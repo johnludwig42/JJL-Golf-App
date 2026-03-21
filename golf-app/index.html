@@ -1,1 +1,220 @@
-golf-app/index.html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b5d3b" />
+  <title>Golf Matchbook</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <h1>Golf Matchbook</h1>
+        <p>Shared strokes, matches, scores, and gambling games</p>
+      </div>
+      <div class="topbar-actions">
+        <span id="syncBadge" class="pill muted">Local mode</span>
+        <button id="installBtn" class="secondary hidden">Install</button>
+      </div>
+    </header>
+
+    <main class="container">
+      <nav class="tabs">
+        <button class="tab active" data-tab="roundTab">Round</button>
+        <button class="tab" data-tab="playersTab">Players</button>
+        <button class="tab" data-tab="coursesTab">Courses</button>
+        <button class="tab" data-tab="historyTab">History</button>
+        <button class="tab" data-tab="settingsTab">Settings</button>
+      </nav>
+
+      <section id="roundTab" class="tab-panel active">
+        <div class="card">
+          <div class="section-header">
+            <h2>Current Match</h2>
+            <div class="actions-wrap">
+              <button id="newMatchBtn">New Match</button>
+              <button id="saveDraftBtn" class="secondary">Save</button>
+            </div>
+          </div>
+          <div id="matchSummary" class="muted">No match loaded yet.</div>
+        </div>
+
+        <div class="card">
+          <div class="section-header">
+            <h2>Live Status</h2>
+            <button id="completeRoundBtn">Complete Round</button>
+          </div>
+          <div id="liveStatus" class="results empty">Create a match to see live game status.</div>
+        </div>
+
+        <div class="card">
+          <div class="section-header">
+            <h2>Hole-by-Hole Entry</h2>
+            <div class="actions-wrap">
+              <button id="prevHoleBtn" class="secondary">Prev</button>
+              <button id="nextHoleBtn" class="secondary">Next</button>
+            </div>
+          </div>
+          <div id="holeEntry" class="results empty">No active match.</div>
+        </div>
+      </section>
+
+      <section id="playersTab" class="tab-panel">
+        <div class="card">
+          <div class="section-header">
+            <h2>Players</h2>
+            <button id="addPlayerBtn">Add Player</button>
+          </div>
+          <p class="muted">Shared when connected to Supabase. Up to 6 can be used in a match.</p>
+          <div id="playersList" class="stack"></div>
+        </div>
+      </section>
+
+      <section id="coursesTab" class="tab-panel">
+        <div class="card">
+          <div class="section-header">
+            <h2>Courses</h2>
+            <button id="addCourseBtn">Add Course</button>
+          </div>
+          <div id="coursesList" class="stack"></div>
+        </div>
+      </section>
+
+      <section id="historyTab" class="tab-panel">
+        <div class="card">
+          <div class="section-header">
+            <h2>Historical Matches</h2>
+            <button id="refreshHistoryBtn" class="secondary">Refresh</button>
+          </div>
+          <div id="historyList" class="stack"></div>
+        </div>
+      </section>
+
+      <section id="settingsTab" class="tab-panel">
+        <div class="card">
+          <h2>Backend</h2>
+          <p class="muted">This app works locally out of the box. To share golfers, courses, and matches across phones, add your Supabase URL and anon key in <code>config.js</code>.</p>
+          <div class="grid two">
+            <div>
+              <strong>Mode</strong>
+              <div id="backendMode" class="muted">Local only</div>
+            </div>
+            <div>
+              <strong>Sync</strong>
+              <div class="muted">Use the provided schema.sql in Supabase, then deploy.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="playerDialog">
+    <form method="dialog" class="dialog-form">
+      <h3 id="playerDialogTitle">Add Player</h3>
+      <input type="hidden" id="playerId" />
+      <label>Name<input id="playerName" required maxlength="30" /></label>
+      <label>Handicap Index<input id="playerIndex" type="number" step="0.1" min="0" max="54" required /></label>
+      <menu>
+        <button value="cancel" class="secondary">Cancel</button>
+        <button id="savePlayerBtn" value="default">Save</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="courseDialog">
+    <form method="dialog" class="dialog-form wide">
+      <h3 id="courseDialogTitle">Add Course</h3>
+      <input type="hidden" id="courseId" />
+      <label>Course Name<input id="courseName" maxlength="60" required /></label>
+      <div class="grid two">
+        <label>Tee Name<input id="teeName" maxlength="30" placeholder="White" required /></label>
+        <label>Par<input id="par" type="number" min="27" max="90" value="72" required /></label>
+      </div>
+      <div class="grid two">
+        <label>Course Rating<input id="rating" type="number" step="0.1" min="50" max="90" value="72.0" required /></label>
+        <label>Slope<input id="slope" type="number" min="55" max="155" value="125" required /></label>
+      </div>
+      <label>Hole Handicap Ranking (comma separated 1-18)<input id="holeRanks" placeholder="11,5,17,3,..." required /></label>
+      <p class="muted">Use scorecard handicap numbers in hole order.</p>
+      <menu>
+        <button value="cancel" class="secondary">Cancel</button>
+        <button id="saveCourseBtn" value="default">Save</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="matchDialog">
+    <form method="dialog" class="dialog-form wide">
+      <h3>New Match</h3>
+      <label>Match Name<input id="matchName" maxlength="60" placeholder="Saturday Nassau" /></label>
+      <div class="grid two">
+        <label>Course<select id="matchCourseSelect"></select></label>
+        <label>Tee Set<select id="matchTeeSelect"></select></label>
+      </div>
+      <div class="grid three">
+        <label>Hole Count
+          <select id="matchHoleCount">
+            <option value="18">18</option>
+            <option value="9">9</option>
+          </select>
+        </label>
+        <label>Allowance
+          <select id="matchAllowance">
+            <option value="100">100%</option>
+            <option value="90">90%</option>
+            <option value="85">85%</option>
+            <option value="80">80%</option>
+          </select>
+        </label>
+        <label>Team Format
+          <select id="matchTeamMode">
+            <option value="auto">Auto from assignment</option>
+            <option value="singles">Singles</option>
+            <option value="teams">Teams</option>
+          </select>
+        </label>
+      </div>
+      <fieldset>
+        <legend>Players (2 to 6)</legend>
+        <div id="matchPlayersPicker" class="stack"></div>
+      </fieldset>
+      <fieldset>
+        <legend>Games</legend>
+        <div class="grid two compact-grid">
+          <label class="checkbox"><input type="checkbox" id="gameIndividualMatch" checked /> Individual Match Play</label>
+          <label class="checkbox"><input type="checkbox" id="gameTeamMatch" checked /> Team Match Play</label>
+          <label class="checkbox"><input type="checkbox" id="gameIndividualSkins" /> Individual Skins</label>
+          <label class="checkbox"><input type="checkbox" id="gameTeamSkins" /> Team Skins</label>
+          <label class="checkbox"><input type="checkbox" id="gameLowNet" /> Low Net / Hole</label>
+        </div>
+      </fieldset>
+      <menu>
+        <button value="cancel" class="secondary">Cancel</button>
+        <button id="createMatchBtn" value="default">Create Match</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="completeDialog">
+    <form method="dialog" class="dialog-form">
+      <h3>Complete Round</h3>
+      <p>Rounds are only moved to history after two confirmations.</p>
+      <label class="checkbox"><input type="checkbox" id="completeConfirm1" /> I confirm hole scores are final.</label>
+      <label class="checkbox"><input type="checkbox" id="completeConfirm2" /> I confirm this round should be locked and saved to history.</label>
+      <menu>
+        <button value="cancel" class="secondary">Cancel</button>
+        <button id="confirmCompleteBtn" value="default">Complete Round</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

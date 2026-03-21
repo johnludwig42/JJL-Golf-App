@@ -1,220 +1,172 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0b5d3b" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Golf Matchbook</title>
+  <meta name="theme-color" content="#0b5d3b" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="app-shell">
-    <header class="topbar">
-      <div>
-        <h1>Golf Matchbook</h1>
-        <p>Shared strokes, matches, scores, and gambling games</p>
+  <header class="app-header">
+    <div>
+      <h1>Golf Matchbook</h1>
+      <p class="sub">Players, courses, tee import, and handicap math.</p>
+    </div>
+    <button id="installBtn" class="secondary hidden">Install</button>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="players">Players</button>
+    <button class="tab" data-tab="courses">Courses</button>
+    <button class="tab" data-tab="import">Import Tees</button>
+    <button class="tab" data-tab="settings">Settings</button>
+  </nav>
+
+  <main>
+    <section id="players" class="panel active">
+      <div class="card">
+        <h2>Add player</h2>
+        <form id="playerForm" class="grid two">
+          <label>
+            <span>Name</span>
+            <input name="name" required placeholder="John" />
+          </label>
+          <label>
+            <span>Handicap Index</span>
+            <input name="index" type="number" step="0.1" min="-9" max="54" required placeholder="12.4" />
+          </label>
+          <div class="actions span-2">
+            <button type="submit">Save Player</button>
+          </div>
+        </form>
       </div>
-      <div class="topbar-actions">
-        <span id="syncBadge" class="pill muted">Local mode</span>
-        <button id="installBtn" class="secondary hidden">Install</button>
+
+      <div class="card">
+        <h2>Saved players</h2>
+        <div id="playersList" class="list"></div>
       </div>
-    </header>
+    </section>
 
-    <main class="container">
-      <nav class="tabs">
-        <button class="tab active" data-tab="roundTab">Round</button>
-        <button class="tab" data-tab="playersTab">Players</button>
-        <button class="tab" data-tab="coursesTab">Courses</button>
-        <button class="tab" data-tab="historyTab">History</button>
-        <button class="tab" data-tab="settingsTab">Settings</button>
-      </nav>
-
-      <section id="roundTab" class="tab-panel active">
-        <div class="card">
-          <div class="section-header">
-            <h2>Current Match</h2>
-            <div class="actions-wrap">
-              <button id="newMatchBtn">New Match</button>
-              <button id="saveDraftBtn" class="secondary">Save</button>
-            </div>
-          </div>
-          <div id="matchSummary" class="muted">No match loaded yet.</div>
-        </div>
-
-        <div class="card">
-          <div class="section-header">
-            <h2>Live Status</h2>
-            <button id="completeRoundBtn">Complete Round</button>
-          </div>
-          <div id="liveStatus" class="results empty">Create a match to see live game status.</div>
-        </div>
-
-        <div class="card">
-          <div class="section-header">
-            <h2>Hole-by-Hole Entry</h2>
-            <div class="actions-wrap">
-              <button id="prevHoleBtn" class="secondary">Prev</button>
-              <button id="nextHoleBtn" class="secondary">Next</button>
-            </div>
-          </div>
-          <div id="holeEntry" class="results empty">No active match.</div>
-        </div>
-      </section>
-
-      <section id="playersTab" class="tab-panel">
-        <div class="card">
-          <div class="section-header">
-            <h2>Players</h2>
-            <button id="addPlayerBtn">Add Player</button>
-          </div>
-          <p class="muted">Shared when connected to Supabase. Up to 6 can be used in a match.</p>
-          <div id="playersList" class="stack"></div>
-        </div>
-      </section>
-
-      <section id="coursesTab" class="tab-panel">
-        <div class="card">
-          <div class="section-header">
-            <h2>Courses</h2>
-            <button id="addCourseBtn">Add Course</button>
-          </div>
-          <div id="coursesList" class="stack"></div>
-        </div>
-      </section>
-
-      <section id="historyTab" class="tab-panel">
-        <div class="card">
-          <div class="section-header">
-            <h2>Historical Matches</h2>
-            <button id="refreshHistoryBtn" class="secondary">Refresh</button>
-          </div>
-          <div id="historyList" class="stack"></div>
-        </div>
-      </section>
-
-      <section id="settingsTab" class="tab-panel">
-        <div class="card">
-          <h2>Backend</h2>
-          <p class="muted">This app works locally out of the box. To share golfers, courses, and matches across phones, add your Supabase URL and anon key in <code>config.js</code>.</p>
-          <div class="grid two">
-            <div>
-              <strong>Mode</strong>
-              <div id="backendMode" class="muted">Local only</div>
-            </div>
-            <div>
-              <strong>Sync</strong>
-              <div class="muted">Use the provided schema.sql in Supabase, then deploy.</div>
-            </div>
-          </div>
-        </div>
-      </section>
-    </main>
-  </div>
-
-  <dialog id="playerDialog">
-    <form method="dialog" class="dialog-form">
-      <h3 id="playerDialogTitle">Add Player</h3>
-      <input type="hidden" id="playerId" />
-      <label>Name<input id="playerName" required maxlength="30" /></label>
-      <label>Handicap Index<input id="playerIndex" type="number" step="0.1" min="0" max="54" required /></label>
-      <menu>
-        <button value="cancel" class="secondary">Cancel</button>
-        <button id="savePlayerBtn" value="default">Save</button>
-      </menu>
-    </form>
-  </dialog>
-
-  <dialog id="courseDialog">
-    <form method="dialog" class="dialog-form wide">
-      <h3 id="courseDialogTitle">Add Course</h3>
-      <input type="hidden" id="courseId" />
-      <label>Course Name<input id="courseName" maxlength="60" required /></label>
-      <div class="grid two">
-        <label>Tee Name<input id="teeName" maxlength="30" placeholder="White" required /></label>
-        <label>Par<input id="par" type="number" min="27" max="90" value="72" required /></label>
+    <section id="courses" class="panel">
+      <div class="card">
+        <h2>Add course manually</h2>
+        <form id="courseForm" class="grid two">
+          <label><span>Course name</span><input name="name" required /></label>
+          <label><span>City</span><input name="city" /></label>
+          <label><span>State</span><input name="state" /></label>
+          <label><span>Country</span><input name="country" value="United States of America" /></label>
+          <div class="actions span-2"><button type="submit">Create Course</button></div>
+        </form>
       </div>
-      <div class="grid two">
-        <label>Course Rating<input id="rating" type="number" step="0.1" min="50" max="90" value="72.0" required /></label>
-        <label>Slope<input id="slope" type="number" min="55" max="155" value="125" required /></label>
-      </div>
-      <label>Hole Handicap Ranking (comma separated 1-18)<input id="holeRanks" placeholder="11,5,17,3,..." required /></label>
-      <p class="muted">Use scorecard handicap numbers in hole order.</p>
-      <menu>
-        <button value="cancel" class="secondary">Cancel</button>
-        <button id="saveCourseBtn" value="default">Save</button>
-      </menu>
-    </form>
-  </dialog>
 
-  <dialog id="matchDialog">
-    <form method="dialog" class="dialog-form wide">
-      <h3>New Match</h3>
-      <label>Match Name<input id="matchName" maxlength="60" placeholder="Saturday Nassau" /></label>
-      <div class="grid two">
-        <label>Course<select id="matchCourseSelect"></select></label>
-        <label>Tee Set<select id="matchTeeSelect"></select></label>
+      <div class="card">
+        <h2>Add tee set manually</h2>
+        <form id="teeForm" class="grid three">
+          <label>
+            <span>Course</span>
+            <select name="courseId" id="teeCourseSelect" required></select>
+          </label>
+          <label><span>Tee name</span><input name="teeName" required placeholder="Blue" /></label>
+          <label>
+            <span>Gender</span>
+            <select name="gender"><option value="M">Men</option><option value="F">Women</option></select>
+          </label>
+          <label><span>Par</span><input name="par" type="number" min="20" max="90" required /></label>
+          <label><span>Course rating</span><input name="rating" type="number" step="0.1" required /></label>
+          <label><span>Slope</span><input name="slope" type="number" min="55" max="155" required /></label>
+          <label><span>Length</span><input name="length" type="number" step="1" /></label>
+          <div class="actions span-3"><button type="submit">Save Tee Set</button></div>
+        </form>
       </div>
-      <div class="grid three">
-        <label>Hole Count
-          <select id="matchHoleCount">
-            <option value="18">18</option>
-            <option value="9">9</option>
-          </select>
-        </label>
-        <label>Allowance
-          <select id="matchAllowance">
-            <option value="100">100%</option>
-            <option value="90">90%</option>
-            <option value="85">85%</option>
-            <option value="80">80%</option>
-          </select>
-        </label>
-        <label>Team Format
-          <select id="matchTeamMode">
-            <option value="auto">Auto from assignment</option>
-            <option value="singles">Singles</option>
-            <option value="teams">Teams</option>
-          </select>
-        </label>
+
+      <div class="card">
+        <h2>Saved courses</h2>
+        <div id="coursesList" class="list"></div>
       </div>
-      <fieldset>
-        <legend>Players (2 to 6)</legend>
-        <div id="matchPlayersPicker" class="stack"></div>
-      </fieldset>
-      <fieldset>
-        <legend>Games</legend>
-        <div class="grid two compact-grid">
-          <label class="checkbox"><input type="checkbox" id="gameIndividualMatch" checked /> Individual Match Play</label>
-          <label class="checkbox"><input type="checkbox" id="gameTeamMatch" checked /> Team Match Play</label>
-          <label class="checkbox"><input type="checkbox" id="gameIndividualSkins" /> Individual Skins</label>
-          <label class="checkbox"><input type="checkbox" id="gameTeamSkins" /> Team Skins</label>
-          <label class="checkbox"><input type="checkbox" id="gameLowNet" /> Low Net / Hole</label>
+    </section>
+
+    <section id="import" class="panel">
+      <div class="card">
+        <h2>Import from USGA course tee page</h2>
+        <p>
+          This version avoids repeated manual entry by importing tee sets from a USGA course tee page.
+          Because the USGA provides a public course rating search and also describes authorized data-affiliate access for retrieving
+          Course Rating and Slope Rating data, this app uses a lightweight import helper rather than a formal partner API. citeturn882808search0turn882808search1
+        </p>
+        <div class="callout">
+          <strong>Fastest workflow:</strong> open the USGA search, find your course, open the tee page, then paste the page URL here.
         </div>
-      </fieldset>
-      <menu>
-        <button value="cancel" class="secondary">Cancel</button>
-        <button id="createMatchBtn" value="default">Create Match</button>
-      </menu>
-    </form>
-  </dialog>
+        <div class="actions wrap">
+          <a class="button-link" href="https://ncrdb.usga.org/" target="_blank" rel="noopener noreferrer">Open USGA Course Rating Search</a>
+          <button id="sampleImportBtn" type="button" class="secondary">Load sample Prairieview page</button>
+        </div>
+        <form id="importForm" class="grid two top-gap">
+          <label class="span-2">
+            <span>USGA tee page URL or CourseID</span>
+            <input id="importSource" name="source" placeholder="https://ncrdb.usga.org/courseTeeInfo?CourseID=7300 or 7300" required />
+          </label>
+          <div class="actions span-2 wrap">
+            <button type="submit">Import tee sets</button>
+            <button id="pasteTextBtn" type="button" class="secondary">Use pasted page text instead</button>
+          </div>
+        </form>
+        <details class="top-gap">
+          <summary>Paste USGA page text manually</summary>
+          <p>If the live import fails, copy the text of the tee page and paste it below. The parser can still pull the tee rows.</p>
+          <textarea id="manualSourceText" rows="10" placeholder="Paste the USGA course tee page text here"></textarea>
+          <div class="actions top-gap"><button id="manualParseBtn" type="button">Parse pasted text</button></div>
+        </details>
+      </div>
 
-  <dialog id="completeDialog">
-    <form method="dialog" class="dialog-form">
-      <h3>Complete Round</h3>
-      <p>Rounds are only moved to history after two confirmations.</p>
-      <label class="checkbox"><input type="checkbox" id="completeConfirm1" /> I confirm hole scores are final.</label>
-      <label class="checkbox"><input type="checkbox" id="completeConfirm2" /> I confirm this round should be locked and saved to history.</label>
-      <menu>
-        <button value="cancel" class="secondary">Cancel</button>
-        <button id="confirmCompleteBtn" value="default">Complete Round</button>
-      </menu>
-    </form>
-  </dialog>
+      <div class="card hidden" id="importPreviewCard">
+        <h2>Import preview</h2>
+        <div id="importPreview"></div>
+        <div class="actions wrap top-gap">
+          <button id="saveImportedCourseBtn" type="button">Save imported course</button>
+          <button id="discardImportBtn" type="button" class="secondary">Discard</button>
+        </div>
+      </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="config.js"></script>
+      <div class="card">
+        <h2>Handicap calculator</h2>
+        <form id="calcForm" class="grid four">
+          <label><span>Player</span><select id="calcPlayer" required></select></label>
+          <label><span>Course</span><select id="calcCourse" required></select></label>
+          <label><span>Tee</span><select id="calcTee" required></select></label>
+          <label><span>Allowance %</span><input id="calcAllowance" type="number" min="0" max="100" value="100" required /></label>
+          <div class="actions span-4"><button type="submit">Calculate</button></div>
+        </form>
+        <div id="calcResult" class="result"></div>
+      </div>
+    </section>
+
+    <section id="settings" class="panel">
+      <div class="card">
+        <h2>Data tools</h2>
+        <div class="actions wrap">
+          <button id="exportBtn" type="button">Export JSON Backup</button>
+          <label class="button-link file-label">
+            Import JSON Backup
+            <input id="importFile" type="file" accept="application/json" />
+          </label>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Notes</h2>
+        <ul>
+          <li>This package keeps data in browser storage for now.</li>
+          <li>When you are ready, the same structures can be moved into Supabase.</li>
+          <li>If you host under a subfolder like <code>/golf-app/</code>, keep all files in that same folder.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
   <script src="app.js"></script>
 </body>
 </html>

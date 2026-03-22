@@ -6,7 +6,7 @@
   <title>Golf Matchbook</title>
   <meta name="theme-color" content="#0b5d3b" />
   <link rel="manifest" href="manifest.json" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-192.png" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -92,12 +92,10 @@
       <div class="card">
         <h2>Import from USGA course tee page</h2>
         <p>
-          This version avoids repeated manual entry by importing tee sets from a USGA course tee page.
-          Because the USGA provides a public course rating search and also describes authorized data-affiliate access for retrieving
-          Course Rating and Slope Rating data, this app uses a lightweight import helper rather than a formal partner API. citeturn882808search0turn882808search1
+          Paste a USGA tee-page URL or a CourseID. This version is more tolerant of HTML, pasted page text, and proxy failures.
         </p>
         <div class="callout">
-          <strong>Fastest workflow:</strong> open the USGA search, find your course, open the tee page, then paste the page URL here.
+          <strong>Fastest workflow:</strong> open the USGA search, find your course, open the tee page, then paste the page URL here. If live import fails, use the pasted page text fallback right below it.
         </div>
         <div class="actions wrap">
           <a class="button-link" href="https://ncrdb.usga.org/" target="_blank" rel="noopener noreferrer">Open USGA Course Rating Search</a>
@@ -115,7 +113,7 @@
         </form>
         <details class="top-gap">
           <summary>Paste USGA page text manually</summary>
-          <p>If the live import fails, copy the text of the tee page and paste it below. The parser can still pull the tee rows.</p>
+          <p>Copy everything visible on the USGA tee page and paste it below. This parser now accepts either plain text or the full copied HTML source.</p>
           <textarea id="manualSourceText" rows="10" placeholder="Paste the USGA course tee page text here"></textarea>
           <div class="actions top-gap"><button id="manualParseBtn" type="button">Parse pasted text</button></div>
         </details>

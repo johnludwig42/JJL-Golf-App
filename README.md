@@ -1,24 +1,28 @@
-# Golf Matchbook – Course Import Update
+Golf Matchbook PWA v4
 
-This update adds a course / tee import helper so you do not have to keep entering rating, slope, par, and length by hand.
+What changed in this version
+- more resilient USGA tee import flow
+- tries multiple live-import proxy routes instead of just one
+- parser now handles either full HTML or plain copied page text
+- better deduping of imported tees
+- clearer fallback when live import is blocked by proxy or CORS issues
+- service worker cache bumped so app updates are easier to pull down
 
-## What it does
-- stores players and handicap indexes locally
-- stores courses and tee sets locally
-- imports tee sets from a USGA course tee page by URL or CourseID
-- falls back to manual paste parsing if the live import fails
-- calculates Course Handicap and Playing Handicap
-- exports and imports a JSON backup
+How to deploy update
+1. Replace the contents of your existing `golf-app/` folder in GitHub with these files.
+2. Commit the changes.
+3. Open the live site URL in Safari.
+4. Refresh once in Safari before opening the home-screen app.
+5. If the old icon or old import behavior persists, delete the home-screen app and add it again.
 
-## Important limitation
-This is still a static PWA hosted on GitHub Pages.
+Import workflow
+1. Open the USGA course rating site.
+2. Find your course and open its tee page.
+3. Paste that full URL into Import Tees.
+4. If live import still fails, copy the visible content of the tee page and paste it into the fallback box.
+5. Save the import preview.
 
-That means the import helper uses a lightweight proxy request to fetch a public USGA tee page and parse it. If that proxy is blocked or rate-limited, use the manual paste parser in the app.
-
-## Deploy
-Upload the contents of this folder into your existing `golf-app/` folder in GitHub, replacing the current files.
-
-Then refresh the app in Safari. If the home-screen icon shows an older cached version, open the site URL directly in Safari first, refresh once, and then reopen the home-screen app.
-
-## Notes on the USGA data source
-The USGA provides a public National Course Rating Database lookup and separately describes authorized data-affiliate access that includes retrieval of Course Rating and Slope Rating data. For a lightweight personal tool, this update uses import parsing rather than a formal affiliate integration.
+Notes
+- This is still a static GitHub Pages app, so live import depends on public cross-origin proxy availability.
+- The pasted-text fallback is the most reliable path when those proxies are flaky.
+- Once you move to Supabase or any lightweight backend, you can replace the proxy dependency with a server-side fetch and make this much more reliable.

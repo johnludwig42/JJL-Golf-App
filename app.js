@@ -1,6 +1,11 @@
-const STORAGE_KEY = 'golf-matchbook-v3';
+const STORAGE_KEY = 'golf-matchbook-v4';
 let deferredPrompt = null;
 let importDraft = null;
+
+const PROXY_CANDIDATES = [
+  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://proxy.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+];
 
 const state = loadState();
 
@@ -20,14 +25,28 @@ function persist() {
 function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
-function toast(msg) {
+function toast(msg, duration = 2600) {
   const el = document.getElementById('toast');
   el.textContent = msg;
   el.classList.remove('hidden');
-  setTimeout(() => el.classList.add('hidden'), 2200);
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => el.classList.add('hidden'), duration);
 }
 function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+function decodeHtml(html) {
+  const txt = document.createElement('textarea');
+  txt.innerHTML = html;
+  return txt.value;
+}
+function normalizeWhitespace(text) {
+  return String(text || '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\r/g, '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 function courseHandicap(index, slope, rating, par) {
@@ -115,58 +134,154 @@ function populateCalcTees() {
 
 function parseCourseId(input) {
   const trimmed = input.trim();
+  if (!trimmed) return null;
   const justDigits = trimmed.match(/^\d+$/);
   if (justDigits) return justDigits[0];
-  const urlId = trimmed.match(/CourseID=(\d+)/i);
+  const urlId = trimmed.match(/[?&]CourseID=(\d+)/i);
   if (urlId) return urlId[1];
+  const pathId = trimmed.match(/courseTeeInfo\/?(\d+)/i);
+  if (pathId) return pathId[1];
   return null;
+}
+
+async function fetchTextWithFallbacks(targetUrl) {
+  const errors = [];
+  for (const buildProxyUrl of PROXY_CANDIDATES) {
+    const requestUrl = buildProxyUrl(targetUrl);
+    try {
+      const resp = await fetch(requestUrl, { headers: { 'Accept': 'text/html,text/plain,*/*' } });
+      if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`.trim());
+      const text = await resp.text();
+      if (!text || text.length < 150) throw new Error('empty response');
+      if (/access denied|rate limit|temporarily unavailable/i.test(text)) throw new Error('proxy blocked');
+      return text;
+    } catch (err) {
+      errors.push(err.message || String(err));
+    }
+  }
+  throw new Error(`Live import could not reach the USGA page. ${errors.join(' | ')}`);
 }
 
 async function fetchCourseText(courseId) {
   const targetUrl = `https://ncrdb.usga.org/courseTeeInfo?CourseID=${courseId}`;
-  const proxied = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-  const resp = await fetch(proxied, { headers: { 'Accept': 'text/html,text/plain' } });
-  if (!resp.ok) throw new Error(`Import request failed (${resp.status})`);
-  return { text: await resp.text(), targetUrl };
+  const text = await fetchTextWithFallbacks(targetUrl);
+  return { text, targetUrl };
 }
 
-function parseUSGATeeText(sourceText, sourceUrl='') {
-  const text = sourceText.replace(/\r/g, '');
-  const lines = text.split('\n').map(x => x.trim()).filter(Boolean);
-  const titleLineIndex = lines.findIndex(line => /Club\/Course Name City State\/Province/i.test(line));
+function parseUSGATableRowsFromHtml(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const rows = [...doc.querySelectorAll('tr')];
+  const tees = [];
+  for (const row of rows) {
+    const cells = [...row.querySelectorAll('td')].map(td => normalizeWhitespace(td.textContent));
+    if (cells.length < 8) continue;
+    const genderIndex = cells.findIndex(v => v === 'M' || v === 'F');
+    if (genderIndex < 1) continue;
+    const teeName = normalizeWhitespace(cells.slice(0, genderIndex).join(' '));
+    const gender = cells[genderIndex];
+    const par = Number(cells[genderIndex + 1]);
+    const rating = Number(cells[genderIndex + 2]);
+    const bogeyRating = Number(cells[genderIndex + 3]);
+    const slope = Number(cells[genderIndex + 4]);
+    const tail = cells.slice(genderIndex + 5).filter(Boolean);
+    const numericTail = tail.filter(v => /^\d+(?:\.\d+)?$/.test(v));
+    const teeId = Number(numericTail.at(-2));
+    const length = Number(numericTail.at(-1));
+    if (!teeName || !Number.isFinite(par) || !Number.isFinite(rating) || !Number.isFinite(slope) || !Number.isFinite(teeId) || !Number.isFinite(length)) continue;
+    tees.push({ teeName, gender, par, rating, bogeyRating: Number.isFinite(bogeyRating) ? bogeyRating : null, slope, teeId, length });
+  }
+  return tees;
+}
+
+function extractMetadataFromText(text, html = '') {
+  const lines = normalizeWhitespace(text).split('\n').map(x => x.trim()).filter(Boolean);
   let courseName = 'Imported Course';
   let city = '';
   let state = '';
-  if (titleLineIndex >= 0 && lines[titleLineIndex + 1]) {
-    const raw = lines[titleLineIndex + 1];
-    // Expected pattern like: Prairieview Golf Club - Prairieview Golf Club Byron IL
+
+  const labeledLineIndex = lines.findIndex(line => /Club\/Course Name City State\/Province/i.test(line));
+  if (labeledLineIndex >= 0 && lines[labeledLineIndex + 1]) {
+    const raw = lines[labeledLineIndex + 1].replace(/\s+-\s+/g, ' - ').trim();
     const m = raw.match(/^(.*?)\s+-\s+(.*?)\s+([A-Za-z .'-]+)\s+([A-Z]{2}|[A-Za-z ]+)$/);
     if (m) {
       courseName = m[2].trim();
       city = m[3].trim();
       state = m[4].trim();
     } else {
-      courseName = raw.trim();
+      courseName = raw;
     }
   }
-  const tees = [];
-  const teePattern = /^(.*?)\s+(M|F)\s+(\d{2})\s+(\d{2,3}\.\d)\s+(\d{2,3}\.\d)\s+(\d{2,3})(?:\s+.*)?\s+(\d{5,7})\s+(\d{3,5})$/;
-  for (const line of lines) {
-    const m = line.match(teePattern);
-    if (!m) continue;
-    tees.push({
-      teeName: m[1].trim(),
-      gender: m[2],
-      par: Number(m[3]),
-      rating: Number(m[4]),
-      bogeyRating: Number(m[5]),
-      slope: Number(m[6]),
-      teeId: m[7],
-      length: Number(m[8])
-    });
+
+  if ((!courseName || courseName === 'Imported Course') && html) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const h1 = normalizeWhitespace(doc.querySelector('h1,h2,title')?.textContent || '');
+    if (h1 && !/Course Rating|Slope Rating/i.test(h1)) courseName = h1;
   }
-  if (!tees.length) throw new Error('No tee rows were found. Try the manual paste option from the actual USGA tee page text.');
-  return { name: courseName, city, state, country: 'United States of America', tees, sourceUrl };
+
+  const fallbackLine = lines.find(line => /Golf|Country Club|CC|Club|Links|Course/i.test(line) && !/Course Rating|Slope Rating|Bogey/i.test(line));
+  if ((courseName === 'Imported Course' || !courseName) && fallbackLine) courseName = fallbackLine;
+
+  return {
+    courseName: courseName || 'Imported Course',
+    city,
+    state,
+  };
+}
+
+function parseUSGATeeText(sourceText, sourceUrl = '') {
+  const decoded = decodeHtml(sourceText);
+  const isHtml = /<html[\s>]|<table[\s>]|<tr[\s>]|<td[\s>]/i.test(decoded);
+  let plainText = decoded;
+  let tees = [];
+
+  if (isHtml) {
+    const doc = new DOMParser().parseFromString(decoded, 'text/html');
+    plainText = normalizeWhitespace(doc.body?.innerText || doc.documentElement?.textContent || decoded);
+    tees = parseUSGATableRowsFromHtml(decoded);
+  } else {
+    plainText = normalizeWhitespace(decoded);
+  }
+
+  const metadata = extractMetadataFromText(plainText, isHtml ? decoded : '');
+
+  if (!tees.length) {
+    const teePattern = /^(.*?)\s+(M|F)\s+(\d{2})\s+(\d{2,3}\.\d)\s+(\d{2,3}\.\d)\s+(\d{2,3})\b.*?\b(\d{5,7})\s+(\d{3,5})\b/gm;
+    for (const match of plainText.matchAll(teePattern)) {
+      tees.push({
+        teeName: match[1].trim(),
+        gender: match[2],
+        par: Number(match[3]),
+        rating: Number(match[4]),
+        bogeyRating: Number(match[5]),
+        slope: Number(match[6]),
+        teeId: Number(match[7]),
+        length: Number(match[8]),
+      });
+    }
+  }
+
+  const uniqueTees = [];
+  const seen = new Set();
+  for (const tee of tees) {
+    const key = `${tee.teeName}|${tee.gender}|${tee.par}|${tee.rating}|${tee.slope}|${tee.length}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueTees.push(tee);
+    }
+  }
+
+  if (!uniqueTees.length) {
+    throw new Error('No tee rows were found. Paste the full USGA tee page text into the fallback box and try again.');
+  }
+
+  return {
+    name: metadata.courseName,
+    city: metadata.city,
+    state: metadata.state,
+    country: 'United States of America',
+    tees: uniqueTees,
+    sourceUrl,
+  };
 }
 
 function showImportPreview(course) {
@@ -284,15 +399,22 @@ document.getElementById('importForm').addEventListener('submit', async e => {
   const source = document.getElementById('importSource').value;
   const courseId = parseCourseId(source);
   if (!courseId) return toast('Paste a CourseID or a full USGA tee page URL.');
+  const btn = e.target.querySelector('button[type="submit"]');
+  btn.disabled = true;
+  btn.textContent = 'Importing...';
   try {
-    toast('Importing tee page...');
+    toast('Trying live import...');
     const { text, targetUrl } = await fetchCourseText(courseId);
     const parsed = parseUSGATeeText(text, targetUrl);
     showImportPreview(parsed);
     toast('Import ready to save.');
   } catch (err) {
     console.error(err);
-    toast(err.message || 'Import failed.');
+    toast(err.message || 'Import failed.', 4200);
+    document.querySelector('details').open = true;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Import tee sets';
   }
 });
 
@@ -301,7 +423,7 @@ document.getElementById('sampleImportBtn').addEventListener('click', () => {
   try {
     showImportPreview(parseUSGATeeText(sample, 'https://ncrdb.usga.org/courseTeeInfo?CourseID=7300'));
     toast('Sample loaded.');
-  } catch (err) {
+  } catch {
     toast('Sample parse failed.');
   }
 });
@@ -313,7 +435,7 @@ document.getElementById('manualParseBtn').addEventListener('click', () => {
     showImportPreview(parseUSGATeeText(text, 'Pasted USGA page text'));
     toast('Pasted text parsed.');
   } catch (err) {
-    toast(err.message || 'Could not parse pasted text.');
+    toast(err.message || 'Could not parse pasted text.', 4200);
   }
 });
 

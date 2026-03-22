@@ -1,4 +1,4 @@
-const CACHE_NAME = 'golf-matchbook-v4-cache';
+const CACHE_NAME = 'golf-matchbook-v5-cache';
 const ASSETS = [
   './',
   './index.html',

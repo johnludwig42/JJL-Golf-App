@@ -137,3 +137,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 12px 0; }
   .grid.two, .grid.three, .grid.four { grid-template-columns: 1fr; }
   .span-2, .span-3, .span-4 { grid-column: auto; }
 }
+.compact-actions button { padding: 9px 12px; font-size: 13px; }
+.tee-block + .tee-block { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+.strong { font-weight: 700; color: var(--text); }
+code { background: #edf2ef; padding: 2px 6px; border-radius: 6px; }

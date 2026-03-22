@@ -1,6 +1,9 @@
-const STORAGE_KEY = 'golf-matchbook-v4';
+const STORAGE_KEY = 'golf-matchbook-v5';
 let deferredPrompt = null;
 let importDraft = null;
+let editingPlayerId = null;
+let editingCourseId = null;
+let editingTeeRef = null;
 
 const PROXY_CANDIDATES = [
   url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
@@ -8,17 +11,64 @@ const PROXY_CANDIDATES = [
 ];
 
 const state = loadState();
+normalizeState();
 
 function loadState() {
   const fallback = { players: [], courses: [] };
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('golf-matchbook-v4');
     return raw ? JSON.parse(raw) : fallback;
   } catch {
     return fallback;
   }
 }
+function normalizeState() {
+  state.players = Array.isArray(state.players) ? state.players : [];
+  state.courses = Array.isArray(state.courses) ? state.courses : [];
+  state.players.forEach(p => {
+    if (!p.id) p.id = uid();
+    p.name = p.name || '';
+    p.index = Number.isFinite(Number(p.index)) ? Number(p.index) : 0;
+  });
+  state.courses.forEach(c => {
+    if (!c.id) c.id = uid();
+    c.name = c.name || 'Untitled Course';
+    c.city = c.city || '';
+    c.state = c.state || '';
+    c.country = c.country || '';
+    c.tees = Array.isArray(c.tees) ? c.tees : [];
+    c.tees.forEach(t => normalizeTee(t, c.name));
+  });
+}
+function normalizeTee(tee, courseName = '') {
+  tee.id = tee.id || uid();
+  tee.courseName = tee.courseName || courseName || '';
+  tee.teeName = tee.teeName || 'Tee';
+  tee.gender = tee.gender || 'M';
+  tee.par = Number.isFinite(Number(tee.par)) ? Number(tee.par) : 72;
+  tee.rating = Number.isFinite(Number(tee.rating)) ? Number(tee.rating) : 72;
+  tee.slope = Number.isFinite(Number(tee.slope)) ? Number(tee.slope) : 113;
+  tee.length = Number.isFinite(Number(tee.length)) ? Number(tee.length) : null;
+  tee.holes = Array.isArray(tee.holes) ? tee.holes : buildDefaultHoles();
+  tee.holes = tee.holes.map((h, idx) => ({
+    holeNumber: Number(h.holeNumber) || idx + 1,
+    yardage: Number.isFinite(Number(h.yardage)) ? Number(h.yardage) : null,
+    par: Number.isFinite(Number(h.par)) ? Number(h.par) : null,
+    strokeIndex: Number.isFinite(Number(h.strokeIndex)) ? Number(h.strokeIndex) : null,
+  }));
+  if (!tee.length) tee.length = sumYardage(tee.holes);
+  if (!tee.par) tee.par = sumPar(tee.holes) || tee.par;
+}
+function buildDefaultHoles() {
+  return Array.from({ length: 18 }, (_, i) => ({
+    holeNumber: i + 1,
+    yardage: null,
+    par: null,
+    strokeIndex: i + 1,
+  }));
+}
 function persist() {
+  normalizeState();
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   renderAll();
 }
@@ -48,7 +98,18 @@ function normalizeWhitespace(text) {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
-
+function sumYardage(holes) {
+  const total = (holes || []).reduce((sum, h) => sum + (Number(h.yardage) || 0), 0);
+  return total || null;
+}
+function sumPar(holes) {
+  const total = (holes || []).reduce((sum, h) => sum + (Number(h.par) || 0), 0);
+  return total || null;
+}
+function strokeIndexSummary(holes) {
+  const filled = (holes || []).filter(h => Number(h.strokeIndex));
+  return filled.length ? `${filled.length}/18 stroke indexes set` : 'No stroke indexes set';
+}
 function courseHandicap(index, slope, rating, par) {
   return Math.round(Number(index) * (Number(slope) / 113) + (Number(rating) - Number(par)));
 }
@@ -77,7 +138,10 @@ function renderPlayers() {
           <div class="item-title">${escapeHtml(p.name)}</div>
           <div class="muted">Handicap Index: ${Number(p.index).toFixed(1)}</div>
         </div>
-        <button class="secondary" data-delete-player="${p.id}">Delete</button>
+        <div class="actions wrap compact-actions">
+          <button class="secondary" data-edit-player="${p.id}">Edit</button>
+          <button class="secondary" data-delete-player="${p.id}">Delete</button>
+        </div>
       </div>
     </div>
   `).join('');
@@ -97,11 +161,26 @@ function renderCourses() {
           <div class="muted">${[c.city, c.state].filter(Boolean).join(', ') || c.country || ''}</div>
           ${c.sourceUrl ? `<div class="tiny">Imported from USGA page</div>` : ''}
         </div>
-        <button class="secondary" data-delete-course="${c.id}">Delete</button>
+        <div class="actions wrap compact-actions">
+          <button class="secondary" data-edit-course="${c.id}">Edit course</button>
+          <button class="secondary" data-delete-course="${c.id}">Delete</button>
+        </div>
       </div>
       <hr>
       ${(c.tees || []).length ? c.tees.map(t => `
-        <div class="tiny">${escapeHtml(t.teeName)} · ${t.gender === 'F' ? 'Women' : 'Men'} · Par ${t.par} · Rating ${t.rating} · Slope ${t.slope}${t.length ? ` · ${t.length} yds` : ''}</div>
+        <div class="tee-block">
+          <div class="item-header">
+            <div>
+              <div class="tiny strong">${escapeHtml(t.teeName)} · ${t.gender === 'F' ? 'Women' : 'Men'}</div>
+              <div class="tiny">Par ${t.par} · Rating ${t.rating} · Slope ${t.slope}${t.length ? ` · ${t.length} yds` : ''}</div>
+              <div class="tiny">${strokeIndexSummary(t.holes)}</div>
+            </div>
+            <div class="actions wrap compact-actions">
+              <button class="secondary" data-edit-tee="${c.id}|${t.id}">Edit tee & holes</button>
+              <button class="secondary" data-delete-tee="${c.id}|${t.id}">Delete tee</button>
+            </div>
+          </div>
+        </div>
       `).join('') : '<div class="tiny">No tee sets yet.</div>'}
     </div>
   `).join('');
@@ -129,7 +208,7 @@ function populateCalcTees() {
     teeSelect.innerHTML = '<option value="">Select tee</option>';
     return;
   }
-  teeSelect.innerHTML = course.tees.map((t, idx) => `<option value="${idx}">${escapeHtml(t.teeName)} · ${t.gender === 'F' ? 'Women' : 'Men'} · ${t.rating}/${t.slope}</option>`).join('');
+  teeSelect.innerHTML = course.tees.map(t => `<option value="${t.id}">${escapeHtml(t.teeName)} · ${t.gender === 'F' ? 'Women' : 'Men'} · ${t.rating}/${t.slope}</option>`).join('');
 }
 
 function parseCourseId(input) {
@@ -188,7 +267,7 @@ function parseUSGATableRowsFromHtml(html) {
     const teeId = Number(numericTail.at(-2));
     const length = Number(numericTail.at(-1));
     if (!teeName || !Number.isFinite(par) || !Number.isFinite(rating) || !Number.isFinite(slope) || !Number.isFinite(teeId) || !Number.isFinite(length)) continue;
-    tees.push({ teeName, gender, par, rating, bogeyRating: Number.isFinite(bogeyRating) ? bogeyRating : null, slope, teeId, length });
+    tees.push({ teeName, gender, par, rating, bogeyRating: Number.isFinite(bogeyRating) ? bogeyRating : null, slope, teeId, length, courseName: '' });
   }
   return tees;
 }
@@ -197,7 +276,7 @@ function extractMetadataFromText(text, html = '') {
   const lines = normalizeWhitespace(text).split('\n').map(x => x.trim()).filter(Boolean);
   let courseName = 'Imported Course';
   let city = '';
-  let state = '';
+  let stateName = '';
 
   const labeledLineIndex = lines.findIndex(line => /Club\/Course Name City State\/Province/i.test(line));
   if (labeledLineIndex >= 0 && lines[labeledLineIndex + 1]) {
@@ -206,7 +285,7 @@ function extractMetadataFromText(text, html = '') {
     if (m) {
       courseName = m[2].trim();
       city = m[3].trim();
-      state = m[4].trim();
+      stateName = m[4].trim();
     } else {
       courseName = raw;
     }
@@ -221,11 +300,7 @@ function extractMetadataFromText(text, html = '') {
   const fallbackLine = lines.find(line => /Golf|Country Club|CC|Club|Links|Course/i.test(line) && !/Course Rating|Slope Rating|Bogey/i.test(line));
   if ((courseName === 'Imported Course' || !courseName) && fallbackLine) courseName = fallbackLine;
 
-  return {
-    courseName: courseName || 'Imported Course',
-    city,
-    state,
-  };
+  return { courseName: courseName || 'Imported Course', city, state: stateName };
 }
 
 function parseUSGATeeText(sourceText, sourceUrl = '') {
@@ -256,6 +331,7 @@ function parseUSGATeeText(sourceText, sourceUrl = '') {
         slope: Number(match[6]),
         teeId: Number(match[7]),
         length: Number(match[8]),
+        courseName: metadata.courseName,
       });
     }
   }
@@ -266,6 +342,8 @@ function parseUSGATeeText(sourceText, sourceUrl = '') {
     const key = `${tee.teeName}|${tee.gender}|${tee.par}|${tee.rating}|${tee.slope}|${tee.length}`;
     if (!seen.has(key)) {
       seen.add(key);
+      tee.courseName = metadata.courseName;
+      normalizeTee(tee, metadata.courseName);
       uniqueTees.push(tee);
     }
   }
@@ -327,48 +405,196 @@ function discardImport() {
   document.getElementById('importPreviewCard').classList.add('hidden');
 }
 
+function loadPlayerEditor(playerId = null) {
+  const form = document.getElementById('playerForm');
+  const title = document.getElementById('playerFormTitle');
+  const submit = document.getElementById('playerSubmitBtn');
+  const cancel = document.getElementById('cancelPlayerEditBtn');
+  editingPlayerId = playerId;
+  if (!playerId) {
+    form.reset();
+    title.textContent = 'Add player';
+    submit.textContent = 'Save Player';
+    cancel.classList.add('hidden');
+    return;
+  }
+  const player = state.players.find(p => p.id === playerId);
+  if (!player) return;
+  form.name.value = player.name;
+  form.index.value = player.index;
+  title.textContent = 'Edit player';
+  submit.textContent = 'Update Player';
+  cancel.classList.remove('hidden');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function loadCourseEditor(courseId = null) {
+  const form = document.getElementById('courseForm');
+  const title = document.getElementById('courseFormTitle');
+  const submit = document.getElementById('courseSubmitBtn');
+  const cancel = document.getElementById('cancelCourseEditBtn');
+  editingCourseId = courseId;
+  if (!courseId) {
+    form.reset();
+    form.country.value = 'United States of America';
+    title.textContent = 'Add course manually';
+    submit.textContent = 'Create Course';
+    cancel.classList.add('hidden');
+    return;
+  }
+  const course = state.courses.find(c => c.id === courseId);
+  if (!course) return;
+  form.name.value = course.name || '';
+  form.city.value = course.city || '';
+  form.state.value = course.state || '';
+  form.country.value = course.country || '';
+  title.textContent = 'Edit course';
+  submit.textContent = 'Update Course';
+  cancel.classList.remove('hidden');
+  document.querySelector('[data-tab="courses"]').click();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function loadTeeEditor(courseId, teeId = null) {
+  const form = document.getElementById('teeForm');
+  const title = document.getElementById('teeFormTitle');
+  const submit = document.getElementById('teeSubmitBtn');
+  const cancel = document.getElementById('cancelTeeEditBtn');
+  editingTeeRef = teeId ? { courseId, teeId } : null;
+  form.courseId.value = courseId || '';
+  if (!teeId) {
+    form.reset();
+    form.courseId.value = courseId || '';
+    title.textContent = 'Add tee set manually';
+    submit.textContent = 'Save Tee Set';
+    cancel.classList.add('hidden');
+    form.holesJson.value = JSON.stringify(buildDefaultHoles(), null, 2);
+    return;
+  }
+  const course = state.courses.find(c => c.id === courseId);
+  const tee = course?.tees.find(t => t.id === teeId);
+  if (!course || !tee) return;
+  form.courseId.value = courseId;
+  form.teeName.value = tee.teeName || '';
+  form.gender.value = tee.gender || 'M';
+  form.par.value = tee.par || '';
+  form.rating.value = tee.rating || '';
+  form.slope.value = tee.slope || '';
+  form.length.value = tee.length || '';
+  form.holesJson.value = JSON.stringify(tee.holes || buildDefaultHoles(), null, 2);
+  title.textContent = `Edit tee & holes — ${course.name} / ${tee.teeName}`;
+  submit.textContent = 'Update Tee Set';
+  cancel.classList.remove('hidden');
+  document.querySelector('[data-tab="courses"]').click();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function parseHolesInput(raw, teeName = '') {
+  if (!raw.trim()) return buildDefaultHoles();
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('Hole detail must be valid JSON.');
+  }
+  if (!Array.isArray(parsed)) throw new Error('Hole detail must be an array of 18 rows.');
+  const holes = parsed.map((h, idx) => ({
+    holeNumber: Number(h.holeNumber) || idx + 1,
+    yardage: h.yardage === '' || h.yardage == null ? null : Number(h.yardage),
+    par: h.par === '' || h.par == null ? null : Number(h.par),
+    strokeIndex: h.strokeIndex === '' || h.strokeIndex == null ? null : Number(h.strokeIndex),
+  }));
+  if (!holes.length) throw new Error('Enter at least one hole row.');
+  const validStrokeIndexes = holes.filter(h => h.strokeIndex != null).every(h => h.strokeIndex >= 1 && h.strokeIndex <= 18);
+  if (!validStrokeIndexes) throw new Error(`Stroke index for ${teeName || 'this tee'} must be between 1 and 18.`);
+  return holes;
+}
+
+document.getElementById('loadTemplate18Btn').addEventListener('click', () => {
+  document.getElementById('teeForm').holesJson.value = JSON.stringify(buildDefaultHoles(), null, 2);
+});
+
 document.getElementById('playerForm').addEventListener('submit', e => {
   e.preventDefault();
   const fd = new FormData(e.target);
-  state.players.push({ id: uid(), name: fd.get('name').trim(), index: Number(fd.get('index')) });
-  e.target.reset();
+  const payload = { name: fd.get('name').trim(), index: Number(fd.get('index')) };
+  if (editingPlayerId) {
+    const player = state.players.find(p => p.id === editingPlayerId);
+    if (player) Object.assign(player, payload);
+    toast('Player updated.');
+  } else {
+    state.players.push({ id: uid(), ...payload });
+    toast('Player saved.');
+  }
+  loadPlayerEditor(null);
   persist();
-  toast('Player saved.');
 });
+
+document.getElementById('cancelPlayerEditBtn').addEventListener('click', () => loadPlayerEditor(null));
 
 document.getElementById('courseForm').addEventListener('submit', e => {
   e.preventDefault();
   const fd = new FormData(e.target);
-  state.courses.push({
-    id: uid(),
+  const payload = {
     name: fd.get('name').trim(),
     city: fd.get('city').trim(),
     state: fd.get('state').trim(),
     country: fd.get('country').trim(),
-    tees: []
-  });
-  e.target.reset();
+  };
+  if (editingCourseId) {
+    const course = state.courses.find(c => c.id === editingCourseId);
+    if (course) {
+      Object.assign(course, payload);
+      course.tees.forEach(t => { t.courseName = course.name; });
+    }
+    toast('Course updated.');
+  } else {
+    state.courses.push({ id: uid(), ...payload, tees: [] });
+    toast('Course created.');
+  }
+  loadCourseEditor(null);
   persist();
-  toast('Course created.');
 });
+
+document.getElementById('cancelCourseEditBtn').addEventListener('click', () => loadCourseEditor(null));
 
 document.getElementById('teeForm').addEventListener('submit', e => {
   e.preventDefault();
   const fd = new FormData(e.target);
   const course = state.courses.find(c => c.id === fd.get('courseId'));
   if (!course) return toast('Pick a course first.');
-  course.tees.push({
+  let holes;
+  try {
+    holes = parseHolesInput(fd.get('holesJson') || '', fd.get('teeName'));
+  } catch (err) {
+    return toast(err.message, 4200);
+  }
+  const payload = {
+    courseName: course.name,
     teeName: fd.get('teeName').trim(),
     gender: fd.get('gender'),
-    par: Number(fd.get('par')),
+    par: Number(fd.get('par')) || sumPar(holes) || 72,
     rating: Number(fd.get('rating')),
     slope: Number(fd.get('slope')),
-    length: Number(fd.get('length')) || null
-  });
-  e.target.reset();
+    length: Number(fd.get('length')) || sumYardage(holes) || null,
+    holes,
+  };
+  if (editingTeeRef) {
+    const tee = course.tees.find(t => t.id === editingTeeRef.teeId);
+    if (tee) Object.assign(tee, payload);
+    normalizeTee(tee, course.name);
+    toast('Tee set updated.');
+  } else {
+    const tee = { id: uid(), ...payload };
+    normalizeTee(tee, course.name);
+    course.tees.push(tee);
+    toast('Tee set saved.');
+  }
+  loadTeeEditor(course.id, null);
   persist();
-  toast('Tee set saved.');
 });
+
+document.getElementById('cancelTeeEditBtn').addEventListener('click', () => loadTeeEditor(document.getElementById('teeCourseSelect').value || '', null));
 
 document.getElementById('coursesList').addEventListener('click', e => {
   const courseId = e.target.getAttribute('data-delete-course');
@@ -379,6 +605,23 @@ document.getElementById('coursesList').addEventListener('click', e => {
       persist();
       toast('Course deleted.');
     }
+    return;
+  }
+  const editCourseId = e.target.getAttribute('data-edit-course');
+  if (editCourseId) return loadCourseEditor(editCourseId);
+  const teeRef = e.target.getAttribute('data-edit-tee');
+  if (teeRef) {
+    const [courseRef, teeRefId] = teeRef.split('|');
+    return loadTeeEditor(courseRef, teeRefId);
+  }
+  const deleteTeeRef = e.target.getAttribute('data-delete-tee');
+  if (deleteTeeRef) {
+    const [courseRef, teeRefId] = deleteTeeRef.split('|');
+    const course = state.courses.find(c => c.id === courseRef);
+    if (!course) return;
+    course.tees = course.tees.filter(t => t.id !== teeRefId);
+    persist();
+    toast('Tee deleted.');
   }
 });
 
@@ -391,7 +634,10 @@ document.getElementById('playersList').addEventListener('click', e => {
       persist();
       toast('Player deleted.');
     }
+    return;
   }
+  const editPlayerId = e.target.getAttribute('data-edit-player');
+  if (editPlayerId) loadPlayerEditor(editPlayerId);
 });
 
 document.getElementById('importForm').addEventListener('submit', async e => {
@@ -440,6 +686,7 @@ document.getElementById('manualParseBtn').addEventListener('click', () => {
 });
 
 document.getElementById('saveImportedCourseBtn').addEventListener('click', saveImportedCourse);
+
 document.getElementById('discardImportBtn').addEventListener('click', discardImport);
 document.getElementById('pasteTextBtn').addEventListener('click', () => {
   document.querySelector('details').open = true;
@@ -447,11 +694,15 @@ document.getElementById('pasteTextBtn').addEventListener('click', () => {
 });
 
 document.getElementById('calcCourse').addEventListener('change', populateCalcTees);
+document.getElementById('teeCourseSelect').addEventListener('change', e => {
+  if (!editingTeeRef) loadTeeEditor(e.target.value || '', null);
+});
+
 document.getElementById('calcForm').addEventListener('submit', e => {
   e.preventDefault();
   const player = state.players.find(p => p.id === document.getElementById('calcPlayer').value);
   const course = state.courses.find(c => c.id === document.getElementById('calcCourse').value);
-  const tee = course?.tees?.[Number(document.getElementById('calcTee').value)];
+  const tee = course?.tees?.find(t => t.id === document.getElementById('calcTee').value);
   const allowance = Number(document.getElementById('calcAllowance').value || 100);
   if (!player || !course || !tee) return toast('Pick a player, course, and tee.');
   const ch = courseHandicap(player.index, tee.slope, tee.rating, tee.par);
@@ -460,7 +711,8 @@ document.getElementById('calcForm').addEventListener('submit', e => {
     <strong>${escapeHtml(player.name)}</strong><br>
     ${escapeHtml(course.name)} · ${escapeHtml(tee.teeName)} · ${tee.gender === 'F' ? 'Women' : 'Men'}<br>
     Course Handicap: <strong>${ch}</strong><br>
-    Playing Handicap (${allowance}%): <strong>${ph}</strong>
+    Playing Handicap (${allowance}%): <strong>${ph}</strong><br>
+    Hole data: <strong>${strokeIndexSummary(tee.holes)}</strong>
   `;
 });
 
@@ -482,6 +734,7 @@ document.getElementById('importFile').addEventListener('change', async e => {
     const incoming = JSON.parse(text);
     state.players = Array.isArray(incoming.players) ? incoming.players : state.players;
     state.courses = Array.isArray(incoming.courses) ? incoming.courses : state.courses;
+    normalizeState();
     persist();
     toast('Backup imported.');
   } catch {
@@ -513,4 +766,7 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(console.error));
 }
 
+loadPlayerEditor(null);
+loadCourseEditor(null);
+loadTeeEditor('', null);
 renderAll();

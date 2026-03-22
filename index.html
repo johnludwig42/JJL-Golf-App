@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Golf Matchbook</title>
+  <title>The Dye Ledger</title>
   <meta name="theme-color" content="#0b5d3b" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" sizes="180x180" href="icons/icon-192.png" />
@@ -12,8 +12,8 @@
 <body>
   <header class="app-header compact-header">
     <div>
-      <h1>Golf Matchbook</h1>
-      <p class="sub">Compact iPhone layout with editable courses, match setup, live scoring, and leaderboard.</p>
+      <h1>The Dye Ledger</h1>
+      <p class="sub">A compact match-and-games ledger for golf groups.</p>
     </div>
     <button id="installBtn" class="secondary hidden">Install</button>
   </header>
@@ -21,7 +21,7 @@
   <nav class="tabs tabs-5 compact-tabs">
     <button class="tab active" data-tab="players">Players</button>
     <button class="tab" data-tab="courses">Courses</button>
-    <button class="tab" data-tab="matches">Match</button>
+    <button class="tab" data-tab="matches">Matches</button>
     <button class="tab" data-tab="leaderboard">Board</button>
     <button class="tab" data-tab="settings">More</button>
   </nav>
@@ -52,7 +52,13 @@
       </div>
     </section>
 
+    
     <section id="courses" class="panel">
+      <div class="card tight-card">
+        <h2>Saved courses &amp; tees</h2>
+        <div id="coursesList" class="list"></div>
+      </div>
+
       <div class="card tight-card">
         <h2 id="courseFormTitle">Add course</h2>
         <form id="courseForm" class="grid two compact-grid">
@@ -109,32 +115,57 @@
           </div>
         </form>
       </div>
-
-      <div class="card tight-card">
-        <h2>Saved courses &amp; tees</h2>
-        <div id="coursesList" class="list"></div>
-      </div>
     </section>
 
+
+    
     <section id="matches" class="panel">
       <div class="card tight-card">
         <h2 id="matchFormTitle">Setup match</h2>
         <form id="matchForm" class="grid two compact-grid">
           <label><span>Match date</span><input name="date" type="date" required /></label>
-          <label><span>Match name</span><input name="name" placeholder="Saturday game" /></label>
+          <label><span>Match name</span><input class="input-match" name="name" placeholder="Saturday game" /></label>
           <label><span>Course</span><select name="courseId" id="matchCourseSelect" required></select></label>
           <label><span>Tee</span><select name="teeId" id="matchTeeSelect" required></select></label>
-          <label><span>Format</span>
-            <select name="format" id="matchFormatSelect">
-              <option value="singles">Singles</option>
-              <option value="teams">Teams</option>
+          <label><span># Teams</span>
+            <select name="teamCount" id="teamCountSelect">
+              <option value="2">2 teams</option>
+              <option value="3">3 teams</option>
+              <option value="4">4 teams</option>
             </select>
           </label>
-          <label><span>Allowance %</span><input name="allowance" type="number" min="0" max="100" value="100" required /></label>
-          <div class="span-2">
-            <div class="section-label">Select 2 to 6 players and assign team numbers (1 or 2)</div>
-            <div id="matchPlayersPicker" class="player-picker"></div>
+          <label><span>Players / team</span>
+            <select name="playersPerTeam" id="playersPerTeamSelect">
+              <option value="1">1 player</option>
+              <option value="2">2 players</option>
+              <option value="3">3 players</option>
+              <option value="4">4 players</option>
+            </select>
+          </label>
+          <label class="span-2"><span>Allowance %</span><input class="input-match" name="allowance" type="number" min="0" max="100" value="100" required /></label>
+
+          <div class="span-2 card inset-card">
+            <div class="section-label">Teams</div>
+            <div id="teamNamesGrid" class="grid two compact-grid top-gap"></div>
           </div>
+
+          <div class="span-2 card inset-card">
+            <div class="item-header">
+              <div class="section-label">Player assignments</div>
+              <div id="assignmentSummary" class="tiny">Choose teams first.</div>
+            </div>
+            <div id="matchPlayersPicker" class="assignment-grid top-gap"></div>
+          </div>
+
+          <div class="span-2 card inset-card">
+            <div class="item-header">
+              <div class="section-label">Gambling games</div>
+              <div class="tiny">Choose up to 5. Only selected games will be scored in Release 2.</div>
+            </div>
+            <div id="gamesPicker" class="games-picker top-gap"></div>
+            <div id="gameConfigs" class="top-gap"></div>
+          </div>
+
           <div class="actions span-2">
             <button id="matchSubmitBtn" type="submit">Create Match</button>
             <button id="cancelMatchEditBtn" type="button" class="secondary hidden">Cancel</button>
@@ -187,6 +218,7 @@
         <div id="matchesList" class="list"></div>
       </div>
     </section>
+
 
     <section id="leaderboard" class="panel">
       <div class="card tight-card">

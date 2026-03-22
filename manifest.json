@@ -1,6 +1,6 @@
 {
-  "name": "Golf Matchbook",
-  "short_name": "Matchbook",
+  "name": "The Dye Ledger",
+  "short_name": "Dye Ledger",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

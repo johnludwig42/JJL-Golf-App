@@ -651,27 +651,164 @@ function populateMatchTees(selectedTeeId = null) {
   const course = getCourse(courseId);
   teeSelect.innerHTML = !course ? '<option value="">Select tee</option>' : `<option value="">Select tee</option>${course.tees.map(t => `<option value="${t.id}" ${selectedTeeId === t.id ? 'selected' : ''}>${escapeHtml(t.teeName)} · ${t.rating}/${t.slope}</option>`).join('')}`;
 }
+
+function renderTeamNameInputs(teamCount = Number(document.getElementById('teamCountSelect')?.value || 2), teamNames = []) {
+  const wrap = document.getElementById('teamNamesGrid');
+  if (!wrap) return;
+  wrap.innerHTML = Array.from({ length: teamCount }, (_, idx) => `
+    <label>
+      <span>Team ${idx + 1} name</span>
+      <input data-team-name="${idx + 1}" maxlength="25" value="${escapeHtml((teamNames[idx] || `Team ${idx + 1}`).slice(0,25))}" placeholder="Team ${idx + 1}" />
+    </label>
+  `).join('');
+}
+function getAssignmentSelections() {
+  return Array.from(document.querySelectorAll('[data-player-slot]')).map(el => el.value).filter(Boolean);
+}
 function populateMatchPlayerPicker(selected = []) {
-  const selectedMap = new Map(selected.map(s => [s.playerId, Number(s.team) || 1]));
   const container = document.getElementById('matchPlayersPicker');
+  const summary = document.getElementById('assignmentSummary');
+  const teamCount = Number(document.getElementById('teamCountSelect')?.value || 2);
+  const playersPerTeam = Number(document.getElementById('playersPerTeamSelect')?.value || 2);
+  const slotCount = teamCount * playersPerTeam;
   if (!state.players.length) {
     container.innerHTML = '<div class="tiny">Add players first.</div>';
+    if (summary) summary.textContent = 'No saved players yet.';
     return;
   }
-  container.innerHTML = state.players.map((p, idx) => {
-    const checked = selectedMap.has(p.id);
-    const team = selectedMap.get(p.id) || (idx % 2 ? 2 : 1);
+  const selectedBySlot = Array.isArray(selected) ? selected.map(s => s.playerId || '') : [];
+  const existingChosen = getAssignmentSelections();
+  const teamNames = Array.from({ length: teamCount }, (_, i) => document.querySelector(`[data-team-name="${i + 1}"]`)?.value || `Team ${i + 1}`);
+  container.innerHTML = Array.from({ length: slotCount }, (_, idx) => {
+    const teamNo = Math.floor(idx / playersPerTeam) + 1;
+    const slotNo = (idx % playersPerTeam) + 1;
+    const current = selectedBySlot[idx] || '';
+    const options = ['<option value="">Select player</option>']
+      .concat(state.players
+        .filter(p => !existingChosen.includes(p.id) || p.id === current)
+        .map(p => `<option value="${p.id}" ${p.id === current ? 'selected' : ''}>${escapeHtml(p.name)} (${Number(p.index).toFixed(1)})</option>`))
+      .join('');
     return `
-      <div class="picker-row">
-        <label class="picker-check"><input type="checkbox" data-match-player="${p.id}" ${checked ? 'checked' : ''} /> ${escapeHtml(p.name)} <span class="tiny">(${Number(p.index).toFixed(1)})</span></label>
-        <select data-match-team="${p.id}">
-          <option value="1" ${team === 1 ? 'selected' : ''}>Team 1</option>
-          <option value="2" ${team === 2 ? 'selected' : ''}>Team 2</option>
-        </select>
+      <div class="picker-row picker-row-stack">
+        <div class="tiny"><strong>${escapeHtml(teamNames[teamNo - 1])}</strong> · Player ${slotNo}</div>
+        <select data-player-slot="${idx}" data-slot-team="${teamNo}">${options}</select>
       </div>
     `;
   }).join('');
+  if (summary) summary.textContent = `${slotCount} slots · ${teamCount} teams · ${playersPerTeam} player(s) per team`;
 }
+function getDefaultGameConfigs() {
+  return [
+    { key: 'nassau', basis: 'net', stakesFront: 5, stakesBack: 5, stakesOverall: 5 },
+    { key: 'individual_match', basis: 'net', stake: 5 },
+    { key: 'team_match', basis: 'net', stake: 5 },
+    { key: 'team_stroke', basis: 'net', scoringMode: 'best_ball', stake: 5 },
+    { key: 'skins', basis: 'net', skinsType: 'individual', stake: 5 },
+    { key: 'greenies', stakePerPlayer: 1, participants: [] },
+  ];
+}
+function getGameConfig(key, existing = []) {
+  return (existing || []).find(g => g.key === key) || getDefaultGameConfigs().find(g => g.key === key) || { key };
+}
+function renderGamesPicker(existing = []) {
+  const picker = document.getElementById('gamesPicker');
+  const configsWrap = document.getElementById('gameConfigs');
+  if (!picker || !configsWrap) return;
+  const selectedKeys = (existing || []).map(g => g.key);
+  picker.innerHTML = GAME_LIBRARY.map(game => `
+    <label class="game-pill ${selectedKeys.includes(game.key) ? 'selected' : ''}">
+      <input type="checkbox" data-game-key="${game.key}" ${selectedKeys.includes(game.key) ? 'checked' : ''} />
+      <span>${game.label}</span>
+    </label>
+  `).join('');
+  const selectedGames = GAME_LIBRARY.filter(g => selectedKeys.includes(g.key));
+  configsWrap.innerHTML = selectedGames.map(game => {
+    const cfg = getGameConfig(game.key, existing);
+    if (game.key === 'nassau') {
+      return `<div class="card inset-card">
+        <div class="section-label">Nassau</div>
+        <div class="grid two compact-grid top-gap">
+          <label><span>Basis</span><select data-game-config="${game.key}" data-field="basis">
+            <option value="gross" ${cfg.basis === 'gross' ? 'selected' : ''}>Gross</option>
+            <option value="net" ${cfg.basis === 'net' ? 'selected' : ''}>Net</option>
+            <option value="both" ${cfg.basis === 'both' ? 'selected' : ''}>Both</option>
+          </select></label>
+          <div></div>
+          <label><span>$ Front</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stakesFront" value="${cfg.stakesFront ?? 5}" /></label>
+          <label><span>$ Back</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stakesBack" value="${cfg.stakesBack ?? 5}" /></label>
+          <label><span>$ 18</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stakesOverall" value="${cfg.stakesOverall ?? 5}" /></label>
+        </div>
+      </div>`;
+    }
+    if (game.key === 'team_stroke') {
+      return `<div class="card inset-card">
+        <div class="section-label">Team Stroke Play</div>
+        <div class="grid two compact-grid top-gap">
+          <label><span>Basis</span><select data-game-config="${game.key}" data-field="basis">
+            <option value="gross" ${cfg.basis === 'gross' ? 'selected' : ''}>Gross</option>
+            <option value="net" ${cfg.basis === 'net' ? 'selected' : ''}>Net</option>
+          </select></label>
+          <label><span>Team score</span><select data-game-config="${game.key}" data-field="scoringMode">
+            <option value="best_ball" ${cfg.scoringMode === 'best_ball' ? 'selected' : ''}>Best Team Ball</option>
+            <option value="aggregate" ${cfg.scoringMode === 'aggregate' ? 'selected' : ''}>Aggregate</option>
+          </select></label>
+          <label><span>$ Stake</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stake" value="${cfg.stake ?? 5}" /></label>
+        </div>
+      </div>`;
+    }
+    if (game.key === 'skins') {
+      return `<div class="card inset-card">
+        <div class="section-label">Skins</div>
+        <div class="grid two compact-grid top-gap">
+          <label><span>Skin type</span><select data-game-config="${game.key}" data-field="skinsType">
+            <option value="individual" ${cfg.skinsType === 'individual' ? 'selected' : ''}>Individual</option>
+            <option value="team" ${cfg.skinsType === 'team' ? 'selected' : ''}>Team</option>
+          </select></label>
+          <label><span>Basis</span><select data-game-config="${game.key}" data-field="basis">
+            <option value="gross" ${cfg.basis === 'gross' ? 'selected' : ''}>Gross</option>
+            <option value="net" ${cfg.basis === 'net' ? 'selected' : ''}>Net</option>
+          </select></label>
+          <label><span>$ Stake</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stake" value="${cfg.stake ?? 5}" /></label>
+        </div>
+      </div>`;
+    }
+    if (game.key === 'greenies') {
+      return `<div class="card inset-card">
+        <div class="section-label">Greenies</div>
+        <div class="grid two compact-grid top-gap">
+          <label class="span-2"><span>Participants</span>
+            <div class="greenies-list">${state.players.map(p => `<label class="mini-check"><input type="checkbox" data-greenie-player="${p.id}" ${(cfg.participants || []).includes(p.id) ? 'checked' : ''} /> ${escapeHtml(p.name)}</label>`).join('')}</div>
+          </label>
+          <label><span>$ / player / par 3</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stakePerPlayer" value="${cfg.stakePerPlayer ?? 1}" /></label>
+        </div>
+      </div>`;
+    }
+    return `<div class="card inset-card">
+      <div class="section-label">${game.label}</div>
+      <div class="grid two compact-grid top-gap">
+        <label><span>Basis</span><select data-game-config="${game.key}" data-field="basis">
+          <option value="gross" ${cfg.basis === 'gross' ? 'selected' : ''}>Gross</option>
+          <option value="net" ${cfg.basis === 'net' ? 'selected' : ''}>Net</option>
+        </select></label>
+        <label><span>$ Stake</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stake" value="${cfg.stake ?? 5}" /></label>
+      </div>
+    </div>`;
+  }).join('');
+}
+function collectSelectedGames() {
+  const keys = Array.from(document.querySelectorAll('[data-game-key]:checked')).map(el => el.dataset.gameKey).slice(0, 5);
+  return keys.map(key => {
+    const cfg = { key };
+    document.querySelectorAll(`[data-game-config="${key}"]`).forEach(el => {
+      cfg[el.dataset.field] = el.value;
+    });
+    if (key === 'greenies') {
+      cfg.participants = Array.from(document.querySelectorAll('[data-greenie-player]:checked')).map(el => el.dataset.greeniePlayer);
+    }
+    return cfg;
+  });
+}
+
 
 function buildTeeHoleRows(courseId = '', holes = null) {
   const course = getCourse(courseId);
@@ -747,6 +884,7 @@ function loadTeeEditor(courseId = null, teeId = null) {
   updateTeeStrokeTemplateHint(courseId);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
 function loadMatchEditor(matchId = null) {
   const form = document.getElementById('matchForm');
   editingMatchId = matchId;
@@ -756,21 +894,34 @@ function loadMatchEditor(matchId = null) {
   if (!matchId) {
     form.reset();
     form.date.value = todayIso();
+    form.allowance.value = 100;
+    document.getElementById('teamCountSelect').value = '2';
+    document.getElementById('playersPerTeamSelect').value = '2';
+    renderTeamNameInputs(2, []);
     populateMatchPlayerPicker([]);
+    renderGamesPicker([]);
     return;
   }
   const match = getMatch(matchId); if (!match) return;
-  form.date.value = match.date; form.name.value = match.name || ''; form.courseId.value = match.courseId || ''; populateMatchTees(match.teeId); form.teeId.value = match.teeId || '';
-  form.format.value = match.format || 'teams'; form.allowance.value = match.allowance || 100;
-  populateMatchPlayerPicker(match.players);
+  form.date.value = match.date;
+  form.name.value = match.name || '';
+  form.courseId.value = match.courseId || '';
+  populateMatchTees(match.teeId); form.teeId.value = match.teeId || '';
+  form.allowance.value = match.allowance || 100;
+  document.getElementById('teamCountSelect').value = String(match.teamCount || 2);
+  document.getElementById('playersPerTeamSelect').value = String(match.playersPerTeam || 2);
+  renderTeamNameInputs(match.teamCount || 2, match.teamNames || []);
+  populateMatchPlayerPicker(match.players || []);
+  renderGamesPicker(match.selectedGames || []);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
 
 function exportJson() {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = `golf-matchbook-${todayIso()}.json`; a.click();
+  a.href = url; a.download = `the-dye-ledger-${todayIso()}.json`; a.click();
   URL.revokeObjectURL(url);
 }
 
@@ -874,14 +1025,42 @@ function installHandlers() {
   });
 
   document.getElementById('matchCourseSelect').addEventListener('change', () => populateMatchTees());
+  document.getElementById('teamCountSelect').addEventListener('change', () => {
+    const teamCount = Number(document.getElementById('teamCountSelect').value || 2);
+    renderTeamNameInputs(teamCount, Array.from(document.querySelectorAll('[data-team-name]')).map(el => el.value));
+    populateMatchPlayerPicker([]);
+  });
+  document.getElementById('playersPerTeamSelect').addEventListener('change', () => populateMatchPlayerPicker([]));
+  document.getElementById('teamNamesGrid').addEventListener('input', () => populateMatchPlayerPicker([]));
+  document.getElementById('matchPlayersPicker').addEventListener('change', e => {
+    if (e.target.matches('[data-player-slot]')) populateMatchPlayerPicker(Array.from(document.querySelectorAll('[data-player-slot]')).map(el => ({ playerId: el.value })));
+  });
+  document.getElementById('gamesPicker').addEventListener('change', e => {
+    if (!e.target.matches('[data-game-key]')) return;
+    const checked = Array.from(document.querySelectorAll('[data-game-key]:checked'));
+    if (checked.length > 5) {
+      e.target.checked = false;
+      toast('Select up to 5 gambling games.');
+      return;
+    }
+    renderGamesPicker(collectSelectedGames());
+  });
   document.getElementById('matchForm').addEventListener('submit', e => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const selectedPlayers = state.players.filter(p => document.querySelector(`[data-match-player="${p.id}"]`)?.checked).map(p => ({ playerId: p.id, team: Number(document.querySelector(`[data-match-team="${p.id}"]`)?.value) || 1, scores: buildEmptyScores() }));
-    if (selectedPlayers.length < 2 || selectedPlayers.length > 6) return toast('Select between 2 and 6 players.');
-    const teamCounts = selectedPlayers.reduce((acc, p) => ((acc[p.team] = (acc[p.team] || 0) + 1), acc), {});
-    if (Object.keys(teamCounts).length > 2) return toast('Use one or two teams only.');
-    if (Math.max(...Object.values(teamCounts)) > 3) return toast('Max team size is 3 players.');
+    const teamCount = Number(fd.get('teamCount')) || 2;
+    const playersPerTeam = Number(fd.get('playersPerTeam')) || 2;
+    if ((teamCount * playersPerTeam) > 12) return toast('Limit is 12 total players.');
+    const teamNames = Array.from({ length: teamCount }, (_, i) => String(document.querySelector(`[data-team-name="${i + 1}"]`)?.value || `Team ${i + 1}`).slice(0, 25));
+    const selectedPlayers = Array.from(document.querySelectorAll('[data-player-slot]'))
+      .map((el, idx) => ({ playerId: el.value, team: Number(el.dataset.slotTeam), slot: idx }))
+      .filter(p => p.playerId);
+    const uniqueIds = new Set(selectedPlayers.map(p => p.playerId));
+    if (selectedPlayers.length !== uniqueIds.size) return toast('Each player can only be selected once.');
+    if (selectedPlayers.length < 2) return toast('Select at least 2 players.');
+    const selectedGames = collectSelectedGames();
+    if (selectedGames.length > 5) return toast('Select up to 5 gambling games.');
+    if (selectedGames.some(g => g.key === 'nassau') && teamCount !== 2) return toast('Nassau requires exactly 2 teams.');
     const existing = editingMatchId ? getMatch(editingMatchId) : null;
     const match = {
       id: editingMatchId || uid(),
@@ -889,13 +1068,17 @@ function installHandlers() {
       name: String(fd.get('name') || '').trim() || 'Round',
       courseId: String(fd.get('courseId') || ''),
       teeId: String(fd.get('teeId') || ''),
-      format: String(fd.get('format') || 'teams'),
+      format: 'teams',
       allowance: Number(fd.get('allowance')) || 100,
+      teamCount,
+      playersPerTeam,
+      teamNames,
+      selectedGames,
       status: existing?.status || 'active',
       completedAt: existing?.completedAt || null,
       players: selectedPlayers.map(sp => {
         const old = existing?.players.find(op => op.playerId === sp.playerId);
-        return old ? { ...old, team: sp.team } : sp;
+        return old ? { ...old, team: sp.team } : { playerId: sp.playerId, team: sp.team, scores: buildEmptyScores() };
       }),
     };
     normalizeMatch(match);
@@ -903,7 +1086,8 @@ function installHandlers() {
     if (editingMatchId) state.matches = state.matches.map(m => m.id === editingMatchId ? match : m); else state.matches.push(match);
     state.activeMatchId = match.id;
     currentHole = Math.max(1, completedHoles(match) || 1);
-    loadMatchEditor(null); persist(); toast(editingMatchId ? 'Match updated.' : 'Match created and loaded.');
+    loadMatchEditor(null); persist();
+    toast(editingMatchId ? 'Match updated.' : 'Match created and loaded.');
   });
   document.getElementById('cancelMatchEditBtn').addEventListener('click', () => loadMatchEditor(null));
   document.getElementById('matchesList').addEventListener('click', e => {

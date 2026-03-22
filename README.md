@@ -26,3 +26,6 @@ This version keeps the manual and editable course/tee workflow, but adds:
 
 
 Version v8 note: course-level stroke index templates now carry forward to new tees on the same course unless you manually change and save the tee.
+
+
+Version 9 adds scorecard sharing from completed or in-progress rounds using the iPhone share sheet when available, with clipboard/mail fallback. This update preserves existing local data by loading prior saved state and extending it without clearing storage.

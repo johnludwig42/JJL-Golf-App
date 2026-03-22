@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'golf-matchbook-v8';
+const STORAGE_KEY = 'golf-matchbook-v9';
 let deferredPrompt = null;
 let editingPlayerId = null;
 let editingCourseId = null;
@@ -30,6 +30,7 @@ function loadState() {
   const fallback = { players: [], courses: [], matches: [], activeMatchId: null };
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
+      || localStorage.getItem('golf-matchbook-v8')
       || localStorage.getItem('golf-matchbook-v7')
       || localStorage.getItem('golf-matchbook-v6')
       || localStorage.getItem('golf-matchbook-v5')
@@ -71,6 +72,85 @@ function formatMatchDiff(diff) {
   if (!Number.isFinite(diff) || diff === 0) return 'AS';
   const sign = diff > 0 ? 'Team 1' : 'Team 2';
   return `${sign} ${Math.abs(diff)} up`;
+}
+
+function formatGrossNet(score) {
+  if (!Number.isFinite(score?.gross)) return '—';
+  const netText = Number.isFinite(score?.net) ? ` / net ${score.net}` : '';
+  return `${score.gross}${netText}`;
+}
+function buildRoundShareText(match) {
+  const metrics = computeMatchMetrics(match);
+  if (!metrics) return `${match?.name || 'Golf round'}
+
+This round is missing valid course or tee data.`;
+  const lines = [];
+  lines.push(`${match.name || 'Round'} — ${match.date}`);
+  lines.push(`${metrics.course.name} · ${metrics.tee.teeName}`);
+  lines.push(match.status === 'complete' ? `Completed ${new Date(match.completedAt || Date.now()).toLocaleString()}` : `${metrics.completed}/18 holes complete`);
+  lines.push('');
+
+  if (metrics.teams.length === 2) {
+    lines.push(`Team Match: ${formatMatchDiff(metrics.matchDiff)}`);
+    const front = metrics.teams[0].front === 0 ? 'AS' : (metrics.teams[0].front > 0 ? `Team 1 ${Math.abs(metrics.teams[0].front)} up` : `Team 2 ${Math.abs(metrics.teams[0].front)} up`);
+    const back = metrics.teams[0].back === 0 ? 'AS' : (metrics.teams[0].back > 0 ? `Team 1 ${Math.abs(metrics.teams[0].back)} up` : `Team 2 ${Math.abs(metrics.teams[0].back)} up`);
+    lines.push(`Front 9: ${front}`);
+    lines.push(`Back 9: ${back}`);
+    lines.push('');
+    lines.push('Team Totals');
+    metrics.teams.forEach(team => {
+      lines.push(`Team ${team.team} (${team.members.map(m => m.player.name).join(', ')}): gross ${team.grossTotal}, net ${team.netTotal}, to par ${formatSigned(team.toPar)}, net diff ${formatSigned(team.netDiff)}, skins ${team.skins}`);
+    });
+    lines.push('');
+  }
+
+  lines.push('Player Totals');
+  metrics.players.slice().sort((a, b) => a.netDiff - b.netDiff || a.toPar - b.toPar).forEach(p => {
+    lines.push(`${p.player.name} (T${p.team}): gross ${p.grossTotal || 0}, net ${p.netTotal || 0}, to par ${formatSigned(p.toPar || 0)}, net diff ${formatSigned(p.netDiff || 0)}, skins ${p.skins}`);
+  });
+
+  lines.push('');
+  lines.push('Hole-by-Hole');
+  metrics.holeResults.forEach(h => {
+    if (!h.completed) {
+      lines.push(`H${h.holeNumber}: not completed`);
+      return;
+    }
+    const playerBits = metrics.players.map(p => {
+      const score = h.playerScores.find(ps => ps.playerId === p.playerId);
+      return `${p.player.name} ${formatGrossNet(score)}`;
+    }).join(' | ');
+    const result = metrics.teams.length === 2
+      ? (h.teamWinner === 1 ? 'Team 1 won hole' : h.teamWinner === 2 ? 'Team 2 won hole' : 'Hole tied')
+      : `Low net: ${h.indivWinners.map(id => metrics.players.find(p => p.playerId === id)?.player.name).filter(Boolean).join(', ') || '—'}`;
+    lines.push(`H${h.holeNumber}: ${playerBits} — ${result}`);
+  });
+
+  return lines.join('\n');
+}
+async function shareRound(matchId) {
+  const match = getMatch(matchId || state.activeMatchId);
+  if (!match) return toast('No round selected to share.');
+  const text = buildRoundShareText(match);
+  const shareData = { title: `${match.name || 'Golf Round'} Scorecard`, text };
+  try {
+    if (navigator.share) {
+      await navigator.share(shareData);
+      toast('Scorecard ready to send.');
+      return;
+    }
+  } catch (err) {
+    if (err && err.name === 'AbortError') return;
+  }
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      toast('Scorecard copied. Paste into Messages or Mail.');
+      return;
+    }
+  } catch {}
+  const mailto = `mailto:?subject=${encodeURIComponent(shareData.title)}&body=${encodeURIComponent(text)}`;
+  window.location.href = mailto;
 }
 function normalizeHole(hole, idx) {
   return {
@@ -384,6 +464,7 @@ function renderMatches() {
           </div>
           <div class="actions wrap compact-actions">
             <button class="secondary" data-load-match="${match.id}">${state.activeMatchId === match.id ? 'Loaded' : 'Load'}</button>
+            <button class="secondary" data-share-match="${match.id}">Share</button>
             <button class="secondary" data-delete-match="${match.id}">Delete</button>
           </div>
         </div>
@@ -826,12 +907,14 @@ function installHandlers() {
   });
   document.getElementById('cancelMatchEditBtn').addEventListener('click', () => loadMatchEditor(null));
   document.getElementById('matchesList').addEventListener('click', e => {
-    const loadId = e.target.dataset.loadMatch; const deleteId = e.target.dataset.deleteMatch;
+    const loadId = e.target.dataset.loadMatch; const shareId = e.target.dataset.shareMatch; const deleteId = e.target.dataset.deleteMatch;
     if (loadId) { state.activeMatchId = loadId; currentHole = Math.max(1, completedHoles(getMatch(loadId)) || 1); persist(); }
+    if (shareId) { shareRound(shareId); }
     if (deleteId && confirm('Delete this match?')) { state.matches = state.matches.filter(m => m.id !== deleteId); if (state.activeMatchId === deleteId) state.activeMatchId = null; persist(); }
   });
   document.getElementById('prevHoleBtn').addEventListener('click', () => { currentHole = Math.max(1, currentHole - 1); renderCurrentMatch(); });
   document.getElementById('nextHoleBtn').addEventListener('click', () => { currentHole = Math.min(18, currentHole + 1); renderCurrentMatch(); });
+  document.getElementById('shareRoundBtn').addEventListener('click', () => { shareRound(); });
   document.getElementById('saveScoresBtn').addEventListener('click', () => {
     const match = getActiveMatch(); if (!match) return;
     const holeInputs = document.querySelectorAll('[data-score-player]');

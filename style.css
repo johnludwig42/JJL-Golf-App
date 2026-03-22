@@ -5,7 +5,6 @@
   --muted: #5b6f68;
   --accent: #0b5d3b;
   --accent-2: #e7f4ee;
-  --danger: #9f2d2d;
   --border: #d7e3dc;
   --shadow: 0 8px 24px rgba(0,0,0,.06);
 }
@@ -27,10 +26,10 @@ body {
 .sub { margin: 6px 0 0; color: var(--muted); }
 .tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
   padding: 0 16px 12px;
 }
+.tabs-3 { grid-template-columns: repeat(3, 1fr); }
 .tab, button, .button-link {
   border: none;
   background: var(--accent);
@@ -60,10 +59,7 @@ main { padding: 0 16px 28px; }
   margin-bottom: 16px;
 }
 .card h2 { margin-top: 0; }
-.grid {
-  display: grid;
-  gap: 12px;
-}
+.grid { display: grid; gap: 12px; }
 .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -84,7 +80,6 @@ input, select, textarea {
   background: white;
   font-size: 15px;
 }
-textarea { resize: vertical; }
 .actions { display: flex; gap: 10px; }
 .actions.wrap { flex-wrap: wrap; }
 .list { display: grid; gap: 10px; }
@@ -103,14 +98,6 @@ textarea { resize: vertical; }
 .item-title { font-weight: 700; }
 .muted { color: var(--muted); font-size: 14px; }
 .tiny { font-size: 12px; color: var(--muted); }
-.top-gap { margin-top: 12px; }
-.callout {
-  background: var(--accent-2);
-  color: var(--text);
-  border-radius: 12px;
-  padding: 12px;
-  border: 1px solid #c8dfd4;
-}
 .result {
   margin-top: 12px;
   padding: 12px;
@@ -131,13 +118,43 @@ textarea { resize: vertical; }
   z-index: 1000;
 }
 .file-label input { display: none; }
-hr { border: 0; border-top: 1px solid var(--border); margin: 12px 0; }
-@media (max-width: 700px) {
-  .tabs { grid-template-columns: repeat(2, 1fr); }
-  .grid.two, .grid.three, .grid.four { grid-template-columns: 1fr; }
-  .span-2, .span-3, .span-4 { grid-column: auto; }
-}
 .compact-actions button { padding: 9px 12px; font-size: 13px; }
 .tee-block + .tee-block { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
 .strong { font-weight: 700; color: var(--text); }
+.hole-grid-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.hole-grid {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 420px;
+  background: white;
+}
+.hole-grid th,
+.hole-grid td {
+  border-bottom: 1px solid var(--border);
+  padding: 8px;
+  text-align: left;
+  font-size: 14px;
+}
+.hole-grid th {
+  position: sticky;
+  top: 0;
+  background: #f8fbf9;
+}
+.hole-grid input {
+  min-width: 72px;
+  padding: 8px 9px;
+}
+.hole-num {
+  font-weight: 700;
+  min-width: 48px;
+}
 code { background: #edf2ef; padding: 2px 6px; border-radius: 6px; }
+@media (max-width: 700px) {
+  .tabs-3 { grid-template-columns: 1fr; }
+  .grid.two, .grid.three, .grid.four { grid-template-columns: 1fr; }
+  .span-2, .span-3, .span-4 { grid-column: auto; }
+}

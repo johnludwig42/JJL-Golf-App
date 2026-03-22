@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Golf Matchbook</title>
   <meta name="theme-color" content="#0b5d3b" />
   <link rel="manifest" href="manifest.json" />
@@ -10,25 +10,27 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header class="app-header">
+  <header class="app-header compact-header">
     <div>
       <h1>Golf Matchbook</h1>
-      <p class="sub">Manual players and editable course + tee data in one place.</p>
+      <p class="sub">Compact iPhone layout with editable courses, match setup, live scoring, and leaderboard.</p>
     </div>
     <button id="installBtn" class="secondary hidden">Install</button>
   </header>
 
-  <nav class="tabs tabs-3">
+  <nav class="tabs tabs-5 compact-tabs">
     <button class="tab active" data-tab="players">Players</button>
-    <button class="tab" data-tab="courses">Courses &amp; Tees</button>
-    <button class="tab" data-tab="settings">Settings</button>
+    <button class="tab" data-tab="courses">Courses</button>
+    <button class="tab" data-tab="matches">Match</button>
+    <button class="tab" data-tab="leaderboard">Board</button>
+    <button class="tab" data-tab="settings">More</button>
   </nav>
 
   <main>
     <section id="players" class="panel active">
-      <div class="card">
+      <div class="card tight-card">
         <h2 id="playerFormTitle">Add player</h2>
-        <form id="playerForm" class="grid two">
+        <form id="playerForm" class="grid two compact-grid">
           <label>
             <span>Name</span>
             <input name="name" required placeholder="John" />
@@ -39,40 +41,40 @@
           </label>
           <div class="actions span-2">
             <button id="playerSubmitBtn" type="submit">Save Player</button>
-            <button id="cancelPlayerEditBtn" type="button" class="secondary hidden">Cancel Edit</button>
+            <button id="cancelPlayerEditBtn" type="button" class="secondary hidden">Cancel</button>
           </div>
         </form>
       </div>
 
-      <div class="card">
+      <div class="card tight-card">
         <h2>Saved players</h2>
         <div id="playersList" class="list"></div>
       </div>
     </section>
 
     <section id="courses" class="panel">
-      <div class="card">
-        <h2 id="courseFormTitle">Add course manually</h2>
-        <p class="muted">All course and tee data is manual and editable. No import workflow.</p>
-        <form id="courseForm" class="grid two">
+      <div class="card tight-card">
+        <h2 id="courseFormTitle">Add course</h2>
+        <form id="courseForm" class="grid two compact-grid">
           <label><span>Course name</span><input name="name" required /></label>
           <label><span>City</span><input name="city" /></label>
           <label><span>State</span><input name="state" /></label>
           <label><span>Country</span><input name="country" value="United States of America" /></label>
           <div class="actions span-2">
-            <button id="courseSubmitBtn" type="submit">Create Course</button>
-            <button id="cancelCourseEditBtn" type="button" class="secondary hidden">Cancel Edit</button>
+            <button id="courseSubmitBtn" type="submit">Save Course</button>
+            <button id="cancelCourseEditBtn" type="button" class="secondary hidden">Cancel</button>
           </div>
         </form>
       </div>
 
-      <div class="card">
-        <h2 id="teeFormTitle">Add tee manually</h2>
-        <form id="teeForm" class="grid three">
+      <div class="card tight-card">
+        <h2 id="teeFormTitle">Add tee</h2>
+        <form id="teeForm" class="grid two compact-grid">
           <label>
             <span>Course</span>
             <select name="courseId" id="teeCourseSelect" required></select>
           </label>
+          <div class="span-2 tiny" id="teeStrokeHint">No course-wide stroke index template yet. Save one tee with stroke indexes to reuse them across all tees.</div>
           <label><span>Tee name</span><input name="teeName" required placeholder="Blue" /></label>
           <label>
             <span>Gender</span>
@@ -82,67 +84,212 @@
           <label><span>Total par</span><input name="par" type="number" min="20" max="90" placeholder="Auto if blank" /></label>
           <label><span>Course rating</span><input name="rating" type="number" step="0.1" required /></label>
           <label><span>Slope</span><input name="slope" type="number" min="55" max="155" required /></label>
-          <div class="span-3 hole-tools actions wrap compact-actions">
+          <div class="span-2 hole-tools actions wrap compact-actions">
             <button id="loadTemplate18Btn" type="button" class="secondary">Load 18-hole template</button>
             <button id="recalcTotalsBtn" type="button" class="secondary">Use hole totals</button>
           </div>
-          <div class="span-3">
+          <div class="span-2">
             <div class="hole-grid-wrap">
-              <table class="hole-grid">
+              <table class="hole-grid hole-grid-course">
                 <thead>
                   <tr>
                     <th>Hole</th>
-                    <th>Yardage</th>
+                    <th>Yds</th>
                     <th>Par</th>
-                    <th>Stroke Index</th>
+                    <th>SI</th>
                   </tr>
                 </thead>
                 <tbody id="holesTableBody"></tbody>
               </table>
             </div>
           </div>
-          <div class="actions span-3">
+          <div class="actions span-2">
             <button id="teeSubmitBtn" type="submit">Save Tee</button>
-            <button id="cancelTeeEditBtn" type="button" class="secondary hidden">Cancel Edit</button>
+            <button id="cancelTeeEditBtn" type="button" class="secondary hidden">Cancel</button>
           </div>
         </form>
       </div>
 
-      <div class="card">
-        <h2>Saved courses</h2>
+      <div class="card tight-card">
+        <h2>Saved courses &amp; tees</h2>
         <div id="coursesList" class="list"></div>
       </div>
+    </section>
 
-      <div class="card">
-        <h2>Handicap calculator</h2>
-        <form id="calcForm" class="grid four">
-          <label><span>Player</span><select id="calcPlayer" required></select></label>
-          <label><span>Course</span><select id="calcCourse" required></select></label>
-          <label><span>Tee</span><select id="calcTee" required></select></label>
-          <label><span>Allowance %</span><input id="calcAllowance" type="number" min="0" max="100" value="100" required /></label>
-          <div class="actions span-4"><button type="submit">Calculate</button></div>
+    <section id="matches" class="panel">
+      <div class="card tight-card">
+        <h2 id="matchFormTitle">Setup match</h2>
+        <form id="matchForm" class="grid two compact-grid">
+          <label><span>Match date</span><input name="date" type="date" required /></label>
+          <label><span>Match name</span><input name="name" placeholder="Saturday game" /></label>
+          <label><span>Course</span><select name="courseId" id="matchCourseSelect" required></select></label>
+          <label><span>Tee</span><select name="teeId" id="matchTeeSelect" required></select></label>
+          <label><span>Format</span>
+            <select name="format" id="matchFormatSelect">
+              <option value="singles">Singles</option>
+              <option value="teams">Teams</option>
+            </select>
+          </label>
+          <label><span>Allowance %</span><input name="allowance" type="number" min="0" max="100" value="100" required /></label>
+          <div class="span-2">
+            <div class="section-label">Select 2 to 6 players and assign team numbers (1 or 2)</div>
+            <div id="matchPlayersPicker" class="player-picker"></div>
+          </div>
+          <div class="actions span-2">
+            <button id="matchSubmitBtn" type="submit">Create Match</button>
+            <button id="cancelMatchEditBtn" type="button" class="secondary hidden">Cancel</button>
+          </div>
         </form>
-        <div id="calcResult" class="result"></div>
+      </div>
+
+      <div class="card tight-card">
+        <div class="item-header">
+          <div>
+            <h2>Current match</h2>
+            <div id="currentMatchMeta" class="muted">No active match.</div>
+          </div>
+          <div class="actions wrap compact-actions">
+            <button id="finishRoundBtn" type="button" class="secondary">Finish Round</button>
+            <button id="confirmFinishRoundBtn" type="button" class="secondary hidden">Confirm Finish</button>
+          </div>
+        </div>
+        <div id="scoreEntryEmpty" class="tiny top-gap">Create a match to begin score entry.</div>
+        <div id="scoreEntryWrap" class="hidden top-gap">
+          <div class="score-hole-nav actions wrap compact-actions">
+            <button id="prevHoleBtn" type="button" class="secondary">◀ Prev</button>
+            <div id="currentHoleBadge" class="badge big-badge">Hole 1</div>
+            <button id="nextHoleBtn" type="button" class="secondary">Next ▶</button>
+          </div>
+          <div id="holeSummary" class="tiny top-gap"></div>
+          <div class="score-grid-wrap top-gap">
+            <table class="score-grid">
+              <thead>
+                <tr>
+                  <th>Player</th>
+                  <th>Team</th>
+                  <th>Gross</th>
+                  <th>Strokes</th>
+                  <th>Net</th>
+                </tr>
+              </thead>
+              <tbody id="scoreGridBody"></tbody>
+            </table>
+          </div>
+          <div class="actions top-gap">
+            <button id="saveScoresBtn" type="button">Save Hole Scores</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card tight-card">
+        <h2>Saved matches</h2>
+        <div id="matchesList" class="list"></div>
+      </div>
+    </section>
+
+    <section id="leaderboard" class="panel">
+      <div class="card tight-card">
+        <div class="item-header">
+          <div>
+            <h2>Live leaderboard</h2>
+            <div id="leaderboardMeta" class="muted">No active match.</div>
+          </div>
+          <div id="leaderboardStatusBadge" class="badge">Awaiting match</div>
+        </div>
+      </div>
+
+      <div id="leaderboardWrap" class="hidden">
+        <div class="leaderboard-cards">
+          <div class="card tight-card">
+            <h2>Match status</h2>
+            <div id="matchStatusSummary" class="result compact-result"></div>
+          </div>
+          <div class="card tight-card">
+            <h2>Games summary</h2>
+            <div id="gamesSummary" class="result compact-result"></div>
+          </div>
+        </div>
+
+        <div class="card tight-card">
+          <h2>Player leaderboard</h2>
+          <div class="leader-table-wrap">
+            <table class="leader-table">
+              <thead>
+                <tr>
+                  <th>Player</th>
+                  <th>Team</th>
+                  <th>Gross</th>
+                  <th>Net</th>
+                  <th>To Par</th>
+                  <th>Net Diff</th>
+                  <th>Skins</th>
+                </tr>
+              </thead>
+              <tbody id="playerLeaderboardBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card tight-card">
+          <h2>Team leaderboard</h2>
+          <div class="leader-table-wrap">
+            <table class="leader-table">
+              <thead>
+                <tr>
+                  <th>Team</th>
+                  <th>Players</th>
+                  <th>Gross</th>
+                  <th>Net</th>
+                  <th>To Par</th>
+                  <th>Net Diff</th>
+                  <th>Match</th>
+                </tr>
+              </thead>
+              <tbody id="teamLeaderboardBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card tight-card">
+          <h2>Hole-by-hole momentum</h2>
+          <div id="holeMomentum" class="hole-momentum"></div>
+        </div>
+      </div>
+
+      <div id="leaderboardEmpty" class="card tight-card">
+        <div class="tiny">Create a match to unlock the live leaderboard.</div>
       </div>
     </section>
 
     <section id="settings" class="panel">
-      <div class="card">
+      <div class="card tight-card">
+        <h2>Handicap calculator</h2>
+        <form id="calcForm" class="grid two compact-grid">
+          <label><span>Player</span><select id="calcPlayer" required></select></label>
+          <label><span>Course</span><select id="calcCourse" required></select></label>
+          <label><span>Tee</span><select id="calcTee" required></select></label>
+          <label><span>Allowance %</span><input id="calcAllowance" type="number" min="0" max="100" value="100" required /></label>
+          <div class="actions span-2"><button type="submit">Calculate</button></div>
+        </form>
+        <div id="calcResult" class="result compact-result"></div>
+      </div>
+
+      <div class="card tight-card">
         <h2>Data tools</h2>
         <div class="actions wrap">
-          <button id="exportBtn" type="button">Export JSON Backup</button>
+          <button id="exportBtn" type="button">Export JSON</button>
           <label class="button-link file-label">
-            Import JSON Backup
+            Import JSON
             <input id="importFile" type="file" accept="application/json" />
           </label>
         </div>
       </div>
-      <div class="card">
+      <div class="card tight-card">
         <h2>Notes</h2>
-        <ul>
-          <li>Players, courses, and tee sets remain editable.</li>
-          <li>Hole-by-hole data is entered manually and stored with each tee.</li>
-          <li>Code updates should not overwrite your saved browser data.</li>
+        <ul class="tight-list">
+          <li>Courses and tees stay manual and editable.</li>
+          <li>Matches support 2 to 6 players with team sizes of 1, 2, or 3.</li>
+          <li>Leaderboard highlights player totals, team totals, match play, and skins.</li>
         </ul>
       </div>
     </section>

@@ -6,9 +6,11 @@
   --accent: #0b5d3b;
   --accent-2: #e7f4ee;
   --border: #d7e3dc;
-  --shadow: 0 8px 24px rgba(0,0,0,.06);
+  --shadow: 0 8px 20px rgba(0,0,0,.05);
+  --danger: #8c2c2c;
 }
 * { box-sizing: border-box; }
+html, body { height: 100%; }
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -16,145 +18,215 @@ body {
   color: var(--text);
 }
 .app-header {
-  padding: 18px 16px 10px;
+  padding: calc(12px + env(safe-area-inset-top)) 12px 8px;
   display: flex;
   justify-content: space-between;
   align-items: start;
-  gap: 12px;
+  gap: 10px;
 }
-.app-header h1 { margin: 0; font-size: 28px; }
-.sub { margin: 6px 0 0; color: var(--muted); }
+.compact-header h1 { margin: 0; font-size: 22px; line-height: 1.1; }
+.sub { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.35; max-width: 520px; }
 .tabs {
   display: grid;
-  gap: 8px;
-  padding: 0 16px 12px;
+  gap: 6px;
+  padding: 0 12px 10px;
 }
-.tabs-3 { grid-template-columns: repeat(3, 1fr); }
+.tabs-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.tab, button, .button-link, select, input {
+  -webkit-tap-highlight-color: transparent;
+}
 .tab, button, .button-link {
   border: none;
   background: var(--accent);
   color: white;
-  border-radius: 12px;
-  padding: 12px 14px;
-  font-size: 15px;
+  border-radius: 11px;
+  padding: 11px 10px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
-.tab { background: #dfe8e3; color: var(--text); }
+.tab {
+  background: #dfe8e3;
+  color: var(--text);
+  min-height: 42px;
+}
 .tab.active { background: var(--accent); color: white; }
 button.secondary, .secondary { background: #edf2ef; color: var(--text); }
 .hidden { display: none !important; }
-main { padding: 0 16px 28px; }
+main { padding: 0 12px calc(26px + env(safe-area-inset-bottom)); }
 .panel { display: none; }
 .panel.active { display: block; }
 .card {
   background: var(--card);
   box-shadow: var(--shadow);
   border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 16px;
-  margin-bottom: 16px;
+  border-radius: 16px;
+  padding: 12px;
+  margin-bottom: 12px;
 }
-.card h2 { margin-top: 0; }
-.grid { display: grid; gap: 12px; }
+.tight-card { padding: 11px; }
+.card h2 { margin: 0 0 10px; font-size: 16px; }
+.grid { display: grid; gap: 10px; }
 .grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .span-2 { grid-column: span 2; }
-.span-3 { grid-column: span 3; }
-.span-4 { grid-column: span 4; }
-label span {
+label span, .section-label {
   display: block;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--muted);
-  margin-bottom: 6px;
+  margin-bottom: 5px;
+  font-weight: 600;
 }
 input, select, textarea {
   width: 100%;
-  padding: 11px 12px;
+  padding: 10px 10px;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: white;
-  font-size: 15px;
+  font-size: 14px;
+  color: var(--text);
 }
-.actions { display: flex; gap: 10px; }
+.actions { display: flex; gap: 8px; }
 .actions.wrap { flex-wrap: wrap; }
+.compact-actions button, .compact-actions .button-link { padding: 8px 10px; font-size: 12px; }
 .list { display: grid; gap: 10px; }
 .item {
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 12px;
+  border-radius: 13px;
+  padding: 10px;
   background: #fbfdfc;
 }
+.compact-item { padding: 10px; }
 .item-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
-.item-title { font-weight: 700; }
-.muted { color: var(--muted); font-size: 14px; }
-.tiny { font-size: 12px; color: var(--muted); }
+.compact-item-header { align-items: start; }
+.item-title { font-weight: 700; font-size: 14px; }
+.muted { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.tiny { font-size: 11px; color: var(--muted); line-height: 1.35; }
 .result {
-  margin-top: 12px;
-  padding: 12px;
+  margin-top: 8px;
+  padding: 10px;
   background: #fbfdfc;
   border: 1px solid var(--border);
   border-radius: 12px;
-  min-height: 48px;
+  min-height: 42px;
+  font-size: 13px;
+  line-height: 1.45;
 }
+.compact-result div + div { margin-top: 6px; }
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 20px;
+  bottom: calc(20px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
   background: rgba(25,49,42,.95);
   color: white;
-  padding: 12px 16px;
+  padding: 10px 14px;
   border-radius: 12px;
   z-index: 1000;
+  font-size: 13px;
 }
 .file-label input { display: none; }
-.compact-actions button { padding: 9px 12px; font-size: 13px; }
-.tee-block + .tee-block { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
-.strong { font-weight: 700; color: var(--text); }
-.hole-grid-wrap {
+.tee-block + .tee-block { margin-top: 9px; padding-top: 9px; border-top: 1px dashed var(--border); }
+.strong { font-weight: 700; color: var(--text); font-size: 13px; }
+.top-gap { margin-top: 8px; }
+.badge {
+  background: var(--accent-2);
+  color: var(--accent);
+  border: 1px solid #cfe4d8;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.big-badge { min-width: 82px; justify-content: center; display: inline-flex; }
+.hole-grid-wrap, .score-grid-wrap, .leader-table-wrap {
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 12px;
-}
-.hole-grid {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 420px;
   background: white;
 }
-.hole-grid th,
-.hole-grid td {
-  border-bottom: 1px solid var(--border);
-  padding: 8px;
-  text-align: left;
-  font-size: 14px;
+.hole-grid, .score-grid, .leader-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 340px;
 }
-.hole-grid th {
+.hole-grid-course { min-width: 320px; }
+.hole-grid th,
+.hole-grid td,
+.score-grid th,
+.score-grid td,
+.leader-table th,
+.leader-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 7px 6px;
+  text-align: left;
+  font-size: 12px;
+  vertical-align: middle;
+}
+.hole-grid th, .score-grid th, .leader-table th {
   position: sticky;
   top: 0;
   background: #f8fbf9;
+  z-index: 1;
 }
-.hole-grid input {
-  min-width: 72px;
-  padding: 8px 9px;
+.hole-grid input, .score-grid input { min-width: 54px; padding: 7px 8px; font-size: 13px; }
+.hole-num { font-weight: 700; min-width: 34px; }
+.player-picker { display: grid; gap: 7px; }
+.picker-row {
+  display: grid;
+  grid-template-columns: 1fr 92px;
+  gap: 8px;
+  align-items: center;
 }
-.hole-num {
+.picker-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+}
+.picker-check input { width: auto; margin: 0; }
+.score-hole-nav { align-items: center; justify-content: space-between; }
+.leaderboard-cards { display: grid; gap: 10px; }
+.hole-momentum {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+.momentum-pill {
+  border-radius: 12px;
+  padding: 8px 6px;
+  text-align: center;
+  font-size: 11px;
   font-weight: 700;
-  min-width: 48px;
+  border: 1px solid var(--border);
+  background: #f8fbf9;
 }
+.momentum-pill span {
+  display: block;
+  font-size: 13px;
+  margin-top: 3px;
+}
+.momentum-pill.team1 { background: #e7f4ee; color: var(--accent); border-color: #cfe4d8; }
+.momentum-pill.team2 { background: #f7ecec; color: var(--danger); border-color: #e8cdcd; }
+.momentum-pill.tied { background: #eef2ef; color: var(--muted); }
+.momentum-pill.pending { background: #fafafa; color: #8e9a94; }
+.tight-list { padding-left: 18px; margin: 0; }
+.tight-list li + li { margin-top: 6px; }
 code { background: #edf2ef; padding: 2px 6px; border-radius: 6px; }
-@media (max-width: 700px) {
-  .tabs-3 { grid-template-columns: 1fr; }
-  .grid.two, .grid.three, .grid.four { grid-template-columns: 1fr; }
-  .span-2, .span-3, .span-4 { grid-column: auto; }
+
+@media (max-width: 760px) {
+  .tabs-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .tab { padding: 9px 4px; font-size: 11px; }
+  .grid.two { grid-template-columns: 1fr; }
+  .span-2 { grid-column: auto; }
+  .hole-momentum { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }

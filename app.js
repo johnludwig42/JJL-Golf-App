@@ -586,17 +586,12 @@ function renderLeaderboard() {
   const frontStatus = metrics.teams.length === 2 ? (metrics.teams[0].front === 0 ? 'AS' : metrics.teams[0].front > 0 ? `Team 1 ${Math.abs(metrics.teams[0].front)} up` : `Team 2 ${Math.abs(metrics.teams[0].front)} up`) : '—';
   const backStatus = metrics.teams.length === 2 ? (metrics.teams[0].back === 0 ? 'AS' : metrics.teams[0].back > 0 ? `Team 1 ${Math.abs(metrics.teams[0].back)} up` : `Team 2 ${Math.abs(metrics.teams[0].back)} up`) : '—';
   matchStatus.innerHTML = `
-    <div><strong>Overall team match:</strong> ${metrics.teams.length === 2 ? formatMatchDiff(metrics.matchDiff) : 'Singles mode'}</div>
-    <div><strong>Front 9 Nassau:</strong> ${frontStatus}</div>
-    <div><strong>Back 9 Nassau:</strong> ${backStatus}</div>
+    <div><strong>Overall team match:</strong> ${metrics.teams.length === 2 ? formatMatchDiff(metrics.matchDiff) : 'Singles / multi-team mode'}</div>
+    <div><strong>Front 9:</strong> ${frontStatus}</div>
+    <div><strong>Back 9:</strong> ${backStatus}</div>
     <div><strong>Best player net:</strong> ${metrics.bestPlayerNet ? `${escapeHtml(metrics.bestPlayerNet.player.name)} (${formatSigned(metrics.bestPlayerNet.netDiff)})` : '—'}</div>
   `;
-  gamesSummary.innerHTML = `
-    <div><strong>Individual net skins leader:</strong> ${describeSkinLeader(metrics.players)}</div>
-    <div><strong>Team skins:</strong> ${describeTeamSkinLeader(metrics.teams)}</div>
-    <div><strong>Best team aggregate net:</strong> ${metrics.bestTeam ? `Team ${metrics.bestTeam.team} (${formatSigned(metrics.bestTeam.netDiff)})` : '—'}</div>
-    <div><strong>Round pace:</strong> ${metrics.completed ? `${Math.round((metrics.completed / 18) * 100)}% complete` : 'Not started'}</div>
-  `;
+  gamesSummary.innerHTML = buildSelectedGamesSummary(match, metrics);
   holeMomentum.innerHTML = metrics.holeResults.map(h => {
     let cls = 'tied';
     let txt = 'T';
@@ -619,6 +614,43 @@ function describeTeamSkinLeader(teams) {
   if (max <= 0) return 'None yet';
   const leaders = teams.filter(t => t.skins === max).map(t => `Team ${t.team}`).join(', ');
   return `${leaders} (${max})`;
+}
+function describeTeamLabel(match, teamNo, metrics) {
+  const name = match.teamNames?.[teamNo - 1] || `Team ${teamNo}`;
+  const members = metrics.teams.find(t => t.team === teamNo)?.members?.map(m => m.player.name).join(', ');
+  return members ? `${escapeHtml(name)} (${escapeHtml(members)})` : escapeHtml(name);
+}
+function buildSelectedGamesSummary(match, metrics) {
+  const selected = Array.isArray(match.selectedGames) ? match.selectedGames : [];
+  if (!selected.length) {
+    return `<div><strong>Round pace:</strong> ${metrics.completed ? `${Math.round((metrics.completed / 18) * 100)}% complete` : 'Not started'}</div>`;
+  }
+  const frontStatus = metrics.teams.length === 2 ? (metrics.teams[0].front === 0 ? 'AS' : metrics.teams[0].front > 0 ? `${describeTeamLabel(match, 1, metrics)} ${Math.abs(metrics.teams[0].front)} up` : `${describeTeamLabel(match, 2, metrics)} ${Math.abs(metrics.teams[0].front)} up`) : '—';
+  const backStatus = metrics.teams.length === 2 ? (metrics.teams[0].back === 0 ? 'AS' : metrics.teams[0].back > 0 ? `${describeTeamLabel(match, 1, metrics)} ${Math.abs(metrics.teams[0].back)} up` : `${describeTeamLabel(match, 2, metrics)} ${Math.abs(metrics.teams[0].back)} up`) : '—';
+  const overallTeam = metrics.teams.length === 2 ? (metrics.matchDiff === 0 ? 'AS' : metrics.matchDiff > 0 ? `${describeTeamLabel(match, 1, metrics)} ${Math.abs(metrics.matchDiff)} up` : `${describeTeamLabel(match, 2, metrics)} ${Math.abs(metrics.matchDiff)} up`) : '—';
+
+  const gameLines = selected.map(cfg => {
+    switch (cfg.key) {
+      case 'nassau':
+        return `<div><strong>Nassau (${escapeHtml(String(cfg.basis || 'net'))}):</strong> Front ${frontStatus} · Back ${backStatus} · 18 ${overallTeam}</div>`;
+      case 'individual_match':
+        return `<div><strong>Individual Match Play (${escapeHtml(String(cfg.basis || 'net'))}):</strong> Leader ${metrics.bestPlayerNet ? `${escapeHtml(metrics.bestPlayerNet.player.name)} (${formatSigned(metrics.bestPlayerNet.netDiff)})` : '—'}</div>`;
+      case 'team_match':
+        return `<div><strong>Team Match Play (${escapeHtml(String(cfg.basis || 'net'))}):</strong> ${overallTeam}</div>`;
+      case 'team_stroke':
+        return `<div><strong>Team Stroke Play (${escapeHtml(String(cfg.basis || 'net'))}, ${cfg.scoringMode === 'aggregate' ? 'aggregate' : 'best ball'}):</strong> ${metrics.bestTeam ? `${describeTeamLabel(match, metrics.bestTeam.team, metrics)} (${formatSigned(metrics.bestTeam.netDiff)})` : '—'}</div>`;
+      case 'skins':
+        return cfg.skinsType === 'team'
+          ? `<div><strong>Team Skins (${escapeHtml(String(cfg.basis || 'net'))}):</strong> ${describeTeamSkinLeader(metrics.teams)}</div>`
+          : `<div><strong>Individual Skins (${escapeHtml(String(cfg.basis || 'net'))}):</strong> ${describeSkinLeader(metrics.players)}</div>`;
+      case 'greenies':
+        return `<div><strong>Greenies:</strong> Enabled for ${(cfg.participants || []).length || 0} player(s) · tracking entry lands in Release 2+</div>`;
+      default:
+        return '';
+    }
+  }).filter(Boolean);
+  gameLines.push(`<div><strong>Round pace:</strong> ${metrics.completed ? `${Math.round((metrics.completed / 18) * 100)}% complete` : 'Not started'}</div>`);
+  return gameLines.join('');
 }
 
 function populateCourseSelects() {
@@ -905,8 +937,7 @@ function loadMatchEditor(matchId = null) {
   const match = getMatch(matchId); if (!match) return;
   form.date.value = match.date;
   form.name.value = match.name || '';
-  form.courseId.value = match.courseId || '';
-  populateMatchTees(match.teeId); form.teeId.value = match.teeId || '';
+  populateMatchCourseSelects(match.courseId || '', match.teeId || '');
   form.allowance.value = match.allowance || 100;
   document.getElementById('teamCountSelect').value = String(match.teamCount || 2);
   document.getElementById('playersPerTeamSelect').value = String(match.playersPerTeam || 2);

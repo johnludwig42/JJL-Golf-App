@@ -1,23 +1,20 @@
-# The Dye Ledger — Release 1
+# The Dye Ledger — Release 2 (stability + scoring foundation)
 
-This package contains Release 1 of the setup-and-structure update.
+This build fixes the Release 1 match-creation issues and moves deeper into Release 2.
 
-Included in Release 1:
-- app renamed to **The Dye Ledger**
-- Courses tab reordered with **Saved Courses & Tees** first
-- expanded match setup for up to **12 players**
-- dropdown-driven team and player-slot setup
-- custom team names (25 chars, emoji-friendly)
-- selectable gambling games (up to 5)
-- per-game setup cards and stakes
-- Team Stroke Play option added
+## Fixed
+- `Create Match` now initializes and saves correctly.
+- gambling game selection now works correctly
+- saved course/tee selectors are preserved more reliably while editing
+- new tees inherit the course stroke-index template correctly
+- tee save now validates that all 18 stroke indexes are entered and total **171**
 
-Not fully wired until Release 2:
-- game-by-game scoring engine
-- Nassau / skins / greenies calculations
-- advanced leaderboard game progression
-- Supabase cloud sync
+## Included in this build
+- core selectable game setup from Release 1
+- selected-game-aware leaderboard summaries
+- better preservation of form state during rerenders
+- app storage key bumped with fallback to prior local versions
 
-Notes:
-- existing local saved data should carry forward
-- scoring/leaderboard is still based on the prior engine, so Release 1 is primarily for reviewing the new setup flow
+## Notes
+- Greenies is still setup-ready; live per-hole greenie winner entry is the next logical enhancement.
+- Team Stroke Play scoring mode selection is stored, and deeper scoring/output work continues in the next iteration.

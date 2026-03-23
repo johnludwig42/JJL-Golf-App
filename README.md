@@ -1,20 +1,23 @@
-# The Dye Ledger — Release 2 (stability + scoring foundation)
+# The Dye Ledger — Hotfix v12
 
-This build fixes the Release 1 match-creation issues and moves deeper into Release 2.
+This build focuses only on the blockers you reported:
 
-## Fixed
-- `Create Match` now initializes and saves correctly.
-- gambling game selection now works correctly
-- saved course/tee selectors are preserved more reliably while editing
-- new tees inherit the course stroke-index template correctly
-- tee save now validates that all 18 stroke indexes are entered and total **171**
+- fixes the missing gambling game selector
+- fixes Create Match so matches save and load correctly
+- improves player-slot dropdown behavior so available players do not disappear unexpectedly
+- improves Add Tee behavior from Saved Courses & Tees
+- keeps course/tee selections more stable during match setup
+- enforces 18-hole stroke index entry totaling 171 before saving a tee
 
-## Included in this build
-- core selectable game setup from Release 1
-- selected-game-aware leaderboard summaries
-- better preservation of form state during rerenders
-- app storage key bumped with fallback to prior local versions
+## Update steps
+1. Replace the contents of your existing `golf-app` folder with these files.
+2. Commit and push to GitHub.
+3. Open the live site in Safari and refresh.
+4. If the home-screen app still shows the old behavior, delete it and re-add it.
 
-## Notes
-- Greenies is still setup-ready; live per-hole greenie winner entry is the next logical enhancement.
-- Team Stroke Play scoring mode selection is stored, and deeper scoring/output work continues in the next iteration.
+## What to retest
+- gambling games appear and can be selected
+- Create Match creates and loads the match
+- player dropdowns show all untaken players
+- Add Tee opens the tee editor with the course preselected
+- tee save blocks invalid stroke indexes

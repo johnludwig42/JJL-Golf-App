@@ -1,4 +1,12 @@
 const STORAGE_KEY = 'golf-matchbook-v9';
+const GAME_LIBRARY = [
+  { key: 'nassau', label: 'Nassau' },
+  { key: 'individual_match', label: 'Individual Match Play' },
+  { key: 'team_match', label: 'Team Match Play' },
+  { key: 'team_stroke', label: 'Team Stroke Play' },
+  { key: 'skins', label: 'Skins' },
+  { key: 'greenies', label: 'Greenies' },
+];
 let deferredPrompt = null;
 let editingPlayerId = null;
 let editingCourseId = null;
@@ -672,16 +680,19 @@ function populateCalcTees() {
   const course = getCourse(courseId);
   teeSelect.innerHTML = !course ? '<option value="">Select tee</option>' : `<option value="">Select tee</option>${course.tees.map(t => `<option value="${t.id}">${escapeHtml(t.teeName)} · ${t.rating}/${t.slope}</option>`).join('')}`;
 }
-function populateMatchCourseSelects() {
-  const options = state.courses.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
-  document.getElementById('matchCourseSelect').innerHTML = `<option value="">Select course</option>${options}`;
-  populateMatchTees();
+function populateMatchCourseSelects(selectedCourseId = null, selectedTeeId = null) {
+  const options = state.courses.map(c => `<option value="${c.id}" ${selectedCourseId === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
+  const courseSelect = document.getElementById('matchCourseSelect');
+  courseSelect.innerHTML = `<option value="">Select course</option>${options}`;
+  if (selectedCourseId) courseSelect.value = selectedCourseId;
+  populateMatchTees(selectedCourseId || courseSelect.value, selectedTeeId);
 }
-function populateMatchTees(selectedTeeId = null) {
-  const courseId = document.getElementById('matchCourseSelect').value;
+function populateMatchTees(courseId = null, selectedTeeId = null) {
+  const resolvedCourseId = courseId ?? document.getElementById('matchCourseSelect').value;
   const teeSelect = document.getElementById('matchTeeSelect');
-  const course = getCourse(courseId);
+  const course = getCourse(resolvedCourseId);
   teeSelect.innerHTML = !course ? '<option value="">Select tee</option>' : `<option value="">Select tee</option>${course.tees.map(t => `<option value="${t.id}" ${selectedTeeId === t.id ? 'selected' : ''}>${escapeHtml(t.teeName)} · ${t.rating}/${t.slope}</option>`).join('')}`;
+  if (selectedTeeId) teeSelect.value = selectedTeeId;
 }
 
 function renderTeamNameInputs(teamCount = Number(document.getElementById('teamCountSelect')?.value || 2), teamNames = []) {
@@ -708,16 +719,16 @@ function populateMatchPlayerPicker(selected = []) {
     if (summary) summary.textContent = 'No saved players yet.';
     return;
   }
-  const selectedBySlot = Array.isArray(selected) ? selected.map(s => s.playerId || '') : [];
-  const existingChosen = getAssignmentSelections();
+  const selectedBySlot = Array.from({ length: slotCount }, (_, idx) => selected[idx]?.playerId || '');
   const teamNames = Array.from({ length: teamCount }, (_, i) => document.querySelector(`[data-team-name="${i + 1}"]`)?.value || `Team ${i + 1}`);
   container.innerHTML = Array.from({ length: slotCount }, (_, idx) => {
     const teamNo = Math.floor(idx / playersPerTeam) + 1;
     const slotNo = (idx % playersPerTeam) + 1;
     const current = selectedBySlot[idx] || '';
+    const takenElsewhere = new Set(selectedBySlot.filter((id, takeIdx) => id && takeIdx !== idx));
     const options = ['<option value="">Select player</option>']
       .concat(state.players
-        .filter(p => !existingChosen.includes(p.id) || p.id === current)
+        .filter(p => !takenElsewhere.has(p.id) || p.id === current)
         .map(p => `<option value="${p.id}" ${p.id === current ? 'selected' : ''}>${escapeHtml(p.name)} (${Number(p.index).toFixed(1)})</option>`))
       .join('');
     return `
@@ -902,19 +913,37 @@ function loadCourseEditor(courseId = null) {
   form.name.value = course.name; form.city.value = course.city; form.state.value = course.state; form.country.value = course.country;
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+function activateTab(tabId) {
+  document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tabId));
+  document.querySelectorAll('.panel').forEach(el => el.classList.toggle('active', el.id === tabId));
+}
+
 function loadTeeEditor(courseId = null, teeId = null) {
   const form = document.getElementById('teeForm');
   editingTeeRef = courseId && teeId ? { courseId, teeId } : null;
   document.getElementById('cancelTeeEditBtn').classList.toggle('hidden', !editingTeeRef);
   document.getElementById('teeFormTitle').textContent = editingTeeRef ? 'Edit tee' : 'Add tee';
   document.getElementById('teeSubmitBtn').textContent = editingTeeRef ? 'Update Tee' : 'Save Tee';
-  if (!courseId || !teeId) { form.reset(); if (courseId) form.courseId.value = courseId; renderHoleRows(buildTeeHoleRows(courseId)); updateTeeStrokeTemplateHint(courseId); return; }
+  activateTab('courses');
+  if (!courseId || !teeId) {
+    form.reset();
+    if (courseId) document.getElementById('teeCourseSelect').value = courseId;
+    renderHoleRows(buildTeeHoleRows(courseId));
+    updateTeeStrokeTemplateHint(courseId);
+    window.scrollTo({ top: document.getElementById('teeFormTitle').getBoundingClientRect().top + window.scrollY - 20, behavior: 'smooth' });
+    return;
+  }
   const course = getCourse(courseId); const tee = course?.tees.find(t => t.id === teeId); if (!tee) return;
-  form.courseId.value = courseId; form.teeName.value = tee.teeName; form.gender.value = tee.gender;
-  form.length.value = tee.length || ''; form.par.value = tee.par || ''; form.rating.value = tee.rating || ''; form.slope.value = tee.slope || '';
+  document.getElementById('teeCourseSelect').value = courseId;
+  form.elements.namedItem('teeName').value = tee.teeName;
+  form.elements.namedItem('gender').value = tee.gender;
+  form.elements.namedItem('length').value = tee.length || '';
+  form.elements.namedItem('par').value = tee.par || '';
+  form.elements.namedItem('rating').value = tee.rating || '';
+  form.elements.namedItem('slope').value = tee.slope || '';
   renderHoleRows(buildTeeHoleRows(courseId, tee.holes));
   updateTeeStrokeTemplateHint(courseId);
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  window.scrollTo({ top: document.getElementById('teeFormTitle').getBoundingClientRect().top + window.scrollY - 20, behavior: 'smooth' });
 }
 
 function loadMatchEditor(matchId = null) {
@@ -923,30 +952,31 @@ function loadMatchEditor(matchId = null) {
   document.getElementById('cancelMatchEditBtn').classList.toggle('hidden', !matchId);
   document.getElementById('matchFormTitle').textContent = matchId ? 'Edit match' : 'Setup match';
   document.getElementById('matchSubmitBtn').textContent = matchId ? 'Update Match' : 'Create Match';
+  activateTab('matches');
   if (!matchId) {
     form.reset();
-    form.date.value = todayIso();
-    form.allowance.value = 100;
+    form.elements.namedItem('date').value = todayIso();
+    form.elements.namedItem('allowance').value = 100;
     document.getElementById('teamCountSelect').value = '2';
     document.getElementById('playersPerTeamSelect').value = '2';
+    populateMatchCourseSelects();
     renderTeamNameInputs(2, []);
     populateMatchPlayerPicker([]);
     renderGamesPicker([]);
     return;
   }
   const match = getMatch(matchId); if (!match) return;
-  form.date.value = match.date;
-  form.name.value = match.name || '';
+  form.elements.namedItem('date').value = match.date;
+  form.elements.namedItem('name').value = match.name || '';
   populateMatchCourseSelects(match.courseId || '', match.teeId || '');
-  form.allowance.value = match.allowance || 100;
+  form.elements.namedItem('allowance').value = match.allowance || 100;
   document.getElementById('teamCountSelect').value = String(match.teamCount || 2);
   document.getElementById('playersPerTeamSelect').value = String(match.playersPerTeam || 2);
   renderTeamNameInputs(match.teamCount || 2, match.teamNames || []);
   populateMatchPlayerPicker(match.players || []);
   renderGamesPicker(match.selectedGames || []);
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  window.scrollTo({ top: document.getElementById('matchFormTitle').getBoundingClientRect().top + window.scrollY - 20, behavior: 'smooth' });
 }
-
 
 function exportJson() {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
@@ -999,6 +1029,9 @@ function installHandlers() {
     const courseTemplate = getCourseStrokeTemplate(course);
     const enteredTemplate = extractStrokeTemplate(holes);
     if (!enteredTemplate && courseTemplate) holes = applyStrokeTemplate(holes, courseTemplate);
+    const strokeTotal = holes.reduce((sum, h) => sum + (Number(h.strokeIndex) || 0), 0);
+    if (holes.some(h => !Number.isFinite(h.strokeIndex) || !h.strokeIndex)) return toast('Enter stroke indexes for all 18 holes.');
+    if (strokeTotal !== 171) return toast('Stroke indexes must total 171 before saving.');
     const tee = {
       id: editingTeeRef?.teeId || uid(),
       courseName: course.name,
@@ -1055,14 +1088,15 @@ function installHandlers() {
     document.getElementById('calcResult').innerHTML = `<strong>${escapeHtml(player.name)}</strong> · Course Hdcp ${ch} · Playing Hdcp ${ph}`;
   });
 
-  document.getElementById('matchCourseSelect').addEventListener('change', () => populateMatchTees());
+  document.getElementById('matchCourseSelect').addEventListener('change', e => populateMatchTees(e.target.value));
   document.getElementById('teamCountSelect').addEventListener('change', () => {
     const teamCount = Number(document.getElementById('teamCountSelect').value || 2);
+    const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map(el => ({ playerId: el.value }));
     renderTeamNameInputs(teamCount, Array.from(document.querySelectorAll('[data-team-name]')).map(el => el.value));
-    populateMatchPlayerPicker([]);
+    populateMatchPlayerPicker(currentSelections);
   });
-  document.getElementById('playersPerTeamSelect').addEventListener('change', () => populateMatchPlayerPicker([]));
-  document.getElementById('teamNamesGrid').addEventListener('input', () => populateMatchPlayerPicker([]));
+  document.getElementById('playersPerTeamSelect').addEventListener('change', () => { const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map(el => ({ playerId: el.value })); populateMatchPlayerPicker(currentSelections); });
+  document.getElementById('teamNamesGrid').addEventListener('input', () => { const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map(el => ({ playerId: el.value })); populateMatchPlayerPicker(currentSelections); });
   document.getElementById('matchPlayersPicker').addEventListener('change', e => {
     if (e.target.matches('[data-player-slot]')) populateMatchPlayerPicker(Array.from(document.querySelectorAll('[data-player-slot]')).map(el => ({ playerId: el.value })));
   });
@@ -1078,6 +1112,7 @@ function installHandlers() {
   });
   document.getElementById('matchForm').addEventListener('submit', e => {
     e.preventDefault();
+    try {
     const fd = new FormData(e.target);
     const teamCount = Number(fd.get('teamCount')) || 2;
     const playersPerTeam = Number(fd.get('playersPerTeam')) || 2;
@@ -1117,8 +1152,11 @@ function installHandlers() {
     if (editingMatchId) state.matches = state.matches.map(m => m.id === editingMatchId ? match : m); else state.matches.push(match);
     state.activeMatchId = match.id;
     currentHole = Math.max(1, completedHoles(match) || 1);
-    loadMatchEditor(null); persist();
+    persist({ skipRender: true });
+    loadMatchEditor(null);
+    renderAll();
     toast(editingMatchId ? 'Match updated.' : 'Match created and loaded.');
+    } catch (err) { console.error(err); toast('Could not create match. Please try again.'); }
   });
   document.getElementById('cancelMatchEditBtn').addEventListener('click', () => loadMatchEditor(null));
   document.getElementById('matchesList').addEventListener('click', e => {

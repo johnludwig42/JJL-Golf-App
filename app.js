@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'golf-matchbook-v9';
+const STORAGE_KEY = 'the-dye-ledger-v13';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Individual Match Play' },
@@ -38,6 +38,7 @@ function loadState() {
   const fallback = { players: [], courses: [], matches: [], activeMatchId: null };
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
+      || localStorage.getItem('golf-matchbook-v9')
       || localStorage.getItem('golf-matchbook-v8')
       || localStorage.getItem('golf-matchbook-v7')
       || localStorage.getItem('golf-matchbook-v6')
@@ -69,7 +70,7 @@ function getCourseStrokeTemplate(course) {
 }
 function applyStrokeTemplate(holes, template) {
   if (!template || template.length !== 18) return holes;
-  return holes.map((h, idx) => ({ ...h, strokeIndex: Number(h.strokeIndex) || Number(template[idx]) || null }));
+  return holes.map((h, idx) => { const current = Number(h.strokeIndex); const shouldReplace = !Number.isFinite(current) || current === 0 || current === idx + 1; return { ...h, strokeIndex: shouldReplace ? (Number(template[idx]) || null) : current }; });
 }
 function extractStrokeTemplate(holes) {
   const arr = holes.map(h => Number(h.strokeIndex) || null);
@@ -195,6 +196,8 @@ function normalizeMatch(match) {
     team: Number(mp.team) || 1,
     scores: Array.isArray(mp.scores) && mp.scores.length ? mp.scores.map((s, idx) => ({ holeNumber: idx + 1, gross: Number(s.gross) || null })) : buildEmptyScores(),
   }));
+  match.greeniesWinners = match.greeniesWinners && typeof match.greeniesWinners === 'object' ? match.greeniesWinners : {};
+  match.momentumGame = match.momentumGame || ((match.selectedGames || []).find(g => g.key === 'nassau')?.key || (match.selectedGames || []).find(g => ['team_match','team_stroke','skins'].includes(g.key))?.key || 'nassau');
 }
 function normalizeState() {
   state.players = Array.isArray(state.players) ? state.players : [];
@@ -507,8 +510,23 @@ function renderCurrentMatch() {
   const teamText = metrics?.teams?.length === 2 ? `${formatMatchDiff(metrics.matchDiff)} overall` : 'Singles leaderboard';
   document.getElementById('holeSummary').textContent = hole ? `Par ${hole.par || '-'} · ${hole.yardage || '-'} yds · SI ${hole.strokeIndex || '-'} · ${teamText}` : '';
   renderScoreGrid(match, tee, metrics);
+  renderGreeniesEntry(match, hole);
 }
 
+function renderGreeniesEntry(match, hole) {
+  const wrap = document.getElementById('greeniesEntryWrap');
+  if (!wrap) return;
+  const greenies = (match.selectedGames || []).find(g => g.key === 'greenies');
+  if (!greenies || Number(hole?.par) !== 3) {
+    wrap.classList.add('hidden');
+    wrap.innerHTML = '';
+    return;
+  }
+  const eligible = (greenies.participants || []).map(getPlayer).filter(Boolean);
+  const winnerId = match.greeniesWinners?.[String(hole.holeNumber)] || '';
+  wrap.classList.remove('hidden');
+  wrap.innerHTML = `<div class="card inset-card"><div class="section-label">Greenies · Hole ${hole.holeNumber}</div><div class="greenies-list top-gap">${eligible.map(p => `<label class="mini-check"><input type="checkbox" data-greenies-winner="${p.id}" ${winnerId === p.id ? 'checked' : ''} /> ${escapeHtml(p.name)}</label>`).join('') || '<div class="tiny">No greenies participants selected for this match.</div>'}</div><div class="tiny top-gap">Select the closest-to-the-pin winner for this par 3. Payout runs only against selected greenies participants.</div></div>`;
+}
 function renderScoreGrid(match, tee, metrics) {
   const body = document.getElementById('scoreGridBody');
   if (!match || !tee || !metrics) {
@@ -533,6 +551,44 @@ function renderScoreGrid(match, tee, metrics) {
   }).join('');
 }
 
+function getMomentumOptions(match) {
+  const selected = Array.isArray(match?.selectedGames) ? match.selectedGames : [];
+  const teamKeys = ['nassau', 'team_match', 'team_stroke'];
+  const keys = selected.map(g => g.key).filter(k => teamKeys.includes(k));
+  const unique = [...new Set(keys)];
+  if (!unique.length) unique.push('nassau');
+  unique.sort((a,b) => (a === 'nassau' ? -1 : b === 'nassau' ? 1 : 0));
+  return unique.map(key => ({ key, label: GAME_LIBRARY.find(g => g.key === key)?.label || key }));
+}
+function computeMomentumOutcome(match, metrics, holeResult, gameKey) {
+  if (!holeResult?.completed) return 'pending';
+  if (gameKey === 'team_stroke') {
+    const cfg = (match.selectedGames || []).find(g => g.key === 'team_stroke') || {};
+    const holeTeams = metrics.teams.map(team => {
+      const entries = holeResult.playerScores.filter(ps => ps.team === team.team);
+      if (!entries.length) return { team: team.team, value: null };
+      const values = entries.map(e => cfg.basis === 'gross' ? e.gross : e.net).filter(v => Number.isFinite(v));
+      if (!values.length) return { team: team.team, value: null };
+      const value = cfg.scoringMode === 'aggregate' ? values.reduce((a,b)=>a+b,0) : Math.min(...values);
+      return { team: team.team, value };
+    }).filter(t => Number.isFinite(t.value));
+    if (holeTeams.length < 2) return 'tied';
+    if (holeTeams[0].value < holeTeams[1].value) return 'team1';
+    if (holeTeams[1].value < holeTeams[0].value) return 'team2';
+    return 'tied';
+  }
+  // Nassau and team_match both use best-ball hole result from Team 1 perspective for momentum.
+  const teamEntries = [1,2].map(teamNo => {
+    const entries = holeResult.playerScores.filter(ps => ps.team === teamNo);
+    const values = entries.map(e => e.net).filter(v => Number.isFinite(v));
+    if (!values.length) return { team: teamNo, value: null };
+    return { team: teamNo, value: Math.min(...values) };
+  });
+  if (!Number.isFinite(teamEntries[0].value) || !Number.isFinite(teamEntries[1].value)) return 'tied';
+  if (teamEntries[0].value < teamEntries[1].value) return 'team1';
+  if (teamEntries[1].value < teamEntries[0].value) return 'team2';
+  return 'tied';
+}
 function renderLeaderboard() {
   const match = getActiveMatch();
   const empty = document.getElementById('leaderboardEmpty');
@@ -600,12 +656,24 @@ function renderLeaderboard() {
     <div><strong>Best player net:</strong> ${metrics.bestPlayerNet ? `${escapeHtml(metrics.bestPlayerNet.player.name)} (${formatSigned(metrics.bestPlayerNet.netDiff)})` : '—'}</div>
   `;
   gamesSummary.innerHTML = buildSelectedGamesSummary(match, metrics);
+  const momentumSelect = document.getElementById('momentumGameSelect');
+  const options = getMomentumOptions(match);
+  if (momentumSelect) {
+    momentumSelect.innerHTML = options.map(opt => `<option value="${opt.key}" ${opt.key === match.momentumGame ? 'selected' : ''}>${escapeHtml(opt.label)}</option>`).join('');
+    if (!options.find(opt => opt.key === match.momentumGame)) {
+      match.momentumGame = options[0]?.key || 'nassau';
+      momentumSelect.value = match.momentumGame;
+    }
+  }
+  let running = 0;
   holeMomentum.innerHTML = metrics.holeResults.map(h => {
+    const outcome = computeMomentumOutcome(match, metrics, h, match.momentumGame || 'nassau');
     let cls = 'tied';
-    let txt = 'T';
-    if (h.teamWinner === 1) { cls = 'team1'; txt = '1'; }
-    if (h.teamWinner === 2) { cls = 'team2'; txt = '2'; }
-    if (!h.completed) { cls = 'pending'; txt = '•'; }
+    let txt = running === 0 ? 'T' : String(running);
+    if (outcome === 'team1') { running += 1; cls = 'team1'; txt = running === 0 ? 'T' : String(running); }
+    else if (outcome === 'team2') { running -= 1; cls = 'team2'; txt = running === 0 ? 'T' : String(Math.abs(running)); }
+    else if (outcome === 'pending') { cls = 'pending'; txt = '•'; }
+    else { cls = 'tied'; txt = running === 0 ? 'T' : String(Math.abs(running)); }
     return `<div class="momentum-pill ${cls}">H${h.holeNumber}<span>${txt}</span></div>`;
   }).join('');
 }
@@ -651,8 +719,11 @@ function buildSelectedGamesSummary(match, metrics) {
         return cfg.skinsType === 'team'
           ? `<div><strong>Team Skins (${escapeHtml(String(cfg.basis || 'net'))}):</strong> ${describeTeamSkinLeader(metrics.teams)}</div>`
           : `<div><strong>Individual Skins (${escapeHtml(String(cfg.basis || 'net'))}):</strong> ${describeSkinLeader(metrics.players)}</div>`;
-      case 'greenies':
-        return `<div><strong>Greenies:</strong> Enabled for ${(cfg.participants || []).length || 0} player(s) · tracking entry lands in Release 2+</div>`;
+      case 'greenies': {
+        const wins = Object.values(match.greeniesWinners || {}).reduce((acc, id) => { acc[id] = (acc[id] || 0) + 1; return acc; }, {});
+        const leaders = Object.entries(wins).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([id,n]) => `${escapeHtml(getPlayer(id)?.name || 'Unknown')} (${n})`).join(', ');
+        return `<div><strong>Greenies:</strong> ${(cfg.participants || []).length || 0} participant(s) · leaders ${leaders || 'None yet'}</div>`;
+      }
       default:
         return '';
     }
@@ -753,6 +824,11 @@ function getDefaultGameConfigs() {
 function getGameConfig(key, existing = []) {
   return (existing || []).find(g => g.key === key) || getDefaultGameConfigs().find(g => g.key === key) || { key };
 }
+function getCurrentAssignablePlayers() {
+  const ids = Array.from(document.querySelectorAll('[data-player-slot]')).map(el => el.value).filter(Boolean);
+  const unique = new Set(ids);
+  return state.players.filter(p => unique.has(p.id));
+}
 function renderGamesPicker(existing = []) {
   const picker = document.getElementById('gamesPicker');
   const configsWrap = document.getElementById('gameConfigs');
@@ -820,7 +896,7 @@ function renderGamesPicker(existing = []) {
         <div class="section-label">Greenies</div>
         <div class="grid two compact-grid top-gap">
           <label class="span-2"><span>Participants</span>
-            <div class="greenies-list">${state.players.map(p => `<label class="mini-check"><input type="checkbox" data-greenie-player="${p.id}" ${(cfg.participants || []).includes(p.id) ? 'checked' : ''} /> ${escapeHtml(p.name)}</label>`).join('')}</div>
+            <div class="greenies-list">${getCurrentAssignablePlayers().map(p => `<label class="mini-check"><input type="checkbox" data-greenie-player="${p.id}" ${(cfg.participants || []).includes(p.id) ? 'checked' : ''} /> ${escapeHtml(p.name)}</label>`).join('') || '<div class="tiny">Select match players first.</div>'}</div>
           </label>
           <label><span>$ / player / par 3</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stakePerPlayer" value="${cfg.stakePerPlayer ?? 1}" /></label>
         </div>
@@ -846,7 +922,8 @@ function collectSelectedGames() {
       cfg[el.dataset.field] = el.value;
     });
     if (key === 'greenies') {
-      cfg.participants = Array.from(document.querySelectorAll('[data-greenie-player]:checked')).map(el => el.dataset.greeniePlayer);
+      const allowed = new Set(getCurrentAssignablePlayers().map(p => p.id));
+      cfg.participants = Array.from(document.querySelectorAll('[data-greenie-player]:checked')).map(el => el.dataset.greeniePlayer).filter(id => allowed.has(id));
     }
     return cfg;
   });
@@ -856,8 +933,9 @@ function collectSelectedGames() {
 function buildTeeHoleRows(courseId = '', holes = null) {
   const course = getCourse(courseId);
   const template = getCourseStrokeTemplate(course);
-  const rows = holes ? holes.map(normalizeHole) : buildDefaultHoles();
-  return template ? rows.map((h, idx) => ({ ...h, strokeIndex: Number(h.strokeIndex) || Number(template[idx]) || null })) : rows;
+  let rows = holes ? holes.map(normalizeHole) : buildDefaultHoles();
+  if (!holes && template) rows = rows.map((h, idx) => ({ ...h, strokeIndex: Number(template[idx]) || null }));
+  return template ? applyStrokeTemplate(rows, template) : rows;
 }
 function updateTeeStrokeTemplateHint(courseId = '') {
   const hint = document.getElementById('teeStrokeHint');
@@ -1094,11 +1172,12 @@ function installHandlers() {
     const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map(el => ({ playerId: el.value }));
     renderTeamNameInputs(teamCount, Array.from(document.querySelectorAll('[data-team-name]')).map(el => el.value));
     populateMatchPlayerPicker(currentSelections);
+    renderGamesPicker(collectSelectedGames());
   });
-  document.getElementById('playersPerTeamSelect').addEventListener('change', () => { const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map(el => ({ playerId: el.value })); populateMatchPlayerPicker(currentSelections); });
-  document.getElementById('teamNamesGrid').addEventListener('input', () => { const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map(el => ({ playerId: el.value })); populateMatchPlayerPicker(currentSelections); });
+  document.getElementById('playersPerTeamSelect').addEventListener('change', () => { const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map(el => ({ playerId: el.value })); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); });
+  document.getElementById('teamNamesGrid').addEventListener('input', () => { const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map(el => ({ playerId: el.value })); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); });
   document.getElementById('matchPlayersPicker').addEventListener('change', e => {
-    if (e.target.matches('[data-player-slot]')) populateMatchPlayerPicker(Array.from(document.querySelectorAll('[data-player-slot]')).map(el => ({ playerId: el.value })));
+    if (e.target.matches('[data-player-slot]')) { populateMatchPlayerPicker(Array.from(document.querySelectorAll('[data-player-slot]')).map(el => ({ playerId: el.value }))); renderGamesPicker(collectSelectedGames()); }
   });
   document.getElementById('gamesPicker').addEventListener('change', e => {
     if (!e.target.matches('[data-game-key]')) return;
@@ -1109,6 +1188,20 @@ function installHandlers() {
       return;
     }
     renderGamesPicker(collectSelectedGames());
+  });
+  document.getElementById('leaderboard').addEventListener('change', e => {
+    if (e.target.id === 'momentumGameSelect') {
+      const match = getActiveMatch();
+      if (!match) return;
+      match.momentumGame = e.target.value;
+      persist();
+      return;
+    }
+  });
+  document.getElementById('matches').addEventListener('change', e => {
+    if (e.target.matches('[data-greenies-winner]')) {
+      document.querySelectorAll('[data-greenies-winner]').forEach(el => { if (el !== e.target) el.checked = false; });
+    }
   });
   document.getElementById('matchForm').addEventListener('submit', e => {
     e.preventDefault();
@@ -1146,6 +1239,8 @@ function installHandlers() {
         const old = existing?.players.find(op => op.playerId === sp.playerId);
         return old ? { ...old, team: sp.team } : { playerId: sp.playerId, team: sp.team, scores: buildEmptyScores() };
       }),
+      greeniesWinners: existing?.greeniesWinners || {},
+      momentumGame: existing?.momentumGame || (selectedGames.find(g => g.key === 'nassau')?.key || selectedGames.find(g => ['team_match','team_stroke'].includes(g.key))?.key || 'nassau'),
     };
     normalizeMatch(match);
     if (!match.courseId || !match.teeId) return toast('Select a course and tee.');

@@ -193,6 +193,7 @@
             <button id="nextHoleBtn" type="button" class="secondary">Next ▶</button>
           </div>
           <div id="holeSummary" class="tiny top-gap"></div>
+          <div id="greeniesEntryWrap" class="top-gap hidden"></div>
           <div class="score-grid-wrap top-gap">
             <table class="score-grid">
               <thead>
@@ -284,7 +285,13 @@
         </div>
 
         <div class="card tight-card">
-          <h2>Hole-by-hole momentum</h2>
+          <div class="item-header">
+            <h2>Hole-by-hole momentum</h2>
+            <label class="inline-select tiny">
+              <span>Game</span>
+              <select id="momentumGameSelect"></select>
+            </label>
+          </div>
           <div id="holeMomentum" class="hole-momentum"></div>
         </div>
       </div>

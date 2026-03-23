@@ -1,23 +1,24 @@
-# The Dye Ledger — Hotfix v12
+# The Dye Ledger – Hotfix / Release 2A (v13)
 
-This build focuses only on the blockers you reported:
+This build focuses on the specific issues and feedback from the latest round of testing.
 
-- fixes the missing gambling game selector
-- fixes Create Match so matches save and load correctly
-- improves player-slot dropdown behavior so available players do not disappear unexpectedly
-- improves Add Tee behavior from Saved Courses & Tees
-- keeps course/tee selections more stable during match setup
-- enforces 18-hole stroke index entry totaling 171 before saving a tee
-
-## Update steps
-1. Replace the contents of your existing `golf-app` folder with these files.
-2. Commit and push to GitHub.
-3. Open the live site in Safari and refresh.
-4. If the home-screen app still shows the old behavior, delete it and re-add it.
+## Included fixes
+- **Momentum chart** now uses **one selected team game at a time** instead of mixing multiple games.
+- Added a **Momentum Game** selector on the leaderboard.
+  - Defaults to **Nassau** when Nassau is selected.
+  - Other supported sources: **Team Match Play** and **Team Stroke Play**.
+  - Momentum is shown from **Team 1's perspective**.
+- **Greenies participants** in match setup are now limited to players actually assigned to that match.
+- On **par 3s**, if Greenies is selected, the score-entry screen now shows a **winner selector** for the eligible Greenies participants.
+- **Stroke-index carry-forward** for new tees was tightened so a course default can prefill the new tee more reliably.
+- Storage key bumped with backward-compatible fallback loading.
 
 ## What to retest
-- gambling games appear and can be selected
-- Create Match creates and loads the match
-- player dropdowns show all untaken players
-- Add Tee opens the tee editor with the course preselected
-- tee save blocks invalid stroke indexes
+1. Create / edit a match with Nassau and another team game; confirm the **Momentum Game** dropdown appears and defaults to Nassau.
+2. Confirm momentum pills now progress hole-by-hole from **Team 1's perspective** without double-counting.
+3. Set up Greenies and confirm only **players in the match** are available as Greenies participants.
+4. On a **par 3**, confirm a Greenies winner control appears and saves correctly.
+5. Add a new tee to a course that already has saved stroke indexes on another tee and confirm the new tee prefills those indexes.
+
+## Deploy
+Replace the contents of your `golf-app` folder with this build, commit, refresh Safari, and re-add the home-screen app if needed.

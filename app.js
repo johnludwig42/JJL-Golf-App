@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'the-dye-ledger-v13';
+const STORAGE_KEY = 'the-dye-ledger-v14';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Individual Match Play' },
@@ -384,6 +384,7 @@ function renderAll() {
   renderMatches();
   renderCurrentMatch();
   renderLeaderboard();
+  renderMatchSetupState();
   populateCourseSelects();
   populateCalcPlayers();
   populateCalcCourses();
@@ -969,6 +970,26 @@ function fillTotalsFromHoles() {
   toast('Totals updated from hole rows.');
 }
 
+
+function matchHasStarted(match) {
+  return !!(match && completedHoles(match) > 0);
+}
+function renderMatchSetupState() {
+  const wrap = document.getElementById('matchSetupFormWrap');
+  const msg = document.getElementById('setupLockMsg');
+  const active = getActiveMatch();
+  const started = matchHasStarted(active);
+  const editingActive = !!(editingMatchId && active && editingMatchId === active.id);
+  if (!wrap || !msg) return;
+  if (started && !editingActive) {
+    wrap.classList.add('hidden');
+    msg.textContent = `Scoring has started for ${active.name || 'the active match'}. Use Edit Active Match to make changes with confirmation.`;
+  } else {
+    wrap.classList.remove('hidden');
+    msg.textContent = active ? `${active.name || 'Active match'} · ${completedHoles(active)}/18 holes entered.` : 'Build a new match, or edit the active one.';
+  }
+}
+
 function loadPlayerEditor(playerId = null) {
   const form = document.getElementById('playerForm');
   editingPlayerId = playerId;
@@ -1030,7 +1051,7 @@ function loadMatchEditor(matchId = null) {
   document.getElementById('cancelMatchEditBtn').classList.toggle('hidden', !matchId);
   document.getElementById('matchFormTitle').textContent = matchId ? 'Edit match' : 'Setup match';
   document.getElementById('matchSubmitBtn').textContent = matchId ? 'Update Match' : 'Create Match';
-  activateTab('matches');
+  activateTab('setup');
   if (!matchId) {
     form.reset();
     form.elements.namedItem('date').value = todayIso();
@@ -1134,7 +1155,7 @@ function installHandlers() {
   document.getElementById('cancelTeeEditBtn').addEventListener('click', () => loadTeeEditor(null, null));
   document.getElementById('teeCourseSelect').addEventListener('change', e => {
     const existing = collectHolesFromGrid();
-    const hasData = existing.some(h => h.yardage || h.par || h.strokeIndex);
+    const hasData = existing.some((h, idx) => h.yardage || h.par || (Number(h.strokeIndex) && Number(h.strokeIndex) !== idx + 1));
     renderHoleRows(buildTeeHoleRows(e.target.value, hasData ? existing : null));
     updateTeeStrokeTemplateHint(e.target.value);
   });
@@ -1164,6 +1185,20 @@ function installHandlers() {
     const ch = courseHandicap(player.index, tee.slope, tee.rating, tee.par);
     const ph = playingHandicap(ch, allowance);
     document.getElementById('calcResult').innerHTML = `<strong>${escapeHtml(player.name)}</strong> · Course Hdcp ${ch} · Playing Hdcp ${ph}`;
+  });
+
+  
+  document.getElementById('newMatchBtn').addEventListener('click', () => {
+    editingMatchId = null;
+    loadMatchEditor(null);
+    activateTab('setup');
+  });
+  document.getElementById('editActiveMatchBtn').addEventListener('click', () => {
+    const active = getActiveMatch();
+    if (!active) return toast('No active match to edit.');
+    if (matchHasStarted(active) && !confirm('Editing may affect scoring. Continue?')) return;
+    loadMatchEditor(active.id);
+    activateTab('setup');
   });
 
   document.getElementById('matchCourseSelect').addEventListener('change', e => populateMatchTees(e.target.value));
@@ -1198,7 +1233,7 @@ function installHandlers() {
       return;
     }
   });
-  document.getElementById('matches').addEventListener('change', e => {
+  document.getElementById('score').addEventListener('change', e => {
     if (e.target.matches('[data-greenies-winner]')) {
       document.querySelectorAll('[data-greenies-winner]').forEach(el => { if (el !== e.target) el.checked = false; });
     }
@@ -1250,13 +1285,14 @@ function installHandlers() {
     persist({ skipRender: true });
     loadMatchEditor(null);
     renderAll();
+    activateTab('score');
     toast(editingMatchId ? 'Match updated.' : 'Match created and loaded.');
     } catch (err) { console.error(err); toast('Could not create match. Please try again.'); }
   });
-  document.getElementById('cancelMatchEditBtn').addEventListener('click', () => loadMatchEditor(null));
+  document.getElementById('cancelMatchEditBtn').addEventListener('click', () => { loadMatchEditor(null); renderMatchSetupState(); });
   document.getElementById('matchesList').addEventListener('click', e => {
     const loadId = e.target.dataset.loadMatch; const shareId = e.target.dataset.shareMatch; const deleteId = e.target.dataset.deleteMatch;
-    if (loadId) { state.activeMatchId = loadId; currentHole = Math.max(1, completedHoles(getMatch(loadId)) || 1); persist(); }
+    if (loadId) { state.activeMatchId = loadId; currentHole = Math.max(1, completedHoles(getMatch(loadId)) || 1); persist(); activateTab('score'); }
     if (shareId) { shareRound(shareId); }
     if (deleteId && confirm('Delete this match?')) { state.matches = state.matches.filter(m => m.id !== deleteId); if (state.activeMatchId === deleteId) state.activeMatchId = null; persist(); }
   });

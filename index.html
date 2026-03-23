@@ -18,10 +18,11 @@
     <button id="installBtn" class="secondary hidden">Install</button>
   </header>
 
-  <nav class="tabs tabs-5 compact-tabs">
+  <nav class="tabs tabs-6 compact-tabs bottom-tabs">
     <button class="tab active" data-tab="players">Players</button>
     <button class="tab" data-tab="courses">Courses</button>
-    <button class="tab" data-tab="matches">Matches</button>
+    <button class="tab" data-tab="setup">Setup</button>
+    <button class="tab" data-tab="score">Score</button>
     <button class="tab" data-tab="leaderboard">Board</button>
     <button class="tab" data-tab="settings">More</button>
   </nav>
@@ -119,8 +120,21 @@
 
 
     
-    <section id="matches" class="panel">
+    <section id="setup" class="panel">
       <div class="card tight-card">
+        <div class="item-header compact-item-header">
+          <div>
+            <h2>Match setup</h2>
+            <div id="setupLockMsg" class="tiny">Build a new match, or edit the active one.</div>
+          </div>
+          <div class="actions wrap compact-actions">
+            <button id="newMatchBtn" type="button" class="secondary">New Match</button>
+            <button id="editActiveMatchBtn" type="button" class="secondary">Edit Active Match</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="matchSetupFormWrap" class="card tight-card">
         <h2 id="matchFormTitle">Setup match</h2>
         <form id="matchForm" class="grid two compact-grid">
           <label><span>Match date</span><input name="date" type="date" required /></label>
@@ -160,7 +174,7 @@
           <div class="span-2 card inset-card">
             <div class="item-header">
               <div class="section-label">Gambling games</div>
-              <div class="tiny">Choose up to 5. Only selected games will be scored in Release 2.</div>
+              <div class="tiny">Choose up to 5. Only selected games will be scored.</div>
             </div>
             <div id="gamesPicker" class="games-picker top-gap"></div>
             <div id="gameConfigs" class="top-gap"></div>
@@ -174,9 +188,16 @@
       </div>
 
       <div class="card tight-card">
+        <h2>Saved matches</h2>
+        <div id="matchesList" class="list"></div>
+      </div>
+    </section>
+
+    <section id="score" class="panel">
+      <div class="card tight-card">
         <div class="item-header">
           <div>
-            <h2>Current match</h2>
+            <h2>Scoring input</h2>
             <div id="currentMatchMeta" class="muted">No active match.</div>
           </div>
           <div class="actions wrap compact-actions">
@@ -185,7 +206,7 @@
             <button id="confirmFinishRoundBtn" type="button" class="secondary hidden">Confirm Finish</button>
           </div>
         </div>
-        <div id="scoreEntryEmpty" class="tiny top-gap">Create a match to begin score entry.</div>
+        <div id="scoreEntryEmpty" class="tiny top-gap">Create or load a match to begin score entry.</div>
         <div id="scoreEntryWrap" class="hidden top-gap">
           <div class="score-hole-nav actions wrap compact-actions">
             <button id="prevHoleBtn" type="button" class="secondary">◀ Prev</button>
@@ -212,11 +233,6 @@
             <button id="saveScoresBtn" type="button">Save Hole Scores</button>
           </div>
         </div>
-      </div>
-
-      <div class="card tight-card">
-        <h2>Saved matches</h2>
-        <div id="matchesList" class="list"></div>
       </div>
     </section>
 

@@ -32,6 +32,7 @@ body {
   padding: 0 12px 10px;
 }
 .tabs-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.tabs-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .tab, button, .button-link, select, input {
   -webkit-tap-highlight-color: transparent;
 }
@@ -57,7 +58,7 @@ body {
 .tab.active { background: var(--accent); color: white; }
 button.secondary, .secondary { background: #edf2ef; color: var(--text); }
 .hidden { display: none !important; }
-main { padding: 0 12px calc(26px + env(safe-area-inset-bottom)); }
+main { padding: 0 12px calc(90px + env(safe-area-inset-bottom)); }
 .panel { display: none; }
 .panel.active { display: block; }
 .card {
@@ -225,6 +226,7 @@ code { background: #edf2ef; padding: 2px 6px; border-radius: 6px; }
 
 @media (max-width: 760px) {
   .tabs-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.tabs-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .tab { padding: 9px 4px; font-size: 11px; }
   .grid.two { grid-template-columns: 1fr; }
   .span-2 { grid-column: auto; }
@@ -242,4 +244,19 @@ code { background: #edf2ef; padding: 2px 6px; border-radius: 6px; }
 .input-match{height:42px}
 @media (max-width: 640px){
   .assignment-grid,.games-picker{grid-template-columns:1fr}
+}
+
+
+.bottom-tabs {
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  background: linear-gradient(to top, var(--bg) 75%, rgba(243,246,244,0));
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+}
+.setup-locked-note{margin-top:6px}
+.readonly-block{opacity:.65;pointer-events:none}
+
+@media (max-width: 760px) {
+  .tabs-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }

@@ -923,6 +923,27 @@ function describeMomentumMeta(match, metrics, gameKey) {
   return `${escapeHtml(gameLabel)} · ${escapeHtml(teamName)} perspective${memberText} · ${escapeHtml(basis)}`;
 }
 
+
+function computeTeamGameDiffs(match, metrics, gameKey) {
+  const holes = Array.isArray(metrics?.holeResults) ? metrics.holeResults : [];
+  let front = 0, back = 0, overall = 0;
+  holes.forEach(h => {
+    const outcome = computeMomentumOutcome(match, metrics, h, gameKey);
+    const step = outcome === 'team1' ? 1 : outcome === 'team2' ? -1 : 0;
+    overall += step;
+    if ((Number(h.holeNumber) || 0) <= 9) front += step;
+    else back += step;
+  });
+  return { front, back, overall };
+}
+function formatTeamGameStatus(match, metrics, diff) {
+  if (!metrics || metrics.teams?.length !== 2) return '—';
+  if (!Number.isFinite(diff) || diff === 0) return 'AS';
+  return diff > 0
+    ? `${describeTeamLabel(match, 1, metrics)} ${Math.abs(diff)} up`
+    : `${describeTeamLabel(match, 2, metrics)} ${Math.abs(diff)} up`;
+}
+
 function getMatchStatusOptions(match) {
   const selected = Array.isArray(match?.selectedGames) ? match.selectedGames : [];
   if (!selected.length) return [];
@@ -934,20 +955,21 @@ function buildFeaturedMatchStatus(match, metrics, gameKey) {
   const basis = formatBasisLabel(cfg.basis, gameKey === 'greenies' ? 'Event' : 'Net');
   const mode = cfg.scoringMode ? ` · ${formatScoringModeLabel(cfg.scoringMode)}` : (gameKey === 'team_match' ? ' · Best Ball' : '');
   const title = `${getGameLabel(gameKey)} (${basis}${mode})`;
-  const frontStatus = metrics.teams.length === 2 ? (metrics.teams[0].front === 0 ? 'AS' : metrics.teams[0].front > 0 ? `${describeTeamLabel(match, 1, metrics)} ${Math.abs(metrics.teams[0].front)} up` : `${describeTeamLabel(match, 2, metrics)} ${Math.abs(metrics.teams[0].front)} up`) : '—';
-  const backStatus = metrics.teams.length === 2 ? (metrics.teams[0].back === 0 ? 'AS' : metrics.teams[0].back > 0 ? `${describeTeamLabel(match, 1, metrics)} ${Math.abs(metrics.teams[0].back)} up` : `${describeTeamLabel(match, 2, metrics)} ${Math.abs(metrics.teams[0].back)} up`) : '—';
-  const overallTeam = metrics.teams.length === 2 ? (metrics.matchDiff === 0 ? 'AS' : metrics.matchDiff > 0 ? `${describeTeamLabel(match, 1, metrics)} ${Math.abs(metrics.matchDiff)} up` : `${describeTeamLabel(match, 2, metrics)} ${Math.abs(metrics.matchDiff)} up`) : '—';
-  if (gameKey === 'nassau') {
-    return `<div><strong>${escapeHtml(title)}:</strong> Front ${frontStatus}</div><div><strong>Back 9:</strong> ${backStatus}</div><div><strong>Overall:</strong> ${overallTeam}</div>`;
-  }
-  if (gameKey === 'team_match') {
+  if (['nassau', 'team_match', 'team_stroke'].includes(gameKey) && metrics.teams.length === 2) {
+    const diffs = computeTeamGameDiffs(match, metrics, gameKey);
+    const frontStatus = formatTeamGameStatus(match, metrics, diffs.front);
+    const backStatus = formatTeamGameStatus(match, metrics, diffs.back);
+    const overallTeam = formatTeamGameStatus(match, metrics, diffs.overall);
+    if (gameKey === 'nassau') {
+      return `<div><strong>${escapeHtml(title)}:</strong> Front ${frontStatus}</div><div><strong>Back 9:</strong> ${backStatus}</div><div><strong>Overall:</strong> ${overallTeam}</div>`;
+    }
     return `<div><strong>${escapeHtml(title)}:</strong> ${overallTeam}</div><div><strong>Front 9:</strong> ${frontStatus}</div><div><strong>Back 9:</strong> ${backStatus}</div>`;
   }
-  if (gameKey === 'team_stroke') {
-    return `<div><strong>${escapeHtml(title)} leader:</strong> ${metrics.bestTeam ? `${describeTeamLabel(match, metrics.bestTeam.team, metrics)} (${formatSigned(metrics.bestTeam.netDiff)})` : '—'}</div><div><strong>Best player net:</strong> ${metrics.bestPlayerNet ? `${escapeHtml(metrics.bestPlayerNet.player.name)} (${formatSigned(metrics.bestPlayerNet.netDiff)})` : '—'}</div>`;
-  }
   if (gameKey === 'individual_match') {
-    return `<div><strong>${escapeHtml(title)} leader:</strong> ${metrics.bestPlayerNet ? `${escapeHtml(metrics.bestPlayerNet.player.name)} (${formatSigned(metrics.bestPlayerNet.netDiff)})` : '—'}</div>`;
+    const basisKey = String(cfg.basis || 'net').toLowerCase() === 'gross' ? 'grossTotal' : 'netTotal';
+    const leader = metrics.players.slice().sort((a,b) => (a[basisKey] - b[basisKey]) || (a.grossTotal - b.grossTotal))[0];
+    const leaderVal = leader ? (basisKey === 'grossTotal' ? leader.toPar : leader.netDiff) : null;
+    return `<div><strong>${escapeHtml(title)} leader:</strong> ${leader ? `${escapeHtml(leader.player.name)} (${formatSigned(leaderVal)})` : '—'}</div>`;
   }
   if (gameKey === 'skins') {
     const skinText = cfg.skinsType === 'team' ? describeTeamSkinLeader(metrics.teams) : describeSkinLeader(metrics.players);

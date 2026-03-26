@@ -1,11 +1,12 @@
-The Dye Ledger — v16.3 tweaks
+The Dye Ledger – Tweaks v16.6
 
 Changes in this build:
-- Added hole jump tiles under Save Hole Scores for faster direct navigation.
-- Next now auto-saves the current hole before advancing.
-- Fixed momentum perspective switching so the chart refreshes when you toggle Team 1 / Team 2.
-- Expanded Net payout on Scoreboard to show per-game amounts, a cross-footed total, and a suggested settlement table.
+- Added a Featured Game selector for Match Status on the Scoreboard.
+- Added a classic scorecard view between the momentum and net payout sections.
+- Moved the main app tabs back to the top and made them sticky.
 
-Notes:
-- Hole jump tiles also auto-save the current hole before switching.
-- Suggested settlement is live / in-round and based on current scoring status, not a final locked settlement engine.
+Update steps:
+1. Replace the contents of your current `golf-app` folder with these files.
+2. Commit to GitHub.
+3. Open the live site in Safari and refresh.
+4. If the PWA still shows the older layout, delete and re-add it to the home screen.

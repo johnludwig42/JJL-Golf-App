@@ -1,4 +1,4 @@
-const CACHE_NAME = 'the-dye-ledger-v16-4';
+const CACHE_NAME = 'the-dye-ledger-v16-7-icons';
 const ASSETS = [
   './',
   './index.html',
@@ -6,7 +6,14 @@ const ASSETS = [
   './app.js',
   './manifest.json',
   './icons/icon-192.png',
-  './icons/icon-512.png'
+  './icons/icon-512.png',
+  './icons/logo-mark.svg',
+  './icons/players.svg',
+  './icons/courses.svg',
+  './icons/setup.svg',
+  './icons/scoring.svg',
+  './icons/leaderboard.svg',
+  './icons/settings.svg'
 ];
 
 self.addEventListener('install', event => {

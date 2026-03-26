@@ -11,21 +11,26 @@
 </head>
 <body>
   <header class="app-header compact-header">
-    <div>
+    <div class="brand-wrap">
+      <img src="icons/logo-mark.svg" alt="The Dye Ledger logo" class="brand-mark" />
+      <div>
       <h1>The Dye Ledger</h1>
       <p class="sub">A compact match-and-games ledger for golf groups.</p>
+      </div>
     </div>
     <button id="installBtn" class="secondary hidden">Install</button>
   </header>
 
-  <nav class="tabs tabs-6 compact-tabs bottom-tabs">
-    <button class="tab active" data-tab="players">Players</button>
-    <button class="tab" data-tab="courses">Courses</button>
-    <button class="tab" data-tab="setup">Game Setup</button>
-    <button class="tab" data-tab="score">Scoring Input</button>
-    <button class="tab" data-tab="leaderboard">Scoreboard</button>
-    <button class="tab" data-tab="settings">More</button>
+  
+  <nav class="tabs tabs-6 compact-tabs top-tabs icon-tabs">
+    <button class="tab active" data-tab="players"><img class="tab-icon-img" src="icons/players.svg" alt="" /><span class="tab-label">Players</span></button>
+    <button class="tab" data-tab="courses"><img class="tab-icon-img" src="icons/courses.svg" alt="" /><span class="tab-label">Courses</span></button>
+    <button class="tab" data-tab="setup"><img class="tab-icon-img" src="icons/setup.svg" alt="" /><span class="tab-label">Game Setup</span></button>
+    <button class="tab" data-tab="score"><img class="tab-icon-img" src="icons/scoring.svg" alt="" /><span class="tab-label">Scoring Input</span></button>
+    <button class="tab" data-tab="leaderboard"><img class="tab-icon-img" src="icons/leaderboard.svg" alt="" /><span class="tab-label">Scoreboard</span></button>
+    <button class="tab" data-tab="settings"><img class="tab-icon-img" src="icons/settings.svg" alt="" /><span class="tab-label">More</span></button>
   </nav>
+
 
   <main>
     <section id="players" class="panel active">
@@ -255,7 +260,16 @@
       <div id="leaderboardWrap" class="hidden">
         <div class="leaderboard-cards">
           <div class="card tight-card">
-            <h2>Match status</h2>
+            <div class="item-header compact-item-header">
+              <div>
+                <h2>Match status</h2>
+                <div class="tiny">Choose which selected game is featured here.</div>
+              </div>
+              <label class="inline-select tiny">
+                <span>Featured game</span>
+                <select id="matchStatusGameSelect"></select>
+              </label>
+            </div>
             <div id="matchStatusSummary" class="result compact-result"></div>
           </div>
           <div class="card tight-card">
@@ -322,6 +336,11 @@
             </div>
           </div>
           <div id="holeMomentum" class="hole-momentum"></div>
+        </div>
+
+        <div class="card tight-card">
+          <h2>Classic scorecard</h2>
+          <div id="classicScorecard" class="top-gap"></div>
         </div>
 
         <div class="card tight-card">

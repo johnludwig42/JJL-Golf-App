@@ -388,8 +388,7 @@ function renderAll() {
   populateCourseSelects();
   populateCalcPlayers();
   populateCalcCourses();
-  populateMatchCourseSelects();
-  populateMatchPlayerPicker();
+  preserveMatchSetupUi();
 }
 
 function renderPlayers() {
@@ -791,7 +790,11 @@ function populateMatchPlayerPicker(selected = []) {
     if (summary) summary.textContent = 'No saved players yet.';
     return;
   }
-  const selectedBySlot = Array.from({ length: slotCount }, (_, idx) => selected[idx]?.playerId || '');
+  const selectedBySlot = Array.from({ length: slotCount }, (_, idx) => {
+    const direct = selected.find(s => Number(s.slot) === idx)?.playerId;
+    if (direct) return direct;
+    return selected[idx]?.playerId || '';
+  });
   const teamNames = Array.from({ length: teamCount }, (_, i) => document.querySelector(`[data-team-name="${i + 1}"]`)?.value || `Team ${i + 1}`);
   container.innerHTML = Array.from({ length: slotCount }, (_, idx) => {
     const teamNo = Math.floor(idx / playersPerTeam) + 1;
@@ -829,6 +832,26 @@ function getCurrentAssignablePlayers() {
   const ids = Array.from(document.querySelectorAll('[data-player-slot]')).map(el => el.value).filter(Boolean);
   const unique = new Set(ids);
   return state.players.filter(p => unique.has(p.id));
+}
+function getCurrentMatchEditorSelections() {
+  return Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => ({
+    playerId: el.value || '',
+    team: Number(el.dataset.slotTeam) || 1,
+    slot: idx,
+  }));
+}
+function preserveMatchSetupUi() {
+  const form = document.getElementById('matchForm');
+  if (!form) return;
+  const selectedCourseId = document.getElementById('matchCourseSelect')?.value || '';
+  const selectedTeeId = document.getElementById('matchTeeSelect')?.value || '';
+  const currentSelections = getCurrentMatchEditorSelections();
+  const currentTeamNames = Array.from(document.querySelectorAll('[data-team-name]')).map(el => el.value || '');
+  const currentGames = collectSelectedGames();
+  populateMatchCourseSelects(selectedCourseId, selectedTeeId);
+  renderTeamNameInputs(Number(document.getElementById('teamCountSelect')?.value || 2), currentTeamNames);
+  populateMatchPlayerPicker(currentSelections);
+  renderGamesPicker(currentGames);
 }
 function renderGamesPicker(existing = []) {
   const picker = document.getElementById('gamesPicker');
@@ -1026,9 +1049,13 @@ function loadTeeEditor(courseId = null, teeId = null) {
   activateTab('courses');
   if (!courseId || !teeId) {
     form.reset();
-    if (courseId) document.getElementById('teeCourseSelect').value = courseId;
+    const courseSelect = document.getElementById('teeCourseSelect');
+    if (courseId) {
+      courseSelect.value = courseId;
+      form.elements.namedItem('courseId').value = courseId;
+    }
     renderHoleRows(buildTeeHoleRows(courseId));
-    updateTeeStrokeTemplateHint(courseId);
+    updateTeeStrokeTemplateHint(courseId || courseSelect.value || '');
     window.scrollTo({ top: document.getElementById('teeFormTitle').getBoundingClientRect().top + window.scrollY - 20, behavior: 'smooth' });
     return;
   }
@@ -1174,6 +1201,12 @@ function installHandlers() {
     }
   });
 
+  document.getElementById('teeCourseSelect').addEventListener('change', e => {
+    if (!editingTeeRef) {
+      renderHoleRows(buildTeeHoleRows(e.target.value));
+    }
+    updateTeeStrokeTemplateHint(e.target.value);
+  });
   document.getElementById('calcCourse').addEventListener('change', populateCalcTees);
   document.getElementById('calcForm').addEventListener('submit', e => {
     e.preventDefault();
@@ -1216,13 +1249,16 @@ function installHandlers() {
   });
   document.getElementById('gamesPicker').addEventListener('change', e => {
     if (!e.target.matches('[data-game-key]')) return;
+    const existing = collectSelectedGames();
     const checked = Array.from(document.querySelectorAll('[data-game-key]:checked'));
     if (checked.length > 5) {
       e.target.checked = false;
       toast('Select up to 5 gambling games.');
       return;
     }
-    renderGamesPicker(collectSelectedGames());
+    const selectedKeys = checked.map(el => el.dataset.gameKey);
+    const configs = selectedKeys.map(key => getGameConfig(key, existing));
+    renderGamesPicker(configs);
   });
   document.getElementById('leaderboard').addEventListener('change', e => {
     if (e.target.id === 'momentumGameSelect') {

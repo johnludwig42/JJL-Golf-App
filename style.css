@@ -58,7 +58,7 @@ body {
 .tab.active { background: var(--accent); color: white; }
 button.secondary, .secondary { background: #edf2ef; color: var(--text); }
 .hidden { display: none !important; }
-main { padding: 0 12px calc(90px + env(safe-area-inset-bottom)); }
+main { padding: 0 12px calc(120px + env(safe-area-inset-bottom) + var(--keyboard-offset, 0px)); }
 .panel { display: none; }
 .panel.active { display: block; }
 .card {
@@ -239,8 +239,10 @@ code { background: #edf2ef; padding: 2px 6px; border-radius: 6px; }
 .picker-row-stack{display:flex;flex-direction:column;align-items:stretch;gap:4px}
 .game-pill{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #d9e6df;border-radius:999px;background:#fff}
 .game-pill.selected{border-color:#0b5d3b;background:#eef7f2}
-.greenies-list{display:flex;flex-wrap:wrap;gap:8px}
-.mini-check{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border:1px solid #d9e6df;border-radius:999px;background:#fff}
+.greenies-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.mini-check{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #d9e6df;border-radius:12px;background:#fff;min-width:0}
+.mini-check input{width:auto;flex:0 0 auto;margin:0}
+.mini-check span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .input-match{height:42px}
 @media (max-width: 640px){
   .assignment-grid,.games-picker{grid-template-columns:1fr}
@@ -248,12 +250,15 @@ code { background: #edf2ef; padding: 2px 6px; border-radius: 6px; }
 
 
 .bottom-tabs {
-  position: sticky;
-  bottom: 0;
-  z-index: 20;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--keyboard-offset, 0px));
+  z-index: 40;
   background: linear-gradient(to top, var(--bg) 75%, rgba(243,246,244,0));
-  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  padding: 0 12px calc(10px + env(safe-area-inset-bottom));
 }
+body.keyboard-open .bottom-tabs { box-shadow: 0 -8px 18px rgba(0,0,0,.08); }
 .setup-locked-note{margin-top:6px}
 .readonly-block{opacity:.65;pointer-events:none}
 
@@ -314,18 +319,25 @@ code { background: #edf2ef; padding: 2px 6px; border-radius: 6px; }
 .momentum-pill.team2 { background: #9f3030; color: white; }
 
 .hole-jump-tiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
-.hole-jump-tile{border:1px solid var(--border);background:white;border-radius:12px;padding:10px 0;font-size:12px;font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.hole-jump-tile{border:1px solid #cfe4d8;background:#eef7f2;color:#0b5d3b;border-radius:12px;padding:10px 0;font-size:12px;font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.04)}
 .hole-jump-tile.active{background:var(--accent);color:white;border-color:var(--accent)}
 .hole-jump-tile.complete{background:#eef7f2;border-color:#cfe4d8;color:#0b5d3b}
 .hole-jump-tile.active.complete{background:var(--accent);color:white}
 .payout-summary-intro{line-height:1.45}
 .payout-table-wrap{overflow-x:auto;padding-bottom:4px}
 .payout-game-table,.settlement-table{width:100%;border-collapse:collapse;margin-top:10px;background:white;border:1px solid var(--border);border-radius:12px;overflow:hidden}
-.payout-game-table{min-width:720px}
-.payout-game-table th,.payout-game-table td,.settlement-table th,.settlement-table td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:12px;text-align:left;vertical-align:top}
+.payout-game-table{min-width:720px;table-layout:fixed}
+.payout-game-table th,.payout-game-table td,.settlement-table th,.settlement-table td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:12px;text-align:left;vertical-align:top;word-break:break-word}
 .payout-game-table th,.settlement-table th{background:#f8fbf9;white-space:nowrap}
 .payout-game-table tfoot td{background:#fbfcfb}
 .payout-settlement-head{margin-top:8px}
 .payout-total-positive{color:#0b5d3b;font-weight:700}
 .payout-total-negative{color:#9f3030;font-weight:700}
 @media (max-width:760px){.hole-jump-tiles{grid-template-columns:repeat(6,minmax(0,1fr))}}
+
+@media (max-width:760px){
+  .greenies-list{grid-template-columns:1fr}
+  .score-grid input{font-size:16px}
+  .inline-select{flex-direction:column;align-items:stretch}
+  .inline-select select{min-width:0}
+}

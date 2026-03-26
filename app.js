@@ -26,6 +26,11 @@ function formatScoringModeLabel(mode) {
 function getTeamName(match, teamNo) {
   return match?.teamNames?.[teamNo - 1] || `Team ${teamNo}`;
 }
+
+function getTeamLabel(match, teamNo, fallback = true) {
+  const name = String(getTeamName(match, teamNo) || '').trim();
+  return name || (fallback ? `Team ${teamNo}` : '');
+}
 function getMomentumPerspectiveTeam(match) {
   const teamNo = Number(match?.momentumPerspective || 1);
   return teamNo === 2 ? 2 : 1;
@@ -42,6 +47,7 @@ let editingTeeRef = null;
 let editingMatchId = null;
 let currentHole = 1;
 let finishConfirmArmed = false;
+let currentLeaderboardMatchRef = null;
 
 const state = loadState();
 normalizeState();
@@ -105,10 +111,10 @@ function extractStrokeTemplate(holes) {
   return arr.length === 18 && arr.every(v => v !== null) ? arr : null;
 }
 function formatSigned(n) { return n > 0 ? `+${n}` : `${n}`; }
-function formatMatchDiff(diff) {
+function formatMatchDiff(diff, match = null) {
   if (!Number.isFinite(diff) || diff === 0) return 'AS';
-  const sign = diff > 0 ? 'Team 1' : 'Team 2';
-  return `${sign} ${Math.abs(diff)} up`; // Team 1 perspective
+  const sign = diff > 0 ? getTeamLabel(match, 1) : getTeamLabel(match, 2);
+  return `${sign} ${Math.abs(diff)} up`;
 }
 
 function formatGrossNet(score) {
@@ -118,6 +124,7 @@ function formatGrossNet(score) {
 }
 function buildRoundShareText(match) {
   const metrics = computeMatchMetrics(match);
+  currentLeaderboardMatchRef = match;
   if (!metrics) return `${match?.name || 'Golf round'}
 
 This round is missing valid course or tee data.`;
@@ -128,22 +135,22 @@ This round is missing valid course or tee data.`;
   lines.push('');
 
   if (metrics.teams.length === 2) {
-    lines.push(`Team Match: ${formatMatchDiff(metrics.matchDiff)}`);
-    const front = metrics.teams[0].front === 0 ? 'AS' : (metrics.teams[0].front > 0 ? `Team 1 ${Math.abs(metrics.teams[0].front)} up` : `Team 2 ${Math.abs(metrics.teams[0].front)} up`);
-    const back = metrics.teams[0].back === 0 ? 'AS' : (metrics.teams[0].back > 0 ? `Team 1 ${Math.abs(metrics.teams[0].back)} up` : `Team 2 ${Math.abs(metrics.teams[0].back)} up`);
+    lines.push(`Team Match: ${formatMatchDiff(metrics.matchDiff, match)}`);
+    const front = metrics.teams[0].front === 0 ? 'AS' : (metrics.teams[0].front > 0 ? `${getTeamLabel(match, 1)} ${Math.abs(metrics.teams[0].front)} up` : `${getTeamLabel(match, 2)} ${Math.abs(metrics.teams[0].front)} up`);
+    const back = metrics.teams[0].back === 0 ? 'AS' : (metrics.teams[0].back > 0 ? `${getTeamLabel(match, 1)} ${Math.abs(metrics.teams[0].back)} up` : `${getTeamLabel(match, 2)} ${Math.abs(metrics.teams[0].back)} up`);
     lines.push(`Front 9: ${front}`);
     lines.push(`Back 9: ${back}`);
     lines.push('');
     lines.push('Team Totals');
     metrics.teams.forEach(team => {
-      lines.push(`Team ${team.team} (${team.members.map(m => m.player.name).join(', ')}): gross ${team.grossTotal}, net ${team.netTotal}, to par ${formatSigned(team.toPar)}, net diff ${formatSigned(team.netDiff)}, skins ${team.skins}`);
+      lines.push(`${getTeamLabel(match, team.team)} (${team.members.map(m => m.player.name).join(', ')}): gross ${team.grossTotal}, net ${team.netTotal}, to par ${formatSigned(team.toPar)}, net diff ${formatSigned(team.netDiff)}, skins ${team.skins}`);
     });
     lines.push('');
   }
 
   lines.push('Player Totals');
   metrics.players.slice().sort((a, b) => a.netDiff - b.netDiff || a.toPar - b.toPar).forEach(p => {
-    lines.push(`${p.player.name} (T${p.team}): gross ${p.grossTotal || 0}, net ${p.netTotal || 0}, to par ${formatSigned(p.toPar || 0)}, net diff ${formatSigned(p.netDiff || 0)}, skins ${p.skins}`);
+    lines.push(`${p.player.name} (${getTeamLabel(match, p.team)}): gross ${p.grossTotal || 0}, net ${p.netTotal || 0}, to par ${formatSigned(p.toPar || 0)}, net diff ${formatSigned(p.netDiff || 0)}, skins ${p.skins}`);
   });
 
   lines.push('');
@@ -158,7 +165,7 @@ This round is missing valid course or tee data.`;
       return `${p.player.name} ${formatGrossNet(score)}`;
     }).join(' | ');
     const result = metrics.teams.length === 2
-      ? (h.teamWinner === 1 ? 'Team 1 won hole' : h.teamWinner === 2 ? 'Team 2 won hole' : 'Hole tied')
+      ? (h.teamWinner === 1 ? `${getTeamLabel(match, 1)} won hole` : h.teamWinner === 2 ? `${getTeamLabel(match, 2)} won hole` : 'Hole tied')
       : `Low net: ${h.indivWinners.map(id => metrics.players.find(p => p.playerId === id)?.player.name).filter(Boolean).join(', ') || '—'}`;
     lines.push(`H${h.holeNumber}: ${playerBits} — ${result}`);
   });
@@ -536,7 +543,7 @@ function renderCurrentMatch() {
   currentHole = Math.min(18, Math.max(1, currentHole));
   document.getElementById('currentHoleBadge').textContent = `Hole ${currentHole}`;
   const hole = tee?.holes[currentHole - 1];
-  const teamText = metrics?.teams?.length === 2 ? `${formatMatchDiff(metrics.matchDiff)} overall` : 'Singles leaderboard';
+  const teamText = metrics?.teams?.length === 2 ? `${formatMatchDiff(metrics.matchDiff, match)} overall` : 'Singles leaderboard';
   document.getElementById('holeSummary').textContent = hole ? `Par ${hole.par || '-'} · ${hole.yardage || '-'} yds · SI ${hole.strokeIndex || '-'} · ${teamText}` : '';
   renderScoreGrid(match, tee, metrics);
   renderGreeniesEntry(match, hole);
@@ -555,7 +562,7 @@ function renderGreeniesEntry(match, hole) {
   const eligible = (greenies.participants || []).map(getPlayer).filter(Boolean);
   const winnerId = match.greeniesWinners?.[String(hole.holeNumber)] || '';
   wrap.classList.remove('hidden');
-  wrap.innerHTML = `<div class="card inset-card game-config-card"><div class="section-label">Greenies · Hole ${hole.holeNumber}</div><div class="greenies-list top-gap">${eligible.map(p => `<label class="mini-check"><input type="checkbox" data-greenies-winner="${p.id}" ${winnerId === p.id ? 'checked' : ''} /> ${escapeHtml(p.name)}</label>`).join('') || '<div class="tiny">No greenies participants selected for this match.</div>'}</div><div class="tiny top-gap">Select the closest-to-the-pin winner for this par 3. Payout runs only against selected greenies participants.</div></div>`;
+  wrap.innerHTML = `<div class="card inset-card game-config-card greenies-card"><div class="section-label">Greenies · Hole ${hole.holeNumber}</div><div class="greenies-list top-gap">${eligible.map(p => `<label class="mini-check greenies-check"><input type="checkbox" data-greenies-winner="${p.id}" ${winnerId === p.id ? 'checked' : ''} /><span>${escapeHtml(p.name)}</span></label>`).join('') || '<div class="tiny">No greenies participants selected for this match.</div>'}</div><div class="tiny top-gap">Select the closest-to-the-pin winner for this par 3. Payout runs only against selected greenies participants.</div></div>`;
 }
 function renderHoleJumpTiles(match) {
   const wrap = document.getElementById('holeJumpTiles');
@@ -565,7 +572,8 @@ function renderHoleJumpTiles(match) {
     const holeNo = idx + 1;
     const classes = ['hole-jump-tile'];
     if (holeNo === currentHole) classes.push('active');
-    if (holeNo <= completed) classes.push('complete');
+    classes.push('complete');
+    if (holeNo <= completed) classes.push('played');
     return `<button type="button" class="${classes.join(' ')}" data-jump-hole="${holeNo}">${holeNo}</button>`;
   }).join('');
 }
@@ -585,7 +593,7 @@ function renderScoreGrid(match, tee, metrics) {
     return `
       <tr>
         <td>${escapeHtml(p.player.name)}</td>
-        <td>T${p.team}</td>
+        <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
         <td><input type="number" min="1" max="15" data-score-player="${p.playerId}" value="${gross}" /></td>
         <td>${strokes}</td>
         <td>${net}</td>
@@ -785,6 +793,7 @@ function renderLeaderboard() {
   }
 
   const metrics = computeMatchMetrics(match);
+  currentLeaderboardMatchRef = match;
   if (!metrics) {
     empty.classList.remove('hidden');
     wrap.classList.add('hidden');
@@ -801,7 +810,7 @@ function renderLeaderboard() {
   playerBody.innerHTML = metrics.players.slice().sort((a, b) => a.netDiff - b.netDiff || a.toPar - b.toPar).map(p => `
     <tr>
       <td>${escapeHtml(p.player.name)}</td>
-      <td>T${p.team}</td>
+      <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
       <td>${p.grossTotal || 0}</td>
       <td>${p.netTotal || 0}</td>
       <td>${formatSigned(p.toPar || 0)}</td>
@@ -812,7 +821,7 @@ function renderLeaderboard() {
 
   teamBody.innerHTML = metrics.teams.map(t => `
     <tr>
-      <td>T${t.team}</td>
+      <td>${escapeHtml(getTeamLabel(match, t.team))}</td>
       <td>${escapeHtml(t.members.map(m => m.player.name).join(', '))}</td>
       <td>${t.grossTotal}</td>
       <td>${t.netTotal}</td>
@@ -822,12 +831,12 @@ function renderLeaderboard() {
     </tr>
   `).join('');
 
-  const frontStatus = metrics.teams.length === 2 ? (metrics.teams[0].front === 0 ? 'AS' : metrics.teams[0].front > 0 ? `Team 1 ${Math.abs(metrics.teams[0].front)} up` : `Team 2 ${Math.abs(metrics.teams[0].front)} up`) : '—';
-  const backStatus = metrics.teams.length === 2 ? (metrics.teams[0].back === 0 ? 'AS' : metrics.teams[0].back > 0 ? `Team 1 ${Math.abs(metrics.teams[0].back)} up` : `Team 2 ${Math.abs(metrics.teams[0].back)} up`) : '—';
+  const frontStatus = metrics.teams.length === 2 ? (metrics.teams[0].front === 0 ? 'AS' : metrics.teams[0].front > 0 ? `${getTeamLabel(match, 1)} ${Math.abs(metrics.teams[0].front)} up` : `${getTeamLabel(match, 2)} ${Math.abs(metrics.teams[0].front)} up`) : '—';
+  const backStatus = metrics.teams.length === 2 ? (metrics.teams[0].back === 0 ? 'AS' : metrics.teams[0].back > 0 ? `${getTeamLabel(match, 1)} ${Math.abs(metrics.teams[0].back)} up` : `${getTeamLabel(match, 2)} ${Math.abs(metrics.teams[0].back)} up`) : '—';
   const teamMatchCfg = (match.selectedGames || []).find(g => g.key === 'team_match');
   const teamMatchBasis = teamMatchCfg ? ` (${escapeHtml(formatBasisLabel(teamMatchCfg.basis))} · Best Ball)` : '';
   matchStatus.innerHTML = `
-    <div><strong>Overall team match${teamMatchBasis}:</strong> ${metrics.teams.length === 2 ? formatMatchDiff(metrics.matchDiff) : 'Singles / multi-team mode'}</div>
+    <div><strong>Overall team match${teamMatchBasis}:</strong> ${metrics.teams.length === 2 ? formatMatchDiff(metrics.matchDiff, match) : 'Singles / multi-team mode'}</div>
     <div><strong>Front 9:</strong> ${frontStatus}</div>
     <div><strong>Back 9:</strong> ${backStatus}</div>
     <div><strong>Best player net:</strong> ${metrics.bestPlayerNet ? `${escapeHtml(metrics.bestPlayerNet.player.name)} (${formatSigned(metrics.bestPlayerNet.netDiff)})` : '—'}</div>
@@ -887,8 +896,8 @@ function describeTeamSkinLeader(teams) {
   if (!teams.length) return '—';
   const max = Math.max(...teams.map(t => t.skins));
   if (max <= 0) return 'None yet';
-  const leaders = teams.filter(t => t.skins === max).map(t => `Team ${t.team}`).join(', ');
-  return `${leaders} (${max})`;
+  const leaders = teams.filter(t => t.skins === max).map(t => getTeamLabel(currentLeaderboardMatchRef, t.team)).join(', ');
+  return `${escapeHtml(leaders)} (${max})`;
 }
 function describeTeamLabel(match, teamNo, metrics) {
   const name = match.teamNames?.[teamNo - 1] || `Team ${teamNo}`;
@@ -942,12 +951,12 @@ function buildNetPayoutSummary(match, metrics) {
     ? settlements.map(row => `<tr><td>${escapeHtml(getPlayer(row.from)?.name || 'Unknown')}</td><td>${escapeHtml(getPlayer(row.to)?.name || 'Unknown')}</td><td><strong>$${row.amount.toFixed(2)}</strong></td></tr>`).join('')
     : '<tr><td colspan="3">No payouts due right now.</td></tr>';
   return `
-    <div class="payout-summary-intro"><strong>Net payout (live):</strong> by player across the top-selected games, cross-footed to a total.</div>
+    <div class="payout-summary-intro"><strong>Net payout (live):</strong> by player across the selected games, rolled to a total.</div>
     <div class="payout-table-wrap top-gap">
       <table class="payout-game-table payout-game-table-wide">
         <thead><tr><th>Player</th>${headerCells}<th>Total</th></tr></thead>
         <tbody>${playerRows}</tbody>
-        <tfoot><tr><td><strong>Cross-foot</strong></td>${columnFoot}<td><strong>${overallText}</strong></td></tr></tfoot>
+        <tfoot><tr><td><strong>Total</strong></td>${columnFoot}<td><strong>${overallText}</strong></td></tr></tfoot>
       </table>
     </div>
     <div class="top-gap payout-settlement-head"><strong>Suggested settlement right now</strong></div>
@@ -1529,7 +1538,35 @@ function installHandlers() {
     const configs = selectedKeys.map(key => getGameConfig(key, existing));
     renderGamesPicker(configs);
   });
-  document.getElementById('leaderboard').addEventListener('change', e => {
+  
+  if (window.visualViewport) {
+    const syncViewport = () => {
+      const offset = Math.max(0, window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop);
+      document.documentElement.style.setProperty('--keyboard-offset', `${Math.max(0, offset)}px`);
+      document.body.classList.toggle('keyboard-open', offset > 120);
+    };
+    window.visualViewport.addEventListener('resize', syncViewport);
+    window.visualViewport.addEventListener('scroll', syncViewport);
+    syncViewport();
+  }
+  document.addEventListener('focusin', e => {
+    if (e.target.closest('#score') && e.target.matches('input, select, textarea')) {
+      setTimeout(() => {
+        try { e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
+      }, 180);
+    }
+  });
+  document.addEventListener('focusout', () => {
+    if (window.visualViewport) {
+      setTimeout(() => {
+        const offset = Math.max(0, window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop);
+        document.documentElement.style.setProperty('--keyboard-offset', `${Math.max(0, offset)}px`);
+        document.body.classList.toggle('keyboard-open', offset > 120);
+      }, 120);
+    }
+  });
+
+document.getElementById('leaderboard').addEventListener('change', e => {
     const match = getActiveMatch();
     if (!match) return;
     if (e.target.id === 'momentumGameSelect') {

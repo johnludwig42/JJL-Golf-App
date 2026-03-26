@@ -21,9 +21,9 @@
   <nav class="tabs tabs-6 compact-tabs bottom-tabs">
     <button class="tab active" data-tab="players">Players</button>
     <button class="tab" data-tab="courses">Courses</button>
-    <button class="tab" data-tab="setup">Setup</button>
-    <button class="tab" data-tab="score">Score</button>
-    <button class="tab" data-tab="leaderboard">Board</button>
+    <button class="tab" data-tab="setup">Game Setup</button>
+    <button class="tab" data-tab="score">Scoring Input</button>
+    <button class="tab" data-tab="leaderboard">Scoreboard</button>
     <button class="tab" data-tab="settings">More</button>
   </nav>
 
@@ -124,7 +124,7 @@
       <div class="card tight-card">
         <div class="item-header compact-item-header">
           <div>
-            <h2>Match setup</h2>
+            <h2>Game setup</h2>
             <div id="setupLockMsg" class="tiny">Build a new match, or edit the active one.</div>
           </div>
           <div class="actions wrap compact-actions">
@@ -135,7 +135,7 @@
       </div>
 
       <div id="matchSetupFormWrap" class="card tight-card">
-        <h2 id="matchFormTitle">Setup match</h2>
+        <h2 id="matchFormTitle">Game setup</h2>
         <form id="matchForm" class="grid two compact-grid">
           <label><span>Match date</span><input name="date" type="date" required /></label>
           <label><span>Match name</span><input class="input-match" name="name" placeholder="Saturday game" /></label>
@@ -143,6 +143,7 @@
           <label><span>Tee</span><select name="teeId" id="matchTeeSelect" required></select></label>
           <label><span># Teams</span>
             <select name="teamCount" id="teamCountSelect">
+              <option value="1">1 team</option>
               <option value="2">2 teams</option>
               <option value="3">3 teams</option>
               <option value="4">4 teams</option>

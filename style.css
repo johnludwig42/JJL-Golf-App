@@ -216,9 +216,9 @@ input, select, textarea {
   font-size: 13px;
   margin-top: 3px;
 }
-.momentum-pill.team1 { background: #e7f4ee; color: var(--accent); border-color: #cfe4d8; }
-.momentum-pill.team2 { background: #f7ecec; color: var(--danger); border-color: #e8cdcd; }
-.momentum-pill.tied { background: #eef2ef; color: var(--muted); }
+.momentum-pill.team1 { background: #0f5b38; color: #ffffff; border-color: #0b4a2d; }
+.momentum-pill.team2 { background: #a12d2f; color: #ffffff; border-color: #862224; }
+.momentum-pill.tied { background: #ffffff; color: var(--muted); border-color: var(--border); }
 .momentum-pill.pending { background: #fafafa; color: #8e9a94; }
 .tight-list { padding-left: 18px; margin: 0; }
 .tight-list li + li { margin-top: 6px; }
@@ -227,7 +227,7 @@ code { background: #edf2ef; padding: 2px 6px; border-radius: 6px; }
 @media (max-width: 760px) {
   .tabs-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .tabs-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-  .tab { padding: 9px 4px; font-size: 11px; }
+  .tab { padding: 9px 3px; font-size: 10px; }
   .grid.two { grid-template-columns: 1fr; }
   .span-2 { grid-column: auto; }
   .hole-momentum { grid-template-columns: repeat(4, minmax(0, 1fr)); }

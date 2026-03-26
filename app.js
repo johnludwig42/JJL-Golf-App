@@ -80,7 +80,7 @@ function formatSigned(n) { return n > 0 ? `+${n}` : `${n}`; }
 function formatMatchDiff(diff) {
   if (!Number.isFinite(diff) || diff === 0) return 'AS';
   const sign = diff > 0 ? 'Team 1' : 'Team 2';
-  return `${sign} ${Math.abs(diff)} up`;
+  return `${sign} ${Math.abs(diff)} up`; // Team 1 perspective
 }
 
 function formatGrossNet(score) {
@@ -562,14 +562,14 @@ function getMomentumOptions(match) {
 }
 function computeMomentumOutcome(match, metrics, holeResult, gameKey) {
   if (!holeResult?.completed) return 'pending';
+  const config = (match.selectedGames || []).find(g => g.key === gameKey) || {};
   if (gameKey === 'team_stroke') {
-    const cfg = (match.selectedGames || []).find(g => g.key === 'team_stroke') || {};
-    const holeTeams = metrics.teams.map(team => {
+    const holeTeams = metrics.teams.slice(0, 2).map(team => {
       const entries = holeResult.playerScores.filter(ps => ps.team === team.team);
       if (!entries.length) return { team: team.team, value: null };
-      const values = entries.map(e => cfg.basis === 'gross' ? e.gross : e.net).filter(v => Number.isFinite(v));
+      const values = entries.map(e => config.basis === 'gross' ? e.gross : e.net).filter(v => Number.isFinite(v));
       if (!values.length) return { team: team.team, value: null };
-      const value = cfg.scoringMode === 'aggregate' ? values.reduce((a,b)=>a+b,0) : Math.min(...values);
+      const value = config.scoringMode === 'aggregate' ? values.reduce((a,b)=>a+b,0) : Math.min(...values);
       return { team: team.team, value };
     }).filter(t => Number.isFinite(t.value));
     if (holeTeams.length < 2) return 'tied';
@@ -577,10 +577,10 @@ function computeMomentumOutcome(match, metrics, holeResult, gameKey) {
     if (holeTeams[1].value < holeTeams[0].value) return 'team2';
     return 'tied';
   }
-  // Nassau and team_match both use best-ball hole result from Team 1 perspective for momentum.
+  const basis = config.basis === 'gross' ? 'gross' : 'net';
   const teamEntries = [1,2].map(teamNo => {
     const entries = holeResult.playerScores.filter(ps => ps.team === teamNo);
-    const values = entries.map(e => e.net).filter(v => Number.isFinite(v));
+    const values = entries.map(e => e[basis]).filter(v => Number.isFinite(v));
     if (!values.length) return { team: teamNo, value: null };
     return { team: teamNo, value: Math.min(...values) };
   });
@@ -722,7 +722,11 @@ function buildSelectedGamesSummary(match, metrics) {
       case 'greenies': {
         const wins = Object.values(match.greeniesWinners || {}).reduce((acc, id) => { acc[id] = (acc[id] || 0) + 1; return acc; }, {});
         const leaders = Object.entries(wins).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([id,n]) => `${escapeHtml(getPlayer(id)?.name || 'Unknown')} (${n})`).join(', ');
-        return `<div><strong>Greenies:</strong> ${(cfg.participants || []).length || 0} participant(s) · leaders ${leaders || 'None yet'}</div>`;
+        const byHole = Object.entries(match.greeniesWinners || {})
+          .sort((a,b)=>Number(a[0]) - Number(b[0]))
+          .map(([hole,id]) => `H${hole} ${escapeHtml(getPlayer(id)?.name || 'Unknown')}`)
+          .join(' · ');
+        return `<div><strong>Greenies:</strong> ${(cfg.participants || []).length || 0} participant(s) · leaders ${leaders || 'None yet'}${byHole ? `<br /><span class="tiny">Winners by par 3: ${byHole}</span>` : ''}</div>`;
       }
       default:
         return '';
@@ -766,7 +770,7 @@ function populateMatchTees(courseId = null, selectedTeeId = null) {
   if (selectedTeeId) teeSelect.value = selectedTeeId;
 }
 
-function renderTeamNameInputs(teamCount = Number(document.getElementById('teamCountSelect')?.value || 2), teamNames = []) {
+function renderTeamNameInputs(teamCount = Number(document.getElementById('teamCountSelect')?.value || 1), teamNames = []) {
   const wrap = document.getElementById('teamNamesGrid');
   if (!wrap) return;
   wrap.innerHTML = Array.from({ length: teamCount }, (_, idx) => `
@@ -782,8 +786,8 @@ function getAssignmentSelections() {
 function populateMatchPlayerPicker(selected = []) {
   const container = document.getElementById('matchPlayersPicker');
   const summary = document.getElementById('assignmentSummary');
-  const teamCount = Number(document.getElementById('teamCountSelect')?.value || 2);
-  const playersPerTeam = Number(document.getElementById('playersPerTeamSelect')?.value || 2);
+  const teamCount = Number(document.getElementById('teamCountSelect')?.value || 1);
+  const playersPerTeam = Number(document.getElementById('playersPerTeamSelect')?.value || 1);
   const slotCount = teamCount * playersPerTeam;
   if (!state.players.length) {
     container.innerHTML = '<div class="tiny">Add players first.</div>';
@@ -1083,10 +1087,10 @@ function loadMatchEditor(matchId = null) {
     form.reset();
     form.elements.namedItem('date').value = todayIso();
     form.elements.namedItem('allowance').value = 100;
-    document.getElementById('teamCountSelect').value = '2';
-    document.getElementById('playersPerTeamSelect').value = '2';
+    document.getElementById('teamCountSelect').value = '1';
+    document.getElementById('playersPerTeamSelect').value = '1';
     populateMatchCourseSelects();
-    renderTeamNameInputs(2, []);
+    renderTeamNameInputs(1, []);
     populateMatchPlayerPicker([]);
     renderGamesPicker([]);
     return;
@@ -1171,8 +1175,8 @@ function installHandlers() {
     };
     normalizeTee(tee, course.name);
     const savedTemplate = extractStrokeTemplate(tee.holes);
-    if (savedTemplate && !editingTeeRef) {
-      course.strokeIndexes = course.strokeIndexes || savedTemplate;
+    if (savedTemplate) {
+      course.strokeIndexes = savedTemplate;
     }
     if (!tee.teeName) return toast('Tee name is required.');
     if (editingTeeRef) course.tees = course.tees.map(t => t.id === editingTeeRef.teeId ? tee : t); else course.tees.push(tee);
@@ -1224,6 +1228,7 @@ function installHandlers() {
   document.getElementById('newMatchBtn').addEventListener('click', () => {
     editingMatchId = null;
     loadMatchEditor(null);
+    renderMatchSetupState();
     activateTab('setup');
   });
   document.getElementById('editActiveMatchBtn').addEventListener('click', () => {
@@ -1231,6 +1236,7 @@ function installHandlers() {
     if (!active) return toast('No active match to edit.');
     if (matchHasStarted(active) && !confirm('Editing may affect scoring. Continue?')) return;
     loadMatchEditor(active.id);
+    renderMatchSetupState();
     activateTab('setup');
   });
 
@@ -1287,10 +1293,11 @@ function installHandlers() {
       .filter(p => p.playerId);
     const uniqueIds = new Set(selectedPlayers.map(p => p.playerId));
     if (selectedPlayers.length !== uniqueIds.size) return toast('Each player can only be selected once.');
-    if (selectedPlayers.length < 2) return toast('Select at least 2 players.');
+    if (selectedPlayers.length < 1) return toast('Select at least 1 player.');
     const selectedGames = collectSelectedGames();
     if (selectedGames.length > 5) return toast('Select up to 5 gambling games.');
     if (selectedGames.some(g => g.key === 'nassau') && teamCount !== 2) return toast('Nassau requires exactly 2 teams.');
+    if (selectedGames.some(g => ['team_match','team_stroke'].includes(g.key)) && teamCount < 2) return toast('Team games require at least 2 teams.');
     const existing = editingMatchId ? getMatch(editingMatchId) : null;
     const match = {
       id: editingMatchId || uid(),

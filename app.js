@@ -525,7 +525,7 @@ function renderGreeniesEntry(match, hole) {
   const eligible = (greenies.participants || []).map(getPlayer).filter(Boolean);
   const winnerId = match.greeniesWinners?.[String(hole.holeNumber)] || '';
   wrap.classList.remove('hidden');
-  wrap.innerHTML = `<div class="card inset-card"><div class="section-label">Greenies · Hole ${hole.holeNumber}</div><div class="greenies-list top-gap">${eligible.map(p => `<label class="mini-check"><input type="checkbox" data-greenies-winner="${p.id}" ${winnerId === p.id ? 'checked' : ''} /> ${escapeHtml(p.name)}</label>`).join('') || '<div class="tiny">No greenies participants selected for this match.</div>'}</div><div class="tiny top-gap">Select the closest-to-the-pin winner for this par 3. Payout runs only against selected greenies participants.</div></div>`;
+  wrap.innerHTML = `<div class="card inset-card game-config-card"><div class="section-label">Greenies · Hole ${hole.holeNumber}</div><div class="greenies-list top-gap">${eligible.map(p => `<label class="mini-check"><input type="checkbox" data-greenies-winner="${p.id}" ${winnerId === p.id ? 'checked' : ''} /> ${escapeHtml(p.name)}</label>`).join('') || '<div class="tiny">No greenies participants selected for this match.</div>'}</div><div class="tiny top-gap">Select the closest-to-the-pin winner for this par 3. Payout runs only against selected greenies participants.</div></div>`;
 }
 function renderScoreGrid(match, tee, metrics) {
   const body = document.getElementById('scoreGridBody');
@@ -600,6 +600,7 @@ function renderLeaderboard() {
   const matchStatus = document.getElementById('matchStatusSummary');
   const gamesSummary = document.getElementById('gamesSummary');
   const holeMomentum = document.getElementById('holeMomentum');
+  const momentumMeta = document.getElementById('momentumMeta');
 
   if (!match) {
     empty.classList.remove('hidden');
@@ -649,8 +650,10 @@ function renderLeaderboard() {
 
   const frontStatus = metrics.teams.length === 2 ? (metrics.teams[0].front === 0 ? 'AS' : metrics.teams[0].front > 0 ? `Team 1 ${Math.abs(metrics.teams[0].front)} up` : `Team 2 ${Math.abs(metrics.teams[0].front)} up`) : '—';
   const backStatus = metrics.teams.length === 2 ? (metrics.teams[0].back === 0 ? 'AS' : metrics.teams[0].back > 0 ? `Team 1 ${Math.abs(metrics.teams[0].back)} up` : `Team 2 ${Math.abs(metrics.teams[0].back)} up`) : '—';
+  const teamMatchCfg = (match.selectedGames || []).find(g => g.key === 'team_match');
+  const teamMatchBasis = teamMatchCfg?.basis ? ` (${escapeHtml(String(teamMatchCfg.basis))})` : '';
   matchStatus.innerHTML = `
-    <div><strong>Overall team match:</strong> ${metrics.teams.length === 2 ? formatMatchDiff(metrics.matchDiff) : 'Singles / multi-team mode'}</div>
+    <div><strong>Overall team match${teamMatchBasis}:</strong> ${metrics.teams.length === 2 ? formatMatchDiff(metrics.matchDiff) : 'Singles / multi-team mode'}</div>
     <div><strong>Front 9:</strong> ${frontStatus}</div>
     <div><strong>Back 9:</strong> ${backStatus}</div>
     <div><strong>Best player net:</strong> ${metrics.bestPlayerNet ? `${escapeHtml(metrics.bestPlayerNet.player.name)} (${formatSigned(metrics.bestPlayerNet.netDiff)})` : '—'}</div>
@@ -664,6 +667,9 @@ function renderLeaderboard() {
       match.momentumGame = options[0]?.key || 'nassau';
       momentumSelect.value = match.momentumGame;
     }
+  }
+  if (momentumMeta) {
+    momentumMeta.textContent = describeMomentumMeta(match, metrics, match.momentumGame || options[0]?.key || 'nassau');
   }
   let running = 0;
   holeMomentum.innerHTML = metrics.holeResults.map(h => {
@@ -695,6 +701,16 @@ function describeTeamLabel(match, teamNo, metrics) {
   const name = match.teamNames?.[teamNo - 1] || `Team ${teamNo}`;
   const members = metrics.teams.find(t => t.team === teamNo)?.members?.map(m => m.player.name).join(', ');
   return members ? `${escapeHtml(name)} (${escapeHtml(members)})` : escapeHtml(name);
+}
+
+function describeMomentumMeta(match, metrics, gameKey) {
+  const cfg = (match.selectedGames || []).find(g => g.key === gameKey) || {};
+  const teamOneName = match.teamNames?.[0] || 'Team 1';
+  const teamOneMembers = metrics?.teams?.find(t => t.team === 1)?.members?.map(m => m.player.name).join(', ') || '';
+  const basis = cfg.basis ? String(cfg.basis) : (gameKey === 'greenies' ? 'event' : 'net');
+  const gameLabel = GAME_LIBRARY.find(g => g.key === gameKey)?.label || 'Momentum';
+  const memberText = teamOneMembers ? ` · ${teamOneMembers}` : '';
+  return `${escapeHtml(gameLabel)} · Team 1: ${escapeHtml(teamOneName)}${memberText} · ${escapeHtml(basis)} basis`;
 }
 function buildSelectedGamesSummary(match, metrics) {
   const selected = Array.isArray(match.selectedGames) ? match.selectedGames : [];
@@ -872,8 +888,8 @@ function renderGamesPicker(existing = []) {
   configsWrap.innerHTML = selectedGames.map(game => {
     const cfg = getGameConfig(game.key, existing);
     if (game.key === 'nassau') {
-      return `<div class="card inset-card">
-        <div class="section-label">Nassau</div>
+      return `<div class="card inset-card game-config-card">
+        <div class="game-config-header"><div class="section-label">Nassau</div><div class="tiny">Head-to-head only</div></div>
         <div class="grid two compact-grid top-gap">
           <label><span>Basis</span><select data-game-config="${game.key}" data-field="basis">
             <option value="gross" ${cfg.basis === 'gross' ? 'selected' : ''}>Gross</option>
@@ -888,8 +904,8 @@ function renderGamesPicker(existing = []) {
       </div>`;
     }
     if (game.key === 'team_stroke') {
-      return `<div class="card inset-card">
-        <div class="section-label">Team Stroke Play</div>
+      return `<div class="card inset-card game-config-card">
+        <div class="game-config-header"><div class="section-label">Team Stroke Play</div><div class="tiny">Gross or net · best ball or aggregate</div></div>
         <div class="grid two compact-grid top-gap">
           <label><span>Basis</span><select data-game-config="${game.key}" data-field="basis">
             <option value="gross" ${cfg.basis === 'gross' ? 'selected' : ''}>Gross</option>
@@ -904,8 +920,8 @@ function renderGamesPicker(existing = []) {
       </div>`;
     }
     if (game.key === 'skins') {
-      return `<div class="card inset-card">
-        <div class="section-label">Skins</div>
+      return `<div class="card inset-card game-config-card">
+        <div class="game-config-header"><div class="section-label">Skins</div><div class="tiny">Individual or team skins</div></div>
         <div class="grid two compact-grid top-gap">
           <label><span>Skin type</span><select data-game-config="${game.key}" data-field="skinsType">
             <option value="individual" ${cfg.skinsType === 'individual' ? 'selected' : ''}>Individual</option>
@@ -920,8 +936,8 @@ function renderGamesPicker(existing = []) {
       </div>`;
     }
     if (game.key === 'greenies') {
-      return `<div class="card inset-card">
-        <div class="section-label">Greenies</div>
+      return `<div class="card inset-card game-config-card">
+        <div class="game-config-header"><div class="section-label">Greenies</div><div class="tiny">Par-3 closest to the pin</div></div>
         <div class="grid two compact-grid top-gap">
           <label class="span-2"><span>Participants</span>
             <div class="greenies-list">${getCurrentAssignablePlayers().map(p => `<label class="mini-check"><input type="checkbox" data-greenie-player="${p.id}" ${(cfg.participants || []).includes(p.id) ? 'checked' : ''} /> ${escapeHtml(p.name)}</label>`).join('') || '<div class="tiny">Select match players first.</div>'}</div>
@@ -930,8 +946,8 @@ function renderGamesPicker(existing = []) {
         </div>
       </div>`;
     }
-    return `<div class="card inset-card">
-      <div class="section-label">${game.label}</div>
+    return `<div class="card inset-card game-config-card">
+      <div class="game-config-header"><div class="section-label">${game.label}</div><div class="tiny">Configure basis and stakes</div></div>
       <div class="grid two compact-grid top-gap">
         <label><span>Basis</span><select data-game-config="${game.key}" data-field="basis">
           <option value="gross" ${cfg.basis === 'gross' ? 'selected' : ''}>Gross</option>
@@ -1350,6 +1366,12 @@ function installHandlers() {
       const mp = match.players.find(p => p.playerId === playerId);
       if (mp) mp.scores[currentHole - 1].gross = Number(input.value) || null;
     });
+    const selectedWinner = document.querySelector('[data-greenies-winner]:checked')?.dataset.greeniesWinner || '';
+    if (selectedWinner) {
+      match.greeniesWinners[String(currentHole)] = selectedWinner;
+    } else if (match.greeniesWinners && match.greeniesWinners[String(currentHole)]) {
+      delete match.greeniesWinners[String(currentHole)];
+    }
     currentHole = Math.min(18, Math.max(currentHole, completedHoles(match) + 1));
     persist(); toast(`Hole ${currentHole <= 18 ? currentHole - 1 || 1 : 18} saved.`);
   });

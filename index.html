@@ -173,11 +173,15 @@
           </div>
 
           <div class="span-2 card inset-card">
-            <div class="item-header">
-              <div class="section-label">Gambling games</div>
-              <div class="tiny">Choose up to 5. Only selected games will be scored.</div>
+            <div class="item-header compact-item-header">
+              <div>
+                <div class="section-label">Gambling games</div>
+                <div class="tiny">Choose up to 5. Only selected games will be scored and saved.</div>
+              </div>
             </div>
-            <div id="gamesPicker" class="games-picker top-gap"></div>
+            <div class="game-picker-shell top-gap">
+              <div id="gamesPicker" class="games-picker"></div>
+            </div>
             <div id="gameConfigs" class="top-gap"></div>
           </div>
 
@@ -188,10 +192,6 @@
         </form>
       </div>
 
-      <div class="card tight-card">
-        <h2>Saved matches</h2>
-        <div id="matchesList" class="list"></div>
-      </div>
     </section>
 
     <section id="score" class="panel">
@@ -302,14 +302,22 @@
         </div>
 
         <div class="card tight-card">
-          <div class="item-header">
-            <h2>Hole-by-hole momentum</h2>
+          <div class="item-header compact-item-header">
+            <div>
+              <h2>Hole-by-hole momentum</h2>
+              <div id="momentumMeta" class="tiny">From Team 1 perspective.</div>
+            </div>
             <label class="inline-select tiny">
               <span>Game</span>
               <select id="momentumGameSelect"></select>
             </label>
           </div>
           <div id="holeMomentum" class="hole-momentum"></div>
+        </div>
+
+        <div class="card tight-card">
+          <h2>Saved matches</h2>
+          <div id="matchesList" class="list"></div>
         </div>
       </div>
 

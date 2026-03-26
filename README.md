@@ -1,19 +1,15 @@
-The Dye Ledger — Release 2 Tabs (v14)
+The Dye Ledger — Tweaks (v16.1)
 
 What changed
-- Split the app into Setup, Score, and Leaderboard tabs with bottom navigation.
-- Setup now hides once the active match has started scoring.
-- Added New Match and Edit Active Match actions.
-- Edit Active Match asks for confirmation when scoring has already begun.
-- Create Match now moves you into the Score tab after saving.
-- Loading a saved match moves you into the Score tab.
-- Greenies winner selection stays on the Score tab and momentum remains on the Leaderboard.
-- Improved tee carry-forward when switching/selecting a course for a new tee.
+- Momentum chart title area now shows that results are from Team 1's perspective and includes the selected team game's label, Team 1 name, participants, and gross/net basis.
+- Match Status now labels the overall team match with gross/net basis when Team Match Play is selected.
+- Gambling game selection on Game Setup has a cleaner, more aligned presentation.
+- Greenies winner selection on par 3s is restored and now saves with the hole when scores are saved.
+- Saved Matches moved from Game Setup to the Scoreboard tab.
 
-What to test first
-1. Create a match from Setup and confirm it opens in Score.
-2. Enter a hole score and return to Setup.
-3. Confirm Setup is hidden/locked and Edit Active Match appears.
-4. Click Edit Active Match and confirm the warning appears.
-5. Add a new tee to a course that already has a saved stroke-index template and confirm indexes carry forward.
-6. Confirm the bottom tabs are always visible on iPhone-sized screens.
+What to retest first
+1. On Scoreboard, confirm the momentum section text identifies Team 1, its members, and the scoring basis.
+2. Confirm Match Status shows overall team match as gross or net when Team Match Play is selected.
+3. On Game Setup, confirm the gambling game area looks cleaner and aligned on iPhone.
+4. On a par 3 with Greenies enabled, confirm the winner selector appears and saves.
+5. Confirm Saved Matches now appears on Scoreboard instead of Game Setup.

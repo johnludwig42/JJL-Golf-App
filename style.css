@@ -216,9 +216,9 @@ input, select, textarea {
   font-size: 13px;
   margin-top: 3px;
 }
-.momentum-pill.team1 { background: #0f5b38; color: #ffffff; border-color: #0b4a2d; }
-.momentum-pill.team2 { background: #a12d2f; color: #ffffff; border-color: #862224; }
-.momentum-pill.tied { background: #ffffff; color: var(--muted); border-color: var(--border); }
+.momentum-pill.team1 { background: #1f6e47; color: white; }
+.momentum-pill.team2 { background: #9f3030; color: white; }
+.momentum-pill.tied { background: #ffffff; border: 1px solid var(--border); color: var(--text); }
 .momentum-pill.pending { background: #fafafa; color: #8e9a94; }
 .tight-list { padding-left: 18px; margin: 0; }
 .tight-list li + li { margin-top: 6px; }
@@ -260,3 +260,55 @@ code { background: #edf2ef; padding: 2px 6px; border-radius: 6px; }
 @media (max-width: 760px) {
   .tabs-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
+
+.game-picker-shell {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #f8fbf9;
+  padding: 8px;
+}
+.games-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.game-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  background: white;
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.game-pill input { width: auto; margin: 0; }
+.game-pill.selected {
+  border-color: var(--accent);
+  background: var(--accent-2);
+  box-shadow: inset 0 0 0 1px rgba(11,93,59,.08);
+}
+.game-config-card {
+  background: #fcfefd;
+}
+.game-config-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.game-config-header .tiny { text-align: right; }
+.inline-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.inline-select select {
+  min-width: 148px;
+}
+.momentum-pill.tied { background: #ffffff; border: 1px solid var(--border); color: var(--text); }
+.momentum-pill.team1 { background: #1f6e47; color: white; }
+.momentum-pill.team2 { background: #9f3030; color: white; }

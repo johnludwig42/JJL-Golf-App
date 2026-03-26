@@ -7,6 +7,34 @@ const GAME_LIBRARY = [
   { key: 'skins', label: 'Skins' },
   { key: 'greenies', label: 'Greenies' },
 ];
+
+const GAME_LABELS = Object.fromEntries(GAME_LIBRARY.map(g => [g.key, g.label]));
+function getGameLabel(key) {
+  return GAME_LABELS[key] || key;
+}
+function formatBasisLabel(basis, fallback = 'Net') {
+  const value = String(basis || fallback).toLowerCase();
+  if (value === 'gross') return 'Gross';
+  if (value === 'net') return 'Net';
+  if (value === 'both') return 'Gross + Net';
+  if (value === 'event') return 'Event';
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+function formatScoringModeLabel(mode) {
+  return mode === 'aggregate' ? 'Aggregate' : 'Best Ball';
+}
+function getTeamName(match, teamNo) {
+  return match?.teamNames?.[teamNo - 1] || `Team ${teamNo}`;
+}
+function getMomentumPerspectiveTeam(match) {
+  const teamNo = Number(match?.momentumPerspective || 1);
+  return teamNo === 2 ? 2 : 1;
+}
+function formatPerspectiveStatus(diff, perspectiveTeam = 1) {
+  const oriented = perspectiveTeam === 2 ? -Number(diff || 0) : Number(diff || 0);
+  if (!Number.isFinite(oriented) || oriented === 0) return 'AS';
+  return oriented > 0 ? `Up ${Math.abs(oriented)}` : `Down ${Math.abs(oriented)}`;
+}
 let deferredPrompt = null;
 let editingPlayerId = null;
 let editingCourseId = null;
@@ -558,7 +586,7 @@ function getMomentumOptions(match) {
   const unique = [...new Set(keys)];
   if (!unique.length) unique.push('nassau');
   unique.sort((a,b) => (a === 'nassau' ? -1 : b === 'nassau' ? 1 : 0));
-  return unique.map(key => ({ key, label: GAME_LIBRARY.find(g => g.key === key)?.label || key }));
+  return unique.map(key => ({ key, label: getGameLabel(key) }));
 }
 function computeMomentumOutcome(match, metrics, holeResult, gameKey) {
   if (!holeResult?.completed) return 'pending';
@@ -601,6 +629,8 @@ function renderLeaderboard() {
   const gamesSummary = document.getElementById('gamesSummary');
   const holeMomentum = document.getElementById('holeMomentum');
   const momentumMeta = document.getElementById('momentumMeta');
+  const payoutSummary = document.getElementById('payoutSummary');
+  const perspectiveSelect = document.getElementById('momentumPerspectiveSelect');
 
   if (!match) {
     empty.classList.remove('hidden');
@@ -651,7 +681,7 @@ function renderLeaderboard() {
   const frontStatus = metrics.teams.length === 2 ? (metrics.teams[0].front === 0 ? 'AS' : metrics.teams[0].front > 0 ? `Team 1 ${Math.abs(metrics.teams[0].front)} up` : `Team 2 ${Math.abs(metrics.teams[0].front)} up`) : '—';
   const backStatus = metrics.teams.length === 2 ? (metrics.teams[0].back === 0 ? 'AS' : metrics.teams[0].back > 0 ? `Team 1 ${Math.abs(metrics.teams[0].back)} up` : `Team 2 ${Math.abs(metrics.teams[0].back)} up`) : '—';
   const teamMatchCfg = (match.selectedGames || []).find(g => g.key === 'team_match');
-  const teamMatchBasis = teamMatchCfg?.basis ? ` (${escapeHtml(String(teamMatchCfg.basis))})` : '';
+  const teamMatchBasis = teamMatchCfg ? ` (${escapeHtml(formatBasisLabel(teamMatchCfg.basis))} · Best Ball)` : '';
   matchStatus.innerHTML = `
     <div><strong>Overall team match${teamMatchBasis}:</strong> ${metrics.teams.length === 2 ? formatMatchDiff(metrics.matchDiff) : 'Singles / multi-team mode'}</div>
     <div><strong>Front 9:</strong> ${frontStatus}</div>
@@ -668,20 +698,39 @@ function renderLeaderboard() {
       momentumSelect.value = match.momentumGame;
     }
   }
+  if (perspectiveSelect) {
+    const teamOptions = metrics.teams.slice(0, 2).map(t => `<option value="${t.team}" ${t.team === getMomentumPerspectiveTeam(match) ? 'selected' : ''}>${escapeHtml(getTeamName(match, t.team))}</option>`).join('');
+    perspectiveSelect.innerHTML = teamOptions;
+    if (!metrics.teams.find(t => t.team === getMomentumPerspectiveTeam(match))) {
+      match.momentumPerspective = 1;
+      perspectiveSelect.value = '1';
+    }
+  }
   if (momentumMeta) {
     momentumMeta.textContent = describeMomentumMeta(match, metrics, match.momentumGame || options[0]?.key || 'nassau');
   }
   let running = 0;
+  const perspectiveTeam = getMomentumPerspectiveTeam(match);
   holeMomentum.innerHTML = metrics.holeResults.map(h => {
     const outcome = computeMomentumOutcome(match, metrics, h, match.momentumGame || 'nassau');
     let cls = 'tied';
-    let txt = running === 0 ? 'T' : String(running);
-    if (outcome === 'team1') { running += 1; cls = 'team1'; txt = running === 0 ? 'T' : String(running); }
-    else if (outcome === 'team2') { running -= 1; cls = 'team2'; txt = running === 0 ? 'T' : String(Math.abs(running)); }
-    else if (outcome === 'pending') { cls = 'pending'; txt = '•'; }
-    else { cls = 'tied'; txt = running === 0 ? 'T' : String(Math.abs(running)); }
+    if (outcome === 'team1') {
+      running += 1;
+      cls = perspectiveTeam === 1 ? 'team1' : 'team2';
+    } else if (outcome === 'team2') {
+      running -= 1;
+      cls = perspectiveTeam === 1 ? 'team2' : 'team1';
+    } else if (outcome === 'pending') {
+      cls = 'pending';
+    } else {
+      cls = 'tied';
+    }
+    const txt = outcome === 'pending' ? '•' : formatPerspectiveStatus(running, perspectiveTeam);
     return `<div class="momentum-pill ${cls}">H${h.holeNumber}<span>${txt}</span></div>`;
   }).join('');
+  if (payoutSummary) {
+    payoutSummary.innerHTML = buildNetPayoutSummary(match, metrics);
+  }
 }
 function describeSkinLeader(players) {
   if (!players.length) return '—';
@@ -705,13 +754,107 @@ function describeTeamLabel(match, teamNo, metrics) {
 
 function describeMomentumMeta(match, metrics, gameKey) {
   const cfg = (match.selectedGames || []).find(g => g.key === gameKey) || {};
-  const teamOneName = match.teamNames?.[0] || 'Team 1';
-  const teamOneMembers = metrics?.teams?.find(t => t.team === 1)?.members?.map(m => m.player.name).join(', ') || '';
-  const basis = cfg.basis ? String(cfg.basis) : (gameKey === 'greenies' ? 'event' : 'net');
-  const gameLabel = GAME_LIBRARY.find(g => g.key === gameKey)?.label || 'Momentum';
-  const memberText = teamOneMembers ? ` · ${teamOneMembers}` : '';
-  return `${escapeHtml(gameLabel)} · Team 1: ${escapeHtml(teamOneName)}${memberText} · ${escapeHtml(basis)} basis`;
+  const perspectiveTeam = getMomentumPerspectiveTeam(match);
+  const teamName = getTeamName(match, perspectiveTeam);
+  const members = metrics?.teams?.find(t => t.team === perspectiveTeam)?.members?.map(m => m.player.name).join(', ') || '';
+  const basis = cfg.key === 'team_stroke'
+    ? `${formatBasisLabel(cfg.basis)} · ${formatScoringModeLabel(cfg.scoringMode)}`
+    : formatBasisLabel(cfg.basis, gameKey === 'greenies' ? 'Event' : 'Net');
+  const gameLabel = getGameLabel(gameKey) || 'Momentum';
+  const memberText = members ? ` · ${members}` : '';
+  return `${escapeHtml(gameLabel)} · ${escapeHtml(teamName)} perspective${memberText} · ${escapeHtml(basis)}`;
 }
+
+function buildNetPayoutSummary(match, metrics) {
+  const selected = Array.isArray(match.selectedGames) ? match.selectedGames : [];
+  if (!selected.length) return '<div><strong>Net payout:</strong> No gambling games selected.</div>';
+  const payouts = {};
+  const details = [];
+  const add = (playerId, amount) => { payouts[playerId] = (payouts[playerId] || 0) + amount; };
+  const teamMemberIds = teamNo => (metrics.teams.find(t => t.team === teamNo)?.members || []).map(m => m.player.id);
+  const splitTeam = (teamNo, total) => {
+    const ids = teamMemberIds(teamNo);
+    if (!ids.length) return;
+    const each = total / ids.length;
+    ids.forEach(id => add(id, each));
+  };
+  const applyHeadToHeadTeams = (winnerTeam, loserTeam, stake, label) => {
+    if (!winnerTeam || !loserTeam || !stake) return;
+    splitTeam(winnerTeam, Number(stake));
+    splitTeam(loserTeam, -Number(stake));
+    details.push(`<div>${escapeHtml(label)}: ${escapeHtml(getTeamName(match, winnerTeam))} ${formatPerspectiveStatus(winnerTeam === 1 ? 1 : -1, winnerTeam)} · $${Number(stake).toFixed(2)}</div>`);
+  };
+  const frontLeader = metrics.teams.length === 2 ? (metrics.teams[0].front > 0 ? 1 : metrics.teams[0].front < 0 ? 2 : 0) : 0;
+  const backLeader = metrics.teams.length === 2 ? (metrics.teams[0].back > 0 ? 1 : metrics.teams[0].back < 0 ? 2 : 0) : 0;
+  const overallLeader = metrics.teams.length === 2 ? (metrics.matchDiff > 0 ? 1 : metrics.matchDiff < 0 ? 2 : 0) : 0;
+  selected.forEach(cfg => {
+    if (cfg.key === 'nassau' && metrics.teams.length === 2) {
+      const front = Number(cfg.stakesFront || 0);
+      const back = Number(cfg.stakesBack || 0);
+      const overall = Number(cfg.stakesOverall || 0);
+      if (frontLeader) applyHeadToHeadTeams(frontLeader, frontLeader === 1 ? 2 : 1, front, `${getGameLabel(cfg.key)} · Front 9 (${formatBasisLabel(cfg.basis)})`);
+      if (backLeader) applyHeadToHeadTeams(backLeader, backLeader === 1 ? 2 : 1, back, `${getGameLabel(cfg.key)} · Back 9 (${formatBasisLabel(cfg.basis)})`);
+      if (overallLeader) applyHeadToHeadTeams(overallLeader, overallLeader === 1 ? 2 : 1, overall, `${getGameLabel(cfg.key)} · 18 (${formatBasisLabel(cfg.basis)})`);
+    } else if (cfg.key === 'team_match' && metrics.teams.length === 2) {
+      const stake = Number(cfg.stake || 0);
+      if (overallLeader) applyHeadToHeadTeams(overallLeader, overallLeader === 1 ? 2 : 1, stake, `${getGameLabel(cfg.key)} (${formatBasisLabel(cfg.basis)})`);
+    } else if (cfg.key === 'team_stroke' && metrics.bestTeam) {
+      const stake = Number(cfg.stake || 0);
+      const winner = metrics.bestTeam.team;
+      const losers = metrics.teams.filter(t => t.team !== winner).map(t => t.team);
+      if (stake && losers.length) {
+        splitTeam(winner, stake * losers.length);
+        losers.forEach(teamNo => splitTeam(teamNo, -stake));
+        details.push(`<div>${escapeHtml(getGameLabel(cfg.key))} (${escapeHtml(formatBasisLabel(cfg.basis))} · ${escapeHtml(formatScoringModeLabel(cfg.scoringMode))}): ${escapeHtml(getTeamName(match, winner))} leads · $${stake.toFixed(2)} per losing team</div>`);
+      }
+    } else if (cfg.key === 'skins') {
+      const stake = Number(cfg.stake || 0);
+      if (cfg.skinsType === 'team') {
+        const maxSkins = Math.max(0, ...metrics.teams.map(t => t.skins || 0));
+        const leaders = metrics.teams.filter(t => (t.skins || 0) === maxSkins && maxSkins > 0);
+        if (stake && leaders.length === 1) {
+          const winner = leaders[0].team;
+          const losers = metrics.teams.filter(t => t.team !== winner).map(t => t.team);
+          splitTeam(winner, stake * (maxSkins || 0) * losers.length);
+          losers.forEach(teamNo => splitTeam(teamNo, -stake * (maxSkins || 0)));
+          details.push(`<div>Team Skins (${escapeHtml(formatBasisLabel(cfg.basis))}): ${escapeHtml(getTeamName(match, winner))} leads ${maxSkins} skins</div>`);
+        }
+      } else {
+        const maxSkins = Math.max(0, ...metrics.players.map(p => p.skins || 0));
+        const leaders = metrics.players.filter(p => (p.skins || 0) === maxSkins && maxSkins > 0);
+        if (stake && leaders.length === 1) {
+          const winner = leaders[0].playerId;
+          const others = metrics.players.filter(p => p.playerId !== winner).map(p => p.playerId);
+          add(winner, stake * (maxSkins || 0) * others.length);
+          others.forEach(id => add(id, -stake * (maxSkins || 0)));
+          details.push(`<div>Individual Skins (${escapeHtml(formatBasisLabel(cfg.basis))}): ${escapeHtml(getPlayer(winner)?.name || 'Unknown')} leads ${maxSkins} skins</div>`);
+        }
+      }
+    } else if (cfg.key === 'greenies') {
+      const stake = Number(cfg.stakePerPlayer || 0);
+      const participants = (cfg.participants || []).filter(Boolean);
+      if (stake && participants.length > 1) {
+        const wins = Object.values(match.greeniesWinners || {}).reduce((acc, id) => {
+          if (participants.includes(id)) acc[id] = (acc[id] || 0) + 1;
+          return acc;
+        }, {});
+        Object.entries(wins).forEach(([winnerId, count]) => {
+          add(winnerId, stake * count * (participants.length - 1));
+          participants.filter(id => id !== winnerId).forEach(id => add(id, -stake * count));
+        });
+        details.push(`<div>Greenies: ${participants.length} participant(s) · $${stake.toFixed(2)} per player per par 3</div>`);
+      }
+    }
+  });
+  const rows = metrics.players
+    .map(p => ({ name: p.player.name, amount: payouts[p.playerId] || 0 }))
+    .filter(r => Math.abs(r.amount) > 0.0001)
+    .sort((a, b) => b.amount - a.amount)
+    .map(r => `<div>${escapeHtml(r.name)}: <strong>${r.amount >= 0 ? '+' : '-'}$${Math.abs(r.amount).toFixed(2)}</strong></div>`)
+    .join('');
+  return `<div><strong>Net payout (live):</strong></div>${rows || '<div>All square so far.</div>'}${details.length ? `<div class="tiny top-gap">${details.join('')}</div>` : ''}`;
+}
+
 function buildSelectedGamesSummary(match, metrics) {
   const selected = Array.isArray(match.selectedGames) ? match.selectedGames : [];
   if (!selected.length) {
@@ -724,17 +867,17 @@ function buildSelectedGamesSummary(match, metrics) {
   const gameLines = selected.map(cfg => {
     switch (cfg.key) {
       case 'nassau':
-        return `<div><strong>Nassau (${escapeHtml(String(cfg.basis || 'net'))}):</strong> Front ${frontStatus} · Back ${backStatus} · 18 ${overallTeam}</div>`;
+        return `<div><strong>${escapeHtml(getGameLabel(cfg.key))} (${escapeHtml(formatBasisLabel(cfg.basis))}):</strong> Front ${frontStatus} · Back ${backStatus} · 18 ${overallTeam}</div>`;
       case 'individual_match':
-        return `<div><strong>Individual Match Play (${escapeHtml(String(cfg.basis || 'net'))}):</strong> Leader ${metrics.bestPlayerNet ? `${escapeHtml(metrics.bestPlayerNet.player.name)} (${formatSigned(metrics.bestPlayerNet.netDiff)})` : '—'}</div>`;
+        return `<div><strong>${escapeHtml(getGameLabel(cfg.key))} (${escapeHtml(formatBasisLabel(cfg.basis))}):</strong> Leader ${metrics.bestPlayerNet ? `${escapeHtml(metrics.bestPlayerNet.player.name)} (${formatSigned(metrics.bestPlayerNet.netDiff)})` : '—'}</div>`;
       case 'team_match':
-        return `<div><strong>Team Match Play (${escapeHtml(String(cfg.basis || 'net'))}):</strong> ${overallTeam}</div>`;
+        return `<div><strong>${escapeHtml(getGameLabel(cfg.key))} (${escapeHtml(formatBasisLabel(cfg.basis))}):</strong> ${overallTeam}</div>`;
       case 'team_stroke':
-        return `<div><strong>Team Stroke Play (${escapeHtml(String(cfg.basis || 'net'))}, ${cfg.scoringMode === 'aggregate' ? 'aggregate' : 'best ball'}):</strong> ${metrics.bestTeam ? `${describeTeamLabel(match, metrics.bestTeam.team, metrics)} (${formatSigned(metrics.bestTeam.netDiff)})` : '—'}</div>`;
+        return `<div><strong>${escapeHtml(getGameLabel(cfg.key))} (${escapeHtml(formatBasisLabel(cfg.basis))} · ${escapeHtml(formatScoringModeLabel(cfg.scoringMode))}):</strong> ${metrics.bestTeam ? `${describeTeamLabel(match, metrics.bestTeam.team, metrics)} (${formatSigned(metrics.bestTeam.netDiff)})` : '—'}</div>`;
       case 'skins':
         return cfg.skinsType === 'team'
-          ? `<div><strong>Team Skins (${escapeHtml(String(cfg.basis || 'net'))}):</strong> ${describeTeamSkinLeader(metrics.teams)}</div>`
-          : `<div><strong>Individual Skins (${escapeHtml(String(cfg.basis || 'net'))}):</strong> ${describeSkinLeader(metrics.players)}</div>`;
+          ? `<div><strong>Team Skins (${escapeHtml(formatBasisLabel(cfg.basis))}):</strong> ${describeTeamSkinLeader(metrics.teams)}</div>`
+          : `<div><strong>Individual Skins (${escapeHtml(formatBasisLabel(cfg.basis))}):</strong> ${describeSkinLeader(metrics.players)}</div>`;
       case 'greenies': {
         const wins = Object.values(match.greeniesWinners || {}).reduce((acc, id) => { acc[id] = (acc[id] || 0) + 1; return acc; }, {});
         const leaders = Object.entries(wins).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([id,n]) => `${escapeHtml(getPlayer(id)?.name || 'Unknown')} (${n})`).join(', ');
@@ -881,7 +1024,7 @@ function renderGamesPicker(existing = []) {
   picker.innerHTML = GAME_LIBRARY.map(game => `
     <label class="game-pill ${selectedKeys.includes(game.key) ? 'selected' : ''}">
       <input type="checkbox" data-game-key="${game.key}" ${selectedKeys.includes(game.key) ? 'checked' : ''} />
-      <span>${game.label}</span>
+      <span>${getGameLabel(game.key)}</span>
     </label>
   `).join('');
   const selectedGames = GAME_LIBRARY.filter(g => selectedKeys.includes(g.key));
@@ -947,7 +1090,7 @@ function renderGamesPicker(existing = []) {
       </div>`;
     }
     return `<div class="card inset-card game-config-card">
-      <div class="game-config-header"><div class="section-label">${game.label}</div><div class="tiny">Configure basis and stakes</div></div>
+      <div class="game-config-header"><div class="section-label">${getGameLabel(game.key)}</div><div class="tiny">Configure basis and stakes</div></div>
       <div class="grid two compact-grid top-gap">
         <label><span>Basis</span><select data-game-config="${game.key}" data-field="basis">
           <option value="gross" ${cfg.basis === 'gross' ? 'selected' : ''}>Gross</option>
@@ -1335,6 +1478,7 @@ function installHandlers() {
       }),
       greeniesWinners: existing?.greeniesWinners || {},
       momentumGame: existing?.momentumGame || (selectedGames.find(g => g.key === 'nassau')?.key || selectedGames.find(g => ['team_match','team_stroke'].includes(g.key))?.key || 'nassau'),
+      momentumPerspective: Number(existing?.momentumPerspective || 1) === 2 ? 2 : 1,
     };
     normalizeMatch(match);
     if (!match.courseId || !match.teeId) return toast('Select a course and tee.');

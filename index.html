@@ -242,7 +242,7 @@
       <div class="card tight-card">
         <div class="item-header">
           <div>
-            <h2>Live leaderboard</h2>
+            <h2>Scoreboard</h2>
             <div id="leaderboardMeta" class="muted">No active match.</div>
           </div>
           <div id="leaderboardStatusBadge" class="badge">Awaiting match</div>
@@ -307,12 +307,23 @@
               <h2>Hole-by-hole momentum</h2>
               <div id="momentumMeta" class="tiny">From Team 1 perspective.</div>
             </div>
-            <label class="inline-select tiny">
-              <span>Game</span>
-              <select id="momentumGameSelect"></select>
-            </label>
+            <div class="actions wrap compact-actions">
+              <label class="inline-select tiny">
+                <span>Game</span>
+                <select id="momentumGameSelect"></select>
+              </label>
+              <label class="inline-select tiny">
+                <span>Perspective</span>
+                <select id="momentumPerspectiveSelect"></select>
+              </label>
+            </div>
           </div>
           <div id="holeMomentum" class="hole-momentum"></div>
+        </div>
+
+        <div class="card tight-card">
+          <h2>Net payout</h2>
+          <div id="payoutSummary" class="result compact-result"></div>
         </div>
 
         <div class="card tight-card">

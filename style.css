@@ -45,11 +45,17 @@ body {
   border-color:#0b5d3b;
   box-shadow:0 8px 18px rgba(11,93,59,.18);
 }
-.tab-icon-img{
+.tab-icon-svg{
+  width:28px;
+  height:28px;
+  display:grid;
+  place-items:center;
+  color:#174f36;
+}
+.tab-icon-svg svg{
   width:28px;
   height:28px;
   display:block;
-  object-fit:contain;
 }
 .tab-label{
   display:block;
@@ -59,7 +65,7 @@ body {
   font-weight:700;
   letter-spacing:.01em;
 }
-.icon-tabs .tab.active .tab-icon-img{filter:none}
+.icon-tabs .tab.active .tab-icon-svg{color:#f4ecd7}
 
 .tabs {
   display: grid;
@@ -390,3 +396,17 @@ body.keyboard-open .top-tabs { box-shadow: 0 6px 14px rgba(0,0,0,.07); }
 .scorecard-table .scorecard-sticky-team{min-width:92px}
 .scorecard-sub{margin-bottom:8px}
 @media (max-width:760px){.scorecard-table{min-width:780px}.scorecard-table th,.scorecard-table td{font-size:11px;padding:7px 6px}}
+
+.score-grid input.score-input{
+  min-width:58px;
+  text-align:center;
+  font-size:16px;
+  font-weight:700;
+}
+body.keyboard-open .top-tabs{
+  position:sticky;
+  top:0;
+  z-index:30;
+  background:var(--bg);
+  padding-top:6px;
+}

@@ -595,7 +595,7 @@ function renderScoreGrid(match, tee, metrics) {
       <tr>
         <td>${escapeHtml(p.player.name)}</td>
         <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
-        <td><input type="number" min="1" max="15" data-score-player="${p.playerId}" value="${gross}" /></td>
+        <td><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="next" min="1" max="15" data-score-player="${p.playerId}" value="${gross}" /></td>
         <td>${strokes}</td>
         <td>${net}</td>
       </tr>

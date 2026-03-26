@@ -524,6 +524,7 @@ function renderCurrentMatch() {
     metaEl.textContent = 'No active match.';
     emptyEl.classList.remove('hidden');
     wrapEl.classList.add('hidden');
+    const tileWrap = document.getElementById('holeJumpTiles'); if (tileWrap) tileWrap.innerHTML = '';
     return;
   }
   const course = getCourse(match.courseId);
@@ -539,6 +540,7 @@ function renderCurrentMatch() {
   document.getElementById('holeSummary').textContent = hole ? `Par ${hole.par || '-'} · ${hole.yardage || '-'} yds · SI ${hole.strokeIndex || '-'} · ${teamText}` : '';
   renderScoreGrid(match, tee, metrics);
   renderGreeniesEntry(match, hole);
+  renderHoleJumpTiles(match);
 }
 
 function renderGreeniesEntry(match, hole) {
@@ -555,6 +557,19 @@ function renderGreeniesEntry(match, hole) {
   wrap.classList.remove('hidden');
   wrap.innerHTML = `<div class="card inset-card game-config-card"><div class="section-label">Greenies · Hole ${hole.holeNumber}</div><div class="greenies-list top-gap">${eligible.map(p => `<label class="mini-check"><input type="checkbox" data-greenies-winner="${p.id}" ${winnerId === p.id ? 'checked' : ''} /> ${escapeHtml(p.name)}</label>`).join('') || '<div class="tiny">No greenies participants selected for this match.</div>'}</div><div class="tiny top-gap">Select the closest-to-the-pin winner for this par 3. Payout runs only against selected greenies participants.</div></div>`;
 }
+function renderHoleJumpTiles(match) {
+  const wrap = document.getElementById('holeJumpTiles');
+  if (!wrap) return;
+  const completed = completedHoles(match);
+  wrap.innerHTML = Array.from({ length: 18 }, (_, idx) => {
+    const holeNo = idx + 1;
+    const classes = ['hole-jump-tile'];
+    if (holeNo === currentHole) classes.push('active');
+    if (holeNo <= completed) classes.push('complete');
+    return `<button type="button" class="${classes.join(' ')}" data-jump-hole="${holeNo}">${holeNo}</button>`;
+  }).join('');
+}
+
 function renderScoreGrid(match, tee, metrics) {
   const body = document.getElementById('scoreGridBody');
   if (!match || !tee || !metrics) {
@@ -617,6 +632,135 @@ function computeMomentumOutcome(match, metrics, holeResult, gameKey) {
   if (teamEntries[1].value < teamEntries[0].value) return 'team2';
   return 'tied';
 }
+function optimalSettlementRows(amountsByPlayer) {
+  const debtors = Object.entries(amountsByPlayer)
+    .filter(([, amount]) => amount < -0.0001)
+    .map(([playerId, amount]) => ({ playerId, amount: Math.abs(amount) }))
+    .sort((a, b) => b.amount - a.amount);
+  const creditors = Object.entries(amountsByPlayer)
+    .filter(([, amount]) => amount > 0.0001)
+    .map(([playerId, amount]) => ({ playerId, amount }))
+    .sort((a, b) => b.amount - a.amount);
+  const rows = [];
+  let i = 0, j = 0;
+  while (i < debtors.length && j < creditors.length) {
+    const pay = Math.min(debtors[i].amount, creditors[j].amount);
+    rows.push({ from: debtors[i].playerId, to: creditors[j].playerId, amount: pay });
+    debtors[i].amount -= pay;
+    creditors[j].amount -= pay;
+    if (debtors[i].amount <= 0.0001) i += 1;
+    if (creditors[j].amount <= 0.0001) j += 1;
+  }
+  return rows;
+}
+function addAmounts(target, source) {
+  Object.entries(source || {}).forEach(([playerId, amount]) => {
+    target[playerId] = (target[playerId] || 0) + amount;
+  });
+}
+function computeLivePayoutGames(match, metrics) {
+  const selected = Array.isArray(match.selectedGames) ? match.selectedGames : [];
+  const games = [];
+  const teamMemberIds = teamNo => (metrics.teams.find(t => t.team === teamNo)?.members || []).map(m => m.player.id);
+  const splitAcrossTeam = (amounts, teamNo, total) => {
+    const ids = teamMemberIds(teamNo);
+    if (!ids.length || !total) return;
+    const each = total / ids.length;
+    ids.forEach(id => { amounts[id] = (amounts[id] || 0) + each; });
+  };
+  const addVsField = (amounts, winnerId, others, perOpponent) => {
+    if (!winnerId || !others.length || !perOpponent) return;
+    amounts[winnerId] = (amounts[winnerId] || 0) + perOpponent * others.length;
+    others.forEach(id => { amounts[id] = (amounts[id] || 0) - perOpponent; });
+  };
+  const frontLeader = metrics.teams.length === 2 ? (metrics.teams[0].front > 0 ? 1 : metrics.teams[0].front < 0 ? 2 : 0) : 0;
+  const backLeader = metrics.teams.length === 2 ? (metrics.teams[0].back > 0 ? 1 : metrics.teams[0].back < 0 ? 2 : 0) : 0;
+  const overallLeader = metrics.teams.length === 2 ? (metrics.matchDiff > 0 ? 1 : metrics.matchDiff < 0 ? 2 : 0) : 0;
+  selected.forEach(cfg => {
+    const amounts = {};
+    const pushGame = (label) => games.push({ key: cfg.key, label, amounts });
+    if (cfg.key === 'nassau' && metrics.teams.length === 2) {
+      const label = `${getGameLabel(cfg.key)} (${formatBasisLabel(cfg.basis)})`;
+      const front = Number(cfg.stakesFront || 0);
+      const back = Number(cfg.stakesBack || 0);
+      const overall = Number(cfg.stakesOverall || 0);
+      if (frontLeader && front) { splitAcrossTeam(amounts, frontLeader, front); splitAcrossTeam(amounts, frontLeader === 1 ? 2 : 1, -front); }
+      if (backLeader && back) { splitAcrossTeam(amounts, backLeader, back); splitAcrossTeam(amounts, backLeader === 1 ? 2 : 1, -back); }
+      if (overallLeader && overall) { splitAcrossTeam(amounts, overallLeader, overall); splitAcrossTeam(amounts, overallLeader === 1 ? 2 : 1, -overall); }
+      pushGame(label);
+      return;
+    }
+    if (cfg.key === 'team_match' && metrics.teams.length === 2) {
+      const stake = Number(cfg.stake || 0);
+      const label = `${getGameLabel(cfg.key)} (${formatBasisLabel(cfg.basis)} · Best Ball)`;
+      if (overallLeader && stake) { splitAcrossTeam(amounts, overallLeader, stake); splitAcrossTeam(amounts, overallLeader === 1 ? 2 : 1, -stake); }
+      pushGame(label); return;
+    }
+    if (cfg.key === 'team_stroke' && metrics.bestTeam) {
+      const stake = Number(cfg.stake || 0);
+      const label = `${getGameLabel(cfg.key)} (${formatBasisLabel(cfg.basis)} · ${formatScoringModeLabel(cfg.scoringMode)})`;
+      const winner = metrics.bestTeam.team;
+      const losers = metrics.teams.filter(t => t.team !== winner).map(t => t.team);
+      if (stake && losers.length) {
+        splitAcrossTeam(amounts, winner, stake * losers.length);
+        losers.forEach(teamNo => splitAcrossTeam(amounts, teamNo, -stake));
+      }
+      pushGame(label); return;
+    }
+    if (cfg.key === 'skins') {
+      const stake = Number(cfg.stake || 0);
+      const basisLabel = formatBasisLabel(cfg.basis);
+      if (cfg.skinsType === 'team') {
+        const label = `Team Skins (${basisLabel})`;
+        const maxSkins = Math.max(0, ...metrics.teams.map(t => t.skins || 0));
+        const leaders = metrics.teams.filter(t => (t.skins || 0) === maxSkins && maxSkins > 0);
+        if (stake && leaders.length === 1) {
+          const winner = leaders[0].team;
+          const losers = metrics.teams.filter(t => t.team !== winner).map(t => t.team);
+          splitAcrossTeam(amounts, winner, stake * maxSkins * losers.length);
+          losers.forEach(teamNo => splitAcrossTeam(amounts, teamNo, -stake * maxSkins));
+        }
+        pushGame(label);
+      } else {
+        const label = `Individual Skins (${basisLabel})`;
+        const maxSkins = Math.max(0, ...metrics.players.map(p => p.skins || 0));
+        const leaders = metrics.players.filter(p => (p.skins || 0) === maxSkins && maxSkins > 0);
+        if (stake && leaders.length === 1) {
+          const winner = leaders[0].playerId;
+          const others = metrics.players.filter(p => p.playerId !== winner).map(p => p.playerId);
+          addVsField(amounts, winner, others, stake * maxSkins);
+        }
+        pushGame(label);
+      }
+      return;
+    }
+    if (cfg.key === 'greenies') {
+      const label = 'Greenies';
+      const stake = Number(cfg.stakePerPlayer || 0);
+      const participants = (cfg.participants || []).filter(Boolean);
+      if (stake && participants.length > 1) {
+        Object.values(match.greeniesWinners || {}).forEach(winnerId => {
+          if (!participants.includes(winnerId)) return;
+          addVsField(amounts, winnerId, participants.filter(id => id !== winnerId), stake);
+        });
+      }
+      pushGame(label); return;
+    }
+    if (cfg.key === 'individual_match') {
+      const label = `${getGameLabel(cfg.key)} (${formatBasisLabel(cfg.basis)})`;
+      const stake = Number(cfg.stake || 0);
+      const leader = metrics.bestPlayerNet?.playerId;
+      if (stake && leader) {
+        const others = metrics.players.filter(p => p.playerId !== leader).map(p => p.playerId);
+        addVsField(amounts, leader, others, stake);
+      }
+      pushGame(label); return;
+    }
+    pushGame(getGameLabel(cfg.key));
+  });
+  return games;
+}
+
 function renderLeaderboard() {
   const match = getActiveMatch();
   const empty = document.getElementById('leaderboardEmpty');
@@ -767,92 +911,41 @@ function describeMomentumMeta(match, metrics, gameKey) {
 
 function buildNetPayoutSummary(match, metrics) {
   const selected = Array.isArray(match.selectedGames) ? match.selectedGames : [];
-  if (!selected.length) return '<div><strong>Net payout:</strong> No gambling games selected.</div>';
-  const payouts = {};
-  const details = [];
-  const add = (playerId, amount) => { payouts[playerId] = (payouts[playerId] || 0) + amount; };
-  const teamMemberIds = teamNo => (metrics.teams.find(t => t.team === teamNo)?.members || []).map(m => m.player.id);
-  const splitTeam = (teamNo, total) => {
-    const ids = teamMemberIds(teamNo);
-    if (!ids.length) return;
-    const each = total / ids.length;
-    ids.forEach(id => add(id, each));
-  };
-  const applyHeadToHeadTeams = (winnerTeam, loserTeam, stake, label) => {
-    if (!winnerTeam || !loserTeam || !stake) return;
-    splitTeam(winnerTeam, Number(stake));
-    splitTeam(loserTeam, -Number(stake));
-    details.push(`<div>${escapeHtml(label)}: ${escapeHtml(getTeamName(match, winnerTeam))} ${formatPerspectiveStatus(winnerTeam === 1 ? 1 : -1, winnerTeam)} · $${Number(stake).toFixed(2)}</div>`);
-  };
-  const frontLeader = metrics.teams.length === 2 ? (metrics.teams[0].front > 0 ? 1 : metrics.teams[0].front < 0 ? 2 : 0) : 0;
-  const backLeader = metrics.teams.length === 2 ? (metrics.teams[0].back > 0 ? 1 : metrics.teams[0].back < 0 ? 2 : 0) : 0;
-  const overallLeader = metrics.teams.length === 2 ? (metrics.matchDiff > 0 ? 1 : metrics.matchDiff < 0 ? 2 : 0) : 0;
-  selected.forEach(cfg => {
-    if (cfg.key === 'nassau' && metrics.teams.length === 2) {
-      const front = Number(cfg.stakesFront || 0);
-      const back = Number(cfg.stakesBack || 0);
-      const overall = Number(cfg.stakesOverall || 0);
-      if (frontLeader) applyHeadToHeadTeams(frontLeader, frontLeader === 1 ? 2 : 1, front, `${getGameLabel(cfg.key)} · Front 9 (${formatBasisLabel(cfg.basis)})`);
-      if (backLeader) applyHeadToHeadTeams(backLeader, backLeader === 1 ? 2 : 1, back, `${getGameLabel(cfg.key)} · Back 9 (${formatBasisLabel(cfg.basis)})`);
-      if (overallLeader) applyHeadToHeadTeams(overallLeader, overallLeader === 1 ? 2 : 1, overall, `${getGameLabel(cfg.key)} · 18 (${formatBasisLabel(cfg.basis)})`);
-    } else if (cfg.key === 'team_match' && metrics.teams.length === 2) {
-      const stake = Number(cfg.stake || 0);
-      if (overallLeader) applyHeadToHeadTeams(overallLeader, overallLeader === 1 ? 2 : 1, stake, `${getGameLabel(cfg.key)} (${formatBasisLabel(cfg.basis)})`);
-    } else if (cfg.key === 'team_stroke' && metrics.bestTeam) {
-      const stake = Number(cfg.stake || 0);
-      const winner = metrics.bestTeam.team;
-      const losers = metrics.teams.filter(t => t.team !== winner).map(t => t.team);
-      if (stake && losers.length) {
-        splitTeam(winner, stake * losers.length);
-        losers.forEach(teamNo => splitTeam(teamNo, -stake));
-        details.push(`<div>${escapeHtml(getGameLabel(cfg.key))} (${escapeHtml(formatBasisLabel(cfg.basis))} · ${escapeHtml(formatScoringModeLabel(cfg.scoringMode))}): ${escapeHtml(getTeamName(match, winner))} leads · $${stake.toFixed(2)} per losing team</div>`);
-      }
-    } else if (cfg.key === 'skins') {
-      const stake = Number(cfg.stake || 0);
-      if (cfg.skinsType === 'team') {
-        const maxSkins = Math.max(0, ...metrics.teams.map(t => t.skins || 0));
-        const leaders = metrics.teams.filter(t => (t.skins || 0) === maxSkins && maxSkins > 0);
-        if (stake && leaders.length === 1) {
-          const winner = leaders[0].team;
-          const losers = metrics.teams.filter(t => t.team !== winner).map(t => t.team);
-          splitTeam(winner, stake * (maxSkins || 0) * losers.length);
-          losers.forEach(teamNo => splitTeam(teamNo, -stake * (maxSkins || 0)));
-          details.push(`<div>Team Skins (${escapeHtml(formatBasisLabel(cfg.basis))}): ${escapeHtml(getTeamName(match, winner))} leads ${maxSkins} skins</div>`);
-        }
-      } else {
-        const maxSkins = Math.max(0, ...metrics.players.map(p => p.skins || 0));
-        const leaders = metrics.players.filter(p => (p.skins || 0) === maxSkins && maxSkins > 0);
-        if (stake && leaders.length === 1) {
-          const winner = leaders[0].playerId;
-          const others = metrics.players.filter(p => p.playerId !== winner).map(p => p.playerId);
-          add(winner, stake * (maxSkins || 0) * others.length);
-          others.forEach(id => add(id, -stake * (maxSkins || 0)));
-          details.push(`<div>Individual Skins (${escapeHtml(formatBasisLabel(cfg.basis))}): ${escapeHtml(getPlayer(winner)?.name || 'Unknown')} leads ${maxSkins} skins</div>`);
-        }
-      }
-    } else if (cfg.key === 'greenies') {
-      const stake = Number(cfg.stakePerPlayer || 0);
-      const participants = (cfg.participants || []).filter(Boolean);
-      if (stake && participants.length > 1) {
-        const wins = Object.values(match.greeniesWinners || {}).reduce((acc, id) => {
-          if (participants.includes(id)) acc[id] = (acc[id] || 0) + 1;
-          return acc;
-        }, {});
-        Object.entries(wins).forEach(([winnerId, count]) => {
-          add(winnerId, stake * count * (participants.length - 1));
-          participants.filter(id => id !== winnerId).forEach(id => add(id, -stake * count));
-        });
-        details.push(`<div>Greenies: ${participants.length} participant(s) · $${stake.toFixed(2)} per player per par 3</div>`);
-      }
-    }
-  });
-  const rows = metrics.players
-    .map(p => ({ name: p.player.name, amount: payouts[p.playerId] || 0 }))
-    .filter(r => Math.abs(r.amount) > 0.0001)
-    .sort((a, b) => b.amount - a.amount)
-    .map(r => `<div>${escapeHtml(r.name)}: <strong>${r.amount >= 0 ? '+' : '-'}$${Math.abs(r.amount).toFixed(2)}</strong></div>`)
-    .join('');
-  return `<div><strong>Net payout (live):</strong></div>${rows || '<div>All square so far.</div>'}${details.length ? `<div class="tiny top-gap">${details.join('')}</div>` : ''}`;
+  if (!selected.length) return '<div><strong>Net payout (live):</strong> No gambling games selected.</div>';
+  const games = computeLivePayoutGames(match, metrics);
+  const totals = {};
+  games.forEach(game => addAmounts(totals, game.amounts));
+  const players = metrics.players.map(p => ({ id: p.playerId, name: p.player.name }));
+  const gameRows = games.map(game => {
+    const rowCells = players.map(player => {
+      const amount = game.amounts[player.id] || 0;
+      const cls = amount > 0.0001 ? 'payout-total-positive' : amount < -0.0001 ? 'payout-total-negative' : '';
+      const text = Math.abs(amount) > 0.0001 ? `${amount > 0 ? '+' : '-'}$${Math.abs(amount).toFixed(2)}` : '—';
+      return `<td class="${cls}">${text}</td>`;
+    }).join('');
+    return `<tr><td><strong>${escapeHtml(game.label)}</strong></td>${rowCells}</tr>`;
+  }).join('');
+  const totalCells = players.map(player => {
+    const amount = totals[player.id] || 0;
+    const cls = amount > 0.0001 ? 'payout-total-positive' : amount < -0.0001 ? 'payout-total-negative' : '';
+    const text = Math.abs(amount) > 0.0001 ? `${amount > 0 ? '+' : '-'}$${Math.abs(amount).toFixed(2)}` : '—';
+    return `<td class="${cls}"><strong>${text}</strong></td>`;
+  }).join('');
+  const settlements = optimalSettlementRows(totals);
+  const settlementRows = settlements.length
+    ? settlements.map(row => `<tr><td>${escapeHtml(getPlayer(row.from)?.name || 'Unknown')}</td><td>${escapeHtml(getPlayer(row.to)?.name || 'Unknown')}</td><td><strong>$${row.amount.toFixed(2)}</strong></td></tr>`).join('')
+    : '<tr><td colspan="3">No payouts due right now.</td></tr>';
+  return `
+    <div><strong>Net payout (live):</strong> by game, cross-footed to total.</div>
+    <table class="payout-game-table">
+      <thead><tr><th>Game</th>${players.map(player => `<th>${escapeHtml(player.name)}</th>`).join('')}</tr></thead>
+      <tbody>${gameRows}<tr><td><strong>Total</strong></td>${totalCells}</tr></tbody>
+    </table>
+    <div class="top-gap"><strong>Suggested settlement right now</strong></div>
+    <table class="settlement-table">
+      <thead><tr><th>From</th><th>To</th><th>Amount</th></tr></thead>
+      <tbody>${settlementRows}</tbody>
+    </table>`;
 }
 
 function buildSelectedGamesSummary(match, metrics) {
@@ -1426,10 +1519,15 @@ function installHandlers() {
     renderGamesPicker(configs);
   });
   document.getElementById('leaderboard').addEventListener('change', e => {
+    const match = getActiveMatch();
+    if (!match) return;
     if (e.target.id === 'momentumGameSelect') {
-      const match = getActiveMatch();
-      if (!match) return;
       match.momentumGame = e.target.value;
+      persist();
+      return;
+    }
+    if (e.target.id === 'momentumPerspectiveSelect') {
+      match.momentumPerspective = Number(e.target.value) || 1;
       persist();
       return;
     }
@@ -1437,6 +1535,12 @@ function installHandlers() {
   document.getElementById('score').addEventListener('change', e => {
     if (e.target.matches('[data-greenies-winner]')) {
       document.querySelectorAll('[data-greenies-winner]').forEach(el => { if (el !== e.target) el.checked = false; });
+    }
+  });
+  document.getElementById('score').addEventListener('click', e => {
+    const jumpHole = e.target.closest('[data-jump-hole]')?.dataset.jumpHole;
+    if (jumpHole) {
+      saveCurrentHole({ targetHole: Number(jumpHole), silent: true });
     }
   });
   document.getElementById('matchForm').addEventListener('submit', e => {
@@ -1493,17 +1597,8 @@ function installHandlers() {
     } catch (err) { console.error(err); toast('Could not create match. Please try again.'); }
   });
   document.getElementById('cancelMatchEditBtn').addEventListener('click', () => { loadMatchEditor(null); renderMatchSetupState(); });
-  document.getElementById('matchesList').addEventListener('click', e => {
-    const loadId = e.target.dataset.loadMatch; const shareId = e.target.dataset.shareMatch; const deleteId = e.target.dataset.deleteMatch;
-    if (loadId) { state.activeMatchId = loadId; currentHole = Math.max(1, completedHoles(getMatch(loadId)) || 1); persist(); activateTab('score'); }
-    if (shareId) { shareRound(shareId); }
-    if (deleteId && confirm('Delete this match?')) { state.matches = state.matches.filter(m => m.id !== deleteId); if (state.activeMatchId === deleteId) state.activeMatchId = null; persist(); }
-  });
-  document.getElementById('prevHoleBtn').addEventListener('click', () => { currentHole = Math.max(1, currentHole - 1); renderCurrentMatch(); });
-  document.getElementById('nextHoleBtn').addEventListener('click', () => { currentHole = Math.min(18, currentHole + 1); renderCurrentMatch(); });
-  document.getElementById('shareRoundBtn').addEventListener('click', () => { shareRound(); });
-  document.getElementById('saveScoresBtn').addEventListener('click', () => {
-    const match = getActiveMatch(); if (!match) return;
+  function saveCurrentHole({ advance = false, targetHole = null, silent = false } = {}) {
+    const match = getActiveMatch(); if (!match) return false;
     const holeInputs = document.querySelectorAll('[data-score-player]');
     holeInputs.forEach(input => {
       const playerId = input.dataset.scorePlayer;
@@ -1516,9 +1611,29 @@ function installHandlers() {
     } else if (match.greeniesWinners && match.greeniesWinners[String(currentHole)]) {
       delete match.greeniesWinners[String(currentHole)];
     }
-    currentHole = Math.min(18, Math.max(currentHole, completedHoles(match) + 1));
-    persist(); toast(`Hole ${currentHole <= 18 ? currentHole - 1 || 1 : 18} saved.`);
+    const savedHole = currentHole;
+    if (Number.isFinite(targetHole) && targetHole >= 1 && targetHole <= 18) {
+      currentHole = targetHole;
+    } else if (advance) {
+      currentHole = Math.min(18, currentHole + 1);
+    } else {
+      currentHole = Math.min(18, Math.max(currentHole, completedHoles(match) + 1));
+    }
+    persist();
+    if (!silent) toast(`Hole ${savedHole} saved.`);
+    return true;
+  }
+
+  document.getElementById('matchesList').addEventListener('click', e => {
+    const loadId = e.target.dataset.loadMatch; const shareId = e.target.dataset.shareMatch; const deleteId = e.target.dataset.deleteMatch;
+    if (loadId) { state.activeMatchId = loadId; currentHole = Math.max(1, completedHoles(getMatch(loadId)) || 1); persist(); activateTab('score'); }
+    if (shareId) { shareRound(shareId); }
+    if (deleteId && confirm('Delete this match?')) { state.matches = state.matches.filter(m => m.id !== deleteId); if (state.activeMatchId === deleteId) state.activeMatchId = null; persist(); }
   });
+  document.getElementById('prevHoleBtn').addEventListener('click', () => { currentHole = Math.max(1, currentHole - 1); renderCurrentMatch(); });
+  document.getElementById('nextHoleBtn').addEventListener('click', () => { saveCurrentHole({ advance: true, silent: true }); });
+  document.getElementById('shareRoundBtn').addEventListener('click', () => { shareRound(); });
+  document.getElementById('saveScoresBtn').addEventListener('click', () => { saveCurrentHole(); });
   document.getElementById('finishRoundBtn').addEventListener('click', () => {
     const match = getActiveMatch(); if (!match) return toast('No active match.');
     finishConfirmArmed = true;

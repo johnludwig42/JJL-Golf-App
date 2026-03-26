@@ -916,36 +916,47 @@ function buildNetPayoutSummary(match, metrics) {
   const totals = {};
   games.forEach(game => addAmounts(totals, game.amounts));
   const players = metrics.players.map(p => ({ id: p.playerId, name: p.player.name }));
-  const gameRows = games.map(game => {
-    const rowCells = players.map(player => {
+  const headerCells = games.map(game => `<th>${escapeHtml(game.label)}</th>`).join('');
+  const playerRows = players.map(player => {
+    const gameCells = games.map(game => {
       const amount = game.amounts[player.id] || 0;
       const cls = amount > 0.0001 ? 'payout-total-positive' : amount < -0.0001 ? 'payout-total-negative' : '';
       const text = Math.abs(amount) > 0.0001 ? `${amount > 0 ? '+' : '-'}$${Math.abs(amount).toFixed(2)}` : '—';
       return `<td class="${cls}">${text}</td>`;
     }).join('');
-    return `<tr><td><strong>${escapeHtml(game.label)}</strong></td>${rowCells}</tr>`;
+    const total = totals[player.id] || 0;
+    const totalCls = total > 0.0001 ? 'payout-total-positive' : total < -0.0001 ? 'payout-total-negative' : '';
+    const totalText = Math.abs(total) > 0.0001 ? `${total > 0 ? '+' : '-'}$${Math.abs(total).toFixed(2)}` : '—';
+    return `<tr><td><strong>${escapeHtml(player.name)}</strong></td>${gameCells}<td class="${totalCls}"><strong>${totalText}</strong></td></tr>`;
   }).join('');
-  const totalCells = players.map(player => {
-    const amount = totals[player.id] || 0;
-    const cls = amount > 0.0001 ? 'payout-total-positive' : amount < -0.0001 ? 'payout-total-negative' : '';
-    const text = Math.abs(amount) > 0.0001 ? `${amount > 0 ? '+' : '-'}$${Math.abs(amount).toFixed(2)}` : '—';
+  const columnFoot = games.map(game => {
+    const colTotal = players.reduce((sum, player) => sum + (game.amounts[player.id] || 0), 0);
+    const cls = Math.abs(colTotal) <= 0.0001 ? '' : (colTotal > 0 ? 'payout-total-positive' : 'payout-total-negative');
+    const text = Math.abs(colTotal) > 0.0001 ? `${colTotal > 0 ? '+' : '-'}$${Math.abs(colTotal).toFixed(2)}` : '$0.00';
     return `<td class="${cls}"><strong>${text}</strong></td>`;
   }).join('');
+  const overallTotal = players.reduce((sum, player) => sum + (totals[player.id] || 0), 0);
+  const overallText = Math.abs(overallTotal) > 0.0001 ? `${overallTotal > 0 ? '+' : '-'}$${Math.abs(overallTotal).toFixed(2)}` : '$0.00';
   const settlements = optimalSettlementRows(totals);
   const settlementRows = settlements.length
     ? settlements.map(row => `<tr><td>${escapeHtml(getPlayer(row.from)?.name || 'Unknown')}</td><td>${escapeHtml(getPlayer(row.to)?.name || 'Unknown')}</td><td><strong>$${row.amount.toFixed(2)}</strong></td></tr>`).join('')
     : '<tr><td colspan="3">No payouts due right now.</td></tr>';
   return `
-    <div><strong>Net payout (live):</strong> by game, cross-footed to total.</div>
-    <table class="payout-game-table">
-      <thead><tr><th>Game</th>${players.map(player => `<th>${escapeHtml(player.name)}</th>`).join('')}</tr></thead>
-      <tbody>${gameRows}<tr><td><strong>Total</strong></td>${totalCells}</tr></tbody>
-    </table>
-    <div class="top-gap"><strong>Suggested settlement right now</strong></div>
-    <table class="settlement-table">
-      <thead><tr><th>From</th><th>To</th><th>Amount</th></tr></thead>
-      <tbody>${settlementRows}</tbody>
-    </table>`;
+    <div class="payout-summary-intro"><strong>Net payout (live):</strong> by player across the top-selected games, cross-footed to a total.</div>
+    <div class="payout-table-wrap top-gap">
+      <table class="payout-game-table payout-game-table-wide">
+        <thead><tr><th>Player</th>${headerCells}<th>Total</th></tr></thead>
+        <tbody>${playerRows}</tbody>
+        <tfoot><tr><td><strong>Cross-foot</strong></td>${columnFoot}<td><strong>${overallText}</strong></td></tr></tfoot>
+      </table>
+    </div>
+    <div class="top-gap payout-settlement-head"><strong>Suggested settlement right now</strong></div>
+    <div class="payout-table-wrap top-gap">
+      <table class="settlement-table">
+        <thead><tr><th>From</th><th>To</th><th>Amount</th></tr></thead>
+        <tbody>${settlementRows}</tbody>
+      </table>
+    </div>`;
 }
 
 function buildSelectedGamesSummary(match, metrics) {
@@ -1523,12 +1534,14 @@ function installHandlers() {
     if (!match) return;
     if (e.target.id === 'momentumGameSelect') {
       match.momentumGame = e.target.value;
-      persist();
+      persist({ skipRender: true });
+      renderLeaderboard();
       return;
     }
     if (e.target.id === 'momentumPerspectiveSelect') {
       match.momentumPerspective = Number(e.target.value) || 1;
-      persist();
+      persist({ skipRender: true });
+      renderLeaderboard();
       return;
     }
   });

@@ -230,9 +230,12 @@
               <tbody id="scoreGridBody"></tbody>
             </table>
           </div>
-          <div class="actions top-gap">
+          <div class="actions top-gap wrap compact-actions">
             <button id="saveScoresBtn" type="button">Save Hole Scores</button>
+            <div class="tiny">Next automatically saves the current hole.</div>
           </div>
+          <div class="tiny top-gap"><strong>Jump to hole</strong></div>
+          <div id="holeJumpTiles" class="hole-jump-tiles top-gap"></div>
         </div>
       </div>
     </section>
@@ -326,10 +329,11 @@
           <div id="payoutSummary" class="result compact-result"></div>
         </div>
 
-        <div class="card tight-card">
-          <h2>Saved matches</h2>
-          <div id="matchesList" class="list"></div>
-        </div>
+      </div>
+
+      <div class="card tight-card">
+        <h2>Saved matches</h2>
+        <div id="matchesList" class="list"></div>
       </div>
 
       <div id="leaderboardEmpty" class="card tight-card">

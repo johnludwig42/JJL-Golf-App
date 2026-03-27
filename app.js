@@ -1129,6 +1129,44 @@ function formatTeamGameStatus(match, metrics, diff) {
     : `${describeTeamLabel(match, 2, metrics)} ${Math.abs(diff)} up`;
 }
 
+function getIndividualMatchPairings(match, metrics) {
+  if (!match || !metrics || metrics.teams?.length !== 2) return [];
+  const team1 = (match.players || []).filter(p => Number(p.team) === 1).sort((a,b)=>(Number(a.slot)||0)-(Number(b.slot)||0));
+  const team2 = (match.players || []).filter(p => Number(p.team) === 2).sort((a,b)=>(Number(a.slot)||0)-(Number(b.slot)||0));
+  const count = Math.min(team1.length, team2.length);
+  const holes = Array.isArray(metrics.holeResults) ? metrics.holeResults : [];
+  const basis = String(((match.selectedGames||[]).find(g=>g.key==='individual_match')||{}).basis || 'net').toLowerCase();
+  const pairings = [];
+  for (let i=0;i<count;i++) {
+    const a = team1[i], b = team2[i];
+    const pa = metrics.players.find(p => p.playerId === a.playerId);
+    const pb = metrics.players.find(p => p.playerId === b.playerId);
+    if (!pa || !pb) continue;
+    let diff = 0;
+    holes.forEach((hole, idx) => {
+      const sgA = Number(pa.scores[idx]?.gross) || null;
+      const sgB = Number(pb.scores[idx]?.gross) || null;
+      if (!sgA || !sgB) return;
+      let scoreA = sgA, scoreB = sgB;
+      if (basis !== 'gross') {
+        const strokesA = holeStrokeAllowanceForPlayer(hole.strokeIndex, pa.playHdcp, metrics.lowPlaying);
+        const strokesB = holeStrokeAllowanceForPlayer(hole.strokeIndex, pb.playHdcp, metrics.lowPlaying);
+        scoreA = sgA - strokesA;
+        scoreB = sgB - strokesB;
+      }
+      if (scoreA < scoreB) diff += 1;
+      else if (scoreB < scoreA) diff -= 1;
+    });
+    pairings.push({
+      team1Player: pa,
+      team2Player: pb,
+      diff,
+      status: diff === 0 ? 'AS' : diff > 0 ? `${Math.abs(diff)} Up` : `${Math.abs(diff)} Down`
+    });
+  }
+  return pairings;
+}
+
 function getMatchStatusOptions(match) {
   const selected = Array.isArray(match?.selectedGames) ? match.selectedGames : [];
   if (!selected.length) return [];
@@ -1138,23 +1176,26 @@ function getMatchStatusOptions(match) {
 function buildFeaturedMatchStatus(match, metrics, gameKey) {
   const cfg = (match.selectedGames || []).find(g => g.key === gameKey) || {};
   const title = getFeaturedGameLabel(match, gameKey);
+  const courseLine = `${escapeHtml(metrics?.course?.name || 'No course')} · ${escapeHtml(metrics?.tee?.teeName || 'No tee')}`;
   if (['nassau', 'team_match', 'team_stroke'].includes(gameKey) && metrics.teams.length === 2) {
     const diffs = computeTeamGameDiffs(match, metrics, gameKey);
     const frontStatus = formatTeamGameStatus(match, metrics, diffs.front);
     const backStatus = formatTeamGameStatus(match, metrics, diffs.back);
     const overallTeam = formatTeamGameStatus(match, metrics, diffs.overall);
     const items = [
-      { label: gameKey === 'nassau' ? 'Front 9' : 'Front 9', value: frontStatus },
+      { label: 'Front 9', value: frontStatus },
       { label: 'Back 9', value: backStatus },
       { label: gameKey === 'nassau' ? 'Overall 18' : 'Overall', value: overallTeam },
     ];
-    return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong></div><div class="match-status-grid">${items.map(item => `<div class="match-status-tile"><div class="tiny">${escapeHtml(item.label)}</div><div class="match-status-value">${item.value}</div></div>`).join('')}</div>`;
+    return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid">${items.map(item => `<div class="match-status-tile"><div class="tiny">${escapeHtml(item.label)}</div><div class="match-status-value">${item.value}</div></div>`).join('')}</div>`;
   }
   if (gameKey === 'individual_match') {
-    const basisKey = String(cfg.basis || 'net').toLowerCase() === 'gross' ? 'grossTotal' : 'netTotal';
-    const leader = metrics.players.slice().sort((a,b) => (a[basisKey] - b[basisKey]) || (a.grossTotal - b.grossTotal))[0];
-    const leaderVal = leader ? (basisKey === 'grossTotal' ? leader.toPar : leader.netDiff) : null;
-    return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong></div><div class="match-status-tile"><div class="tiny">Leader</div><div class="match-status-value">${leader ? `${escapeHtml(leader.player.name)} (${formatSigned(leaderVal)})` : '—'}</div></div>`;
+    const pairings = getIndividualMatchPairings(match, metrics);
+    const basis = formatBasisLabel(cfg.basis);
+    if (!pairings.length) {
+      return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine} · ${escapeHtml(basis)}</div></div><div class="match-status-tile"><div class="tiny">Status</div><div class="match-status-value">Waiting for pairings</div></div>`;
+    }
+    return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine} · ${escapeHtml(basis)}</div></div><div class="match-status-grid">${pairings.map(p => `<div class="match-status-tile"><div class="tiny">${escapeHtml(p.team1Player.player.name)} vs ${escapeHtml(p.team2Player.player.name)}</div><div class="match-status-value">${escapeHtml(p.status)}</div></div>`).join('')}</div>`;
   }
   if (gameKey === 'skins') {
     const basis = formatBasisLabel(cfg.basis);
@@ -1163,21 +1204,21 @@ function buildFeaturedMatchStatus(match, metrics, gameKey) {
       const max = Math.max(0, ...Object.values(skins.counts));
       const leaders = Object.entries(skins.counts).filter(([,n]) => n === max && max > 0).map(([team,n]) => `${escapeHtml(getTeamLabel(match, Number(team)))} (${n})`).join(', ');
       const holes = skins.winnersByHole.map(h => `H${h.holeNumber}: ${escapeHtml(getTeamLabel(match, h.winner))}`).join(' · ');
-      return `<div class="match-status-head"><strong>${escapeHtml(getGameLabel(gameKey))} (Team · ${escapeHtml(basis)})</strong></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Leader</div><div class="match-status-value">${leaders || 'None yet'}</div></div><div class="match-status-tile"><div class="tiny">Won on</div><div class="match-status-value">${holes || '—'}</div></div></div>`;
+      return `<div class="match-status-head"><strong>${escapeHtml(getGameLabel(gameKey))} (Team · ${escapeHtml(basis)})</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Leader</div><div class="match-status-value">${leaders || 'None yet'}</div></div><div class="match-status-tile"><div class="tiny">Won on</div><div class="match-status-value">${holes || '—'}</div></div></div>`;
     }
     const max = Math.max(0, ...Object.values(skins.counts));
     const leaders = Object.entries(skins.counts).filter(([,n]) => n === max && max > 0).map(([id,n]) => `${escapeHtml(getPlayer(id)?.name || 'Unknown')} (${n})`).join(', ');
     const holes = skins.winnersByHole.map(h => `H${h.holeNumber}: ${escapeHtml(getPlayer(h.winner)?.name || 'Unknown')}`).join(' · ');
-    return `<div class="match-status-head"><strong>${escapeHtml(getGameLabel(gameKey))} (Individual · ${escapeHtml(basis)})</strong></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Leader</div><div class="match-status-value">${leaders || 'None yet'}</div></div><div class="match-status-tile"><div class="tiny">Won on</div><div class="match-status-value">${holes || '—'}</div></div></div>`;
+    return `<div class="match-status-head"><strong>${escapeHtml(getGameLabel(gameKey))} (Individual · ${escapeHtml(basis)})</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Leader</div><div class="match-status-value">${leaders || 'None yet'}</div></div><div class="match-status-tile"><div class="tiny">Won on</div><div class="match-status-value">${holes || '—'}</div></div></div>`;
   }
   if (gameKey === 'greenies') {
     const greenies = getGreeniesResults(match, metrics, cfg);
     const max = Math.max(0, ...Object.values(greenies.counts));
     const leaders = Object.entries(greenies.counts).filter(([,n]) => n === max && max > 0).map(([id,n]) => `${escapeHtml(getPlayer(id)?.name || 'Unknown')} (${n})`).join(', ');
     const holes = greenies.winnersByHole.map(h => `H${h.holeNumber}: ${escapeHtml(getPlayer(h.winner)?.name || 'Unknown')}`).join(' · ');
-    return `<div class="match-status-head"><strong>Greenies</strong></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Participants</div><div class="match-status-value">${(cfg.participants || []).length || 0}</div></div><div class="match-status-tile"><div class="tiny">Leader(s)</div><div class="match-status-value">${leaders || 'None yet'}</div></div><div class="match-status-tile"><div class="tiny">Won on</div><div class="match-status-value">${holes || '—'}</div></div></div>`;
+    return `<div class="match-status-head"><strong>Greenies</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Participants</div><div class="match-status-value">${(cfg.participants || []).length || 0}</div></div><div class="match-status-tile"><div class="tiny">Leader(s)</div><div class="match-status-value">${leaders || 'None yet'}</div></div><div class="match-status-tile"><div class="tiny">Won on</div><div class="match-status-value">${holes || '—'}</div></div></div>`;
   }
-  return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong></div><div class="match-status-tile"><div class="tiny">Status</div><div class="match-status-value">Live</div></div>`;
+  return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-tile"><div class="tiny">Status</div><div class="match-status-value">Live</div></div>`;
 }
 
 function buildClassicScorecard(match, metrics) {
@@ -1301,10 +1342,9 @@ function buildSelectedGamesSummary(match, metrics) {
       value = scoredTeams[0] ? `${describeTeamLabel(match, scoredTeams[0].team, metrics)} (${formatSigned(scoredTeams[0].value)})` : '—';
       sub = `Mode: ${formatScoringModeLabel(cfg.scoringMode)} · ${formatBasisLabel(cfg.basis)}`;
     } else if (cfg.key === 'individual_match') {
-      const basisKey = String(cfg.basis || 'net').toLowerCase() === 'gross' ? 'toPar' : 'netDiff';
-      const leader = metrics.players.slice().sort((a,b)=>(a[basisKey]-b[basisKey])||(a.toPar-b.toPar))[0];
-      value = leader ? `${leader.player.name} (${formatSigned(leader[basisKey])})` : '—';
-      sub = 'Leader by selected basis';
+      const pairings = getIndividualMatchPairings(match, metrics);
+      value = pairings.length ? pairings.map(p => `${p.team1Player.player.name} vs ${p.team2Player.player.name}: ${p.status}`).join(' · ') : 'Waiting for pairings';
+      sub = `Scored as match play · ${formatBasisLabel(cfg.basis)}`;
     } else if (cfg.key === 'skins') {
       const skins = computeSkinResults(match, metrics, cfg);
       const entries = Object.entries(skins.counts || {});

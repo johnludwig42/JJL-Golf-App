@@ -202,23 +202,21 @@
             <div id="gameConfigs" class="top-gap"></div>
           </div>
 
-        </form>
-      </div>
-
-      <div class="card tight-card handicap-preview-card persistent-preview-card">
-        <div class="item-header compact-item-header">
-          <div>
-            <h2>Handicap preview</h2>
-            <div class="tiny">Course handicap, playing handicap, and strokes received for the selected course / tee.</div>
+        <div class="span-2 card inset-card handicap-preview-card top-gap">
+          <div class="item-header compact-item-header">
+            <div>
+              <div class="section-label">Handicap preview</div>
+              <div class="tiny">Course handicap, playing handicap, and strokes received for the selected course / tee.</div>
+            </div>
+          </div>
+          <div id="setupHandicapPreview" class="top-gap"></div>
+          <div class="actions top-gap preview-card-actions">
+            <button id="matchSubmitBtn" type="submit" form="matchForm">Create Match</button>
+            <button id="cancelMatchEditBtn" type="button" class="secondary hidden">Cancel</button>
           </div>
         </div>
-        <div id="setupHandicapPreview" class="top-gap"></div>
-        <div class="actions top-gap preview-card-actions">
-          <button id="matchSubmitBtn" type="submit" form="matchForm">Create Match</button>
-          <button id="cancelMatchEditBtn" type="button" class="secondary hidden">Cancel</button>
-        </div>
+        </form>
       </div>
-
     </section>
 
     <section id="score" class="panel">
@@ -284,15 +282,15 @@
             </div>
             <div id="matchStatusSummary" class="result compact-result"></div>
           </div>
-          <div class="card tight-card scoreboard-card">
-            <h2>Games summary</h2>
-            <div id="gamesSummary" class="result compact-result"></div>
-          </div>
+          <details class="card tight-card scoreboard-card scoreboard-collapsible">
+            <summary><h2>Games summary</h2></summary>
+            <div id="gamesSummary" class="result compact-result top-gap"></div>
+          </details>
         </div>
 
-        <div class="card tight-card scoreboard-card">
-          <h2>Player leaderboard</h2>
-          <div class="leader-table-wrap">
+        <details class="card tight-card scoreboard-card scoreboard-collapsible">
+          <summary><h2>Player leaderboard</h2></summary>
+          <div class="leader-table-wrap top-gap">
             <table class="leader-table">
               <thead>
                 <tr>
@@ -308,11 +306,11 @@
             </table>
           </div>
           <div id="playerLeaderboardMobile" class="leader-mobile-cards top-gap"></div>
-        </div>
+        </details>
 
-        <div class="card tight-card scoreboard-card">
-          <h2>Team leaderboard</h2>
-          <div class="leader-table-wrap">
+        <details class="card tight-card scoreboard-card scoreboard-collapsible">
+          <summary><h2>Team leaderboard</h2></summary>
+          <div class="leader-table-wrap top-gap">
             <table class="leader-table">
               <thead>
                 <tr>
@@ -329,7 +327,7 @@
             </table>
           </div>
           <div id="teamLeaderboardMobile" class="leader-mobile-cards top-gap"></div>
-        </div>
+        </details>
 
         <div class="card tight-card scoreboard-card">
           <div class="item-header compact-item-header">
@@ -356,17 +354,17 @@
           <div id="classicScorecard" class="top-gap"></div>
         </div>
 
-        <div class="card tight-card scoreboard-card">
-          <h2>Net payout</h2>
-          <div id="payoutSummary" class="result compact-result"></div>
-        </div>
+        <details class="card tight-card scoreboard-card scoreboard-collapsible">
+          <summary><h2>Net payout</h2></summary>
+          <div id="payoutSummary" class="result compact-result top-gap"></div>
+        </details>
 
       </div>
 
-      <div class="card tight-card">
-        <h2>Saved matches</h2>
-        <div id="matchesList" class="list"></div>
-      </div>
+      <details class="card tight-card scoreboard-card scoreboard-collapsible" open>
+        <summary><h2>Saved matches</h2></summary>
+        <div id="matchesList" class="list top-gap"></div>
+      </details>
 
       <div id="leaderboardEmpty" class="card tight-card">
         <div class="tiny">Create a match to unlock the live leaderboard.</div>

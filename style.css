@@ -562,3 +562,21 @@ body.keyboard-open .top-tabs{
   .score-sub{min-height:22px;font-size:10px}
   .score-number{min-width:22px;height:22px;padding:0 5px}
 }
+
+.scoreboard-collapsible summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.scoreboard-collapsible summary::-webkit-details-marker{display:none}
+.scoreboard-collapsible summary h2{margin:0}
+.scoreboard-collapsible summary::after{content:'▾';font-size:14px;color:var(--muted);transition:transform .2s ease}
+.scoreboard-collapsible:not([open]) summary::after{transform:rotate(-90deg)}
+.match-status-meta{margin-top:6px;color:var(--muted);font-size:12px}
+@media (max-width:760px){
+  #leaderboardWrap{display:grid;gap:12px}
+  .leaderboard-cards{display:grid;gap:12px}
+  .scoreboard-card{padding:14px;border-radius:16px}
+  .scoreboard-collapsible{padding:0}
+  .scoreboard-collapsible summary{padding:14px 14px 0 14px}
+  .scoreboard-collapsible > *:not(summary){padding-left:14px;padding-right:14px;padding-bottom:14px}
+  .leader-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .payout-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .game-summary-card{padding:12px 12px 10px}
+}

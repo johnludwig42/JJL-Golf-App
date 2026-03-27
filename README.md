@@ -1,12 +1,17 @@
-The Dye Ledger – Tweaks v16.6
+# The Dye Ledger — v17 Refinements
 
 Changes in this build:
-- Added a Featured Game selector for Match Status on the Scoreboard.
-- Added a classic scorecard view between the momentum and net payout sections.
-- Moved the main app tabs back to the top and made them sticky.
+- fixed the main Dye Ledger brand mark with a more robust inline/header SVG and refreshed app icon assets
+- improved Nassau featured-match presentation to use consistent Front 9 / Back 9 / Overall tiles
+- redesigned Games Summary into cleaner summary cards
+- removed the low-value top scoreboard header block
+- changed payout negatives to accounting style `( $ )` formatting
+- kept momentum selectors side by side on iPhone
+- upgraded the classic scorecard with Yardage, Par, Stroke Index, and per-hole stroke dots
+- added a handicap preview at the bottom of Game Setup showing course handicap, playing handicap, and strokes received
 
-Update steps:
-1. Replace the contents of your current `golf-app` folder with these files.
-2. Commit to GitHub.
-3. Open the live site in Safari and refresh.
-4. If the PWA still shows the older layout, delete and re-add it to the home screen.
+Validation checks run with dummy data:
+- Nassau momentum / featured status alignment
+- Team Stroke Play aggregate featured status
+- Greenies payout inclusion and zero-sum live payout cross-foot
+- Classic scorecard rendering with Yds / SI rows

@@ -12,7 +12,19 @@
 <body>
   <header class="app-header compact-header">
     <div class="brand-wrap">
-      <img src="icons/logo-mark.svg" alt="The Dye Ledger logo" class="brand-mark" />
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img">
+          <rect x="4" y="4" width="56" height="56" rx="16" fill="#0f5b3a"/>
+          <rect x="4" y="4" width="56" height="56" rx="16" fill="none" stroke="#d9b66c" stroke-width="2.5"/>
+          <path d="M32 12l14 4v15c0 11-6 19-14 24-8-5-14-13-14-24V16z" fill="#f5efe2" stroke="#d9b66c" stroke-width="2"/>
+          <rect x="20" y="20" width="12" height="18" rx="2.5" fill="none" stroke="#0f5b3a" stroke-width="2"/>
+          <path d="M23 25h6M23 29h6M23 33h6" stroke="#0f5b3a" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M38 20v18" stroke="#0f5b3a" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M39 21c6 1 9 4 9 8s-3 7-9 8z" fill="#1d7a50"/>
+          <path d="M35 44l8-12" stroke="#d9b66c" stroke-width="3" stroke-linecap="round"/>
+          <path d="M33 48l3-8 7 3-3 8z" fill="#0f5b3a" stroke="#d9b66c" stroke-width="1.5"/>
+        </svg>
+      </div>
       <div>
       <h1>The Dye Ledger</h1>
       <p class="sub">A compact match-and-games ledger for golf groups.</p>
@@ -132,7 +144,7 @@
             <h2>Game setup</h2>
             <div id="setupLockMsg" class="tiny">Build a new match, or edit the active one.</div>
           </div>
-          <div class="actions wrap compact-actions">
+          <div class="actions compact-actions momentum-controls">
             <button id="newMatchBtn" type="button" class="secondary">New Match</button>
             <button id="editActiveMatchBtn" type="button" class="secondary">Edit Active Match</button>
           </div>
@@ -247,16 +259,6 @@
 
 
     <section id="leaderboard" class="panel">
-      <div class="card tight-card">
-        <div class="item-header">
-          <div>
-            <h2>Scoreboard</h2>
-            <div id="leaderboardMeta" class="muted">No active match.</div>
-          </div>
-          <div id="leaderboardStatusBadge" class="badge">Awaiting match</div>
-        </div>
-      </div>
-
       <div id="leaderboardWrap" class="hidden">
         <div class="leaderboard-cards">
           <div class="card tight-card">

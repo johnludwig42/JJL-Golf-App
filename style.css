@@ -476,3 +476,23 @@ body.keyboard-open .top-tabs{
 .score-main{font-weight:700}
 .score-sub{font-size:11px;color:var(--muted)}
 .score-dots{display:inline-block;margin-left:4px;color:#0b5d3b;font-weight:700}
+
+
+.score-dots-row{min-height:14px;margin-top:2px}
+.handicap-preview-outer{margin-top:12px}
+.scorecard-table .score-main{font-weight:700;line-height:1.1}
+.scorecard-table .score-sub{font-size:11px;line-height:1.1;margin-top:2px;color:var(--muted)}
+.scorecard-table .total-sub{font-size:11px}
+@media (max-width:760px){
+  #leaderboardWrap{gap:14px}
+  .leaderboard-cards{gap:14px}
+  .scoreboard-card{padding:12px}
+  .match-status-value{font-size:13px;line-height:1.35}
+  .game-summary-card{padding:12px}
+  .game-summary-title{font-size:12px}
+  .game-summary-value{font-size:14px}
+  .game-summary-sub{font-size:12px}
+  .leader-table-wrap,.scorecard-wrap,.payout-table-wrap{margin-inline:-2px}
+  .leader-table th,.leader-table td{padding:9px 8px}
+  .scorecard-table th,.scorecard-table td{padding:8px 6px}
+}

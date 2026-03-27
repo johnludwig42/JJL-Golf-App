@@ -202,10 +202,6 @@
             <div id="gameConfigs" class="top-gap"></div>
           </div>
 
-          <div class="actions span-2">
-            <button id="matchSubmitBtn" type="submit">Create Match</button>
-            <button id="cancelMatchEditBtn" type="button" class="secondary hidden">Cancel</button>
-          </div>
         </form>
       </div>
 
@@ -217,6 +213,10 @@
           </div>
         </div>
         <div id="setupHandicapPreview" class="top-gap"></div>
+        <div class="actions top-gap preview-card-actions">
+          <button id="matchSubmitBtn" type="submit" form="matchForm">Create Match</button>
+          <button id="cancelMatchEditBtn" type="button" class="secondary hidden">Cancel</button>
+        </div>
       </div>
 
     </section>
@@ -299,8 +299,8 @@
                   <th>Player</th>
                   <th>Team</th>
                   <th>Gross</th>
-                  <th>Net</th>
                   <th>Gross to Par</th>
+                  <th>Net</th>
                   <th>Net to Par</th>
                 </tr>
               </thead>

@@ -203,6 +203,20 @@ function formatGolfScoreSymbol(score, par) {
   if (diff >= 2) return `▣${s}▣`;
   return s;
 }
+function golfScoreClass(score, par) {
+  if (!Number.isFinite(score)) return '';
+  const diff = Number(score) - Number(par || 0);
+  if (diff <= -2) return 'score-eagle';
+  if (diff === -1) return 'score-birdie';
+  if (diff === 1) return 'score-bogey';
+  if (diff >= 2) return 'score-doublebogey';
+  return 'score-par';
+}
+function formatGolfScoreMarkup(score, par, tone = 'gross') {
+  if (!Number.isFinite(score)) return '<span class="score-number score-empty">—</span>';
+  const cls = golfScoreClass(score, par);
+  return `<span class="score-number ${cls} ${tone === 'net' ? 'score-net' : 'score-gross'}">${escapeHtml(String(score))}</span>`;
+}
 function buildRoundShareText(match) {
   const metrics = computeMatchMetrics(match);
   currentLeaderboardMatchRef = match;
@@ -1197,9 +1211,9 @@ function buildClassicScorecard(match, metrics) {
     const cells = holes.map((hole, idx) => {
       const gross = Number(p.scores[idx]?.gross) || null;
       const strokes = holeStrokeAllowanceForPlayer(hole.strokeIndex, p.playHdcp, metrics.lowPlaying);
-      if (!gross) return `<td><div class="score-main">—</div><div class="score-sub">—${dotMarkup(strokes)}</div></td>`;
+      if (!gross) return `<td class="score-hole-cell"><div class="score-main">${formatGolfScoreMarkup(null, hole.par, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(null, hole.par, 'net')}${dotMarkup(strokes)}</div></td>`;
       const net = gross - strokes;
-      return `<td><div class="score-main">${formatGolfScoreSymbol(gross, hole.par)}</div><div class="score-sub">${formatGolfScoreSymbol(net, hole.par)}${dotMarkup(strokes)}</div></td>`;
+      return `<td class="score-hole-cell"><div class="score-main">${formatGolfScoreMarkup(gross, hole.par, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(net, hole.par, 'net')}${dotMarkup(strokes)}</div></td>`;
     }).join('');
     return `<tr><td class="scorecard-sticky-name"><strong>${escapeHtml(p.player.name)}</strong></td><td class="scorecard-sticky-team">${escapeHtml(getTeamLabel(match,p.team))}</td>${cells}<td><strong>${frontGross}</strong><div class="score-sub total-sub">${frontNet || '—'}</div></td><td><strong>${backGross}</strong><div class="score-sub total-sub">${backNet || '—'}</div></td><td><strong>${p.grossTotal || 0}</strong><div class="score-sub total-sub">${p.netTotal || 0}</div></td></tr>`;
   }).join('');

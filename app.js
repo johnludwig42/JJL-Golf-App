@@ -134,6 +134,75 @@ function formatGrossNet(score) {
   const netText = Number.isFinite(score?.net) ? ` / net ${score.net}` : '';
   return `${score.gross}${netText}`;
 }
+
+function getHoleValueForBasis(scoreObj, basis = 'net') {
+  if (!scoreObj) return null;
+  return String(basis || 'net').toLowerCase() === 'gross' ? scoreObj.gross : scoreObj.net;
+}
+function getTeamHoleScore(holeResult, teamNo, basis = 'net', scoringMode = 'best_ball') {
+  const teamScores = (holeResult?.playerScores || []).filter(s => s.team === teamNo);
+  if (!teamScores.length) return null;
+  const values = teamScores.map(s => getHoleValueForBasis(s, basis)).filter(v => Number.isFinite(v));
+  if (!values.length) return null;
+  return String(scoringMode || 'best_ball') === 'aggregate'
+    ? values.reduce((sum, v) => sum + v, 0)
+    : Math.min(...values);
+}
+function computeSkinResults(match, metrics, cfg = {}) {
+  const basis = String(cfg.basis || 'net').toLowerCase();
+  const isTeam = cfg.skinsType === 'team';
+  const winnersByHole = [];
+  const counts = {};
+  (metrics?.holeResults || []).forEach(h => {
+    if (!h.completed) return;
+    if (isTeam) {
+      const scoredTeams = (metrics.teams || []).map(t => ({ team: t.team, value: getTeamHoleScore(h, t.team, basis, 'best_ball') })).filter(t => Number.isFinite(t.value));
+      if (scoredTeams.length < 2) return;
+      const best = Math.min(...scoredTeams.map(t => t.value));
+      const winners = scoredTeams.filter(t => t.value == best);
+      if (winners.length === 1) {
+        const winner = winners[0].team;
+        counts[winner] = (counts[winner] || 0) + 1;
+        winnersByHole.push({ holeNumber: h.holeNumber, winnerType: 'team', winner });
+      }
+      return;
+    }
+    const scoredPlayers = (h.playerScores || []).map(ps => ({ playerId: ps.playerId, value: getHoleValueForBasis(ps, basis) })).filter(p => Number.isFinite(p.value));
+    if (scoredPlayers.length < 2) return;
+    const best = Math.min(...scoredPlayers.map(p => p.value));
+    const winners = scoredPlayers.filter(p => p.value == best);
+    if (winners.length === 1) {
+      const winner = winners[0].playerId;
+      counts[winner] = (counts[winner] || 0) + 1;
+      winnersByHole.push({ holeNumber: h.holeNumber, winnerType: 'player', winner });
+    }
+  });
+  return { counts, winnersByHole };
+}
+function getGreeniesResults(match, metrics, cfg = {}) {
+  const counts = {};
+  const winnersByHole = [];
+  const participants = new Set((cfg.participants || []).filter(Boolean));
+  Object.entries(match?.greeniesWinners || {}).forEach(([holeNo, winnerId]) => {
+    const hole = (metrics?.tee?.holes || []).find(h => String(h.holeNumber) === String(holeNo));
+    if (!hole || Number(hole.par) !== 3) return;
+    if (!winnerId || (participants.size && !participants.has(winnerId))) return;
+    counts[winnerId] = (counts[winnerId] || 0) + 1;
+    winnersByHole.push({ holeNumber: Number(holeNo), winner: winnerId });
+  });
+  winnersByHole.sort((a,b)=>a.holeNumber-b.holeNumber);
+  return { counts, winnersByHole };
+}
+function formatGolfScoreSymbol(score, par) {
+  if (!Number.isFinite(score)) return '—';
+  const diff = Number(score) - Number(par || 0);
+  const s = String(score);
+  if (diff <= -2) return `◎${s}◎`;
+  if (diff === -1) return `◯${s}◯`;
+  if (diff === 1) return `□${s}□`;
+  if (diff >= 2) return `▣${s}▣`;
+  return s;
+}
 function buildRoundShareText(match) {
   const metrics = computeMatchMetrics(match);
   currentLeaderboardMatchRef = match;
@@ -780,25 +849,26 @@ function computeLivePayoutGames(match, metrics) {
     if (cfg.key === 'skins') {
       const stake = Number(cfg.stake || 0);
       const basisLabel = formatBasisLabel(cfg.basis);
+      const skins = computeSkinResults(match, metrics, cfg);
       if (cfg.skinsType === 'team') {
         const label = `Team Skins (${basisLabel})`;
-        const maxSkins = Math.max(0, ...metrics.teams.map(t => t.skins || 0));
-        const leaders = metrics.teams.filter(t => (t.skins || 0) === maxSkins && maxSkins > 0);
-        if (stake && leaders.length === 1) {
-          const winner = leaders[0].team;
-          const losers = metrics.teams.filter(t => t.team !== winner).map(t => t.team);
-          splitAcrossTeam(amounts, winner, stake * maxSkins * losers.length);
-          losers.forEach(teamNo => splitAcrossTeam(amounts, teamNo, -stake * maxSkins));
+        if (stake) {
+          skins.winnersByHole.forEach(h => {
+            const winner = h.winner;
+            const losers = metrics.teams.filter(t => t.team !== winner).map(t => t.team);
+            splitAcrossTeam(amounts, winner, stake * losers.length);
+            losers.forEach(teamNo => splitAcrossTeam(amounts, teamNo, -stake));
+          });
         }
         pushGame(label);
       } else {
         const label = `Individual Skins (${basisLabel})`;
-        const maxSkins = Math.max(0, ...metrics.players.map(p => p.skins || 0));
-        const leaders = metrics.players.filter(p => (p.skins || 0) === maxSkins && maxSkins > 0);
-        if (stake && leaders.length === 1) {
-          const winner = leaders[0].playerId;
-          const others = metrics.players.filter(p => p.playerId !== winner).map(p => p.playerId);
-          addVsField(amounts, winner, others, stake * maxSkins);
+        if (stake) {
+          skins.winnersByHole.forEach(h => {
+            const winner = h.winner;
+            const others = metrics.players.filter(p => p.playerId !== winner).map(p => p.playerId);
+            addVsField(amounts, winner, others, stake);
+          });
         }
         pushGame(label);
       }
@@ -809,9 +879,9 @@ function computeLivePayoutGames(match, metrics) {
       const stake = Number(cfg.stakePerPlayer || 0);
       const participants = (cfg.participants || []).filter(Boolean);
       if (stake && participants.length > 1) {
-        Object.values(match.greeniesWinners || {}).forEach(winnerId => {
-          if (!participants.includes(winnerId)) return;
-          addVsField(amounts, winnerId, participants.filter(id => id !== winnerId), stake);
+        const greenies = getGreeniesResults(match, metrics, cfg);
+        greenies.winnersByHole.forEach(({ winner }) => {
+          addVsField(amounts, winner, participants.filter(id => id !== winner), stake);
         });
       }
       pushGame(label); return;
@@ -871,7 +941,6 @@ function renderLeaderboard() {
       <td>${p.netTotal || 0}</td>
       <td>${formatSigned(p.toPar || 0)}</td>
       <td>${formatSigned(p.netDiff || 0)}</td>
-      <td>${p.skins}</td>
     </tr>
   `).join('');
 
@@ -1026,13 +1095,24 @@ function buildFeaturedMatchStatus(match, metrics, gameKey) {
   }
   if (gameKey === 'skins') {
     const basis = formatBasisLabel(cfg.basis);
-    const skinText = cfg.skinsType === 'team' ? describeTeamSkinLeader(metrics.teams) : describeSkinLeader(metrics.players);
-    return `<div class="match-status-head"><strong>${escapeHtml(getGameLabel(gameKey))} (${escapeHtml(cfg.skinsType === 'team' ? 'Team' : 'Individual')} · ${escapeHtml(basis)})</strong></div><div class="match-status-tile"><div class="tiny">Leader</div><div class="match-status-value">${skinText}</div></div>`;
+    const skins = computeSkinResults(match, metrics, cfg);
+    if (cfg.skinsType === 'team') {
+      const max = Math.max(0, ...Object.values(skins.counts));
+      const leaders = Object.entries(skins.counts).filter(([,n]) => n === max && max > 0).map(([team,n]) => `${escapeHtml(getTeamLabel(match, Number(team)))} (${n})`).join(', ');
+      const holes = skins.winnersByHole.map(h => `H${h.holeNumber}: ${escapeHtml(getTeamLabel(match, h.winner))}`).join(' · ');
+      return `<div class="match-status-head"><strong>${escapeHtml(getGameLabel(gameKey))} (Team · ${escapeHtml(basis)})</strong></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Leader</div><div class="match-status-value">${leaders || 'None yet'}</div></div><div class="match-status-tile"><div class="tiny">Won on</div><div class="match-status-value">${holes || '—'}</div></div></div>`;
+    }
+    const max = Math.max(0, ...Object.values(skins.counts));
+    const leaders = Object.entries(skins.counts).filter(([,n]) => n === max && max > 0).map(([id,n]) => `${escapeHtml(getPlayer(id)?.name || 'Unknown')} (${n})`).join(', ');
+    const holes = skins.winnersByHole.map(h => `H${h.holeNumber}: ${escapeHtml(getPlayer(h.winner)?.name || 'Unknown')}`).join(' · ');
+    return `<div class="match-status-head"><strong>${escapeHtml(getGameLabel(gameKey))} (Individual · ${escapeHtml(basis)})</strong></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Leader</div><div class="match-status-value">${leaders || 'None yet'}</div></div><div class="match-status-tile"><div class="tiny">Won on</div><div class="match-status-value">${holes || '—'}</div></div></div>`;
   }
   if (gameKey === 'greenies') {
-    const wins = Object.values(match.greeniesWinners || {}).reduce((acc, id) => { acc[id] = (acc[id] || 0) + 1; return acc; }, {});
-    const leaders = Object.entries(wins).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([id,n]) => `${escapeHtml(getPlayer(id)?.name || 'Unknown')} (${n})`).join(', ');
-    return `<div class="match-status-head"><strong>Greenies</strong></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Participants</div><div class="match-status-value">${(cfg.participants || []).length || 0}</div></div><div class="match-status-tile"><div class="tiny">Leader(s)</div><div class="match-status-value">${leaders || 'None yet'}</div></div></div>`;
+    const greenies = getGreeniesResults(match, metrics, cfg);
+    const max = Math.max(0, ...Object.values(greenies.counts));
+    const leaders = Object.entries(greenies.counts).filter(([,n]) => n === max && max > 0).map(([id,n]) => `${escapeHtml(getPlayer(id)?.name || 'Unknown')} (${n})`).join(', ');
+    const holes = greenies.winnersByHole.map(h => `H${h.holeNumber}: ${escapeHtml(getPlayer(h.winner)?.name || 'Unknown')}`).join(' · ');
+    return `<div class="match-status-head"><strong>Greenies</strong></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Participants</div><div class="match-status-value">${(cfg.participants || []).length || 0}</div></div><div class="match-status-tile"><div class="tiny">Leader(s)</div><div class="match-status-value">${leaders || 'None yet'}</div></div><div class="match-status-tile"><div class="tiny">Won on</div><div class="match-status-value">${holes || '—'}</div></div></div>`;
   }
   return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong></div><div class="match-status-tile"><div class="tiny">Status</div><div class="match-status-value">Live</div></div>`;
 }
@@ -1048,7 +1128,7 @@ function buildClassicScorecard(match, metrics) {
   const scorecardMetaRow = (label, extractor) => `<tr><td class="scorecard-sticky-name"><strong>${label}</strong></td><td class="scorecard-sticky-team">Course</td>${holes.map(h => `<td>${extractor(h) ?? '—'}</td>`).join('')}<td><strong>${sum(front.map(extractor)) || '—'}</strong></td><td><strong>${sum(back.map(extractor)) || '—'}</strong></td><td><strong>${sum(holes.map(extractor)) || '—'}</strong></td></tr>`;
   const yardageRow = scorecardMetaRow('Yds', h => Number(h.yardage) || 0);
   const parRow = scorecardMetaRow('Par', h => Number(h.par) || 0);
-  const siRow = scorecardMetaRow('SI', h => Number(h.strokeIndex) || 0);
+  const siRow = scorecardMetaRow('Handicap', h => Number(h.strokeIndex) || 0);
   const dotMarkup = count => count > 0 ? `<span class="score-dots">${'•'.repeat(Math.min(count,3))}${count>3?`<sup>${count}</sup>`:''}</span>` : '';
   const playerRows = metrics.players.map(p => {
     const frontGross = p.scores.slice(0,9).reduce((s,x)=>s+(Number(x.gross)||0),0);
@@ -1070,7 +1150,7 @@ function buildClassicScorecard(match, metrics) {
       const strokes = holeStrokeAllowanceForPlayer(hole.strokeIndex, p.playHdcp, metrics.lowPlaying);
       if (!gross) return `<td><div class="score-main">—</div><div class="score-sub">—${dotMarkup(strokes)}</div></td>`;
       const net = gross - strokes;
-      return `<td><div class="score-main">${gross}</div><div class="score-sub">${net}${dotMarkup(strokes)}</div></td>`;
+      return `<td><div class="score-main">${formatGolfScoreSymbol(gross, hole.par)}</div><div class="score-sub">${formatGolfScoreSymbol(net, hole.par)}${dotMarkup(strokes)}</div></td>`;
     }).join('');
     return `<tr><td class="scorecard-sticky-name"><strong>${escapeHtml(p.player.name)}</strong></td><td class="scorecard-sticky-team">${escapeHtml(getTeamLabel(match,p.team))}</td>${cells}<td><strong>${frontGross}</strong><div class="score-sub total-sub">${frontNet || '—'}</div></td><td><strong>${backGross}</strong><div class="score-sub total-sub">${backNet || '—'}</div></td><td><strong>${p.grossTotal || 0}</strong><div class="score-sub total-sub">${p.netTotal || 0}</div></td></tr>`;
   }).join('');
@@ -1145,19 +1225,40 @@ function buildSelectedGamesSummary(match, metrics) {
       value = formatTeamGameStatus(match, metrics, diffs.overall);
       sub = `Front 9: ${formatTeamGameStatus(match, metrics, diffs.front)} · Back 9: ${formatTeamGameStatus(match, metrics, diffs.back)}`;
     } else if (cfg.key === 'team_stroke') {
-      value = metrics.bestTeam ? `${describeTeamLabel(match, metrics.bestTeam.team, metrics)} (${formatSigned(metrics.bestTeam.netDiff)})` : '—';
-      sub = `Mode: ${formatScoringModeLabel(cfg.scoringMode)}`;
+      const basisKey = String(cfg.basis || 'net').toLowerCase() === 'gross' ? 'toPar' : 'netDiff';
+      const mode = String(cfg.scoringMode || 'best_ball');
+      const scoredTeams = metrics.teams.map(t => {
+        let value;
+        if (mode === 'aggregate') value = basisKey === 'toPar' ? t.toPar : t.netDiff;
+        else {
+          value = (metrics.holeResults || []).reduce((sum,h) => { const v = getTeamHoleScore(h, t.team, cfg.basis, mode); const par = Number(h.par)||0; return sum + (Number.isFinite(v) ? v - par : 0); }, 0);
+        }
+        return { team:t.team, value };
+      }).sort((a,b)=>a.value-b.value);
+      value = scoredTeams[0] ? `${describeTeamLabel(match, scoredTeams[0].team, metrics)} (${formatSigned(scoredTeams[0].value)})` : '—';
+      sub = `Mode: ${formatScoringModeLabel(cfg.scoringMode)} · ${formatBasisLabel(cfg.basis)}`;
     } else if (cfg.key === 'individual_match') {
-      value = metrics.bestPlayerNet ? `${metrics.bestPlayerNet.player.name} (${formatSigned(metrics.bestPlayerNet.netDiff)})` : '—';
+      const basisKey = String(cfg.basis || 'net').toLowerCase() === 'gross' ? 'toPar' : 'netDiff';
+      const leader = metrics.players.slice().sort((a,b)=>(a[basisKey]-b[basisKey])||(a.toPar-b.toPar))[0];
+      value = leader ? `${leader.player.name} (${formatSigned(leader[basisKey])})` : '—';
       sub = 'Leader by selected basis';
     } else if (cfg.key === 'skins') {
-      value = cfg.skinsType === 'team' ? describeTeamSkinLeader(metrics.teams) : describeSkinLeader(metrics.players);
-      sub = cfg.skinsType === 'team' ? 'Team skins leader' : 'Individual skins leader';
+      const skins = computeSkinResults(match, metrics, cfg);
+      if (cfg.skinsType === 'team') {
+        const max = Math.max(0, ...Object.values(skins.counts));
+        value = max > 0 ? Object.entries(skins.counts).filter(([,n])=>n===max).map(([team,n]) => `${getTeamLabel(match, Number(team))} (${n})`).join(', ') : 'None yet';
+      } else {
+        const max = Math.max(0, ...Object.values(skins.counts));
+        value = max > 0 ? Object.entries(skins.counts).filter(([,n])=>n===max).map(([id,n]) => `${getPlayer(id)?.name || 'Unknown'} (${n})`).join(', ') : 'None yet';
+      }
+      const holes = skins.winnersByHole.map(h => `H${h.holeNumber}: ${h.winnerType === 'team' ? getTeamLabel(match, h.winner) : (getPlayer(h.winner)?.name || 'Unknown')}`).join(' · ');
+      sub = holes || 'No skins won yet';
     } else if (cfg.key === 'greenies') {
-      const wins = Object.values(match.greeniesWinners || {}).reduce((acc, id) => { acc[id] = (acc[id] || 0) + 1; return acc; }, {});
-      const leaders = Object.entries(wins).sort((a,b)=>b[1]-a[1]).slice(0,2).map(([id,n]) => `${getPlayer(id)?.name || 'Unknown'} (${n})`).join(', ');
+      const greenies = getGreeniesResults(match, metrics, cfg);
+      const max = Math.max(0, ...Object.values(greenies.counts));
+      const leaders = max > 0 ? Object.entries(greenies.counts).filter(([,n])=>n===max).map(([id,n]) => `${getPlayer(id)?.name || 'Unknown'} (${n})`).join(', ') : '';
       value = leaders || 'No winners yet';
-      sub = `${(cfg.participants || []).length || 0} participant(s)`;
+      sub = greenies.winnersByHole.map(h => `H${h.holeNumber}: ${getPlayer(h.winner)?.name || 'Unknown'}`).join(' · ') || `${(cfg.participants || []).length || 0} participant(s)`;
     }
     return `<div class="game-summary-card"><div class="game-summary-title">${escapeHtml(title)}</div><div class="game-summary-value">${escapeHtml(value)}</div>${sub ? `<div class="game-summary-sub">${escapeHtml(sub)}</div>` : ''}</div>`;
   });

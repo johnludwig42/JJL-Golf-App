@@ -177,7 +177,7 @@ function computeSkinResults(match, metrics, cfg = {}) {
       winnersByHole.push({ holeNumber: h.holeNumber, winnerType: 'player', winner });
     }
   });
-  return { counts, winnersByHole, winnerType: isTeam ? 'team' : 'player' };
+  return { counts, winnersByHole };
 }
 function getGreeniesResults(match, metrics, cfg = {}) {
   const counts = {};
@@ -191,24 +191,7 @@ function getGreeniesResults(match, metrics, cfg = {}) {
     winnersByHole.push({ holeNumber: Number(holeNo), winner: winnerId });
   });
   winnersByHole.sort((a,b)=>a.holeNumber-b.holeNumber);
-  return { counts, winnersByHole, winnerType: isTeam ? 'team' : 'player' };
-}
-
-function listSkinsWinnerSummary(match, skins) {
-  const entries = Object.entries(skins?.counts || {});
-  if (!entries.length) return 'No skins won yet';
-  return entries
-    .sort((a, b) => Number(b[1]) - Number(a[1]) || String(a[0]).localeCompare(String(b[0])))
-    .map(([winner, count]) => `${skins.winnerType === 'team' ? getTeamLabel(match, Number(winner)) : (getPlayer(winner)?.name || 'Unknown')} (${count})`)
-    .join(' · ');
-}
-function listGreeniesWinnerSummary(match, greenies) {
-  const entries = Object.entries(greenies?.counts || {});
-  if (!entries.length) return 'No winners yet';
-  return entries
-    .sort((a, b) => Number(b[1]) - Number(a[1]) || String(a[0]).localeCompare(String(b[0])))
-    .map(([winner, count]) => `${getPlayer(winner)?.name || 'Unknown'} (${count})`)
-    .join(' · ');
+  return { counts, winnersByHole };
 }
 function formatGolfScoreSymbol(score, par) {
   if (!Number.isFinite(score)) return '—';
@@ -950,7 +933,8 @@ function renderLeaderboard() {
   empty.classList.add('hidden');
   wrap.classList.remove('hidden');
 
-  playerBody.innerHTML = metrics.players.slice().sort((a, b) => a.netDiff - b.netDiff || a.toPar - b.toPar).map(p => `
+  const sortedPlayers = metrics.players.slice().sort((a, b) => a.netDiff - b.netDiff || a.toPar - b.toPar);
+  playerBody.innerHTML = sortedPlayers.map(p => `
     <tr>
       <td>${escapeHtml(p.player.name)}</td>
       <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
@@ -960,6 +944,20 @@ function renderLeaderboard() {
       <td>${formatSigned(p.netDiff || 0)}</td>
     </tr>
   `).join('');
+  const playerMobile = document.getElementById('playerLeaderboardMobile');
+  if (playerMobile) {
+    playerMobile.innerHTML = sortedPlayers.map(p => `
+      <div class="leader-mobile-card">
+        <div><strong>${escapeHtml(p.player.name)}</strong> <span class="tiny">· ${escapeHtml(getTeamLabel(match, p.team))}</span></div>
+        <div class="leader-mobile-grid">
+          <div><div class="leader-mobile-label">Gross</div><div>${p.grossTotal || 0}</div></div>
+          <div><div class="leader-mobile-label">Net</div><div>${p.netTotal || 0}</div></div>
+          <div><div class="leader-mobile-label">Gross to Par</div><div>${formatSigned(p.toPar || 0)}</div></div>
+          <div><div class="leader-mobile-label">Net to Par</div><div>${formatSigned(p.netDiff || 0)}</div></div>
+        </div>
+      </div>
+    `).join('');
+  }
 
   teamBody.innerHTML = metrics.teams.map(t => `
     <tr>
@@ -972,6 +970,22 @@ function renderLeaderboard() {
       <td>${formatSigned(t.overall)}</td>
     </tr>
   `).join('');
+  const teamMobile = document.getElementById('teamLeaderboardMobile');
+  if (teamMobile) {
+    teamMobile.innerHTML = metrics.teams.map(t => `
+      <div class="leader-mobile-card">
+        <div><strong>${escapeHtml(getTeamLabel(match, t.team))}</strong></div>
+        <div class="tiny">${escapeHtml(t.members.map(m => m.player.name).join(', '))}</div>
+        <div class="leader-mobile-grid">
+          <div><div class="leader-mobile-label">Gross</div><div>${t.grossTotal}</div></div>
+          <div><div class="leader-mobile-label">Net</div><div>${t.netTotal}</div></div>
+          <div><div class="leader-mobile-label">To Par</div><div>${formatSigned(t.toPar)}</div></div>
+          <div><div class="leader-mobile-label">Net Diff</div><div>${formatSigned(t.netDiff)}</div></div>
+          <div><div class="leader-mobile-label">Match</div><div>${formatSigned(t.overall)}</div></div>
+        </div>
+      </div>
+    `).join('');
+  }
 
   const statusOptions = getMatchStatusOptions(match);
   if (matchStatusGameSelect) {
@@ -1114,19 +1128,22 @@ function buildFeaturedMatchStatus(match, metrics, gameKey) {
     const basis = formatBasisLabel(cfg.basis);
     const skins = computeSkinResults(match, metrics, cfg);
     if (cfg.skinsType === 'team') {
-      const summary = listSkinsWinnerSummary(match, skins);
+      const max = Math.max(0, ...Object.values(skins.counts));
+      const leaders = Object.entries(skins.counts).filter(([,n]) => n === max && max > 0).map(([team,n]) => `${escapeHtml(getTeamLabel(match, Number(team)))} (${n})`).join(', ');
       const holes = skins.winnersByHole.map(h => `H${h.holeNumber}: ${escapeHtml(getTeamLabel(match, h.winner))}`).join(' · ');
-      return `<div class="match-status-head"><strong>${escapeHtml(getGameLabel(gameKey))} (Team · ${escapeHtml(basis)})</strong></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Winners</div><div class="match-status-value">${summary}</div></div><div class="match-status-tile"><div class="tiny">Won on</div><div class="match-status-value">${holes || '—'}</div></div></div>`;
+      return `<div class="match-status-head"><strong>${escapeHtml(getGameLabel(gameKey))} (Team · ${escapeHtml(basis)})</strong></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Leader</div><div class="match-status-value">${leaders || 'None yet'}</div></div><div class="match-status-tile"><div class="tiny">Won on</div><div class="match-status-value">${holes || '—'}</div></div></div>`;
     }
-    const summary = listSkinsWinnerSummary(match, skins);
+    const max = Math.max(0, ...Object.values(skins.counts));
+    const leaders = Object.entries(skins.counts).filter(([,n]) => n === max && max > 0).map(([id,n]) => `${escapeHtml(getPlayer(id)?.name || 'Unknown')} (${n})`).join(', ');
     const holes = skins.winnersByHole.map(h => `H${h.holeNumber}: ${escapeHtml(getPlayer(h.winner)?.name || 'Unknown')}`).join(' · ');
-    return `<div class="match-status-head"><strong>${escapeHtml(getGameLabel(gameKey))} (Individual · ${escapeHtml(basis)})</strong></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Winners</div><div class="match-status-value">${summary}</div></div><div class="match-status-tile"><div class="tiny">Won on</div><div class="match-status-value">${holes || '—'}</div></div></div>`;
+    return `<div class="match-status-head"><strong>${escapeHtml(getGameLabel(gameKey))} (Individual · ${escapeHtml(basis)})</strong></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Leader</div><div class="match-status-value">${leaders || 'None yet'}</div></div><div class="match-status-tile"><div class="tiny">Won on</div><div class="match-status-value">${holes || '—'}</div></div></div>`;
   }
   if (gameKey === 'greenies') {
     const greenies = getGreeniesResults(match, metrics, cfg);
-    const summary = listGreeniesWinnerSummary(match, greenies);
+    const max = Math.max(0, ...Object.values(greenies.counts));
+    const leaders = Object.entries(greenies.counts).filter(([,n]) => n === max && max > 0).map(([id,n]) => `${escapeHtml(getPlayer(id)?.name || 'Unknown')} (${n})`).join(', ');
     const holes = greenies.winnersByHole.map(h => `H${h.holeNumber}: ${escapeHtml(getPlayer(h.winner)?.name || 'Unknown')}`).join(' · ');
-    return `<div class="match-status-head"><strong>Greenies</strong></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Participants</div><div class="match-status-value">${(cfg.participants || []).length || 0}</div></div><div class="match-status-tile"><div class="tiny">Winners</div><div class="match-status-value">${summary}</div></div><div class="match-status-tile"><div class="tiny">Won on</div><div class="match-status-value">${holes || '—'}</div></div></div>`;
+    return `<div class="match-status-head"><strong>Greenies</strong></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Participants</div><div class="match-status-value">${(cfg.participants || []).length || 0}</div></div><div class="match-status-tile"><div class="tiny">Leader(s)</div><div class="match-status-value">${leaders || 'None yet'}</div></div><div class="match-status-tile"><div class="tiny">Won on</div><div class="match-status-value">${holes || '—'}</div></div></div>`;
   }
   return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong></div><div class="match-status-tile"><div class="tiny">Status</div><div class="match-status-value">Live</div></div>`;
 }
@@ -1143,7 +1160,7 @@ function buildClassicScorecard(match, metrics) {
   const yardageRow = scorecardMetaRow('Yds', h => Number(h.yardage) || 0);
   const parRow = scorecardMetaRow('Par', h => Number(h.par) || 0);
   const siRow = scorecardMetaRow('Handicap', h => Number(h.strokeIndex) || 0);
-  const dotMarkup = count => count > 0 ? `<div class="score-dots-row"><span class="score-dots">${'•'.repeat(Math.min(count,3))}${count>3?`<sup>${count}</sup>`:''}</span></div>` : '<div class="score-dots-row">&nbsp;</div>';
+  const dotMarkup = count => count > 0 ? `<span class="score-dots">${'•'.repeat(Math.min(count,3))}${count>3?`<sup>${count}</sup>`:''}</span>` : '';
   const playerRows = metrics.players.map(p => {
     const frontGross = p.scores.slice(0,9).reduce((s,x)=>s+(Number(x.gross)||0),0);
     const backGross = p.scores.slice(9,18).reduce((s,x)=>s+(Number(x.gross)||0),0);
@@ -1162,13 +1179,13 @@ function buildClassicScorecard(match, metrics) {
     const cells = holes.map((hole, idx) => {
       const gross = Number(p.scores[idx]?.gross) || null;
       const strokes = holeStrokeAllowanceForPlayer(hole.strokeIndex, p.playHdcp, metrics.lowPlaying);
-      if (!gross) return `<td><div class="score-main">—</div><div class="score-sub">—</div>${dotMarkup(strokes)}</td>`;
+      if (!gross) return `<td><div class="score-main">—</div><div class="score-sub">—${dotMarkup(strokes)}</div></td>`;
       const net = gross - strokes;
-      return `<td><div class="score-main">${formatGolfScoreSymbol(gross, hole.par)}</div><div class="score-sub">${formatGolfScoreSymbol(net, hole.par)}</div>${dotMarkup(strokes)}</td>`;
+      return `<td><div class="score-main">${formatGolfScoreSymbol(gross, hole.par)}</div><div class="score-sub">${formatGolfScoreSymbol(net, hole.par)}${dotMarkup(strokes)}</div></td>`;
     }).join('');
     return `<tr><td class="scorecard-sticky-name"><strong>${escapeHtml(p.player.name)}</strong></td><td class="scorecard-sticky-team">${escapeHtml(getTeamLabel(match,p.team))}</td>${cells}<td><strong>${frontGross}</strong><div class="score-sub total-sub">${frontNet || '—'}</div></td><td><strong>${backGross}</strong><div class="score-sub total-sub">${backNet || '—'}</div></td><td><strong>${p.grossTotal || 0}</strong><div class="score-sub total-sub">${p.netTotal || 0}</div></td></tr>`;
   }).join('');
-  return `<div class="scorecard-sub tiny">Per-hole cells show gross on top, net below, and dots for strokes received. Course rows include yardage, par, and handicap.</div><div class="scorecard-wrap"><table class="scorecard-table"><thead><tr><th class="scorecard-sticky-name">Player</th><th class="scorecard-sticky-team">Team</th>${holeHeader}<th>Out</th><th>In</th><th>Total</th></tr></thead><tbody>${yardageRow}${parRow}${siRow}${playerRows}</tbody></table></div>`;
+  return `<div class="scorecard-sub tiny">Per-hole cells show gross on top and net below, with notation wrapped around the score and dots for strokes received. Course rows include yardage, par, and handicap.</div><div class="scorecard-wrap"><table class="scorecard-table"><thead><tr><th class="scorecard-sticky-name">Player</th><th class="scorecard-sticky-team">Team</th>${holeHeader}<th>Out</th><th>In</th><th>Total</th></tr></thead><tbody>${yardageRow}${parRow}${siRow}${playerRows}</tbody></table></div>`;
 }
 
 function buildNetPayoutSummary(match, metrics) {
@@ -1258,12 +1275,23 @@ function buildSelectedGamesSummary(match, metrics) {
       sub = 'Leader by selected basis';
     } else if (cfg.key === 'skins') {
       const skins = computeSkinResults(match, metrics, cfg);
-      value = listSkinsWinnerSummary(match, skins);
+      const entries = Object.entries(skins.counts || {});
+      if (cfg.skinsType === 'team') {
+        value = entries.length
+          ? entries.sort((a,b)=>b[1]-a[1] || Number(a[0])-Number(b[0])).map(([team,n]) => `${getTeamLabel(match, Number(team))} (${n})`).join(' · ')
+          : 'None yet';
+      } else {
+        value = entries.length
+          ? entries.sort((a,b)=>b[1]-a[1]).map(([id,n]) => `${getPlayer(id)?.name || 'Unknown'} (${n})`).join(' · ')
+          : 'None yet';
+      }
       const holes = skins.winnersByHole.map(h => `H${h.holeNumber}: ${h.winnerType === 'team' ? getTeamLabel(match, h.winner) : (getPlayer(h.winner)?.name || 'Unknown')}`).join(' · ');
       sub = holes || 'No skins won yet';
     } else if (cfg.key === 'greenies') {
       const greenies = getGreeniesResults(match, metrics, cfg);
-      value = listGreeniesWinnerSummary(match, greenies);
+      const max = Math.max(0, ...Object.values(greenies.counts));
+      const leaders = max > 0 ? Object.entries(greenies.counts).filter(([,n])=>n===max).map(([id,n]) => `${getPlayer(id)?.name || 'Unknown'} (${n})`).join(', ') : '';
+      value = leaders || 'No winners yet';
       sub = greenies.winnersByHole.map(h => `H${h.holeNumber}: ${getPlayer(h.winner)?.name || 'Unknown'}`).join(' · ') || `${(cfg.participants || []).length || 0} participant(s)`;
     }
     return `<div class="game-summary-card"><div class="game-summary-title">${escapeHtml(title)}</div><div class="game-summary-value">${escapeHtml(value)}</div>${sub ? `<div class="game-summary-sub">${escapeHtml(sub)}</div>` : ''}</div>`;

@@ -202,6 +202,16 @@
             <div id="gameConfigs" class="top-gap"></div>
           </div>
 
+          <div class="span-2 card inset-card handicap-preview-card">
+            <div class="item-header compact-item-header">
+              <div>
+                <div class="section-label">Handicap preview</div>
+                <div class="tiny">Course handicap, playing handicap, and strokes received for the selected course / tee.</div>
+              </div>
+            </div>
+            <div id="setupHandicapPreview" class="top-gap"></div>
+          </div>
+
           <div class="actions span-2">
             <button id="matchSubmitBtn" type="submit">Create Match</button>
             <button id="cancelMatchEditBtn" type="button" class="secondary hidden">Cancel</button>
@@ -261,7 +271,7 @@
     <section id="leaderboard" class="panel">
       <div id="leaderboardWrap" class="hidden">
         <div class="leaderboard-cards">
-          <div class="card tight-card">
+          <div class="card tight-card scoreboard-card">
             <div class="item-header compact-item-header">
               <div>
                 <h2>Match status</h2>
@@ -274,13 +284,13 @@
             </div>
             <div id="matchStatusSummary" class="result compact-result"></div>
           </div>
-          <div class="card tight-card">
+          <div class="card tight-card scoreboard-card">
             <h2>Games summary</h2>
             <div id="gamesSummary" class="result compact-result"></div>
           </div>
         </div>
 
-        <div class="card tight-card">
+        <div class="card tight-card scoreboard-card">
           <h2>Player leaderboard</h2>
           <div class="leader-table-wrap">
             <table class="leader-table">
@@ -300,7 +310,7 @@
           </div>
         </div>
 
-        <div class="card tight-card">
+        <div class="card tight-card scoreboard-card">
           <h2>Team leaderboard</h2>
           <div class="leader-table-wrap">
             <table class="leader-table">
@@ -320,7 +330,7 @@
           </div>
         </div>
 
-        <div class="card tight-card">
+        <div class="card tight-card scoreboard-card">
           <div class="item-header compact-item-header">
             <div>
               <h2>Hole-by-hole momentum</h2>
@@ -340,12 +350,12 @@
           <div id="holeMomentum" class="hole-momentum"></div>
         </div>
 
-        <div class="card tight-card">
+        <div class="card tight-card scoreboard-card">
           <h2>Classic scorecard</h2>
           <div id="classicScorecard" class="top-gap"></div>
         </div>
 
-        <div class="card tight-card">
+        <div class="card tight-card scoreboard-card">
           <h2>Net payout</h2>
           <div id="payoutSummary" class="result compact-result"></div>
         </div>

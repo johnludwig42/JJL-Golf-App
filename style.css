@@ -432,3 +432,37 @@ body.keyboard-open .top-tabs{
 .total-sub{justify-content:center}
 .score-dots{color:#0b5d3b;letter-spacing:1px;font-weight:700}
 @media (max-width:760px){.match-status-grid{grid-template-columns:1fr}.game-summary-grid{grid-template-columns:1fr}.momentum-controls{grid-template-columns:repeat(2,minmax(0,1fr))}.brand-wrap{align-items:flex-start}}
+
+
+.scoreboard-stack{display:grid;gap:12px}
+.scoreboard-section-title{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.scoreboard-section-title .tiny{max-width:42ch}
+.handicap-preview-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.handicap-preview-cardline{border:1px solid var(--border);border-radius:12px;padding:10px;background:#fff}
+.handicap-preview-name{font-weight:700;font-size:13px;margin-bottom:4px}
+.handicap-preview-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;font-size:12px}
+.handicap-preview-meta span{display:block}
+.leader-mobile-cards{display:none}
+.leader-mobile-card{border:1px solid var(--border);border-radius:12px;padding:10px;background:#fbfdfc;display:grid;gap:6px}
+.leader-mobile-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;font-size:12px}
+.leader-mobile-label{color:var(--muted);font-size:11px}
+.scoreboard-card{scroll-margin-top:96px}
+@media (max-width:760px){
+  .app-header{padding-bottom:6px}
+  .sub{display:none}
+  .leaderboard-cards{grid-template-columns:1fr;gap:12px}
+  #leaderboardWrap{display:grid;gap:12px}
+  .leader-table-wrap{border-radius:14px}
+  .leader-table{min-width:640px}
+  .leader-table th,.leader-table td{padding:8px 8px;font-size:11px}
+  .handicap-preview-grid{grid-template-columns:1fr}
+  .handicap-preview-meta{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .scoreboard-stack{gap:10px}
+  .scoreboard-card{padding:12px}
+  #leaderboard .card h2{font-size:15px}
+  #leaderboard .inline-select{flex-direction:row;align-items:center;gap:6px;flex-wrap:wrap}
+  #leaderboard .inline-select span{margin-bottom:0}
+  #leaderboard .inline-select select{min-width:0;flex:1 1 160px}
+  .match-status-grid{grid-template-columns:1fr}
+  .game-summary-grid{grid-template-columns:1fr}
+}

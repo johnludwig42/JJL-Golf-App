@@ -426,6 +426,54 @@ function computeMatchMetrics(match) {
   };
 }
 
+function renderSetupHandicapPreview() {
+  const wrap = document.getElementById('setupHandicapPreview');
+  if (!wrap) return;
+  const courseId = document.getElementById('matchCourseSelect')?.value || '';
+  const teeId = document.getElementById('matchTeeSelect')?.value || '';
+  const allowance = Number(document.querySelector('#matchForm [name="allowance"]')?.value || 100) || 100;
+  const course = getCourse(courseId);
+  const tee = getTee(courseId, teeId);
+  const selected = Array.from(document.querySelectorAll('[data-player-slot]'))
+    .map((el, idx) => ({ playerId: el.value || '', team: Number(el.dataset.slotTeam) || 1, slot: idx }))
+    .filter(p => p.playerId)
+    .filter((p, idx, arr) => arr.findIndex(x => x.playerId === p.playerId) === idx);
+  if (!course || !tee) {
+    wrap.innerHTML = '<div class="tiny">Select a course and tee to preview course handicaps and strokes received.</div>';
+    return;
+  }
+  if (!selected.length) {
+    wrap.innerHTML = '<div class="tiny">Select at least one player to preview course handicap, playing handicap, and strokes received.</div>';
+    return;
+  }
+  const enriched = selected.map(sp => {
+    const player = getPlayer(sp.playerId);
+    if (!player) return null;
+    const ch = courseHandicap(player.index, tee.slope, tee.rating, tee.par);
+    const ph = playingHandicap(ch, allowance);
+    return { player, team: sp.team, courseHdcp: ch, playHdcp: ph, strokes: ph };
+  }).filter(Boolean);
+  if (!enriched.length) {
+    wrap.innerHTML = '<div class="tiny">No valid players selected.</div>';
+    return;
+  }
+  const lowPlaying = Math.min(...enriched.map(p => p.playHdcp));
+  wrap.innerHTML = `
+    <div class="tiny">${escapeHtml(course.name)} · ${escapeHtml(tee.teeName)} · Allowance ${allowance}%</div>
+    <div class="handicap-preview-grid top-gap">${enriched.map(row => {
+      const teamLabel = getTeamLabel({ teamNames: Array.from(document.querySelectorAll('[data-team-name]')).map(el => el.value || '') }, row.team);
+      const strokes = Math.max(0, row.playHdcp - lowPlaying);
+      return `<div class="handicap-preview-cardline">
+        <div class="handicap-preview-name">${escapeHtml(row.player.name)} <span class="tiny">· ${escapeHtml(teamLabel)}</span></div>
+        <div class="handicap-preview-meta">
+          <div><span class="tiny">Course</span><strong>${row.courseHdcp}</strong></div>
+          <div><span class="tiny">Playing</span><strong>${row.playHdcp}</strong></div>
+          <div><span class="tiny">Gets</span><strong>${strokes}</strong></div>
+        </div>
+      </div>`;
+    }).join('')}</div>`;
+}
+
 function renderAll() {
   renderPlayers();
   renderCourses();
@@ -1621,18 +1669,19 @@ function installHandlers() {
     activateTab('setup');
   });
 
-  document.getElementById('matchCourseSelect').addEventListener('change', e => populateMatchTees(e.target.value));
+  document.getElementById('matchCourseSelect').addEventListener('change', e => { populateMatchTees(e.target.value); renderSetupHandicapPreview(); });
   document.getElementById('teamCountSelect').addEventListener('change', () => {
     const teamCount = Number(document.getElementById('teamCountSelect').value || 2);
     const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map(el => ({ playerId: el.value }));
     renderTeamNameInputs(teamCount, Array.from(document.querySelectorAll('[data-team-name]')).map(el => el.value));
     populateMatchPlayerPicker(currentSelections);
     renderGamesPicker(collectSelectedGames());
+    renderSetupHandicapPreview();
   });
-  document.getElementById('playersPerTeamSelect').addEventListener('change', () => { const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map(el => ({ playerId: el.value })); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); });
-  document.getElementById('teamNamesGrid').addEventListener('input', () => { const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map(el => ({ playerId: el.value })); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); });
+  document.getElementById('playersPerTeamSelect').addEventListener('change', () => { const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map(el => ({ playerId: el.value })); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
+  document.getElementById('teamNamesGrid').addEventListener('input', () => { const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map(el => ({ playerId: el.value })); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
   document.getElementById('matchPlayersPicker').addEventListener('change', e => {
-    if (e.target.matches('[data-player-slot]')) { populateMatchPlayerPicker(Array.from(document.querySelectorAll('[data-player-slot]')).map(el => ({ playerId: el.value }))); renderGamesPicker(collectSelectedGames()); }
+    if (e.target.matches('[data-player-slot]')) { populateMatchPlayerPicker(Array.from(document.querySelectorAll('[data-player-slot]')).map(el => ({ playerId: el.value }))); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); }
   });
   document.getElementById('gamesPicker').addEventListener('change', e => {
     if (!e.target.matches('[data-game-key]')) return;

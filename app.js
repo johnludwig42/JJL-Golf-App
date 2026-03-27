@@ -498,15 +498,32 @@ function computeMatchMetrics(match) {
 function renderSetupHandicapPreview() {
   const wrap = document.getElementById('setupHandicapPreview');
   if (!wrap) return;
-  const courseId = document.getElementById('matchCourseSelect')?.value || '';
-  const teeId = document.getElementById('matchTeeSelect')?.value || '';
-  const allowance = Number(document.querySelector('#matchForm [name="allowance"]')?.value || 100) || 100;
-  const course = getCourse(courseId);
-  const tee = getTee(courseId, teeId);
-  const selected = Array.from(document.querySelectorAll('[data-player-slot]'))
+  let courseId = document.getElementById('matchCourseSelect')?.value || '';
+  let teeId = document.getElementById('matchTeeSelect')?.value || '';
+  let allowance = Number(document.querySelector('#matchForm [name="allowance"]')?.value || 100) || 100;
+  let selected = Array.from(document.querySelectorAll('[data-player-slot]'))
     .map((el, idx) => ({ playerId: el.value || '', team: Number(el.dataset.slotTeam) || 1, slot: idx }))
     .filter(p => p.playerId)
     .filter((p, idx, arr) => arr.findIndex(x => x.playerId === p.playerId) === idx);
+  let teamNames = Array.from(document.querySelectorAll('[data-team-name]')).map(el => el.value || '');
+
+  const fallbackMatch = editingMatchId ? getMatch(editingMatchId) : (getActiveMatch() || null);
+  if ((!courseId || !teeId || !selected.length) && fallbackMatch) {
+    courseId = courseId || fallbackMatch.courseId || '';
+    teeId = teeId || fallbackMatch.teeId || '';
+    allowance = Number(allowance || fallbackMatch.allowance || 100) || 100;
+    if (!selected.length && Array.isArray(fallbackMatch.players)) {
+      selected = fallbackMatch.players
+        .map((p, idx) => ({ playerId: p.playerId, team: Number(p.team) || 1, slot: idx }))
+        .filter(p => p.playerId);
+    }
+    if (!teamNames.length && Array.isArray(fallbackMatch.teamNames)) {
+      teamNames = fallbackMatch.teamNames.slice();
+    }
+  }
+
+  const course = getCourse(courseId);
+  const tee = getTee(courseId, teeId);
   if (!course || !tee) {
     wrap.innerHTML = '<div class="tiny">Select a course and tee to preview course handicaps and strokes received.</div>';
     return;
@@ -530,7 +547,7 @@ function renderSetupHandicapPreview() {
   wrap.innerHTML = `
     <div class="tiny">${escapeHtml(course.name)} · ${escapeHtml(tee.teeName)} · Allowance ${allowance}%</div>
     <div class="handicap-preview-grid top-gap">${enriched.map(row => {
-      const teamLabel = getTeamLabel({ teamNames: Array.from(document.querySelectorAll('[data-team-name]')).map(el => el.value || '') }, row.team);
+      const teamLabel = getTeamLabel({ teamNames }, row.team);
       const strokes = Math.max(0, row.playHdcp - lowPlaying);
       return `<div class="handicap-preview-cardline">
         <div class="handicap-preview-name">${escapeHtml(row.player.name)} <span class="tiny">· ${escapeHtml(teamLabel)}</span></div>
@@ -542,6 +559,7 @@ function renderSetupHandicapPreview() {
       </div>`;
     }).join('')}</div>`;
 }
+
 
 function renderAll() {
   renderPlayers();
@@ -939,8 +957,8 @@ function renderLeaderboard() {
       <td>${escapeHtml(p.player.name)}</td>
       <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
       <td>${p.grossTotal || 0}</td>
-      <td>${p.netTotal || 0}</td>
       <td>${formatSigned(p.toPar || 0)}</td>
+      <td>${p.netTotal || 0}</td>
       <td>${formatSigned(p.netDiff || 0)}</td>
     </tr>
   `).join('');
@@ -951,8 +969,8 @@ function renderLeaderboard() {
         <div><strong>${escapeHtml(p.player.name)}</strong> <span class="tiny">· ${escapeHtml(getTeamLabel(match, p.team))}</span></div>
         <div class="leader-mobile-grid">
           <div><div class="leader-mobile-label">Gross</div><div>${p.grossTotal || 0}</div></div>
-          <div><div class="leader-mobile-label">Net</div><div>${p.netTotal || 0}</div></div>
           <div><div class="leader-mobile-label">Gross to Par</div><div>${formatSigned(p.toPar || 0)}</div></div>
+          <div><div class="leader-mobile-label">Net</div><div>${p.netTotal || 0}</div></div>
           <div><div class="leader-mobile-label">Net to Par</div><div>${formatSigned(p.netDiff || 0)}</div></div>
         </div>
       </div>

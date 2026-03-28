@@ -776,3 +776,17 @@ body.keyboard-open .top-tabs{
     page-break-before: auto;
   }
 }
+
+#notesBox{min-height:140px;resize:vertical}
+@media print {
+  body.printing-scorecard #leaderboard .print-section-match-status,
+  body.printing-scorecard #leaderboard .print-section-scoreboard-summary,
+  body.printing-scorecard #leaderboard .print-section-momentum,
+  body.printing-scorecard #leaderboard .print-section-classic-scorecard,
+  body.printing-scorecard #leaderboard .print-section-payout,
+  body.printing-scorecard #leaderboard .payout-section,
+  body.printing-scorecard #leaderboard .game-summary-card {
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+  }
+}

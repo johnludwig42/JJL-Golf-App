@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v20.6';
+const APP_VERSION = 'v20.7';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -34,6 +34,7 @@ function getSideMatchConfigs(match) {
     id: row.id || uid(),
     playerAId: row.playerAId || row.team1PlayerId || '',
     playerBId: row.playerBId || row.team2PlayerId || '',
+    game: String(row.game || row.gameKey || cfg.game || 'nassau').toLowerCase(),
     basis: String(row.basis || cfg.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net',
     stake: Number(row.stake ?? cfg.stake ?? 5) || 0,
   })).filter(row => row.playerAId && row.playerBId && row.playerAId !== row.playerBId);
@@ -43,6 +44,17 @@ function getSideMatchConfigs(match) {
 function getSideMatchStatusText(pairing) {
   if (!pairing || !Number.isFinite(pairing.diff) || pairing.diff === 0) return 'AS';
   return `${pairing.leaderName} ${Math.abs(pairing.diff)} up`;
+}
+
+function getSideMatchGameOptions() {
+  return [
+    { key: 'nassau', label: 'Nassau' },
+    { key: 'team_match', label: 'Match Play' },
+    { key: 'team_stroke', label: 'Stroke Play' },
+  ];
+}
+function getSideMatchGameLabel(gameKey = 'nassau') {
+  return (getSideMatchGameOptions().find(opt => opt.key === gameKey) || {}).label || 'Nassau';
 }
 function formatBasisLabel(basis, fallback = 'Net') {
   const value = String(basis || fallback).toLowerCase();
@@ -101,7 +113,7 @@ function toast(message, ms = 2200) {
   toast._timer = setTimeout(() => el.classList.add('hidden'), ms);
 }
 function loadState() {
-  const fallback = { players: [], courses: [], matches: [], activeMatchId: null };
+  const fallback = { players: [], courses: [], matches: [], activeMatchId: null, notes: '' };
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
       || localStorage.getItem('golf-matchbook-v9')
@@ -113,6 +125,7 @@ function loadState() {
     const parsed = raw ? JSON.parse(raw) : fallback;
     parsed.matches = Array.isArray(parsed.matches) ? parsed.matches : [];
     parsed.activeMatchId = parsed.activeMatchId || null;
+    parsed.notes = typeof parsed.notes === 'string' ? parsed.notes : '';
     return parsed;
   } catch {
     return fallback;
@@ -187,6 +200,14 @@ function formatMoneyAccounting(amount) {
 }
 function getFeaturedGameLabel(match, gameKey) {
   const cfg = (match.selectedGames || []).find(g => g.key === gameKey) || {};
+  if (gameKey === 'individual_match') {
+    const matchups = Array.isArray(cfg.matchups) ? cfg.matchups : [];
+    if (matchups.length === 1) {
+      const row = matchups[0] || {};
+      return `${getGameLabel(gameKey)} (${getSideMatchGameLabel(row.game || 'nassau')} · ${formatBasisLabel(row.basis, 'Net')})`;
+    }
+    return `${getGameLabel(gameKey)} (${matchups.length || 0})`;
+  }
   const basis = gameKey === "greenies" ? "Event" : formatBasisLabel(cfg.basis, "Net");
   const mode = gameKey === "team_match" ? " · Best Ball" : (cfg.scoringMode ? ` · ${formatScoringModeLabel(cfg.scoringMode)}` : "");
   return `${getGameLabel(gameKey)} (${basis}${mode})`;
@@ -476,6 +497,7 @@ function normalizeState() {
   state.players = Array.isArray(state.players) ? state.players : [];
   state.courses = Array.isArray(state.courses) ? state.courses : [];
   state.matches = Array.isArray(state.matches) ? state.matches : [];
+  state.notes = typeof state.notes === 'string' ? state.notes : '';
   state.players.forEach(p => {
     p.id = p.id || uid();
     p.name = p.name || '';
@@ -667,6 +689,8 @@ function renderSetupHandicapPreview() {
   if (!wrap) return;
   let courseId = document.getElementById('matchCourseSelect')?.value || '';
   let teeId = document.getElementById('matchTeeSelect')?.value || '';
+  const allowance = Number(document.querySelector('#matchForm [name="allowance"]')?.value || 100) || 100;
+  const teamNames = Array.from(document.querySelectorAll('[data-team-name]')).map(el => el.value || '');
   const selected = Array.from(document.querySelectorAll('[data-player-slot]'))
     .map((el, idx) => ({ playerId: el.value || '', team: Number(el.dataset.slotTeam) || 1, slot: idx, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || teeId || '' }))
     .filter(p => p.playerId);
@@ -691,7 +715,7 @@ function renderSetupHandicapPreview() {
     if (!player || !playerTee) return null;
     const ch = courseHandicap(player.index, playerTee.slope, playerTee.rating, playerTee.par);
     const ph = playingHandicap(ch, allowance);
-    return { player, team: sp.team, tee: playerTee, courseHdcp: ch, playHdcp: ph, strokes: ph };
+    return { player, team: sp.team, tee: playerTee, courseHdcp: ch, playHdcp: ph };
   }).filter(Boolean);
   if (!enriched.length) {
     wrap.innerHTML = '<div class="tiny">No valid players selected.</div>';
@@ -699,7 +723,7 @@ function renderSetupHandicapPreview() {
   }
   const lowPlaying = Math.min(...enriched.map(p => p.playHdcp));
   wrap.innerHTML = `
-    <div class="tiny">${escapeHtml(course.name)} · ${escapeHtml(tee.teeName)} · Allowance ${allowance}%</div>
+    <div class="tiny">${escapeHtml(course.name)} · Allowance ${allowance}% · Strokes received are versus the low playing handicap in the match.</div>
     <div class="handicap-preview-grid top-gap">${enriched.map(row => {
       const teamLabel = getTeamLabel({ teamNames }, row.team);
       const strokes = Math.max(0, row.playHdcp - lowPlaying);
@@ -747,85 +771,76 @@ function getIndividualMatchPairings(match, metrics) {
   if (!match || !metrics) return [];
   const holes = Array.isArray(metrics.holeResults) ? metrics.holeResults : [];
   const configured = getSideMatchConfigs(match);
-  if (configured.length) {
-    return configured.map((row, idx) => {
-      const pa = metrics.players.find(p => p.playerId === row.playerAId);
-      const pb = metrics.players.find(p => p.playerId === row.playerBId);
-      if (!pa || !pb) return null;
-      let diff = 0;
-      holes.forEach((hole, holeIdx) => {
-        const sgA = Number(pa.scores[holeIdx]?.gross) || null;
-        const sgB = Number(pb.scores[holeIdx]?.gross) || null;
-        if (!sgA || !sgB) return;
-        let scoreA = sgA, scoreB = sgB;
-        if (row.basis !== 'gross') {
-          const strokesA = holeStrokeAllowanceForPlayer(hole.strokeIndex, pa.playHdcp, metrics.lowPlaying);
-          const strokesB = holeStrokeAllowanceForPlayer(hole.strokeIndex, pb.playHdcp, metrics.lowPlaying);
-          scoreA = sgA - strokesA;
-          scoreB = sgB - strokesB;
-        }
-        if (scoreA < scoreB) diff += 1;
-        else if (scoreB < scoreA) diff -= 1;
-      });
-      const leaderName = diff === 0 ? '' : (diff > 0 ? pa.player.name : pb.player.name);
-      return {
-        id: row.id || `side_${idx + 1}`,
-        label: `${pa.player.name} vs ${pb.player.name}`,
-        team1Player: pa,
-        team2Player: pb,
-        playerA: pa,
-        playerB: pb,
-        diff,
-        basis: row.basis,
-        stake: Number(row.stake) || 0,
-        leaderName,
-        status: diff === 0 ? 'AS' : `${leaderName} ${Math.abs(diff)} up`
-      };
-    }).filter(Boolean);
-  }
-  if (metrics.teams?.length !== 2) return [];
-  const team1 = (match.players || []).filter(p => Number(p.team) === 1).sort((a,b)=>(Number(a.slot)||0)-(Number(b.slot)||0));
-  const team2 = (match.players || []).filter(p => Number(p.team) === 2).sort((a,b)=>(Number(a.slot)||0)-(Number(b.slot)||0));
-  const count = Math.min(team1.length, team2.length);
-  const basis = String(((match.selectedGames||[]).find(g=>g.key==='individual_match')||{}).basis || 'net').toLowerCase();
-  const pairings = [];
-  for (let i=0;i<count;i++) {
-    const a = team1[i], b = team2[i];
-    const pa = metrics.players.find(p => p.playerId === a.playerId);
-    const pb = metrics.players.find(p => p.playerId === b.playerId);
-    if (!pa || !pb) continue;
+  if (!configured.length) return [];
+  return configured.map((row, idx) => {
+    const pa = metrics.players.find(p => p.playerId === row.playerAId);
+    const pb = metrics.players.find(p => p.playerId === row.playerBId);
+    if (!pa || !pb) return null;
+    const game = String(row.game || 'nassau').toLowerCase();
     let diff = 0;
-    holes.forEach((hole, idx) => {
-      const sgA = Number(pa.scores[idx]?.gross) || null;
-      const sgB = Number(pb.scores[idx]?.gross) || null;
-      if (!sgA || !sgB) return;
-      let scoreA = sgA, scoreB = sgB;
-      if (basis !== 'gross') {
-        const strokesA = holeStrokeAllowanceForPlayer(hole.strokeIndex, pa.playHdcp, metrics.lowPlaying);
-        const strokesB = holeStrokeAllowanceForPlayer(hole.strokeIndex, pb.playHdcp, metrics.lowPlaying);
-        scoreA = sgA - strokesA;
-        scoreB = sgB - strokesB;
+    let front = 0;
+    let back = 0;
+    let skinsA = 0;
+    let skinsB = 0;
+    let totalA = 0;
+    let totalB = 0;
+    holes.forEach((hole, holeIdx) => {
+      const scoreAObj = hole.playerScores.find(ps => ps.playerId === pa.playerId);
+      const scoreBObj = hole.playerScores.find(ps => ps.playerId === pb.playerId);
+      const grossA = Number(scoreAObj?.gross) || null;
+      const grossB = Number(scoreBObj?.gross) || null;
+      if (!grossA || !grossB) return;
+      const useNet = String(row.basis || 'net').toLowerCase() !== 'gross';
+      const scoreA = useNet ? Number(scoreAObj?.net) : grossA;
+      const scoreB = useNet ? Number(scoreBObj?.net) : grossB;
+      if (!Number.isFinite(scoreA) || !Number.isFinite(scoreB)) return;
+      if (game === 'team_stroke') {
+        totalA += scoreA;
+        totalB += scoreB;
+        return;
       }
-      if (scoreA < scoreB) diff += 1;
-      else if (scoreB < scoreA) diff -= 1;
+      if (scoreA < scoreB) {
+        diff += 1;
+        if ((Number(hole.holeNumber) || 0) <= 9) front += 1; else back += 1;
+        skinsA += 1;
+      } else if (scoreB < scoreA) {
+        diff -= 1;
+        if ((Number(hole.holeNumber) || 0) <= 9) front -= 1; else back -= 1;
+        skinsB += 1;
+      }
     });
+    if (game === 'team_stroke') {
+      diff = totalA === totalB ? 0 : (totalA < totalB ? 1 : -1);
+    }
     const leaderName = diff === 0 ? '' : (diff > 0 ? pa.player.name : pb.player.name);
-    pairings.push({
-      id: `side_${i + 1}`,
+    const status = game === 'nassau'
+      ? `Front ${front === 0 ? 'AS' : `${front > 0 ? pa.player.name : pb.player.name} ${Math.abs(front)} up`} · Back ${back === 0 ? 'AS' : `${back > 0 ? pa.player.name : pb.player.name} ${Math.abs(back)} up`} · 18 ${diff === 0 ? 'AS' : `${leaderName} ${Math.abs(diff)} up`}`
+      : game === 'team_stroke'
+        ? (diff === 0 ? 'Tied' : `${leaderName} leads by ${Math.abs(totalA - totalB)}`)
+        : (diff === 0 ? 'AS' : `${leaderName} ${Math.abs(diff)} up`);
+    return {
+      id: row.id || `side_${idx + 1}`,
       label: `${pa.player.name} vs ${pb.player.name}`,
       team1Player: pa,
       team2Player: pb,
       playerA: pa,
       playerB: pb,
       diff,
-      basis,
-      stake: Number(((match.selectedGames||[]).find(g=>g.key==='individual_match')||{}).stake || 0),
+      front,
+      back,
+      totalA,
+      totalB,
+      skinsA,
+      skinsB,
+      game,
+      basis: row.basis,
+      stake: Number(row.stake) || 0,
       leaderName,
-      status: diff === 0 ? 'AS' : `${leaderName} ${Math.abs(diff)} up`
-    });
-  }
-  return pairings;
+      status
+    };
+  }).filter(Boolean);
 }
+
 
 function getMatchStatusOptions(match) {
   const selected = getOrderedSelectedGames(match);
@@ -877,7 +892,7 @@ function buildFeaturedMatchStatus(match, metrics, gameKey) {
     if (!pairings.length) {
       return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-tile"><div class="tiny">Status</div><div class="match-status-value">Select side-match players in setup</div></div>`;
     }
-    return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid">${pairings.map(p => `<div class="match-status-tile"><div class="tiny">${escapeHtml(p.label)} · ${escapeHtml(formatBasisLabel(p.basis))}</div><div class="match-status-value">${escapeHtml(getSideMatchStatusText(p))}</div></div>`).join('')}</div>`;
+    return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid">${pairings.map(p => `<div class="match-status-tile"><div class="tiny">${escapeHtml(p.label)} · ${escapeHtml(getSideMatchGameLabel(p.game))} · ${escapeHtml(formatBasisLabel(p.basis))}</div><div class="match-status-value">${escapeHtml(p.status)}</div></div>`).join('')}</div>`;
   }
   if (gameKey === 'skins') {
     const basis = formatBasisLabel(cfg.basis);
@@ -950,6 +965,7 @@ function buildClassicScorecard(match, metrics) {
     const totals = back.length
       ? `<td><strong>${frontGross}</strong><div class="score-sub total-sub">${frontNet || '—'}</div></td><td><strong>${backGross}</strong><div class="score-sub total-sub">${backNet || '—'}</div></td><td><strong>${p.grossTotal || 0}</strong><div class="score-sub total-sub">${p.netTotal || 0}</div></td>`
       : `<td><strong>${frontGross}</strong><div class="score-sub total-sub">${frontNet || '—'}</div></td><td><strong>${p.grossTotal || 0}</strong><div class="score-sub total-sub">${p.netTotal || 0}</div></td>`;
+    const playerTeeName = p.tee?.teeName || tee?.teeName || 'Tee';
     return `<tr><td class="scorecard-sticky-name"><strong>${escapeHtml(p.player.name)}</strong><div class="tiny">Tee: ${escapeHtml(playerTeeName)}</div></td><td class="scorecard-sticky-team">${escapeHtml(getTeamLabel(match,p.team))}</td>${cells}${totals}</tr>`;
   }).join('');
   const teeLegend = metrics.players.map(p => `${p.player.name}: ${p.tee?.teeName || tee?.teeName || 'Tee'}`).join(' · ');
@@ -1172,7 +1188,9 @@ function renderAll() {
   preserveMatchSetupUi();
   renderSetupHandicapPreview();
   const versionEl = document.getElementById('appVersionLabel'); if (versionEl) versionEl.textContent = APP_VERSION;
+  const notesBox = document.getElementById('notesBox'); if (notesBox && notesBox.value !== state.notes) notesBox.value = state.notes || '';
 }
+
 
 function renderPlayers() {
   const el = document.getElementById('playersList');
@@ -1513,7 +1531,22 @@ function computeLivePayoutGames(match, metrics) {
       const pairings = getIndividualMatchPairings(match, metrics);
       pairings.forEach(p => {
         const stake = Number(p.stake || 0);
-        if (!stake || !Number.isFinite(p.diff) || p.diff === 0) return;
+        if (!stake) return;
+        if (p.game === 'nassau') {
+          const awards = [p.front, p.back, p.diff];
+          awards.forEach(diff => {
+            if (!diff) return;
+            if (diff > 0) {
+              amounts[p.playerA.playerId] = (amounts[p.playerA.playerId] || 0) + stake;
+              amounts[p.playerB.playerId] = (amounts[p.playerB.playerId] || 0) - stake;
+            } else {
+              amounts[p.playerA.playerId] = (amounts[p.playerA.playerId] || 0) - stake;
+              amounts[p.playerB.playerId] = (amounts[p.playerB.playerId] || 0) + stake;
+            }
+          });
+          return;
+        }
+        if (!Number.isFinite(p.diff) || p.diff === 0) return;
         if (p.diff > 0) {
           amounts[p.playerA.playerId] = (amounts[p.playerA.playerId] || 0) + stake;
           amounts[p.playerB.playerId] = (amounts[p.playerB.playerId] || 0) - stake;
@@ -1522,7 +1555,7 @@ function computeLivePayoutGames(match, metrics) {
           amounts[p.playerB.playerId] = (amounts[p.playerB.playerId] || 0) + stake;
         }
       });
-      const sideLabel = pairings.length === 1 ? `${pairings[0].label} (${formatBasisLabel(pairings[0].basis)})` : `Head-to-Head Side Matches (${pairings.length})`;
+      const sideLabel = pairings.length === 1 ? `${pairings[0].label} (${getSideMatchGameLabel(pairings[0].game)} · ${formatBasisLabel(pairings[0].basis)})` : `Head-to-Head Side Matches (${pairings.length})`;
       pushGame(cfg.key, sideLabel, amounts, 'side'); return;
     }
     pushGame(cfg.key, getGameLabel(cfg.key), {});
@@ -1802,6 +1835,7 @@ function renderGamesPicker(existing = []) {
         <div class="game-config-header"><div class="section-label">Greenies</div><div class="tiny">Par-3 closest to the pin</div></div>
         <div class="grid two compact-grid top-gap">
           <label class="span-2"><span>Participants</span>
+            <div class="actions wrap compact-actions top-gap"><button type="button" class="secondary" id="greeniesSelectAllBtn">Select All Players</button><button type="button" class="secondary" id="greeniesClearAllBtn">Clear</button></div>
             <div class="greenies-list">${getCurrentAssignablePlayers().map(p => `<label class="mini-check"><input type="checkbox" data-greenie-player="${p.id}" ${(cfg.participants || []).includes(p.id) ? 'checked' : ''} /> ${escapeHtml(p.name)}</label>`).join('') || '<div class="tiny">Select match players first.</div>'}</div>
           </label>
           <label><span>$ / player / par 3</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stakePerPlayer" value="${cfg.stakePerPlayer ?? 1}" /></label>
@@ -1809,7 +1843,7 @@ function renderGamesPicker(existing = []) {
       </div>`;
     }
     if (game.key === 'individual_match') {
-      const rows = Array.isArray(cfg.matchups) && cfg.matchups.length ? cfg.matchups : [{ id: uid(), playerAId: '', playerBId: '', basis: 'net', stake: 5 }];
+      const rows = Array.isArray(cfg.matchups) && cfg.matchups.length ? cfg.matchups : [{ id: uid(), playerAId: '', playerBId: '', game: 'nassau', basis: 'net', stake: 5 }];
       const players = getCurrentAssignablePlayers();
       return `<div class="card inset-card game-config-card">
         <div class="game-config-header"><div class="section-label">Head-to-Head Side Matches</div><div class="tiny">Separate from the team payout total. Configure one or more player-vs-player side bets.</div></div>
@@ -1818,6 +1852,7 @@ function renderGamesPicker(existing = []) {
             <div class="tiny"><strong>Side match ${idx + 1}</strong></div>
             <label><span>Player A</span><select data-side-field="playerAId"><option value="">Select player</option>${players.map(p => `<option value="${p.id}" ${p.id === row.playerAId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}</select></label>
             <label><span>Player B</span><select data-side-field="playerBId"><option value="">Select player</option>${players.map(p => `<option value="${p.id}" ${p.id === row.playerBId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}</select></label>
+            <label><span>Game</span><select data-side-field="game">${getSideMatchGameOptions().map(opt => `<option value="${opt.key}" ${String(row.game || 'nassau') === opt.key ? 'selected' : ''}>${escapeHtml(opt.label)}</option>`).join('')}</select></label>
             <label><span>Basis</span><select data-side-field="basis"><option value="gross" ${row.basis === 'gross' ? 'selected' : ''}>Gross</option><option value="net" ${row.basis !== 'gross' ? 'selected' : ''}>Net</option></select></label>
             <label><span>$ Stake</span><input type="number" step="0.01" data-side-field="stake" value="${Number(row.stake ?? 5) || 0}" /></label>
             <div class="side-match-row-actions"><button type="button" class="secondary" data-remove-side-match="${row.id}">Remove</button></div>
@@ -1855,6 +1890,7 @@ function collectSelectedGames() {
         id: row.dataset.sideMatchRow || uid(),
         playerAId: row.querySelector('[data-side-field="playerAId"]')?.value || '',
         playerBId: row.querySelector('[data-side-field="playerBId"]')?.value || '',
+        game: row.querySelector('[data-side-field="game"]')?.value || 'nassau',
         basis: row.querySelector('[data-side-field="basis"]')?.value || 'net',
         stake: row.querySelector('[data-side-field="stake"]')?.value || '0',
       })).filter(row => allowed.has(row.playerAId) && allowed.has(row.playerBId) && row.playerAId && row.playerBId && row.playerAId !== row.playerBId);
@@ -2407,11 +2443,19 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
   document.getElementById('setup').addEventListener('click', e => {
+    if (e.target.id === 'greeniesSelectAllBtn') {
+      document.querySelectorAll('[data-greenie-player]').forEach(el => { el.checked = true; });
+      return;
+    }
+    if (e.target.id === 'greeniesClearAllBtn') {
+      document.querySelectorAll('[data-greenie-player]').forEach(el => { el.checked = false; });
+      return;
+    }
     if (e.target.id === 'addSideMatchBtn') {
       const games = collectSelectedGames();
       const cfg = games.find(g => g.key === 'individual_match') || { key: 'individual_match', matchups: [] };
       cfg.matchups = Array.isArray(cfg.matchups) ? cfg.matchups : [];
-      cfg.matchups.push({ id: uid(), playerAId: '', playerBId: '', basis: 'net', stake: 5 });
+      cfg.matchups.push({ id: uid(), playerAId: '', playerBId: '', game: 'nassau', basis: 'net', stake: 5 });
       const others = games.filter(g => g.key !== 'individual_match');
       renderGamesPicker(normalizeSelectedGamesOrder([...others, cfg]));
       return;
@@ -2422,7 +2466,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       const cfg = games.find(g => g.key === 'individual_match');
       if (!cfg) return;
       cfg.matchups = (cfg.matchups || []).filter(row => row.id !== removeId);
-      if (!cfg.matchups.length) cfg.matchups = [{ id: uid(), playerAId: '', playerBId: '', basis: 'net', stake: 5 }];
+      if (!cfg.matchups.length) cfg.matchups = [{ id: uid(), playerAId: '', playerBId: '', game: 'nassau', basis: 'net', stake: 5 }];
       const others = games.filter(g => g.key !== 'individual_match');
       renderGamesPicker(normalizeSelectedGamesOrder([...others, cfg]));
     }
@@ -2539,6 +2583,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const match = getActiveMatch(); if (!match || !finishConfirmArmed) return;
     match.status = 'complete'; match.completedAt = new Date().toISOString(); state.activeMatchId = null; persist(); toast('Round marked complete.');
   });
+
+  const notesBox = document.getElementById('notesBox');
+  if (notesBox) notesBox.addEventListener('input', e => { state.notes = e.target.value || ''; persist({ skipRender: true }); });
 
   document.getElementById('exportBtn').addEventListener('click', exportJson);
   document.getElementById('importFile').addEventListener('change', async e => {

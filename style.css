@@ -283,6 +283,7 @@ code { background: #edf2ef; padding: 2px 6px; border-radius: 6px; }
 .inset-card{background:#f7faf8;border:1px solid #d9e6df;border-radius:14px;padding:10px}
 .assignment-grid,.games-picker{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .picker-row-stack{display:flex;flex-direction:column;align-items:stretch;gap:4px}
+.player-tee-select{display:grid;gap:4px}.player-tee-select select{font-size:12px}
 .game-pill{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #d9e6df;border-radius:999px;background:#fff}
 .game-pill.selected{border-color:#0b5d3b;background:#eef7f2}
 .greenies-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
@@ -687,10 +688,15 @@ body.keyboard-open .top-tabs{
   body.printing-scorecard.printing-classic-only #matchStatusGameSelect,
   body.printing-scorecard.printing-classic-only .inline-select,
   body.printing-scorecard.printing-classic-only .item-header.compact-item-header > .actions,
-  body.printing-scorecard.printing-classic-only .card.tight-card.scoreboard-card:not(:has(#classicScorecard)) {
+  body.printing-scorecard.printing-classic-only .scoreboard-card.print-section-match-status,
+  body.printing-scorecard.printing-classic-only .scoreboard-card.print-section-momentum,
+  body.printing-scorecard.printing-classic-only .scoreboard-card.print-section-export,
+  body.printing-scorecard.printing-classic-only .scoreboard-card.print-section-scoreboard-summary,
+  body.printing-scorecard.printing-classic-only .scoreboard-collapsible,
+  body.printing-scorecard.printing-classic-only .leaderboard-cards {
     display:none !important;
   }
-  body.printing-scorecard.printing-classic-only .card.tight-card.scoreboard-card:has(#classicScorecard) {
+  body.printing-scorecard.printing-classic-only .scoreboard-card.print-section-classic-scorecard {
     display:block !important;
     border:none !important;
     box-shadow:none !important;

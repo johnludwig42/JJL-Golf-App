@@ -1,12 +1,12 @@
 # The Dye Ledger
 
-Version: v20
+Version: v20.1
 
 Baseline: v19
 
 This build focuses on scoring accuracy and payout validation.
 
-Updates in v20:
+Updates in v20.1:
 - validates Nassau and payout calculations with no carryovers and no presses
 - improves team stroke play winner logic for best-ball and aggregate scoring
 - improves individual match play payout logic by matchup

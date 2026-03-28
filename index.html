@@ -168,7 +168,7 @@
           <label><span>Match date</span><input name="date" type="date" required /></label>
           <label><span>Match name</span><input class="input-match" name="name" placeholder="Saturday game" /></label>
           <label><span>Course</span><select name="courseId" id="matchCourseSelect" required></select></label>
-          <label><span>Tee</span><select name="teeId" id="matchTeeSelect" required></select></label>
+          <label class="hidden"><span>Reference tee</span><select name="teeId" id="matchTeeSelect"></select></label>
           <label><span>Match length</span>
             <select name="holeCount" id="holeCountSelect">
               <option value="9">9 holes</option>
@@ -201,7 +201,7 @@
           <div class="span-2 card inset-card">
             <div class="item-header">
               <div class="section-label">Player assignments</div>
-              <div id="assignmentSummary" class="tiny">Choose teams first.</div>
+              <div id="assignmentSummary" class="tiny">Choose teams first. Each player will have a tee selection.</div>
             </div>
             <div id="matchPlayersPicker" class="assignment-grid top-gap"></div>
           </div>
@@ -304,7 +304,7 @@
           </div>
         </div>
         <div class="leaderboard-cards">
-          <div class="card tight-card scoreboard-card">
+          <div class="card tight-card scoreboard-card print-section-match-status">
             <div class="item-header compact-item-header">
               <div>
                 <h2>Match status</h2>
@@ -389,7 +389,7 @@
           <div id="classicScorecard" class="top-gap"></div>
         </div>
 
-        <details class="card tight-card scoreboard-card scoreboard-collapsible">
+        <details class="card tight-card scoreboard-card scoreboard-collapsible print-section-payout">
           <summary><h2>Net payout</h2></summary>
           <div id="payoutSummary" class="result compact-result top-gap"></div>
         </details>

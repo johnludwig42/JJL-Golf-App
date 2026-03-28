@@ -746,3 +746,33 @@ body.keyboard-open .top-tabs{
   body.printing-scorecard { background:#fff !important; }
   body.printing-scorecard main { padding:0 !important; }
 }
+
+.hidden{display:none !important}
+.side-match-config-list{display:grid;gap:10px}
+.side-match-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:10px;align-items:end;padding:10px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.55)}
+.side-match-row .tiny{grid-column:1/-1}
+.side-match-row-actions{display:flex;align-items:end}
+@media (max-width:760px){
+  .side-match-row{grid-template-columns:1fr 1fr}
+  .side-match-row-actions,.side-match-row .tiny{grid-column:1/-1}
+}
+@media print {
+  body.printing-scorecard .leaderboard-cards,
+  body.printing-scorecard .scoreboard-card,
+  body.printing-scorecard .payout-section,
+  body.printing-scorecard .scorecard-wrap,
+  body.printing-scorecard .game-summary-card,
+  body.printing-scorecard .match-status-grid,
+  body.printing-scorecard .match-status-tile{
+    break-inside: avoid-page;
+    page-break-inside: avoid;
+  }
+  body.printing-scorecard .print-section-match-status,
+  body.printing-scorecard .print-section-momentum,
+  body.printing-scorecard .print-section-classic-scorecard,
+  body.printing-scorecard .print-section-scoreboard-summary,
+  body.printing-scorecard .print-section-payout{
+    break-before: auto;
+    page-break-before: auto;
+  }
+}

@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v20.4';
+const APP_VERSION = 'v20.6';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -12,6 +12,37 @@ const GAME_LIBRARY = [
 const GAME_LABELS = Object.fromEntries(GAME_LIBRARY.map(g => [g.key, g.label]));
 function getGameLabel(key) {
   return GAME_LABELS[key] || key;
+}
+
+function normalizeSelectedGamesOrder(games = []) {
+  const ordered = Array.isArray(games) ? games.slice() : [];
+  ordered.sort((a, b) => {
+    const aSide = a?.key === 'individual_match' ? 1 : 0;
+    const bSide = b?.key === 'individual_match' ? 1 : 0;
+    if (aSide !== bSide) return aSide - bSide;
+    return 0;
+  });
+  return ordered;
+}
+function getOrderedSelectedGames(match) {
+  return normalizeSelectedGamesOrder(Array.isArray(match?.selectedGames) ? match.selectedGames : []);
+}
+function getSideMatchConfigs(match) {
+  const cfg = (Array.isArray(match?.selectedGames) ? match.selectedGames : []).find(g => g.key === 'individual_match') || {};
+  const rows = Array.isArray(cfg.matchups) ? cfg.matchups : [];
+  const normalized = rows.map(row => ({
+    id: row.id || uid(),
+    playerAId: row.playerAId || row.team1PlayerId || '',
+    playerBId: row.playerBId || row.team2PlayerId || '',
+    basis: String(row.basis || cfg.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net',
+    stake: Number(row.stake ?? cfg.stake ?? 5) || 0,
+  })).filter(row => row.playerAId && row.playerBId && row.playerAId !== row.playerBId);
+  if (normalized.length) return normalized;
+  return [];
+}
+function getSideMatchStatusText(pairing) {
+  if (!pairing || !Number.isFinite(pairing.diff) || pairing.diff === 0) return 'AS';
+  return `${pairing.leaderName} ${Math.abs(pairing.diff)} up`;
 }
 function formatBasisLabel(basis, fallback = 'Net') {
   const value = String(basis || fallback).toLowerCase();
@@ -636,32 +667,18 @@ function renderSetupHandicapPreview() {
   if (!wrap) return;
   let courseId = document.getElementById('matchCourseSelect')?.value || '';
   let teeId = document.getElementById('matchTeeSelect')?.value || '';
-  let allowance = Number(document.querySelector('#matchForm [name="allowance"]')?.value || 100) || 100;
-  let selected = Array.from(document.querySelectorAll('[data-player-slot]'))
+  const selected = Array.from(document.querySelectorAll('[data-player-slot]'))
     .map((el, idx) => ({ playerId: el.value || '', team: Number(el.dataset.slotTeam) || 1, slot: idx, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || teeId || '' }))
-    .filter(p => p.playerId)
-    .filter((p, idx, arr) => arr.findIndex(x => x.playerId === p.playerId) === idx);
-  let teamNames = Array.from(document.querySelectorAll('[data-team-name]')).map(el => el.value || '');
-
-  const fallbackMatch = editingMatchId ? getMatch(editingMatchId) : (getActiveMatch() || null);
-  if ((!courseId || !teeId || !selected.length) && fallbackMatch) {
+    .filter(p => p.playerId);
+  const fallbackMatch = editingMatchId ? getMatch(editingMatchId) : getActiveMatch();
+  if ((!courseId || !selected.length) && fallbackMatch) {
     courseId = courseId || fallbackMatch.courseId || '';
-    teeId = teeId || fallbackMatch.teeId || '';
-    allowance = Number(allowance || fallbackMatch.allowance || 100) || 100;
-    if (!selected.length && Array.isArray(fallbackMatch.players)) {
-      selected = fallbackMatch.players
-        .map((p, idx) => ({ playerId: p.playerId, team: Number(p.team) || 1, slot: idx, teeId: p.teeId || fallbackMatch.teeId || '' }))
-        .filter(p => p.playerId);
-    }
-    if (!teamNames.length && Array.isArray(fallbackMatch.teamNames)) {
-      teamNames = fallbackMatch.teamNames.slice();
-    }
   }
-
+  teeId = teeId || selected.find(sp => sp.teeId)?.teeId || fallbackMatch?.teeId || '';
   const course = getCourse(courseId);
   const tee = getTee(courseId, teeId);
   if (!course || !tee) {
-    wrap.innerHTML = '<div class="tiny">Select a course and tee to preview course handicaps and strokes received.</div>';
+    wrap.innerHTML = '<div class="tiny">Select a course and each player tee to preview course handicaps and strokes received.</div>';
     return;
   }
   if (!selected.length) {
@@ -727,11 +744,49 @@ function formatTeamGameStatus(match, metrics, diff) {
 }
 
 function getIndividualMatchPairings(match, metrics) {
-  if (!match || !metrics || metrics.teams?.length !== 2) return [];
+  if (!match || !metrics) return [];
+  const holes = Array.isArray(metrics.holeResults) ? metrics.holeResults : [];
+  const configured = getSideMatchConfigs(match);
+  if (configured.length) {
+    return configured.map((row, idx) => {
+      const pa = metrics.players.find(p => p.playerId === row.playerAId);
+      const pb = metrics.players.find(p => p.playerId === row.playerBId);
+      if (!pa || !pb) return null;
+      let diff = 0;
+      holes.forEach((hole, holeIdx) => {
+        const sgA = Number(pa.scores[holeIdx]?.gross) || null;
+        const sgB = Number(pb.scores[holeIdx]?.gross) || null;
+        if (!sgA || !sgB) return;
+        let scoreA = sgA, scoreB = sgB;
+        if (row.basis !== 'gross') {
+          const strokesA = holeStrokeAllowanceForPlayer(hole.strokeIndex, pa.playHdcp, metrics.lowPlaying);
+          const strokesB = holeStrokeAllowanceForPlayer(hole.strokeIndex, pb.playHdcp, metrics.lowPlaying);
+          scoreA = sgA - strokesA;
+          scoreB = sgB - strokesB;
+        }
+        if (scoreA < scoreB) diff += 1;
+        else if (scoreB < scoreA) diff -= 1;
+      });
+      const leaderName = diff === 0 ? '' : (diff > 0 ? pa.player.name : pb.player.name);
+      return {
+        id: row.id || `side_${idx + 1}`,
+        label: `${pa.player.name} vs ${pb.player.name}`,
+        team1Player: pa,
+        team2Player: pb,
+        playerA: pa,
+        playerB: pb,
+        diff,
+        basis: row.basis,
+        stake: Number(row.stake) || 0,
+        leaderName,
+        status: diff === 0 ? 'AS' : `${leaderName} ${Math.abs(diff)} up`
+      };
+    }).filter(Boolean);
+  }
+  if (metrics.teams?.length !== 2) return [];
   const team1 = (match.players || []).filter(p => Number(p.team) === 1).sort((a,b)=>(Number(a.slot)||0)-(Number(b.slot)||0));
   const team2 = (match.players || []).filter(p => Number(p.team) === 2).sort((a,b)=>(Number(a.slot)||0)-(Number(b.slot)||0));
   const count = Math.min(team1.length, team2.length);
-  const holes = Array.isArray(metrics.holeResults) ? metrics.holeResults : [];
   const basis = String(((match.selectedGames||[]).find(g=>g.key==='individual_match')||{}).basis || 'net').toLowerCase();
   const pairings = [];
   for (let i=0;i<count;i++) {
@@ -754,18 +809,26 @@ function getIndividualMatchPairings(match, metrics) {
       if (scoreA < scoreB) diff += 1;
       else if (scoreB < scoreA) diff -= 1;
     });
+    const leaderName = diff === 0 ? '' : (diff > 0 ? pa.player.name : pb.player.name);
     pairings.push({
+      id: `side_${i + 1}`,
+      label: `${pa.player.name} vs ${pb.player.name}`,
       team1Player: pa,
       team2Player: pb,
+      playerA: pa,
+      playerB: pb,
       diff,
-      status: diff === 0 ? 'AS' : diff > 0 ? `${Math.abs(diff)} Up` : `${Math.abs(diff)} Down`
+      basis,
+      stake: Number(((match.selectedGames||[]).find(g=>g.key==='individual_match')||{}).stake || 0),
+      leaderName,
+      status: diff === 0 ? 'AS' : `${leaderName} ${Math.abs(diff)} up`
     });
   }
   return pairings;
 }
 
 function getMatchStatusOptions(match) {
-  const selected = Array.isArray(match?.selectedGames) ? match.selectedGames : [];
+  const selected = getOrderedSelectedGames(match);
   if (!selected.length) return [];
   return selected.map(g => ({ key: g.key, label: getGameLabel(g.key) }));
 }
@@ -811,11 +874,10 @@ function buildFeaturedMatchStatus(match, metrics, gameKey) {
   }
   if (gameKey === 'individual_match') {
     const pairings = getIndividualMatchPairings(match, metrics);
-    const basis = formatBasisLabel(cfg.basis);
     if (!pairings.length) {
-      return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine} · ${escapeHtml(basis)}</div></div><div class="match-status-tile"><div class="tiny">Status</div><div class="match-status-value">Waiting for pairings</div></div>`;
+      return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-tile"><div class="tiny">Status</div><div class="match-status-value">Select side-match players in setup</div></div>`;
     }
-    return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine} · ${escapeHtml(basis)}</div></div><div class="match-status-grid">${pairings.map(p => `<div class="match-status-tile"><div class="tiny">${escapeHtml(p.team1Player.player.name)} vs ${escapeHtml(p.team2Player.player.name)}</div><div class="match-status-value">${escapeHtml(p.status)}</div></div>`).join('')}</div>`;
+    return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid">${pairings.map(p => `<div class="match-status-tile"><div class="tiny">${escapeHtml(p.label)} · ${escapeHtml(formatBasisLabel(p.basis))}</div><div class="match-status-value">${escapeHtml(getSideMatchStatusText(p))}</div></div>`).join('')}</div>`;
   }
   if (gameKey === 'skins') {
     const basis = formatBasisLabel(cfg.basis);
@@ -888,13 +950,14 @@ function buildClassicScorecard(match, metrics) {
     const totals = back.length
       ? `<td><strong>${frontGross}</strong><div class="score-sub total-sub">${frontNet || '—'}</div></td><td><strong>${backGross}</strong><div class="score-sub total-sub">${backNet || '—'}</div></td><td><strong>${p.grossTotal || 0}</strong><div class="score-sub total-sub">${p.netTotal || 0}</div></td>`
       : `<td><strong>${frontGross}</strong><div class="score-sub total-sub">${frontNet || '—'}</div></td><td><strong>${p.grossTotal || 0}</strong><div class="score-sub total-sub">${p.netTotal || 0}</div></td>`;
-    return `<tr><td class="scorecard-sticky-name"><strong>${escapeHtml(p.player.name)}</strong></td><td class="scorecard-sticky-team">${escapeHtml(getTeamLabel(match,p.team))}</td>${cells}${totals}</tr>`;
+    return `<tr><td class="scorecard-sticky-name"><strong>${escapeHtml(p.player.name)}</strong><div class="tiny">Tee: ${escapeHtml(playerTeeName)}</div></td><td class="scorecard-sticky-team">${escapeHtml(getTeamLabel(match,p.team))}</td>${cells}${totals}</tr>`;
   }).join('');
-  return `<div class="scorecard-sub tiny">Per-hole cells show gross on top and net below, with notation wrapped around the score and dots for strokes received. Course rows include yardage, par, and handicap.</div><div class="scorecard-wrap"><table class="scorecard-table"><thead><tr><th class="scorecard-sticky-name">Player</th><th class="scorecard-sticky-team">Team</th>${holeHeader}${totalColumns}</tr></thead><tbody>${yardageRow}${parRow}${siRow}${playerRows}</tbody></table></div>`;
+  const teeLegend = metrics.players.map(p => `${p.player.name}: ${p.tee?.teeName || tee?.teeName || 'Tee'}`).join(' · ');
+  return `<div class="scorecard-sub tiny">Per-hole cells show gross on top and net below, with notation wrapped around the score and dots for strokes received. Course rows include yardage, par, and handicap. Player tees: ${escapeHtml(teeLegend)}</div><div class="scorecard-wrap"><table class="scorecard-table"><thead><tr><th class="scorecard-sticky-name">Player</th><th class="scorecard-sticky-team">Team</th>${holeHeader}${totalColumns}</tr></thead><tbody>${yardageRow}${parRow}${siRow}${playerRows}</tbody></table></div>`;
 }
 
 function buildNetPayoutSummary(match, metrics) {
-  const selected = Array.isArray(match.selectedGames) ? match.selectedGames : [];
+  const selected = getOrderedSelectedGames(match);
   if (!selected.length) return '<div><strong>Net payout (live):</strong> No gambling games selected.</div>';
   const games = computeLivePayoutGames(match, metrics);
   const players = metrics.players.map(p => ({ id: p.playerId, name: p.player.name }));
@@ -1231,7 +1294,12 @@ function renderCurrentMatch() {
   document.getElementById('currentHoleBadge').textContent = `Hole ${currentHole}`;
   const hole = tee?.holes[currentHole - 1];
   const teamText = metrics?.teams?.length === 2 ? `${formatMatchDiff(metrics.matchDiff, match)} overall` : 'Singles leaderboard';
-  document.getElementById('holeSummary').textContent = hole ? `Par ${hole.par || '-'} · ${hole.yardage ? formatYardageValue(hole.yardage) : '-'} yds · SI ${hole.strokeIndex || '-'} · ${teamText}` : '';
+  const teeYardages = hole ? [...new Map((metrics?.players || []).map(p => {
+    const playerHole = getPlayerHole(match, p, currentHole - 1, tee) || hole;
+    const key = `${p.tee?.id || p.teeId || ''}|${playerHole?.yardage || ''}`;
+    return [key, `${p.tee?.teeName || tee?.teeName || 'Tee'} ${playerHole?.yardage ? `${formatYardageValue(playerHole.yardage)} yds` : '— yds'}`];
+  })).values()].join(' · ') : '';
+  document.getElementById('holeSummary').textContent = hole ? `Par ${hole.par || '-'} · SI ${hole.strokeIndex || '-'} · ${teeYardages || `${hole.yardage ? formatYardageValue(hole.yardage) : '-'} yds`} · ${teamText}` : '';
   renderScoreGrid(match, tee, metrics);
   renderGreeniesEntry(match, hole);
   renderHoleJumpTiles(match);
@@ -1280,7 +1348,7 @@ function renderScoreGrid(match, tee, metrics) {
     const net = score?.gross ? score.gross - strokes : '';
     return `
       <tr>
-        <td>${escapeHtml(p.player.name)}</td>
+        <td>${escapeHtml(p.player.name)}<div class="tiny">${escapeHtml(p.tee?.teeName || tee?.teeName || 'Tee')}</div></td>
         <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
         <td><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="next" min="1" max="15" data-score-player="${p.playerId}" value="${gross}" /></td>
         <td>${strokes}</td>
@@ -1341,7 +1409,7 @@ function addAmounts(target, source) {
   });
 }
 function computeLivePayoutGames(match, metrics) {
-  const selected = Array.isArray(match.selectedGames) ? match.selectedGames : [];
+  const selected = getOrderedSelectedGames(match);
   const games = [];
   const teamMemberIds = teamNo => (metrics.teams.find(t => t.team === teamNo)?.members || []).map(m => m.player.id);
   const splitAcrossTeam = (amounts, teamNo, total) => {
@@ -1441,20 +1509,21 @@ function computeLivePayoutGames(match, metrics) {
       pushGame(cfg.key, 'Greenies', amounts); return;
     }
     if (cfg.key === 'individual_match') {
-      const stake = Number(cfg.stake || 0);
       const amounts = {};
       const pairings = getIndividualMatchPairings(match, metrics);
       pairings.forEach(p => {
+        const stake = Number(p.stake || 0);
         if (!stake || !Number.isFinite(p.diff) || p.diff === 0) return;
         if (p.diff > 0) {
-          amounts[p.team1Player.playerId] = (amounts[p.team1Player.playerId] || 0) + stake;
-          amounts[p.team2Player.playerId] = (amounts[p.team2Player.playerId] || 0) - stake;
+          amounts[p.playerA.playerId] = (amounts[p.playerA.playerId] || 0) + stake;
+          amounts[p.playerB.playerId] = (amounts[p.playerB.playerId] || 0) - stake;
         } else {
-          amounts[p.team1Player.playerId] = (amounts[p.team1Player.playerId] || 0) - stake;
-          amounts[p.team2Player.playerId] = (amounts[p.team2Player.playerId] || 0) + stake;
+          amounts[p.playerA.playerId] = (amounts[p.playerA.playerId] || 0) - stake;
+          amounts[p.playerB.playerId] = (amounts[p.playerB.playerId] || 0) + stake;
         }
       });
-      pushGame(cfg.key, `Side Match (${formatBasisLabel(cfg.basis)})`, amounts, 'side'); return;
+      const sideLabel = pairings.length === 1 ? `${pairings[0].label} (${formatBasisLabel(pairings[0].basis)})` : `Head-to-Head Side Matches (${pairings.length})`;
+      pushGame(cfg.key, sideLabel, amounts, 'side'); return;
     }
     pushGame(cfg.key, getGameLabel(cfg.key), {});
   });
@@ -1494,15 +1563,12 @@ function buildSelectedGamesSummary(match, metrics) {
     } else if (cfg.key === 'individual_match') {
       const pairings = getIndividualMatchPairings(match, metrics);
       if (!pairings.length) {
-        value = 'Waiting for pairings';
-        sub = `Leader: — · Scored as match play · ${formatBasisLabel(cfg.basis)}`;
+        value = 'Select side-match players';
+        sub = 'No side matches configured yet.';
       } else {
-        const leaders = pairings.map(p => {
-          if (!Number.isFinite(p.diff) || p.diff === 0) return null;
-          return `${p.diff > 0 ? p.team1Player.player.name : p.team2Player.player.name} ${Math.abs(p.diff)} up`;
-        }).filter(Boolean);
+        const leaders = pairings.map(p => Number.isFinite(p.diff) && p.diff !== 0 ? getSideMatchStatusText(p) : null).filter(Boolean);
         value = leaders.length ? leaders.join(' · ') : 'All square';
-        sub = `Leader: ${value} · ` + pairings.map(p => `${p.team1Player.player.name} vs ${p.team2Player.player.name}: ${p.status}`).join(' · ');
+        sub = pairings.map(p => `${p.label}: ${getSideMatchStatusText(p)} · ${formatBasisLabel(p.basis)} · ${formatMoneyAccounting(p.stake)}`).join(' · ');
       }
     } else if (cfg.key === 'skins') {
       const skins = computeSkinResults(match, metrics, cfg);
@@ -1561,8 +1627,10 @@ function populateMatchTees(courseId = null, selectedTeeId = null) {
   const resolvedCourseId = courseId ?? document.getElementById('matchCourseSelect').value;
   const teeSelect = document.getElementById('matchTeeSelect');
   const course = getCourse(resolvedCourseId);
-  teeSelect.innerHTML = !course ? '<option value="">Select tee</option>' : `<option value="">Select tee</option>${getSortedTeesByYardage(course).map(t => `<option value="${t.id}" ${selectedTeeId === t.id ? 'selected' : ''}>${formatTeeSummary(t)}</option>`).join('')}`;
+  const sortedTees = course ? getSortedTeesByYardage(course) : [];
+  teeSelect.innerHTML = !course ? '<option value="">Select tee</option>' : `<option value="">Select tee</option>${sortedTees.map(t => `<option value="${t.id}" ${selectedTeeId === t.id ? 'selected' : ''}>${formatTeeSummary(t)}</option>`).join('')}`;
   if (selectedTeeId) teeSelect.value = selectedTeeId;
+  if (!selectedTeeId && sortedTees[0]) teeSelect.value = sortedTees[0].id;
 }
 
 function renderTeamNameInputs(teamCount = Number(document.getElementById('teamCountSelect')?.value || 1), teamNames = []) {
@@ -1615,7 +1683,7 @@ function populateMatchPlayerPicker(selected = []) {
         .map(p => `<option value="${p.id}" ${p.id === current ? 'selected' : ''}>${escapeHtml(p.name)} (${Number(p.index).toFixed(1)})</option>`))
       .join('');
     const teeSelect = teeOptions.length
-      ? `<label class="tiny player-tee-select"><span>Handicap tee</span><select data-player-tee-slot="${idx}" data-slot-team="${teamNo}"><option value="">Match default</option>${teeOptions.map(t => `<option value="${t.id}" ${t.id === currentTeeId ? 'selected' : ''}>${t.label}</option>`).join('')}</select></label>`
+      ? `<label class="tiny player-tee-select"><span>Handicap tee</span><select data-player-tee-slot="${idx}" data-slot-team="${teamNo}"><option value="">Select tee</option>${teeOptions.map(t => `<option value="${t.id}" ${t.id === currentTeeId ? 'selected' : ''}>${t.label}</option>`).join('')}</select></label>`
       : '<div class="tiny">Select a course first to choose tees.</div>';
     return `
       <div class="picker-row picker-row-stack">
@@ -1630,7 +1698,7 @@ function populateMatchPlayerPicker(selected = []) {
 function getDefaultGameConfigs() {
   return [
     { key: 'nassau', basis: 'net', stakesFront: 5, stakesBack: 5, stakesOverall: 5 },
-    { key: 'individual_match', basis: 'net', stake: 5 },
+    { key: 'individual_match', matchups: [] },
     { key: 'team_match', basis: 'net', stake: 5 },
     { key: 'team_stroke', basis: 'net', scoringMode: 'best_ball', stake: 5 },
     { key: 'skins', basis: 'net', skinsType: 'individual', stake: 5 },
@@ -1650,6 +1718,7 @@ function getCurrentMatchEditorSelections() {
     playerId: el.value || '',
     team: Number(el.dataset.slotTeam) || 1,
     slot: idx,
+    teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '',
   }));
 }
 function preserveMatchSetupUi() {
@@ -1669,16 +1738,17 @@ function renderGamesPicker(existing = []) {
   const picker = document.getElementById('gamesPicker');
   const configsWrap = document.getElementById('gameConfigs');
   if (!picker || !configsWrap) return;
-  const selectedKeys = (existing || []).map(g => g.key);
+  const normalizedExisting = normalizeSelectedGamesOrder(existing || []);
+  const selectedKeys = normalizedExisting.map(g => g.key);
   picker.innerHTML = GAME_LIBRARY.map(game => `
     <label class="game-pill ${selectedKeys.includes(game.key) ? 'selected' : ''}">
       <input type="checkbox" data-game-key="${game.key}" ${selectedKeys.includes(game.key) ? 'checked' : ''} />
       <span>${getGameLabel(game.key)}</span>
     </label>
   `).join('');
-  const selectedGames = GAME_LIBRARY.filter(g => selectedKeys.includes(g.key));
+  const selectedGames = normalizeSelectedGamesOrder(GAME_LIBRARY.filter(g => selectedKeys.includes(g.key)));
   configsWrap.innerHTML = selectedGames.map(game => {
-    const cfg = getGameConfig(game.key, existing);
+    const cfg = getGameConfig(game.key, normalizedExisting);
     if (game.key === 'nassau') {
       return `<div class="card inset-card game-config-card">
         <div class="game-config-header"><div class="section-label">Nassau</div><div class="tiny">Head-to-head only</div></div>
@@ -1738,8 +1808,26 @@ function renderGamesPicker(existing = []) {
         </div>
       </div>`;
     }
+    if (game.key === 'individual_match') {
+      const rows = Array.isArray(cfg.matchups) && cfg.matchups.length ? cfg.matchups : [{ id: uid(), playerAId: '', playerBId: '', basis: 'net', stake: 5 }];
+      const players = getCurrentAssignablePlayers();
+      return `<div class="card inset-card game-config-card">
+        <div class="game-config-header"><div class="section-label">Head-to-Head Side Matches</div><div class="tiny">Separate from the team payout total. Configure one or more player-vs-player side bets.</div></div>
+        <div class="side-match-config-list top-gap">
+          ${rows.map((row, idx) => `<div class="side-match-row" data-side-match-row="${row.id}">
+            <div class="tiny"><strong>Side match ${idx + 1}</strong></div>
+            <label><span>Player A</span><select data-side-field="playerAId"><option value="">Select player</option>${players.map(p => `<option value="${p.id}" ${p.id === row.playerAId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}</select></label>
+            <label><span>Player B</span><select data-side-field="playerBId"><option value="">Select player</option>${players.map(p => `<option value="${p.id}" ${p.id === row.playerBId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}</select></label>
+            <label><span>Basis</span><select data-side-field="basis"><option value="gross" ${row.basis === 'gross' ? 'selected' : ''}>Gross</option><option value="net" ${row.basis !== 'gross' ? 'selected' : ''}>Net</option></select></label>
+            <label><span>$ Stake</span><input type="number" step="0.01" data-side-field="stake" value="${Number(row.stake ?? 5) || 0}" /></label>
+            <div class="side-match-row-actions"><button type="button" class="secondary" data-remove-side-match="${row.id}">Remove</button></div>
+          </div>`).join('')}
+        </div>
+        <div class="actions top-gap"><button type="button" class="secondary" id="addSideMatchBtn">Add Side Match</button></div>
+      </div>`;
+    }
     return `<div class="card inset-card game-config-card">
-      <div class="game-config-header"><div class="section-label">${game.key === 'individual_match' ? 'Head-to-Head Side Matches' : getGameLabel(game.key)}</div><div class="tiny">${game.key === 'individual_match' ? 'Separate from the team payout total' : 'Configure basis and stakes'}</div></div>
+      <div class="game-config-header"><div class="section-label">${getGameLabel(game.key)}</div><div class="tiny">Configure basis and stakes</div></div>
       <div class="grid two compact-grid top-gap">
         <label><span>Basis</span><select data-game-config="${game.key}" data-field="basis">
           <option value="gross" ${cfg.basis === 'gross' ? 'selected' : ''}>Gross</option>
@@ -1752,7 +1840,7 @@ function renderGamesPicker(existing = []) {
 }
 function collectSelectedGames() {
   const keys = Array.from(document.querySelectorAll('[data-game-key]:checked')).map(el => el.dataset.gameKey).slice(0, 5);
-  return keys.map(key => {
+  const games = keys.map(key => {
     const cfg = { key };
     document.querySelectorAll(`[data-game-config="${key}"]`).forEach(el => {
       cfg[el.dataset.field] = el.value;
@@ -1761,8 +1849,19 @@ function collectSelectedGames() {
       const allowed = new Set(getCurrentAssignablePlayers().map(p => p.id));
       cfg.participants = Array.from(document.querySelectorAll('[data-greenie-player]:checked')).map(el => el.dataset.greeniePlayer).filter(id => allowed.has(id));
     }
+    if (key === 'individual_match') {
+      const allowed = new Set(getCurrentAssignablePlayers().map(p => p.id));
+      cfg.matchups = Array.from(document.querySelectorAll('[data-side-match-row]')).map(row => ({
+        id: row.dataset.sideMatchRow || uid(),
+        playerAId: row.querySelector('[data-side-field="playerAId"]')?.value || '',
+        playerBId: row.querySelector('[data-side-field="playerBId"]')?.value || '',
+        basis: row.querySelector('[data-side-field="basis"]')?.value || 'net',
+        stake: row.querySelector('[data-side-field="stake"]')?.value || '0',
+      })).filter(row => allowed.has(row.playerAId) && allowed.has(row.playerBId) && row.playerAId && row.playerBId && row.playerAId !== row.playerBId);
+    }
     return cfg;
   });
+  return normalizeSelectedGamesOrder(games);
 }
 
 
@@ -2298,13 +2397,34 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
   document.getElementById('setup').addEventListener('change', e => {
-    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, [name="allowance"]')) {
-      setTimeout(() => { renderSetupHandicapPreview(); }, 0);
+    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, [name="allowance"], [data-side-field]')) {
+      setTimeout(() => { renderSetupHandicapPreview(); renderGamesPicker(collectSelectedGames()); }, 0);
     }
   });
   document.getElementById('setup').addEventListener('input', e => {
     if (e.target.matches('[data-team-name], [name="allowance"]')) {
       renderSetupHandicapPreview();
+    }
+  });
+  document.getElementById('setup').addEventListener('click', e => {
+    if (e.target.id === 'addSideMatchBtn') {
+      const games = collectSelectedGames();
+      const cfg = games.find(g => g.key === 'individual_match') || { key: 'individual_match', matchups: [] };
+      cfg.matchups = Array.isArray(cfg.matchups) ? cfg.matchups : [];
+      cfg.matchups.push({ id: uid(), playerAId: '', playerBId: '', basis: 'net', stake: 5 });
+      const others = games.filter(g => g.key !== 'individual_match');
+      renderGamesPicker(normalizeSelectedGamesOrder([...others, cfg]));
+      return;
+    }
+    const removeId = e.target.closest('[data-remove-side-match]')?.dataset.removeSideMatch;
+    if (removeId) {
+      const games = collectSelectedGames();
+      const cfg = games.find(g => g.key === 'individual_match');
+      if (!cfg) return;
+      cfg.matchups = (cfg.matchups || []).filter(row => row.id !== removeId);
+      if (!cfg.matchups.length) cfg.matchups = [{ id: uid(), playerAId: '', playerBId: '', basis: 'net', stake: 5 }];
+      const others = games.filter(g => g.key !== 'individual_match');
+      renderGamesPicker(normalizeSelectedGamesOrder([...others, cfg]));
     }
   });
   document.getElementById('score').addEventListener('click', e => {
@@ -2322,11 +2442,12 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if ((teamCount * playersPerTeam) > 12) return toast('Limit is 12 total players.');
     const teamNames = Array.from({ length: teamCount }, (_, i) => String(document.querySelector(`[data-team-name="${i + 1}"]`)?.value || `Team ${i + 1}`).slice(0, 25));
     const selectedPlayers = Array.from(document.querySelectorAll('[data-player-slot]'))
-      .map((el, idx) => ({ playerId: el.value, team: Number(el.dataset.slotTeam), slot: idx, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || String(fd.get('teeId') || '') }))
+      .map((el, idx) => ({ playerId: el.value, team: Number(el.dataset.slotTeam), slot: idx, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '' }))
       .filter(p => p.playerId);
     const uniqueIds = new Set(selectedPlayers.map(p => p.playerId));
     if (selectedPlayers.length !== uniqueIds.size) return toast('Each player can only be selected once.');
     if (selectedPlayers.length < 1) return toast('Select at least 1 player.');
+    if (selectedPlayers.some(p => !p.teeId)) return toast('Select a tee for each player.');
     const selectedGames = collectSelectedGames();
     if (selectedGames.length > 5) return toast('Select up to 5 gambling games.');
     if (selectedGames.some(g => g.key === 'nassau') && teamCount !== 2) return toast('Nassau requires exactly 2 teams.');
@@ -2337,27 +2458,28 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       date: String(fd.get('date') || todayIso()),
       name: String(fd.get('name') || '').trim() || 'Round',
       courseId: String(fd.get('courseId') || ''),
-      teeId: String(fd.get('teeId') || ''),
+      teeId: selectedPlayers[0]?.teeId || '',
       format: 'teams',
       allowance: Number(fd.get('allowance')) || 100,
       holeCount: Number(fd.get('holeCount')) === 9 ? 9 : 18,
       teamCount,
       playersPerTeam,
       teamNames,
-      selectedGames,
+      selectedGames: normalizeSelectedGamesOrder(selectedGames),
       status: existing?.status || 'active',
       completedAt: existing?.completedAt || null,
       players: selectedPlayers.map(sp => {
         const old = existing?.players.find(op => op.playerId === sp.playerId);
-        return old ? { ...old, team: sp.team, slot: sp.slot, teeId: sp.teeId || String(fd.get('teeId') || '') } : { playerId: sp.playerId, team: sp.team, slot: sp.slot, teeId: sp.teeId || String(fd.get('teeId') || ''), scores: buildEmptyScores(Number(fd.get('holeCount')) === 9 ? 9 : 18) };
+        return old ? { ...old, team: sp.team, slot: sp.slot, teeId: sp.teeId || selectedPlayers[0]?.teeId || '' } : { playerId: sp.playerId, team: sp.team, slot: sp.slot, teeId: sp.teeId || selectedPlayers[0]?.teeId || '', scores: buildEmptyScores(Number(fd.get('holeCount')) === 9 ? 9 : 18) };
       }),
       greeniesWinners: existing?.greeniesWinners || {},
       momentumGame: existing?.momentumGame || (selectedGames.find(g => g.key === 'nassau')?.key || selectedGames.find(g => ['team_match','team_stroke'].includes(g.key))?.key || 'nassau'),
-      matchStatusGame: existing?.matchStatusGame || (selectedGames.find(g => g.key === 'team_match')?.key || selectedGames.find(g => g.key === 'nassau')?.key || selectedGames[0]?.key || 'team_match'),
+      matchStatusGame: existing?.matchStatusGame || (selectedGames.find(g => g.key === 'team_match')?.key || selectedGames.find(g => g.key === 'nassau')?.key || selectedGames.find(g => g.key !== 'individual_match')?.key || selectedGames[0]?.key || 'team_match'),
       momentumPerspective: Number(existing?.momentumPerspective || 1) === 2 ? 2 : 1,
     };
     normalizeMatch(match);
-    if (!match.courseId || !match.teeId) return toast('Select a course and tee.');
+    if (!match.courseId) return toast('Select a course.');
+    if (!match.players.every(p => p.teeId)) return toast('Each player needs a tee.');
     if (editingMatchId) state.matches = state.matches.map(m => m.id === editingMatchId ? match : m); else state.matches.push(match);
     state.activeMatchId = match.id;
     currentHole = Math.min(getRequestedHoleCount(match), Math.max(1, completedHoles(match) || 1));

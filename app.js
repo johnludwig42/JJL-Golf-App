@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v20.7';
+const APP_VERSION = 'v20.8';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -34,7 +34,7 @@ function getSideMatchConfigs(match) {
     id: row.id || uid(),
     playerAId: row.playerAId || row.team1PlayerId || '',
     playerBId: row.playerBId || row.team2PlayerId || '',
-    game: String(row.game || row.gameKey || cfg.game || 'nassau').toLowerCase(),
+    game: String(row.game || row.gameKey || cfg.game || 'nassau').toLowerCase().replace('team_match','match_play').replace('team_stroke','stroke_play'),
     basis: String(row.basis || cfg.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net',
     stake: Number(row.stake ?? cfg.stake ?? 5) || 0,
   })).filter(row => row.playerAId && row.playerBId && row.playerAId !== row.playerBId);
@@ -48,13 +48,30 @@ function getSideMatchStatusText(pairing) {
 
 function getSideMatchGameOptions() {
   return [
-    { key: 'nassau', label: 'Nassau' },
-    { key: 'team_match', label: 'Match Play' },
-    { key: 'team_stroke', label: 'Stroke Play' },
+    { key: 'nassau', label: 'Nassau (Front, Back, 18)' },
+    { key: 'match_play', label: 'Match Play (18)' },
+    { key: 'stroke_play', label: 'Stroke Play (18)' },
   ];
 }
 function getSideMatchGameLabel(gameKey = 'nassau') {
   return (getSideMatchGameOptions().find(opt => opt.key === gameKey) || {}).label || 'Nassau';
+}
+
+function getSideMatchPlayerOptions(players, selectedA = '', selectedB = '') {
+  const list = Array.isArray(players) ? players : [];
+  return {
+    playerA: list.filter(p => !selectedB || p.id === selectedA || p.id !== selectedB),
+    playerB: list.filter(p => !selectedA || p.id === selectedB || p.id !== selectedA),
+  };
+}
+function getSideMatchNetHoleScore(match, holeIdx, playerMetric, lowPlaying, fallbackHole = null) {
+  if (!playerMetric) return null;
+  const gross = Number(playerMetric.scores?.[holeIdx]?.gross) || null;
+  if (!gross) return null;
+  const playerHole = getPlayerHole(match, playerMetric, holeIdx, fallbackHole);
+  const strokeIndex = Number(playerHole?.strokeIndex) || Number(fallbackHole?.strokeIndex) || 0;
+  const strokes = holeStrokeAllowanceForPlayer(strokeIndex, Number(playerMetric.playHdcp) || 0, Number(lowPlaying) || 0);
+  return gross - strokes;
 }
 function formatBasisLabel(basis, fallback = 'Net') {
   const value = String(basis || fallback).toLowerCase();
@@ -777,46 +794,48 @@ function getIndividualMatchPairings(match, metrics) {
     const pb = metrics.players.find(p => p.playerId === row.playerBId);
     if (!pa || !pb) return null;
     const game = String(row.game || 'nassau').toLowerCase();
-    let diff = 0;
+    const useNet = String(row.basis || 'net').toLowerCase() !== 'gross';
+    const sideLowPlaying = Math.min(Number(pa.playHdcp) || 0, Number(pb.playHdcp) || 0);
+    let matchDiff = 0;
     let front = 0;
     let back = 0;
-    let skinsA = 0;
-    let skinsB = 0;
     let totalA = 0;
     let totalB = 0;
+    let completedCount = 0;
     holes.forEach((hole, holeIdx) => {
       const scoreAObj = hole.playerScores.find(ps => ps.playerId === pa.playerId);
       const scoreBObj = hole.playerScores.find(ps => ps.playerId === pb.playerId);
       const grossA = Number(scoreAObj?.gross) || null;
       const grossB = Number(scoreBObj?.gross) || null;
       if (!grossA || !grossB) return;
-      const useNet = String(row.basis || 'net').toLowerCase() !== 'gross';
-      const scoreA = useNet ? Number(scoreAObj?.net) : grossA;
-      const scoreB = useNet ? Number(scoreBObj?.net) : grossB;
+      const scoreA = useNet ? getSideMatchNetHoleScore(match, holeIdx, pa, sideLowPlaying, hole) : grossA;
+      const scoreB = useNet ? getSideMatchNetHoleScore(match, holeIdx, pb, sideLowPlaying, hole) : grossB;
       if (!Number.isFinite(scoreA) || !Number.isFinite(scoreB)) return;
-      if (game === 'team_stroke') {
+      completedCount += 1;
+      if (game === 'stroke_play') {
         totalA += scoreA;
         totalB += scoreB;
         return;
       }
       if (scoreA < scoreB) {
-        diff += 1;
+        matchDiff += 1;
         if ((Number(hole.holeNumber) || 0) <= 9) front += 1; else back += 1;
-        skinsA += 1;
       } else if (scoreB < scoreA) {
-        diff -= 1;
+        matchDiff -= 1;
         if ((Number(hole.holeNumber) || 0) <= 9) front -= 1; else back -= 1;
-        skinsB += 1;
       }
     });
-    if (game === 'team_stroke') {
-      diff = totalA === totalB ? 0 : (totalA < totalB ? 1 : -1);
-    }
+    const diff = game === 'stroke_play'
+      ? (totalA === totalB ? 0 : (totalA < totalB ? totalB - totalA : -(totalA - totalB)))
+      : matchDiff;
     const leaderName = diff === 0 ? '' : (diff > 0 ? pa.player.name : pb.player.name);
+    const frontStatus = front === 0 ? 'AS' : `${front > 0 ? pa.player.name : pb.player.name} ${Math.abs(front)} up`;
+    const backStatus = back === 0 ? 'AS' : `${back > 0 ? pa.player.name : pb.player.name} ${Math.abs(back)} up`;
+    const overallStatus = diff === 0 ? 'AS' : `${leaderName} ${Math.abs(diff)} ${game === 'stroke_play' ? 'stroke' + (Math.abs(diff) === 1 ? '' : 's') : 'up'}`;
     const status = game === 'nassau'
-      ? `Front ${front === 0 ? 'AS' : `${front > 0 ? pa.player.name : pb.player.name} ${Math.abs(front)} up`} · Back ${back === 0 ? 'AS' : `${back > 0 ? pa.player.name : pb.player.name} ${Math.abs(back)} up`} · 18 ${diff === 0 ? 'AS' : `${leaderName} ${Math.abs(diff)} up`}`
-      : game === 'team_stroke'
-        ? (diff === 0 ? 'Tied' : `${leaderName} leads by ${Math.abs(totalA - totalB)}`)
+      ? `Front ${frontStatus} · Back ${backStatus} · 18 ${overallStatus.replace(/ stroke(s)?$/, ' up')}`
+      : game === 'stroke_play'
+        ? (diff === 0 ? 'Tied' : `${leaderName} leads by ${Math.abs(diff)} stroke${Math.abs(diff) === 1 ? '' : 's'}`)
         : (diff === 0 ? 'AS' : `${leaderName} ${Math.abs(diff)} up`);
     return {
       id: row.id || `side_${idx + 1}`,
@@ -830,16 +849,17 @@ function getIndividualMatchPairings(match, metrics) {
       back,
       totalA,
       totalB,
-      skinsA,
-      skinsB,
       game,
       basis: row.basis,
       stake: Number(row.stake) || 0,
       leaderName,
+      completedCount,
+      sideLowPlaying,
       status
     };
   }).filter(Boolean);
 }
+
 
 
 function getMatchStatusOptions(match) {
@@ -1601,7 +1621,7 @@ function buildSelectedGamesSummary(match, metrics) {
       } else {
         const leaders = pairings.map(p => Number.isFinite(p.diff) && p.diff !== 0 ? getSideMatchStatusText(p) : null).filter(Boolean);
         value = leaders.length ? leaders.join(' · ') : 'All square';
-        sub = pairings.map(p => `${p.label}: ${getSideMatchStatusText(p)} · ${formatBasisLabel(p.basis)} · ${formatMoneyAccounting(p.stake)}`).join(' · ');
+        sub = pairings.map(p => `${p.label}: ${getSideMatchGameLabel(p.game)} · ${getSideMatchStatusText(p)} · ${formatBasisLabel(p.basis)} · ${formatMoneyAccounting(p.stake)}`).join(' · ');
       }
     } else if (cfg.key === 'skins') {
       const skins = computeSkinResults(match, metrics, cfg);
@@ -1848,15 +1868,18 @@ function renderGamesPicker(existing = []) {
       return `<div class="card inset-card game-config-card">
         <div class="game-config-header"><div class="section-label">Head-to-Head Side Matches</div><div class="tiny">Separate from the team payout total. Configure one or more player-vs-player side bets.</div></div>
         <div class="side-match-config-list top-gap">
-          ${rows.map((row, idx) => `<div class="side-match-row" data-side-match-row="${row.id}">
-            <div class="tiny"><strong>Side match ${idx + 1}</strong></div>
-            <label><span>Player A</span><select data-side-field="playerAId"><option value="">Select player</option>${players.map(p => `<option value="${p.id}" ${p.id === row.playerAId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}</select></label>
-            <label><span>Player B</span><select data-side-field="playerBId"><option value="">Select player</option>${players.map(p => `<option value="${p.id}" ${p.id === row.playerBId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}</select></label>
-            <label><span>Game</span><select data-side-field="game">${getSideMatchGameOptions().map(opt => `<option value="${opt.key}" ${String(row.game || 'nassau') === opt.key ? 'selected' : ''}>${escapeHtml(opt.label)}</option>`).join('')}</select></label>
-            <label><span>Basis</span><select data-side-field="basis"><option value="gross" ${row.basis === 'gross' ? 'selected' : ''}>Gross</option><option value="net" ${row.basis !== 'gross' ? 'selected' : ''}>Net</option></select></label>
-            <label><span>$ Stake</span><input type="number" step="0.01" data-side-field="stake" value="${Number(row.stake ?? 5) || 0}" /></label>
-            <div class="side-match-row-actions"><button type="button" class="secondary" data-remove-side-match="${row.id}">Remove</button></div>
-          </div>`).join('')}
+          ${rows.map((row, idx) => {
+            const playerOptions = getSideMatchPlayerOptions(players, row.playerAId || '', row.playerBId || '');
+            return `<div class="side-match-row" data-side-match-row="${row.id}">
+              <div class="tiny"><strong>Side match ${idx + 1}</strong></div>
+              <label><span>Player A</span><select data-side-field="playerAId"><option value="">Select player</option>${playerOptions.playerA.map(p => `<option value="${p.id}" ${p.id === row.playerAId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}</select></label>
+              <label><span>Player B</span><select data-side-field="playerBId"><option value="">Select player</option>${playerOptions.playerB.map(p => `<option value="${p.id}" ${p.id === row.playerBId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}</select></label>
+              <label><span>Game</span><select data-side-field="game">${getSideMatchGameOptions().map(opt => `<option value="${opt.key}" ${String(row.game || 'nassau') === opt.key ? 'selected' : ''}>${escapeHtml(opt.label)}</option>`).join('')}</select></label>
+              <label><span>Basis</span><select data-side-field="basis"><option value="gross" ${row.basis === 'gross' ? 'selected' : ''}>Gross</option><option value="net" ${row.basis !== 'gross' ? 'selected' : ''}>Net</option></select></label>
+              <label><span>$ Stake</span><input type="number" step="0.01" data-side-field="stake" value="${Number(row.stake ?? 5) || 0}" /></label>
+              <div class="side-match-row-actions"><button type="button" class="secondary" data-remove-side-match="${row.id}">Remove</button></div>
+            </div>`;
+          }).join('')}
         </div>
         <div class="actions top-gap"><button type="button" class="secondary" id="addSideMatchBtn">Add Side Match</button></div>
       </div>`;

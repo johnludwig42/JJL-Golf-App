@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v20.8';
+const APP_VERSION = 'v20.9';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -786,7 +786,9 @@ function formatTeamGameStatus(match, metrics, diff) {
 
 function getIndividualMatchPairings(match, metrics) {
   if (!match || !metrics) return [];
-  const holes = Array.isArray(metrics.holeResults) ? metrics.holeResults : [];
+  const allHoles = Array.isArray(metrics.holeResults) ? metrics.holeResults : [];
+  const totalPlayableHoles = Math.min(getPlayableHoleCount(match, metrics.tee), allHoles.length || 18);
+  const holes = allHoles.slice(0, totalPlayableHoles || allHoles.length);
   const configured = getSideMatchConfigs(match);
   if (!configured.length) return [];
   return configured.map((row, idx) => {
@@ -796,6 +798,7 @@ function getIndividualMatchPairings(match, metrics) {
     const game = String(row.game || 'nassau').toLowerCase();
     const useNet = String(row.basis || 'net').toLowerCase() !== 'gross';
     const sideLowPlaying = Math.min(Number(pa.playHdcp) || 0, Number(pb.playHdcp) || 0);
+    const isNineHoleSideNassau = game === 'nassau' && totalPlayableHoles <= 9;
     let matchDiff = 0;
     let front = 0;
     let back = 0;
@@ -833,7 +836,7 @@ function getIndividualMatchPairings(match, metrics) {
     const backStatus = back === 0 ? 'AS' : `${back > 0 ? pa.player.name : pb.player.name} ${Math.abs(back)} up`;
     const overallStatus = diff === 0 ? 'AS' : `${leaderName} ${Math.abs(diff)} ${game === 'stroke_play' ? 'stroke' + (Math.abs(diff) === 1 ? '' : 's') : 'up'}`;
     const status = game === 'nassau'
-      ? `Front ${frontStatus} · Back ${backStatus} · 18 ${overallStatus.replace(/ stroke(s)?$/, ' up')}`
+      ? (isNineHoleSideNassau ? `9-hole ${frontStatus}` : `Front ${frontStatus} · Back ${backStatus} · 18 ${overallStatus.replace(/ stroke(s)?$/, ' up')}`)
       : game === 'stroke_play'
         ? (diff === 0 ? 'Tied' : `${leaderName} leads by ${Math.abs(diff)} stroke${Math.abs(diff) === 1 ? '' : 's'}`)
         : (diff === 0 ? 'AS' : `${leaderName} ${Math.abs(diff)} up`);
@@ -855,6 +858,8 @@ function getIndividualMatchPairings(match, metrics) {
       leaderName,
       completedCount,
       sideLowPlaying,
+      totalPlayableHoles,
+      isNineHoleSideNassau,
       status
     };
   }).filter(Boolean);
@@ -912,7 +917,7 @@ function buildFeaturedMatchStatus(match, metrics, gameKey) {
     if (!pairings.length) {
       return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-tile"><div class="tiny">Status</div><div class="match-status-value">Select side-match players in setup</div></div>`;
     }
-    return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid">${pairings.map(p => `<div class="match-status-tile"><div class="tiny">${escapeHtml(p.label)} · ${escapeHtml(getSideMatchGameLabel(p.game))} · ${escapeHtml(formatBasisLabel(p.basis))}</div><div class="match-status-value">${escapeHtml(p.status)}</div></div>`).join('')}</div>`;
+    return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid">${pairings.map(p => `<div class="match-status-tile"><div class="tiny">${escapeHtml(p.label)} · ${escapeHtml(p.isNineHoleSideNassau ? 'Nassau (9 Holes)' : getSideMatchGameLabel(p.game))} · ${escapeHtml(formatBasisLabel(p.basis))}</div><div class="match-status-value">${escapeHtml(p.status)}</div></div>`).join('')}</div>`;
   }
   if (gameKey === 'skins') {
     const basis = formatBasisLabel(cfg.basis);
@@ -1553,7 +1558,7 @@ function computeLivePayoutGames(match, metrics) {
         const stake = Number(p.stake || 0);
         if (!stake) return;
         if (p.game === 'nassau') {
-          const awards = [p.front, p.back, p.diff];
+          const awards = p.isNineHoleSideNassau ? [p.front] : [p.front, p.back, p.diff];
           awards.forEach(diff => {
             if (!diff) return;
             if (diff > 0) {
@@ -1621,7 +1626,7 @@ function buildSelectedGamesSummary(match, metrics) {
       } else {
         const leaders = pairings.map(p => Number.isFinite(p.diff) && p.diff !== 0 ? getSideMatchStatusText(p) : null).filter(Boolean);
         value = leaders.length ? leaders.join(' · ') : 'All square';
-        sub = pairings.map(p => `${p.label}: ${getSideMatchGameLabel(p.game)} · ${getSideMatchStatusText(p)} · ${formatBasisLabel(p.basis)} · ${formatMoneyAccounting(p.stake)}`).join(' · ');
+        sub = pairings.map(p => `${p.label}: ${p.isNineHoleSideNassau ? 'Nassau (9 Holes)' : getSideMatchGameLabel(p.game)} · ${p.status || getSideMatchStatusText(p)} · ${formatBasisLabel(p.basis)} · ${formatMoneyAccounting(p.stake)}`).join(' · ');
       }
     } else if (cfg.key === 'skins') {
       const skins = computeSkinResults(match, metrics, cfg);
@@ -1909,14 +1914,19 @@ function collectSelectedGames() {
     }
     if (key === 'individual_match') {
       const allowed = new Set(getCurrentAssignablePlayers().map(p => p.id));
-      cfg.matchups = Array.from(document.querySelectorAll('[data-side-match-row]')).map(row => ({
-        id: row.dataset.sideMatchRow || uid(),
-        playerAId: row.querySelector('[data-side-field="playerAId"]')?.value || '',
-        playerBId: row.querySelector('[data-side-field="playerBId"]')?.value || '',
-        game: row.querySelector('[data-side-field="game"]')?.value || 'nassau',
-        basis: row.querySelector('[data-side-field="basis"]')?.value || 'net',
-        stake: row.querySelector('[data-side-field="stake"]')?.value || '0',
-      })).filter(row => allowed.has(row.playerAId) && allowed.has(row.playerBId) && row.playerAId && row.playerBId && row.playerAId !== row.playerBId);
+      cfg.matchups = Array.from(document.querySelectorAll('[data-side-match-row]')).map(row => {
+        const playerAId = row.querySelector('[data-side-field="playerAId"]')?.value || '';
+        const playerBId = row.querySelector('[data-side-field="playerBId"]')?.value || '';
+        return {
+          id: row.dataset.sideMatchRow || uid(),
+          playerAId: allowed.has(playerAId) ? playerAId : '',
+          playerBId: allowed.has(playerBId) ? playerBId : '',
+          game: row.querySelector('[data-side-field="game"]')?.value || 'nassau',
+          basis: row.querySelector('[data-side-field="basis"]')?.value || 'net',
+          stake: row.querySelector('[data-side-field="stake"]')?.value || '0',
+        };
+      }).filter(row => row.playerAId || row.playerBId || Number(row.stake || 0) || row.game || row.basis);
+      if (!cfg.matchups.length) cfg.matchups = [{ id: uid(), playerAId: '', playerBId: '', game: 'nassau', basis: 'net', stake: 5 }];
     }
     return cfg;
   });

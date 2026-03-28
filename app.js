@@ -97,6 +97,18 @@ function buildDefaultHoles(count = 18) {
 function buildEmptyScores(count = 18) {
   return Array.from({ length: count }, (_, i) => ({ holeNumber: i + 1, gross: null }));
 }
+function getRequestedHoleCount(match) {
+  return Number(match?.holeCount) === 9 ? 9 : 18;
+}
+function getPlayableHoleCount(match, tee = null) {
+  const requested = getRequestedHoleCount(match);
+  const holes = Array.isArray(tee?.holes) ? tee.holes.length : 18;
+  return Math.max(1, Math.min(requested, holes || requested));
+}
+function formatHoleCountLabel(count) {
+  const holes = Number(count) === 9 ? 9 : 18;
+  return `${holes} hole${holes === 1 ? '' : 's'}`;
+}
 function sumYardage(holes) { return holes.reduce((sum, h) => sum + (Number(h.yardage) || 0), 0) || null; }
 function sumPar(holes) { return holes.reduce((sum, h) => sum + (Number(h.par) || 0), 0) || null; }
 function getCourseStrokeTemplate(course) {
@@ -267,15 +279,20 @@ This round is missing valid course or tee data.`;
   const lines = [];
   lines.push(`${match.name || 'Round'} — ${match.date}`);
   lines.push(`${metrics.course.name} · ${metrics.tee.teeName}`);
-  lines.push(match.status === 'complete' ? `Completed ${new Date(match.completedAt || Date.now()).toLocaleString()}` : `${metrics.completed}/18 holes complete`);
+  const holeCount = getPlayableHoleCount(match, metrics.tee);
+  lines.push(match.status === 'complete' ? `Completed ${new Date(match.completedAt || Date.now()).toLocaleString()}` : `${metrics.completed}/${holeCount} holes complete`);
   lines.push('');
 
   if (metrics.teams.length === 2) {
     lines.push(`Team Match: ${formatMatchDiff(metrics.matchDiff, match)}`);
     const front = metrics.teams[0].front === 0 ? 'AS' : (metrics.teams[0].front > 0 ? `${getTeamLabel(match, 1)} ${Math.abs(metrics.teams[0].front)} up` : `${getTeamLabel(match, 2)} ${Math.abs(metrics.teams[0].front)} up`);
     const back = metrics.teams[0].back === 0 ? 'AS' : (metrics.teams[0].back > 0 ? `${getTeamLabel(match, 1)} ${Math.abs(metrics.teams[0].back)} up` : `${getTeamLabel(match, 2)} ${Math.abs(metrics.teams[0].back)} up`);
-    lines.push(`Front 9: ${front}`);
-    lines.push(`Back 9: ${back}`);
+    if (holeCount > 9) {
+      lines.push(`Front 9: ${front}`);
+      lines.push(`Back 9: ${back}`);
+    } else {
+      lines.push(`Match status: ${front}`);
+    }
     lines.push('');
     lines.push('Team Totals');
     metrics.teams.forEach(team => {
@@ -308,29 +325,46 @@ This round is missing valid course or tee data.`;
 
   return lines.join('\n');
 }
-async function shareRound(matchId) {
+function buildPrintMeta(match, metrics) {
+  const holeCount = getPlayableHoleCount(match, metrics?.tee);
+  const courseName = metrics?.course?.name || 'No course';
+  const teeName = metrics?.tee?.teeName || 'No tee';
+  return `
+    <div class="print-round-title">${escapeHtml(match?.name || 'Round')}</div>
+    <div class="print-round-sub">${escapeHtml(match?.date || todayIso())} · ${escapeHtml(courseName)} · ${escapeHtml(teeName)} · ${holeCount} holes</div>
+    <div class="print-round-sub">${metrics ? `${metrics.completed}/${holeCount} holes completed` : 'Scorecard ready to print'}${match?.status === 'complete' ? ' · Final' : ' · Live'}<\/div>`;
+}
+function openPrintScorecard(matchId) {
   const match = getMatch(matchId || state.activeMatchId);
-  if (!match) return toast('No round selected to share.');
-  const text = buildRoundShareText(match);
-  const shareData = { title: `${match.name || 'Golf Round'} Scorecard`, text };
-  try {
-    if (navigator.share) {
-      await navigator.share(shareData);
-      toast('Scorecard ready to send.');
-      return;
-    }
-  } catch (err) {
-    if (err && err.name === 'AbortError') return;
+  if (!match) return toast('No round selected to print.');
+  const previousTab = document.querySelector('.tab.active')?.dataset.tab || 'score';
+  const previouslyActiveMatch = state.activeMatchId;
+  const detailsNodes = Array.from(document.querySelectorAll('#leaderboard details'));
+  const priorOpen = detailsNodes.map(node => node.open);
+  if (state.activeMatchId !== match.id) state.activeMatchId = match.id;
+  const metrics = computeMatchMetrics(match);
+  const printMeta = document.getElementById('printRoundMeta');
+  if (printMeta) {
+    printMeta.innerHTML = buildPrintMeta(match, metrics);
+    printMeta.classList.remove('hidden');
   }
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      toast('Scorecard copied. Paste into Messages or Mail.');
-      return;
-    }
-  } catch {}
-  const mailto = `mailto:?subject=${encodeURIComponent(shareData.title)}&body=${encodeURIComponent(text)}`;
-  window.location.href = mailto;
+  activateTab('leaderboard');
+  detailsNodes.forEach(node => { node.open = true; });
+  document.body.classList.add('printing-scorecard');
+  renderAll();
+  const cleanup = () => {
+    document.body.classList.remove('printing-scorecard');
+    if (printMeta) printMeta.classList.add('hidden');
+    detailsNodes.forEach((node, idx) => { node.open = priorOpen[idx]; });
+    state.activeMatchId = previouslyActiveMatch;
+    renderAll();
+    activateTab(previousTab);
+    window.removeEventListener('afterprint', cleanup);
+  };
+  window.addEventListener('afterprint', cleanup);
+  setTimeout(() => {
+    try { window.print(); } catch (err) { cleanup(); toast('Print dialog could not open.'); }
+  }, 80);
 }
 function normalizeHole(hole, idx) {
   return {
@@ -359,13 +393,14 @@ function normalizeMatch(match) {
   match.teeId = match.teeId || '';
   match.format = match.format || 'teams';
   match.allowance = Number(match.allowance) || 100;
+  match.holeCount = getRequestedHoleCount(match);
   match.status = match.status || 'active';
   match.completedAt = match.completedAt || null;
   match.players = Array.isArray(match.players) ? match.players : [];
   match.players = match.players.map(mp => ({
     playerId: mp.playerId,
     team: Number(mp.team) || 1,
-    scores: Array.isArray(mp.scores) && mp.scores.length ? mp.scores.map((s, idx) => ({ holeNumber: idx + 1, gross: Number(s.gross) || null })) : buildEmptyScores(),
+    scores: Array.isArray(mp.scores) && mp.scores.length ? mp.scores.map((s, idx) => ({ holeNumber: idx + 1, gross: Number(s.gross) || null })) : buildEmptyScores(match.holeCount),
   }));
   match.greeniesWinners = match.greeniesWinners && typeof match.greeniesWinners === 'object' ? match.greeniesWinners : {};
   match.momentumGame = match.momentumGame || ((match.selectedGames || []).find(g => g.key === 'nassau')?.key || (match.selectedGames || []).find(g => ['team_match','team_stroke','skins'].includes(g.key))?.key || 'nassau');
@@ -412,7 +447,8 @@ function getMatch(matchId = state.activeMatchId) { return state.matches.find(m =
 function getActiveMatch() { return getMatch(); }
 function completedHoles(match) {
   if (!match) return 0;
-  return Math.max(0, ...match.players.flatMap(mp => mp.scores.filter(s => s.gross).map(s => s.holeNumber)), 0);
+  const limit = getRequestedHoleCount(match);
+  return Math.max(0, ...match.players.flatMap(mp => mp.scores.filter(s => s.gross && Number(s.holeNumber) <= limit).map(s => s.holeNumber)), 0);
 }
 function holeStrokeAllowanceForPlayer(holeStrokeIndex, playerHandicap, baseHandicap) {
   const diff = Math.max(0, playerHandicap - baseHandicap);
@@ -426,6 +462,8 @@ function computeMatchMetrics(match) {
   const course = getCourse(match.courseId);
   const tee = getTee(match.courseId, match.teeId);
   if (!course || !tee) return null;
+  const holeCount = getPlayableHoleCount(match, tee);
+  const scoringHoles = (tee.holes || []).slice(0, holeCount);
   const players = match.players.map(mp => {
     const player = getPlayer(mp.playerId);
     const courseHdcp = courseHandicap(player?.index || 0, tee.slope, tee.rating, tee.par);
@@ -436,13 +474,14 @@ function computeMatchMetrics(match) {
       team: Number(mp.team) || 1,
       courseHdcp,
       playHdcp,
+      scores: (mp.scores || []).slice(0, holeCount),
     };
   }).filter(x => x.player);
 
   if (!players.length) return { players: [], teams: [], holeResults: [], completed: 0, statusText: 'No players' };
 
   const lowPlaying = Math.min(...players.map(p => p.playHdcp));
-  const holeResults = tee.holes.map((hole, idx) => {
+  const holeResults = scoringHoles.map((hole, idx) => {
     const playerScores = players.map(p => {
       const gross = Number(p.scores[idx]?.gross) || null;
       const strokes = holeStrokeAllowanceForPlayer(hole.strokeIndex, p.playHdcp, lowPlaying);
@@ -490,7 +529,7 @@ function computeMatchMetrics(match) {
     const scoredHoles = holeResults.filter(h => h.completed).map(h => h.playerScores.find(ps => ps.playerId === p.playerId)).filter(Boolean);
     const grossTotal = scoredHoles.reduce((sum, s) => sum + (s.gross || 0), 0);
     const netTotal = scoredHoles.reduce((sum, s) => sum + (s.net || 0), 0);
-    const totalPar = tee.holes.slice(0, scoredHoles.length).reduce((sum, h) => sum + (Number(h.par) || 0), 0);
+    const totalPar = scoringHoles.slice(0, scoredHoles.length).reduce((sum, h) => sum + (Number(h.par) || 0), 0);
     const toPar = grossTotal - totalPar;
     const netDiff = netTotal - totalPar;
     const skins = holeResults.filter(h => h.completed && h.indivWinners.length === 1 && h.indivWinners[0] === p.playerId).length;
@@ -513,8 +552,9 @@ function computeMatchMetrics(match) {
     const netTotal = members.reduce((sum, p) => sum + p.netTotal, 0);
     const totalPar = members.reduce((sum, p) => sum + p.totalPar, 0);
     const skins = holeResults.filter(h => h.completed && h.teamSkinWinner === teamNo).length;
-    const front = holeResults.slice(0, 9).reduce((sum, h) => sum + (h.teamWinner === teamNo ? 1 : h.teamWinner && h.teamWinner !== 0 ? -1 : 0), 0);
-    const back = holeResults.slice(9, 18).reduce((sum, h) => sum + (h.teamWinner === teamNo ? 1 : h.teamWinner && h.teamWinner !== 0 ? -1 : 0), 0);
+    const split = Math.min(9, holeCount);
+    const front = holeResults.slice(0, split).reduce((sum, h) => sum + (h.teamWinner === teamNo ? 1 : h.teamWinner && h.teamWinner !== 0 ? -1 : 0), 0);
+    const back = holeCount > 9 ? holeResults.slice(9, holeCount).reduce((sum, h) => sum + (h.teamWinner === teamNo ? 1 : h.teamWinner && h.teamWinner !== 0 ? -1 : 0), 0) : 0;
     const overall = holeResults.reduce((sum, h) => sum + (h.teamWinner === teamNo ? 1 : h.teamWinner && h.teamWinner !== 0 ? -1 : 0), 0);
     return {
       team: teamNo,
@@ -547,6 +587,7 @@ function computeMatchMetrics(match) {
     bestPlayerNet,
     bestTeam,
     matchDiff,
+    holeCount,
   };
 }
 
@@ -706,14 +747,24 @@ function buildFeaturedMatchStatus(match, metrics, gameKey) {
   const courseLine = `${escapeHtml(metrics?.course?.name || 'No course')} · ${escapeHtml(metrics?.tee?.teeName || 'No tee')}`;
   if (['nassau', 'team_match', 'team_stroke'].includes(gameKey) && metrics.teams.length === 2) {
     const diffs = computeTeamGameDiffs(match, metrics, gameKey);
-    const frontStatus = formatTeamGameStatus(match, metrics, diffs.front);
-    const backStatus = formatTeamGameStatus(match, metrics, diffs.back);
+    const holeCount = getPlayableHoleCount(match, metrics.tee);
     const overallTeam = formatTeamGameStatus(match, metrics, diffs.overall);
-    const items = [
-      { label: 'Front 9', value: frontStatus },
-      { label: 'Back 9', value: backStatus },
-      { label: gameKey === 'nassau' ? 'Overall 18' : 'Overall', value: overallTeam },
-    ];
+    let items;
+    if (holeCount <= 9) {
+      items = [
+        { label: 'Format', value: `${holeCount} Holes` },
+        { label: 'Played', value: `${metrics.completed}/${holeCount}` },
+        { label: 'Overall', value: overallTeam },
+      ];
+    } else {
+      const frontStatus = formatTeamGameStatus(match, metrics, diffs.front);
+      const backStatus = formatTeamGameStatus(match, metrics, diffs.back);
+      items = [
+        { label: 'Front 9', value: frontStatus },
+        { label: 'Back 9', value: backStatus },
+        { label: gameKey === 'nassau' ? 'Overall 18' : 'Overall', value: overallTeam },
+      ];
+    }
     return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid">${items.map(item => `<div class="match-status-tile"><div class="tiny">${escapeHtml(item.label)}</div><div class="match-status-value">${item.value}</div></div>`).join('')}</div>`;
   }
   if (gameKey === 'individual_match') {
@@ -751,41 +802,53 @@ function buildFeaturedMatchStatus(match, metrics, gameKey) {
 function buildClassicScorecard(match, metrics) {
   const tee = metrics?.tee;
   if (!tee) return '<div class="tiny">No scorecard available.</div>';
-  const holes = tee.holes || [];
-  const front = holes.slice(0,9);
-  const back = holes.slice(9,18);
+  const holeCount = getPlayableHoleCount(match, tee);
+  const holes = (tee.holes || []).slice(0, holeCount);
+  const front = holes.slice(0, Math.min(9, holeCount));
+  const back = holeCount > 9 ? holes.slice(9, holeCount) : [];
   const holeHeader = holes.map(h => `<th>H${h.holeNumber}</th>`).join('');
   const sum = arr => arr.reduce((s,h)=>s+(Number(h)||0),0);
-  const scorecardMetaRow = (label, extractor) => `<tr><td class="scorecard-sticky-name"><strong>${label}</strong></td><td class="scorecard-sticky-team">Course</td>${holes.map(h => `<td>${extractor(h) ?? '—'}</td>`).join('')}<td><strong>${sum(front.map(extractor)) || '—'}</strong></td><td><strong>${sum(back.map(extractor)) || '—'}</strong></td><td><strong>${sum(holes.map(extractor)) || '—'}</strong></td></tr>`;
+  const totalColumns = holeCount > 9 ? '<th>Out</th><th>In</th><th>Total</th>' : '<th>Out</th><th>Total</th>';
+  const scorecardMetaRow = (label, extractor) => {
+    const holeValues = holes.map(h => extractor(h));
+    const outTotal = sum(front.map(extractor));
+    const inTotal = back.length ? sum(back.map(extractor)) : null;
+    const total = sum(holes.map(extractor));
+    return `<tr><td class="scorecard-sticky-name"><strong>${label}</strong></td><td class="scorecard-sticky-team">Course</td>${holeValues.map(v => `<td>${v ?? '—'}</td>`).join('')}<td><strong>${outTotal || '—'}</strong></td>${back.length ? `<td><strong>${inTotal || '—'}</strong></td>` : ''}<td><strong>${total || '—'}</strong></td></tr>`;
+  };
   const yardageRow = scorecardMetaRow('Yds', h => Number(h.yardage) || 0);
   const parRow = scorecardMetaRow('Par', h => Number(h.par) || 0);
   const siRow = scorecardMetaRow('Handicap', h => Number(h.strokeIndex) || 0);
   const dotMarkup = count => count > 0 ? `<span class="score-dots">${'•'.repeat(Math.min(count,3))}${count>3?`<sup>${count}</sup>`:''}</span>` : '';
   const playerRows = metrics.players.map(p => {
-    const frontGross = p.scores.slice(0,9).reduce((s,x)=>s+(Number(x.gross)||0),0);
-    const backGross = p.scores.slice(9,18).reduce((s,x)=>s+(Number(x.gross)||0),0);
+    const playerScores = (p.scores || []).slice(0, holeCount);
+    const frontGross = playerScores.slice(0, Math.min(9, holeCount)).reduce((s,x)=>s+(Number(x.gross)||0),0);
+    const backGross = holeCount > 9 ? playerScores.slice(9, holeCount).reduce((s,x)=>s+(Number(x.gross)||0),0) : 0;
     const frontNetValues = front.map((hole, idx) => {
-      const gross = Number(p.scores[idx]?.gross) || null;
+      const gross = Number(playerScores[idx]?.gross) || null;
       const strokes = holeStrokeAllowanceForPlayer(hole.strokeIndex, p.playHdcp, metrics.lowPlaying);
       return gross ? gross - strokes : null;
     });
     const backNetValues = back.map((hole, idx) => {
-      const gross = Number(p.scores[idx+9]?.gross) || null;
+      const gross = Number(playerScores[idx + 9]?.gross) || null;
       const strokes = holeStrokeAllowanceForPlayer(hole.strokeIndex, p.playHdcp, metrics.lowPlaying);
       return gross ? gross - strokes : null;
     });
     const frontNet = frontNetValues.reduce((s,v)=>s+(Number(v)||0),0);
     const backNet = backNetValues.reduce((s,v)=>s+(Number(v)||0),0);
     const cells = holes.map((hole, idx) => {
-      const gross = Number(p.scores[idx]?.gross) || null;
+      const gross = Number(playerScores[idx]?.gross) || null;
       const strokes = holeStrokeAllowanceForPlayer(hole.strokeIndex, p.playHdcp, metrics.lowPlaying);
       if (!gross) return `<td class="score-hole-cell"><div class="score-main">${formatGolfScoreMarkup(null, hole.par, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(null, hole.par, 'net')}${dotMarkup(strokes)}</div></td>`;
       const net = gross - strokes;
       return `<td class="score-hole-cell"><div class="score-main">${formatGolfScoreMarkup(gross, hole.par, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(net, hole.par, 'net')}${dotMarkup(strokes)}</div></td>`;
     }).join('');
-    return `<tr><td class="scorecard-sticky-name"><strong>${escapeHtml(p.player.name)}</strong></td><td class="scorecard-sticky-team">${escapeHtml(getTeamLabel(match,p.team))}</td>${cells}<td><strong>${frontGross}</strong><div class="score-sub total-sub">${frontNet || '—'}</div></td><td><strong>${backGross}</strong><div class="score-sub total-sub">${backNet || '—'}</div></td><td><strong>${p.grossTotal || 0}</strong><div class="score-sub total-sub">${p.netTotal || 0}</div></td></tr>`;
+    const totals = back.length
+      ? `<td><strong>${frontGross}</strong><div class="score-sub total-sub">${frontNet || '—'}</div></td><td><strong>${backGross}</strong><div class="score-sub total-sub">${backNet || '—'}</div></td><td><strong>${p.grossTotal || 0}</strong><div class="score-sub total-sub">${p.netTotal || 0}</div></td>`
+      : `<td><strong>${frontGross}</strong><div class="score-sub total-sub">${frontNet || '—'}</div></td><td><strong>${p.grossTotal || 0}</strong><div class="score-sub total-sub">${p.netTotal || 0}</div></td>`;
+    return `<tr><td class="scorecard-sticky-name"><strong>${escapeHtml(p.player.name)}</strong></td><td class="scorecard-sticky-team">${escapeHtml(getTeamLabel(match,p.team))}</td>${cells}${totals}</tr>`;
   }).join('');
-  return `<div class="scorecard-sub tiny">Per-hole cells show gross on top and net below, with notation wrapped around the score and dots for strokes received. Course rows include yardage, par, and handicap.</div><div class="scorecard-wrap"><table class="scorecard-table"><thead><tr><th class="scorecard-sticky-name">Player</th><th class="scorecard-sticky-team">Team</th>${holeHeader}<th>Out</th><th>In</th><th>Total</th></tr></thead><tbody>${yardageRow}${parRow}${siRow}${playerRows}</tbody></table></div>`;
+  return `<div class="scorecard-sub tiny">Per-hole cells show gross on top and net below, with notation wrapped around the score and dots for strokes received. Course rows include yardage, par, and handicap.</div><div class="scorecard-wrap"><table class="scorecard-table"><thead><tr><th class="scorecard-sticky-name">Player</th><th class="scorecard-sticky-team">Team</th>${holeHeader}${totalColumns}</tr></thead><tbody>${yardageRow}${parRow}${siRow}${playerRows}</tbody></table></div>`;
 }
 
 function buildNetPayoutSummary(match, metrics) {
@@ -1076,11 +1139,11 @@ function renderMatches() {
           <div>
             <div class="item-title">${escapeHtml(match.name || 'Round')} · ${escapeHtml(match.date)}</div>
             <div class="muted">${escapeHtml(course?.name || 'No course')} · ${escapeHtml(tee?.teeName || 'No tee')} · ${status}</div>
-            <div class="tiny">${metrics ? `${metrics.completed}/18 holes completed` : ''}</div>
+            <div class="tiny">${metrics ? `${metrics.completed}/${getPlayableHoleCount(match, metrics.tee)} holes completed` : ''}</div>
           </div>
           <div class="actions wrap compact-actions">
             <button class="secondary" data-load-match="${match.id}">${state.activeMatchId === match.id ? 'Loaded' : 'Load'}</button>
-            <button class="secondary" data-share-match="${match.id}">Share</button>
+            <button class="secondary" data-share-match="${match.id}">PDF</button>
             <button class="secondary" data-delete-match="${match.id}">Delete</button>
           </div>
         </div>
@@ -1107,10 +1170,11 @@ function renderCurrentMatch() {
   const course = getCourse(match.courseId);
   const tee = getTee(match.courseId, match.teeId);
   const metrics = computeMatchMetrics(match);
-  metaEl.textContent = `${match.date} · ${match.name || 'Round'} · ${course?.name || ''} · ${tee?.teeName || ''} · ${metrics?.completed || 0}/18 holes completed`;
+  const holeCount = getPlayableHoleCount(match, tee);
+  metaEl.textContent = `${match.date} · ${match.name || 'Round'} · ${course?.name || ''} · ${tee?.teeName || ''} · ${metrics?.completed || 0}/${holeCount} holes completed`;
   emptyEl.classList.add('hidden');
   wrapEl.classList.remove('hidden');
-  currentHole = Math.min(18, Math.max(1, currentHole));
+  currentHole = Math.min(getPlayableHoleCount(match, tee), Math.max(1, currentHole));
   document.getElementById('currentHoleBadge').textContent = `Hole ${currentHole}`;
   const hole = tee?.holes[currentHole - 1];
   const teamText = metrics?.teams?.length === 2 ? `${formatMatchDiff(metrics.matchDiff, match)} overall` : 'Singles leaderboard';
@@ -1138,7 +1202,8 @@ function renderHoleJumpTiles(match) {
   const wrap = document.getElementById('holeJumpTiles');
   if (!wrap) return;
   const completed = completedHoles(match);
-  wrap.innerHTML = Array.from({ length: 18 }, (_, idx) => {
+  const holeCount = getPlayableHoleCount(match);
+  wrap.innerHTML = Array.from({ length: holeCount }, (_, idx) => {
     const holeNo = idx + 1;
     const classes = ['hole-jump-tile'];
     if (holeNo === currentHole) classes.push('active');
@@ -1346,7 +1411,7 @@ function computeLivePayoutGames(match, metrics) {
 function buildSelectedGamesSummary(match, metrics) {
   const selected = Array.isArray(match.selectedGames) ? match.selectedGames : [];
   if (!selected.length) {
-    return `<div class="game-summary-grid"><div class="game-summary-card"><div class="game-summary-title">Round pace</div><div class="game-summary-value">${metrics.completed ? `${Math.round((metrics.completed / 18) * 100)}% complete` : 'Not started'}</div></div></div>`;
+    return `<div class="game-summary-grid"><div class="game-summary-card"><div class="game-summary-title">Round pace</div><div class="game-summary-value">${metrics.completed ? `${Math.round((metrics.completed / Math.max(1, getPlayableHoleCount(match, metrics.tee))) * 100)}% complete` : 'Not started'}</div></div></div>`;
   }
   const cards = selected.map(cfg => {
     const title = getFeaturedGameLabel(match, cfg.key);
@@ -1400,7 +1465,7 @@ function buildSelectedGamesSummary(match, metrics) {
     }
     return `<div class="game-summary-card"><div class="game-summary-title">${escapeHtml(title)}</div><div class="game-summary-value">${escapeHtml(value)}</div>${sub ? `<div class="game-summary-sub">${escapeHtml(sub)}</div>` : ''}</div>`;
   });
-  cards.push(`<div class="game-summary-card game-summary-card-accent"><div class="game-summary-title">Round pace</div><div class="game-summary-value">${metrics.completed ? `${Math.round((metrics.completed / 18) * 100)}% complete` : 'Not started'}</div><div class="game-summary-sub">${metrics.completed}/18 holes completed</div></div>`);
+  cards.push(`<div class="game-summary-card game-summary-card-accent"><div class="game-summary-title">Round pace</div><div class="game-summary-value">${metrics.completed ? `${Math.round((metrics.completed / Math.max(1, getPlayableHoleCount(match, metrics.tee))) * 100)}% complete` : 'Not started'}</div><div class="game-summary-sub">${metrics.completed}/${getPlayableHoleCount(match, metrics.tee)} holes completed</div></div>`);
   return `<div class="game-summary-grid">${cards.join('')}</div>`;
 }
 
@@ -1681,7 +1746,7 @@ function renderMatchSetupState() {
     msg.textContent = `Scoring has started for ${active.name || 'the active match'}. Use Edit Active Match to make changes with confirmation.`;
   } else {
     wrap.classList.remove('hidden');
-    msg.textContent = active ? `${active.name || 'Active match'} · ${completedHoles(active)}/18 holes entered.` : 'Build a new match, or edit the active one.';
+    msg.textContent = active ? `${active.name || 'Active match'} · ${completedHoles(active)}/${getRequestedHoleCount(active)} holes entered.` : 'Build a new match, or edit the active one.';
   }
 }
 
@@ -1755,6 +1820,7 @@ function loadMatchEditor(matchId = null) {
     form.reset();
     form.elements.namedItem('date').value = todayIso();
     form.elements.namedItem('allowance').value = 100;
+    form.elements.namedItem('holeCount').value = '18';
     document.getElementById('teamCountSelect').value = '1';
     document.getElementById('playersPerTeamSelect').value = '1';
     populateMatchCourseSelects();
@@ -1768,6 +1834,7 @@ function loadMatchEditor(matchId = null) {
   form.elements.namedItem('name').value = match.name || '';
   populateMatchCourseSelects(match.courseId || '', match.teeId || '');
   form.elements.namedItem('allowance').value = match.allowance || 100;
+  form.elements.namedItem('holeCount').value = String(getRequestedHoleCount(match));
   document.getElementById('teamCountSelect').value = String(match.teamCount || 2);
   document.getElementById('playersPerTeamSelect').value = String(match.playersPerTeam || 2);
   renderTeamNameInputs(match.teamCount || 2, match.teamNames || []);
@@ -2033,6 +2100,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       teeId: String(fd.get('teeId') || ''),
       format: 'teams',
       allowance: Number(fd.get('allowance')) || 100,
+      holeCount: Number(fd.get('holeCount')) === 9 ? 9 : 18,
       teamCount,
       playersPerTeam,
       teamNames,
@@ -2041,7 +2109,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       completedAt: existing?.completedAt || null,
       players: selectedPlayers.map(sp => {
         const old = existing?.players.find(op => op.playerId === sp.playerId);
-        return old ? { ...old, team: sp.team } : { playerId: sp.playerId, team: sp.team, scores: buildEmptyScores() };
+        return old ? { ...old, team: sp.team } : { playerId: sp.playerId, team: sp.team, scores: buildEmptyScores(Number(fd.get('holeCount')) === 9 ? 9 : 18) };
       }),
       greeniesWinners: existing?.greeniesWinners || {},
       momentumGame: existing?.momentumGame || (selectedGames.find(g => g.key === 'nassau')?.key || selectedGames.find(g => ['team_match','team_stroke'].includes(g.key))?.key || 'nassau'),
@@ -2052,7 +2120,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (!match.courseId || !match.teeId) return toast('Select a course and tee.');
     if (editingMatchId) state.matches = state.matches.map(m => m.id === editingMatchId ? match : m); else state.matches.push(match);
     state.activeMatchId = match.id;
-    currentHole = Math.max(1, completedHoles(match) || 1);
+    currentHole = Math.min(getRequestedHoleCount(match), Math.max(1, completedHoles(match) || 1));
     persist({ skipRender: true });
     loadMatchEditor(null);
     renderAll();
@@ -2076,12 +2144,13 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       delete match.greeniesWinners[String(currentHole)];
     }
     const savedHole = currentHole;
-    if (Number.isFinite(targetHole) && targetHole >= 1 && targetHole <= 18) {
+    const maxHole = getRequestedHoleCount(match);
+    if (Number.isFinite(targetHole) && targetHole >= 1 && targetHole <= maxHole) {
       currentHole = targetHole;
     } else if (advance) {
-      currentHole = Math.min(18, currentHole + 1);
+      currentHole = Math.min(maxHole, currentHole + 1);
     } else {
-      currentHole = Math.min(18, Math.max(currentHole, completedHoles(match) + 1));
+      currentHole = Math.min(maxHole, Math.max(currentHole, completedHoles(match) + 1));
     }
     persist();
     if (!silent) toast(`Hole ${savedHole} saved.`);
@@ -2090,13 +2159,13 @@ document.getElementById('leaderboard').addEventListener('change', e => {
 
   document.getElementById('matchesList').addEventListener('click', e => {
     const loadId = e.target.dataset.loadMatch; const shareId = e.target.dataset.shareMatch; const deleteId = e.target.dataset.deleteMatch;
-    if (loadId) { state.activeMatchId = loadId; currentHole = Math.max(1, completedHoles(getMatch(loadId)) || 1); persist(); activateTab('score'); }
-    if (shareId) { shareRound(shareId); }
+    if (loadId) { state.activeMatchId = loadId; currentHole = Math.min(getRequestedHoleCount(getMatch(loadId)), Math.max(1, completedHoles(getMatch(loadId)) || 1)); persist(); activateTab('score'); }
+    if (shareId) { openPrintScorecard(shareId); }
     if (deleteId && confirm('Delete this match?')) { state.matches = state.matches.filter(m => m.id !== deleteId); if (state.activeMatchId === deleteId) state.activeMatchId = null; persist(); }
   });
   document.getElementById('prevHoleBtn').addEventListener('click', () => { currentHole = Math.max(1, currentHole - 1); renderCurrentMatch(); });
   document.getElementById('nextHoleBtn').addEventListener('click', () => { saveCurrentHole({ advance: true, silent: true }); });
-  document.getElementById('shareRoundBtn').addEventListener('click', () => { shareRound(); });
+  document.getElementById('shareRoundBtn').addEventListener('click', () => { openPrintScorecard(); });
   document.getElementById('saveScoresBtn').addEventListener('click', () => { saveCurrentHole(); });
   document.getElementById('finishRoundBtn').addEventListener('click', () => {
     const match = getActiveMatch(); if (!match) return toast('No active match.');

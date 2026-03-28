@@ -158,6 +158,12 @@
           <label><span>Match name</span><input class="input-match" name="name" placeholder="Saturday game" /></label>
           <label><span>Course</span><select name="courseId" id="matchCourseSelect" required></select></label>
           <label><span>Tee</span><select name="teeId" id="matchTeeSelect" required></select></label>
+          <label><span>Match length</span>
+            <select name="holeCount" id="holeCountSelect">
+              <option value="9">9 holes</option>
+              <option value="18" selected>18 holes</option>
+            </select>
+          </label>
           <label><span># Teams</span>
             <select name="teamCount" id="teamCountSelect">
               <option value="1">1 team</option>
@@ -227,7 +233,7 @@
             <div id="currentMatchMeta" class="muted">No active match.</div>
           </div>
           <div class="actions wrap compact-actions">
-            <button id="shareRoundBtn" type="button" class="secondary">Share Scorecard</button>
+            <button id="shareRoundBtn" type="button" class="secondary">Print / Save PDF</button>
             <button id="finishRoundBtn" type="button" class="secondary">Finish Round</button>
             <button id="confirmFinishRoundBtn" type="button" class="secondary hidden">Confirm Finish</button>
           </div>
@@ -268,6 +274,7 @@
 
     <section id="leaderboard" class="panel">
       <div id="leaderboardWrap" class="hidden">
+        <div id="printRoundMeta" class="print-round-meta hidden"></div>
         <div class="leaderboard-cards">
           <div class="card tight-card scoreboard-card">
             <div class="item-header compact-item-header">

@@ -108,11 +108,22 @@
           <label><span>Total par</span><input name="par" type="number" min="20" max="90" placeholder="Auto if blank" /></label>
           <label><span>Course rating</span><input name="rating" type="number" step="0.1" required /></label>
           <label><span>Slope</span><input name="slope" type="number" min="55" max="155" required /></label>
+          <label class="mini-check combo-toggle"><input id="teeIsCombo" name="isCombo" type="checkbox" /> Combo tee</label>
+          <label>
+            <span>Copy from saved tee</span>
+            <select id="copyTeeSourceSelect">
+              <option value="">Copy from saved tee</option>
+            </select>
+          </label>
+          <div id="comboTeeBuilderWrap" class="span-2 hidden">
+            <div class="tiny">Choose the source tee for each hole. The yardage, par, and stroke index will be inherited automatically.</div>
+            <div id="comboHoleSourceWrap"></div>
+          </div>
           <div class="span-2 hole-tools actions wrap compact-actions">
             <button id="loadTemplate18Btn" type="button" class="secondary">Load 18-hole template</button>
             <button id="recalcTotalsBtn" type="button" class="secondary">Use hole totals</button>
           </div>
-          <div class="span-2">
+          <div id="standardHoleRowsWrap" class="span-2">
             <div class="hole-grid-wrap">
               <table class="hole-grid hole-grid-course">
                 <thead>
@@ -232,15 +243,7 @@
             <h2>Scoring input</h2>
             <div id="currentMatchMeta" class="muted">No active match.</div>
           </div>
-          <div class="actions wrap compact-actions print-actions">
-            <label class="inline-select tiny">
-              <span>Print view</span>
-              <select id="printViewSelect">
-                <option value="summary" selected>Match summary</option>
-                <option value="scorecard">Classic scorecard only</option>
-              </select>
-            </label>
-            <button id="shareRoundBtn" type="button" class="secondary">Print / Save PDF</button>
+          <div class="actions wrap compact-actions">
             <button id="finishRoundBtn" type="button" class="secondary">Finish Round</button>
             <button id="confirmFinishRoundBtn" type="button" class="secondary hidden">Confirm Finish</button>
           </div>
@@ -282,6 +285,24 @@
     <section id="leaderboard" class="panel">
       <div id="leaderboardWrap" class="hidden">
         <div id="printRoundMeta" class="print-round-meta hidden"></div>
+        <div class="card tight-card scoreboard-card scoreboard-export-card">
+          <div class="item-header compact-item-header">
+            <div>
+              <h2>Share / Print</h2>
+              <div class="tiny">Open the iPhone/browser print sheet, then use Save as PDF if desired.</div>
+            </div>
+            <div class="actions wrap compact-actions print-actions">
+              <label class="inline-select tiny">
+                <span>Print view</span>
+                <select id="scoreboardPrintViewSelect">
+                  <option value="summary" selected>Match summary</option>
+                  <option value="scorecard">Classic scorecard only</option>
+                </select>
+              </label>
+              <button id="scoreboardShareRoundBtn" type="button" class="secondary">Print / Save PDF</button>
+            </div>
+          </div>
+        </div>
         <div class="leaderboard-cards">
           <div class="card tight-card scoreboard-card">
             <div class="item-header compact-item-header">

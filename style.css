@@ -717,3 +717,26 @@ body.keyboard-open .top-tabs{
   .print-actions{align-items:stretch}
   #printViewSelect{max-width:170px}
 }
+
+
+.combo-toggle{display:flex;align-items:center;gap:8px;font-weight:600}
+.combo-grid select{min-width:120px}
+.scoreboard-export-card{margin-bottom:12px}
+@media print {
+  body.printing-scorecard main > .panel,
+  body.printing-scorecard nav,
+  body.printing-scorecard .app-header { display:none !important; }
+  body.printing-scorecard #leaderboard.panel { display:block !important; }
+  body.printing-scorecard #leaderboardWrap { display:block !important; }
+  body.printing-scorecard #leaderboard .scoreboard-export-card,
+  body.printing-scorecard #score,
+  body.printing-scorecard #setup,
+  body.printing-scorecard #players,
+  body.printing-scorecard #courses,
+  body.printing-scorecard #settings,
+  body.printing-scorecard #leaderboardEmpty,
+  body.printing-scorecard #matchesList,
+  body.printing-scorecard #leaderboard > details:last-of-type { display:none !important; }
+  body.printing-scorecard { background:#fff !important; }
+  body.printing-scorecard main { padding:0 !important; }
+}

@@ -126,6 +126,17 @@ function extractStrokeTemplate(holes) {
   return arr.length === 18 && arr.every(v => v !== null) ? arr : null;
 }
 function formatSigned(n) { return n > 0 ? `+${n}` : `${n}`; }
+function formatRatingValue(v) {
+  const num = Number(v);
+  return Number.isFinite(num) ? num.toFixed(1) : '0.0';
+}
+function formatYardageValue(v) {
+  const num = Number(v);
+  return Number.isFinite(num) && num > 0 ? num.toLocaleString('en-US') : '0';
+}
+function formatTeeSummary(t) {
+  return `${escapeHtml(t.teeName)} · ${formatRatingValue(t.rating)}/${Number(t.slope) || 0}${getTeeTotalYardage(t) ? ` · ${formatYardageValue(getTeeTotalYardage(t))} yds` : ''}`;
+}
 function formatMoneyAccounting(amount) {
   const value = Number(amount) || 0;
   const abs = Math.abs(value).toFixed(2);
@@ -384,6 +395,11 @@ function normalizeTee(tee, courseName = '') {
   tee.courseName = tee.courseName || courseName;
   tee.teeName = tee.teeName || 'Tee';
   tee.gender = tee.gender || 'M';
+  tee.isCombo = !!tee.isCombo;
+  tee.comboSources = Array.isArray(tee.comboSources) ? tee.comboSources.slice(0, 18).map((source, idx) => ({
+    holeNumber: idx + 1,
+    sourceTeeId: source?.sourceTeeId || ''
+  })) : buildDefaultHoles().map(h => ({ holeNumber: h.holeNumber, sourceTeeId: '' }));
   tee.holes = Array.isArray(tee.holes) && tee.holes.length ? tee.holes.map(normalizeHole) : buildDefaultHoles();
   tee.length = Number(tee.length) || sumYardage(tee.holes) || null;
   tee.par = Number(tee.par) || sumPar(tee.holes) || 72;
@@ -1123,11 +1139,12 @@ function renderCourses() {
       <div class="top-gap">
         ${c.tees.length ? getSortedTeesByYardage(c).map(t => `
           <div class="tee-block">
-            <div class="strong">${escapeHtml(t.teeName)} · ${t.gender === 'F' ? 'Women' : 'Men'}</div>
-            <div class="tiny">Par ${t.par} · Rating ${t.rating} · Slope ${t.slope}${t.length ? ` · ${t.length} yds` : ''}</div>
+            <div class="strong">${escapeHtml(t.teeName)} · ${t.gender === 'F' ? 'Women' : 'Men'}${t.isCombo ? ' · Combo' : ''}</div>
+            <div class="tiny">Par ${t.par} · Rating ${formatRatingValue(t.rating)} · Slope ${t.slope}${getTeeTotalYardage(t) ? ` · ${formatYardageValue(getTeeTotalYardage(t))} yds` : ''}</div>
             <div class="tiny">${strokeIndexSummary(t.holes, c)}</div>
             <div class="actions wrap compact-actions top-gap">
               <button class="secondary" data-edit-tee="${c.id}|${t.id}">Edit tee</button>
+              <button class="secondary" data-copy-tee="${c.id}|${t.id}">Copy tee</button>
               <button class="secondary" data-delete-tee="${c.id}|${t.id}">Delete tee</button>
             </div>
           </div>
@@ -1455,8 +1472,17 @@ function buildSelectedGamesSummary(match, metrics) {
       sub = `Mode: ${formatScoringModeLabel(cfg.scoringMode)} · ${formatBasisLabel(cfg.basis)}`;
     } else if (cfg.key === 'individual_match') {
       const pairings = getIndividualMatchPairings(match, metrics);
-      value = pairings.length ? pairings.map(p => `${p.team1Player.player.name} vs ${p.team2Player.player.name}: ${p.status}`).join(' · ') : 'Waiting for pairings';
-      sub = `Scored as match play · ${formatBasisLabel(cfg.basis)}`;
+      if (!pairings.length) {
+        value = 'Waiting for pairings';
+        sub = `Scored as match play · ${formatBasisLabel(cfg.basis)}`;
+      } else {
+        const leaders = pairings.map(p => {
+          if (!Number.isFinite(p.diff) || p.diff === 0) return null;
+          return p.diff > 0 ? p.team1Player.player.name : p.team2Player.player.name;
+        }).filter(Boolean);
+        value = leaders.length ? leaders.join(' · ') : 'All square';
+        sub = pairings.map(p => `${p.team1Player.player.name} vs ${p.team2Player.player.name}: ${p.status}`).join(' · ');
+      }
     } else if (cfg.key === 'skins') {
       const skins = computeSkinResults(match, metrics, cfg);
       const entries = Object.entries(skins.counts || {});
@@ -1501,7 +1527,7 @@ function populateCalcTees() {
   const courseId = document.getElementById('calcCourse').value;
   const teeSelect = document.getElementById('calcTee');
   const course = getCourse(courseId);
-  teeSelect.innerHTML = !course ? '<option value="">Select tee</option>' : `<option value="">Select tee</option>${getSortedTeesByYardage(course).map(t => `<option value="${t.id}">${escapeHtml(t.teeName)} · ${t.rating}/${t.slope}${getTeeTotalYardage(t) ? ` · ${getTeeTotalYardage(t)} yds` : ''}</option>`).join('')}`;
+  teeSelect.innerHTML = !course ? '<option value="">Select tee</option>' : `<option value="">Select tee</option>${getSortedTeesByYardage(course).map(t => `<option value="${t.id}">${formatTeeSummary(t)}</option>`).join('')}`;
 }
 function populateMatchCourseSelects(selectedCourseId = null, selectedTeeId = null) {
   const options = state.courses.map(c => `<option value="${c.id}" ${selectedCourseId === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
@@ -1514,7 +1540,7 @@ function populateMatchTees(courseId = null, selectedTeeId = null) {
   const resolvedCourseId = courseId ?? document.getElementById('matchCourseSelect').value;
   const teeSelect = document.getElementById('matchTeeSelect');
   const course = getCourse(resolvedCourseId);
-  teeSelect.innerHTML = !course ? '<option value="">Select tee</option>' : `<option value="">Select tee</option>${getSortedTeesByYardage(course).map(t => `<option value="${t.id}" ${selectedTeeId === t.id ? 'selected' : ''}>${escapeHtml(t.teeName)} · ${t.rating}/${t.slope}${getTeeTotalYardage(t) ? ` · ${getTeeTotalYardage(t)} yds` : ''}</option>`).join('')}`;
+  teeSelect.innerHTML = !course ? '<option value="">Select tee</option>' : `<option value="">Select tee</option>${getSortedTeesByYardage(course).map(t => `<option value="${t.id}" ${selectedTeeId === t.id ? 'selected' : ''}>${formatTeeSummary(t)}</option>`).join('')}`;
   if (selectedTeeId) teeSelect.value = selectedTeeId;
 }
 
@@ -1706,6 +1732,127 @@ function collectSelectedGames() {
 }
 
 
+function getAvailableSourceTees(courseId = '', excludeTeeId = '') {
+  const course = getCourse(courseId);
+  return getSortedTeesByYardage(course).filter(t => t.id !== excludeTeeId);
+}
+function buildComboSourceRows(courseId = '', comboSources = null) {
+  const sourceTees = getAvailableSourceTees(courseId, editingTeeRef?.teeId || '');
+  const baseSources = Array.isArray(comboSources) && comboSources.length
+    ? comboSources.slice(0, 18).map((row, idx) => ({ holeNumber: idx + 1, sourceTeeId: row?.sourceTeeId || '' }))
+    : buildDefaultHoles().map(h => ({ holeNumber: h.holeNumber, sourceTeeId: '' }));
+  return baseSources.map((row, idx) => {
+    const sourceTee = sourceTees.find(t => t.id === row.sourceTeeId) || null;
+    const hole = sourceTee?.holes?.[idx] || null;
+    return {
+      holeNumber: idx + 1,
+      sourceTeeId: row.sourceTeeId || '',
+      yardage: Number(hole?.yardage) || null,
+      par: Number(hole?.par) || null,
+      strokeIndex: Number(hole?.strokeIndex) || null,
+    };
+  });
+}
+function renderComboSourceRows(courseId = '', comboSources = null) {
+  const wrap = document.getElementById('comboHoleSourceWrap');
+  if (!wrap) return;
+  const sourceTees = getAvailableSourceTees(courseId, editingTeeRef?.teeId || '');
+  const rows = buildComboSourceRows(courseId, comboSources);
+  if (!sourceTees.length) {
+    wrap.innerHTML = '<div class="tiny">Add at least one existing tee on this course before building a combo tee.</div>';
+    return;
+  }
+  wrap.innerHTML = `
+    <div class="hole-grid-wrap top-gap">
+      <table class="hole-grid hole-grid-course combo-grid">
+        <thead>
+          <tr>
+            <th>Hole</th>
+            <th>Source tee</th>
+            <th>Yds</th>
+            <th>Par</th>
+            <th>SI</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((row, idx) => `
+            <tr>
+              <td class="hole-num">${idx + 1}</td>
+              <td>
+                <select data-combo-hole="${idx}">
+                  <option value="">Select tee</option>
+                  ${sourceTees.map(tee => `<option value="${tee.id}" ${tee.id === row.sourceTeeId ? 'selected' : ''}>${escapeHtml(tee.teeName)}</option>`).join('')}
+                </select>
+              </td>
+              <td>${row.yardage ?? '—'}</td>
+              <td>${row.par ?? '—'}</td>
+              <td>${row.strokeIndex ?? '—'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+function collectComboSources() {
+  return Array.from({ length: 18 }, (_, idx) => ({
+    holeNumber: idx + 1,
+    sourceTeeId: document.querySelector(`[data-combo-hole="${idx}"]`)?.value || ''
+  }));
+}
+function buildComboHoles(courseId = '', comboSources = null) {
+  const course = getCourse(courseId);
+  if (!course) return buildDefaultHoles();
+  const sources = Array.isArray(comboSources) ? comboSources : collectComboSources();
+  return buildDefaultHoles().map((hole, idx) => {
+    const sourceTeeId = sources[idx]?.sourceTeeId || '';
+    const sourceTee = course.tees.find(t => t.id === sourceTeeId);
+    const sourceHole = sourceTee?.holes?.[idx];
+    return normalizeHole({
+      holeNumber: idx + 1,
+      yardage: Number(sourceHole?.yardage) || null,
+      par: Number(sourceHole?.par) || null,
+      strokeIndex: Number(sourceHole?.strokeIndex) || null,
+    });
+  });
+}
+function syncComboTotals() {
+  const form = document.getElementById('teeForm');
+  if (!form || !document.getElementById('teeIsCombo')?.checked) return;
+  const holes = buildComboHoles(form.elements.namedItem('courseId')?.value || '');
+  form.elements.namedItem('length').value = sumYardage(holes) || '';
+  form.elements.namedItem('par').value = sumPar(holes) || '';
+}
+function refreshTeeModeUi({ preserveCombo = true } = {}) {
+  const form = document.getElementById('teeForm');
+  if (!form) return;
+  const isCombo = !!document.getElementById('teeIsCombo')?.checked;
+  const standardWrap = document.getElementById('standardHoleRowsWrap');
+  const comboWrap = document.getElementById('comboTeeBuilderWrap');
+  if (standardWrap) standardWrap.classList.toggle('hidden', isCombo);
+  if (comboWrap) comboWrap.classList.toggle('hidden', !isCombo);
+  if (isCombo) {
+    const comboSources = preserveCombo ? collectComboSources() : null;
+    renderComboSourceRows(form.elements.namedItem('courseId')?.value || '', comboSources);
+    syncComboTotals();
+  }
+}
+function loadTeeCopySource(courseId = '', sourceTeeId = '') {
+  const course = getCourse(courseId);
+  const sourceTee = course?.tees.find(t => t.id === sourceTeeId);
+  if (!sourceTee) return;
+  const form = document.getElementById('teeForm');
+  form.elements.namedItem('gender').value = sourceTee.gender || 'M';
+  form.elements.namedItem('length').value = sourceTee.length || '';
+  form.elements.namedItem('par').value = sourceTee.par || '';
+  form.elements.namedItem('rating').value = formatRatingValue(sourceTee.rating);
+  form.elements.namedItem('slope').value = sourceTee.slope || '';
+  document.getElementById('teeIsCombo').checked = !!sourceTee.isCombo;
+  renderHoleRows(buildTeeHoleRows(courseId, sourceTee.holes));
+  renderComboSourceRows(courseId, sourceTee.comboSources || null);
+  refreshTeeModeUi({ preserveCombo: false });
+  toast(`Copied ${sourceTee.teeName} into the tee editor.`);
+}
+
 function buildTeeHoleRows(courseId = '', holes = null) {
   const course = getCourse(courseId);
   const template = getCourseStrokeTemplate(course);
@@ -1801,12 +1948,17 @@ function loadTeeEditor(courseId = null, teeId = null) {
   activateTab('courses');
   if (!courseId || !teeId) {
     form.reset();
+    document.getElementById('teeIsCombo').checked = false;
     const courseSelect = document.getElementById('teeCourseSelect');
     if (courseId) {
       courseSelect.value = courseId;
       form.elements.namedItem('courseId').value = courseId;
     }
+    document.getElementById('copyTeeSourceSelect').innerHTML = `<option value="">Copy from saved tee</option>${getAvailableSourceTees(courseId || courseSelect.value || '', '').map(t => `<option value="${t.id}">${escapeHtml(t.teeName)}</option>`).join('')}`;
+    document.getElementById('copyTeeSourceSelect').value = '';
     renderHoleRows(buildTeeHoleRows(courseId));
+    renderComboSourceRows(courseId, null);
+    refreshTeeModeUi({ preserveCombo: false });
     updateTeeStrokeTemplateHint(courseId || courseSelect.value || '');
     window.scrollTo({ top: document.getElementById('teeFormTitle').getBoundingClientRect().top + window.scrollY - 20, behavior: 'smooth' });
     return;
@@ -1817,9 +1969,14 @@ function loadTeeEditor(courseId = null, teeId = null) {
   form.elements.namedItem('gender').value = tee.gender;
   form.elements.namedItem('length').value = tee.length || '';
   form.elements.namedItem('par').value = tee.par || '';
-  form.elements.namedItem('rating').value = tee.rating || '';
+  form.elements.namedItem('rating').value = formatRatingValue(tee.rating);
   form.elements.namedItem('slope').value = tee.slope || '';
+  document.getElementById('copyTeeSourceSelect').innerHTML = `<option value="">Copy from saved tee</option>${getAvailableSourceTees(courseId, tee.id).map(t => `<option value="${t.id}">${escapeHtml(t.teeName)}</option>`).join('')}`;
+  document.getElementById('copyTeeSourceSelect').value = '';
+  document.getElementById('teeIsCombo').checked = !!tee.isCombo;
   renderHoleRows(buildTeeHoleRows(courseId, tee.holes));
+  renderComboSourceRows(courseId, tee.comboSources || null);
+  refreshTeeModeUi({ preserveCombo: false });
   updateTeeStrokeTemplateHint(courseId);
   window.scrollTo({ top: document.getElementById('teeFormTitle').getBoundingClientRect().top + window.scrollY - 20, behavior: 'smooth' });
 }
@@ -1905,18 +2062,23 @@ function installHandlers() {
     const courseId = String(fd.get('courseId') || '');
     const course = getCourse(courseId);
     if (!course) return toast('Select a course first.');
-    let holes = collectHolesFromGrid();
+    const isCombo = String(fd.get('isCombo') || '') === 'on';
+    const comboSources = isCombo ? collectComboSources() : buildDefaultHoles().map(h => ({ holeNumber: h.holeNumber, sourceTeeId: '' }));
+    let holes = isCombo ? buildComboHoles(courseId, comboSources) : collectHolesFromGrid();
     const courseTemplate = getCourseStrokeTemplate(course);
     const enteredTemplate = extractStrokeTemplate(holes);
     if (!enteredTemplate && courseTemplate) holes = applyStrokeTemplate(holes, courseTemplate);
     const strokeTotal = holes.reduce((sum, h) => sum + (Number(h.strokeIndex) || 0), 0);
     if (holes.some(h => !Number.isFinite(h.strokeIndex) || !h.strokeIndex)) return toast('Enter stroke indexes for all 18 holes.');
     if (strokeTotal !== 171) return toast('Stroke indexes must total 171 before saving.');
+    if (isCombo && comboSources.some(row => !row.sourceTeeId)) return toast('Choose a source tee for every hole in a combo tee.');
     const tee = {
       id: editingTeeRef?.teeId || uid(),
       courseName: course.name,
       teeName: String(fd.get('teeName') || '').trim(),
       gender: String(fd.get('gender') || 'M'),
+      isCombo,
+      comboSources,
       length: Number(fd.get('length')) || null,
       par: Number(fd.get('par')) || null,
       rating: Number(fd.get('rating')) || null,
@@ -1938,16 +2100,45 @@ function installHandlers() {
     const existing = collectHolesFromGrid();
     const hasData = existing.some((h, idx) => h.yardage || h.par || (Number(h.strokeIndex) && Number(h.strokeIndex) !== idx + 1));
     renderHoleRows(buildTeeHoleRows(e.target.value, hasData ? existing : null));
+    renderComboSourceRows(e.target.value, collectComboSources());
+    document.getElementById('copyTeeSourceSelect').innerHTML = `<option value="">Copy from saved tee</option>${getAvailableSourceTees(e.target.value, editingTeeRef?.teeId || '').map(t => `<option value="${t.id}">${escapeHtml(t.teeName)}</option>`).join('')}`;
+    refreshTeeModeUi();
     updateTeeStrokeTemplateHint(e.target.value);
   });
+  document.getElementById('teeIsCombo').addEventListener('change', () => refreshTeeModeUi({ preserveCombo: true }));
+  document.getElementById('copyTeeSourceSelect').addEventListener('change', e => {
+    const courseId = document.getElementById('teeCourseSelect').value;
+    if (courseId && e.target.value) loadTeeCopySource(courseId, e.target.value);
+  });
+  document.getElementById('teeForm').addEventListener('change', e => {
+    if (e.target.matches('[data-combo-hole]')) {
+      const selected = collectComboSources();
+      renderComboSourceRows(document.getElementById('teeCourseSelect').value, selected);
+      syncComboTotals();
+    }
+  });
   document.getElementById('loadTemplate18Btn').addEventListener('click', () => { renderHoleRows(buildTeeHoleRows(document.getElementById('teeCourseSelect').value)); toast('18-hole template loaded.'); });
-  document.getElementById('recalcTotalsBtn').addEventListener('click', fillTotalsFromHoles);
+  document.getElementById('recalcTotalsBtn').addEventListener('click', () => {
+    if (document.getElementById('teeIsCombo')?.checked) {
+      syncComboTotals();
+      toast('Combo tee totals updated from selected source tees.');
+      return;
+    }
+    fillTotalsFromHoles();
+  });
   document.getElementById('coursesList').addEventListener('click', e => {
-    const editCourse = e.target.dataset.editCourse; const deleteCourse = e.target.dataset.deleteCourse; const newTee = e.target.dataset.newTee; const editTee = e.target.dataset.editTee; const deleteTee = e.target.dataset.deleteTee;
+    const editCourse = e.target.dataset.editCourse; const deleteCourse = e.target.dataset.deleteCourse; const newTee = e.target.dataset.newTee; const editTee = e.target.dataset.editTee; const copyTee = e.target.dataset.copyTee; const deleteTee = e.target.dataset.deleteTee;
     if (editCourse) loadCourseEditor(editCourse);
     if (deleteCourse && confirm('Delete this course and all tees?')) { state.courses = state.courses.filter(c => c.id !== deleteCourse); state.matches = state.matches.filter(m => m.courseId !== deleteCourse); if (state.activeMatchId && !getActiveMatch()) state.activeMatchId = null; persist(); }
     if (newTee) loadTeeEditor(newTee, null);
     if (editTee) { const [courseId, teeId] = editTee.split('|'); loadTeeEditor(courseId, teeId); }
+    if (copyTee) {
+      const [courseId, teeId] = copyTee.split('|');
+      loadTeeEditor(courseId, null);
+      document.getElementById('copyTeeSourceSelect').value = teeId;
+      loadTeeCopySource(courseId, teeId);
+      return;
+    }
     if (deleteTee) {
       const [courseId, teeId] = deleteTee.split('|');
       const course = getCourse(courseId); if (!course) return;
@@ -1955,12 +2146,6 @@ function installHandlers() {
     }
   });
 
-  document.getElementById('teeCourseSelect').addEventListener('change', e => {
-    if (!editingTeeRef) {
-      renderHoleRows(buildTeeHoleRows(e.target.value));
-    }
-    updateTeeStrokeTemplateHint(e.target.value);
-  });
   document.getElementById('calcCourse').addEventListener('change', populateCalcTees);
   document.getElementById('calcForm').addEventListener('submit', e => {
     e.preventDefault();
@@ -2180,7 +2365,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   });
   document.getElementById('prevHoleBtn').addEventListener('click', () => { currentHole = Math.max(1, currentHole - 1); renderCurrentMatch(); });
   document.getElementById('nextHoleBtn').addEventListener('click', () => { saveCurrentHole({ advance: true, silent: true }); });
-  document.getElementById('shareRoundBtn').addEventListener('click', () => { openPrintScorecard(); });
+  document.getElementById('scoreboardShareRoundBtn').addEventListener('click', () => { openPrintScorecard(); });
   document.getElementById('saveScoresBtn').addEventListener('click', () => { saveCurrentHole(); });
   document.getElementById('finishRoundBtn').addEventListener('click', () => {
     const match = getActiveMatch(); if (!match) return toast('No active match.');

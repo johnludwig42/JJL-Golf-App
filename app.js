@@ -589,6 +589,7 @@ function computeMatchMetrics(match) {
   if (!players.length) return { players: [], teams: [], holeResults: [], completed: 0, statusText: 'No players' };
 
   const lowPlaying = Math.min(...players.map(p => p.playHdcp));
+  const teamNos = [...new Set(players.map(p => Number(p.team) || 1))].sort((a, b) => a - b);
   const holeResults = scoringHoles.map((hole, idx) => {
     const playerScores = players.map(p => {
       const gross = Number(p.scores[idx]?.gross) || null;
@@ -606,21 +607,21 @@ function computeMatchMetrics(match) {
       indivBest = Math.min(...playerScores.map(s => s.net));
       indivWinners = playerScores.filter(s => s.net === indivBest).map(s => s.playerId);
     }
-    const teams = [1, 2].map(teamNo => {
+    const teamScores = teamNos.map(teamNo => {
       const teamPlayers = playerScores.filter(s => s.team === teamNo);
       const gross = teamPlayers.reduce((sum, s) => sum + (s.gross || 0), 0);
       const net = teamPlayers.reduce((sum, s) => sum + (s.net || 0), 0);
       return { team: teamNo, gross: teamPlayers.length ? gross : null, net: teamPlayers.length ? net : null };
     }).filter(t => t.gross !== null);
     let teamWinner = null;
-    if (completed && teams.length === 2) {
-      if (teams[0].net < teams[1].net) teamWinner = 1;
-      else if (teams[1].net < teams[0].net) teamWinner = 2;
+    if (completed && teamScores.length === 2) {
+      if (teamScores[0].net < teamScores[1].net) teamWinner = teamScores[0].team;
+      else if (teamScores[1].net < teamScores[0].net) teamWinner = teamScores[1].team;
       else teamWinner = 0;
     }
     let teamSkinWinner = null;
-    if (completed && teams.length === 2 && teams[0].net !== teams[1].net) {
-      teamSkinWinner = teams[0].net < teams[1].net ? 1 : 2;
+    if (completed && teamScores.length === 2 && teamScores[0].net !== teamScores[1].net) {
+      teamSkinWinner = teamScores[0].net < teamScores[1].net ? teamScores[0].team : teamScores[1].team;
     }
     return {
       holeNumber: hole.holeNumber,
@@ -631,7 +632,7 @@ function computeMatchMetrics(match) {
       indivWinners,
       teamWinner,
       teamSkinWinner,
-      teamScores: teams,
+      teamScores,
     };
   });
 
@@ -655,7 +656,7 @@ function computeMatchMetrics(match) {
     };
   });
 
-  const teams = [1, 2].map(teamNo => {
+  const teams = teamNos.map(teamNo => {
     const members = playersWithTotals.filter(p => p.team === teamNo);
     if (!members.length) return null;
     const grossTotal = members.reduce((sum, p) => sum + p.grossTotal, 0);

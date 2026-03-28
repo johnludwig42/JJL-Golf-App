@@ -635,3 +635,85 @@ body.keyboard-open .top-tabs{
   body.printing-scorecard .payout-game-table,
   body.printing-scorecard .settlement-table { font-size:11px; }
 }
+
+
+.print-actions{align-items:flex-end}
+.payout-summary-stack{display:grid;gap:18px}
+.payout-section{page-break-inside:avoid}
+@media print {
+  body.printing-scorecard {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  body.printing-scorecard .momentum-pill,
+  body.printing-scorecard .score-main,
+  body.printing-scorecard .score-sub,
+  body.printing-scorecard .badge {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  body.printing-scorecard .scorecard-table th,
+  body.printing-scorecard .scorecard-table td,
+  body.printing-scorecard .leader-table th,
+  body.printing-scorecard .leader-table td,
+  body.printing-scorecard .payout-game-table th,
+  body.printing-scorecard .payout-game-table td,
+  body.printing-scorecard .settlement-table th,
+  body.printing-scorecard .settlement-table td {
+    background: #fff !important;
+  }
+  body.printing-scorecard .scorecard-table th:first-child,
+  body.printing-scorecard .scorecard-table td:first-child,
+  body.printing-scorecard .scorecard-table th:nth-child(2),
+  body.printing-scorecard .scorecard-table td:nth-child(2),
+  body.printing-scorecard .leader-table th:first-child,
+  body.printing-scorecard .leader-table td:first-child {
+    position: static !important;
+    left: auto !important;
+    box-shadow: none !important;
+  }
+  body.printing-scorecard.printing-classic-only .leaderboard-cards,
+  body.printing-scorecard.printing-classic-only details.scoreboard-collapsible,
+  body.printing-scorecard.printing-classic-only .leader-table-wrap,
+  body.printing-scorecard.printing-classic-only #playerLeaderboardMobile,
+  body.printing-scorecard.printing-classic-only #teamLeaderboardMobile,
+  body.printing-scorecard.printing-classic-only #matchStatusSummary,
+  body.printing-scorecard.printing-classic-only #gamesSummary,
+  body.printing-scorecard.printing-classic-only #payoutSummary,
+  body.printing-scorecard.printing-classic-only #holeMomentum,
+  body.printing-scorecard.printing-classic-only #momentumMeta,
+  body.printing-scorecard.printing-classic-only #momentumGameSelect,
+  body.printing-scorecard.printing-classic-only #momentumPerspectiveSelect,
+  body.printing-scorecard.printing-classic-only #matchStatusGameSelect,
+  body.printing-scorecard.printing-classic-only .inline-select,
+  body.printing-scorecard.printing-classic-only .item-header.compact-item-header > .actions,
+  body.printing-scorecard.printing-classic-only .card.tight-card.scoreboard-card:not(:has(#classicScorecard)) {
+    display:none !important;
+  }
+  body.printing-scorecard.printing-classic-only .card.tight-card.scoreboard-card:has(#classicScorecard) {
+    display:block !important;
+    border:none !important;
+    box-shadow:none !important;
+    padding:0 !important;
+    margin:0 !important;
+  }
+  body.printing-scorecard.printing-classic-only #classicScorecard .scorecard-wrap {
+    border:none !important;
+    box-shadow:none !important;
+  }
+  body.printing-scorecard.printing-classic-only #classicScorecard .scorecard-table {
+    min-width:0 !important;
+    width:100% !important;
+  }
+  body.printing-scorecard.printing-summary #holeMomentum {
+    break-inside: avoid;
+  }
+  @page {
+    size: auto;
+    margin: 10mm 8mm 12mm;
+  }
+}
+@media (max-width:760px) {
+  .print-actions{align-items:stretch}
+  #printViewSelect{max-width:170px}
+}

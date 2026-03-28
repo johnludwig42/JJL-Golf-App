@@ -1,8 +1,8 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v20.1';
+const APP_VERSION = 'v20.3';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
-  { key: 'individual_match', label: 'Individual Match Play' },
+  { key: 'individual_match', label: 'Head-to-Head Side Match' },
   { key: 'team_match', label: 'Team Match Play' },
   { key: 'team_stroke', label: 'Team Stroke Play' },
   { key: 'skins', label: 'Skins' },
@@ -110,6 +110,8 @@ function formatHoleCountLabel(count) {
   return `${holes} hole${holes === 1 ? '' : 's'}`;
 }
 function sumYardage(holes) { return holes.reduce((sum, h) => sum + (Number(h.yardage) || 0), 0) || null; }
+function getTeeTotalYardage(tee) { return Number(tee?.length) || sumYardage(Array.isArray(tee?.holes) ? tee.holes : []) || 0; }
+function getSortedTeesByYardage(course) { return Array.isArray(course?.tees) ? course.tees.slice().sort((a, b) => getTeeTotalYardage(b) - getTeeTotalYardage(a) || String(a?.teeName || '').localeCompare(String(b?.teeName || ''))) : []; }
 function sumPar(holes) { return holes.reduce((sum, h) => sum + (Number(h.par) || 0), 0) || null; }
 function getCourseStrokeTemplate(course) {
   const tpl = Array.isArray(course?.strokeIndexes) ? course.strokeIndexes.map(v => Number(v) || null) : [];
@@ -325,35 +327,38 @@ This round is missing valid course or tee data.`;
 
   return lines.join('\n');
 }
-function buildPrintMeta(match, metrics) {
+function buildPrintMeta(match, metrics, printView = "summary") {
   const holeCount = getPlayableHoleCount(match, metrics?.tee);
   const courseName = metrics?.course?.name || 'No course';
   const teeName = metrics?.tee?.teeName || 'No tee';
   return `
     <div class="print-round-title">${escapeHtml(match?.name || 'Round')}</div>
     <div class="print-round-sub">${escapeHtml(match?.date || todayIso())} · ${escapeHtml(courseName)} · ${escapeHtml(teeName)} · ${holeCount} holes</div>
-    <div class="print-round-sub">${metrics ? `${metrics.completed}/${holeCount} holes completed` : 'Scorecard ready to print'}${match?.status === 'complete' ? ' · Final' : ' · Live'}<\/div>`;
+    <div class="print-round-sub">${metrics ? `${metrics.completed}/${holeCount} holes completed` : 'Scorecard ready to print'}${match?.status === 'complete' ? ' · Final' : ' · Live'} · ${printView === 'scorecard' ? 'Classic scorecard only' : 'Full match summary'}<\/div>`;
 }
-function openPrintScorecard(matchId) {
+function openPrintScorecard(matchId, printView = null) {
   const match = getMatch(matchId || state.activeMatchId);
   if (!match) return toast('No round selected to print.');
   const previousTab = document.querySelector('.tab.active')?.dataset.tab || 'score';
   const previouslyActiveMatch = state.activeMatchId;
   const detailsNodes = Array.from(document.querySelectorAll('#leaderboard details'));
   const priorOpen = detailsNodes.map(node => node.open);
+  const requestedView = (printView || document.getElementById('printViewSelect')?.value || 'summary') === 'scorecard' ? 'scorecard' : 'summary';
   if (state.activeMatchId !== match.id) state.activeMatchId = match.id;
   const metrics = computeMatchMetrics(match);
   const printMeta = document.getElementById('printRoundMeta');
   if (printMeta) {
-    printMeta.innerHTML = buildPrintMeta(match, metrics);
+    printMeta.innerHTML = buildPrintMeta(match, metrics, requestedView);
     printMeta.classList.remove('hidden');
   }
   activateTab('leaderboard');
-  detailsNodes.forEach(node => { node.open = true; });
+  detailsNodes.forEach(node => { node.open = requestedView === 'summary'; });
   document.body.classList.add('printing-scorecard');
+  document.body.classList.toggle('printing-summary', requestedView === 'summary');
+  document.body.classList.toggle('printing-classic-only', requestedView === 'scorecard');
   renderAll();
   const cleanup = () => {
-    document.body.classList.remove('printing-scorecard');
+    document.body.classList.remove('printing-scorecard', 'printing-summary', 'printing-classic-only');
     if (printMeta) printMeta.classList.add('hidden');
     detailsNodes.forEach((node, idx) => { node.open = priorOpen[idx]; });
     state.activeMatchId = previouslyActiveMatch;
@@ -364,7 +369,7 @@ function openPrintScorecard(matchId) {
   window.addEventListener('afterprint', cleanup);
   setTimeout(() => {
     try { window.print(); } catch (err) { cleanup(); toast('Print dialog could not open.'); }
-  }, 80);
+  }, 120);
 }
 function normalizeHole(hole, idx) {
   return {
@@ -855,50 +860,60 @@ function buildNetPayoutSummary(match, metrics) {
   const selected = Array.isArray(match.selectedGames) ? match.selectedGames : [];
   if (!selected.length) return '<div><strong>Net payout (live):</strong> No gambling games selected.</div>';
   const games = computeLivePayoutGames(match, metrics);
-  const totals = {};
-  games.forEach(game => addAmounts(totals, game.amounts));
   const players = metrics.players.map(p => ({ id: p.playerId, name: p.player.name }));
-  const headerCells = games.map(game => `<th>${escapeHtml(game.label)}</th>`).join('');
-  const playerRows = players.map(player => {
-    const gameCells = games.map(game => {
-      const amount = game.amounts[player.id] || 0;
-      const cls = amount > 0.0001 ? 'payout-total-positive' : amount < -0.0001 ? 'payout-total-negative' : '';
-      const text = Math.abs(amount) > 0.0001 ? formatMoneyAccounting(amount) : '—';
-      return `<td class="${cls}">${text}</td>`;
+  const sections = [
+    { key: 'team', title: 'Team games payout', intro: 'Team-format games only. Side matches are tracked separately below.', games: games.filter(game => game.group !== 'side') },
+    { key: 'side', title: 'Head-to-head side matches', intro: 'Separate player-vs-player match stakes, kept outside the team payout total.', games: games.filter(game => game.group === 'side') },
+  ].filter(section => section.games.length);
+  if (!sections.length) return '<div><strong>Net payout (live):</strong> No payout-producing games selected.</div>';
+
+  const renderSection = (section) => {
+    const totals = {};
+    section.games.forEach(game => addAmounts(totals, game.amounts));
+    const headerCells = section.games.map(game => `<th>${escapeHtml(game.label)}</th>`).join('');
+    const playerRows = players.map(player => {
+      const gameCells = section.games.map(game => {
+        const amount = game.amounts[player.id] || 0;
+        const cls = amount > 0.0001 ? 'payout-total-positive' : amount < -0.0001 ? 'payout-total-negative' : '';
+        const text = Math.abs(amount) > 0.0001 ? formatMoneyAccounting(amount) : '—';
+        return `<td class="${cls}">${text}</td>`;
+      }).join('');
+      const total = totals[player.id] || 0;
+      const totalCls = total > 0.0001 ? 'payout-total-positive' : total < -0.0001 ? 'payout-total-negative' : '';
+      const totalText = Math.abs(total) > 0.0001 ? formatMoneyAccounting(total) : '—';
+      return `<tr><td><strong>${escapeHtml(player.name)}</strong></td>${gameCells}<td class="${totalCls}"><strong>${totalText}</strong></td></tr>`;
     }).join('');
-    const total = totals[player.id] || 0;
-    const totalCls = total > 0.0001 ? 'payout-total-positive' : total < -0.0001 ? 'payout-total-negative' : '';
-    const totalText = Math.abs(total) > 0.0001 ? formatMoneyAccounting(total) : '—';
-    return `<tr><td><strong>${escapeHtml(player.name)}</strong></td>${gameCells}<td class="${totalCls}"><strong>${totalText}</strong></td></tr>`;
-  }).join('');
-  const columnFoot = games.map(game => {
-    const colTotal = players.reduce((sum, player) => sum + (game.amounts[player.id] || 0), 0);
-    const cls = Math.abs(colTotal) <= 0.0001 ? '' : (colTotal > 0 ? 'payout-total-positive' : 'payout-total-negative');
-    const text = formatMoneyAccounting(colTotal);
-    return `<td class="${cls}"><strong>${text}</strong></td>`;
-  }).join('');
-  const overallTotal = players.reduce((sum, player) => sum + (totals[player.id] || 0), 0);
-  const overallText = formatMoneyAccounting(overallTotal);
-  const settlements = optimalSettlementRows(totals);
-  const settlementRows = settlements.length
-    ? settlements.map(row => `<tr><td>${escapeHtml(getPlayer(row.from)?.name || 'Unknown')}</td><td>${escapeHtml(getPlayer(row.to)?.name || 'Unknown')}</td><td><strong>${formatMoneyAccounting(row.amount)}</strong></td></tr>`).join('')
-    : '<tr><td colspan="3">No payouts due right now.</td></tr>';
-  return `
-    <div class="payout-summary-intro"><strong>Net payout (live):</strong> by player across the selected games, rolled to a total.</div>
-    <div class="payout-table-wrap top-gap">
-      <table class="payout-game-table payout-game-table-wide">
-        <thead><tr><th>Player</th>${headerCells}<th>Total</th></tr></thead>
-        <tbody>${playerRows}</tbody>
-        <tfoot><tr><td><strong>Total</strong></td>${columnFoot}<td><strong>${overallText}</strong></td></tr></tfoot>
-      </table>
-    </div>
-    <div class="top-gap payout-settlement-head"><strong>Suggested settlement right now</strong></div>
-    <div class="payout-table-wrap top-gap">
-      <table class="settlement-table">
-        <thead><tr><th>From</th><th>To</th><th>Amount</th></tr></thead>
-        <tbody>${settlementRows}</tbody>
-      </table>
-    </div>`;
+    const columnFoot = section.games.map(game => {
+      const colTotal = players.reduce((sum, player) => sum + (game.amounts[player.id] || 0), 0);
+      const cls = Math.abs(colTotal) <= 0.0001 ? '' : (colTotal > 0 ? 'payout-total-positive' : 'payout-total-negative');
+      return `<td class="${cls}"><strong>${formatMoneyAccounting(colTotal)}</strong></td>`;
+    }).join('');
+    const overallTotal = players.reduce((sum, player) => sum + (totals[player.id] || 0), 0);
+    const settlements = optimalSettlementRows(totals);
+    const settlementRows = settlements.length
+      ? settlements.map(row => `<tr><td>${escapeHtml(getPlayer(row.from)?.name || 'Unknown')}</td><td>${escapeHtml(getPlayer(row.to)?.name || 'Unknown')}</td><td><strong>${formatMoneyAccounting(row.amount)}</strong></td></tr>`).join('')
+      : '<tr><td colspan="3">No payouts due right now.</td></tr>';
+    return `
+      <div class="payout-section top-gap">
+        <div class="payout-summary-intro"><strong>${escapeHtml(section.title)}:</strong> ${escapeHtml(section.intro)}</div>
+        <div class="payout-table-wrap top-gap">
+          <table class="payout-game-table payout-game-table-wide">
+            <thead><tr><th>Player</th>${headerCells}<th>Total</th></tr></thead>
+            <tbody>${playerRows}</tbody>
+            <tfoot><tr><td><strong>Total</strong></td>${columnFoot}<td><strong>${formatMoneyAccounting(overallTotal)}</strong></td></tr></tfoot>
+          </table>
+        </div>
+        <div class="top-gap payout-settlement-head"><strong>${escapeHtml(section.title)} settlement</strong></div>
+        <div class="payout-table-wrap top-gap">
+          <table class="settlement-table">
+            <thead><tr><th>From</th><th>To</th><th>Amount</th></tr></thead>
+            <tbody>${settlementRows}</tbody>
+          </table>
+        </div>
+      </div>`;
+  };
+
+  return `<div class="payout-summary-stack">${sections.map(renderSection).join('')}</div>`;
 }
 
 function renderLeaderboard() {
@@ -1106,7 +1121,7 @@ function renderCourses() {
         </div>
       </div>
       <div class="top-gap">
-        ${c.tees.length ? c.tees.map(t => `
+        ${c.tees.length ? getSortedTeesByYardage(c).map(t => `
           <div class="tee-block">
             <div class="strong">${escapeHtml(t.teeName)} · ${t.gender === 'F' ? 'Women' : 'Men'}</div>
             <div class="tiny">Par ${t.par} · Rating ${t.rating} · Slope ${t.slope}${t.length ? ` · ${t.length} yds` : ''}</div>
@@ -1302,7 +1317,7 @@ function computeLivePayoutGames(match, metrics) {
     amounts[winnerId] = (amounts[winnerId] || 0) + perOpponent * others.length;
     others.forEach(id => { amounts[id] = (amounts[id] || 0) - perOpponent; });
   };
-  const pushGame = (key, label, amounts) => games.push({ key, label, amounts });
+  const pushGame = (key, label, amounts, group = 'team') => games.push({ key, label, amounts, group });
 
   selected.forEach(cfg => {
     if (cfg.key === 'nassau' && metrics.teams.length === 2) {
@@ -1401,7 +1416,7 @@ function computeLivePayoutGames(match, metrics) {
           amounts[p.team2Player.playerId] = (amounts[p.team2Player.playerId] || 0) + stake;
         }
       });
-      pushGame(cfg.key, `${getGameLabel(cfg.key)} (${formatBasisLabel(cfg.basis)})`, amounts); return;
+      pushGame(cfg.key, `Side Match (${formatBasisLabel(cfg.basis)})`, amounts, 'side'); return;
     }
     pushGame(cfg.key, getGameLabel(cfg.key), {});
   });
@@ -1486,7 +1501,7 @@ function populateCalcTees() {
   const courseId = document.getElementById('calcCourse').value;
   const teeSelect = document.getElementById('calcTee');
   const course = getCourse(courseId);
-  teeSelect.innerHTML = !course ? '<option value="">Select tee</option>' : `<option value="">Select tee</option>${course.tees.map(t => `<option value="${t.id}">${escapeHtml(t.teeName)} · ${t.rating}/${t.slope}</option>`).join('')}`;
+  teeSelect.innerHTML = !course ? '<option value="">Select tee</option>' : `<option value="">Select tee</option>${getSortedTeesByYardage(course).map(t => `<option value="${t.id}">${escapeHtml(t.teeName)} · ${t.rating}/${t.slope}${getTeeTotalYardage(t) ? ` · ${getTeeTotalYardage(t)} yds` : ''}</option>`).join('')}`;
 }
 function populateMatchCourseSelects(selectedCourseId = null, selectedTeeId = null) {
   const options = state.courses.map(c => `<option value="${c.id}" ${selectedCourseId === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
@@ -1499,7 +1514,7 @@ function populateMatchTees(courseId = null, selectedTeeId = null) {
   const resolvedCourseId = courseId ?? document.getElementById('matchCourseSelect').value;
   const teeSelect = document.getElementById('matchTeeSelect');
   const course = getCourse(resolvedCourseId);
-  teeSelect.innerHTML = !course ? '<option value="">Select tee</option>' : `<option value="">Select tee</option>${course.tees.map(t => `<option value="${t.id}" ${selectedTeeId === t.id ? 'selected' : ''}>${escapeHtml(t.teeName)} · ${t.rating}/${t.slope}</option>`).join('')}`;
+  teeSelect.innerHTML = !course ? '<option value="">Select tee</option>' : `<option value="">Select tee</option>${getSortedTeesByYardage(course).map(t => `<option value="${t.id}" ${selectedTeeId === t.id ? 'selected' : ''}>${escapeHtml(t.teeName)} · ${t.rating}/${t.slope}${getTeeTotalYardage(t) ? ` · ${getTeeTotalYardage(t)} yds` : ''}</option>`).join('')}`;
   if (selectedTeeId) teeSelect.value = selectedTeeId;
 }
 
@@ -1664,7 +1679,7 @@ function renderGamesPicker(existing = []) {
       </div>`;
     }
     return `<div class="card inset-card game-config-card">
-      <div class="game-config-header"><div class="section-label">${getGameLabel(game.key)}</div><div class="tiny">Configure basis and stakes</div></div>
+      <div class="game-config-header"><div class="section-label">${game.key === 'individual_match' ? 'Head-to-Head Side Matches' : getGameLabel(game.key)}</div><div class="tiny">${game.key === 'individual_match' ? 'Separate from the team payout total' : 'Configure basis and stakes'}</div></div>
       <div class="grid two compact-grid top-gap">
         <label><span>Basis</span><select data-game-config="${game.key}" data-field="basis">
           <option value="gross" ${cfg.basis === 'gross' ? 'selected' : ''}>Gross</option>

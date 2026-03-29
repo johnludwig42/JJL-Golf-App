@@ -591,7 +591,7 @@ body.keyboard-open .top-tabs{
 .print-round-sub{margin-top:4px;color:var(--muted)}
 
 @media print {
-  @page { margin: 10mm; }
+  @page { size: landscape; margin: 10mm; }
   body.printing-scorecard { background:#fff; color:#000; }
   body.printing-scorecard .app-header,
   body.printing-scorecard .tabbar,
@@ -641,6 +641,17 @@ body.keyboard-open .top-tabs{
 .print-actions{align-items:flex-end}
 .payout-summary-stack{display:grid;gap:18px}
 .payout-section{page-break-inside:avoid}
+@media print {
+  body.printing-scorecard .scoreboard-card,
+  body.printing-scorecard .scorecard-wrap,
+  body.printing-scorecard .payout-section,
+  body.printing-scorecard #holeMomentum,
+  body.printing-scorecard #classicScorecard,
+  body.printing-scorecard #ninePointScorecard {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
 @media print {
   body.printing-scorecard {
     -webkit-print-color-adjust: exact;
@@ -716,7 +727,7 @@ body.keyboard-open .top-tabs{
     break-inside: avoid;
   }
   @page {
-    size: auto;
+    size: landscape;
     margin: 10mm 8mm 12mm;
   }
 }

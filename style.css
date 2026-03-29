@@ -696,6 +696,7 @@ body.keyboard-open .top-tabs{
   body.printing-scorecard.printing-classic-only .leaderboard-cards {
     display:none !important;
   }
+  body.printing-scorecard.printing-classic-only #ninePointScorecardCard,
   body.printing-scorecard.printing-classic-only .scoreboard-card.print-section-classic-scorecard {
     display:block !important;
     border:none !important;
@@ -770,6 +771,7 @@ body.keyboard-open .top-tabs{
   body.printing-scorecard .print-section-match-status,
   body.printing-scorecard .print-section-momentum,
   body.printing-scorecard .print-section-classic-scorecard,
+  body.printing-scorecard .print-section-nine-point,
   body.printing-scorecard .print-section-scoreboard-summary,
   body.printing-scorecard .print-section-payout{
     break-before: auto;
@@ -783,6 +785,7 @@ body.keyboard-open .top-tabs{
   body.printing-scorecard #leaderboard .print-section-scoreboard-summary,
   body.printing-scorecard #leaderboard .print-section-momentum,
   body.printing-scorecard #leaderboard .print-section-classic-scorecard,
+  body.printing-scorecard #leaderboard .print-section-nine-point,
   body.printing-scorecard #leaderboard .print-section-payout,
   body.printing-scorecard #leaderboard .payout-section,
   body.printing-scorecard #leaderboard .game-summary-card {

@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v20.9';
+const APP_VERSION = 'v21.1';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -7,6 +7,7 @@ const GAME_LIBRARY = [
   { key: 'team_stroke', label: 'Team Stroke Play' },
   { key: 'skins', label: 'Skins' },
   { key: 'greenies', label: 'Greenies' },
+  { key: 'nine_point', label: '9-Point Game' },
 ];
 
 const GAME_LABELS = Object.fromEntries(GAME_LIBRARY.map(g => [g.key, g.label]));
@@ -162,13 +163,46 @@ function getRequestedHoleCount(match) {
   return Number(match?.holeCount) === 9 ? 9 : 18;
 }
 function getPlayableHoleCount(match, tee = null) {
-  const requested = getRequestedHoleCount(match);
-  const holes = Array.isArray(tee?.holes) ? tee.holes.length : 18;
-  return Math.max(1, Math.min(requested, holes || requested));
+  return Math.max(1, getSelectedHoleIndexes(match, tee).length);
 }
 function formatHoleCountLabel(count) {
   const holes = Number(count) === 9 ? 9 : 18;
   return `${holes} hole${holes === 1 ? '' : 's'}`;
+}
+function isNineHoleMatch(match) {
+  return getRequestedHoleCount(match) === 9;
+}
+function getNineHoleSegment(match) {
+  const value = String(match?.nineHoleSegment || 'front').toLowerCase();
+  return ['front', 'back', 'custom'].includes(value) ? value : 'front';
+}
+function getSelectedHoleIndexes(match, tee = null) {
+  const total = Array.isArray(tee?.holes) && tee.holes.length ? tee.holes.length : 18;
+  if (!isNineHoleMatch(match)) return Array.from({ length: Math.min(18, total) }, (_, i) => i);
+  const segment = getNineHoleSegment(match);
+  let startIdx = 0;
+  if (segment === 'back') startIdx = Math.max(0, Math.min(9, total - 9));
+  else if (segment === 'custom') {
+    const maxStart = Math.max(0, total - 9);
+    startIdx = Math.max(0, Math.min(maxStart, (Number(match?.customStartHole) || 1) - 1));
+  }
+  const length = Math.min(9, Math.max(0, total - startIdx));
+  return Array.from({ length }, (_, i) => startIdx + i);
+}
+function getSelectedScoringHoles(match, tee = null) {
+  const source = Array.isArray(tee?.holes) ? tee.holes : buildDefaultHoles();
+  return getSelectedHoleIndexes(match, tee).map(idx => normalizeHole(source[idx] || { holeNumber: idx + 1 }, idx));
+}
+function getHoleSegmentLabel(match, tee = null) {
+  if (!isNineHoleMatch(match)) return '18 Holes';
+  const indexes = getSelectedHoleIndexes(match, tee);
+  if (!indexes.length) return '9 Holes';
+  const first = indexes[0] + 1;
+  const last = indexes[indexes.length - 1] + 1;
+  const segment = getNineHoleSegment(match);
+  if (segment === 'front') return 'Front 9';
+  if (segment === 'back') return 'Back 9';
+  return `Custom ${first}-${last}`;
 }
 function sumYardage(holes) { return holes.reduce((sum, h) => sum + (Number(h.yardage) || 0), 0) || null; }
 function getTeeTotalYardage(tee) { return Number(tee?.length) || sumYardage(Array.isArray(tee?.holes) ? tee.holes : []) || 0; }
@@ -204,7 +238,9 @@ function getPlayerTee(match, playerRef = null) {
 }
 function getPlayerHole(match, playerRef, holeIdx, fallbackTee = null) {
   const tee = getPlayerTee(match, playerRef) || fallbackTee || getTee(match?.courseId, match?.teeId);
-  return tee?.holes?.[holeIdx] || fallbackTee?.holes?.[holeIdx] || null;
+  const selectedIndexes = getSelectedHoleIndexes(match, tee);
+  const actualIdx = Number.isFinite(selectedIndexes[holeIdx]) ? selectedIndexes[holeIdx] : holeIdx;
+  return tee?.holes?.[actualIdx] || fallbackTee?.holes?.[actualIdx] || null;
 }
 function formatTeeSummary(t) {
   return `${escapeHtml(t.teeName)} · ${formatRatingValue(t.rating)}/${Number(t.slope) || 0}${getTeeTotalYardage(t) ? ` · ${formatYardageValue(getTeeTotalYardage(t))} yds` : ''}`;
@@ -263,14 +299,14 @@ function getHeadToHeadOutcome(value1, value2) {
 function computeNassauDiffsForBasis(metrics, basis = 'net') {
   const holes = Array.isArray(metrics?.holeResults) ? metrics.holeResults : [];
   let front = 0, back = 0, overall = 0;
-  holes.forEach(h => {
+  holes.forEach((h, idx) => {
     if (!h?.completed) return;
     const t1 = getTeamHoleScore(h, 1, basis, 'best_ball');
     const t2 = getTeamHoleScore(h, 2, basis, 'best_ball');
     const outcome = getHeadToHeadOutcome(t1, t2);
     const step = outcome === 'team1' ? 1 : outcome === 'team2' ? -1 : 0;
     overall += step;
-    if ((Number(h.holeNumber) || 0) <= 9) front += step;
+    if (idx < 9) front += step;
     else back += step;
   });
   return { front, back, overall };
@@ -373,7 +409,8 @@ This round is missing valid course or tee data.`;
   lines.push(`${match.name || 'Round'} — ${match.date}`);
   lines.push(`${metrics.course.name} · ${metrics.tee.teeName}`);
   const holeCount = getPlayableHoleCount(match, metrics.tee);
-  lines.push(match.status === 'complete' ? `Completed ${new Date(match.completedAt || Date.now()).toLocaleString()}` : `${metrics.completed}/${holeCount} holes complete`);
+  lines.push(`${getHoleSegmentLabel(match, metrics.tee)} · ${metrics.completed}/${holeCount} holes complete`);
+  if (match.status === 'complete') lines.push(`Completed ${new Date(match.completedAt || Date.now()).toLocaleString()}`);
   lines.push('');
 
   if (metrics.teams.length === 2) {
@@ -448,9 +485,12 @@ function openPrintScorecard(matchId, printView = null) {
   document.body.classList.add('printing-scorecard');
   document.body.classList.toggle('printing-summary', requestedView === 'summary');
   document.body.classList.toggle('printing-classic-only', requestedView === 'scorecard');
+  document.body.setAttribute('data-print-view', requestedView);
   renderAll();
+  void document.body.offsetHeight;
   const cleanup = () => {
     document.body.classList.remove('printing-scorecard', 'printing-summary', 'printing-classic-only');
+    document.body.removeAttribute('data-print-view');
     if (printMeta) printMeta.classList.add('hidden');
     detailsNodes.forEach((node, idx) => { node.open = priorOpen[idx]; });
     state.activeMatchId = previouslyActiveMatch;
@@ -459,10 +499,13 @@ function openPrintScorecard(matchId, printView = null) {
     window.removeEventListener('afterprint', cleanup);
   };
   window.addEventListener('afterprint', cleanup);
-  setTimeout(() => {
-    try { window.print(); } catch (err) { cleanup(); toast('Print dialog could not open.'); }
-  }, 120);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    setTimeout(() => {
+      try { window.print(); } catch (err) { cleanup(); toast('Print dialog could not open.'); }
+    }, 180);
+  }));
 }
+
 function normalizeHole(hole, idx) {
   return {
     holeNumber: Number(hole?.holeNumber) || idx + 1,
@@ -496,6 +539,8 @@ function normalizeMatch(match) {
   match.format = match.format || 'teams';
   match.allowance = Number(match.allowance) || 100;
   match.holeCount = getRequestedHoleCount(match);
+  match.nineHoleSegment = getNineHoleSegment(match);
+  match.customStartHole = Math.max(1, Math.min(10, Number(match.customStartHole) || 1));
   match.status = match.status || 'active';
   match.completedAt = match.completedAt || null;
   match.players = Array.isArray(match.players) ? match.players : [];
@@ -568,7 +613,7 @@ function computeMatchMetrics(match) {
   const tee = getTee(match.courseId, match.teeId);
   if (!course || !tee) return null;
   const holeCount = getPlayableHoleCount(match, tee);
-  const scoringHoles = (tee.holes || []).slice(0, holeCount);
+  const scoringHoles = getSelectedScoringHoles(match, tee);
   const players = match.players.map(mp => {
     const player = getPlayer(mp.playerId);
     const playerTee = getPlayerTee(match, mp) || tee;
@@ -741,7 +786,7 @@ function renderSetupHandicapPreview() {
   }
   const lowPlaying = Math.min(...enriched.map(p => p.playHdcp));
   wrap.innerHTML = `
-    <div class="tiny">${escapeHtml(course.name)} · Allowance ${allowance}% · Strokes received are versus the low playing handicap in the match.</div>
+    <div class="tiny">${escapeHtml(course.name)} · ${escapeHtml(getHoleSegmentLabel({ holeCount: Number(document.querySelector('#matchForm [name="holeCount"]')?.value || 18), nineHoleSegment: document.getElementById('nineHoleSegmentSelect')?.value || 'front', customStartHole: Number(document.getElementById('customNineHoleStartSelect')?.value || 1) }, tee))} · Allowance ${allowance}% · Strokes received are versus the low playing handicap in the match.</div>
     <div class="handicap-preview-grid top-gap">${enriched.map(row => {
       const teamLabel = getTeamLabel({ teamNames }, row.team);
       const strokes = Math.max(0, row.playHdcp - lowPlaying);
@@ -767,11 +812,11 @@ function describeTeamLabel(match, teamNo, metrics) {
 function computeTeamGameDiffs(match, metrics, gameKey) {
   const holes = Array.isArray(metrics?.holeResults) ? metrics.holeResults : [];
   let front = 0, back = 0, overall = 0;
-  holes.forEach(h => {
+  holes.forEach((h, idx) => {
     const outcome = computeMomentumOutcome(match, metrics, h, gameKey);
     const step = outcome === 'team1' ? 1 : outcome === 'team2' ? -1 : 0;
     overall += step;
-    if ((Number(h.holeNumber) || 0) <= 9) front += step;
+    if (idx < 9) front += step;
     else back += step;
   });
   return { front, back, overall };
@@ -941,6 +986,11 @@ function buildFeaturedMatchStatus(match, metrics, gameKey) {
     const holes = greenies.winnersByHole.map(h => `H${h.holeNumber}: ${escapeHtml(getPlayer(h.winner)?.name || 'Unknown')}`).join(' · ');
     return `<div class="match-status-head"><strong>Greenies</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Participants</div><div class="match-status-value">${(cfg.participants || []).length || 0}</div></div><div class="match-status-tile"><div class="tiny">Leader(s)</div><div class="match-status-value">${leaders || 'None yet'}</div></div><div class="match-status-tile"><div class="tiny">Won on</div><div class="match-status-value">${holes || '—'}</div></div></div>`;
   }
+  if (gameKey === 'nine_point') {
+    const nine = computeNinePointResults(match, metrics, cfg);
+    const leaders = nine.leaderboard.map(row => `${escapeHtml(row.name)} (${row.total})`).join(' · ');
+    return `<div class="match-status-head"><strong>9-Point Game</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Basis</div><div class="match-status-value">${escapeHtml(formatBasisLabel(nine.basis || cfg.basis))}</div></div><div class="match-status-tile"><div class="tiny">Leaders</div><div class="match-status-value">${leaders || 'Select 3 players'}</div></div><div class="match-status-tile"><div class="tiny">$ / point</div><div class="match-status-value">${formatMoneyAccounting(nine.stakePerPoint || cfg.stakePerPoint || 0)}</div></div></div>`;
+  }
   return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-tile"><div class="tiny">Status</div><div class="match-status-value">Live</div></div>`;
 }
 
@@ -948,7 +998,7 @@ function buildClassicScorecard(match, metrics) {
   const tee = metrics?.tee;
   if (!tee) return '<div class="tiny">No scorecard available.</div>';
   const holeCount = getPlayableHoleCount(match, tee);
-  const holes = (tee.holes || []).slice(0, holeCount);
+  const holes = getSelectedScoringHoles(match, tee);
   const front = holes.slice(0, Math.min(9, holeCount));
   const back = holeCount > 9 ? holes.slice(9, holeCount) : [];
   const holeHeader = holes.map(h => `<th>H${h.holeNumber}</th>`).join('');
@@ -971,19 +1021,23 @@ function buildClassicScorecard(match, metrics) {
     const backGross = holeCount > 9 ? playerScores.slice(9, holeCount).reduce((s,x)=>s+(Number(x.gross)||0),0) : 0;
     const frontNetValues = front.map((hole, idx) => {
       const gross = Number(playerScores[idx]?.gross) || null;
-      const strokes = holeStrokeAllowanceForPlayer(hole.strokeIndex, p.playHdcp, metrics.lowPlaying);
+      const playerHole = getPlayerHole(match, p, idx, tee) || hole;
+      const strokes = holeStrokeAllowanceForPlayer(playerHole.strokeIndex, p.playHdcp, metrics.lowPlaying);
       return gross ? gross - strokes : null;
     });
     const backNetValues = back.map((hole, idx) => {
-      const gross = Number(playerScores[idx + 9]?.gross) || null;
-      const strokes = holeStrokeAllowanceForPlayer(hole.strokeIndex, p.playHdcp, metrics.lowPlaying);
+      const scoreIdx = idx + front.length;
+      const gross = Number(playerScores[scoreIdx]?.gross) || null;
+      const playerHole = getPlayerHole(match, p, scoreIdx, tee) || hole;
+      const strokes = holeStrokeAllowanceForPlayer(playerHole.strokeIndex, p.playHdcp, metrics.lowPlaying);
       return gross ? gross - strokes : null;
     });
     const frontNet = frontNetValues.reduce((s,v)=>s+(Number(v)||0),0);
     const backNet = backNetValues.reduce((s,v)=>s+(Number(v)||0),0);
     const cells = holes.map((hole, idx) => {
       const gross = Number(playerScores[idx]?.gross) || null;
-      const strokes = holeStrokeAllowanceForPlayer(hole.strokeIndex, p.playHdcp, metrics.lowPlaying);
+      const playerHole = getPlayerHole(match, p, idx, tee) || hole;
+      const strokes = holeStrokeAllowanceForPlayer(playerHole.strokeIndex, p.playHdcp, metrics.lowPlaying);
       if (!gross) return `<td class="score-hole-cell"><div class="score-main">${formatGolfScoreMarkup(null, hole.par, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(null, hole.par, 'net')}${dotMarkup(strokes)}</div></td>`;
       const net = gross - strokes;
       return `<td class="score-hole-cell"><div class="score-main">${formatGolfScoreMarkup(gross, hole.par, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(net, hole.par, 'net')}${dotMarkup(strokes)}</div></td>`;
@@ -1005,7 +1059,7 @@ function buildNetPayoutSummary(match, metrics) {
   const players = metrics.players.map(p => ({ id: p.playerId, name: p.player.name }));
   const sections = [
     { key: 'team', title: 'Team games payout', intro: 'Team-format games only. Side matches are tracked separately below.', games: games.filter(game => game.group !== 'side') },
-    { key: 'side', title: 'Head-to-head side matches', intro: 'Separate player-vs-player match stakes, kept outside the team payout total.', games: games.filter(game => game.group === 'side') },
+    { key: 'side', title: 'Side games payout', intro: 'Separate player side games, kept outside the team payout total.', games: games.filter(game => game.group === 'side') },
   ].filter(section => section.games.length);
   if (!sections.length) return '<div><strong>Net payout (live):</strong> No payout-producing games selected.</div>';
 
@@ -1068,6 +1122,8 @@ function renderLeaderboard() {
   const matchStatusGameSelect = document.getElementById('matchStatusGameSelect');
   const gamesSummary = document.getElementById('gamesSummary');
   const classicScorecard = document.getElementById('classicScorecard');
+  const ninePointCard = document.getElementById('ninePointScorecardCard');
+  const ninePointScorecard = document.getElementById('ninePointScorecard');
   const holeMomentum = document.getElementById('holeMomentum');
   const momentumMeta = document.getElementById('momentumMeta');
   const payoutSummary = document.getElementById('payoutSummary');
@@ -1156,6 +1212,12 @@ function renderLeaderboard() {
   gamesSummary.innerHTML = buildSelectedGamesSummary(match, metrics);
   if (classicScorecard) {
     classicScorecard.innerHTML = buildClassicScorecard(match, metrics);
+  }
+  if (ninePointCard && ninePointScorecard) {
+    const hasNinePoint = (match.selectedGames || []).some(g => g.key === 'nine_point');
+    ninePointCard.classList.toggle('hidden', !hasNinePoint);
+    if (hasNinePoint) ninePointScorecard.innerHTML = buildNinePointScorecard(match, metrics);
+    else ninePointScorecard.innerHTML = '';
   }
   const momentumSelect = document.getElementById('momentumGameSelect');
   const options = getMomentumOptions(match);
@@ -1298,7 +1360,7 @@ function renderMatches() {
         <div class="item-header compact-item-header">
           <div>
             <div class="item-title">${escapeHtml(match.name || 'Round')} · ${escapeHtml(match.date)}</div>
-            <div class="muted">${escapeHtml(course?.name || 'No course')} · ${escapeHtml(tee?.teeName || 'No tee')} · ${status}</div>
+            <div class="muted">${escapeHtml(course?.name || 'No course')} · ${escapeHtml(tee?.teeName || 'No tee')} · ${escapeHtml(getHoleSegmentLabel(match, tee))} · ${status}</div>
             <div class="tiny">${metrics ? `${metrics.completed}/${getPlayableHoleCount(match, metrics.tee)} holes completed` : ''}</div>
           </div>
           <div class="actions wrap compact-actions">
@@ -1331,20 +1393,21 @@ function renderCurrentMatch() {
   const tee = getTee(match.courseId, match.teeId);
   const metrics = computeMatchMetrics(match);
   const holeCount = getPlayableHoleCount(match, tee);
-  metaEl.textContent = `${match.date} · ${match.name || 'Round'} · ${course?.name || ''} · ${tee?.teeName || ''} · ${metrics?.completed || 0}/${holeCount} holes completed`;
+  const scoringHoles = getSelectedScoringHoles(match, tee);
+  metaEl.textContent = `${match.date} · ${match.name || 'Round'} · ${course?.name || ''} · ${getHoleSegmentLabel(match, tee)} · ${metrics?.completed || 0}/${holeCount} holes completed`;
   emptyEl.classList.add('hidden');
   wrapEl.classList.remove('hidden');
-  currentHole = Math.min(getPlayableHoleCount(match, tee), Math.max(1, currentHole));
-  document.getElementById('currentHoleBadge').textContent = `Hole ${currentHole}`;
-  const hole = tee?.holes[currentHole - 1];
+  currentHole = Math.min(holeCount, Math.max(1, currentHole));
+  const hole = scoringHoles[currentHole - 1];
+  document.getElementById('currentHoleBadge').textContent = `Hole ${hole?.holeNumber || currentHole}`;
   const teamText = metrics?.teams?.length === 2 ? `${formatMatchDiff(metrics.matchDiff, match)} overall` : 'Singles leaderboard';
   const teeYardages = hole ? [...new Map((metrics?.players || []).map(p => {
     const playerHole = getPlayerHole(match, p, currentHole - 1, tee) || hole;
     const key = `${p.tee?.id || p.teeId || ''}|${playerHole?.yardage || ''}`;
     return [key, `${p.tee?.teeName || tee?.teeName || 'Tee'} ${playerHole?.yardage ? `${formatYardageValue(playerHole.yardage)} yds` : '— yds'}`];
   })).values()].join(' · ') : '';
-  document.getElementById('holeSummary').textContent = hole ? `Par ${hole.par || '-'} · SI ${hole.strokeIndex || '-'} · ${teeYardages || `${hole.yardage ? formatYardageValue(hole.yardage) : '-'} yds`} · ${teamText}` : '';
-  renderScoreGrid(match, tee, metrics);
+  document.getElementById('holeSummary').textContent = hole ? `Hole ${hole.holeNumber} · Par ${hole.par || '-'} · SI ${hole.strokeIndex || '-'} · ${teeYardages || `${hole.yardage ? formatYardageValue(hole.yardage) : '-'} yds`} · ${teamText}` : '';
+  renderScoreGrid(match, tee, metrics, scoringHoles);
   renderGreeniesEntry(match, hole);
   renderHoleJumpTiles(match);
 }
@@ -1366,28 +1429,35 @@ function renderGreeniesEntry(match, hole) {
 function renderHoleJumpTiles(match) {
   const wrap = document.getElementById('holeJumpTiles');
   if (!wrap) return;
-  const completed = completedHoles(match);
-  const holeCount = getPlayableHoleCount(match);
+  const holeCount = getPlayableHoleCount(match, getTee(match.courseId, match.teeId));
+  const played = Array.from({ length: holeCount }, (_, idx) => {
+    const hasScore = (match.players || []).some(mp => Number(mp.scores?.[idx]?.gross));
+    return hasScore;
+  });
+  const scoringHoles = getSelectedScoringHoles(match, getTee(match.courseId, match.teeId));
   wrap.innerHTML = Array.from({ length: holeCount }, (_, idx) => {
     const holeNo = idx + 1;
+    const displayHole = scoringHoles[idx]?.holeNumber || holeNo;
     const classes = ['hole-jump-tile'];
     if (holeNo === currentHole) classes.push('active');
     classes.push('complete');
-    if (holeNo <= completed) classes.push('played');
-    return `<button type="button" class="${classes.join(' ')}" data-jump-hole="${holeNo}">${holeNo}</button>`;
+    if (played[idx]) classes.push('played');
+    return `<button type="button" class="${classes.join(' ')}" data-jump-hole="${holeNo}">${displayHole}</button>`;
   }).join('');
 }
 
-function renderScoreGrid(match, tee, metrics) {
+function renderScoreGrid(match, tee, metrics, scoringHoles = null) {
   const body = document.getElementById('scoreGridBody');
   if (!match || !tee || !metrics) {
     body.innerHTML = '';
     return;
   }
-  const hole = tee.holes[currentHole - 1];
+  const holes = scoringHoles || getSelectedScoringHoles(match, tee);
+  const hole = holes[currentHole - 1];
   body.innerHTML = metrics.players.map(p => {
     const score = p.scores[currentHole - 1];
-    const strokes = holeStrokeAllowanceForPlayer(hole?.strokeIndex, p.playHdcp, metrics.lowPlaying);
+    const playerHole = getPlayerHole(match, p, currentHole - 1, tee) || hole;
+    const strokes = holeStrokeAllowanceForPlayer(playerHole?.strokeIndex, p.playHdcp, metrics.lowPlaying);
     const gross = score?.gross || '';
     const net = score?.gross ? score.gross - strokes : '';
     return `
@@ -1584,6 +1654,14 @@ function computeLivePayoutGames(match, metrics) {
       const sideLabel = pairings.length === 1 ? `${pairings[0].label} (${getSideMatchGameLabel(pairings[0].game)} · ${formatBasisLabel(pairings[0].basis)})` : `Head-to-Head Side Matches (${pairings.length})`;
       pushGame(cfg.key, sideLabel, amounts, 'side'); return;
     }
+    if (cfg.key === 'nine_point') {
+      const amounts = {};
+      const nine = computeNinePointResults(match, metrics, cfg);
+      const perPoint = Number(cfg.stakePerPoint || 0) || 0;
+      Object.entries(nine.deltas || {}).forEach(([playerId, delta]) => { amounts[playerId] = (Number(delta) || 0) * perPoint; });
+      pushGame(cfg.key, `9-Point Game (${formatBasisLabel(nine.basis)})`, amounts, 'side');
+      return;
+    }
     pushGame(cfg.key, getGameLabel(cfg.key), {});
   });
   return games;
@@ -1601,11 +1679,11 @@ function buildSelectedGamesSummary(match, metrics) {
     if (cfg.key === 'nassau') {
       const diffs = computeTeamGameDiffs(match, metrics, cfg.key);
       value = formatTeamGameStatus(match, metrics, diffs.overall);
-      sub = `Front 9: ${formatTeamGameStatus(match, metrics, diffs.front)} · Back 9: ${formatTeamGameStatus(match, metrics, diffs.back)}`;
+      sub = getPlayableHoleCount(match, metrics.tee) <= 9 ? `Format: ${getHoleSegmentLabel(match, metrics.tee)}` : `Front 9: ${formatTeamGameStatus(match, metrics, diffs.front)} · Back 9: ${formatTeamGameStatus(match, metrics, diffs.back)}`;
     } else if (cfg.key === 'team_match') {
       const diffs = computeTeamGameDiffs(match, metrics, cfg.key);
       value = formatTeamGameStatus(match, metrics, diffs.overall);
-      sub = `Front 9: ${formatTeamGameStatus(match, metrics, diffs.front)} · Back 9: ${formatTeamGameStatus(match, metrics, diffs.back)}`;
+      sub = getPlayableHoleCount(match, metrics.tee) <= 9 ? `Format: ${getHoleSegmentLabel(match, metrics.tee)}` : `Front 9: ${formatTeamGameStatus(match, metrics, diffs.front)} · Back 9: ${formatTeamGameStatus(match, metrics, diffs.back)}`;
     } else if (cfg.key === 'team_stroke') {
       const basisKey = String(cfg.basis || 'net').toLowerCase() === 'gross' ? 'toPar' : 'netDiff';
       const mode = String(cfg.scoringMode || 'best_ball');
@@ -1649,6 +1727,11 @@ function buildSelectedGamesSummary(match, metrics) {
       const leaders = max > 0 ? Object.entries(greenies.counts).filter(([,n])=>n===max).map(([id,n]) => `${getPlayer(id)?.name || 'Unknown'} (${n})`).join(', ') : '';
       value = leaders || 'No winners yet';
       sub = greenies.winnersByHole.map(h => `H${h.holeNumber}: ${getPlayer(h.winner)?.name || 'Unknown'}`).join(' · ') || `${(cfg.participants || []).length || 0} participant(s)`;
+    }
+    else if (cfg.key === 'nine_point') {
+      const nine = computeNinePointResults(match, metrics, cfg);
+      value = nine.leaderboard.length ? nine.leaderboard.map(row => `${row.name} (${row.total})`).join(' · ') : 'Select 3 players';
+      sub = nine.leaderboard.length ? `${formatBasisLabel(nine.basis)} · ${formatMoneyAccounting(nine.stakePerPoint)} / point · ${nine.completedHoles} hole(s) complete` : '9-Point Game requires three selected players with scores.';
     }
     return `<div class="game-summary-card"><div class="game-summary-title">${escapeHtml(title)}</div><div class="game-summary-value">${escapeHtml(value)}</div>${sub ? `<div class="game-summary-sub">${escapeHtml(sub)}</div>` : ''}</div>`;
   });
@@ -1701,6 +1784,19 @@ function renderTeamNameInputs(teamCount = Number(document.getElementById('teamCo
       <input data-team-name="${idx + 1}" maxlength="25" value="${escapeHtml((teamNames[idx] || `Team ${idx + 1}`).slice(0,25))}" placeholder="Team ${idx + 1}" />
     </label>
   `).join('');
+}
+
+function renderNineHoleConfigUi() {
+  const holeCount = Number(document.getElementById('holeCountSelect')?.value || 18) === 9 ? 9 : 18;
+  const wrap = document.getElementById('nineHoleConfigWrap');
+  const segmentSelect = document.getElementById('nineHoleSegmentSelect');
+  const customWrap = document.getElementById('customNineHoleStartWrap');
+  const customSelect = document.getElementById('customNineHoleStartSelect');
+  if (!wrap || !segmentSelect || !customWrap || !customSelect) return;
+  wrap.classList.toggle('hidden', holeCount !== 9);
+  customSelect.innerHTML = Array.from({ length: 10 }, (_, idx) => `<option value="${idx + 1}">Holes ${idx + 1}-${idx + 9}</option>`).join('');
+  if (!customSelect.value) customSelect.value = '1';
+  customWrap.classList.toggle('hidden', holeCount !== 9 || segmentSelect.value !== 'custom');
 }
 function getAssignmentSelections() {
   return Array.from(document.querySelectorAll('[data-player-slot]')).map(el => el.value).filter(Boolean);
@@ -1762,6 +1858,7 @@ function getDefaultGameConfigs() {
     { key: 'team_stroke', basis: 'net', scoringMode: 'best_ball', stake: 5 },
     { key: 'skins', basis: 'net', skinsType: 'individual', stake: 5 },
     { key: 'greenies', stakePerPlayer: 1, participants: [] },
+    { key: 'nine_point', basis: 'net', stakePerPoint: 1, playerIds: [] },
   ];
 }
 function getGameConfig(key, existing = []) {
@@ -1890,6 +1987,20 @@ function renderGamesPicker(existing = []) {
         <div class="actions top-gap"><button type="button" class="secondary" id="addSideMatchBtn">Add Side Match</button></div>
       </div>`;
     }
+    if (game.key === 'nine_point') {
+      const players = getCurrentAssignablePlayers();
+      const selectedIds = Array.isArray(cfg.playerIds) ? cfg.playerIds.slice(0, 3) : [];
+      while (selectedIds.length < 3) selectedIds.push('');
+      const playerOptions = getNinePointPlayerOptions(players, selectedIds);
+      return `<div class="card inset-card game-config-card">
+        <div class="game-config-header"><div class="section-label">9-Point Game</div><div class="tiny">3-player only side game. Points per hole sum to 9.</div></div>
+        <div class="grid two compact-grid top-gap">
+          <label><span>Basis</span><select data-game-config="${game.key}" data-field="basis"><option value="net" ${cfg.basis !== 'gross' ? 'selected' : ''}>Net</option><option value="gross" ${cfg.basis === 'gross' ? 'selected' : ''}>Gross</option></select></label>
+          <label><span>$ / point</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stakePerPoint" value="${cfg.stakePerPoint ?? 1}" /></label>
+          ${[0,1,2].map(idx => `<label><span>Player ${idx + 1}</span><select data-nine-point-player="${idx}"><option value="">Select player</option>${playerOptions[idx].map(p => `<option value="${p.id}" ${p.id === selectedIds[idx] ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}</select></label>`).join('')}
+        </div>
+      </div>`;
+    }
     return `<div class="card inset-card game-config-card">
       <div class="game-config-header"><div class="section-label">${getGameLabel(game.key)}</div><div class="tiny">Configure basis and stakes</div></div>
       <div class="grid two compact-grid top-gap">
@@ -1928,6 +2039,10 @@ function collectSelectedGames() {
         };
       }).filter(row => row.playerAId || row.playerBId || Number(row.stake || 0) || row.game || row.basis);
       if (!cfg.matchups.length) cfg.matchups = [{ id: uid(), playerAId: '', playerBId: '', game: 'nassau', basis: 'net', stake: 5 }];
+    }
+    if (key === 'nine_point') {
+      const allowed = new Set(getCurrentAssignablePlayers().map(p => p.id));
+      cfg.playerIds = Array.from(document.querySelectorAll('[data-nine-point-player]')).slice(0, 3).map(el => allowed.has(el.value) ? el.value : '').filter(Boolean);
     }
     return cfg;
   });
@@ -2200,6 +2315,9 @@ function loadMatchEditor(matchId = null) {
     form.elements.namedItem('date').value = todayIso();
     form.elements.namedItem('allowance').value = 100;
     form.elements.namedItem('holeCount').value = '18';
+    document.getElementById('nineHoleSegmentSelect').value = 'front';
+    document.getElementById('customNineHoleStartSelect').value = '1';
+    renderNineHoleConfigUi();
     document.getElementById('teamCountSelect').value = '1';
     document.getElementById('playersPerTeamSelect').value = '1';
     populateMatchCourseSelects();
@@ -2214,6 +2332,9 @@ function loadMatchEditor(matchId = null) {
   populateMatchCourseSelects(match.courseId || '', match.teeId || '');
   form.elements.namedItem('allowance').value = match.allowance || 100;
   form.elements.namedItem('holeCount').value = String(getRequestedHoleCount(match));
+  document.getElementById('nineHoleSegmentSelect').value = getNineHoleSegment(match);
+  document.getElementById('customNineHoleStartSelect').value = String(Math.max(1, Math.min(10, Number(match.customStartHole) || 1)));
+  renderNineHoleConfigUi();
   document.getElementById('teamCountSelect').value = String(match.teamCount || 2);
   document.getElementById('playersPerTeamSelect').value = String(match.playersPerTeam || 2);
   renderTeamNameInputs(match.teamCount || 2, match.teamNames || []);
@@ -2385,6 +2506,9 @@ function installHandlers() {
   });
 
   document.getElementById('matchCourseSelect').addEventListener('change', e => { const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => ({ playerId: el.value, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '', slot: idx })); populateMatchTees(e.target.value); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
+  document.getElementById('holeCountSelect').addEventListener('change', () => { renderNineHoleConfigUi(); renderSetupHandicapPreview(); });
+  document.getElementById('nineHoleSegmentSelect').addEventListener('change', () => { renderNineHoleConfigUi(); renderSetupHandicapPreview(); });
+  document.getElementById('customNineHoleStartSelect').addEventListener('change', () => { renderSetupHandicapPreview(); });
   document.getElementById('teamCountSelect').addEventListener('change', () => {
     const teamCount = Number(document.getElementById('teamCountSelect').value || 2);
     const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => ({ playerId: el.value, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '', slot: idx }));
@@ -2467,12 +2591,12 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
   document.getElementById('setup').addEventListener('change', e => {
-    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, [name="allowance"], [data-side-field]')) {
+    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], [data-side-field], [data-nine-point-player], [data-game-config]')) {
       setTimeout(() => { renderSetupHandicapPreview(); renderGamesPicker(collectSelectedGames()); }, 0);
     }
   });
   document.getElementById('setup').addEventListener('input', e => {
-    if (e.target.matches('[data-team-name], [name="allowance"]')) {
+    if (e.target.matches('[data-team-name], [name="allowance"], [data-game-config], [data-nine-point-player], #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect')) {
       renderSetupHandicapPreview();
     }
   });
@@ -2530,6 +2654,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (selectedGames.length > 5) return toast('Select up to 5 gambling games.');
     if (selectedGames.some(g => g.key === 'nassau') && teamCount !== 2) return toast('Nassau requires exactly 2 teams.');
     if (selectedGames.some(g => ['team_match','team_stroke'].includes(g.key)) && teamCount < 2) return toast('Team games require at least 2 teams.');
+    if (selectedGames.some(g => g.key === 'nine_point') && selectedPlayers.length < 3) return toast('9-Point Game requires at least 3 assigned players.');
+    if (selectedGames.some(g => g.key === 'nine_point' && (!Array.isArray(g.playerIds) || g.playerIds.length !== 3))) return toast('Select 3 players for the 9-Point Game.');
     const existing = editingMatchId ? getMatch(editingMatchId) : null;
     const match = {
       id: editingMatchId || uid(),
@@ -2540,6 +2666,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       format: 'teams',
       allowance: Number(fd.get('allowance')) || 100,
       holeCount: Number(fd.get('holeCount')) === 9 ? 9 : 18,
+      nineHoleSegment: Number(fd.get('holeCount')) === 9 ? String(fd.get('nineHoleSegment') || 'front') : 'front',
+      customStartHole: Number(fd.get('holeCount')) === 9 ? Math.max(1, Math.min(10, Number(fd.get('customStartHole')) || 1)) : 1,
       teamCount,
       playersPerTeam,
       teamNames,
@@ -2571,6 +2699,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('cancelMatchEditBtn').addEventListener('click', () => { loadMatchEditor(null); renderMatchSetupState(); });
   function saveCurrentHole({ advance = false, targetHole = null, silent = false } = {}) {
     const match = getActiveMatch(); if (!match) return false;
+    const scoringHoles = getSelectedScoringHoles(match, getTee(match.courseId, match.teeId));
+    const actualHoleNumber = scoringHoles[currentHole - 1]?.holeNumber || currentHole;
     const holeInputs = document.querySelectorAll('[data-score-player]');
     holeInputs.forEach(input => {
       const playerId = input.dataset.scorePlayer;
@@ -2579,12 +2709,12 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     });
     const selectedWinner = document.querySelector('[data-greenies-winner]:checked')?.dataset.greeniesWinner || '';
     if (selectedWinner) {
-      match.greeniesWinners[String(currentHole)] = selectedWinner;
-    } else if (match.greeniesWinners && match.greeniesWinners[String(currentHole)]) {
-      delete match.greeniesWinners[String(currentHole)];
+      match.greeniesWinners[String(actualHoleNumber)] = selectedWinner;
+    } else if (match.greeniesWinners && match.greeniesWinners[String(actualHoleNumber)]) {
+      delete match.greeniesWinners[String(actualHoleNumber)];
     }
-    const savedHole = currentHole;
-    const maxHole = getRequestedHoleCount(match);
+    const savedHole = actualHoleNumber;
+    const maxHole = getPlayableHoleCount(match, getTee(match.courseId, match.teeId));
     if (Number.isFinite(targetHole) && targetHole >= 1 && targetHole <= maxHole) {
       currentHole = targetHole;
     } else if (advance) {

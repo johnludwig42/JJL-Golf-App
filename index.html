@@ -175,6 +175,18 @@
               <option value="18" selected>18 holes</option>
             </select>
           </label>
+          <div id="nineHoleConfigWrap" class="hidden span-2 grid two compact-grid">
+            <label><span>9-hole segment</span>
+              <select id="nineHoleSegmentSelect" name="nineHoleSegment">
+                <option value="front">Front 9</option>
+                <option value="back">Back 9</option>
+                <option value="custom">Custom 9</option>
+              </select>
+            </label>
+            <label id="customNineHoleStartWrap" class="hidden"><span>Custom start hole</span>
+              <select id="customNineHoleStartSelect" name="customStartHole"></select>
+            </label>
+          </div>
           <label><span># Teams</span>
             <select name="teamCount" id="teamCountSelect">
               <option value="1">1 team</option>
@@ -389,6 +401,11 @@
           <div id="classicScorecard" class="top-gap"></div>
         </div>
 
+        <div id="ninePointScorecardCard" class="card tight-card scoreboard-card print-section-nine-point hidden">
+          <h2>9-Point game scorecard</h2>
+          <div id="ninePointScorecard" class="top-gap"></div>
+        </div>
+
         <details class="card tight-card scoreboard-card scoreboard-collapsible print-section-payout">
           <summary><h2>Net payout</h2></summary>
           <div id="payoutSummary" class="result compact-result top-gap"></div>
@@ -440,7 +457,7 @@
           <li>Courses and tees stay manual and editable.</li>
           <li>Matches support 2 to 6 players with team sizes of 1, 2, or 3.</li>
           <li>Leaderboard highlights player totals, team totals, match play, skins, and side matches.</li>
-          <li>App version: <strong id="appVersionLabel">v20.7</strong></li>
+          <li>App version: <strong id="appVersionLabel">v21.1</strong></li>
         </ul>
       </div>
     </section>

@@ -804,3 +804,40 @@ body.keyboard-open .top-tabs{
     page-break-inside: avoid;
   }
 }
+
+
+/* v21.3 mobile-first scoring + scoreboard polish */
+.score-grid thead th{ text-align:center; }
+.score-grid td:nth-child(2),
+.score-grid td:nth-child(4),
+.score-grid td:nth-child(5){ text-align:center; }
+.score-grid td:nth-child(3){ text-align:center; }
+#score .score-hole-nav{position:sticky;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:12;background:rgba(244,248,246,.96);backdrop-filter:blur(8px);padding:8px;border-radius:14px;border:1px solid rgba(11,93,59,.12)}
+#score .score-grid-wrap{border-radius:16px;box-shadow:0 10px 24px rgba(0,0,0,.05)}
+#leaderboard .scoreboard-card{border-radius:16px;box-shadow:0 10px 24px rgba(0,0,0,.05)}
+#leaderboard .match-status-value,#leaderboard .game-summary-value{font-size:16px;line-height:1.25;font-weight:800}
+#leaderboard .game-summary-sub,#leaderboard .match-status-meta,#leaderboard .tiny{color:#42574d}
+#leaderboard .scoreboard-section-title{align-items:center}
+#score .score-grid td:first-child strong,#score .score-grid td:first-child{font-weight:700}
+@media (max-width: 760px){
+  #score .panel-head,#leaderboard .panel-head{gap:8px}
+  #score .score-hole-nav{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:8px}
+  #score #currentHoleBadge{min-width:0;width:100%;font-size:15px;padding:8px 10px}
+  #score .score-grid{min-width:100%}
+  #score .score-grid th,#score .score-grid td{padding:10px 8px;font-size:13px}
+  #score .score-grid th:first-child,#score .score-grid td:first-child{min-width:118px}
+  #score .score-grid input.score-input{min-height:46px;width:64px;border-width:2px;font-size:18px;font-weight:800}
+  #score .actions.top-gap.wrap.compact-actions{position:sticky;bottom:calc(env(safe-area-inset-bottom,0px) + 8px);z-index:12;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);padding:10px;border:1px solid rgba(11,93,59,.12);border-radius:16px;box-shadow:0 8px 20px rgba(0,0,0,.08)}
+  #score #saveScoresBtn{flex:1 1 auto;min-height:46px;font-size:16px}
+  #leaderboardWrap{gap:10px}
+  #leaderboard .leader-mobile-card{padding:14px;border-radius:16px;border:1px solid rgba(11,93,59,.10);background:#fff}
+  #leaderboard .leader-mobile-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 12px}
+  #leaderboard .match-status-grid{grid-template-columns:1fr;gap:8px}
+  #leaderboard .game-summary-grid{grid-template-columns:1fr;gap:10px}
+  #leaderboard .hole-momentum{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  #leaderboard .momentum-controls{display:grid;grid-template-columns:1fr;gap:8px}
+  #leaderboard select,#score select,#score button,#leaderboard button{min-height:44px}
+}
+@media print {
+  @page{size:landscape}
+}

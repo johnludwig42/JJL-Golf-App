@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v21.1';
+const APP_VERSION = 'v21.3';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -43,7 +43,8 @@ function getSideMatchConfigs(match) {
   return [];
 }
 function getSideMatchStatusText(pairing) {
-  if (!pairing || !Number.isFinite(pairing.diff) || pairing.diff === 0) return 'AS';
+  if (!pairing || !Number.isFinite(pairing.diff) || pairing.diff === 0) return pairing?.game === 'stroke_play' ? 'Tied' : 'AS';
+  if (pairing.game === 'stroke_play') return `${pairing.leaderName} leads by ${Math.abs(pairing.diff)} stroke${Math.abs(pairing.diff) === 1 ? '' : 's'}`;
   return `${pairing.leaderName} ${Math.abs(pairing.diff)} up`;
 }
 
@@ -245,6 +246,10 @@ function getTeamLabel(match, teamNo, fallback = true) {
 function getMomentumPerspectiveTeam(match) {
   const teamNo = Number(match?.momentumPerspective || 1);
   return teamNo === 2 ? 2 : 1;
+}
+function hasMomentumGame(match) {
+  const selected = Array.isArray(match?.selectedGames) ? match.selectedGames : [];
+  return selected.some(g => g.key === 'nassau' || g.key === 'team_match' || (g.key === 'individual_match' && Array.isArray(g.matchups) && g.matchups.some(row => ['nassau','match_play'].includes(String(row?.game || 'nassau').toLowerCase()))));
 }
 function formatPerspectiveStatus(diff, perspectiveTeam = 1) {
   const oriented = perspectiveTeam === 2 ? -Number(diff || 0) : Number(diff || 0);
@@ -628,7 +633,10 @@ function openPrintScorecard(matchId, printView = null) {
   }
   activateTab('leaderboard');
   const selectEl = document.getElementById('scoreboardPrintViewSelect');
-  if (selectEl) selectEl.value = requestedView;
+  if (selectEl) {
+    selectEl.value = requestedView;
+    selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+  }
   renderAll();
   renderLeaderboard();
   const detailsNodes = Array.from(document.querySelectorAll('#leaderboard details.scoreboard-collapsible'));
@@ -656,7 +664,7 @@ function openPrintScorecard(matchId, printView = null) {
   requestAnimationFrame(() => requestAnimationFrame(() => {
     setTimeout(() => {
       try { window.print(); } catch (err) { cleanup(); toast('Print dialog could not open.'); }
-    }, 180);
+    }, 320);
   }));
 }
 
@@ -1005,6 +1013,7 @@ function getIndividualMatchPairings(match, metrics) {
     let totalA = 0;
     let totalB = 0;
     let completedCount = 0;
+    const frontSpan = totalPlayableHoles <= 9 ? totalPlayableHoles : 9;
     holes.forEach((hole, holeIdx) => {
       const scoreAObj = hole.playerScores.find(ps => ps.playerId === pa.playerId);
       const scoreBObj = hole.playerScores.find(ps => ps.playerId === pb.playerId);
@@ -1020,12 +1029,13 @@ function getIndividualMatchPairings(match, metrics) {
         totalB += scoreB;
         return;
       }
+      const isFrontSegmentHole = holeIdx < frontSpan;
       if (scoreA < scoreB) {
         matchDiff += 1;
-        if ((Number(hole.holeNumber) || 0) <= 9) front += 1; else back += 1;
+        if (isFrontSegmentHole) front += 1; else back += 1;
       } else if (scoreB < scoreA) {
         matchDiff -= 1;
-        if ((Number(hole.holeNumber) || 0) <= 9) front -= 1; else back -= 1;
+        if (isFrontSegmentHole) front -= 1; else back -= 1;
       }
     });
     const diff = game === 'stroke_play'
@@ -1326,12 +1336,13 @@ function renderLeaderboard() {
     `).join('');
   }
 
+  const sortedTeams = metrics.teams.slice().sort((a, b) => (a.netTotal - b.netTotal) || (a.grossTotal - b.grossTotal) || (a.team - b.team));
   const teamMatchRelevant = showTeamMatchMetric(match, metrics);
   const teamMetricLabel = teamMatchRelevant ? 'H2H' : '—';
   const teamMetricValue = t => teamMatchRelevant ? formatSigned(t.overall) : '—';
   const teamLeaderHeader = document.querySelectorAll('#leaderboard .leader-table thead tr th:last-child')[1];
   if (teamLeaderHeader) teamLeaderHeader.textContent = teamMatchRelevant ? 'H2H' : '—';
-  teamBody.innerHTML = metrics.teams.map(t => `
+  teamBody.innerHTML = sortedTeams.map(t => `
     <tr>
       <td>${escapeHtml(getTeamLabel(match, t.team))}</td>
       <td>${escapeHtml(t.members.map(m => m.player.name).join(', '))}</td>
@@ -1344,7 +1355,7 @@ function renderLeaderboard() {
   `).join('');
   const teamMobile = document.getElementById('teamLeaderboardMobile');
   if (teamMobile) {
-    teamMobile.innerHTML = metrics.teams.map(t => `
+    teamMobile.innerHTML = sortedTeams.map(t => `
       <div class="leader-mobile-card">
         <div><strong>${escapeHtml(getTeamLabel(match, t.team))}</strong></div>
         <div class="tiny">${escapeHtml(t.members.map(m => m.player.name).join(', '))}</div>
@@ -1378,16 +1389,19 @@ function renderLeaderboard() {
     if (hasNinePoint) ninePointScorecard.innerHTML = buildNinePointScorecard(match, metrics);
     else ninePointScorecard.innerHTML = '';
   }
+  const momentumCard = document.querySelector('.print-section-momentum');
+  const showMomentum = hasMomentumGame(match);
+  if (momentumCard) momentumCard.classList.toggle('hidden', !showMomentum);
   const momentumSelect = document.getElementById('momentumGameSelect');
   const options = getMomentumOptions(match);
-  if (momentumSelect) {
+  if (showMomentum && momentumSelect) {
     momentumSelect.innerHTML = options.map(opt => `<option value="${opt.key}" ${opt.key === match.momentumGame ? 'selected' : ''}>${escapeHtml(opt.label)}</option>`).join('');
     if (!options.find(opt => opt.key === match.momentumGame)) {
       match.momentumGame = options[0]?.key || 'nassau';
       momentumSelect.value = match.momentumGame;
     }
   }
-  if (perspectiveSelect) {
+  if (showMomentum && perspectiveSelect) {
     const teamOptions = metrics.teams.slice(0, 2).map(t => `<option value="${t.team}" ${t.team === getMomentumPerspectiveTeam(match) ? 'selected' : ''}>${escapeHtml(getTeamName(match, t.team))}</option>`).join('');
     perspectiveSelect.innerHTML = teamOptions;
     if (!metrics.teams.find(t => t.team === getMomentumPerspectiveTeam(match))) {
@@ -1395,28 +1409,33 @@ function renderLeaderboard() {
       perspectiveSelect.value = '1';
     }
   }
-  if (momentumMeta) {
+  if (showMomentum && momentumMeta) {
     momentumMeta.textContent = describeMomentumMeta(match, metrics, match.momentumGame || options[0]?.key || 'nassau');
   }
-  let running = 0;
-  const perspectiveTeam = getMomentumPerspectiveTeam(match);
-  holeMomentum.innerHTML = metrics.holeResults.map(h => {
-    const outcome = computeMomentumOutcome(match, metrics, h, match.momentumGame || 'nassau');
-    let cls = 'tied';
-    if (outcome === 'team1') {
-      running += 1;
-      cls = perspectiveTeam === 1 ? 'team1' : 'team2';
-    } else if (outcome === 'team2') {
-      running -= 1;
-      cls = perspectiveTeam === 1 ? 'team2' : 'team1';
-    } else if (outcome === 'pending') {
-      cls = 'pending';
-    } else {
-      cls = 'tied';
-    }
-    const txt = outcome === 'pending' ? '•' : formatPerspectiveStatus(running, perspectiveTeam);
-    return `<div class="momentum-pill ${cls}">H${h.holeNumber}<span>${txt}</span></div>`;
-  }).join('');
+  if (showMomentum && holeMomentum) {
+    let running = 0;
+    const perspectiveTeam = getMomentumPerspectiveTeam(match);
+    holeMomentum.innerHTML = metrics.holeResults.map(h => {
+      const outcome = computeMomentumOutcome(match, metrics, h, match.momentumGame || 'nassau');
+      let cls = 'tied';
+      if (outcome === 'team1') {
+        running += 1;
+        cls = perspectiveTeam === 1 ? 'team1' : 'team2';
+      } else if (outcome === 'team2') {
+        running -= 1;
+        cls = perspectiveTeam === 1 ? 'team2' : 'team1';
+      } else if (outcome === 'pending') {
+        cls = 'pending';
+      } else {
+        cls = 'tied';
+      }
+      const txt = outcome === 'pending' ? '•' : formatPerspectiveStatus(running, perspectiveTeam);
+      return `<div class="momentum-pill ${cls}">H${h.holeNumber}<span>${txt}</span></div>`;
+    }).join('');
+  } else if (holeMomentum) {
+    holeMomentum.innerHTML = '';
+    if (momentumMeta) momentumMeta.textContent = 'Momentum is shown when a Nassau or match play game is in the round.';
+  }
   if (payoutSummary) {
     payoutSummary.innerHTML = buildNetPayoutSummary(match, metrics);
   }
@@ -1633,12 +1652,18 @@ function renderScoreGrid(match, tee, metrics, scoringHoles = null) {
 
 function getMomentumOptions(match) {
   const selected = Array.isArray(match?.selectedGames) ? match.selectedGames : [];
-  const teamKeys = ['nassau', 'team_match', 'team_stroke'];
-  const keys = selected.map(g => g.key).filter(k => teamKeys.includes(k));
+  const keys = [];
+  selected.forEach(g => {
+    if (g.key === 'nassau' || g.key === 'team_match') keys.push(g.key);
+    if (g.key === 'individual_match') {
+      const rows = Array.isArray(g.matchups) ? g.matchups : [];
+      if (rows.some(row => String(row?.game || 'nassau').toLowerCase() === 'nassau')) keys.push('nassau');
+      if (rows.some(row => String(row?.game || '').toLowerCase() === 'match_play')) keys.push('team_match');
+    }
+  });
   const unique = [...new Set(keys)];
-  if (!unique.length) unique.push('nassau');
   unique.sort((a,b) => (a === 'nassau' ? -1 : b === 'nassau' ? 1 : 0));
-  return unique.map(key => ({ key, label: getGameLabel(key) }));
+  return unique.map(key => ({ key, label: key === 'team_match' ? 'Match Play' : getGameLabel(key) }));
 }
 function computeMomentumOutcome(match, metrics, holeResult, gameKey) {
   if (!holeResult?.completed) return 'pending';
@@ -1861,9 +1886,9 @@ function buildSelectedGamesSummary(match, metrics) {
         value = 'Select side-match players';
         sub = 'No side matches configured yet.';
       } else {
-        const leaders = pairings.map(p => Number.isFinite(p.diff) && p.diff !== 0 ? getSideMatchStatusText(p) : null).filter(Boolean);
-        value = leaders.length ? leaders.join(' · ') : 'All square';
-        sub = pairings.map(p => `${p.label}: ${p.isNineHoleSideNassau ? 'Nassau (9 Holes)' : getSideMatchGameLabel(p.game)} · ${p.status || getSideMatchStatusText(p)} · ${formatBasisLabel(p.basis)} · ${formatMoneyAccounting(p.stake)}`).join(' · ');
+        const statusLines = pairings.map(p => `${p.label}: ${p.status || (p.game === 'stroke_play' ? (p.diff === 0 ? 'Tied' : `${p.leaderName} leads by ${Math.abs(p.diff)} stroke${Math.abs(p.diff) === 1 ? '' : 's'}`) : getSideMatchStatusText(p))}`);
+        value = statusLines.join(' · ');
+        sub = pairings.map(p => `${p.isNineHoleSideNassau ? 'Nassau (9 Holes)' : getSideMatchGameLabel(p.game)} · ${formatBasisLabel(p.basis)} · ${formatMoneyAccounting(p.stake)}`).join(' · ');
       }
     } else if (cfg.key === 'skins') {
       const skins = computeSkinResults(match, metrics, cfg);
@@ -2155,6 +2180,7 @@ function renderGamesPicker(existing = []) {
         <div class="grid two compact-grid top-gap">
           <label><span>Basis</span><select data-game-config="${game.key}" data-field="basis"><option value="net" ${cfg.basis !== 'gross' ? 'selected' : ''}>Net</option><option value="gross" ${cfg.basis === 'gross' ? 'selected' : ''}>Gross</option></select></label>
           <label><span>$ / point</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stakePerPoint" value="${cfg.stakePerPoint ?? 1}" /></label>
+          <label class="span-2"><span>Players</span><div class="actions wrap compact-actions top-gap"><button type="button" class="secondary" id="ninePointSelectAllBtn">Select all match players</button><button type="button" class="secondary" id="ninePointClearBtn">Clear</button></div></label>
           ${[0,1,2].map(idx => `<label><span>Player ${idx + 1}</span><select data-nine-point-player="${idx}"><option value="">Select player</option>${playerOptions[idx].map(p => `<option value="${p.id}" ${p.id === selectedIds[idx] ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}</select></label>`).join('')}
         </div>
       </div>`;
@@ -2766,6 +2792,19 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
     if (e.target.id === 'greeniesClearAllBtn') {
       document.querySelectorAll('[data-greenie-player]').forEach(el => { el.checked = false; });
+      return;
+    }
+    if (e.target.id === 'ninePointSelectAllBtn') {
+      const ids = Array.from(document.querySelectorAll('[data-player-slot]')).map(el => el.value).filter(Boolean).slice(0, 3);
+      document.querySelectorAll('[data-nine-point-player]').forEach((el, idx) => { el.value = ids[idx] || ''; });
+      renderSetupHandicapPreview();
+      renderGamesPicker(collectSelectedGames());
+      return;
+    }
+    if (e.target.id === 'ninePointClearBtn') {
+      document.querySelectorAll('[data-nine-point-player]').forEach(el => { el.value = ''; });
+      renderSetupHandicapPreview();
+      renderGamesPicker(collectSelectedGames());
       return;
     }
     if (e.target.id === 'addSideMatchBtn') {

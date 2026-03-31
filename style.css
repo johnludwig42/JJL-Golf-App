@@ -841,3 +841,122 @@ body.keyboard-open .top-tabs{
 @media print {
   @page{size:landscape}
 }
+
+
+/* v21.4 team stake per person + stronger mobile scoreboard + print landscape bias */
+@media (max-width: 760px){
+  #leaderboard{
+    padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 18px);
+  }
+  #leaderboard .panel-head{
+    position:sticky;
+    top:calc(env(safe-area-inset-top, 0px) + 6px);
+    z-index:14;
+    background:rgba(244,248,246,.96);
+    backdrop-filter:blur(8px);
+    padding:10px 0 8px;
+    margin-bottom:6px;
+  }
+  #leaderboard .scoreboard-card{
+    padding:12px;
+    border-radius:18px;
+    box-shadow:0 8px 18px rgba(0,0,0,.05);
+  }
+  #leaderboard .scoreboard-section-title{
+    align-items:flex-start;
+    gap:6px;
+  }
+  #leaderboard .scoreboard-section-title h2,
+  #leaderboard .item-header h2{
+    font-size:17px;
+    line-height:1.15;
+  }
+  #leaderboard .scoreboard-section-title .tiny,
+  #leaderboard .item-header .tiny,
+  #leaderboard .game-summary-sub,
+  #leaderboard .match-status-meta,
+  #leaderboard .tiny{
+    font-size:11px;
+    line-height:1.3;
+  }
+  #leaderboard .match-status-value,
+  #leaderboard .game-summary-value{
+    font-size:15px;
+    line-height:1.2;
+  }
+  #leaderboard .leader-mobile-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:8px;
+  }
+  #leaderboard .leader-mobile-grid > div,
+  #leaderboard .match-status-tile,
+  #leaderboard .game-summary-card{
+    padding:10px;
+    border-radius:14px;
+  }
+  #leaderboard .leader-mobile-card{
+    padding:12px;
+  }
+  #leaderboard .scorecard-wrap,
+  #leaderboard .leader-table-wrap,
+  #leaderboard .payout-table-wrap{
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    margin-left:-4px;
+    margin-right:-4px;
+    padding-left:4px;
+    padding-right:4px;
+  }
+  #leaderboard .scorecard-table,
+  #leaderboard .leader-table,
+  #leaderboard .payout-game-table,
+  #leaderboard .settlement-table{
+    font-size:12px;
+  }
+  #leaderboard .scorecard-table th,
+  #leaderboard .scorecard-table td,
+  #leaderboard .leader-table th,
+  #leaderboard .leader-table td,
+  #leaderboard .payout-game-table th,
+  #leaderboard .payout-game-table td,
+  #leaderboard .settlement-table th,
+  #leaderboard .settlement-table td{
+    padding:8px 6px;
+    white-space:nowrap;
+  }
+  #leaderboard .print-actions{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:8px;
+  }
+  #leaderboard .print-actions > *{
+    width:100%;
+  }
+  #leaderboard #scoreboardPrintViewSelect,
+  #leaderboard #scoreboardShareRoundBtn{
+    min-height:46px;
+    font-size:16px;
+  }
+}
+
+@media print {
+  @page{size: landscape; margin: 10mm;}
+  html, body { width:auto !important; height:auto !important; }
+  body.printing-scorecard #leaderboard{
+    width:1180px;
+    max-width:none !important;
+    margin:0 auto;
+  }
+  body.printing-scorecard.printing-summary #leaderboardWrap{
+    display:grid !important;
+    grid-template-columns:1fr;
+    gap:12px;
+  }
+  body.printing-scorecard .scoreboard-card,
+  body.printing-scorecard .leader-mobile-card,
+  body.printing-scorecard .match-status-tile,
+  body.printing-scorecard .game-summary-card{
+    break-inside:avoid-page;
+    page-break-inside:avoid;
+  }
+}

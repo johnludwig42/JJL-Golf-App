@@ -1710,11 +1710,16 @@ function computeLivePayoutGames(match, metrics) {
   const selected = getOrderedSelectedGames(match);
   const games = [];
   const teamMemberIds = teamNo => (metrics.teams.find(t => t.team === teamNo)?.members || []).map(m => m.player.id);
-  const splitAcrossTeam = (amounts, teamNo, total) => {
-    const ids = teamMemberIds(teamNo);
-    if (!ids.length || !total) return;
-    const each = total / ids.length;
-    ids.forEach(id => { amounts[id] = (amounts[id] || 0) + each; });
+  const transferTeamStakePerPerson = (amounts, winnerTeamNos, loserTeamNos, stakePerPerson) => {
+    const winners = (Array.isArray(winnerTeamNos) ? winnerTeamNos : [winnerTeamNos]).flatMap(teamMemberIds).filter(Boolean);
+    const losers = (Array.isArray(loserTeamNos) ? loserTeamNos : [loserTeamNos]).flatMap(teamMemberIds).filter(Boolean);
+    if (!winners.length || !losers.length || !stakePerPerson) return;
+    winners.forEach(winnerId => {
+      losers.forEach(loserId => {
+        amounts[winnerId] = (amounts[winnerId] || 0) + stakePerPerson;
+        amounts[loserId] = (amounts[loserId] || 0) - stakePerPerson;
+      });
+    });
   };
   const addVsField = (amounts, winnerId, others, perOpponent) => {
     if (!winnerId || !others.length || !perOpponent) return;
@@ -1734,9 +1739,9 @@ function computeLivePayoutGames(match, metrics) {
         const front = Number(cfg.stakesFront || 0);
         const back = Number(cfg.stakesBack || 0);
         const overall = Number(cfg.stakesOverall || 0);
-        if (frontLeader && front) { splitAcrossTeam(amounts, frontLeader, front); splitAcrossTeam(amounts, frontLeader === 1 ? 2 : 1, -front); }
-        if (backLeader && back) { splitAcrossTeam(amounts, backLeader, back); splitAcrossTeam(amounts, backLeader === 1 ? 2 : 1, -back); }
-        if (overallLeader && overall) { splitAcrossTeam(amounts, overallLeader, overall); splitAcrossTeam(amounts, overallLeader === 1 ? 2 : 1, -overall); }
+        if (frontLeader && front) transferTeamStakePerPerson(amounts, frontLeader, frontLeader === 1 ? 2 : 1, front);
+        if (backLeader && back) transferTeamStakePerPerson(amounts, backLeader, backLeader === 1 ? 2 : 1, back);
+        if (overallLeader && overall) transferTeamStakePerPerson(amounts, overallLeader, overallLeader === 1 ? 2 : 1, overall);
         pushGame('nassau_' + basisKey, `Nassau (${basisLabel})`, amounts);
       };
       if (String(cfg.basis || 'net').toLowerCase() === 'both') {
@@ -1753,7 +1758,7 @@ function computeLivePayoutGames(match, metrics) {
       const stake = Number(cfg.stake || 0);
       const diffs = computeTeamGameDiffs(match, metrics, 'team_match');
       const leader = diffs.overall > 0 ? 1 : diffs.overall < 0 ? 2 : 0;
-      if (leader && stake) { splitAcrossTeam(amounts, leader, stake); splitAcrossTeam(amounts, leader === 1 ? 2 : 1, -stake); }
+      if (leader && stake) transferTeamStakePerPerson(amounts, leader, leader === 1 ? 2 : 1, stake);
       pushGame(cfg.key, `${getGameLabel(cfg.key)} (${formatBasisLabel(cfg.basis)} · Best Ball)`, amounts); return;
     }
     if (cfg.key === 'team_stroke' && metrics.teams.length >= 2) {
@@ -1762,8 +1767,7 @@ function computeLivePayoutGames(match, metrics) {
       const standing = getTeamStrokeStanding(metrics, String(cfg.basis || 'net').toLowerCase(), String(cfg.scoringMode || 'best_ball').toLowerCase());
       if (stake && standing.winner) {
         const losers = metrics.teams.filter(t => t.team !== standing.winner).map(t => t.team);
-        splitAcrossTeam(amounts, standing.winner, stake * losers.length);
-        losers.forEach(teamNo => splitAcrossTeam(amounts, teamNo, -stake));
+        transferTeamStakePerPerson(amounts, standing.winner, losers, stake);
       }
       pushGame(cfg.key, `${getGameLabel(cfg.key)} (${formatBasisLabel(cfg.basis)} · ${formatScoringModeLabel(cfg.scoringMode)})`, amounts); return;
     }
@@ -1777,8 +1781,7 @@ function computeLivePayoutGames(match, metrics) {
           skins.winnersByHole.forEach(h => {
             const winner = h.winner;
             const losers = metrics.teams.filter(t => t.team !== winner).map(t => t.team);
-            splitAcrossTeam(amounts, winner, stake * losers.length);
-            losers.forEach(teamNo => splitAcrossTeam(amounts, teamNo, -stake));
+            transferTeamStakePerPerson(amounts, winner, losers, stake);
           });
         }
         pushGame('team_skins', `Team Skins (${basisLabel})`, amounts);

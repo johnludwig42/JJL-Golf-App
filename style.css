@@ -960,3 +960,67 @@ body.keyboard-open .top-tabs{
     page-break-inside:avoid;
   }
 }
+
+
+/* v21.5 Nassau burn fix + iPhone print/mobile scoreboard refinements */
+@media (max-width: 760px){
+  html, body { overflow-x:hidden; }
+  #leaderboard, #leaderboardWrap, #leaderboard .leaderboard-cards, #leaderboard .scoreboard-card, #leaderboard .compact-item-header { min-width:0; }
+  #leaderboard .compact-item-header,
+  #leaderboard .item-header.compact-item-header{
+    display:grid;
+    grid-template-columns:1fr;
+    align-items:stretch;
+    gap:10px;
+  }
+  #leaderboard .compact-item-header > :last-child,
+  #leaderboard .item-header.compact-item-header > :last-child{
+    width:100%;
+    min-width:0;
+  }
+  #leaderboard .inline-select,
+  #leaderboard .actions.wrap.compact-actions,
+  #leaderboard .actions.wrap.compact-actions > *{
+    width:100%;
+    min-width:0;
+  }
+  #leaderboard .inline-select span{display:block;margin-bottom:4px;}
+  #leaderboard select,
+  #leaderboard button{width:100%;max-width:100%;}
+  #leaderboard .scoreboard-card{overflow:hidden;}
+  #leaderboard .match-status-grid,
+  #leaderboard .game-summary-grid,
+  #leaderboard #playerLeaderboardMobile{width:100%;max-width:100%;}
+  #leaderboard .match-status-tile,
+  #leaderboard .game-summary-card,
+  #leaderboard .leader-mobile-card{width:100%;max-width:100%;box-sizing:border-box;}
+  #leaderboard .match-status-value,
+  #leaderboard .game-summary-value{font-size:14px;line-height:1.2;overflow-wrap:anywhere;word-break:break-word;}
+  #leaderboard .game-summary-title,
+  #leaderboard .game-summary-sub,
+  #leaderboard .match-status-meta,
+  #leaderboard .leader-mobile-label,
+  #leaderboard .tiny{overflow-wrap:anywhere;word-break:break-word;}
+  #leaderboard .leader-mobile-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  #leaderboard .leader-mobile-grid > div{min-width:0;}
+}
+@media print {
+  @page { size: landscape !important; margin: 8mm !important; }
+  html { width: 100% !important; }
+  body.printing-scorecard { width: 100% !important; }
+  body.printing-scorecard #leaderboard,
+  body.printing-scorecard #leaderboardWrap {
+    width: 100% !important;
+    max-width: none !important;
+  }
+  body.printing-scorecard details.scoreboard-collapsible[open] > *:not(summary),
+  body.printing-scorecard .scoreboard-card,
+  body.printing-scorecard .leader-mobile-card,
+  body.printing-scorecard .match-status-tile,
+  body.printing-scorecard .game-summary-card,
+  body.printing-scorecard .payout-section,
+  body.printing-scorecard .scorecard-wrap {
+    break-inside: avoid-page !important;
+    page-break-inside: avoid !important;
+  }
+}

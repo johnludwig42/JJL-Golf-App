@@ -641,7 +641,7 @@ function openPrintScorecard(matchId, printView = null) {
   renderLeaderboard();
   const detailsNodes = Array.from(document.querySelectorAll('#leaderboard details.scoreboard-collapsible'));
   const priorOpen = detailsNodes.map(node => node.open);
-  detailsNodes.forEach(node => { node.open = requestedView === 'summary'; });
+  detailsNodes.forEach(node => { node.open = true; });
   document.body.classList.add('printing-scorecard');
   document.body.classList.toggle('printing-summary', requestedView === 'summary');
   document.body.classList.toggle('printing-classic-only', requestedView === 'scorecard');
@@ -1714,11 +1714,15 @@ function computeLivePayoutGames(match, metrics) {
     const winners = (Array.isArray(winnerTeamNos) ? winnerTeamNos : [winnerTeamNos]).flatMap(teamMemberIds).filter(Boolean);
     const losers = (Array.isArray(loserTeamNos) ? loserTeamNos : [loserTeamNos]).flatMap(teamMemberIds).filter(Boolean);
     if (!winners.length || !losers.length || !stakePerPerson) return;
+    const loserShare = Number(stakePerPerson) || 0;
+    if (!loserShare) return;
+    const totalPot = loserShare * losers.length;
+    const winnerShare = totalPot / winners.length;
     winners.forEach(winnerId => {
-      losers.forEach(loserId => {
-        amounts[winnerId] = (amounts[winnerId] || 0) + stakePerPerson;
-        amounts[loserId] = (amounts[loserId] || 0) - stakePerPerson;
-      });
+      amounts[winnerId] = (amounts[winnerId] || 0) + winnerShare;
+    });
+    losers.forEach(loserId => {
+      amounts[loserId] = (amounts[loserId] || 0) - loserShare;
     });
   };
   const addVsField = (amounts, winnerId, others, perOpponent) => {

@@ -1134,3 +1134,92 @@ body.keyboard-open .top-tabs{
     width: 100%;
   }
 }
+
+/* v21.8 iphone scorecard/setup refinements */
+.lookup-picker-row{gap:8px;}
+.lookup-field,.quick-player-select,.player-tee-select{display:grid;gap:4px;min-width:0;}
+.quick-player-select select{width:100%;min-width:0;}
+.match-status-stack{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:100%;}
+.match-status-name{display:block;max-width:100%;white-space:normal;overflow-wrap:anywhere;word-break:break-word;line-height:1.15;}
+.match-status-scoreline{display:block;font-weight:800;line-height:1.05;}
+.game-summary-card{display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;height:auto;min-height:0;}
+.game-summary-title,.game-summary-sub,.game-summary-value{max-width:100%;overflow-wrap:anywhere;word-break:break-word;white-space:normal;}
+#setup input[type="date"]{width:100%;min-width:0;max-width:100%;appearance:none;-webkit-appearance:none;}
+#setup .compact-grid > label{min-width:0;}
+
+@media (max-width:760px){
+  #setup input[type="date"]{font-size:16px;}
+  #matchForm label:first-child{max-width:100%;}
+  #matchPlayersPicker .lookup-picker-row{padding:10px;border:1px solid rgba(11,93,59,.10);border-radius:14px;background:#fbfdfc;}
+  #matchPlayersPicker .lookup-field input,
+  #matchPlayersPicker .quick-player-select select,
+  #matchPlayersPicker .player-tee-select select{min-height:42px;font-size:16px;}
+
+  #leaderboard .scorecard-wrap{
+    margin-left:-12px;
+    margin-right:-12px;
+    padding-left:0;
+    padding-right:0;
+    overflow-x:auto;
+    overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;
+    scroll-padding-left:178px;
+    position:relative;
+    isolation:isolate;
+  }
+  #leaderboard .scorecard-wrap::before{
+    content:"";
+    position:sticky;
+    left:0;
+    top:0;
+    bottom:0;
+    width:176px;
+    height:100%;
+    display:block;
+    background:linear-gradient(to right, rgba(255,255,255,1) 0%, rgba(255,255,255,1) 88%, rgba(255,255,255,.98) 100%);
+    pointer-events:none;
+    z-index:7;
+  }
+  #leaderboard .scorecard-wrap::after{
+    content:"";
+    position:sticky;
+    left:176px;
+    top:0;
+    bottom:0;
+    display:block;
+    width:14px;
+    height:100%;
+    background:linear-gradient(to right, rgba(255,255,255,.98), rgba(255,255,255,0));
+    pointer-events:none;
+    z-index:7;
+  }
+  #leaderboard .scorecard-table{min-width:920px;}
+  #leaderboard .scorecard-table th:first-child,
+  #leaderboard .scorecard-table td:first-child,
+  #leaderboard .scorecard-table th:nth-child(2),
+  #leaderboard .scorecard-table td:nth-child(2){background:#fff !important;}
+  #leaderboard .scorecard-table .scorecard-sticky-name{min-width:104px;max-width:104px;}
+  #leaderboard .scorecard-table .scorecard-sticky-team{min-width:72px;max-width:72px;}
+  #leaderboard .scorecard-table th:nth-child(2),
+  #leaderboard .scorecard-table td:nth-child(2){left:104px !important;}
+  #leaderboard .scorecard-table th:first-child,
+  #leaderboard .scorecard-table td:first-child{left:0 !important;}
+  #leaderboard .scorecard-table td,
+  #leaderboard .scorecard-table th{padding-left:6px;padding-right:6px;}
+
+  #leaderboard .payout-table-wrap{margin-left:-4px;margin-right:-4px;padding-left:0;padding-right:0;}
+  #leaderboard .payout-game-table,
+  #leaderboard .settlement-table{min-width:700px;width:max-content;}
+  #leaderboard .payout-game-table th:first-child,
+  #leaderboard .payout-game-table td:first-child{position:sticky;left:0;background:#fff;z-index:4;box-shadow:8px 0 12px -10px rgba(0,0,0,.22);}
+
+  #leaderboard .match-status-value{align-items:flex-start;justify-content:flex-start;text-align:left;min-height:unset;}
+  #leaderboard .match-status-stack{align-items:flex-start;text-align:left;}
+  #leaderboard .game-summary-grid{grid-template-columns:1fr;align-items:start;}
+  #leaderboard .game-summary-card{padding:12px 12px 10px;align-items:flex-start;}
+}
+
+@media print{
+  body.printing-scorecard .scorecard-wrap::before,
+  body.printing-scorecard .scorecard-wrap::after{display:none !important;}
+}

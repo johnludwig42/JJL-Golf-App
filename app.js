@@ -1037,6 +1037,17 @@ function formatTeamGameStatus(match, metrics, diff) {
     ? `${describeTeamLabel(match, 1, metrics)} ${Math.abs(diff)} up`
     : `${describeTeamLabel(match, 2, metrics)} ${Math.abs(diff)} up`;
 }
+function formatMatchStatusMarkup(statusText, opts = {}) {
+  const raw = String(statusText || '—').trim();
+  const escaped = escapeHtml(raw);
+  if (!opts.forceScoreLast) return escaped;
+  if (raw === 'AS' || raw === '—') {
+    return `<span class="match-status-stack"><span class="match-status-scoreline">${escaped}</span></span>`;
+  }
+  const m = raw.match(/^(.*?)(\s+((?:\d+\s+(?:up|down))|AS))$/i);
+  if (!m) return escaped;
+  return `<span class="match-status-stack"><span class="match-status-name">${escapeHtml(m[1].trim())}</span><span class="match-status-scoreline">${escapeHtml(m[3].trim())}</span></span>`;
+}
 
 function getIndividualMatchPairings(match, metrics) {
   if (!match || !metrics) return [];
@@ -1166,7 +1177,7 @@ function buildFeaturedMatchStatus(match, metrics, gameKey) {
         { label: gameKey === 'nassau' ? 'Overall 18' : 'Overall', value: overallTeam },
       ];
     }
-    return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid">${items.map(item => `<div class="match-status-tile"><div class="tiny">${escapeHtml(item.label)}</div><div class="match-status-value">${item.value}</div></div>`).join('')}</div>`;
+    return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid">${items.map(item => `<div class="match-status-tile"><div class="tiny">${escapeHtml(item.label)}</div><div class="match-status-value">${formatMatchStatusMarkup(item.value, { forceScoreLast: gameKey === 'nassau' })}</div></div>`).join('')}</div>`;
   }
   if (gameKey === 'individual_match') {
     const pairings = getIndividualMatchPairings(match, metrics);
@@ -2110,6 +2121,7 @@ function populateMatchPlayerPicker(selected = []) {
           <input list="${lookupId}" data-player-lookup-slot="${idx}" data-slot-team="${teamNo}" placeholder="Start typing a player name" value="${escapeHtml(currentPlayer ? getPlayerLookupLabel(currentPlayer) : '')}" autocomplete="off" />
         </label>
         <datalist id="${lookupId}">${candidatePlayers.map(p => `<option value="${escapeHtml(getPlayerLookupLabel(p))}"></option>`).join('')}</datalist>
+        <label class="tiny quick-player-select"><span>Or choose from list</span><select data-player-dropdown-slot="${idx}" data-slot-team="${teamNo}"><option value="">Select saved player</option>${candidatePlayers.map(p => `<option value="${p.id}" ${p.id === current ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}</select></label>
         ${teeSelect}
       </div>
     `;
@@ -2813,6 +2825,18 @@ function installHandlers() {
   document.getElementById('matchPlayersPicker').addEventListener('change', e => {
     if (e.target.matches('[data-player-lookup-slot]')) {
       syncPlayerLookupSelection(e.target);
+      populateMatchPlayerPicker(Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => ({ playerId: el.value, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '', slot: idx })));
+      renderGamesPicker(collectSelectedGames());
+      renderSetupHandicapPreview();
+      return;
+    }
+    if (e.target.matches('[data-player-dropdown-slot]')) {
+      const slot = Number(e.target.dataset.playerDropdownSlot);
+      const hidden = document.querySelector(`[data-player-slot="${slot}"]`);
+      const lookup = document.querySelector(`[data-player-lookup-slot="${slot}"]`);
+      const picked = getPlayer(e.target.value || '');
+      if (hidden) hidden.value = picked?.id || '';
+      if (lookup) lookup.value = picked ? getPlayerLookupLabel(picked) : '';
       populateMatchPlayerPicker(Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => ({ playerId: el.value, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '', slot: idx })));
       renderGamesPicker(collectSelectedGames());
       renderSetupHandicapPreview();

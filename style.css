@@ -1024,3 +1024,113 @@ body.keyboard-open .top-tabs{
     page-break-inside: avoid !important;
   }
 }
+
+
+/* v21.6 print toggle + iphone overflow + sticky scorecard masking */
+.scorecard-wrap{position:relative;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;}
+.scorecard-table th:first-child,.scorecard-table td:first-child{background:#ffffff !important;z-index:6 !important;box-shadow:2px 0 0 rgba(255,255,255,.98);}
+.scorecard-table th:nth-child(2),.scorecard-table td:nth-child(2){background:#ffffff !important;z-index:6 !important;box-shadow:10px 0 12px -8px rgba(0,0,0,.18);}
+.scorecard-wrap::before{content:"";position:sticky;left:0;display:block;width:224px;min-width:224px;height:0;pointer-events:none;z-index:5;}
+#leaderboardWrap[data-print-view="scorecard"] .leaderboard-cards,
+#leaderboardWrap[data-print-view="scorecard"] .print-section-match-status,
+#leaderboardWrap[data-print-view="scorecard"] .print-section-scoreboard-summary,
+#leaderboardWrap[data-print-view="scorecard"] .print-section-momentum,
+#leaderboardWrap[data-print-view="scorecard"] .print-section-payout{opacity:.55;transition:opacity .18s ease;}
+#leaderboardWrap[data-print-view="scorecard"] .print-section-classic-scorecard,
+#leaderboardWrap[data-print-view="scorecard"] .print-section-nine-point{opacity:1;}
+.print-preview-muted{opacity:.55;}
+.print-preview-emphasis{opacity:1;}
+@media (max-width: 760px){
+  #leaderboard .scoreboard-card{overflow:visible;}
+  #leaderboard .scoreboard-collapsible{overflow:visible;}
+  #leaderboard #payoutSummary{overflow:visible;min-width:0;}
+  #leaderboard .payout-summary-stack,
+  #leaderboard .payout-section{min-width:0;}
+  #leaderboard .payout-table-wrap{overflow-x:auto !important;overflow-y:hidden;max-width:100%;width:100%;padding-bottom:8px;-webkit-overflow-scrolling:touch;}
+  #leaderboard .payout-game-table,
+  #leaderboard .settlement-table{min-width:640px;width:max-content;}
+  #leaderboard .payout-game-table th:first-child,
+  #leaderboard .payout-game-table td:first-child,
+  #leaderboard .settlement-table th:first-child,
+  #leaderboard .settlement-table td:first-child{position:sticky;left:0;background:#fff;z-index:2;box-shadow:6px 0 10px -8px rgba(0,0,0,.16);}
+  #leaderboard .scorecard-wrap{padding-bottom:6px;}
+  #leaderboard .scorecard-wrap::after{content:"";position:sticky;left:194px;float:left;width:18px;height:1px;box-shadow:12px 0 14px rgba(255,255,255,.98);pointer-events:none;z-index:7;}
+  #leaderboard .scorecard-table .scorecard-sticky-name{min-width:112px;max-width:112px;}
+  #leaderboard .scorecard-table .scorecard-sticky-team{min-width:82px;max-width:82px;}
+}
+@media print {
+  body.printing-scorecard .scorecard-wrap::before,
+  body.printing-scorecard .scorecard-wrap::after{display:none !important;}
+  body.printing-scorecard .scorecard-table th:first-child,
+  body.printing-scorecard .scorecard-table td:first-child,
+  body.printing-scorecard .scorecard-table th:nth-child(2),
+  body.printing-scorecard .scorecard-table td:nth-child(2){box-shadow:none !important;}
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+.compact-search input {
+  min-width: 180px;
+}
+.course-search-inline {
+  display: flex;
+  align-items: center;
+}
+.course-card-header {
+  align-items: flex-start;
+  gap: 10px;
+}
+.course-expand-btn {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 1 1 auto;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+}
+.course-expand-icon {
+  font-size: 18px;
+  line-height: 1.1;
+  min-width: 14px;
+}
+.course-meta-line {
+  display: block;
+}
+.lookup-picker-row {
+  gap: 8px;
+}
+.lookup-field {
+  display: grid;
+  gap: 4px;
+}
+.lookup-field input {
+  width: 100%;
+}
+@media (max-width: 640px) {
+  .course-card-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .course-card-header .actions {
+    width: 100%;
+  }
+  .course-card-header .actions button {
+    flex: 1 1 auto;
+  }
+  .compact-search input {
+    min-width: 0;
+    width: 100%;
+  }
+}

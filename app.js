@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v21.3';
+const APP_VERSION = 'v21.7';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -264,6 +264,10 @@ let editingMatchId = null;
 let currentHole = 1;
 let finishConfirmArmed = false;
 let currentLeaderboardMatchRef = null;
+const uiState = {
+  courseSearch: '',
+  expandedCourses: new Set(),
+};
 
 const state = loadState();
 normalizeState();
@@ -283,6 +287,27 @@ function toast(message, ms = 2200) {
   el.classList.remove('hidden');
   clearTimeout(toast._timer);
   toast._timer = setTimeout(() => el.classList.add('hidden'), ms);
+}
+
+function getPlayerLookupLabel(player) {
+  if (!player) return '';
+  return `${player.name} · ${Number(player.index || 0).toFixed(1)}`;
+}
+function getPlayerByLookupLabel(label = '', candidates = null) {
+  const needle = String(label || '').trim().toLowerCase();
+  const pool = Array.isArray(candidates) ? candidates : state.players;
+  if (!needle) return null;
+  return pool.find(p => getPlayerLookupLabel(p).toLowerCase() === needle)
+    || pool.find(p => String(p.name || '').trim().toLowerCase() === needle)
+    || null;
+}
+function getCourseSearchValue() {
+  return String(uiState.courseSearch || document.getElementById('coursesSearchInput')?.value || '').trim().toLowerCase();
+}
+function setCourseExpanded(courseId, expanded) {
+  if (!courseId) return;
+  if (expanded) uiState.expandedCourses.add(courseId);
+  else uiState.expandedCourses.delete(courseId);
 }
 function loadState() {
   const fallback = { players: [], courses: [], matches: [], activeMatchId: null, notes: '' };
@@ -609,6 +634,26 @@ This round is missing valid course or tee data.`;
 
   return lines.join('\n');
 }
+function applyScoreboardPrintView(view = "summary") {
+  const requestedView = view === "scorecard" ? "scorecard" : "summary";
+  document.body.classList.toggle('printing-summary', requestedView === 'summary');
+  document.body.classList.toggle('printing-classic-only', requestedView === 'scorecard');
+  document.body.setAttribute('data-print-view', requestedView);
+  const root = document.getElementById('leaderboardWrap');
+  if (root) root.setAttribute('data-print-view', requestedView);
+  const printMeta = document.getElementById('printRoundMeta');
+  if (printMeta && !printMeta.classList.contains('hidden')) {
+    const match = getActiveMatch();
+    const metrics = match ? computeMatchMetrics(match) : null;
+    printMeta.innerHTML = buildPrintMeta(match, metrics, requestedView);
+  }
+  const classicCard = document.querySelector('.print-section-classic-scorecard');
+  const nineCard = document.getElementById('ninePointScorecardCard');
+  const cards = document.querySelectorAll('.leaderboard-cards, .print-section-match-status, .print-section-scoreboard-summary, .print-section-momentum, .print-section-payout');
+  if (classicCard) classicCard.classList.toggle('print-preview-emphasis', requestedView === 'scorecard');
+  if (nineCard) nineCard.classList.toggle('print-preview-emphasis', requestedView === 'scorecard');
+  cards.forEach(card => card.classList.toggle('print-preview-muted', requestedView === 'scorecard'));
+}
 function buildPrintMeta(match, metrics, printView = "summary") {
   const holeCount = getPlayableHoleCount(match, metrics?.tee);
   const courseName = metrics?.course?.name || 'No course';
@@ -623,7 +668,7 @@ function openPrintScorecard(matchId, printView = null) {
   if (!match) return toast('No round selected to print.');
   const previousTab = document.querySelector('.tab.active')?.dataset.tab || 'score';
   const previouslyActiveMatch = state.activeMatchId;
-  const requestedView = (printView || document.getElementById('scoreboardPrintViewSelect')?.value || 'summary') === 'scorecard' ? 'scorecard' : 'summary';
+  const requestedView = (printView || match.printView || document.getElementById('scoreboardPrintViewSelect')?.value || 'summary') === 'scorecard' ? 'scorecard' : 'summary';
   if (state.activeMatchId !== match.id) state.activeMatchId = match.id;
   const metrics = computeMatchMetrics(match);
   const printMeta = document.getElementById('printRoundMeta');
@@ -643,9 +688,7 @@ function openPrintScorecard(matchId, printView = null) {
   const priorOpen = detailsNodes.map(node => node.open);
   detailsNodes.forEach(node => { node.open = true; });
   document.body.classList.add('printing-scorecard');
-  document.body.classList.toggle('printing-summary', requestedView === 'summary');
-  document.body.classList.toggle('printing-classic-only', requestedView === 'scorecard');
-  document.body.setAttribute('data-print-view', requestedView);
+  applyScoreboardPrintView(requestedView);
   renderAll();
   renderLeaderboard();
   void document.body.offsetHeight;
@@ -653,6 +696,9 @@ function openPrintScorecard(matchId, printView = null) {
   const cleanup = () => {
     document.body.classList.remove('printing-scorecard', 'printing-summary', 'printing-classic-only');
     document.body.removeAttribute('data-print-view');
+    const root = document.getElementById('leaderboardWrap');
+    if (root) root.removeAttribute('data-print-view');
+    document.querySelectorAll('.print-preview-muted,.print-preview-emphasis').forEach(el => el.classList.remove('print-preview-muted','print-preview-emphasis'));
     if (printMeta) printMeta.classList.add('hidden');
     detailsNodes.forEach((node, idx) => { node.open = priorOpen[idx]; });
     state.activeMatchId = previouslyActiveMatch;
@@ -664,7 +710,7 @@ function openPrintScorecard(matchId, printView = null) {
   requestAnimationFrame(() => requestAnimationFrame(() => {
     setTimeout(() => {
       try { window.print(); } catch (err) { cleanup(); toast('Print dialog could not open.'); }
-    }, 320);
+    }, 650);
   }));
 }
 
@@ -1370,6 +1416,11 @@ function renderLeaderboard() {
     `).join('');
   }
 
+  const printViewSelect = document.getElementById('scoreboardPrintViewSelect');
+  const activePrintView = (match.printView === 'scorecard') ? 'scorecard' : 'summary';
+  if (printViewSelect && printViewSelect.value !== activePrintView) printViewSelect.value = activePrintView;
+  applyScoreboardPrintView(activePrintView);
+
   const statusOptions = getMatchStatusOptions(match);
   if (matchStatusGameSelect) {
     matchStatusGameSelect.innerHTML = statusOptions.map(opt => `<option value="${opt.key}" ${opt.key === match.matchStatusGame ? 'selected' : ''}>${escapeHtml(opt.label)}</option>`).join('');
@@ -1455,6 +1506,8 @@ function renderAll() {
   renderSetupHandicapPreview();
   const versionEl = document.getElementById('appVersionLabel'); if (versionEl) versionEl.textContent = APP_VERSION;
   const notesBox = document.getElementById('notesBox'); if (notesBox && notesBox.value !== state.notes) notesBox.value = state.notes || '';
+  const coursesSearchInput = document.getElementById('coursesSearchInput');
+  if (coursesSearchInput && coursesSearchInput.value !== uiState.courseSearch) coursesSearchInput.value = uiState.courseSearch;
 }
 
 
@@ -1487,25 +1540,43 @@ function strokeIndexSummary(holes, course) {
 }
 function renderCourses() {
   const el = document.getElementById('coursesList');
+  const query = getCourseSearchValue();
+  const courses = state.courses.filter(c => {
+    if (!query) return true;
+    const location = [c.city, c.state, c.country].filter(Boolean).join(' ').toLowerCase();
+    const teeText = (Array.isArray(c.tees) ? c.tees : []).map(t => [t.teeName, t.gender === 'F' ? 'women' : 'men', t.isCombo ? 'combo' : ''].join(' ')).join(' ').toLowerCase();
+    return `${String(c.name || '').toLowerCase()} ${location} ${teeText}`.includes(query);
+  });
   if (!state.courses.length) {
     el.innerHTML = '<div class="tiny">No courses saved yet.</div>';
     return;
   }
-  el.innerHTML = state.courses.map(c => `
-    <div class="item compact-item">
-      <div class="item-header compact-item-header">
-        <div>
-          <div class="item-title">${escapeHtml(c.name)}</div>
-          <div class="muted">${escapeHtml([c.city, c.state].filter(Boolean).join(', ') || c.country)}</div>
-        </div>
+  if (!courses.length) {
+    el.innerHTML = '<div class="tiny">No courses match your search.</div>';
+    return;
+  }
+  el.innerHTML = courses.map(c => {
+    const expanded = query ? true : uiState.expandedCourses.has(c.id);
+    const sortedTees = getSortedTeesByYardage(c);
+    return `
+    <div class="item compact-item course-card ${expanded ? 'expanded' : 'collapsed'}">
+      <div class="item-header compact-item-header course-card-header">
+        <button type="button" class="course-expand-btn" data-toggle-course="${c.id}" aria-expanded="${expanded ? 'true' : 'false'}">
+          <span class="course-expand-icon">${expanded ? '▾' : '▸'}</span>
+          <span>
+            <span class="item-title">${escapeHtml(c.name)}</span>
+            <span class="muted course-meta-line">${escapeHtml([c.city, c.state].filter(Boolean).join(', ') || c.country || 'Course')}</span>
+            <span class="tiny course-meta-line">${sortedTees.length} tee${sortedTees.length === 1 ? '' : 's'}</span>
+          </span>
+        </button>
         <div class="actions wrap compact-actions">
           <button class="secondary" data-edit-course="${c.id}">Edit course</button>
           <button class="secondary" data-delete-course="${c.id}">Delete</button>
           <button class="secondary" data-new-tee="${c.id}">Add tee</button>
         </div>
       </div>
-      <div class="top-gap">
-        ${c.tees.length ? getSortedTeesByYardage(c).map(t => `
+      <div class="top-gap ${expanded ? '' : 'hidden'}" data-course-tee-panel="${c.id}">
+        ${sortedTees.length ? sortedTees.map(t => `
           <div class="tee-block">
             <div class="strong">${escapeHtml(t.teeName)} · ${t.gender === 'F' ? 'Women' : 'Men'}${t.isCombo ? ' · Combo' : ''}</div>
             <div class="tiny">Par ${t.par} · Rating ${formatRatingValue(t.rating)} · Slope ${t.slope}${getTeeTotalYardage(t) ? ` · ${formatYardageValue(getTeeTotalYardage(t))} yds` : ''}</div>
@@ -1518,9 +1589,10 @@ function renderCourses() {
           </div>
         `).join('') : '<div class="tiny">No tees saved yet.</div>'}
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
+
 
 function renderMatches() {
   const el = document.getElementById('matchesList');
@@ -2009,37 +2081,42 @@ function populateMatchPlayerPicker(selected = []) {
   const selectedBySlot = Array.from({ length: slotCount }, (_, idx) => {
     const direct = selected.find(s => Number(s.slot) === idx)?.playerId;
     if (direct) return direct;
-    return selected[idx]?.playerId || '';
+    return document.querySelector(`[data-player-slot="${idx}"]`)?.value || '';
   });
   const teeBySlot = Array.from({ length: slotCount }, (_, idx) => {
     const direct = selected.find(s => Number(s.slot) === idx)?.teeId;
-    return direct || selected[idx]?.teeId || defaultTeeId || '';
+    if (direct) return direct;
+    return document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || defaultTeeId || '';
   });
   const teamNames = Array.from({ length: teamCount }, (_, i) => document.querySelector(`[data-team-name="${i + 1}"]`)?.value || `Team ${i + 1}`);
   container.innerHTML = Array.from({ length: slotCount }, (_, idx) => {
     const teamNo = Math.floor(idx / playersPerTeam) + 1;
     const slotNo = (idx % playersPerTeam) + 1;
     const current = selectedBySlot[idx] || '';
+    const currentPlayer = getPlayer(current);
     const currentTeeId = teeBySlot[idx] || defaultTeeId || '';
     const takenElsewhere = new Set(selectedBySlot.filter((id, takeIdx) => id && takeIdx !== idx));
-    const options = ['<option value="">Select player</option>']
-      .concat(state.players
-        .filter(p => !takenElsewhere.has(p.id) || p.id === current)
-        .map(p => `<option value="${p.id}" ${p.id === current ? 'selected' : ''}>${escapeHtml(p.name)} (${Number(p.index).toFixed(1)})</option>`))
-      .join('');
+    const candidatePlayers = state.players.filter(p => !takenElsewhere.has(p.id) || p.id === current);
+    const lookupId = `playerLookupList_${idx}`;
     const teeSelect = teeOptions.length
       ? `<label class="tiny player-tee-select"><span>Handicap tee</span><select data-player-tee-slot="${idx}" data-slot-team="${teamNo}"><option value="">Select tee</option>${teeOptions.map(t => `<option value="${t.id}" ${t.id === currentTeeId ? 'selected' : ''}>${t.label}</option>`).join('')}</select></label>`
       : '<div class="tiny">Select a course first to choose tees.</div>';
     return `
-      <div class="picker-row picker-row-stack">
+      <div class="picker-row picker-row-stack lookup-picker-row">
         <div class="tiny"><strong>${escapeHtml(teamNames[teamNo - 1])}</strong> · Player ${slotNo}</div>
-        <select data-player-slot="${idx}" data-slot-team="${teamNo}">${options}</select>
+        <input type="hidden" data-player-slot="${idx}" data-slot-team="${teamNo}" value="${current}">
+        <label class="lookup-field">
+          <span class="tiny">Player lookup</span>
+          <input list="${lookupId}" data-player-lookup-slot="${idx}" data-slot-team="${teamNo}" placeholder="Start typing a player name" value="${escapeHtml(currentPlayer ? getPlayerLookupLabel(currentPlayer) : '')}" autocomplete="off" />
+        </label>
+        <datalist id="${lookupId}">${candidatePlayers.map(p => `<option value="${escapeHtml(getPlayerLookupLabel(p))}"></option>`).join('')}</datalist>
         ${teeSelect}
       </div>
     `;
   }).join('');
-  if (summary) summary.textContent = `${slotCount} slots · ${teamCount} teams · ${playersPerTeam} player(s) per team${teeOptions.length ? ' · player tees enabled' : ''}`;
+  if (summary) summary.textContent = `${slotCount} slots · ${teamCount} teams · ${playersPerTeam} player(s) per team${teeOptions.length ? ' · player tees enabled' : ''} · use lookup to find saved players quickly`;
 }
+
 function getDefaultGameConfigs() {
   return [
     { key: 'nassau', basis: 'net', stakesFront: 5, stakesBack: 5, stakesOverall: 5 },
@@ -2066,6 +2143,18 @@ function getCurrentMatchEditorSelections() {
     slot: idx,
     teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '',
   }));
+}
+function syncPlayerLookupSelection(inputEl) {
+  if (!inputEl) return false;
+  const slot = Number(inputEl.dataset.playerLookupSlot);
+  const hidden = document.querySelector(`[data-player-slot="${slot}"]`);
+  if (!hidden) return false;
+  const selectedByOtherSlots = Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => idx === slot ? '' : el.value).filter(Boolean);
+  const candidates = state.players.filter(p => !selectedByOtherSlots.includes(p.id) || p.id === hidden.value);
+  const match = getPlayerByLookupLabel(inputEl.value, candidates);
+  hidden.value = match ? match.id : '';
+  if (match) inputEl.value = getPlayerLookupLabel(match);
+  return !!match;
 }
 function preserveMatchSetupUi() {
   const form = document.getElementById('matchForm');
@@ -2575,6 +2664,10 @@ function installHandlers() {
     loadCourseEditor(null); persist(); toast(editingCourseId ? 'Course updated.' : 'Course added.');
   });
   document.getElementById('cancelCourseEditBtn').addEventListener('click', () => loadCourseEditor(null));
+  document.getElementById('coursesSearchInput').addEventListener('input', e => {
+    uiState.courseSearch = e.target.value || '';
+    renderCourses();
+  });
   document.getElementById('teeForm').addEventListener('submit', e => {
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -2648,6 +2741,13 @@ function installHandlers() {
     fillTotalsFromHoles();
   });
   document.getElementById('coursesList').addEventListener('click', e => {
+    const toggleCourseBtn = e.target.closest('[data-toggle-course]');
+    if (toggleCourseBtn) {
+      const courseId = toggleCourseBtn.dataset.toggleCourse;
+      setCourseExpanded(courseId, !uiState.expandedCourses.has(courseId));
+      renderCourses();
+      return;
+    }
     const editCourse = e.target.dataset.editCourse; const deleteCourse = e.target.dataset.deleteCourse; const newTee = e.target.dataset.newTee; const editTee = e.target.dataset.editTee; const copyTee = e.target.dataset.copyTee; const deleteTee = e.target.dataset.deleteTee;
     if (editCourse) loadCourseEditor(editCourse);
     if (deleteCourse && confirm('Delete this course and all tees?')) { state.courses = state.courses.filter(c => c.id !== deleteCourse); state.matches = state.matches.filter(m => m.courseId !== deleteCourse); if (state.activeMatchId && !getActiveMatch()) state.activeMatchId = null; persist(); }
@@ -2711,7 +2811,22 @@ function installHandlers() {
   document.getElementById('playersPerTeamSelect').addEventListener('change', () => { const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => ({ playerId: el.value, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '', slot: idx })); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
   document.getElementById('teamNamesGrid').addEventListener('input', () => { const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => ({ playerId: el.value, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '', slot: idx })); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
   document.getElementById('matchPlayersPicker').addEventListener('change', e => {
+    if (e.target.matches('[data-player-lookup-slot]')) {
+      syncPlayerLookupSelection(e.target);
+      populateMatchPlayerPicker(Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => ({ playerId: el.value, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '', slot: idx })));
+      renderGamesPicker(collectSelectedGames());
+      renderSetupHandicapPreview();
+      return;
+    }
     if (e.target.matches('[data-player-slot], [data-player-tee-slot]')) { populateMatchPlayerPicker(Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => ({ playerId: el.value, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '', slot: idx }))); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); }
+  });
+  document.getElementById('matchPlayersPicker').addEventListener('input', e => {
+    if (!e.target.matches('[data-player-lookup-slot]')) return;
+    if (syncPlayerLookupSelection(e.target)) {
+      populateMatchPlayerPicker(Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => ({ playerId: el.value, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '', slot: idx })));
+      renderGamesPicker(collectSelectedGames());
+      renderSetupHandicapPreview();
+    }
   });
   document.getElementById('gamesPicker').addEventListener('change', e => {
     if (!e.target.matches('[data-game-key]')) return;
@@ -2753,6 +2868,15 @@ function installHandlers() {
       }, 120);
     }
   });
+
+document.getElementById('scoreboardPrintViewSelect').addEventListener('change', e => {
+  const match = getActiveMatch();
+  if (match) {
+    match.printView = e.target.value === 'scorecard' ? 'scorecard' : 'summary';
+    persist({ skipRender: true });
+  }
+  applyScoreboardPrintView(e.target.value);
+});
 
 document.getElementById('leaderboard').addEventListener('change', e => {
     const match = getActiveMatch();

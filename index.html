@@ -73,8 +73,17 @@
     
     <section id="courses" class="panel">
       <div class="card tight-card">
-        <h2>Saved courses &amp; tees</h2>
-        <div id="coursesList" class="list"></div>
+        <div class="item-header compact-item-header">
+          <div>
+            <h2>Saved courses &amp; tees</h2>
+            <div class="tiny">Search courses, then expand a course to view or edit its tees.</div>
+          </div>
+          <label class="compact-search course-search-inline">
+            <span class="sr-only">Search courses</span>
+            <input id="coursesSearchInput" type="search" placeholder="Search courses" autocomplete="off" />
+          </label>
+        </div>
+        <div id="coursesList" class="list top-gap"></div>
       </div>
 
       <div class="card tight-card">

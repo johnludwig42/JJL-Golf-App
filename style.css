@@ -1223,3 +1223,63 @@ body.keyboard-open .top-tabs{
   body.printing-scorecard .scorecard-wrap::before,
   body.printing-scorecard .scorecard-wrap::after{display:none !important;}
 }
+
+
+/* v21.9 iphone scoreboard readability refinements */
+@media (max-width:760px){
+  #leaderboard .scorecard-table .scorecard-sticky-team{
+    min-width:78px;
+    max-width:78px;
+    white-space:normal;
+    overflow-wrap:anywhere;
+    word-break:break-word;
+    line-height:1.15;
+    text-align:left;
+  }
+  #leaderboard .scorecard-table th:nth-child(2),
+  #leaderboard .scorecard-table td:nth-child(2){
+    left:104px !important;
+    white-space:normal;
+  }
+  #leaderboard .scorecard-wrap::before{width:182px;}
+  #leaderboard .scorecard-wrap::after{left:182px;}
+
+  #leaderboard .payout-table-wrap{
+    position:relative;
+    overflow-x:auto !important;
+    overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;
+  }
+  #leaderboard .payout-game-table th:first-child,
+  #leaderboard .payout-game-table td:first-child,
+  #leaderboard .payout-game-table tfoot td:first-child{
+    position:sticky;
+    left:0;
+    z-index:5;
+    background:#fff;
+    box-shadow:10px 0 14px -10px rgba(0,0,0,.24);
+  }
+  #leaderboard .payout-game-table thead th:first-child{z-index:6;}
+  #leaderboard .payout-game-table td:first-child strong,
+  #leaderboard .payout-game-table tfoot td:first-child strong{display:block;white-space:nowrap;}
+
+  #leaderboard .match-status-value{
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+  }
+  #leaderboard .match-status-stack{
+    align-items:center;
+    text-align:center;
+  }
+  #leaderboard .game-summary-card{
+    align-items:center;
+    text-align:center;
+  }
+  #leaderboard .game-summary-title,
+  #leaderboard .game-summary-sub,
+  #leaderboard .game-summary-value{
+    text-align:center;
+    width:100%;
+  }
+}

@@ -2250,7 +2250,7 @@ function renderPlayerSearchResults(slot, query = '') {
     ? matches.map(player => `
       <button type="button" class="player-search-result ${player.id === currentId ? 'is-selected' : ''}" data-select-player-slot="${slot}" data-player-id="${escapeHtml(player.id)}">
         <span class="player-search-main">${escapeHtml(player.name)}</span>
-        <span class="player-search-sub">Index ${formatNumber(player.index, 1)} · ${escapeHtml(getPlayerLookupLabel(player))}</span>
+        <span class="player-search-sub">Index ${Number(player.index).toFixed(1)} · ${escapeHtml(getPlayerLookupLabel(player))}</span>
       </button>
     `).join('')
     : '<div class="tiny">No saved players match that search.</div>';
@@ -2746,6 +2746,21 @@ function exportJson() {
   URL.revokeObjectURL(url);
 }
 
+
+function clearMatchPlayerTeeErrors() {
+  document.querySelectorAll('#matchPlayersPicker .picker-row--error').forEach(row => row.classList.remove('picker-row--error'));
+}
+function markMissingPlayerTeeErrors() {
+  clearMatchPlayerTeeErrors();
+  document.querySelectorAll('[data-player-slot]').forEach((slotEl, idx) => {
+    if (!slotEl.value) return;
+    const teeEl = document.querySelector(`[data-player-tee-slot="${idx}"]`);
+    if (!teeEl || teeEl.value) return;
+    const row = slotEl.closest('.picker-row') || teeEl.closest('.picker-row');
+    if (row) row.classList.add('picker-row--error');
+  });
+}
+
 function installHandlers() {
   document.querySelectorAll('.tab').forEach(btn => btn.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
@@ -3111,12 +3126,31 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       saveCurrentHole({ targetHole: Number(jumpHole), silent: true });
     }
   });
+  document.getElementById('score').addEventListener('input', e => {
+    if (!e.target.matches('[data-score-player]')) return;
+    const row = e.target.closest('tr');
+    if (!row) return;
+    const match = getActiveMatch();
+    if (!match) return;
+    const tee = getTee(match.courseId, match.teeId);
+    const metrics = computeMatchMetrics(match);
+    if (!tee || !metrics) return;
+    const playerMetric = metrics.players.find(p => p.playerId === e.target.dataset.scorePlayer);
+    if (!playerMetric) return;
+    const scoringHoles = getSelectedScoringHoles(match, tee);
+    const hole = scoringHoles[currentHole - 1];
+    const playerHole = getPlayerHole(match, playerMetric, currentHole - 1, tee) || hole;
+    const strokes = holeStrokeAllowanceForPlayer(playerHole?.strokeIndex, playerMetric.playHdcp, metrics.lowPlaying);
+    const gross = Number(e.target.value) || null;
+    const netCell = row.children[4];
+    if (netCell) netCell.textContent = gross ? String(gross - strokes) : '';
+  });
   document.getElementById('matchForm').addEventListener('submit', e => {
     e.preventDefault();
     try {
     const fd = new FormData(e.target);
-    const teamCount = Number(fd.get('teamCount')) || 2;
-    const playersPerTeam = Number(fd.get('playersPerTeam')) || 2;
+    const teamCount = Number(fd.get('teamCount')) || 1;
+    const playersPerTeam = Number(fd.get('playersPerTeam')) || 1;
     if ((teamCount * playersPerTeam) > 12) return toast('Limit is 12 total players.');
     const teamNames = Array.from({ length: teamCount }, (_, i) => String(document.querySelector(`[data-team-name="${i + 1}"]`)?.value || `Team ${i + 1}`).slice(0, 25));
     const selectedPlayers = Array.from(document.querySelectorAll('[data-player-slot]'))
@@ -3125,7 +3159,11 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const uniqueIds = new Set(selectedPlayers.map(p => p.playerId));
     if (selectedPlayers.length !== uniqueIds.size) return toast('Each player can only be selected once.');
     if (selectedPlayers.length < 1) return toast('Select at least 1 player.');
-    if (selectedPlayers.some(p => !p.teeId)) return toast('Select a tee for each player.');
+    clearMatchPlayerTeeErrors();
+    if (selectedPlayers.some(p => !p.teeId)) {
+      markMissingPlayerTeeErrors();
+      return toast('Select a tee for each player.');
+    }
     const selectedGames = collectSelectedGames();
     if (selectedGames.length > 5) return toast('Select up to 5 gambling games.');
     if (selectedGames.some(g => g.key === 'nassau') && teamCount !== 2) return toast('Nassau requires exactly 2 teams.');

@@ -230,6 +230,12 @@ input, select, textarea {
   gap: 8px;
   align-items: center;
 }
+.picker-row--error {
+  border: 1px solid #c62828;
+  border-radius: 12px;
+  padding: 6px;
+  background: rgba(198, 40, 40, 0.06);
+}
 .picker-check {
   display: flex;
   align-items: center;

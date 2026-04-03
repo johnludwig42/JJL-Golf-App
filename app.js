@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v22.4';
+const APP_VERSION = 'v22.5';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2227,11 +2227,11 @@ function renderPlayerSearchResults(slot, query = '') {
     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
   const selectedPlayer = getPlayer(currentId);
   const clearHtml = selectedPlayer
-    ? `<button type="button" class="sheet-action danger" onclick="assignPlayerToSlot(${slot}, ''); return false;">Clear current player (${escapeHtml(selectedPlayer.name)})</button>`
+    ? `<button type="button" class="sheet-action danger" data-clear-player-slot="${slot}">Clear current player (${escapeHtml(selectedPlayer.name)})</button>`
     : '';
   const matchHtml = matches.length
     ? matches.map(player => `
-      <button type="button" class="player-search-result ${player.id === currentId ? 'is-selected' : ''}" onclick="assignPlayerToSlot(${slot}, '${escapeHtml(player.id)}'); return false;">
+      <button type="button" class="player-search-result ${player.id === currentId ? 'is-selected' : ''}" data-select-player-slot="${slot}" data-player-id="${escapeHtml(player.id)}">
         <span class="player-search-main">${escapeHtml(player.name)}</span>
         <span class="player-search-sub">Index ${formatNumber(player.index, 1)} · ${escapeHtml(getPlayerLookupLabel(player))}</span>
       </button>
@@ -2243,6 +2243,11 @@ function assignPlayerToSlot(slot, playerId = '') {
   const hidden = document.querySelector(`[data-player-slot="${slot}"]`);
   if (!hidden) return;
   hidden.value = playerId || '';
+  const trigger = document.querySelector(`[data-open-player-sheet="${slot}"] .player-card-label`);
+  const hint = document.querySelector(`[data-open-player-sheet="${slot}"] .player-card-hint`);
+  const player = getPlayer(playerId || '');
+  if (trigger) trigger.textContent = player ? getPlayerLookupLabel(player) : 'Tap to select player';
+  if (hint) hint.textContent = player ? 'Change player' : 'Search saved players';
   refreshMatchSetupUi();
   closePlayerSearchSheet();
 }

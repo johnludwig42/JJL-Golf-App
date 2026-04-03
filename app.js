@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v22.0';
+const APP_VERSION = 'v22.1';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2074,6 +2074,7 @@ function renderNineHoleConfigUi() {
 function getAssignmentSelections() {
   return Array.from(document.querySelectorAll('[data-player-slot]')).map(el => el.value).filter(Boolean);
 }
+
 function populateMatchPlayerPicker(selected = []) {
   const container = document.getElementById('matchPlayersPicker');
   const summary = document.getElementById('assignmentSummary');
@@ -2106,27 +2107,24 @@ function populateMatchPlayerPicker(selected = []) {
     const current = selectedBySlot[idx] || '';
     const currentPlayer = getPlayer(current);
     const currentTeeId = teeBySlot[idx] || defaultTeeId || '';
-    const takenElsewhere = new Set(selectedBySlot.filter((id, takeIdx) => id && takeIdx !== idx));
-    const candidatePlayers = state.players.filter(p => !takenElsewhere.has(p.id) || p.id === current);
-    const lookupId = `playerLookupList_${idx}`;
+    const buttonLabel = currentPlayer ? escapeHtml(getPlayerLookupLabel(currentPlayer)) : 'Tap to select player';
+    const buttonClass = currentPlayer ? 'player-card-trigger has-selection' : 'player-card-trigger';
     const teeSelect = teeOptions.length
       ? `<label class="tiny player-tee-select"><span>Handicap tee</span><select data-player-tee-slot="${idx}" data-slot-team="${teamNo}"><option value="">Select tee</option>${teeOptions.map(t => `<option value="${t.id}" ${t.id === currentTeeId ? 'selected' : ''}>${t.label}</option>`).join('')}</select></label>`
       : '<div class="tiny">Select a course first to choose tees.</div>';
     return `
-      <div class="picker-row picker-row-stack lookup-picker-row">
+      <div class="picker-row picker-row-stack picker-card-row">
         <div class="tiny"><strong>${escapeHtml(teamNames[teamNo - 1])}</strong> · Player ${slotNo}</div>
         <input type="hidden" data-player-slot="${idx}" data-slot-team="${teamNo}" value="${current}">
-        <label class="lookup-field">
-          <span class="tiny">Player lookup</span>
-          <input list="${lookupId}" data-player-lookup-slot="${idx}" data-slot-team="${teamNo}" placeholder="Start typing a player name" value="${escapeHtml(currentPlayer ? getPlayerLookupLabel(currentPlayer) : '')}" autocomplete="off" />
-        </label>
-        <datalist id="${lookupId}">${candidatePlayers.map(p => `<option value="${escapeHtml(getPlayerLookupLabel(p))}"></option>`).join('')}</datalist>
-        <label class="tiny quick-player-select"><span>Or choose from list</span><select data-player-dropdown-slot="${idx}" data-slot-team="${teamNo}"><option value="">Select saved player</option>${candidatePlayers.map(p => `<option value="${p.id}" ${p.id === current ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}</select></label>
+        <button type="button" class="${buttonClass}" data-open-player-sheet="${idx}" data-slot-team="${teamNo}" aria-label="Select player for ${escapeHtml(teamNames[teamNo - 1])} player ${slotNo}">
+          <span class="player-card-label">${buttonLabel}</span>
+          <span class="player-card-hint">${currentPlayer ? 'Change player' : 'Search saved players'}</span>
+        </button>
         ${teeSelect}
       </div>
     `;
   }).join('');
-  if (summary) summary.textContent = `${slotCount} slots · ${teamCount} teams · ${playersPerTeam} player(s) per team${teeOptions.length ? ' · player tees enabled' : ''} · use lookup to find saved players quickly`;
+  if (summary) summary.textContent = `${slotCount} slots · ${teamCount} teams · ${playersPerTeam} player(s) per team${teeOptions.length ? ' · player tees enabled' : ''} · tap a player card to search saved players`;
 }
 
 function getDefaultGameConfigs() {
@@ -2156,17 +2154,77 @@ function getCurrentMatchEditorSelections() {
     teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '',
   }));
 }
-function syncPlayerLookupSelection(inputEl) {
-  if (!inputEl) return false;
-  const slot = Number(inputEl.dataset.playerLookupSlot);
+
+function getSelectablePlayersForSlot(slot) {
   const hidden = document.querySelector(`[data-player-slot="${slot}"]`);
-  if (!hidden) return false;
-  const selectedByOtherSlots = Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => idx === slot ? '' : el.value).filter(Boolean);
-  const candidates = state.players.filter(p => !selectedByOtherSlots.includes(p.id) || p.id === hidden.value);
-  const match = getPlayerByLookupLabel(inputEl.value, candidates);
-  hidden.value = match ? match.id : '';
-  if (match) inputEl.value = getPlayerLookupLabel(match);
-  return !!match;
+  const currentId = hidden?.value || '';
+  const selectedByOtherSlots = Array.from(document.querySelectorAll('[data-player-slot]'))
+    .map((el, idx) => idx === slot ? '' : el.value)
+    .filter(Boolean);
+  return state.players.filter(p => !selectedByOtherSlots.includes(p.id) || p.id === currentId);
+}
+function refreshMatchSetupUi() {
+  const selections = Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => ({
+    playerId: el.value,
+    teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '',
+    slot: idx
+  }));
+  populateMatchPlayerPicker(selections);
+  renderGamesPicker(collectSelectedGames());
+  renderSetupHandicapPreview();
+}
+function openPlayerSearchSheet(slot) {
+  const sheet = document.getElementById('playerSearchSheet');
+  const input = document.getElementById('playerSearchInput');
+  const meta = document.getElementById('playerSearchMeta');
+  if (!sheet || !input) return;
+  sheet.dataset.slot = String(slot);
+  const teamNo = Number(document.querySelector(`[data-player-slot="${slot}"]`)?.dataset.slotTeam || document.querySelector(`[data-open-player-sheet="${slot}"]`)?.dataset.slotTeam || 1);
+  const teamName = document.querySelector(`[data-team-name="${teamNo}"]`)?.value || `Team ${teamNo}`;
+  const slotWithinTeam = (slot % Math.max(1, Number(document.getElementById('playersPerTeamSelect')?.value || 1))) + 1;
+  if (meta) meta.textContent = `${teamName} · Player ${slotWithinTeam} · choose from saved players`;
+  input.value = '';
+  renderPlayerSearchResults(slot, '');
+  sheet.classList.remove('hidden');
+  sheet.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('sheet-open');
+  setTimeout(() => input.focus(), 50);
+}
+function closePlayerSearchSheet() {
+  const sheet = document.getElementById('playerSearchSheet');
+  const input = document.getElementById('playerSearchInput');
+  if (!sheet) return;
+  sheet.classList.add('hidden');
+  sheet.setAttribute('aria-hidden', 'true');
+  sheet.dataset.slot = '';
+  if (input) input.value = '';
+  document.body.classList.remove('sheet-open');
+}
+function renderPlayerSearchResults(slot, query = '') {
+  const results = document.getElementById('playerSearchResults');
+  if (!results) return;
+  const currentId = document.querySelector(`[data-player-slot="${slot}"]`)?.value || '';
+  const q = String(query || '').trim().toLowerCase();
+  const matches = getSelectablePlayersForSlot(slot)
+    .filter(player => !q || getPlayerLookupLabel(player).toLowerCase().includes(q) || String(player.name || '').toLowerCase().includes(q))
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+  const selectedPlayer = getPlayer(currentId);
+  results.innerHTML = `
+    ${selectedPlayer ? `<button type="button" class="sheet-action danger" data-clear-player-slot="${slot}">Clear current player (${escapeHtml(selectedPlayer.name)})</button>` : ''}
+    ${matches.length ? matches.map(player => `
+      <button type="button" class="player-search-result ${player.id === currentId ? 'is-selected' : ''}" data-select-player-slot="${slot}" data-player-id="${player.id}">
+        <span class="player-search-main">${escapeHtml(player.name)}</span>
+        <span class="player-search-sub">Index ${formatNumber(player.index, 1)} · ${escapeHtml(getPlayerLookupLabel(player))}</span>
+      </button>
+    `).join('') : '<div class="tiny">No saved players match that search.</div>'}
+  `;
+}
+function assignPlayerToSlot(slot, playerId = '') {
+  const hidden = document.querySelector(`[data-player-slot="${slot}"]`);
+  if (!hidden) return;
+  hidden.value = playerId || '';
+  refreshMatchSetupUi();
+  closePlayerSearchSheet();
 }
 function preserveMatchSetupUi() {
   const form = document.getElementById('matchForm');
@@ -2822,35 +2880,37 @@ function installHandlers() {
   });
   document.getElementById('playersPerTeamSelect').addEventListener('change', () => { const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => ({ playerId: el.value, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '', slot: idx })); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
   document.getElementById('teamNamesGrid').addEventListener('input', () => { const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => ({ playerId: el.value, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '', slot: idx })); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
-  document.getElementById('matchPlayersPicker').addEventListener('change', e => {
-    if (e.target.matches('[data-player-lookup-slot]')) {
-      syncPlayerLookupSelection(e.target);
-      populateMatchPlayerPicker(Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => ({ playerId: el.value, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '', slot: idx })));
-      renderGamesPicker(collectSelectedGames());
-      renderSetupHandicapPreview();
-      return;
-    }
-    if (e.target.matches('[data-player-dropdown-slot]')) {
-      const slot = Number(e.target.dataset.playerDropdownSlot);
-      const hidden = document.querySelector(`[data-player-slot="${slot}"]`);
-      const lookup = document.querySelector(`[data-player-lookup-slot="${slot}"]`);
-      const picked = getPlayer(e.target.value || '');
-      if (hidden) hidden.value = picked?.id || '';
-      if (lookup) lookup.value = picked ? getPlayerLookupLabel(picked) : '';
-      populateMatchPlayerPicker(Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => ({ playerId: el.value, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '', slot: idx })));
-      renderGamesPicker(collectSelectedGames());
-      renderSetupHandicapPreview();
-      return;
-    }
-    if (e.target.matches('[data-player-slot], [data-player-tee-slot]')) { populateMatchPlayerPicker(Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => ({ playerId: el.value, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '', slot: idx }))); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); }
+  document.getElementById('matchPlayersPicker').addEventListener('click', e => {
+    const trigger = e.target.closest('[data-open-player-sheet]');
+    if (!trigger) return;
+    openPlayerSearchSheet(Number(trigger.dataset.openPlayerSheet));
   });
-  document.getElementById('matchPlayersPicker').addEventListener('input', e => {
-    if (!e.target.matches('[data-player-lookup-slot]')) return;
-    if (syncPlayerLookupSelection(e.target)) {
-      populateMatchPlayerPicker(Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => ({ playerId: el.value, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '', slot: idx })));
-      renderGamesPicker(collectSelectedGames());
-      renderSetupHandicapPreview();
+  document.getElementById('matchPlayersPicker').addEventListener('change', e => {
+    if (e.target.matches('[data-player-tee-slot]')) refreshMatchSetupUi();
+  });
+  document.getElementById('playerSearchInput').addEventListener('input', e => {
+    const sheet = document.getElementById('playerSearchSheet');
+    const slot = Number(sheet?.dataset.slot || -1);
+    if (slot < 0) return;
+    renderPlayerSearchResults(slot, e.target.value || '');
+  });
+  document.getElementById('playerSearchResults').addEventListener('click', e => {
+    const selectBtn = e.target.closest('[data-select-player-slot]');
+    if (selectBtn) {
+      assignPlayerToSlot(Number(selectBtn.dataset.selectPlayerSlot), selectBtn.dataset.playerId || '');
+      return;
     }
+    const clearBtn = e.target.closest('[data-clear-player-slot]');
+    if (clearBtn) {
+      assignPlayerToSlot(Number(clearBtn.dataset.clearPlayerSlot), '');
+    }
+  });
+  document.getElementById('closePlayerSearchSheet').addEventListener('click', closePlayerSearchSheet);
+  document.getElementById('playerSearchSheet').addEventListener('click', e => {
+    if (e.target.id === 'playerSearchSheet') closePlayerSearchSheet();
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !document.getElementById('playerSearchSheet')?.classList.contains('hidden')) closePlayerSearchSheet();
   });
   document.getElementById('gamesPicker').addEventListener('change', e => {
     if (!e.target.matches('[data-game-key]')) return;

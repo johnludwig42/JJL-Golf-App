@@ -1304,6 +1304,12 @@ body.keyboard-open .top-tabs{
 }
 .player-card-trigger.has-selection{border-color:rgba(11,93,59,.30);background:#f7fbf9}
 .player-card-label{font-weight:800;font-size:16px;line-height:1.15;max-width:100%;overflow-wrap:anywhere}
+
+.player-label-inline{display:inline-flex;align-items:baseline;column-gap:.6ch;row-gap:0;flex-wrap:wrap;}
+.player-label-name,.player-label-index{font:inherit;color:inherit;font-weight:inherit;letter-spacing:inherit;line-height:inherit;}
+.player-card-label .player-label-inline{max-width:100%;}
+.player-search-main.player-label-inline{display:flex;font-weight:800;font-size:16px;line-height:1.2;}
+.player-search-result .player-label-index{white-space:nowrap;}
 .player-card-hint{font-size:12px;color:#4b6356;line-height:1.2}
 .picker-card-row{gap:10px}
 .sheet-backdrop{

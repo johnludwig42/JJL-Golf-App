@@ -290,9 +290,19 @@ function toast(message, ms = 2200) {
   toast._timer = setTimeout(() => el.classList.add('hidden'), ms);
 }
 
+function getPlayerIndexText(player) {
+  return Number(player?.index || 0).toFixed(1);
+}
 function getPlayerLookupLabel(player) {
   if (!player) return '';
-  return `${player.name} · ${Number(player.index || 0).toFixed(1)}`;
+  return `${player.name}  ${getPlayerIndexText(player)}`;
+}
+function getPlayerDisplayHtml(player, { wrapperClass = '', nameClass = '', indexClass = '' } = {}) {
+  if (!player) return '';
+  const wrapper = wrapperClass ? ` class="${wrapperClass}"` : '';
+  const nameCls = nameClass ? ` class="${nameClass}"` : '';
+  const indexCls = indexClass ? ` class="${indexClass}"` : '';
+  return `<span${wrapper}><span${nameCls}>${escapeHtml(player.name || '')}</span><span${indexCls}>${escapeHtml(getPlayerIndexText(player))}</span></span>`;
 }
 function getPlayerByLookupLabel(label = '', candidates = null) {
   const needle = String(label || '').trim().toLowerCase();
@@ -2147,7 +2157,7 @@ function populateMatchPlayerPicker(selected = []) {
     const current = selectedBySlot[idx] || '';
     const currentPlayer = getPlayer(current);
     const currentTeeId = teeBySlot[idx] || defaultTeeId || '';
-    const buttonLabel = currentPlayer ? escapeHtml(getPlayerLookupLabel(currentPlayer)) : 'Tap to select player';
+    const buttonLabel = currentPlayer ? getPlayerDisplayHtml(currentPlayer, { wrapperClass: 'player-label-inline', nameClass: 'player-label-name', indexClass: 'player-label-index' }) : 'Tap to select player';
     const buttonClass = currentPlayer ? 'player-card-trigger has-selection' : 'player-card-trigger';
     const teeSelect = teeOptions.length
       ? `<label class="tiny player-tee-select"><span>Handicap tee</span><select data-player-tee-slot="${idx}" data-slot-team="${teamNo}"><option value="">Select tee</option>${teeOptions.map(t => `<option value="${t.id}" ${t.id === currentTeeId ? 'selected' : ''}>${t.label}</option>`).join('')}</select></label>`
@@ -2284,8 +2294,7 @@ function renderPlayerSearchResults(slot, query = '') {
   const matchHtml = matches.length
     ? matches.map(player => `
       <button type="button" class="player-search-result ${player.id === currentId ? 'is-selected' : ''}" data-select-player-slot="${slot}" data-player-id="${escapeHtml(player.id)}">
-        <span class="player-search-main">${escapeHtml(player.name)}</span>
-        <span class="player-search-sub">Index ${Number(player.index || 0).toFixed(1)}</span>
+        <span class="player-search-main player-label-inline"><span class="player-label-name">${escapeHtml(player.name)}</span><span class="player-label-index">${escapeHtml(getPlayerIndexText(player))}</span></span>
       </button>
     `).join('')
     : '<div class="tiny">No saved players match that search.</div>';

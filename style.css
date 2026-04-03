@@ -230,12 +230,6 @@ input, select, textarea {
   gap: 8px;
   align-items: center;
 }
-.picker-row--error {
-  border: 1px solid #c62828;
-  border-radius: 12px;
-  padding: 6px;
-  background: rgba(198, 40, 40, 0.06);
-}
 .picker-check {
   display: flex;
   align-items: center;
@@ -1347,4 +1341,19 @@ body.sheet-open{overflow:hidden}
   .sheet-backdrop{padding:0}
   .sheet-card{width:100%;max-height:88vh;border-radius:24px 24px 0 0}
   .player-card-trigger{min-height:60px}
+}
+
+
+.picker-row--error{border:1px solid #c62828 !important;box-shadow:0 0 0 2px rgba(198,40,40,.14) !important;background:rgba(198,40,40,.04) !important;}
+
+@media print {
+  body.printing-scorecard.printing-summary .print-section-classic-scorecard,
+  body.printing-scorecard.printing-summary .print-section-nine-point{display:none !important;}
+  body.printing-scorecard.printing-summary details.scoreboard-collapsible{display:block !important;}
+  body.printing-scorecard.printing-summary details.scoreboard-collapsible > *{display:block !important;}
+  body.printing-scorecard.printing-summary details.scoreboard-collapsible summary{display:none !important;}
+  body.printing-scorecard.printing-classic-only .print-section-match-status,
+  body.printing-scorecard.printing-classic-only .print-section-scoreboard-summary,
+  body.printing-scorecard.printing-classic-only .print-section-momentum,
+  body.printing-scorecard.printing-classic-only .print-section-payout{display:none !important;}
 }

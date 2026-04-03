@@ -1,14 +1,14 @@
-const CACHE_NAME = 'the-dye-ledger-v22.6';
+const CACHE_NAME = 'the-dye-ledger-v22.8';
 const ASSETS = [
   './',
   './index.html',
   './style.css',
   './app.js',
   './manifest.json',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
+  './icons/icon-192-v2.png',
+  './icons/icon-512-v2.png',
   './icons/logo-mark.svg',
-  './icons/apple-touch-icon.png',
+  './icons/apple-touch-icon-v2.png',
   './icons/players.svg',
   './icons/courses.svg',
   './icons/setup.svg',

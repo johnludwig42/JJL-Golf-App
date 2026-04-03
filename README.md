@@ -1,15 +1,18 @@
 # The Dye Ledger
 
-Version: v22.6
+Current version: **v22.8**
 
-Baseline: v22.5
+## What changed in v22.8
+- packaged the full app again for the release zip
+- updated the player search results so they show only the player name and index
+- fixed the player search sheet crash by replacing the undefined `formatNumber(...)` call
+- changed match setup fallbacks so `teamCount` and `playersPerTeam` default to `1` instead of `2`
+- added live net-score updates during score entry when a gross score is typed
+- added visual tee-selection error highlighting for any player slot missing a tee
+- updated print/export so Match Summary forces scoreboard sections open before printing
+- updated print/export so only the selected print view is shown when printing in landscape
+- renamed app icon assets to `v2` filenames and updated all references
+- removed duplicate legacy PNG icon files from the build
 
-This build focuses on stabilizing game setup player selection and cleaning up app assets.
-
-Updates in v22.6:
-- reworked the Game Setup player picker so tap-to-select player cards use a more reliable draft-state flow
-- preserved the same on-screen player-card + search-sheet presentation while simplifying the underlying assignment logic
-- cleaned the icon asset structure back to canonical filenames (`icon-192.png`, `icon-512.png`, `apple-touch-icon.png`)
-- removed duplicate versioned icon files from the build
-- updated the manifest, service worker cache, and in-app versioning to v22.6
-- refreshed the README so each build records the current version and what changed
+## Baseline
+This build was produced from the stable v22.6 codebase and then updated with the targeted fixes and packaging cleanup above.

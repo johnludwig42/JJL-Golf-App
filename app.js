@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v22.2';
+const APP_VERSION = 'v22.3';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2115,7 +2115,7 @@ function populateMatchPlayerPicker(selected = []) {
       <div class="picker-row picker-row-stack picker-card-row">
         <div class="tiny"><strong>${escapeHtml(teamNames[teamNo - 1])}</strong> · Player ${slotNo}</div>
         <input type="hidden" data-player-slot="${idx}" data-slot-team="${teamNo}" value="${current}">
-        <button type="button" class="${buttonClass}" data-open-player-sheet="${idx}" data-slot-team="${teamNo}" aria-label="Select player for ${escapeHtml(teamNames[teamNo - 1])} player ${slotNo}">
+        <button type="button" class="${buttonClass}" data-open-player-sheet="${idx}" data-slot-team="${teamNo}" aria-label="Select player for ${escapeHtml(teamNames[teamNo - 1])} player ${slotNo}" onclick="openPlayerSearchSheet(${idx}); return false;">
           <span class="player-card-label">${buttonLabel}</span>
           <span class="player-card-hint">${currentPlayer ? 'Change player' : 'Search saved players'}</span>
         </button>
@@ -2199,6 +2199,10 @@ function closePlayerSearchSheet() {
   if (input) input.value = '';
   document.body.classList.remove('sheet-open');
 }
+
+window.openPlayerSearchSheet = openPlayerSearchSheet;
+window.closePlayerSearchSheet = closePlayerSearchSheet;
+window.assignPlayerToSlot = assignPlayerToSlot;
 function renderPlayerSearchResults(slot, query = '') {
   const results = document.getElementById('playerSearchResults');
   if (!results) return;
@@ -2879,13 +2883,17 @@ function installHandlers() {
   });
   document.getElementById('playersPerTeamSelect').addEventListener('change', () => { const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => ({ playerId: el.value, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '', slot: idx })); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
   document.getElementById('teamNamesGrid').addEventListener('input', () => { const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => ({ playerId: el.value, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '', slot: idx })); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
-  document.getElementById('matchPlayersPicker').addEventListener('click', e => {
+  const matchPlayersPickerEl = document.getElementById('matchPlayersPicker');
+  const handlePlayerPickerOpen = e => {
     const trigger = e.target.closest('[data-open-player-sheet]');
     if (trigger) {
+      e.preventDefault();
       openPlayerSearchSheet(Number(trigger.dataset.openPlayerSheet));
       return;
     }
-  });
+  };
+  matchPlayersPickerEl.addEventListener('click', handlePlayerPickerOpen);
+  matchPlayersPickerEl.addEventListener('pointerup', handlePlayerPickerOpen);
   document.getElementById('matchPlayersPicker').addEventListener('change', e => {
     if (e.target.matches('[data-player-tee-slot]')) {
       refreshMatchSetupUi();

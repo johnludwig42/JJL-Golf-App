@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v22.1';
+const APP_VERSION = 'v22.2';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2074,7 +2074,6 @@ function renderNineHoleConfigUi() {
 function getAssignmentSelections() {
   return Array.from(document.querySelectorAll('[data-player-slot]')).map(el => el.value).filter(Boolean);
 }
-
 function populateMatchPlayerPicker(selected = []) {
   const container = document.getElementById('matchPlayersPicker');
   const summary = document.getElementById('assignmentSummary');
@@ -2882,11 +2881,15 @@ function installHandlers() {
   document.getElementById('teamNamesGrid').addEventListener('input', () => { const currentSelections = Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => ({ playerId: el.value, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '', slot: idx })); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
   document.getElementById('matchPlayersPicker').addEventListener('click', e => {
     const trigger = e.target.closest('[data-open-player-sheet]');
-    if (!trigger) return;
-    openPlayerSearchSheet(Number(trigger.dataset.openPlayerSheet));
+    if (trigger) {
+      openPlayerSearchSheet(Number(trigger.dataset.openPlayerSheet));
+      return;
+    }
   });
   document.getElementById('matchPlayersPicker').addEventListener('change', e => {
-    if (e.target.matches('[data-player-tee-slot]')) refreshMatchSetupUi();
+    if (e.target.matches('[data-player-tee-slot]')) {
+      refreshMatchSetupUi();
+    }
   });
   document.getElementById('playerSearchInput').addEventListener('input', e => {
     const sheet = document.getElementById('playerSearchSheet');

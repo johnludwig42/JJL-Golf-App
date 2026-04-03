@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v22.3';
+const APP_VERSION = 'v22.4';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2124,6 +2124,19 @@ function populateMatchPlayerPicker(selected = []) {
     `;
   }).join('');
   if (summary) summary.textContent = `${slotCount} slots · ${teamCount} teams · ${playersPerTeam} player(s) per team${teeOptions.length ? ' · player tees enabled' : ''} · tap a player card to search saved players`;
+  bindPlayerPickerTriggers();
+}
+
+
+function bindPlayerPickerTriggers() {
+  document.querySelectorAll('[data-open-player-sheet]').forEach(btn => {
+    btn.onclick = e => {
+      e.preventDefault();
+      e.stopPropagation();
+      openPlayerSearchSheet(Number(btn.dataset.openPlayerSheet));
+      return false;
+    };
+  });
 }
 
 function getDefaultGameConfigs() {
@@ -2203,6 +2216,7 @@ function closePlayerSearchSheet() {
 window.openPlayerSearchSheet = openPlayerSearchSheet;
 window.closePlayerSearchSheet = closePlayerSearchSheet;
 window.assignPlayerToSlot = assignPlayerToSlot;
+window.bindPlayerPickerTriggers = bindPlayerPickerTriggers;
 function renderPlayerSearchResults(slot, query = '') {
   const results = document.getElementById('playerSearchResults');
   if (!results) return;
@@ -2212,15 +2226,18 @@ function renderPlayerSearchResults(slot, query = '') {
     .filter(player => !q || getPlayerLookupLabel(player).toLowerCase().includes(q) || String(player.name || '').toLowerCase().includes(q))
     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
   const selectedPlayer = getPlayer(currentId);
-  results.innerHTML = `
-    ${selectedPlayer ? `<button type="button" class="sheet-action danger" data-clear-player-slot="${slot}">Clear current player (${escapeHtml(selectedPlayer.name)})</button>` : ''}
-    ${matches.length ? matches.map(player => `
-      <button type="button" class="player-search-result ${player.id === currentId ? 'is-selected' : ''}" data-select-player-slot="${slot}" data-player-id="${player.id}">
+  const clearHtml = selectedPlayer
+    ? `<button type="button" class="sheet-action danger" onclick="assignPlayerToSlot(${slot}, ''); return false;">Clear current player (${escapeHtml(selectedPlayer.name)})</button>`
+    : '';
+  const matchHtml = matches.length
+    ? matches.map(player => `
+      <button type="button" class="player-search-result ${player.id === currentId ? 'is-selected' : ''}" onclick="assignPlayerToSlot(${slot}, '${escapeHtml(player.id)}'); return false;">
         <span class="player-search-main">${escapeHtml(player.name)}</span>
         <span class="player-search-sub">Index ${formatNumber(player.index, 1)} · ${escapeHtml(getPlayerLookupLabel(player))}</span>
       </button>
-    `).join('') : '<div class="tiny">No saved players match that search.</div>'}
-  `;
+    `).join('')
+    : '<div class="tiny">No saved players match that search.</div>';
+  results.innerHTML = `${clearHtml}${matchHtml}`;
 }
 function assignPlayerToSlot(slot, playerId = '') {
   const hidden = document.querySelector(`[data-player-slot="${slot}"]`);

@@ -1,8 +1,15 @@
 # The Dye Ledger
 
-Current version: **v22.8**
+Current version: **v23.4**
 
-## What changed in v22.8
+## What changed in v23.4
+- expanded match setup to allow up to 8 teams
+- preserved support for up to 4 players per team
+- raised the total player-slot cap from 12 to 32
+- updated the in-app App notes to reflect the new team/player limits
+- synchronized the displayed app version and manifest/service-worker cache version to v23.4
+
+## Previous changes in v22.8
 - packaged the full app again for the release zip
 - updated the player search results so they show only the player name and index
 - fixed the player search sheet crash by replacing the undefined `formatNumber(...)` call

@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v22.8';
+const APP_VERSION = 'v23.4';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -302,7 +302,7 @@ function getPlayerDisplayHtml(player, { wrapperClass = '', nameClass = '', index
   const wrapper = wrapperClass ? ` class="${wrapperClass}"` : '';
   const nameCls = nameClass ? ` class="${nameClass}"` : '';
   const indexCls = indexClass ? ` class="${indexClass}"` : '';
-  return `<span${wrapper}><span${nameCls}>${escapeHtml(player.name || '')}</span><span${indexCls}>${escapeHtml(getPlayerIndexText(player))}</span></span>`;
+  return `<span${wrapper}><span${nameCls}>${escapeHtml(player.name || '')}</span><span class="player-label-separator" aria-hidden="true">&nbsp;&nbsp;</span><span${indexCls}>${escapeHtml(getPlayerIndexText(player))}</span></span>`;
 }
 function getPlayerByLookupLabel(label = '', candidates = null) {
   const needle = String(label || '').trim().toLowerCase();
@@ -2294,7 +2294,7 @@ function renderPlayerSearchResults(slot, query = '') {
   const matchHtml = matches.length
     ? matches.map(player => `
       <button type="button" class="player-search-result ${player.id === currentId ? 'is-selected' : ''}" data-select-player-slot="${slot}" data-player-id="${escapeHtml(player.id)}">
-        <span class="player-search-main player-label-inline"><span class="player-label-name">${escapeHtml(player.name)}</span><span class="player-label-index">${escapeHtml(getPlayerIndexText(player))}</span></span>
+        ${getPlayerDisplayHtml(player, { wrapperClass: 'player-search-main player-label-inline', nameClass: 'player-label-name', indexClass: 'player-label-index' })}
       </button>
     `).join('')
     : '<div class="tiny">No saved players match that search.</div>';
@@ -3168,7 +3168,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const fd = new FormData(e.target);
     const teamCount = Number(fd.get('teamCount')) || 1;
     const playersPerTeam = Number(fd.get('playersPerTeam')) || 1;
-    if ((teamCount * playersPerTeam) > 12) return toast('Limit is 12 total players.');
+    if ((teamCount * playersPerTeam) > 32) return toast('Limit is 32 total players.');
     const teamNames = Array.from({ length: teamCount }, (_, i) => String(document.querySelector(`[data-team-name="${i + 1}"]`)?.value || `Team ${i + 1}`).slice(0, 25));
     const selectedPlayers = Array.from(document.querySelectorAll('[data-player-slot]'))
       .map((el, idx) => ({ playerId: el.value, team: Number(el.dataset.slotTeam), slot: idx, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '' }))

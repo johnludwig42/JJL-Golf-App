@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>The Dye Ledger</title>
   <meta name="theme-color" content="#0b5d3b" />
-  <link rel="manifest" href="manifest.json?v=23.6" />
+  <link rel="manifest" href="manifest.json?v=23.8" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
   <link rel="shortcut icon" href="./favicon-32x32.png" />
@@ -170,7 +170,10 @@
           <label><span>Match date</span><input name="date" type="date" required /></label>
           <label><span>Match name</span><input class="input-match" name="name" placeholder="Saturday game" /></label>
           <label><span>Course</span><select name="courseId" id="matchCourseSelect" required></select></label>
-          <label><span>Reference tee</span><select name="teeId" id="matchTeeSelect"></select></label>
+          <div id="referenceTeeField" class="reference-tee-field hidden">
+            <label><span>Reference tee <span id="referenceTeeBadge" class="tiny"></span></span><select name="teeId" id="matchTeeSelect"></select></label>
+            <div id="referenceTeeHelp" class="tiny">Used only when players are on different tees.</div>
+          </div>
           <label><span>Match length</span>
             <select name="holeCount" id="holeCountSelect">
               <option value="9">9 holes</option>
@@ -229,6 +232,16 @@
             </div>
             <div id="teamInputRoleConfig" class="top-gap hidden"></div>
             <div id="scoreEntryModeHint" class="tiny top-gap">Official Scorer mode keeps one full-access scorekeeper while everyone else can remain read-only.</div>
+          </div>
+
+          <div class="span-2 card inset-card">
+            <div class="item-header compact-item-header">
+              <div>
+                <div class="section-label">Optional round tracking</div>
+                <div class="tiny">Turn on per-hole stat tracking for fairways, greens, putts, up &amp; downs, and sandies.</div>
+              </div>
+            </div>
+            <label class="inline-check top-gap"><input id="enableStatTrackingInput" name="enableStatTracking" type="checkbox" /><span>Enable Stat Tracking</span></label>
           </div>
 
           <div class="span-2 card inset-card">
@@ -331,6 +344,7 @@
               <tbody id="scoreGridBody"></tbody>
             </table>
           </div>
+          <div id="statTrackingEntryWrap" class="top-gap hidden"></div>
           <div class="actions top-gap wrap compact-actions">
             <button id="saveScoresBtn" type="button">Save Hole Scores</button>
             <div class="tiny">Next automatically saves the current hole.</div>
@@ -364,44 +378,48 @@
             </div>
           </div>
         </div>
-        <div class="leaderboard-cards">
-          <div class="card tight-card scoreboard-card print-section-match-status">
-            <div class="item-header compact-item-header">
-              <div>
-                <h2>Match status</h2>
-                <div class="tiny">Choose which selected game is featured here.</div>
-              </div>
-              <label class="inline-select tiny">
-                <span>Featured game</span>
-                <select id="matchStatusGameSelect"></select>
-              </label>
+        <div class="card tight-card scoreboard-card print-section-match-status">
+          <div class="item-header compact-item-header">
+            <div>
+              <h2>Match status</h2>
+              <div class="tiny">Choose which selected game is featured here.</div>
             </div>
-            <div id="matchStatusSummary" class="result compact-result"></div>
+            <label class="inline-select tiny">
+              <span>Featured game</span>
+              <select id="matchStatusGameSelect"></select>
+            </label>
           </div>
-          <details class="card tight-card scoreboard-card scoreboard-collapsible print-section-scoreboard-summary">
-            <summary><h2>Games summary</h2></summary>
-            <div id="gamesSummary" class="result compact-result top-gap"></div>
-          </details>
+          <div id="matchStatusSummary" class="result compact-result"></div>
         </div>
 
-        <details class="card tight-card scoreboard-card scoreboard-collapsible">
-          <summary><h2>Player leaderboard</h2></summary>
-          <div class="leader-table-wrap top-gap">
-            <table class="leader-table">
-              <thead>
-                <tr>
-                  <th>Player</th>
-                  <th>Team</th>
-                  <th>Gross</th>
-                  <th>Gross to Par</th>
-                  <th>Net</th>
-                  <th>Net to Par</th>
-                </tr>
-              </thead>
-              <tbody id="playerLeaderboardBody"></tbody>
-            </table>
+        <div class="card tight-card scoreboard-card print-section-momentum">
+          <div class="item-header compact-item-header">
+            <div>
+              <h2>Hole-by-hole momentum</h2>
+              <div id="momentumMeta" class="tiny">From Team 1 perspective.</div>
+            </div>
+            <div class="actions wrap compact-actions">
+              <label class="inline-select tiny">
+                <span>Game</span>
+                <select id="momentumGameSelect"></select>
+              </label>
+              <label class="inline-select tiny">
+                <span>Perspective</span>
+                <select id="momentumPerspectiveSelect"></select>
+              </label>
+            </div>
           </div>
-          <div id="playerLeaderboardMobile" class="leader-mobile-cards top-gap"></div>
+          <div id="holeMomentum" class="hole-momentum"></div>
+        </div>
+
+        <details class="card tight-card scoreboard-card scoreboard-collapsible print-section-scoreboard-summary">
+          <summary><h2>Games summary</h2></summary>
+          <div id="gamesSummary" class="result compact-result top-gap"></div>
+        </details>
+
+        <details class="card tight-card scoreboard-card scoreboard-collapsible print-section-payout">
+          <summary><h2>Net payout</h2></summary>
+          <div id="payoutSummary" class="result compact-result top-gap"></div>
         </details>
 
         <details class="card tight-card scoreboard-card scoreboard-collapsible">
@@ -425,40 +443,45 @@
           <div id="teamLeaderboardMobile" class="leader-mobile-cards top-gap"></div>
         </details>
 
-        <div class="card tight-card scoreboard-card print-section-momentum">
-          <div class="item-header compact-item-header">
-            <div>
-              <h2>Hole-by-hole momentum</h2>
-              <div id="momentumMeta" class="tiny">From Team 1 perspective.</div>
-            </div>
-            <div class="actions wrap compact-actions">
-              <label class="inline-select tiny">
-                <span>Game</span>
-                <select id="momentumGameSelect"></select>
-              </label>
-              <label class="inline-select tiny">
-                <span>Perspective</span>
-                <select id="momentumPerspectiveSelect"></select>
-              </label>
-            </div>
+        <details class="card tight-card scoreboard-card scoreboard-collapsible">
+          <summary><h2>Player leaderboard</h2></summary>
+          <div class="leader-table-wrap top-gap">
+            <table class="leader-table">
+              <thead>
+                <tr>
+                  <th>Player</th>
+                  <th>Team</th>
+                  <th>Gross</th>
+                  <th>Gross to Par</th>
+                  <th>Net</th>
+                  <th>Net to Par</th>
+                </tr>
+              </thead>
+              <tbody id="playerLeaderboardBody"></tbody>
+            </table>
           </div>
-          <div id="holeMomentum" class="hole-momentum"></div>
-        </div>
+          <div id="playerLeaderboardMobile" class="leader-mobile-cards top-gap"></div>
+        </details>
 
         <div class="card tight-card scoreboard-card print-section-classic-scorecard">
           <h2>Classic scorecard</h2>
           <div id="classicScorecard" class="top-gap"></div>
         </div>
 
+        <div id="statTrackingSummaryCard" class="card tight-card scoreboard-card print-section-stat-tracking hidden">
+          <h2>Stat Tracking</h2>
+          <div id="statTrackingSummary" class="top-gap"></div>
+        </div>
+
+        <div id="notesCard" class="card tight-card scoreboard-card print-section-notes">
+          <h2>Notes</h2>
+          <label><span>Round / app notes</span><textarea id="notesBox" rows="6" placeholder="Add any free-form notes here."></textarea></label>
+        </div>
+
         <div id="ninePointScorecardCard" class="card tight-card scoreboard-card print-section-nine-point hidden">
           <h2>9-Point game scorecard</h2>
           <div id="ninePointScorecard" class="top-gap"></div>
         </div>
-
-        <details class="card tight-card scoreboard-card scoreboard-collapsible print-section-payout">
-          <summary><h2>Net payout</h2></summary>
-          <div id="payoutSummary" class="result compact-result top-gap"></div>
-        </details>
 
       </div>
 
@@ -486,11 +509,6 @@
       </div>
 
       <div class="card tight-card">
-        <h2>Notes</h2>
-        <label><span>Round / app notes</span><textarea id="notesBox" rows="6" placeholder="Add any free-form notes here."></textarea></label>
-      </div>
-
-      <div class="card tight-card">
         <h2>Data tools</h2>
         <div class="actions wrap">
           <button id="exportBtn" type="button">Export JSON</button>
@@ -510,7 +528,9 @@
           <li>Print / Save PDF controls now stay synchronized with the currently selected export view.</li>
           <li>Game setup now includes role-based scoring control for Official Scorer or Team Input events.</li>
           <li>Score entry can be previewed as Event Admin, Official Scorer, Team Scorer, or Viewer before moving into Supabase.</li>
-          <li>App version: <strong id="appVersionLabel">v23.6</strong></li>
+          <li>Added optional per-hole stat tracking (fairways, GIR, putts, up &amp; downs, sandies).</li>
+          <li>Reordered the Scoreboard layout and moved Notes from More to Scoreboard.</li>
+          <li>App version: <strong id="appVersionLabel">v23.9</strong></li>
         </ul>
       </div>
     </section>

@@ -784,7 +784,9 @@ body.keyboard-open .top-tabs{
   body.printing-scorecard .print-section-classic-scorecard,
   body.printing-scorecard .print-section-nine-point,
   body.printing-scorecard .print-section-scoreboard-summary,
-  body.printing-scorecard .print-section-payout{
+  body.printing-scorecard .print-section-payout,
+  body.printing-scorecard .print-section-stat-tracking,
+  body.printing-scorecard .print-section-notes{
     break-before: auto;
     page-break-before: auto;
   }
@@ -798,6 +800,8 @@ body.keyboard-open .top-tabs{
   body.printing-scorecard #leaderboard .print-section-classic-scorecard,
   body.printing-scorecard #leaderboard .print-section-nine-point,
   body.printing-scorecard #leaderboard .print-section-payout,
+  body.printing-scorecard #leaderboard .print-section-stat-tracking,
+  body.printing-scorecard #leaderboard .print-section-notes,
   body.printing-scorecard #leaderboard .payout-section,
   body.printing-scorecard #leaderboard .game-summary-card {
     break-inside: avoid-page;
@@ -1035,7 +1039,9 @@ body.keyboard-open .top-tabs{
 #leaderboardWrap[data-print-view="scorecard"] .print-section-match-status,
 #leaderboardWrap[data-print-view="scorecard"] .print-section-scoreboard-summary,
 #leaderboardWrap[data-print-view="scorecard"] .print-section-momentum,
-#leaderboardWrap[data-print-view="scorecard"] .print-section-payout{opacity:.55;transition:opacity .18s ease;}
+#leaderboardWrap[data-print-view="scorecard"] .print-section-payout,
+#leaderboardWrap[data-print-view="scorecard"] .print-section-stat-tracking,
+#leaderboardWrap[data-print-view="scorecard"] .print-section-notes{opacity:.55;transition:opacity .18s ease;}
 #leaderboardWrap[data-print-view="scorecard"] .print-section-classic-scorecard,
 #leaderboardWrap[data-print-view="scorecard"] .print-section-nine-point{opacity:1;}
 .print-preview-muted{opacity:.55;}
@@ -1362,7 +1368,9 @@ body.sheet-open{overflow:hidden}
   body.printing-scorecard.printing-classic-only .print-section-match-status,
   body.printing-scorecard.printing-classic-only .print-section-scoreboard-summary,
   body.printing-scorecard.printing-classic-only .print-section-momentum,
-  body.printing-scorecard.printing-classic-only .print-section-payout{display:none !important;}
+  body.printing-scorecard.printing-classic-only .print-section-payout,
+  body.printing-scorecard.printing-classic-only .print-section-stat-tracking,
+  body.printing-scorecard.printing-classic-only .print-section-notes{display:none !important;}
 }
 
 
@@ -1372,3 +1380,27 @@ body.sheet-open{overflow:hidden}
 .score-row-readonly .score-input { background: #f4f4f4; color: #666; }
 .greenies-check.is-readonly { opacity: .6; }
 #teamInputRoleConfig .compact-grid-item { min-width: 0; }
+
+
+.reference-tee-field{display:grid;gap:4px;align-content:start}
+.reference-tee-field .tiny{overflow-wrap:anywhere}
+#referenceTeeBadge{font-weight:600}
+#referenceTeeHelp{margin-top:-2px}
+
+
+/* v23.8 stat tracking */
+.inline-check{display:flex;align-items:center;gap:10px;font-weight:600}
+.inline-check input{width:18px;height:18px}
+.stat-entry-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.stat-player-card{border:1px solid var(--border);border-radius:14px;padding:12px;background:#fbfdfc}
+.stat-player-card.is-readonly{opacity:.7}
+.stat-player-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.stat-check-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.stat-putts-field{display:flex;flex-direction:column;gap:6px}
+.stat-putts-input{max-width:90px}
+.stat-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.stat-summary-card{border:1px solid var(--border);border-radius:14px;padding:14px;background:#fbfdfc}
+.stat-summary-name{font-weight:700}
+.stat-summary-list{display:grid;gap:8px}
+.stat-summary-list div{display:flex;justify-content:space-between;gap:12px;border-top:1px solid rgba(12,55,33,.08);padding-top:8px}
+@media (max-width: 900px){.stat-entry-grid,.stat-summary-grid{grid-template-columns:1fr}.stat-check-grid{grid-template-columns:1fr}}

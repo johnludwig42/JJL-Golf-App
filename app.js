@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v24.2';
+const APP_VERSION = 'v24.3';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2293,7 +2293,7 @@ function getReferenceTeeStats(courseId = null, selections = null) {
   const course = getCourse(resolvedCourseId);
   const sortedTees = course ? getSortedTeesByYardage(course) : [];
   const rankedIds = sortedTees.map(t => t.id);
-  const draft = Array.isArray(selections) ? selections : getCurrentMatchEditorSelections();
+  const draft = Array.isArray(selections) ? selections : getCurrentMatchEditorSelectionsSnapshot();
   const validSelections = draft
     .map(row => ({ ...row, teeId: String(row?.teeId || '') }))
     .filter(row => row.playerId && row.teeId && rankedIds.includes(row.teeId));
@@ -2466,11 +2466,37 @@ function renderNineHoleConfigUi() {
 function getAssignmentSelections() {
   return Array.from(document.querySelectorAll('[data-player-slot]')).map(el => el.value).filter(Boolean);
 }
+function getReferenceFallbackTeeId(courseId = null) {
+  const resolvedCourseId = courseId ?? (document.getElementById('matchCourseSelect')?.value || '');
+  const selectedTeeId = document.getElementById('matchTeeSelect')?.value || '';
+  const course = getCourse(resolvedCourseId);
+  const sortedTees = course ? getSortedTeesByYardage(course) : [];
+  const validTeeIds = new Set(sortedTees.map(t => t.id));
+  if (selectedTeeId && (!validTeeIds.size || validTeeIds.has(selectedTeeId))) return selectedTeeId;
+  return sortedTees[0]?.id || '';
+}
+function getCurrentMatchEditorSelectionsSnapshot() {
+  const slotCount = getCurrentSetupSlotCount();
+  const playersPerTeam = getCurrentSetupPlayersPerTeam();
+  const fallbackTeeId = getReferenceFallbackTeeId();
+  const draft = Array.isArray(uiState.matchPlayerDraft) ? uiState.matchPlayerDraft : [];
+  return Array.from({ length: slotCount }, (_, idx) => {
+    const draftRow = draft.find(row => Number(row?.slot) === idx) || draft[idx] || {};
+    const domSlot = document.querySelector(`[data-player-slot="${idx}"]`);
+    const domTee = document.querySelector(`[data-player-tee-slot="${idx}"]`);
+    return {
+      slot: idx,
+      team: Number(draftRow.team || domSlot?.dataset.slotTeam || (Math.floor(idx / playersPerTeam) + 1)) || 1,
+      playerId: String(domSlot?.value || draftRow.playerId || ''),
+      teeId: String(domTee?.value || draftRow.teeId || fallbackTeeId || ''),
+    };
+  });
+}
 function syncMatchPlayerDraft(selected = null) {
   const teamCount = Number(document.getElementById('teamCountSelect')?.value || 1);
   const playersPerTeam = Number(document.getElementById('playersPerTeamSelect')?.value || 1);
   const slotCount = teamCount * playersPerTeam;
-  const defaultTeeId = syncReferenceTeeUi();
+  const defaultTeeId = getReferenceFallbackTeeId();
   const incoming = Array.isArray(selected) ? selected : [];
   const currentDraft = Array.isArray(uiState.matchPlayerDraft) ? uiState.matchPlayerDraft : [];
   const next = Array.from({ length: slotCount }, (_, idx) => {
@@ -2596,7 +2622,8 @@ function getCurrentAssignablePlayers() {
   return state.players.filter(p => unique.has(p.id));
 }
 function getCurrentMatchEditorSelections() {
-  return getMatchPlayerDraft().map((row, idx) => ({
+  const synced = syncMatchPlayerDraft(getCurrentMatchEditorSelectionsSnapshot());
+  return synced.map((row, idx) => ({
     playerId: row.playerId || document.querySelector(`[data-player-slot="${idx}"]`)?.value || '',
     team: row.team || Number(document.querySelector(`[data-player-slot="${idx}"]`)?.dataset.slotTeam) || 1,
     slot: idx,

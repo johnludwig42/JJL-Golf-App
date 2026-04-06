@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v24.1';
+const APP_VERSION = 'v24.2';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2491,22 +2491,43 @@ function syncMatchPlayerDraft(selected = null) {
 function getMatchPlayerDraft() {
   return syncMatchPlayerDraft();
 }
+function getCurrentSetupTeamCount() {
+  return Math.max(1, Number(document.getElementById('teamCountSelect')?.value || 1));
+}
+function getCurrentSetupPlayersPerTeam() {
+  return Math.max(1, Number(document.getElementById('playersPerTeamSelect')?.value || 1));
+}
+function getCurrentSetupSlotCount() {
+  return getCurrentSetupTeamCount() * getCurrentSetupPlayersPerTeam();
+}
+function buildSetupSlotSelections(selected = []) {
+  const teamCount = getCurrentSetupTeamCount();
+  const playersPerTeam = getCurrentSetupPlayersPerTeam();
+  const slotCount = getCurrentSetupSlotCount();
+  const synced = syncMatchPlayerDraft(selected);
+  return Array.from({ length: slotCount }, (_, idx) => {
+    const row = synced[idx] || {};
+    return {
+      slot: idx,
+      team: Number(row.team || (Math.floor(idx / playersPerTeam) + 1)) || 1,
+      playerId: String(row.playerId || ''),
+      teeId: String(row.teeId || ''),
+    };
+  }).slice(0, Math.max(1, teamCount * playersPerTeam));
+}
 function populateMatchPlayerPicker(selected = []) {
   const container = document.getElementById('matchPlayersPicker');
   const summary = document.getElementById('assignmentSummary');
-  const teamCount = Number(document.getElementById('teamCountSelect')?.value || 1);
-  const playersPerTeam = Number(document.getElementById('playersPerTeamSelect')?.value || 1);
-  const slotCount = teamCount * playersPerTeam;
+  if (!container) return;
+  const teamCount = getCurrentSetupTeamCount();
+  const playersPerTeam = getCurrentSetupPlayersPerTeam();
+  const slotCount = getCurrentSetupSlotCount();
   const courseId = document.getElementById('matchCourseSelect')?.value || '';
   const defaultTeeId = syncReferenceTeeUi();
   const course = getCourse(courseId);
   const teeOptions = course ? getSortedTeesByYardage(course).map(t => ({ id: t.id, label: formatTeeSummary(t) })) : [];
-  if (!state.players.length) {
-    container.innerHTML = '<div class="tiny">Add players first.</div>';
-    if (summary) summary.textContent = 'No saved players yet.';
-    return;
-  }
-  const draftSelections = syncMatchPlayerDraft(selected);
+  const draftSelections = buildSetupSlotSelections(selected);
+  uiState.matchPlayerDraft = draftSelections;
   const selectedBySlot = draftSelections.map(s => s.playerId || '');
   const teeBySlot = draftSelections.map(s => s.teeId || defaultTeeId || '');
   const teamNames = Array.from({ length: teamCount }, (_, i) => document.querySelector(`[data-team-name="${i + 1}"]`)?.value || `Team ${i + 1}`);
@@ -2518,24 +2539,31 @@ function populateMatchPlayerPicker(selected = []) {
     const currentTeeId = teeBySlot[idx] || defaultTeeId || '';
     const buttonLabel = currentPlayer ? getPlayerDisplayHtml(currentPlayer, { wrapperClass: 'player-label-inline', nameClass: 'player-label-name', indexClass: 'player-label-index' }) : 'Tap to select player';
     const buttonClass = currentPlayer ? 'player-card-trigger has-selection' : 'player-card-trigger';
-    const playerQuickSelect = `<label class="tiny player-tee-select"><span>Player</span><select data-player-select-slot="${idx}" data-slot-team="${teamNo}"><option value="">Select player</option>${getSelectablePlayersForSlot(idx).map(player => `<option value="${player.id}" ${player.id === current ? 'selected' : ''}>${escapeHtml(getPlayerLookupLabel(player))}</option>`).join('')}</select></label>`;
+    const selectablePlayers = getSelectablePlayersForSlot(idx);
+    const hasSavedPlayers = state.players.length > 0;
+    const playerQuickSelect = `<label class="tiny player-tee-select"><span>Player</span><select data-player-select-slot="${idx}" data-slot-team="${teamNo}" ${hasSavedPlayers ? '' : 'disabled'}><option value="">${hasSavedPlayers ? 'Select player' : 'Add players first'}</option>${selectablePlayers.map(player => `<option value="${player.id}" ${player.id === current ? 'selected' : ''}>${escapeHtml(getPlayerLookupLabel(player))}</option>`).join('')}</select></label>`;
     const teeSelect = teeOptions.length
       ? `<label class="tiny player-tee-select"><span>Handicap tee</span><select data-player-tee-slot="${idx}" data-slot-team="${teamNo}"><option value="">Select tee</option>${teeOptions.map(t => `<option value="${t.id}" ${t.id === currentTeeId ? 'selected' : ''}>${t.label}</option>`).join('')}</select></label>`
       : '<div class="tiny">Select a course first to choose tees.</div>';
     return `
-      <div class="picker-row picker-row-stack picker-card-row">
+      <div class="picker-row picker-row-stack picker-card-row" data-assignment-slot="${idx}">
         <div class="tiny"><strong>${escapeHtml(teamNames[teamNo - 1])}</strong> · Player ${slotNo}</div>
         <input type="hidden" data-player-slot="${idx}" data-slot-team="${teamNo}" value="${current}">
-        <button type="button" class="${buttonClass}" data-open-player-sheet="${idx}" data-slot-team="${teamNo}" aria-label="Select player for ${escapeHtml(teamNames[teamNo - 1])} player ${slotNo}">
+        <button type="button" class="${buttonClass}" data-open-player-sheet="${idx}" data-slot-team="${teamNo}" aria-label="Select player for ${escapeHtml(teamNames[teamNo - 1])} player ${slotNo}" ${hasSavedPlayers ? '' : 'disabled'}>
           <span class="player-card-label">${buttonLabel}</span>
-          <span class="player-card-hint">${currentPlayer ? 'Change player' : 'Search saved players'}</span>
+          <span class="player-card-hint">${hasSavedPlayers ? (currentPlayer ? 'Change player' : 'Search saved players') : 'Add players on the Players tab'}</span>
         </button>
         ${playerQuickSelect}
         ${teeSelect}
       </div>
     `;
   }).join('');
-  if (summary) summary.textContent = `${slotCount} slots · ${teamCount} teams · ${playersPerTeam} player(s) per team${teeOptions.length ? ' · player tees enabled' : ''} · tap a player card to search saved players`;
+  if (summary) {
+    const base = `${slotCount} slots · ${teamCount} teams · ${playersPerTeam} player(s) per team`;
+    const teeMsg = teeOptions.length ? ' · player tees enabled' : ' · select a course to enable player tees';
+    const playerMsg = state.players.length ? ' · tap a player card to search saved players' : ' · add saved players on the Players tab to fill these slots';
+    summary.textContent = `${base}${teeMsg}${playerMsg}`;
+  }
   bindPlayerPickerTriggers();
 }
 
@@ -2696,6 +2724,13 @@ function assignPlayerToSlot(slot, playerId = '') {
   renderSetupHandicapPreview();
   clearMatchTeeErrors();
   closePlayerSearchSheet();
+}
+function refreshMatchPlayerSlots(options = {}) {
+  const preserveSelections = options.preserveSelections !== false;
+  const selected = preserveSelections ? getCurrentMatchEditorSelections() : [];
+  populateMatchPlayerPicker(selected);
+  renderGamesPicker(collectSelectedGames());
+  renderSetupHandicapPreview();
 }
 function preserveMatchSetupUi() {
   const form = document.getElementById('matchForm');
@@ -3361,16 +3396,21 @@ function installHandlers() {
   document.getElementById('nineHoleSegmentSelect').addEventListener('change', () => { renderNineHoleConfigUi(); renderSetupHandicapPreview(); });
   document.getElementById('customNineHoleStartSelect').addEventListener('change', () => { renderSetupHandicapPreview(); });
   document.getElementById('teamCountSelect').addEventListener('change', () => {
-    const teamCount = Number(document.getElementById('teamCountSelect').value || 2);
-    const currentSelections = getCurrentMatchEditorSelections();
+    const teamCount = getCurrentSetupTeamCount();
     const teamNames = Array.from(document.querySelectorAll('[data-team-name]')).map(el => el.value);
     renderTeamNameInputs(teamCount, teamNames);
     renderScoringControlConfig();
-    populateMatchPlayerPicker(currentSelections);
-    renderGamesPicker(collectSelectedGames());
-    renderSetupHandicapPreview();
+    refreshMatchPlayerSlots({ preserveSelections: true });
   });
-  document.getElementById('playersPerTeamSelect').addEventListener('change', () => { const currentSelections = getCurrentMatchEditorSelections(); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
+  document.getElementById('playersPerTeamSelect').addEventListener('change', () => {
+    refreshMatchPlayerSlots({ preserveSelections: true });
+  });
+  document.getElementById('teamCountSelect').addEventListener('input', () => {
+    refreshMatchPlayerSlots({ preserveSelections: true });
+  });
+  document.getElementById('playersPerTeamSelect').addEventListener('input', () => {
+    refreshMatchPlayerSlots({ preserveSelections: true });
+  });
   document.getElementById('scoreEntryModeSelect').addEventListener('change', () => { renderScoringControlConfig(); });
   document.getElementById('matchTeeSelect').addEventListener('change', e => { uiState.referenceTeeManual = true; uiState.referenceTeeAutoId = e.target.value || uiState.referenceTeeAutoId; const draft = normalizeDraftTeeAssignments({ forceDefault: false }).map(row => ({ ...row, teeId: row.teeId || e.target.value || '' })); syncMatchPlayerDraft(draft); normalizeDraftTeeAssignments({ forceDefault: false }); syncReferenceTeeUi({ selections: uiState.matchPlayerDraft, forceAuto: false }); populateMatchPlayerPicker(uiState.matchPlayerDraft); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
   document.getElementById('teamNamesGrid').addEventListener('input', () => { const currentSelections = getCurrentMatchEditorSelections(); renderScoringControlConfig(); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });

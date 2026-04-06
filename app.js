@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v24.5';
+const APP_VERSION = 'v24.6';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -1913,17 +1913,19 @@ function renderStatTrackingEntry(match, hole, metrics) {
         ${metrics.players.map(p => {
           const stat = getPlayerStatEntry(match.players.find(mp => mp.playerId === p.playerId), currentHole - 1);
           const canEdit = canEditPlayerScore(match, p.team);
+          const playerHole = getPlayerHole(match, p, currentHole - 1, hole) || hole || null;
+          const showFairway = Number(playerHole?.par) === 4 || Number(playerHole?.par) === 5 || isFairwayHole;
           return `
             <div class="stat-player-card ${canEdit ? '' : 'is-readonly'}">
               <div class="stat-player-head">
                 <div><strong>${escapeHtml(p.player.name)}</strong></div>
                 <div class="tiny">${escapeHtml(getTeamLabel(match, p.team))}${canEdit ? '' : ' · read only'}</div>
               </div>
-              <div class="stat-check-grid top-gap">
-                ${isFairwayHole ? `<label class="mini-check"><input type="checkbox" data-stat-player="${p.playerId}" data-stat-key="fairway" ${stat.fairway ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>Fairway hit</span></label>` : ''}
-                <label class="mini-check"><input type="checkbox" data-stat-player="${p.playerId}" data-stat-key="green" ${stat.green ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>Green in regulation</span></label>
-                <label class="mini-check"><input type="checkbox" data-stat-player="${p.playerId}" data-stat-key="upAndDown" ${stat.upAndDown ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>Up and down</span></label>
-                <label class="mini-check"><input type="checkbox" data-stat-player="${p.playerId}" data-stat-key="sandy" ${stat.sandy ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>Sandy</span></label>
+              <div class="stat-check-grid top-gap ${showFairway ? 'stat-check-grid--with-fairway' : ''}">
+                ${showFairway ? `<label class="mini-check stat-mini-check stat-mini-check--fairway"><input type="checkbox" data-stat-player="${p.playerId}" data-stat-key="fairway" ${stat.fairway ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>Fairway hit</span></label>` : ''}
+                <label class="mini-check stat-mini-check"><input type="checkbox" data-stat-player="${p.playerId}" data-stat-key="green" ${stat.green ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>Green in regulation</span></label>
+                <label class="mini-check stat-mini-check"><input type="checkbox" data-stat-player="${p.playerId}" data-stat-key="upAndDown" ${stat.upAndDown ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>Up and down</span></label>
+                <label class="mini-check stat-mini-check"><input type="checkbox" data-stat-player="${p.playerId}" data-stat-key="sandy" ${stat.sandy ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>Sandy</span></label>
               </div>
               <label class="stat-putts-field top-gap"><span>Putts</span><input class="score-input stat-putts-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" min="0" max="9" data-stat-player="${p.playerId}" data-stat-key="putts" value="${Number.isFinite(stat.putts) ? stat.putts : ''}" ${canEdit ? '' : 'disabled'} /></label>
             </div>`;
@@ -2617,7 +2619,6 @@ function populateMatchPlayerPicker(selected = []) {
     const buttonClass = currentPlayer ? 'player-card-trigger has-selection' : 'player-card-trigger';
     const selectablePlayers = getSelectablePlayersForSlot(idx);
     const hasSavedPlayers = state.players.length > 0;
-    const playerQuickSelect = `<label class="tiny player-tee-select"><span>Player</span><select data-player-select-slot="${idx}" data-slot-team="${teamNo}" ${hasSavedPlayers ? '' : 'disabled'}><option value="">${hasSavedPlayers ? 'Select player' : 'Add players first'}</option>${selectablePlayers.map(player => `<option value="${player.id}" ${player.id === current ? 'selected' : ''}>${escapeHtml(getPlayerLookupLabel(player))}</option>`).join('')}</select></label>`;
     const teeSelect = teeOptions.length
       ? `<label class="tiny player-tee-select"><span>Handicap tee</span><select data-player-tee-slot="${idx}" data-slot-team="${teamNo}"><option value="">Select tee</option>${teeOptions.map(t => `<option value="${t.id}" ${t.id === currentTeeId ? 'selected' : ''}>${t.label}</option>`).join('')}</select></label>`
       : '<div class="tiny">Select a course first to choose tees.</div>';

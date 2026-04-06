@@ -1444,6 +1444,13 @@ body.sheet-open{overflow:hidden}
 .stat-summary-list{display:grid;gap:8px}
 .stat-summary-list div{display:flex;justify-content:space-between;gap:12px;border-top:1px solid rgba(12,55,33,.08);padding-top:8px}
 @media (max-width: 900px){.stat-entry-grid,.stat-summary-grid{grid-template-columns:1fr}.stat-check-grid{grid-template-columns:1fr}}
+.stat-mini-check{min-width:0;}
+.stat-mini-check span{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.2;}
+@media (max-width: 900px){
+  .stat-check-grid--with-fairway{grid-template-columns:1fr;}
+  .stat-mini-check--fairway{order:-1;}
+}
+
 
 
 @media print and (max-width: 760px) {

@@ -1,13 +1,14 @@
 # The Dye Ledger
 
-Current version: **v24.0**
+Current version: **v24.1**
 
-## What changed in v24.0
+## What changed in v24.1
+- fixed Game Setup player assignment so player options reliably appear after choosing the number of teams and players per team
 
 - reordered the Scoreboard to: Share / Print, Match Status, Hole-by-hole Momentum, Games Summary, Net Payout, Team Leaderboard, Player Leaderboard, Classic Scorecard, Stat Tracking, and Notes
 - moved Notes from the More tab to the bottom of the Scoreboard while preserving note editing/saving behavior
 - fixed a game setup regression so player assignments stay tied to their team slots and matches can be created reliably again
-- refreshed the in-app App notes and synchronized the displayed app version, manifest version, and service-worker cache version to v24.0
+- refreshed the in-app App notes and synchronized the displayed app version, manifest version, and service-worker cache version to v24.1
 
 ## What changed in v23.8
 - added **Scoring control** to Game Setup with two explicit event modes: **Official Scorer** or **Team Input**

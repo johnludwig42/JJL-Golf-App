@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v24.0';
+const APP_VERSION = 'v24.1';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2518,6 +2518,7 @@ function populateMatchPlayerPicker(selected = []) {
     const currentTeeId = teeBySlot[idx] || defaultTeeId || '';
     const buttonLabel = currentPlayer ? getPlayerDisplayHtml(currentPlayer, { wrapperClass: 'player-label-inline', nameClass: 'player-label-name', indexClass: 'player-label-index' }) : 'Tap to select player';
     const buttonClass = currentPlayer ? 'player-card-trigger has-selection' : 'player-card-trigger';
+    const playerQuickSelect = `<label class="tiny player-tee-select"><span>Player</span><select data-player-select-slot="${idx}" data-slot-team="${teamNo}"><option value="">Select player</option>${getSelectablePlayersForSlot(idx).map(player => `<option value="${player.id}" ${player.id === current ? 'selected' : ''}>${escapeHtml(getPlayerLookupLabel(player))}</option>`).join('')}</select></label>`;
     const teeSelect = teeOptions.length
       ? `<label class="tiny player-tee-select"><span>Handicap tee</span><select data-player-tee-slot="${idx}" data-slot-team="${teamNo}"><option value="">Select tee</option>${teeOptions.map(t => `<option value="${t.id}" ${t.id === currentTeeId ? 'selected' : ''}>${t.label}</option>`).join('')}</select></label>`
       : '<div class="tiny">Select a course first to choose tees.</div>';
@@ -2529,6 +2530,7 @@ function populateMatchPlayerPicker(selected = []) {
           <span class="player-card-label">${buttonLabel}</span>
           <span class="player-card-hint">${currentPlayer ? 'Change player' : 'Search saved players'}</span>
         </button>
+        ${playerQuickSelect}
         ${teeSelect}
       </div>
     `;
@@ -3390,6 +3392,10 @@ function installHandlers() {
     }
   });
   document.getElementById('matchPlayersPicker').addEventListener('change', e => {
+    if (e.target.matches('[data-player-select-slot]')) {
+      assignPlayerToSlot(Number(e.target.dataset.playerSelectSlot), e.target.value || '');
+      return;
+    }
     if (e.target.matches('[data-player-tee-slot]')) {
       const slot = Number(e.target.dataset.playerTeeSlot);
       const draft = getMatchPlayerDraft();

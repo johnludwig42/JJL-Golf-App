@@ -1364,3 +1364,11 @@ body.sheet-open{overflow:hidden}
   body.printing-scorecard.printing-classic-only .print-section-momentum,
   body.printing-scorecard.printing-classic-only .print-section-payout{display:none !important;}
 }
+
+
+#scoreAccessCard select:disabled,
+#scoreAccessCard input:disabled { opacity: .7; }
+.score-row-readonly { opacity: .8; }
+.score-row-readonly .score-input { background: #f4f4f4; color: #666; }
+.greenies-check.is-readonly { opacity: .6; }
+#teamInputRoleConfig .compact-grid-item { min-width: 0; }

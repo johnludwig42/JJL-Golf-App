@@ -1,6 +1,22 @@
 # The Dye Ledger
 
-Current version: **v23.4**
+Current version: **v23.6**
+
+## What changed in v23.6
+- added **Scoring control** to Game Setup with two explicit event modes: **Official Scorer** or **Team Input**
+- added local role scaffolding for **Event Admin**, **Official Scorer**, **Team Scorer**, and **Viewer** so the app can mirror the permission model planned for Supabase
+- added per-team scorer placeholders and access codes in Team Input mode so each team can be mapped later to a restricted Supabase role
+- added a **Scoring access** card on the Scoring tab to preview and test which role is currently entering scores
+- restricted Team Scorer editing so only that team’s players are editable in score entry, while Viewer remains read-only
+- kept Event Admin and Official Scorer able to edit all teams
+- refreshed the in-app App notes and synchronized the displayed app version, manifest version, and service-worker cache version to v23.6
+
+## What changed in v23.5
+- fixed match setup tee selection so the visible reference-tee control and all player tee dropdowns stay synchronized on desktop and mobile, including 8-team / 32-slot setups
+- when the match course changes, all player tee assignments now reset cleanly to a valid tee on that course instead of keeping stale tee ids
+- when the default match tee changes, any empty or invalid player tee assignments now refresh to a valid tee automatically
+- updated the Share / Print controls so the selected export view stays synchronized with the current print/save choice and button state
+- refreshed the in-app App notes and synchronized the displayed app version, manifest version, and service-worker cache version to v23.5
 
 ## What changed in v23.4
 - expanded match setup to allow up to 8 teams

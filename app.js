@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v23.4';
+const APP_VERSION = 'v23.6';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -11,8 +11,72 @@ const GAME_LIBRARY = [
 ];
 
 const GAME_LABELS = Object.fromEntries(GAME_LIBRARY.map(g => [g.key, g.label]));
+const SCORE_ENTRY_MODES = {
+  official_scorer: 'Official Scorer',
+  team_input: 'Team Input',
+};
+const SCORE_ACCESS_ROLE_LABELS = {
+  event_admin: 'Event Admin',
+  official_scorer: 'Official Scorer',
+  team_scorer: 'Team Scorer',
+  viewer: 'Viewer',
+};
 function getGameLabel(key) {
   return GAME_LABELS[key] || key;
+}
+function formatScoreEntryModeLabel(mode = 'official_scorer') {
+  return SCORE_ENTRY_MODES[mode] || SCORE_ENTRY_MODES.official_scorer;
+}
+function formatScoreAccessRoleLabel(role = 'viewer') {
+  return SCORE_ACCESS_ROLE_LABELS[role] || SCORE_ACCESS_ROLE_LABELS.viewer;
+}
+function defaultTeamScorerLabel(teamName = '', teamNo = 1) {
+  return `${teamName || `Team ${teamNo}`} scorer`;
+}
+function defaultTeamAccessCode(teamName = '', teamNo = 1) {
+  const base = String(teamName || `TEAM ${teamNo}`).toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 6) || `TEAM${teamNo}`;
+  return `${base}-${teamNo}`;
+}
+function buildTeamScorerAssignments(teamCount = 1, teamNames = [], existing = []) {
+  const rows = Array.isArray(existing) ? existing : [];
+  return Array.from({ length: Math.max(1, Number(teamCount) || 1) }, (_, idx) => {
+    const team = idx + 1;
+    const prior = rows.find(row => Number(row?.team) === team) || {};
+    const teamName = String(teamNames[idx] || `Team ${team}`);
+    return {
+      team,
+      label: String(prior.label || defaultTeamScorerLabel(teamName, team)),
+      accessCode: String(prior.accessCode || defaultTeamAccessCode(teamName, team)),
+    };
+  });
+}
+function getScoreAccessState(match) {
+  const mode = String(match?.scoreEntryMode || 'official_scorer') === 'team_input' ? 'team_input' : 'official_scorer';
+  const role = String(match?.activeScoreRole || (mode === 'team_input' ? 'team_scorer' : 'official_scorer'));
+  const allowedRole = mode === 'official_scorer' && role === 'team_scorer' ? 'official_scorer' : role;
+  const teamCount = Math.max(1, Number(match?.teamCount) || 1);
+  const selectedTeam = Math.min(teamCount, Math.max(1, Number(match?.activeScoreTeam) || 1));
+  return {
+    mode,
+    role: ['event_admin','official_scorer','team_scorer','viewer'].includes(allowedRole) ? allowedRole : 'viewer',
+    team: selectedTeam,
+  };
+}
+function canEditPlayerScore(match, teamNo = 1) {
+  const access = getScoreAccessState(match);
+  if (access.role === 'event_admin' || access.role === 'official_scorer') return true;
+  if (access.role === 'team_scorer') return Number(teamNo) === Number(access.team);
+  return false;
+}
+function canEditGreenies(match, teamNo = 1) {
+  return canEditPlayerScore(match, teamNo);
+}
+function getScoreAccessHint(match) {
+  const access = getScoreAccessState(match);
+  if (access.role === 'event_admin') return 'Event Admin can edit any team, correct scores, and act as the event owner.';
+  if (access.role === 'official_scorer') return 'Official Scorer can enter scores for every team in the event.';
+  if (access.role === 'team_scorer') return `Team Scorer can enter scores only for ${getTeamLabel(match, access.team)}.`;
+  return 'Viewer is read-only and can monitor the round without editing any scores.';
 }
 
 function normalizeSelectedGamesOrder(games = []) {
@@ -680,6 +744,7 @@ function openPrintScorecard(matchId, printView = null) {
   const previousTab = document.querySelector('.tab.active')?.dataset.tab || 'score';
   const previouslyActiveMatch = state.activeMatchId;
   const requestedView = (printView || match.printView || document.getElementById('scoreboardPrintViewSelect')?.value || 'summary') === 'scorecard' ? 'scorecard' : 'summary';
+  syncScoreboardPrintControls(requestedView);
   if (state.activeMatchId !== match.id) state.activeMatchId = match.id;
   const metrics = computeMatchMetrics(match);
   const printMeta = document.getElementById('printRoundMeta');
@@ -764,6 +829,13 @@ function normalizeMatch(match) {
   match.customStartHole = Math.max(1, Math.min(10, Number(match.customStartHole) || 1));
   match.status = match.status || 'active';
   match.completedAt = match.completedAt || null;
+  match.scoreEntryMode = String(match.scoreEntryMode || 'official_scorer') === 'team_input' ? 'team_input' : 'official_scorer';
+  match.officialScorerName = String(match.officialScorerName || 'Official scorer').trim() || 'Official scorer';
+  match.teamNames = Array.isArray(match.teamNames) ? match.teamNames : [];
+  match.teamScorers = buildTeamScorerAssignments(Number(match.teamCount) || Math.max(1, match.teamNames.length || 1), match.teamNames, match.teamScorers);
+  match.activeScoreRole = match.activeScoreRole || (match.scoreEntryMode === 'team_input' ? 'team_scorer' : 'official_scorer');
+  if (match.scoreEntryMode === 'official_scorer' && match.activeScoreRole === 'team_scorer') match.activeScoreRole = 'official_scorer';
+  match.activeScoreTeam = Math.min(Math.max(1, Number(match.activeScoreTeam) || 1), Math.max(1, Number(match.teamCount) || 1));
   match.players = Array.isArray(match.players) ? match.players : [];
   match.players = match.players.map((mp, idx) => ({
     playerId: mp.playerId,
@@ -1440,9 +1512,8 @@ function renderLeaderboard() {
     `).join('');
   }
 
-  const printViewSelect = document.getElementById('scoreboardPrintViewSelect');
   const activePrintView = (match.printView === 'scorecard') ? 'scorecard' : 'summary';
-  if (printViewSelect && printViewSelect.value !== activePrintView) printViewSelect.value = activePrintView;
+  syncScoreboardPrintControls(activePrintView);
   applyScoreboardPrintView(activePrintView);
 
   const statusOptions = getMatchStatusOptions(match);
@@ -1681,10 +1752,14 @@ function renderCurrentMatch() {
     return [key, `${p.tee?.teeName || tee?.teeName || 'Tee'} ${playerHole?.yardage ? `${formatYardageValue(playerHole.yardage)} yds` : '— yds'}`];
   })).values()].join(' · ') : '';
   document.getElementById('holeSummary').textContent = hole ? `Hole ${hole.holeNumber} · Par ${hole.par || '-'} · SI ${hole.strokeIndex || '-'} · ${teeYardages || `${hole.yardage ? formatYardageValue(hole.yardage) : '-'} yds`} · ${teamText}` : '';
+  renderScoreAccessCard(match);
   renderScoreGrid(match, tee, metrics, scoringHoles);
   renderGreeniesEntry(match, hole);
   renderHoleJumpTiles(match);
+  const saveBtn = document.getElementById('saveScoresBtn');
+  if (saveBtn) saveBtn.disabled = getScoreAccessState(match).role === 'viewer';
 }
+
 
 function renderGreeniesEntry(match, hole) {
   const wrap = document.getElementById('greeniesEntryWrap');
@@ -1695,10 +1770,14 @@ function renderGreeniesEntry(match, hole) {
     wrap.innerHTML = '';
     return;
   }
-  const eligible = (greenies.participants || []).map(getPlayer).filter(Boolean);
+  const eligible = (greenies.participants || []).map(id => {
+    const player = getPlayer(id);
+    const mp = match.players.find(row => row.playerId === id);
+    return player && mp ? { player, team: mp.team } : null;
+  }).filter(Boolean);
   const winnerId = match.greeniesWinners?.[String(hole.holeNumber)] || '';
   wrap.classList.remove('hidden');
-  wrap.innerHTML = `<div class="card inset-card game-config-card greenies-card"><div class="section-label">Greenies · Hole ${hole.holeNumber}</div><div class="greenies-list top-gap">${eligible.map(p => `<label class="mini-check greenies-check"><input type="checkbox" data-greenies-winner="${p.id}" ${winnerId === p.id ? 'checked' : ''} /><span>${escapeHtml(p.name)}</span></label>`).join('') || '<div class="tiny">No greenies participants selected for this match.</div>'}</div><div class="tiny top-gap">Select the closest-to-the-pin winner for this par 3. Payout runs only against selected greenies participants.</div></div>`;
+  wrap.innerHTML = `<div class="card inset-card game-config-card greenies-card"><div class="section-label">Greenies · Hole ${hole.holeNumber}</div><div class="greenies-list top-gap">${eligible.map(row => `<label class="mini-check greenies-check ${canEditGreenies(match, row.team) ? '' : 'is-readonly'}"><input type="checkbox" data-greenies-winner="${row.player.id}" ${winnerId === row.player.id ? 'checked' : ''} ${canEditGreenies(match, row.team) ? '' : 'disabled'} /><span>${escapeHtml(row.player.name)}</span></label>`).join('') || '<div class="tiny">No greenies participants selected for this match.</div>'}</div><div class="tiny top-gap">Select the closest-to-the-pin winner for this par 3. Payout runs only against selected greenies participants.</div></div>`;
 }
 function renderHoleJumpTiles(match) {
   const wrap = document.getElementById('holeJumpTiles');
@@ -1734,11 +1813,12 @@ function renderScoreGrid(match, tee, metrics, scoringHoles = null) {
     const strokes = holeStrokeAllowanceForPlayer(playerHole?.strokeIndex, p.playHdcp, metrics.lowPlaying);
     const gross = score?.gross || '';
     const net = score?.gross ? score.gross - strokes : '';
+    const canEdit = canEditPlayerScore(match, p.team);
     return `
-      <tr>
-        <td>${escapeHtml(p.player.name)}<div class="tiny">${escapeHtml(p.tee?.teeName || tee?.teeName || 'Tee')}</div></td>
+      <tr class="${canEdit ? '' : 'score-row-readonly'}">
+        <td>${escapeHtml(p.player.name)}<div class="tiny">${escapeHtml(p.tee?.teeName || tee?.teeName || 'Tee')}${canEdit ? '' : ' · read only'}</div></td>
         <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
-        <td><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="next" min="1" max="15" data-score-player="${p.playerId}" value="${gross}" /></td>
+        <td><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="next" min="1" max="15" data-score-player="${p.playerId}" value="${gross}" ${canEdit ? '' : 'disabled'} /></td>
         <td>${strokes}</td>
         <td>${net}</td>
       </tr>
@@ -2081,6 +2161,39 @@ function populateMatchTees(courseId = null, selectedTeeId = null) {
   if (!selectedTeeId && sortedTees[0]) teeSelect.value = sortedTees[0].id;
 }
 
+function getDefaultMatchTeeId(courseId = null) {
+  const resolvedCourseId = courseId ?? (document.getElementById('matchCourseSelect')?.value || '');
+  const selectedTeeId = document.getElementById('matchTeeSelect')?.value || '';
+  if (selectedTeeId) return selectedTeeId;
+  const course = getCourse(resolvedCourseId);
+  return getSortedTeesByYardage(course)[0]?.id || '';
+}
+function normalizeDraftTeeAssignments({ courseId = null, forceDefault = false } = {}) {
+  const resolvedCourseId = courseId ?? (document.getElementById('matchCourseSelect')?.value || '');
+  const course = getCourse(resolvedCourseId);
+  const validTeeIds = new Set((course?.tees || []).map(t => t.id));
+  const fallbackTeeId = getDefaultMatchTeeId(resolvedCourseId);
+  const draft = Array.isArray(uiState.matchPlayerDraft) ? uiState.matchPlayerDraft : [];
+  const next = draft.map(row => {
+    const teeId = String(row?.teeId || '');
+    const needsDefault = forceDefault || !teeId || (validTeeIds.size && !validTeeIds.has(teeId));
+    return { ...row, teeId: needsDefault ? fallbackTeeId : teeId };
+  });
+  uiState.matchPlayerDraft = next;
+  return next;
+}
+function syncScoreboardPrintControls(printView = null) {
+  const resolvedView = printView === 'scorecard' ? 'scorecard' : 'summary';
+  const select = document.getElementById('scoreboardPrintViewSelect');
+  const button = document.getElementById('scoreboardShareRoundBtn');
+  const hint = document.getElementById('scoreboardPrintViewHint');
+  if (select && select.value !== resolvedView) select.value = resolvedView;
+  if (button) button.textContent = resolvedView === 'scorecard' ? 'Print / Save Scorecard PDF' : 'Print / Save Summary PDF';
+  if (hint) hint.textContent = resolvedView === 'scorecard'
+    ? 'Classic scorecard only will be sent to the print sheet.'
+    : 'Full match summary will be sent to the print sheet.';
+}
+
 function renderTeamNameInputs(teamCount = Number(document.getElementById('teamCountSelect')?.value || 1), teamNames = []) {
   const wrap = document.getElementById('teamNamesGrid');
   if (!wrap) return;
@@ -2090,6 +2203,76 @@ function renderTeamNameInputs(teamCount = Number(document.getElementById('teamCo
       <input data-team-name="${idx + 1}" maxlength="25" value="${escapeHtml((teamNames[idx] || `Team ${idx + 1}`).slice(0,25))}" placeholder="Team ${idx + 1}" />
     </label>
   `).join('');
+}
+function renderScoringControlConfig(existingMatch = null) {
+  const modeSelect = document.getElementById('scoreEntryModeSelect');
+  const officialInput = document.getElementById('officialScorerNameInput');
+  const wrap = document.getElementById('teamInputRoleConfig');
+  const hint = document.getElementById('scoreEntryModeHint');
+  if (!modeSelect || !officialInput || !wrap || !hint) return;
+  const teamCount = Number(document.getElementById('teamCountSelect')?.value || existingMatch?.teamCount || 1);
+  const teamNames = Array.from({ length: teamCount }, (_, idx) => String(document.querySelector(`[data-team-name="${idx + 1}"]`)?.value || existingMatch?.teamNames?.[idx] || `Team ${idx + 1}`));
+  const mode = modeSelect.value === 'team_input' ? 'team_input' : 'official_scorer';
+  const teamScorers = buildTeamScorerAssignments(teamCount, teamNames, existingMatch?.teamScorers || []);
+  if (existingMatch) existingMatch.teamScorers = teamScorers;
+  wrap.classList.toggle('hidden', mode !== 'team_input');
+  hint.textContent = mode === 'team_input'
+    ? 'Team Input assigns one scorer identity per team. In Supabase, each team scorer would only be allowed to edit that team.'
+    : 'Official Scorer mode keeps one full-access scorer while everyone else can stay read-only.';
+  if (mode !== 'team_input') {
+    wrap.innerHTML = '';
+    return;
+  }
+  wrap.innerHTML = `
+    <div class="section-label">Team scorer assignments</div>
+    <div class="tiny top-gap">These names and access codes are the local placeholders we can map to Supabase roles later.</div>
+    <div class="grid two compact-grid top-gap">
+      ${teamScorers.map(row => `
+        <div class="card inset-card compact-grid-item">
+          <div class="tiny"><strong>${escapeHtml(teamNames[row.team - 1] || `Team ${row.team}`)}</strong></div>
+          <label class="top-gap"><span>Team scorer</span><input class="input-match" data-team-scorer-label="${row.team}" value="${escapeHtml(row.label)}" /></label>
+          <label><span>Access code</span><input class="input-match" data-team-scorer-code="${row.team}" value="${escapeHtml(row.accessCode)}" /></label>
+        </div>
+      `).join('')}
+    </div>`;
+}
+function collectTeamScorerAssignments(teamCount, teamNames, existing = []) {
+  const fallback = buildTeamScorerAssignments(teamCount, teamNames, existing);
+  return Array.from({ length: teamCount }, (_, idx) => {
+    const team = idx + 1;
+    const prior = fallback.find(row => row.team === team) || {};
+    return {
+      team,
+      label: String(document.querySelector(`[data-team-scorer-label="${team}"]`)?.value || prior.label || defaultTeamScorerLabel(teamNames[idx], team)).trim() || defaultTeamScorerLabel(teamNames[idx], team),
+      accessCode: String(document.querySelector(`[data-team-scorer-code="${team}"]`)?.value || prior.accessCode || defaultTeamAccessCode(teamNames[idx], team)).trim().toUpperCase() || defaultTeamAccessCode(teamNames[idx], team),
+    };
+  });
+}
+function renderScoreAccessCard(match) {
+  const card = document.getElementById('scoreAccessCard');
+  const meta = document.getElementById('scoreAccessMeta');
+  const hint = document.getElementById('scoreAccessHint');
+  const roleSelect = document.getElementById('scoreAccessRoleSelect');
+  const teamWrap = document.getElementById('scoreAccessTeamWrap');
+  const teamSelect = document.getElementById('scoreAccessTeamSelect');
+  if (!card || !meta || !hint || !roleSelect || !teamWrap || !teamSelect) return;
+  if (!match) {
+    card.classList.add('hidden');
+    return;
+  }
+  const access = getScoreAccessState(match);
+  const mode = access.mode;
+  const officialName = match.officialScorerName || 'Official scorer';
+  card.classList.remove('hidden');
+  roleSelect.innerHTML = mode === 'team_input'
+    ? `<option value="event_admin">Event Admin</option><option value="official_scorer">Official Scorer</option><option value="team_scorer">Team Scorer</option><option value="viewer">Viewer</option>`
+    : `<option value="event_admin">Event Admin</option><option value="official_scorer">Official Scorer</option><option value="viewer">Viewer</option>`;
+  roleSelect.value = (access.role === 'team_scorer' && mode !== 'team_input') ? 'official_scorer' : access.role;
+  teamWrap.classList.toggle('hidden', !(mode === 'team_input' && roleSelect.value === 'team_scorer'));
+  teamSelect.innerHTML = Array.from({ length: Math.max(1, Number(match.teamCount) || 1) }, (_, idx) => `<option value="${idx + 1}">${escapeHtml(getTeamLabel(match, idx + 1))}</option>`).join('');
+  teamSelect.value = String(access.team || 1);
+  meta.textContent = `${formatScoreEntryModeLabel(mode)} · Official scorer: ${officialName}${mode === 'team_input' ? ' · Team scorers are restricted to their own team.' : ' · One scorer can enter all teams.'}`;
+  hint.textContent = getScoreAccessHint(match);
 }
 
 function renderNineHoleConfigUi() {
@@ -2323,7 +2506,8 @@ function preserveMatchSetupUi() {
   const currentTeamNames = Array.from(document.querySelectorAll('[data-team-name]')).map(el => el.value || '');
   const currentGames = collectSelectedGames();
   populateMatchCourseSelects(selectedCourseId, selectedTeeId);
-  renderTeamNameInputs(Number(document.getElementById('teamCountSelect')?.value || 2), currentTeamNames);
+  renderTeamNameInputs(Number(document.getElementById('teamCountSelect')?.value || 1), currentTeamNames);
+  renderScoringControlConfig();
   populateMatchPlayerPicker(currentSelections);
   renderGamesPicker(currentGames);
 }
@@ -2758,8 +2942,11 @@ function loadMatchEditor(matchId = null) {
     renderNineHoleConfigUi();
     document.getElementById('teamCountSelect').value = '1';
     document.getElementById('playersPerTeamSelect').value = '1';
+    document.getElementById('scoreEntryModeSelect').value = 'official_scorer';
+    document.getElementById('officialScorerNameInput').value = 'Official scorer';
     populateMatchCourseSelects();
     renderTeamNameInputs(1, []);
+    renderScoringControlConfig();
     uiState.matchPlayerDraft = [];
     populateMatchPlayerPicker([]);
     renderGamesPicker([]);
@@ -2776,7 +2963,10 @@ function loadMatchEditor(matchId = null) {
   renderNineHoleConfigUi();
   document.getElementById('teamCountSelect').value = String(match.teamCount || 2);
   document.getElementById('playersPerTeamSelect').value = String(match.playersPerTeam || 2);
+  document.getElementById('scoreEntryModeSelect').value = match.scoreEntryMode || 'official_scorer';
+  document.getElementById('officialScorerNameInput').value = match.officialScorerName || 'Official scorer';
   renderTeamNameInputs(match.teamCount || 2, match.teamNames || []);
+  renderScoringControlConfig(match);
   uiState.matchPlayerDraft = (match.players || []).map((p, idx) => ({ ...p, slot: Number.isFinite(Number(p.slot)) ? Number(p.slot) : idx, teeId: p.teeId || match.teeId || '' }));
   populateMatchPlayerPicker(uiState.matchPlayerDraft);
   renderGamesPicker(match.selectedGames || []);
@@ -2956,20 +3146,24 @@ function installHandlers() {
     activateTab('setup');
   });
 
-  document.getElementById('matchCourseSelect').addEventListener('change', e => { const currentSelections = getCurrentMatchEditorSelections(); populateMatchTees(e.target.value); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
+  document.getElementById('matchCourseSelect').addEventListener('change', e => { populateMatchTees(e.target.value); const currentSelections = getCurrentMatchEditorSelections(); const defaultTeeId = getDefaultMatchTeeId(e.target.value); const normalizedSelections = currentSelections.map(row => ({ ...row, teeId: defaultTeeId })); syncMatchPlayerDraft(normalizedSelections); normalizeDraftTeeAssignments({ courseId: e.target.value, forceDefault: true }); populateMatchPlayerPicker(uiState.matchPlayerDraft); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
   document.getElementById('holeCountSelect').addEventListener('change', () => { renderNineHoleConfigUi(); renderSetupHandicapPreview(); });
   document.getElementById('nineHoleSegmentSelect').addEventListener('change', () => { renderNineHoleConfigUi(); renderSetupHandicapPreview(); });
   document.getElementById('customNineHoleStartSelect').addEventListener('change', () => { renderSetupHandicapPreview(); });
   document.getElementById('teamCountSelect').addEventListener('change', () => {
     const teamCount = Number(document.getElementById('teamCountSelect').value || 2);
     const currentSelections = getCurrentMatchEditorSelections();
-    renderTeamNameInputs(teamCount, Array.from(document.querySelectorAll('[data-team-name]')).map(el => el.value));
+    const teamNames = Array.from(document.querySelectorAll('[data-team-name]')).map(el => el.value);
+    renderTeamNameInputs(teamCount, teamNames);
+    renderScoringControlConfig();
     populateMatchPlayerPicker(currentSelections);
     renderGamesPicker(collectSelectedGames());
     renderSetupHandicapPreview();
   });
   document.getElementById('playersPerTeamSelect').addEventListener('change', () => { const currentSelections = getCurrentMatchEditorSelections(); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
-  document.getElementById('teamNamesGrid').addEventListener('input', () => { const currentSelections = getCurrentMatchEditorSelections(); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
+  document.getElementById('scoreEntryModeSelect').addEventListener('change', () => { renderScoringControlConfig(); });
+  document.getElementById('matchTeeSelect').addEventListener('change', e => { const draft = normalizeDraftTeeAssignments({ forceDefault: false }).map(row => ({ ...row, teeId: row.teeId || e.target.value || '' })); syncMatchPlayerDraft(draft); normalizeDraftTeeAssignments({ forceDefault: false }); populateMatchPlayerPicker(uiState.matchPlayerDraft); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
+  document.getElementById('teamNamesGrid').addEventListener('input', () => { const currentSelections = getCurrentMatchEditorSelections(); renderScoringControlConfig(); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
   const matchPlayersPickerEl = document.getElementById('matchPlayersPicker');
   const handlePlayerPickerOpen = e => {
     const trigger = e.target.closest('[data-open-player-sheet]');
@@ -3063,12 +3257,14 @@ function installHandlers() {
   });
 
 document.getElementById('scoreboardPrintViewSelect').addEventListener('change', e => {
+  const requestedView = e.target.value === 'scorecard' ? 'scorecard' : 'summary';
   const match = getActiveMatch();
   if (match) {
-    match.printView = e.target.value === 'scorecard' ? 'scorecard' : 'summary';
+    match.printView = requestedView;
     persist({ skipRender: true });
   }
-  applyScoreboardPrintView(e.target.value);
+  syncScoreboardPrintControls(requestedView);
+  applyScoreboardPrintView(requestedView);
 });
 
 document.getElementById('leaderboard').addEventListener('change', e => {
@@ -3099,13 +3295,31 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       document.querySelectorAll('[data-greenies-winner]').forEach(el => { if (el !== e.target) el.checked = false; });
     }
   });
+  document.getElementById('score').addEventListener('change', e => {
+    const match = getActiveMatch();
+    if (!match) return;
+    if (e.target.id === 'scoreAccessRoleSelect') {
+      const nextRole = e.target.value;
+      match.activeScoreRole = nextRole;
+      if (nextRole !== 'team_scorer') match.activeScoreTeam = 1;
+      persist({ skipRender: true });
+      renderCurrentMatch();
+      return;
+    }
+    if (e.target.id === 'scoreAccessTeamSelect') {
+      match.activeScoreTeam = Math.max(1, Number(e.target.value) || 1);
+      persist({ skipRender: true });
+      renderCurrentMatch();
+      return;
+    }
+  });
   document.getElementById('setup').addEventListener('change', e => {
-    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], [data-side-field], [data-nine-point-player], [data-game-config]')) {
+    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #scoreEntryModeSelect, #officialScorerNameInput, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-game-config]')) {
       setTimeout(() => { renderSetupHandicapPreview(); renderGamesPicker(collectSelectedGames()); }, 0);
     }
   });
   document.getElementById('setup').addEventListener('input', e => {
-    if (e.target.matches('[data-team-name], [name="allowance"], [data-game-config], [data-nine-point-player], #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect')) {
+    if (e.target.matches('[data-team-name], [name="allowance"], #scoreEntryModeSelect, #officialScorerNameInput, [data-team-scorer-label], [data-team-scorer-code], [data-game-config], [data-nine-point-player], #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect')) {
       renderSetupHandicapPreview();
     }
   });
@@ -3184,6 +3398,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (selectedGames.some(g => g.key === 'nine_point') && selectedPlayers.length < 3) return toast('9-Point Game requires at least 3 assigned players.');
     if (selectedGames.some(g => g.key === 'nine_point' && (!Array.isArray(g.playerIds) || [...new Set(g.playerIds)].length !== 3))) return toast('Select 3 players for the 9-Point Game.');
     const existing = editingMatchId ? getMatch(editingMatchId) : null;
+    const scoreEntryMode = String(fd.get('scoreEntryMode') || 'official_scorer') === 'team_input' ? 'team_input' : 'official_scorer';
+    const officialScorerName = String(fd.get('officialScorerName') || '').trim() || 'Official scorer';
+    const teamScorers = collectTeamScorerAssignments(teamCount, teamNames, existing?.teamScorers || []);
     const match = {
       id: editingMatchId || uid(),
       date: String(fd.get('date') || todayIso()),
@@ -3198,6 +3415,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       teamCount,
       playersPerTeam,
       teamNames,
+      scoreEntryMode,
+      officialScorerName,
+      teamScorers,
       selectedGames: normalizeSelectedGamesOrder(selectedGames),
       status: existing?.status || 'active',
       completedAt: existing?.completedAt || null,
@@ -3209,6 +3429,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       matchStatusGame: existing?.matchStatusGame || getDefaultFeaturedGameKey(selectedGames),
       momentumGame: existing?.momentumGame || existing?.matchStatusGame || getDefaultFeaturedGameKey(selectedGames),
       momentumPerspective: Number(existing?.momentumPerspective || 1) === 2 ? 2 : 1,
+      activeScoreRole: existing?.activeScoreRole || (scoreEntryMode === 'team_input' ? 'team_scorer' : 'official_scorer'),
+      activeScoreTeam: Math.min(teamCount, Math.max(1, Number(existing?.activeScoreTeam) || 1)),
     };
     normalizeMatch(match);
     if (!match.courseId) return toast('Select a course.');
@@ -3227,6 +3449,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('cancelMatchEditBtn').addEventListener('click', () => { loadMatchEditor(null); renderMatchSetupState(); });
   function saveCurrentHole({ advance = false, targetHole = null, silent = false } = {}) {
     const match = getActiveMatch(); if (!match) return false;
+    if (getScoreAccessState(match).role === 'viewer') { if (!silent) toast('Viewer mode is read-only.'); return false; }
     const scoringHoles = getSelectedScoringHoles(match, getTee(match.courseId, match.teeId));
     const actualHoleNumber = scoringHoles[currentHole - 1]?.holeNumber || currentHole;
     const holeInputs = document.querySelectorAll('[data-score-player]');

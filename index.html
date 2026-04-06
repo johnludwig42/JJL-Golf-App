@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>The Dye Ledger</title>
   <meta name="theme-color" content="#0b5d3b" />
-  <link rel="manifest" href="manifest.json?v=23.4" />
+  <link rel="manifest" href="manifest.json?v=23.6" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
   <link rel="shortcut icon" href="./favicon-32x32.png" />
@@ -33,7 +33,7 @@
     <button class="tab" data-tab="setup"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 64 64"><rect x="13" y="11" width="30" height="40" rx="4" fill="none" stroke="currentColor" stroke-width="4"/><path d="M20 21h16M20 30h14M20 39h10" stroke="currentColor" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="16" cy="21" r="2.5" fill="currentColor"/><circle cx="16" cy="30" r="2.5" fill="currentColor"/><circle cx="16" cy="39" r="2.5" fill="currentColor"/><path d="M40 48 53 30" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none" opacity=".7"/><path d="M37 53l6-14 10 4-5 14z" fill="currentColor" opacity=".85"/></svg></span><span class="tab-label">Game Setup</span></button>
     <button class="tab" data-tab="score"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 64 64"><rect x="10" y="11" width="30" height="40" rx="4" fill="none" stroke="currentColor" stroke-width="4"/><path d="M18 11v40M26 11v40M34 11v40M10 21h30M10 31h30M10 41h30" stroke="currentColor" stroke-width="3" fill="none"/><path d="M39 48 52 30" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none" opacity=".7"/><path d="M36 53l6-14 10 4-5 14z" fill="currentColor" opacity=".85"/></svg></span><span class="tab-label">Scoring Input</span></button>
     <button class="tab" data-tab="leaderboard"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 64 64"><rect x="8" y="16" width="48" height="34" rx="5" fill="currentColor" opacity=".95"/><path d="M16 26h14M16 34h14M16 42h14" stroke="white" stroke-width="4" stroke-linecap="round" fill="none" opacity=".9"/><g fill="white"><circle cx="42" cy="27" r="3"/><circle cx="50" cy="27" r="3"/><circle cx="42" cy="35" r="3"/><circle cx="50" cy="35" r="3"/><circle cx="42" cy="43" r="3"/><circle cx="50" cy="43" r="3"/></g><path d="M28 8h8v8h6l-10 10-10-10h6z" fill="currentColor" opacity=".65"/></svg></span><span class="tab-label">Scoreboard</span></button>
-    <button class="tab" data-tab="settings"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="8" fill="none" stroke="currentColor" stroke-width="4"/><path d="M32 12v7M32 45v7M52 32h-7M19 32h-7M45.5 18.5l-5 5M23.5 40.5l-5 5M45.5 45.5l-5-5M23.5 23.5l-5-5" stroke="currentColor" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="32" cy="32" r="18" fill="none" stroke="currentColor" stroke-width="5" opacity=".55"/></svg></span><span class="tab-label">More</span></button>
+    <button class="tab" data-tab="settings"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="8" fill="none" stroke="currentColor" stroke-width="4"/><path d="M32 12v7M32 45v7M52 32h-7M19 32h-7M45.5 18.5l-5 5M23.6 40.5l-5 5M45.5 45.5l-5-5M23.6 23.6l-5-5" stroke="currentColor" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="32" cy="32" r="18" fill="none" stroke="currentColor" stroke-width="5" opacity=".55"/></svg></span><span class="tab-label">More</span></button>
   </nav>
 
 
@@ -170,7 +170,7 @@
           <label><span>Match date</span><input name="date" type="date" required /></label>
           <label><span>Match name</span><input class="input-match" name="name" placeholder="Saturday game" /></label>
           <label><span>Course</span><select name="courseId" id="matchCourseSelect" required></select></label>
-          <label class="hidden"><span>Reference tee</span><select name="teeId" id="matchTeeSelect"></select></label>
+          <label><span>Reference tee</span><select name="teeId" id="matchTeeSelect"></select></label>
           <label><span>Match length</span>
             <select name="holeCount" id="holeCountSelect">
               <option value="9">9 holes</option>
@@ -210,6 +210,26 @@
             </select>
           </label>
           <label class="span-2"><span>Allowance %</span><input class="input-match" name="allowance" type="number" min="0" max="100" value="100" required /></label>
+
+          <div class="span-2 card inset-card">
+            <div class="item-header compact-item-header">
+              <div>
+                <div class="section-label">Scoring control</div>
+                <div class="tiny">Choose whether one official scorer enters everything or each team enters only its own scores.</div>
+              </div>
+            </div>
+            <div class="grid two compact-grid top-gap">
+              <label><span>Score entry mode</span>
+                <select name="scoreEntryMode" id="scoreEntryModeSelect">
+                  <option value="official_scorer" selected>Official Scorer</option>
+                  <option value="team_input">Team Input</option>
+                </select>
+              </label>
+              <label><span>Official scorer</span><input class="input-match" name="officialScorerName" id="officialScorerNameInput" placeholder="Captain / pro shop / organizer" /></label>
+            </div>
+            <div id="teamInputRoleConfig" class="top-gap hidden"></div>
+            <div id="scoreEntryModeHint" class="tiny top-gap">Official Scorer mode keeps one full-access scorekeeper while everyone else can remain read-only.</div>
+          </div>
 
           <div class="span-2 card inset-card">
             <div class="section-label">Teams</div>
@@ -274,6 +294,28 @@
             <button id="nextHoleBtn" type="button" class="secondary">Next ▶</button>
           </div>
           <div id="holeSummary" class="tiny top-gap"></div>
+          <div id="scoreAccessCard" class="card inset-card top-gap hidden">
+            <div class="item-header compact-item-header">
+              <div>
+                <div class="section-label">Scoring access</div>
+                <div id="scoreAccessMeta" class="tiny">Role-based permissions preview for this event.</div>
+              </div>
+            </div>
+            <div class="grid two compact-grid top-gap">
+              <label><span>Current role</span>
+                <select id="scoreAccessRoleSelect">
+                  <option value="event_admin">Event Admin</option>
+                  <option value="official_scorer">Official Scorer</option>
+                  <option value="team_scorer">Team Scorer</option>
+                  <option value="viewer">Viewer</option>
+                </select>
+              </label>
+              <label id="scoreAccessTeamWrap" class="hidden"><span>Scoring team</span>
+                <select id="scoreAccessTeamSelect"></select>
+              </label>
+            </div>
+            <div id="scoreAccessHint" class="tiny top-gap"></div>
+          </div>
           <div id="greeniesEntryWrap" class="top-gap hidden"></div>
           <div class="score-grid-wrap top-gap">
             <table class="score-grid">
@@ -308,6 +350,7 @@
             <div>
               <h2>Share / Print</h2>
               <div class="tiny">Open the iPhone/browser print sheet, then use Save as PDF if desired.</div>
+              <div id="scoreboardPrintViewHint" class="tiny">Full match summary will be sent to the print sheet.</div>
             </div>
             <div class="actions wrap compact-actions print-actions">
               <label class="inline-select tiny">
@@ -463,7 +506,11 @@
           <li>Courses and tees stay manual and editable.</li>
           <li>Matches now support up to 8 teams with up to 4 players per team (32 total player slots).</li>
           <li>Leaderboard highlights player totals, team totals, match play, skins, and side matches.</li>
-          <li>App version: <strong id="appVersionLabel">v23.4</strong></li>
+          <li>Match setup now keeps all player tee selectors synchronized across desktop and mobile for up to 8 teams of 4.</li>
+          <li>Print / Save PDF controls now stay synchronized with the currently selected export view.</li>
+          <li>Game setup now includes role-based scoring control for Official Scorer or Team Input events.</li>
+          <li>Score entry can be previewed as Event Admin, Official Scorer, Team Scorer, or Viewer before moving into Supabase.</li>
+          <li>App version: <strong id="appVersionLabel">v23.6</strong></li>
         </ul>
       </div>
     </section>

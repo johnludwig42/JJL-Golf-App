@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v23.9';
+const APP_VERSION = 'v24.0';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2573,6 +2573,24 @@ function getCurrentMatchEditorSelections() {
     teeId: row.teeId || document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '',
   }));
 }
+function getSelectedPlayersFromSetup() {
+  const teamCount = Number(document.getElementById('teamCountSelect')?.value || 1);
+  const playersPerTeam = Number(document.getElementById('playersPerTeamSelect')?.value || 1);
+  const slotCount = Math.max(1, teamCount * playersPerTeam);
+  const draft = syncMatchPlayerDraft();
+  return Array.from({ length: slotCount }, (_, idx) => {
+    const row = draft[idx] || {};
+    const domSlot = document.querySelector(`[data-player-slot="${idx}"]`);
+    const domTee = document.querySelector(`[data-player-tee-slot="${idx}"]`);
+    const team = Number(row.team || domSlot?.dataset.slotTeam || (Math.floor(idx / Math.max(1, playersPerTeam)) + 1)) || 1;
+    return {
+      playerId: String(row.playerId || domSlot?.value || ''),
+      team,
+      slot: idx,
+      teeId: String(row.teeId || domTee?.value || getDefaultMatchTeeId() || ''),
+    };
+  }).filter(row => row.playerId);
+}
 
 function getSelectablePlayersForSlot(slot) {
   const draft = getMatchPlayerDraft();
@@ -2662,9 +2680,12 @@ function renderPlayerSearchResults(slot, query = '') {
 }
 function assignPlayerToSlot(slot, playerId = '') {
   const draft = getMatchPlayerDraft();
-  const row = draft[slot] || { slot, team: 1, playerId: '', teeId: '' };
+  const playersPerTeam = Math.max(1, Number(document.getElementById('playersPerTeamSelect')?.value || 1));
+  const fallbackTeam = Number(document.querySelector(`[data-player-slot="${slot}"]`)?.dataset.slotTeam || document.querySelector(`[data-open-player-sheet="${slot}"]`)?.dataset.slotTeam || (Math.floor(Number(slot) / playersPerTeam) + 1)) || 1;
+  const row = draft[slot] || { slot, team: fallbackTeam, playerId: '', teeId: '' };
+  row.team = Number(row.team || fallbackTeam) || 1;
   row.playerId = playerId || '';
-  if (!row.teeId) row.teeId = document.getElementById('matchTeeSelect')?.value || '';
+  if (!row.teeId) row.teeId = document.getElementById('matchTeeSelect')?.value || getDefaultMatchTeeId() || '';
   draft[slot] = row;
   uiState.matchPlayerDraft = draft;
   syncReferenceTeeUi({ selections: draft });
@@ -3573,9 +3594,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const playersPerTeam = Number(fd.get('playersPerTeam')) || 1;
     if ((teamCount * playersPerTeam) > 32) return toast('Limit is 32 total players.');
     const teamNames = Array.from({ length: teamCount }, (_, i) => String(document.querySelector(`[data-team-name="${i + 1}"]`)?.value || `Team ${i + 1}`).slice(0, 25));
-    const selectedPlayers = Array.from(document.querySelectorAll('[data-player-slot]'))
-      .map((el, idx) => ({ playerId: el.value, team: Number(el.dataset.slotTeam), slot: idx, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '' }))
-      .filter(p => p.playerId);
+    const selectedPlayers = getSelectedPlayersFromSetup();
     const uniqueIds = new Set(selectedPlayers.map(p => p.playerId));
     if (selectedPlayers.length !== uniqueIds.size) return toast('Each player can only be selected once.');
     if (selectedPlayers.length < 1) return toast('Select at least 1 player.');

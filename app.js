@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v24.6';
+const APP_VERSION = 'v24.7';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2630,7 +2630,6 @@ function populateMatchPlayerPicker(selected = []) {
           <span class="player-card-label">${buttonLabel}</span>
           <span class="player-card-hint">${hasSavedPlayers ? (currentPlayer ? 'Change player' : 'Search saved players') : 'Add players on the Players tab'}</span>
         </button>
-        ${playerQuickSelect}
         ${teeSelect}
       </div>
     `;

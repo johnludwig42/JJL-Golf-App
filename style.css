@@ -589,6 +589,7 @@ body.keyboard-open .top-tabs{
 .print-round-meta{display:none}
 .print-round-title{font-size:24px;font-weight:800;line-height:1.15}
 .print-round-sub{margin-top:4px;color:var(--muted)}
+#leaderboardWrap{--summary-print-scale:1;--classic-print-scale:1;}
 
 @media print {
   @page { size: landscape; margin: 10mm; }
@@ -1360,17 +1361,56 @@ body.sheet-open{overflow:hidden}
 .picker-row--error{border:1px solid #c62828 !important;box-shadow:0 0 0 2px rgba(198,40,40,.14) !important;background:rgba(198,40,40,.04) !important;}
 
 @media print {
-  body.printing-scorecard.printing-summary .print-section-classic-scorecard,
-  body.printing-scorecard.printing-summary .print-section-nine-point{display:none !important;}
   body.printing-scorecard.printing-summary details.scoreboard-collapsible{display:block !important;}
   body.printing-scorecard.printing-summary details.scoreboard-collapsible > *{display:block !important;}
   body.printing-scorecard.printing-summary details.scoreboard-collapsible summary{display:none !important;}
+  body.printing-scorecard.printing-summary #leaderboardWrap{
+    transform:scale(var(--summary-print-scale,1));
+    transform-origin:top center;
+    width:calc(100% / var(--summary-print-scale,1));
+  }
+  body.printing-scorecard.printing-summary .scoreboard-card,
+  body.printing-scorecard.printing-summary .leader-table-wrap,
+  body.printing-scorecard.printing-summary .payout-table-wrap,
+  body.printing-scorecard.printing-summary .scorecard-wrap{
+    overflow:visible !important;
+    max-width:none !important;
+  }
+  body.printing-scorecard.printing-summary .scorecard-table,
+  body.printing-scorecard.printing-summary .leader-table,
+  body.printing-scorecard.printing-summary .payout-game-table,
+  body.printing-scorecard.printing-summary .settlement-table{
+    width:100% !important;
+    min-width:0 !important;
+    table-layout:auto;
+  }
   body.printing-scorecard.printing-classic-only .print-section-match-status,
   body.printing-scorecard.printing-classic-only .print-section-scoreboard-summary,
   body.printing-scorecard.printing-classic-only .print-section-momentum,
   body.printing-scorecard.printing-classic-only .print-section-payout,
   body.printing-scorecard.printing-classic-only .print-section-stat-tracking,
-  body.printing-scorecard.printing-classic-only .print-section-notes{display:none !important;}
+  body.printing-scorecard.printing-classic-only .print-section-notes,
+  body.printing-scorecard.printing-classic-only .print-section-nine-point{display:none !important;}
+  body.printing-scorecard.printing-classic-only #leaderboardWrap{display:block !important;}
+  body.printing-scorecard.printing-classic-only .print-section-classic-scorecard{
+    border:none !important;
+    box-shadow:none !important;
+    background:transparent !important;
+    padding:0 !important;
+    margin:0 !important;
+    min-height:var(--classic-print-height,auto);
+  }
+  body.printing-scorecard.printing-classic-only #classicScorecard{
+    transform:scale(var(--classic-print-scale,1));
+    transform-origin:top left;
+    width:calc(100% / var(--classic-print-scale,1));
+  }
+  body.printing-scorecard.printing-classic-only #classicScorecard .scorecard-wrap,
+  body.printing-scorecard.printing-classic-only #classicScorecard .scorecard-table{
+    overflow:visible !important;
+    width:100% !important;
+    min-width:0 !important;
+  }
 }
 
 
@@ -1404,3 +1444,18 @@ body.sheet-open{overflow:hidden}
 .stat-summary-list{display:grid;gap:8px}
 .stat-summary-list div{display:flex;justify-content:space-between;gap:12px;border-top:1px solid rgba(12,55,33,.08);padding-top:8px}
 @media (max-width: 900px){.stat-entry-grid,.stat-summary-grid{grid-template-columns:1fr}.stat-check-grid{grid-template-columns:1fr}}
+
+
+@media print and (max-width: 760px) {
+  @page { size: landscape !important; margin: 6mm !important; }
+  body.printing-scorecard .print-round-title{font-size:18px;}
+  body.printing-scorecard .print-round-sub{font-size:11px;}
+  body.printing-scorecard.printing-summary .scoreboard-card,
+  body.printing-scorecard.printing-summary .game-summary-card,
+  body.printing-scorecard.printing-summary .match-status-tile{padding:10px !important;}
+  body.printing-scorecard.printing-summary .scorecard-table,
+  body.printing-scorecard.printing-summary .leader-table,
+  body.printing-scorecard.printing-summary .payout-game-table,
+  body.printing-scorecard.printing-summary .settlement-table,
+  body.printing-scorecard.printing-classic-only .scorecard-table{font-size:9.5px !important;}
+}

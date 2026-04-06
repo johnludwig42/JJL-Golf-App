@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v24.3';
+const APP_VERSION = 'v24.5';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -767,6 +767,55 @@ function buildPrintMeta(match, metrics, printView = "summary") {
     <div class="print-round-sub">${escapeHtml(match?.date || todayIso())} · ${escapeHtml(courseName)} · ${escapeHtml(teeName)} · ${holeCount} holes</div>
     <div class="print-round-sub">${metrics ? `${metrics.completed}/${holeCount} holes completed` : 'Scorecard ready to print'}${match?.status === 'complete' ? ' · Final' : ' · Live'} · ${printView === 'scorecard' ? 'Classic scorecard only' : 'Full match summary'}<\/div>`;
 }
+function clearPrintScaling() {
+  const root = document.getElementById('leaderboardWrap');
+  const classicCard = document.querySelector('.print-section-classic-scorecard');
+  if (root) {
+    root.style.removeProperty('--summary-print-scale');
+    root.style.removeProperty('--classic-print-scale');
+  }
+  if (classicCard) classicCard.style.removeProperty('--classic-print-height');
+}
+function fitElementScale(element, maxWidth, maxHeight = null) {
+  if (!element || !maxWidth) return 1;
+  const width = Math.max(element.scrollWidth || 0, element.offsetWidth || 0, element.getBoundingClientRect?.().width || 0);
+  const height = Math.max(element.scrollHeight || 0, element.offsetHeight || 0, element.getBoundingClientRect?.().height || 0);
+  if (!width || !height) return 1;
+  const widthScale = Math.min(1, maxWidth / width);
+  const heightScale = maxHeight ? Math.min(1, maxHeight / height) : 1;
+  return Math.max(0.58, Math.min(widthScale, heightScale, 1));
+}
+function prepareScoreboardPrintLayout(printView = 'summary') {
+  const root = document.getElementById('leaderboardWrap');
+  const classicCard = document.querySelector('.print-section-classic-scorecard');
+  const classicScorecard = document.getElementById('classicScorecard');
+  const printableSummaryNodes = Array.from(document.querySelectorAll('#leaderboardWrap > .scoreboard-card:not(.scoreboard-export-card):not(.hidden)'));
+  clearPrintScaling();
+  if (!root) return;
+  const viewportWidth = Math.max(window.innerWidth || 0, document.documentElement?.clientWidth || 0, 1180);
+  const viewportHeight = Math.max(window.innerHeight || 0, document.documentElement?.clientHeight || 0, 720);
+  if (printView === 'scorecard') {
+    const maxWidth = Math.max(780, viewportWidth - 36);
+    const maxHeight = Math.max(420, viewportHeight - 80);
+    const scale = fitElementScale(classicScorecard, maxWidth, maxHeight);
+    root.style.setProperty('--classic-print-scale', String(scale));
+    if (classicCard && classicScorecard) {
+      const height = Math.ceil((classicScorecard.scrollHeight || classicScorecard.offsetHeight || 0) * scale);
+      if (height) classicCard.style.setProperty('--classic-print-height', `${height}px`);
+    }
+  } else {
+    const widest = printableSummaryNodes.reduce((max, node) => Math.max(max, node.scrollWidth || node.offsetWidth || 0), 0);
+    const maxWidth = Math.max(880, viewportWidth - 28);
+    const scale = widest ? fitElementScale({
+      scrollWidth: widest,
+      scrollHeight: root.scrollHeight || root.offsetHeight || viewportHeight,
+      offsetWidth: widest,
+      offsetHeight: root.scrollHeight || root.offsetHeight || viewportHeight,
+      getBoundingClientRect: () => ({ width: widest, height: root.scrollHeight || root.offsetHeight || viewportHeight })
+    }, maxWidth) : 1;
+    root.style.setProperty('--summary-print-scale', String(scale));
+  }
+}
 function openPrintScorecard(matchId, printView = null) {
   const match = getMatch(matchId || state.activeMatchId);
   if (!match) return toast('No round selected to print.');
@@ -791,13 +840,13 @@ function openPrintScorecard(matchId, printView = null) {
   renderLeaderboard();
   const detailsNodes = Array.from(document.querySelectorAll('#leaderboard details.scoreboard-collapsible'));
   const priorOpen = detailsNodes.map(node => node.open);
-  if (requestedView === 'summary') {
-    detailsNodes.forEach(node => { node.open = true; });
-  }
+  detailsNodes.forEach(node => { node.open = true; });
   document.body.classList.add('printing-scorecard');
   applyScoreboardPrintView(requestedView);
   renderAll();
   renderLeaderboard();
+  detailsNodes.forEach(node => { node.open = true; });
+  prepareScoreboardPrintLayout(requestedView);
   void document.body.offsetHeight;
   window.scrollTo(0, 0);
   const cleanup = () => {
@@ -805,6 +854,7 @@ function openPrintScorecard(matchId, printView = null) {
     document.body.removeAttribute('data-print-view');
     const root = document.getElementById('leaderboardWrap');
     if (root) root.removeAttribute('data-print-view');
+    clearPrintScaling();
     document.querySelectorAll('.print-preview-muted,.print-preview-emphasis').forEach(el => el.classList.remove('print-preview-muted','print-preview-emphasis'));
     if (printMeta) printMeta.classList.add('hidden');
     detailsNodes.forEach((node, idx) => { node.open = priorOpen[idx]; });
@@ -2669,6 +2719,25 @@ function refreshMatchSetupUi() {
   renderGamesPicker(collectSelectedGames());
   renderSetupHandicapPreview();
 }
+function updateMatchPlayerTee(slot, teeId = '') {
+  const normalizedSlot = Number(slot);
+  if (!Number.isFinite(normalizedSlot) || normalizedSlot < 0) return;
+  const fallbackTeam = Number(document.querySelector(`[data-player-slot="${normalizedSlot}"]`)?.dataset.slotTeam || document.querySelector(`[data-open-player-sheet="${normalizedSlot}"]`)?.dataset.slotTeam || 1) || 1;
+  const draft = syncMatchPlayerDraft(getCurrentMatchEditorSelectionsSnapshot());
+  const row = draft[normalizedSlot] || { slot: normalizedSlot, team: fallbackTeam, playerId: '', teeId: '' };
+  row.slot = normalizedSlot;
+  row.team = Number(row.team || fallbackTeam) || 1;
+  row.playerId = String(row.playerId || document.querySelector(`[data-player-slot="${normalizedSlot}"]`)?.value || '');
+  row.teeId = String(teeId || '');
+  draft[normalizedSlot] = row;
+  uiState.matchPlayerDraft = normalizeDraftTeeAssignments({ selections: draft, forceDefault: false });
+  const refStats = getReferenceTeeStats(null, uiState.matchPlayerDraft);
+  if (!refStats.showReferenceSelector) uiState.referenceTeeManual = false;
+  syncReferenceTeeUi({ selections: uiState.matchPlayerDraft, forceAuto: !uiState.referenceTeeManual });
+  document.querySelector(`[data-player-tee-slot="${normalizedSlot}"]`)?.closest('.picker-row')?.classList.remove('picker-row--error');
+  renderGamesPicker(collectSelectedGames());
+  renderSetupHandicapPreview();
+}
 
 function openPlayerSearchSheet(slot) {
   const sheet = document.getElementById('playerSearchSheet');
@@ -3458,22 +3527,17 @@ function installHandlers() {
       openPlayerSearchSheet(Number(trigger.dataset.openPlayerSheet));
     }
   });
-  document.getElementById('matchPlayersPicker').addEventListener('change', e => {
+  const handleMatchPlayersPickerSelectionChange = e => {
     if (e.target.matches('[data-player-select-slot]')) {
       assignPlayerToSlot(Number(e.target.dataset.playerSelectSlot), e.target.value || '');
       return;
     }
     if (e.target.matches('[data-player-tee-slot]')) {
-      const slot = Number(e.target.dataset.playerTeeSlot);
-      const draft = getMatchPlayerDraft();
-      if (Number.isFinite(slot) && draft[slot]) draft[slot].teeId = e.target.value || '';
-      uiState.matchPlayerDraft = draft;
-      const refStats = getReferenceTeeStats(null, draft);
-      if (!refStats.showReferenceSelector) uiState.referenceTeeManual = false;
-      e.target.closest('.picker-row')?.classList.remove('picker-row--error');
-      refreshMatchSetupUi();
+      updateMatchPlayerTee(Number(e.target.dataset.playerTeeSlot), e.target.value || '');
     }
-  });
+  };
+  document.getElementById('matchPlayersPicker').addEventListener('change', handleMatchPlayersPickerSelectionChange);
+  document.getElementById('matchPlayersPicker').addEventListener('input', handleMatchPlayersPickerSelectionChange);
   document.getElementById('playerSearchInput').addEventListener('input', e => {
     const sheet = document.getElementById('playerSearchSheet');
     const slot = Number(sheet?.dataset.slot || -1);

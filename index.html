@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>The Dye Ledger</title>
   <meta name="theme-color" content="#0b5d3b" />
-  <link rel="manifest" href="manifest.json?v=24.7" />
+  <link rel="manifest" href="manifest.json?v=24.9" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
   <link rel="shortcut icon" href="./favicon-32x32.png" />
@@ -522,11 +522,16 @@
         <h2>App notes</h2>
         <ul class="tight-list">
           <li>Courses and tees stay manual and editable.</li>
+          <li>Audited Team Stroke Play scoring so aggregate net stroke play resolves correctly across the Scoreboard, Games Summary, and Net Payout.</li>
+          <li>Team Stroke Play now defaults to Aggregate scoring, while Best Team Ball remains available as an option.</li>
+          <li>Fixed Game Setup handicap preview so all golfers and their handicap tees reappear correctly when editing a match.</li>
+          <li>Removed a stale Game Setup player-slot render reference that could suppress the player / tee selection block.</li>
           <li>Improved Print / Save PDF formatting so Match Summary expands all sections before printing and scales more cleanly on desktop and iPhone.</li>
           <li>Classic Scorecard only print now renders as a standalone scorecard and scales to fit the page more reliably in landscape.</li>
           <li>Fixed a Game Setup selector regression so Course select and Player select work correctly again after recent slot-render updates.</li>
           <li>Removed the duplicate second player selector in Game Setup so the tap-to-select player card remains the only player picker, while keeping the per-player handicap tee selector unchanged.</li>
           <li>Improved stat tracking on iPhone so the Fairway Hit option reliably appears on scoring input for par 4 and par 5 holes.</li>
+          <li>Scoreboard Team Stroke Play now shows the selected event using actual stroke totals and winning margin instead of match-play style status.</li>
           <li>Leaderboard highlights player totals, team totals, match play, skins, and side matches.</li>
           <li>Match setup now keeps all player tee selectors synchronized across desktop and mobile for up to 8 teams of 4.</li>
           <li>Print / Save PDF controls now stay synchronized with the currently selected export view.</li>
@@ -535,7 +540,7 @@
           <li>Added optional per-hole stat tracking (fairways, GIR, putts, up &amp; downs, sandies).</li>
           <li>Reordered the Scoreboard layout and moved Notes from More to Scoreboard.</li>
           <li>Fixed the Game Setup player assignment flow so team slots save correctly and matches can be created reliably again.</li>
-          <li>App version: <strong id="appVersionLabel">v24.7</strong></li>
+          <li>App version: <strong id="appVersionLabel">v24.9</strong></li>
         </ul>
       </div>
     </section>

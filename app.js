@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v24.8';
+const APP_VERSION = 'v24.9';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -615,6 +615,28 @@ function getTeamStrokeStanding(metrics, basis = 'net', scoringMode = 'best_ball'
   const best = Math.min(...valid.map(t => t.total));
   const winners = valid.filter(t => t.total === best);
   return { winner: winners.length === 1 ? winners[0].team : null, totals: byTeam, tie: winners.length !== 1 };
+}
+
+function getTeamStrokeScoreboardData(match, metrics, cfg = {}) {
+  const basis = String(cfg?.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net';
+  const scoringMode = resolveTeamStrokeScoringMode(cfg?.scoringMode);
+  const rows = (metrics?.teams || []).map(teamRef => {
+    let total;
+    if (scoringMode === 'aggregate') total = basis === 'gross' ? teamRef.grossTotal : teamRef.netTotal;
+    else {
+      total = (metrics?.holeResults || []).reduce((sum, holeResult) => {
+        if (!holeResult?.completed) return sum;
+        const value = getTeamHoleScore(holeResult, teamRef.team, basis, scoringMode);
+        return sum + (Number.isFinite(value) ? value : 0);
+      }, 0);
+    }
+    return { team: teamRef.team, total: Number.isFinite(total) ? total : null };
+  }).filter(row => Number.isFinite(row.total)).sort((a, b) => a.total - b.total || a.team - b.team);
+  const leader = rows[0] || null;
+  const runnerUp = rows[1] || null;
+  const tie = !!leader && !!runnerUp && leader.total === runnerUp.total;
+  const margin = leader && runnerUp && !tie ? runnerUp.total - leader.total : 0;
+  return { basis, scoringMode, rows, leader, runnerUp, tie, margin };
 }
 function computeSkinResults(match, metrics, cfg = {}) {
   const basis = String(cfg.basis || 'net').toLowerCase();
@@ -1334,7 +1356,23 @@ function buildFeaturedMatchStatus(match, metrics, gameKey) {
   const cfg = (match.selectedGames || []).find(g => g.key === gameKey) || {};
   const title = getFeaturedGameLabel(match, gameKey);
   const courseLine = `${escapeHtml(metrics?.course?.name || 'No course')} · ${escapeHtml(metrics?.tee?.teeName || 'No tee')}`;
-  if (['nassau', 'team_match', 'team_stroke'].includes(gameKey) && metrics.teams.length === 2) {
+  if (gameKey === 'team_stroke' && metrics.teams.length >= 2) {
+    const stroke = getTeamStrokeScoreboardData(match, metrics, cfg);
+    const items = stroke.rows.length
+      ? stroke.rows.slice(0, 2).map(row => ({
+          label: `${getTeamLabel(match, row.team)} (${formatBasisLabel(stroke.basis)} · ${formatScoringModeLabel(stroke.scoringMode)})`,
+          value: `${row.total}`,
+        }))
+      : [{ label: 'Status', value: 'No scores yet' }];
+    const resultText = !stroke.leader
+      ? 'No scores yet'
+      : stroke.tie
+        ? `Tied at ${stroke.leader.total}`
+        : `${describeTeamLabel(match, stroke.leader.team, metrics)} by ${stroke.margin} stroke${stroke.margin === 1 ? '' : 's'}`;
+    items.push({ label: 'Result', value: resultText });
+    return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid">${items.map(item => `<div class="match-status-tile"><div class="tiny">${escapeHtml(item.label)}</div><div class="match-status-value">${escapeHtml(item.value)}</div></div>`).join('')}</div>`;
+  }
+  if (['nassau', 'team_match'].includes(gameKey) && metrics.teams.length === 2) {
     const diffs = computeTeamGameDiffs(match, metrics, gameKey);
     const holeCount = getPlayableHoleCount(match, metrics.tee);
     const overallTeam = formatTeamGameStatus(match, metrics, diffs.overall);
@@ -2255,18 +2293,11 @@ function buildSelectedGamesSummary(match, metrics) {
       value = formatTeamGameStatus(match, metrics, diffs.overall);
       sub = getPlayableHoleCount(match, metrics.tee) <= 9 ? `Format: ${getHoleSegmentLabel(match, metrics.tee)}` : `Front 9: ${formatTeamGameStatus(match, metrics, diffs.front)} · Back 9: ${formatTeamGameStatus(match, metrics, diffs.back)}`;
     } else if (cfg.key === 'team_stroke') {
-      const basisKey = String(cfg.basis || 'net').toLowerCase() === 'gross' ? 'toPar' : 'netDiff';
-      const mode = resolveTeamStrokeScoringMode(cfg.scoringMode);
-      const scoredTeams = metrics.teams.map(t => {
-        let value;
-        if (mode === 'aggregate') value = basisKey === 'toPar' ? t.toPar : t.netDiff;
-        else {
-          value = (metrics.holeResults || []).reduce((sum,h) => { const v = getTeamHoleScore(h, t.team, cfg.basis, mode); const par = Number(h.par)||0; return sum + (Number.isFinite(v) ? v - par : 0); }, 0);
-        }
-        return { team:t.team, value };
-      }).sort((a,b)=>a.value-b.value);
-      value = scoredTeams[0] ? `${describeTeamLabel(match, scoredTeams[0].team, metrics)} (${formatSigned(scoredTeams[0].value)})` : '—';
-      sub = `Mode: ${formatScoringModeLabel(cfg.scoringMode)} · ${formatBasisLabel(cfg.basis)}`;
+      const stroke = getTeamStrokeScoreboardData(match, metrics, cfg);
+      value = stroke.leader ? `${describeTeamLabel(match, stroke.leader.team, metrics)} (${stroke.leader.total})` : '—';
+      if (!stroke.leader) sub = `Mode: ${formatScoringModeLabel(cfg.scoringMode)} · ${formatBasisLabel(cfg.basis)}`;
+      else if (stroke.tie) sub = `Tied at ${stroke.leader.total} · ${formatBasisLabel(stroke.basis)} · ${formatScoringModeLabel(stroke.scoringMode)}`;
+      else sub = `${describeTeamLabel(match, stroke.leader.team, metrics)} by ${stroke.margin} stroke${stroke.margin === 1 ? '' : 's'} · ${formatBasisLabel(stroke.basis)} · ${formatScoringModeLabel(stroke.scoringMode)}`;
     } else if (cfg.key === 'individual_match') {
       const pairings = getIndividualMatchPairings(match, metrics);
       if (!pairings.length) {

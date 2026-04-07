@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v24.7';
+const APP_VERSION = 'v24.8';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -285,6 +285,9 @@ function formatBasisLabel(basis, fallback = 'Net') {
 }
 function formatScoringModeLabel(mode) {
   return mode === 'aggregate' ? 'Aggregate' : 'Best Ball';
+}
+function resolveTeamStrokeScoringMode(mode) {
+  return String(mode || 'aggregate').toLowerCase() === 'best_ball' ? 'best_ball' : 'aggregate';
 }
 function getDefaultFeaturedGameKey(selectedGames = []) {
   const ordered = normalizeSelectedGamesOrder(Array.isArray(selectedGames) ? selectedGames : []);
@@ -1128,9 +1131,17 @@ function renderSetupHandicapPreview() {
   let teeId = document.getElementById('matchTeeSelect')?.value || '';
   const allowance = Number(document.querySelector('#matchForm [name="allowance"]')?.value || 100) || 100;
   const teamNames = Array.from(document.querySelectorAll('[data-team-name]')).map(el => el.value || '');
-  const selected = Array.from(document.querySelectorAll('[data-player-slot]'))
-    .map((el, idx) => ({ playerId: el.value || '', team: Number(el.dataset.slotTeam) || 1, slot: idx, teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || teeId || '' }))
-    .filter(p => p.playerId);
+  const draftSelections = Array.isArray(uiState.matchPlayerDraft) ? uiState.matchPlayerDraft : [];
+  const selected = Array.from({ length: Math.max(document.querySelectorAll('[data-player-slot]').length, draftSelections.length) }, (_, idx) => {
+    const draftRow = draftSelections.find(row => Number(row?.slot) === idx) || draftSelections[idx] || {};
+    const slotEl = document.querySelector(`[data-player-slot="${idx}"]`);
+    return {
+      playerId: String(slotEl?.value || draftRow.playerId || ''),
+      team: Number(slotEl?.dataset.slotTeam || draftRow.team || 1) || 1,
+      slot: idx,
+      teeId: String(document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || draftRow.teeId || teeId || ''),
+    };
+  }).filter(p => p.playerId);
   const fallbackMatch = editingMatchId ? getMatch(editingMatchId) : getActiveMatch();
   if ((!courseId || !selected.length) && fallbackMatch) {
     courseId = courseId || fallbackMatch.courseId || '';
@@ -2039,7 +2050,7 @@ function computeMomentumOutcome(match, metrics, holeResult, gameKey) {
   const config = (match.selectedGames || []).find(g => g.key === gameKey) || {};
   if (gameKey === 'team_stroke') {
     const basis = String(config.basis || 'net').toLowerCase();
-    const mode = String(config.scoringMode || 'best_ball').toLowerCase();
+    const mode = resolveTeamStrokeScoringMode(config.scoringMode);
     const t1 = getTeamHoleScore(holeResult, 1, basis, mode);
     const t2 = getTeamHoleScore(holeResult, 2, basis, mode);
     return getHeadToHeadOutcome(t1, t2);
@@ -2137,7 +2148,7 @@ function computeLivePayoutGames(match, metrics) {
     if (cfg.key === 'team_stroke' && metrics.teams.length >= 2) {
       const amounts = {};
       const stake = Number(cfg.stake || 0);
-      const standing = getTeamStrokeStanding(metrics, String(cfg.basis || 'net').toLowerCase(), String(cfg.scoringMode || 'best_ball').toLowerCase());
+      const standing = getTeamStrokeStanding(metrics, String(cfg.basis || 'net').toLowerCase(), resolveTeamStrokeScoringMode(cfg.scoringMode));
       if (stake && standing.winner) {
         const losers = metrics.teams.filter(t => t.team !== standing.winner).map(t => t.team);
         transferTeamStakePerPerson(amounts, standing.winner, losers, stake);
@@ -2245,7 +2256,7 @@ function buildSelectedGamesSummary(match, metrics) {
       sub = getPlayableHoleCount(match, metrics.tee) <= 9 ? `Format: ${getHoleSegmentLabel(match, metrics.tee)}` : `Front 9: ${formatTeamGameStatus(match, metrics, diffs.front)} · Back 9: ${formatTeamGameStatus(match, metrics, diffs.back)}`;
     } else if (cfg.key === 'team_stroke') {
       const basisKey = String(cfg.basis || 'net').toLowerCase() === 'gross' ? 'toPar' : 'netDiff';
-      const mode = String(cfg.scoringMode || 'best_ball');
+      const mode = resolveTeamStrokeScoringMode(cfg.scoringMode);
       const scoredTeams = metrics.teams.map(t => {
         let value;
         if (mode === 'aggregate') value = basisKey === 'toPar' ? t.toPar : t.netDiff;
@@ -2657,7 +2668,7 @@ function getDefaultGameConfigs() {
     { key: 'nassau', basis: 'net', stakesFront: 5, stakesBack: 5, stakesOverall: 5 },
     { key: 'individual_match', matchups: [] },
     { key: 'team_match', basis: 'net', stake: 5 },
-    { key: 'team_stroke', basis: 'net', scoringMode: 'best_ball', stake: 5 },
+    { key: 'team_stroke', basis: 'net', scoringMode: 'aggregate', stake: 5 },
     { key: 'skins', basis: 'net', skinsType: 'individual', stake: 5 },
     { key: 'greenies', stakePerPlayer: 1, participants: [] },
     { key: 'nine_point', basis: 'net', stakePerPoint: 1, playerIds: [] },
@@ -2884,8 +2895,8 @@ function renderGamesPicker(existing = []) {
             <option value="net" ${cfg.basis === 'net' ? 'selected' : ''}>Net</option>
           </select></label>
           <label><span>Team score</span><select data-game-config="${game.key}" data-field="scoringMode">
-            <option value="best_ball" ${cfg.scoringMode === 'best_ball' ? 'selected' : ''}>Best Team Ball</option>
-            <option value="aggregate" ${cfg.scoringMode === 'aggregate' ? 'selected' : ''}>Aggregate</option>
+            <option value="aggregate" ${resolveTeamStrokeScoringMode(cfg.scoringMode) === 'aggregate' ? 'selected' : ''}>Aggregate</option>
+            <option value="best_ball" ${resolveTeamStrokeScoringMode(cfg.scoringMode) === 'best_ball' ? 'selected' : ''}>Best Team Ball</option>
           </select></label>
           <label><span>$ Stake</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stake" value="${cfg.stake ?? 5}" /></label>
         </div>
@@ -3286,6 +3297,7 @@ function loadMatchEditor(matchId = null) {
     uiState.referenceTeeAutoId = '';
     populateMatchPlayerPicker([]);
     renderGamesPicker([]);
+    renderSetupHandicapPreview();
     return;
   }
   const match = getMatch(matchId); if (!match) return;
@@ -3311,6 +3323,7 @@ function loadMatchEditor(matchId = null) {
   uiState.referenceTeeManual = !!(match.teeId && document.getElementById('matchTeeSelect')?.value === match.teeId);
   populateMatchPlayerPicker(uiState.matchPlayerDraft);
   renderGamesPicker(match.selectedGames || []);
+  renderSetupHandicapPreview();
   window.scrollTo({ top: document.getElementById('matchFormTitle').getBoundingClientRect().top + window.scrollY - 20, behavior: 'smooth' });
 }
 

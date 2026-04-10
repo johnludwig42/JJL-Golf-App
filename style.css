@@ -2049,3 +2049,178 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
   #leaderboard .payout-section-team .team-payout-split,
   #leaderboard .payout-section-team .team-payout-mobile-cards{display:none !important;}
 }
+
+/* v26.12 precision alignment for team payout + responsive settlement */
+#leaderboard .payout-section-team .team-payout-split{
+  --team-payout-player-col-width:148px;
+  --team-payout-game-col-width:108px;
+  --team-payout-total-col-width:114px;
+  grid-template-columns:var(--team-payout-player-col-width) minmax(0,1fr);
+}
+#leaderboard .payout-section-team .team-payout-fixed-pane,
+#leaderboard .payout-section-team .team-payout-fixed-table,
+#leaderboard .payout-section-team .team-payout-fixed-table .payout-player-col,
+#leaderboard .payout-section-team .team-payout-fixed-table col.team-payout-col-player-desktop{
+  width:var(--team-payout-player-col-width);
+  min-width:var(--team-payout-player-col-width);
+  max-width:var(--team-payout-player-col-width);
+}
+#leaderboard .payout-section-team .payout-game-table-team col.team-payout-col-game-desktop{
+  width:var(--team-payout-game-col-width);
+  min-width:var(--team-payout-game-col-width);
+}
+#leaderboard .payout-section-team .payout-game-table-team col.team-payout-col-total-desktop{
+  width:var(--team-payout-total-col-width);
+  min-width:var(--team-payout-total-col-width);
+}
+#leaderboard .payout-section-team .team-payout-fixed-table,
+#leaderboard .payout-section-team .payout-game-table-team{
+  table-layout:fixed !important;
+}
+#leaderboard .payout-section-team .team-payout-fixed-table th,
+#leaderboard .payout-section-team .team-payout-fixed-table td,
+#leaderboard .payout-section-team .payout-game-table-team th,
+#leaderboard .payout-section-team .payout-game-table-team td{
+  padding:10px 12px !important;
+  line-height:1.25 !important;
+  vertical-align:middle !important;
+  box-sizing:border-box;
+  white-space:nowrap;
+}
+#leaderboard .payout-section-team .team-payout-fixed-table th,
+#leaderboard .payout-section-team .payout-game-table-team th{
+  text-align:center;
+}
+#leaderboard .payout-section-team .team-payout-fixed-table th.payout-player-col,
+#leaderboard .payout-section-team .team-payout-fixed-table td.payout-player-col{
+  text-align:left;
+}
+#leaderboard .payout-section-team .payout-game-table-team td,
+#leaderboard .payout-section-team .payout-game-table-team tfoot td{ text-align:right; }
+#leaderboard .payout-section-team .payout-game-table-team thead th:last-child,
+#leaderboard .payout-section-team .payout-game-table-team tbody td:last-child,
+#leaderboard .payout-section-team .payout-game-table-team tfoot td:last-child{
+  background:#f8fafc;
+  font-weight:800;
+}
+#leaderboard .team-payout-mobile-matrix{
+  --team-payout-mobile-player-col-width:118px;
+  --team-payout-mobile-game-col-width:88px;
+  --team-payout-mobile-total-col-width:92px;
+  gap:8px;
+}
+#leaderboard .team-payout-mobile-wrap{padding-bottom:6px;}
+#leaderboard .team-payout-mobile-table{
+  min-width:calc(var(--team-payout-mobile-player-col-width) + var(--team-payout-mobile-total-col-width) + (var(--team-payout-mobile-game-col-width) * 2));
+  width:100%;
+  table-layout:fixed;
+  border-collapse:separate;
+  border-spacing:0;
+}
+#leaderboard .team-payout-mobile-table col.team-payout-col-player{width:var(--team-payout-mobile-player-col-width);}
+#leaderboard .team-payout-mobile-table col.team-payout-col-game{width:var(--team-payout-mobile-game-col-width);}
+#leaderboard .team-payout-mobile-table col.team-payout-col-total{width:var(--team-payout-mobile-total-col-width);}
+#leaderboard .team-payout-mobile-table th,
+#leaderboard .team-payout-mobile-table td{
+  padding:9px 10px;
+  line-height:1.2;
+  white-space:nowrap;
+  box-sizing:border-box;
+  vertical-align:middle;
+}
+#leaderboard .team-payout-mobile-player-head,
+#leaderboard .team-payout-mobile-player-cell{
+  min-width:var(--team-payout-mobile-player-col-width);
+  max-width:var(--team-payout-mobile-player-col-width);
+  width:var(--team-payout-mobile-player-col-width);
+  text-align:left;
+}
+#leaderboard .team-payout-mobile-game-head,
+#leaderboard .team-payout-mobile-game-cell{ text-align:right; }
+#leaderboard .team-payout-mobile-total-head,
+#leaderboard .team-payout-mobile-total-cell{
+  min-width:var(--team-payout-mobile-total-col-width);
+  max-width:var(--team-payout-mobile-total-col-width);
+  width:var(--team-payout-mobile-total-col-width);
+  text-align:right;
+}
+#leaderboard .team-payout-mobile-table thead th{
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:0;
+  line-height:1.1;
+}
+#leaderboard .team-payout-header-button{
+  display:block;
+  width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  text-align:right;
+}
+#leaderboard .team-payout-mobile-player-head{z-index:5;}
+#leaderboard .team-payout-mobile-player-cell strong{
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+#leaderboard .team-payout-window-chips{align-items:center;}
+#leaderboard .team-payout-window-chip{min-height:30px;display:inline-flex;align-items:center;justify-content:center;}
+#leaderboard .team-payout-mobile-legend{
+  min-height:20px;
+  padding:0 2px 2px;
+  font-size:11px;
+}
+#leaderboard .settlement-table-responsive{
+  width:100%;
+  min-width:0 !important;
+  table-layout:fixed;
+  border-collapse:separate;
+  border-spacing:0;
+}
+#leaderboard .settlement-table-responsive col.settlement-col-from{width:35%;}
+#leaderboard .settlement-table-responsive col.settlement-col-to{width:35%;}
+#leaderboard .settlement-table-responsive col.settlement-col-amount{width:30%;}
+#leaderboard .settlement-table-responsive th,
+#leaderboard .settlement-table-responsive td{
+  padding:10px 12px;
+  vertical-align:middle;
+  box-sizing:border-box;
+}
+#leaderboard .settlement-table-responsive thead th:nth-child(3),
+#leaderboard .settlement-table-responsive tbody td:nth-child(3){text-align:right;}
+#leaderboard .settlement-table-responsive .settlement-name{
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+#leaderboard .settlement-table-wrap{max-width:100%;}
+@media (max-width:760px){
+  #leaderboard .payout-section-team .team-payout-split{
+    --team-payout-player-col-width:132px;
+    --team-payout-game-col-width:96px;
+    --team-payout-total-col-width:104px;
+  }
+  #leaderboard .team-payout-mobile-matrix{
+    --team-payout-mobile-player-col-width:116px;
+    --team-payout-mobile-game-col-width:86px;
+    --team-payout-mobile-total-col-width:92px;
+  }
+  #leaderboard .settlement-table,
+  #leaderboard .settlement-table-responsive{
+    min-width:0 !important;
+    width:100% !important;
+  }
+  #leaderboard .settlement-table th:first-child,
+  #leaderboard .settlement-table td:first-child{
+    position:static !important;
+    left:auto !important;
+    box-shadow:none !important;
+  }
+  #leaderboard .settlement-table-responsive th,
+  #leaderboard .settlement-table-responsive td{
+    padding:9px 10px;
+    font-size:12px;
+  }
+}

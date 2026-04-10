@@ -2247,14 +2247,14 @@ function getTeamPayoutMobileWindowSize() {
 function shortenTeamPayoutGameLabel(label, index, used = new Set()) {
   const original = String(label || '').trim() || `Game ${index + 1}`;
   let short = original
-    .replace(/Nassau\s*\((front|back|overall)\)/i, (_, part) => `Nassau ${part.charAt(0).toUpperCase()}`)
-    .replace(/Front/i, 'F')
-    .replace(/Back/i, 'B')
-    .replace(/Overall/i, 'Ov')
-    .replace(/Best Ball/i, 'BB')
-    .replace(/Match Play/i, 'Match')
-    .replace(/Stroke Play/i, 'Stroke')
-    .replace(/Contest/i, '')
+    .replace(/Nassau\s*\((front|back|overall)\)/i, (_, part) => `Nassau ${part.charAt(0).toUpperCase()}`)
+    .replace(/\bFront\b/i, 'F')
+    .replace(/\bBack\b/i, 'B')
+    .replace(/\bOverall\b/i, 'Ov')
+    .replace(/\bBest Ball\b/i, 'BB')
+    .replace(/\bMatch Play\b/i, 'Match')
+    .replace(/\bStroke Play\b/i, 'Stroke')
+    .replace(/\bContest\b/i, '')
     .replace(/\s+/g, ' ')
     .trim();
   if (short.length > 12) short = short.slice(0, 11).trimEnd();
@@ -2298,14 +2298,14 @@ function buildTeamPayoutMobileMatrix(match, section, players, totals) {
   }).join('');
   const headerCells = visibleGames.map(game => {
     const isOpen = legendKey === game.mobileKey;
-    return `<th><button type="button" class="team-payout-header-button ${isOpen ? 'active' : ''}" data-team-payout-header-full="${escapeHtml(game.mobileLabel.full)}" data-team-payout-header-key="${game.mobileKey}" aria-expanded="${isOpen ? 'true' : 'false'}">${escapeHtml(game.mobileLabel.short)}</button></th>`;
+    return `<th class="team-payout-mobile-game-head"><button type="button" class="team-payout-header-button ${isOpen ? 'active' : ''}" data-team-payout-header-full="${escapeHtml(game.mobileLabel.full)}" data-team-payout-header-key="${game.mobileKey}" aria-expanded="${isOpen ? 'true' : 'false'}">${escapeHtml(game.mobileLabel.short)}</button></th>`;
   }).join('');
   const bodyRows = players.map(player => {
     const gameCells = visibleGames.map(game => {
       const amount = game.amounts[player.id] || 0;
       const cls = amount > 0.0001 ? 'payout-total-positive' : amount < -0.0001 ? 'payout-total-negative' : '';
       const text = Math.abs(amount) > 0.0001 ? formatMoneyAccounting(amount) : '—';
-      return `<td class="${cls}">${text}</td>`;
+      return `<td class="team-payout-mobile-game-cell ${cls}">${text}</td>`;
     }).join('');
     const total = totals[player.id] || 0;
     const totalCls = total > 0.0001 ? 'payout-total-positive' : total < -0.0001 ? 'payout-total-negative' : '';
@@ -2315,9 +2315,10 @@ function buildTeamPayoutMobileMatrix(match, section, players, totals) {
   const columnFoot = visibleGames.map(game => {
     const colTotal = players.reduce((sum, player) => sum + (game.amounts[player.id] || 0), 0);
     const cls = Math.abs(colTotal) <= 0.0001 ? '' : (colTotal > 0 ? 'payout-total-positive' : 'payout-total-negative');
-    return `<td class="${cls}"><strong>${formatMoneyAccounting(colTotal)}</strong></td>`;
+    return `<td class="team-payout-mobile-game-cell ${cls}"><strong>${formatMoneyAccounting(colTotal)}</strong></td>`;
   }).join('');
   const overallTotal = players.reduce((sum, player) => sum + (totals[player.id] || 0), 0);
+  const colgroup = `<colgroup><col class="team-payout-col-player">${visibleGames.map(() => '<col class="team-payout-col-game">').join('')}<col class="team-payout-col-total"></colgroup>`;
   return `
     <div class="team-payout-mobile-matrix" data-team-payout-mobile>
       <div class="team-payout-mobile-topline">
@@ -2327,11 +2328,35 @@ function buildTeamPayoutMobileMatrix(match, section, players, totals) {
       <div class="team-payout-mobile-legend ${legendGame ? 'is-open' : ''}" aria-live="polite">${legendText}</div>
       <div class="payout-table-wrap team-payout-mobile-wrap">
         <table class="payout-game-table team-payout-mobile-table">
+          ${colgroup}
           <thead><tr><th class="team-payout-mobile-player-head">Player</th>${headerCells}<th class="team-payout-mobile-total-head">Total</th></tr></thead>
           <tbody>${bodyRows}</tbody>
           <tfoot><tr><th scope="row" class="team-payout-mobile-player-cell"><strong>Total</strong></th>${columnFoot}<td class="team-payout-mobile-total-cell"><strong>${formatMoneyAccounting(overallTotal)}</strong></td></tr></tfoot>
         </table>
       </div>
+    </div>`;
+}
+
+function buildResponsiveSettlementTable(settlements) {
+  const rows = settlements.length
+    ? settlements.map(row => `
+      <tr>
+        <td class="settlement-from-cell"><span class="settlement-name">${escapeHtml(getPlayer(row.from)?.name || 'Unknown')}</span></td>
+        <td class="settlement-to-cell"><span class="settlement-name">${escapeHtml(getPlayer(row.to)?.name || 'Unknown')}</span></td>
+        <td class="settlement-amount-cell"><strong>${formatMoneyAccounting(row.amount)}</strong></td>
+      </tr>`).join('')
+    : '<tr><td colspan="3">No payouts due right now.</td></tr>';
+  return `
+    <div class="payout-table-wrap top-gap settlement-table-wrap">
+      <table class="settlement-table settlement-table-responsive">
+        <colgroup>
+          <col class="settlement-col-from">
+          <col class="settlement-col-to">
+          <col class="settlement-col-amount">
+        </colgroup>
+        <thead><tr><th>From</th><th>To</th><th>Amount</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
     </div>`;
 }
 
@@ -2372,9 +2397,7 @@ function buildNetPayoutSummary(match, metrics) {
     }).join('');
     const overallTotal = players.reduce((sum, player) => sum + (totals[player.id] || 0), 0);
     const settlements = optimalSettlementRows(totals);
-    const settlementRows = settlements.length
-      ? settlements.map(row => `<tr><td>${escapeHtml(getPlayer(row.from)?.name || 'Unknown')}</td><td>${escapeHtml(getPlayer(row.to)?.name || 'Unknown')}</td><td><strong>${formatMoneyAccounting(row.amount)}</strong></td></tr>`).join('')
-      : '<tr><td colspan="3">No payouts due right now.</td></tr>';
+    const settlementTableHtml = buildResponsiveSettlementTable(settlements);
     const useMobileTeamCards = section.key === 'team' && isCompactTeamPayoutViewport();
     const payoutTableHtml = section.key === 'team'
       ? (useMobileTeamCards
@@ -2383,6 +2406,7 @@ function buildNetPayoutSummary(match, metrics) {
         <div class="team-payout-split" role="group" aria-label="${escapeHtml(section.title)}">
           <div class="team-payout-fixed-pane">
             <table class="payout-game-table payout-game-table-fixed team-payout-fixed-table" aria-hidden="true">
+              <colgroup><col class="team-payout-col-player-desktop"></colgroup>
               <thead><tr><th class="payout-player-col">Player</th></tr></thead>
               <tbody>${playerRows}</tbody>
               <tfoot><tr><td class="payout-player-col"><strong>Total</strong></td></tr></tfoot>
@@ -2390,6 +2414,7 @@ function buildNetPayoutSummary(match, metrics) {
           </div>
           <div class="team-payout-scroll-pane payout-table-wrap payout-table-wrap-team">
             <table class="payout-game-table payout-game-table-wide payout-game-table-${section.key}">
+              <colgroup>${section.games.map(() => '<col class="team-payout-col-game-desktop">').join('')}<col class="team-payout-col-total-desktop"></colgroup>
               <thead><tr>${headerCells}<th>Total</th></tr></thead>
               <tbody>${valueRows}</tbody>
               <tfoot><tr>${columnFoot}<td><strong>${formatMoneyAccounting(overallTotal)}</strong></td></tr></tfoot>
@@ -2420,12 +2445,7 @@ function buildNetPayoutSummary(match, metrics) {
         <div class="payout-summary-intro"><strong>${escapeHtml(section.title)}:</strong> ${escapeHtml(section.intro)}</div>
         ${payoutTableHtml}
         <div class="top-gap payout-settlement-head"><strong>${escapeHtml(section.title)} settlement</strong></div>
-        <div class="payout-table-wrap top-gap">
-          <table class="settlement-table">
-            <thead><tr><th>From</th><th>To</th><th>Amount</th></tr></thead>
-            <tbody>${settlementRows}</tbody>
-          </table>
-        </div>
+${settlementTableHtml}
       </div>`;
   };
 
@@ -2648,6 +2668,7 @@ function renderLeaderboard() {
   }
   if (payoutSummary) {
     payoutSummary.innerHTML = buildNetPayoutSummary(match, metrics);
+    scheduleTeamPayoutSplitPaneSync();
   }
 }
 
@@ -2661,18 +2682,31 @@ function syncTeamPayoutSplitPane(root = document) {
     const leftRows = Array.from(leftTable.querySelectorAll('thead tr, tbody tr, tfoot tr'));
     const rightRows = Array.from(rightTable.querySelectorAll('thead tr, tbody tr, tfoot tr'));
     if (!leftRows.length || leftRows.length !== rightRows.length) return;
+    group.style.setProperty('--team-payout-player-col-width', `${Math.round(leftTable.getBoundingClientRect().width || 148)}px`);
     leftRows.forEach(row => row.style.height = '');
     rightRows.forEach(row => row.style.height = '');
-    const cells = group.querySelectorAll('.team-payout-fixed-table th, .team-payout-fixed-table td, .payout-game-table-team th, .payout-game-table-team td');
-    cells.forEach(cell => cell.style.height = '');
-    const heights = leftRows.map((leftRow, idx) => Math.ceil(Math.max(leftRow.getBoundingClientRect().height || 0, rightRows[idx].getBoundingClientRect().height || 0)));
+    group.querySelectorAll('.team-payout-fixed-table th, .team-payout-fixed-table td, .payout-game-table-team th, .payout-game-table-team td').forEach(cell => {
+      cell.style.height = '';
+      cell.style.minHeight = '';
+    });
+    const heights = leftRows.map((leftRow, idx) => {
+      const leftRect = leftRow.getBoundingClientRect();
+      const rightRect = rightRows[idx].getBoundingClientRect();
+      return Math.ceil(Math.max(leftRect.height || 0, rightRect.height || 0));
+    });
     leftRows.forEach((leftRow, idx) => {
-      const height = Math.max(36, heights[idx] || 0);
+      const height = Math.max(idx === 0 || idx === leftRows.length - 1 ? 42 : 40, heights[idx] || 0);
       const rightRow = rightRows[idx];
       leftRow.style.height = height + 'px';
       rightRow.style.height = height + 'px';
-      Array.from(leftRow.children).forEach(cell => cell.style.height = height + 'px');
-      Array.from(rightRow.children).forEach(cell => cell.style.height = height + 'px');
+      Array.from(leftRow.children).forEach(cell => {
+        cell.style.height = height + 'px';
+        cell.style.minHeight = height + 'px';
+      });
+      Array.from(rightRow.children).forEach(cell => {
+        cell.style.height = height + 'px';
+        cell.style.minHeight = height + 'px';
+      });
     });
   });
 }

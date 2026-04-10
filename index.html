@@ -364,19 +364,19 @@
         <div class="card tight-card scoreboard-card scoreboard-export-card print-section-export">
           <div class="item-header compact-item-header">
             <div>
-              <h2>Share / Print</h2>
-              <div class="tiny">Open the iPhone/browser print sheet, then use Save as PDF if desired.</div>
-              <div id="scoreboardPrintViewHint" class="tiny">Full match summary will be sent to the print sheet.</div>
+              <h2>Share / Save PDF</h2>
+              <div class="tiny">Choose a format, then use the iPhone/browser share sheet to save or send the PDF.</div>
+              <div id="scoreboardPrintViewHint" class="tiny">Match Summary selected. It will open ready to save or share as a PDF.</div>
             </div>
             <div class="actions wrap compact-actions print-actions">
               <label class="inline-select tiny">
-                <span>Print view</span>
+                <span>Export type</span>
                 <select id="scoreboardPrintViewSelect">
-                  <option value="summary" selected>Match summary</option>
-                  <option value="scorecard">Classic scorecard only</option>
+                  <option value="summary" selected>Match Summary (Recommended)</option>
+                  <option value="scorecard">Classic Scorecard</option>
                 </select>
               </label>
-              <button id="scoreboardShareRoundBtn" type="button" class="secondary">Print / Save PDF</button>
+              <button id="scoreboardShareRoundBtn" type="button" class="primary share-match-btn">Share Match</button>
             </div>
           </div>
           <div class="scoreboard-round-actions no-print">
@@ -536,7 +536,7 @@
           <li>Team Stroke Play now defaults to Aggregate scoring, while Best Team Ball remains available as an option.</li>
           <li>Fixed Game Setup handicap preview so all golfers and their handicap tees reappear correctly when editing a match.</li>
           <li>Removed a stale Game Setup player-slot render reference that could suppress the player / tee selection block.</li>
-          <li>Improved Print / Save PDF formatting so Match Summary expands all sections before printing and scales more cleanly on desktop and iPhone.</li>
+          <li>Improved Share / Save PDF formatting so Match Summary expands all sections before export and scales more cleanly on desktop and iPhone.</li>
           <li>Classic Scorecard only print now renders as a standalone scorecard and scales to fit the page more reliably in landscape.</li>
           <li>Fixed a Game Setup selector regression so Course select and Player select work correctly again after recent slot-render updates.</li>
           <li>Removed the duplicate second player selector in Game Setup so the tap-to-select player card remains the only player picker, while keeping the per-player handicap tee selector unchanged.</li>
@@ -544,13 +544,13 @@
           <li>Scoreboard Team Stroke Play now shows the selected event using actual stroke totals and winning margin instead of match-play style status.</li>
           <li>Leaderboard highlights player totals, team totals, match play, skins, and side matches.</li>
           <li>Match setup now keeps all player tee selectors synchronized across desktop and mobile for up to 8 teams of 4.</li>
-          <li>Print / Save PDF controls now stay synchronized with the currently selected export view.</li>
+          <li>Share / Save PDF controls now stay synchronized with the currently selected export view.</li>
           <li>Game setup now includes role-based scoring control for Official Scorer or Team Input events.</li>
           <li>Score entry can be previewed as Event Admin, Official Scorer, Team Scorer, or Viewer before moving into Supabase.</li>
           <li>Added optional per-hole stat tracking (fairways, GIR, putts, up &amp; downs, sandies).</li>
           <li>Reordered the Scoreboard layout and moved Notes from More to Scoreboard.</li>
           <li>Fixed the Game Setup player assignment flow so team slots save correctly and matches can be created reliably again.</li>
-          <li>App version: <strong id="appVersionLabel">v26.0</strong></li>
+          <li>App version: <strong id="appVersionLabel">v26.1</strong></li>
         </ul>
       </div>
     </section>
@@ -570,7 +570,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v26.0</span>
+    <span id="appVersionFooter">v26.1</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>

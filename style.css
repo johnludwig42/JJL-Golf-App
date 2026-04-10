@@ -688,7 +688,7 @@ body.keyboard-open .top-tabs{
 }
 
 
-.print-actions{align-items:flex-end}
+.print-actions{align-items:flex-end;gap:10px;flex-wrap:wrap;}
 .payout-summary-stack{display:grid;gap:18px}
 .payout-section{page-break-inside:avoid}
 @media print {
@@ -790,6 +790,21 @@ body.keyboard-open .top-tabs{
 .combo-toggle{display:flex;align-items:center;gap:8px;font-weight:600}
 .combo-grid select{min-width:120px}
 .scoreboard-export-card{margin-bottom:12px}
+
+.scoreboard-export-card .item-header{align-items:flex-start;flex-wrap:wrap;}
+.scoreboard-export-card .item-header > div:first-child{min-width:0;flex:1 1 260px;}
+.scoreboard-export-card .print-actions{flex:1 1 280px;justify-content:flex-end;}
+.scoreboard-export-card .inline-select{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:180px;}
+.scoreboard-export-card .inline-select select{min-width:180px;max-width:100%;}
+.scoreboard-export-card .share-match-btn{min-width:160px;}
+@media (max-width:760px){
+  .scoreboard-export-card .item-header{flex-direction:column;align-items:stretch;}
+  .scoreboard-export-card .print-actions{justify-content:stretch;align-items:stretch;width:100%;gap:8px;}
+  .scoreboard-export-card .inline-select{width:100%;}
+  .scoreboard-export-card .inline-select select{width:100%;min-width:0;}
+  .scoreboard-export-card .share-match-btn{width:100%;}
+}
+
 @media print {
   body.printing-scorecard main > .panel,
   body.printing-scorecard nav,

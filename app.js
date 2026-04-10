@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v26.0';
+const APP_VERSION = 'v26.1';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -844,7 +844,7 @@ function prepareScoreboardPrintLayout(printView = 'summary') {
 }
 function openPrintScorecard(matchId, printView = null) {
   const match = getMatch(matchId || state.activeMatchId);
-  if (!match) return toast('No round selected to print.');
+  if (!match) return toast('No round selected to share.');
   const previousTab = document.querySelector('.tab.active')?.dataset.tab || 'score';
   const previouslyActiveMatch = state.activeMatchId;
   const requestedView = (printView || match.printView || document.getElementById('scoreboardPrintViewSelect')?.value || 'summary') === 'scorecard' ? 'scorecard' : 'summary';
@@ -892,7 +892,7 @@ function openPrintScorecard(matchId, printView = null) {
   window.addEventListener('afterprint', cleanup);
   requestAnimationFrame(() => requestAnimationFrame(() => {
     setTimeout(() => {
-      try { window.print(); } catch (err) { cleanup(); toast('Print dialog could not open.'); }
+      try { window.print(); } catch (err) { cleanup(); toast('Share / save sheet could not open.'); }
     }, 650);
   }));
 }
@@ -2585,10 +2585,10 @@ function syncScoreboardPrintControls(printView = null) {
   const button = document.getElementById('scoreboardShareRoundBtn');
   const hint = document.getElementById('scoreboardPrintViewHint');
   if (select && select.value !== resolvedView) select.value = resolvedView;
-  if (button) button.textContent = resolvedView === 'scorecard' ? 'Print / Save Scorecard PDF' : 'Print / Save Summary PDF';
+  if (button) button.textContent = 'Share Match';
   if (hint) hint.textContent = resolvedView === 'scorecard'
-    ? 'Classic scorecard only will be sent to the print sheet.'
-    : 'Full match summary will be sent to the print sheet.';
+    ? 'Classic Scorecard selected. It will open ready to save or share as a PDF.'
+    : 'Match Summary selected. It will open ready to save or share as a PDF.';
 }
 
 function renderTeamNameInputs(teamCount = Number(document.getElementById('teamCountSelect')?.value || 1), teamNames = []) {

@@ -2011,3 +2011,41 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
     font-size:11px;
   }
 }
+
+
+/* v26.11 team payout mobile windowed matrix */
+#leaderboard .team-payout-mobile-matrix{display:none;gap:10px;margin-top:10px;}
+#leaderboard .team-payout-mobile-topline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+#leaderboard .team-payout-mobile-topline-label{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748b;}
+#leaderboard .team-payout-window-chips{display:flex;flex-wrap:wrap;gap:8px;}
+#leaderboard .team-payout-window-chip{
+  appearance:none;border:1px solid rgba(11,93,59,.14);background:#fff;color:#334155;border-radius:999px;
+  padding:7px 10px;font-size:12px;font-weight:700;line-height:1;box-shadow:0 1px 2px rgba(15,23,42,.04);
+}
+#leaderboard .team-payout-window-chip.active{background:#0b5d3b;color:#fff;border-color:#0b5d3b;box-shadow:0 4px 14px rgba(11,93,59,.18);}
+#leaderboard .team-payout-mobile-legend{
+  min-height:18px;font-size:12px;line-height:1.35;color:#64748b;padding:0 2px;
+}
+#leaderboard .team-payout-mobile-legend.is-open{color:#0f172a;font-weight:600;}
+#leaderboard .team-payout-mobile-wrap{overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;}
+#leaderboard .team-payout-mobile-table{min-width:100%;width:max-content;table-layout:auto;border-collapse:separate;border-spacing:0;}
+#leaderboard .team-payout-mobile-table th,
+#leaderboard .team-payout-mobile-table td{padding:9px 10px;font-size:12px;line-height:1.2;white-space:nowrap;}
+#leaderboard .team-payout-mobile-table thead th{font-size:11px;text-transform:none;letter-spacing:0;font-weight:800;color:#334155;background:#f8fbf9;}
+#leaderboard .team-payout-mobile-player-head,
+#leaderboard .team-payout-mobile-player-cell{position:sticky;left:0;z-index:3;background:#fff;min-width:118px;max-width:118px;box-shadow:10px 0 14px -10px rgba(0,0,0,.2);}
+#leaderboard .team-payout-mobile-table thead .team-payout-mobile-player-head{z-index:4;background:#f8fbf9;}
+#leaderboard .team-payout-mobile-table tfoot .team-payout-mobile-player-cell{z-index:4;background:#fbfcfb;}
+#leaderboard .team-payout-mobile-player-cell strong{display:block;overflow:hidden;text-overflow:ellipsis;}
+#leaderboard .team-payout-mobile-total-head,
+#leaderboard .team-payout-mobile-total-cell{background:#f8fafc;font-weight:800;}
+#leaderboard .team-payout-header-button{
+  appearance:none;border:none;background:transparent;padding:0;margin:0;font:inherit;color:inherit;font-weight:800;
+  text-decoration:none;white-space:nowrap;
+}
+#leaderboard .team-payout-header-button.active{color:#0b5d3b;}
+@media (max-width:760px){
+  #leaderboard .payout-section-team .team-payout-mobile-matrix{display:grid;}
+  #leaderboard .payout-section-team .team-payout-split,
+  #leaderboard .payout-section-team .team-payout-mobile-cards{display:none !important;}
+}

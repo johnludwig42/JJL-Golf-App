@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v26.10';
+const APP_VERSION = 'v26.11';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -338,6 +338,8 @@ const uiState = {
   matchPlayerDraft: [],
   referenceTeeManual: false,
   referenceTeeAutoId: '',
+  teamPayoutMobileWindowByMatch: {},
+  teamPayoutMobileOpenHeaderKey: '',
 };
 
 const state = loadState();
@@ -2235,28 +2237,101 @@ function isCompactTeamPayoutViewport() {
   return viewportWidth > 0 && viewportWidth <= 760;
 }
 
-function buildTeamPayoutMobileCards(section, players, totals) {
+
+function getTeamPayoutMobileWindowSize() {
+  const viewportWidth = Math.max(window.innerWidth || 0, document.documentElement?.clientWidth || 0, 0);
+  if (viewportWidth && viewportWidth <= 390) return 2;
+  return 3;
+}
+
+function shortenTeamPayoutGameLabel(label, index, used = new Set()) {
+  const original = String(label || '').trim() || `Game ${index + 1}`;
+  let short = original
+    .replace(/Nassau\s*\((front|back|overall)\)/i, (_, part) => `Nassau ${part.charAt(0).toUpperCase()}`)
+    .replace(/Front/i, 'F')
+    .replace(/Back/i, 'B')
+    .replace(/Overall/i, 'Ov')
+    .replace(/Best Ball/i, 'BB')
+    .replace(/Match Play/i, 'Match')
+    .replace(/Stroke Play/i, 'Stroke')
+    .replace(/Contest/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (short.length > 12) short = short.slice(0, 11).trimEnd();
+  if (!short) short = `G${index + 1}`;
+  let candidate = short;
+  if (used.has(candidate)) candidate = `${candidate} (${index + 1})`;
+  if (candidate.length > 14) candidate = `G${index + 1}`;
+  used.add(candidate);
+  return { short: candidate, full: original };
+}
+
+function getTeamPayoutMobileWindows(matchId, section) {
+  const windowSize = getTeamPayoutMobileWindowSize();
+  const used = new Set();
+  const games = section.games.map((game, index) => ({
+    ...game,
+    mobileLabel: shortenTeamPayoutGameLabel(game.label, index, used),
+    mobileKey: `${section.key}-${index}`,
+  }));
+  const windows = [];
+  for (let start = 0; start < games.length; start += windowSize) {
+    windows.push(games.slice(start, start + windowSize));
+  }
+  if (!windows.length) windows.push([]);
+  const active = Math.max(0, Math.min(Number(uiState.teamPayoutMobileWindowByMatch[matchId] || 0), windows.length - 1));
+  return { games, windows, active };
+}
+
+function buildTeamPayoutMobileMatrix(match, section, players, totals) {
+  const matchId = match?.id || 'active';
+  const { windows, active } = getTeamPayoutMobileWindows(matchId, section);
+  const visibleGames = windows[active] || [];
+  const legendKey = uiState.teamPayoutMobileOpenHeaderKey || '';
+  const legendGame = visibleGames.find(game => game.mobileKey === legendKey) || null;
+  const legendText = legendGame
+    ? escapeHtml(legendGame.mobileLabel.full)
+    : 'Tap a game header to see the full game name.';
+  const windowButtons = windows.map((games, index) => {
+    const summary = games.map(game => game.mobileLabel.short).join(' · ') || `Games ${index + 1}`;
+    return `<button type="button" class="team-payout-window-chip ${index === active ? 'active' : ''}" data-team-payout-window="${index}" aria-pressed="${index === active ? 'true' : 'false'}" title="${escapeHtml(games.map(game => game.mobileLabel.full).join(' • '))}">${escapeHtml(summary)}</button>`;
+  }).join('');
+  const headerCells = visibleGames.map(game => {
+    const isOpen = legendKey === game.mobileKey;
+    return `<th><button type="button" class="team-payout-header-button ${isOpen ? 'active' : ''}" data-team-payout-header-full="${escapeHtml(game.mobileLabel.full)}" data-team-payout-header-key="${game.mobileKey}" aria-expanded="${isOpen ? 'true' : 'false'}">${escapeHtml(game.mobileLabel.short)}</button></th>`;
+  }).join('');
+  const bodyRows = players.map(player => {
+    const gameCells = visibleGames.map(game => {
+      const amount = game.amounts[player.id] || 0;
+      const cls = amount > 0.0001 ? 'payout-total-positive' : amount < -0.0001 ? 'payout-total-negative' : '';
+      const text = Math.abs(amount) > 0.0001 ? formatMoneyAccounting(amount) : '—';
+      return `<td class="${cls}">${text}</td>`;
+    }).join('');
+    const total = totals[player.id] || 0;
+    const totalCls = total > 0.0001 ? 'payout-total-positive' : total < -0.0001 ? 'payout-total-negative' : '';
+    const totalText = Math.abs(total) > 0.0001 ? formatMoneyAccounting(total) : '—';
+    return `<tr><th scope="row" class="team-payout-mobile-player-cell"><strong>${escapeHtml(player.name)}</strong></th>${gameCells}<td class="team-payout-mobile-total-cell ${totalCls}"><strong>${totalText}</strong></td></tr>`;
+  }).join('');
+  const columnFoot = visibleGames.map(game => {
+    const colTotal = players.reduce((sum, player) => sum + (game.amounts[player.id] || 0), 0);
+    const cls = Math.abs(colTotal) <= 0.0001 ? '' : (colTotal > 0 ? 'payout-total-positive' : 'payout-total-negative');
+    return `<td class="${cls}"><strong>${formatMoneyAccounting(colTotal)}</strong></td>`;
+  }).join('');
+  const overallTotal = players.reduce((sum, player) => sum + (totals[player.id] || 0), 0);
   return `
-    <div class="team-payout-mobile-cards" role="list" aria-label="${escapeHtml(section.title)}">
-      ${players.map(player => {
-        const total = totals[player.id] || 0;
-        const totalCls = total > 0.0001 ? 'positive' : total < -0.0001 ? 'negative' : 'neutral';
-        const totalText = Math.abs(total) > 0.0001 ? formatMoneyAccounting(total) : '—';
-        const gameRows = section.games.map(game => {
-          const amount = game.amounts[player.id] || 0;
-          const cls = amount > 0.0001 ? 'positive' : amount < -0.0001 ? 'negative' : 'neutral';
-          const text = Math.abs(amount) > 0.0001 ? formatMoneyAccounting(amount) : '—';
-          return `<div class="team-payout-mobile-row"><div class="team-payout-mobile-label">${escapeHtml(game.label)}</div><div class="team-payout-mobile-value ${cls}">${text}</div></div>`;
-        }).join('');
-        return `<article class="team-payout-mobile-card" role="listitem">
-          <div class="team-payout-mobile-head">
-            <div class="team-payout-mobile-player">${escapeHtml(player.name)}</div>
-            <div class="team-payout-mobile-total ${totalCls}">${totalText}</div>
-          </div>
-          <div class="team-payout-mobile-subhead">Team games payout total</div>
-          <div class="team-payout-mobile-grid">${gameRows}</div>
-        </article>`;
-      }).join('')}
+    <div class="team-payout-mobile-matrix" data-team-payout-mobile>
+      <div class="team-payout-mobile-topline">
+        <div class="team-payout-mobile-topline-label">View</div>
+        <div class="team-payout-window-chips" role="tablist" aria-label="Visible team payout games">${windowButtons}</div>
+      </div>
+      <div class="team-payout-mobile-legend ${legendGame ? 'is-open' : ''}" aria-live="polite">${legendText}</div>
+      <div class="payout-table-wrap team-payout-mobile-wrap">
+        <table class="payout-game-table team-payout-mobile-table">
+          <thead><tr><th class="team-payout-mobile-player-head">Player</th>${headerCells}<th class="team-payout-mobile-total-head">Total</th></tr></thead>
+          <tbody>${bodyRows}</tbody>
+          <tfoot><tr><th scope="row" class="team-payout-mobile-player-cell"><strong>Total</strong></th>${columnFoot}<td class="team-payout-mobile-total-cell"><strong>${formatMoneyAccounting(overallTotal)}</strong></td></tr></tfoot>
+        </table>
+      </div>
     </div>`;
 }
 
@@ -2303,7 +2378,7 @@ function buildNetPayoutSummary(match, metrics) {
     const useMobileTeamCards = section.key === 'team' && isCompactTeamPayoutViewport();
     const payoutTableHtml = section.key === 'team'
       ? (useMobileTeamCards
-        ? buildTeamPayoutMobileCards(section, players, totals)
+        ? buildTeamPayoutMobileMatrix(match, section, players, totals)
         : `
         <div class="team-payout-split" role="group" aria-label="${escapeHtml(section.title)}">
           <div class="team-payout-fixed-pane">
@@ -4669,6 +4744,24 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (e.target.id === 'momentumPerspectiveSelect') {
       match.momentumPerspective = Number(e.target.value) || 1;
       persist({ skipRender: true });
+      renderLeaderboard();
+      return;
+    }
+  });
+  document.getElementById('leaderboard').addEventListener('click', e => {
+    const match = getActiveMatch();
+    if (!match) return;
+    const windowBtn = e.target.closest('[data-team-payout-window]');
+    if (windowBtn) {
+      uiState.teamPayoutMobileWindowByMatch[match.id] = Number(windowBtn.getAttribute('data-team-payout-window')) || 0;
+      uiState.teamPayoutMobileOpenHeaderKey = '';
+      renderLeaderboard();
+      return;
+    }
+    const headerBtn = e.target.closest('[data-team-payout-header-key]');
+    if (headerBtn) {
+      const nextKey = headerBtn.getAttribute('data-team-payout-header-key') || '';
+      uiState.teamPayoutMobileOpenHeaderKey = uiState.teamPayoutMobileOpenHeaderKey === nextKey ? '' : nextKey;
       renderLeaderboard();
       return;
     }

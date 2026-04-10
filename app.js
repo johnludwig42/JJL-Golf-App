@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v26.1';
+const APP_VERSION = 'v26.2';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -821,9 +821,12 @@ function prepareScoreboardPrintLayout(printView = 'summary') {
   const viewportWidth = Math.max(window.innerWidth || 0, document.documentElement?.clientWidth || 0, 1180);
   const viewportHeight = Math.max(window.innerHeight || 0, document.documentElement?.clientHeight || 0, 720);
   if (printView === 'scorecard') {
-    const maxWidth = Math.max(780, viewportWidth - 36);
-    const maxHeight = Math.max(420, viewportHeight - 80);
-    const scale = fitElementScale(classicScorecard, maxWidth, maxHeight);
+    const printSafeWidth = 980;
+    const printSafeHeight = 620;
+    const scorecardTable = classicScorecard?.querySelector('.scorecard-table');
+    const scaleTarget = scorecardTable || classicScorecard;
+    let scale = fitElementScale(scaleTarget, printSafeWidth, printSafeHeight);
+    scale = Math.max(0.42, Math.min(scale, 1));
     root.style.setProperty('--classic-print-scale', String(scale));
     if (classicCard && classicScorecard) {
       const height = Math.ceil((classicScorecard.scrollHeight || classicScorecard.offsetHeight || 0) * scale);

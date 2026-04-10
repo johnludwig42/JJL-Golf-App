@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v26.7';
+const APP_VERSION = 'v26.8';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2222,7 +2222,7 @@ function buildNetPayoutSummary(match, metrics) {
     const totals = {};
     section.games.forEach(game => addAmounts(totals, game.amounts));
     const headerCells = section.games.map(game => `<th>${escapeHtml(game.label)}</th>`).join('');
-    const playerRows = players.map(player => {
+    const valueRows = players.map(player => {
       const gameCells = section.games.map(game => {
         const amount = game.amounts[player.id] || 0;
         const cls = amount > 0.0001 ? 'payout-total-positive' : amount < -0.0001 ? 'payout-total-negative' : '';
@@ -2232,8 +2232,11 @@ function buildNetPayoutSummary(match, metrics) {
       const total = totals[player.id] || 0;
       const totalCls = total > 0.0001 ? 'payout-total-positive' : total < -0.0001 ? 'payout-total-negative' : '';
       const totalText = Math.abs(total) > 0.0001 ? formatMoneyAccounting(total) : '—';
-      return `<tr><td class="payout-player-col"><div class="payout-sticky-player"><strong>${escapeHtml(player.name)}</strong></div></td>${gameCells}<td class="${totalCls}"><strong>${totalText}</strong></td></tr>`;
+      return `<tr>${gameCells}<td class="${totalCls}"><strong>${totalText}</strong></td></tr>`;
     }).join('');
+    const playerRows = players.map(player => (
+      `<tr><td class="payout-player-col"><strong>${escapeHtml(player.name)}</strong></td></tr>`
+    )).join('');
     const columnFoot = section.games.map(game => {
       const colTotal = players.reduce((sum, player) => sum + (game.amounts[player.id] || 0), 0);
       const cls = Math.abs(colTotal) <= 0.0001 ? '' : (colTotal > 0 ? 'payout-total-positive' : 'payout-total-negative');
@@ -2244,16 +2247,47 @@ function buildNetPayoutSummary(match, metrics) {
     const settlementRows = settlements.length
       ? settlements.map(row => `<tr><td>${escapeHtml(getPlayer(row.from)?.name || 'Unknown')}</td><td>${escapeHtml(getPlayer(row.to)?.name || 'Unknown')}</td><td><strong>${formatMoneyAccounting(row.amount)}</strong></td></tr>`).join('')
       : '<tr><td colspan="3">No payouts due right now.</td></tr>';
-    return `
-      <div class="payout-section top-gap">
-        <div class="payout-summary-intro"><strong>${escapeHtml(section.title)}:</strong> ${escapeHtml(section.intro)}</div>
+    const payoutTableHtml = section.key === 'team'
+      ? `
+        <div class="team-payout-split" role="group" aria-label="${escapeHtml(section.title)}">
+          <div class="team-payout-fixed-pane">
+            <table class="payout-game-table payout-game-table-fixed team-payout-fixed-table" aria-hidden="true">
+              <thead><tr><th class="payout-player-col">Player</th></tr></thead>
+              <tbody>${playerRows}</tbody>
+              <tfoot><tr><td class="payout-player-col"><strong>Total</strong></td></tr></tfoot>
+            </table>
+          </div>
+          <div class="team-payout-scroll-pane payout-table-wrap payout-table-wrap-team">
+            <table class="payout-game-table payout-game-table-wide payout-game-table-${section.key}">
+              <thead><tr>${headerCells}<th>Total</th></tr></thead>
+              <tbody>${valueRows}</tbody>
+              <tfoot><tr>${columnFoot}<td><strong>${formatMoneyAccounting(overallTotal)}</strong></td></tr></tfoot>
+            </table>
+          </div>
+        </div>`
+      : `
         <div class="payout-table-wrap payout-table-wrap-${section.key} top-gap">
           <table class="payout-game-table payout-game-table-wide payout-game-table-${section.key}">
             <thead><tr><th class="payout-player-col"><div class="payout-sticky-player">Player</div></th>${headerCells}<th>Total</th></tr></thead>
-            <tbody>${playerRows}</tbody>
+            <tbody>${players.map(player => {
+              const gameCells = section.games.map(game => {
+                const amount = game.amounts[player.id] || 0;
+                const cls = amount > 0.0001 ? 'payout-total-positive' : amount < -0.0001 ? 'payout-total-negative' : '';
+                const text = Math.abs(amount) > 0.0001 ? formatMoneyAccounting(amount) : '—';
+                return `<td class="${cls}">${text}</td>`;
+              }).join('');
+              const total = totals[player.id] || 0;
+              const totalCls = total > 0.0001 ? 'payout-total-positive' : total < -0.0001 ? 'payout-total-negative' : '';
+              const totalText = Math.abs(total) > 0.0001 ? formatMoneyAccounting(total) : '—';
+              return `<tr><td class="payout-player-col"><div class="payout-sticky-player"><strong>${escapeHtml(player.name)}</strong></div></td>${gameCells}<td class="${totalCls}"><strong>${totalText}</strong></td></tr>`;
+            }).join('')}</tbody>
             <tfoot><tr><td class="payout-player-col"><div class="payout-sticky-player"><strong>Total</strong></div></td>${columnFoot}<td><strong>${formatMoneyAccounting(overallTotal)}</strong></td></tr></tfoot>
           </table>
-        </div>
+        </div>`;
+    return `
+      <div class="payout-section top-gap payout-section-${section.key}">
+        <div class="payout-summary-intro"><strong>${escapeHtml(section.title)}:</strong> ${escapeHtml(section.intro)}</div>
+        ${payoutTableHtml}
         <div class="top-gap payout-settlement-head"><strong>${escapeHtml(section.title)} settlement</strong></div>
         <div class="payout-table-wrap top-gap">
           <table class="settlement-table">

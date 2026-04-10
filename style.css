@@ -1825,3 +1825,167 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
     -webkit-transform: translateZ(0);
   }
 }
+
+
+/* v26.7 team payout sticky structural fix */
+#leaderboard .payout-table-wrap-team{
+  position: relative;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  -webkit-overflow-scrolling: touch;
+}
+#leaderboard .payout-table-wrap-team .payout-game-table-team{
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  table-layout: auto !important;
+  min-width: max-content;
+}
+#leaderboard .payout-game-table-team th.payout-player-col,
+#leaderboard .payout-game-table-team td.payout-player-col{
+  position: static !important;
+  left: auto !important;
+  z-index: auto !important;
+  padding: 0 !important;
+  min-width: 148px;
+  max-width: 148px;
+  background: #fff !important;
+}
+#leaderboard .payout-game-table-team thead th.payout-player-col{background:#f8fbf9 !important;}
+#leaderboard .payout-game-table-team tfoot td.payout-player-col{background:#fbfcfb !important;}
+#leaderboard .payout-game-table-team .payout-sticky-player{
+  position: -webkit-sticky !important;
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 30 !important;
+  display: block;
+  min-width: 148px;
+  max-width: 148px;
+  padding: 10px 8px;
+  white-space: nowrap;
+  background: inherit !important;
+  background-clip: padding-box;
+  box-shadow: 10px 0 14px -10px rgba(0,0,0,.24) !important;
+}
+#leaderboard .payout-game-table-team thead .payout-sticky-player{z-index:32 !important;}
+#leaderboard .payout-game-table-team tfoot .payout-sticky-player{z-index:31 !important;}
+#leaderboard .payout-game-table-team td.payout-player-col .payout-sticky-player strong,
+#leaderboard .payout-game-table-team tfoot td.payout-player-col .payout-sticky-player strong{
+  display:block;
+  white-space:nowrap;
+}
+@supports (-webkit-touch-callout: none) {
+  #leaderboard .payout-table-wrap-team,
+  #leaderboard .payout-table-wrap-team *{
+    transform: none !important;
+    filter: none !important;
+  }
+}
+
+
+/* v26.8 team payout split-pane fix for iPhone Safari */
+#leaderboard .payout-section-team .team-payout-split{
+  display:grid;
+  grid-template-columns:minmax(148px, 148px) minmax(0, 1fr);
+  align-items:start;
+  gap:0;
+  margin-top:10px;
+  width:100%;
+  min-width:0;
+}
+#leaderboard .payout-section-team .team-payout-fixed-pane{
+  position:relative;
+  z-index:2;
+  min-width:148px;
+  max-width:148px;
+}
+#leaderboard .payout-section-team .team-payout-scroll-pane{
+  position:relative;
+  min-width:0;
+  overflow-x:auto !important;
+  overflow-y:hidden !important;
+  -webkit-overflow-scrolling:touch;
+}
+#leaderboard .payout-section-team .team-payout-fixed-table,
+#leaderboard .payout-section-team .payout-game-table-team{
+  margin-top:0;
+  border-collapse:separate !important;
+  border-spacing:0 !important;
+  table-layout:fixed;
+}
+#leaderboard .payout-section-team .team-payout-fixed-table{
+  width:148px;
+  min-width:148px;
+  max-width:148px;
+  border-right:0;
+  border-top-right-radius:0;
+  border-bottom-right-radius:0;
+  overflow:hidden;
+}
+#leaderboard .payout-section-team .payout-game-table-team{
+  width:max-content;
+  min-width:100%;
+  border-left:0;
+  border-top-left-radius:0;
+  border-bottom-left-radius:0;
+}
+#leaderboard .payout-section-team .team-payout-fixed-table th,
+#leaderboard .payout-section-team .team-payout-fixed-table td,
+#leaderboard .payout-section-team .payout-game-table-team th,
+#leaderboard .payout-section-team .payout-game-table-team td{
+  padding:10px 12px;
+  font-size:12px;
+  line-height:1.35;
+  white-space:nowrap;
+  height:40px;
+  box-sizing:border-box;
+  vertical-align:middle;
+}
+#leaderboard .payout-section-team .team-payout-fixed-table th,
+#leaderboard .payout-section-team .payout-game-table-team th{
+  height:42px;
+}
+#leaderboard .payout-section-team .team-payout-fixed-table tfoot td,
+#leaderboard .payout-section-team .payout-game-table-team tfoot td{
+  height:42px;
+}
+#leaderboard .payout-section-team .team-payout-fixed-table .payout-player-col{
+  width:148px;
+  min-width:148px;
+  max-width:148px;
+  background:#fff;
+  position:static !important;
+  box-shadow:10px 0 14px -10px rgba(0,0,0,.24);
+}
+#leaderboard .payout-section-team .team-payout-fixed-table thead .payout-player-col{background:#f8fbf9;}
+#leaderboard .payout-section-team .team-payout-fixed-table tfoot .payout-player-col{background:#fbfcfb;}
+#leaderboard .payout-section-team .payout-game-table-team .payout-sticky-player,
+#leaderboard .payout-section-team .payout-game-table-team th:first-child,
+#leaderboard .payout-section-team .payout-game-table-team td:first-child,
+#leaderboard .payout-section-team .payout-game-table-team tfoot td:first-child{
+  position:static !important;
+  left:auto !important;
+  z-index:auto !important;
+  box-shadow:none !important;
+  background:inherit !important;
+}
+#leaderboard .payout-section-team .team-payout-scroll-pane::-webkit-scrollbar{height:10px;}
+#leaderboard .payout-section-team .team-payout-scroll-pane::-webkit-scrollbar-thumb{background:rgba(15,23,42,.18);border-radius:999px;}
+@media (max-width:760px){
+  #leaderboard .payout-section-team .team-payout-split{
+    grid-template-columns:132px minmax(0, 1fr);
+  }
+  #leaderboard .payout-section-team .team-payout-fixed-pane,
+  #leaderboard .payout-section-team .team-payout-fixed-table,
+  #leaderboard .payout-section-team .team-payout-fixed-table .payout-player-col{
+    min-width:132px;
+    width:132px;
+    max-width:132px;
+  }
+  #leaderboard .payout-section-team .team-payout-fixed-table th,
+  #leaderboard .payout-section-team .team-payout-fixed-table td,
+  #leaderboard .payout-section-team .payout-game-table-team th,
+  #leaderboard .payout-section-team .payout-game-table-team td{
+    padding:9px 10px;
+    font-size:11px;
+  }
+}

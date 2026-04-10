@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v26.6';
+const APP_VERSION = 'v26.7';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -1101,6 +1101,15 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       font-weight: 600;
       color: var(--text);
     }
+    .export-return-status {
+      margin: 0 0 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      background: #fff8dc;
+      color: #5c4a00;
+      border-radius: 12px;
+      font-size: 12px;
+    }
     .export-header {
       background: var(--card-bg);
       border: 1px solid var(--border);
@@ -1120,6 +1129,12 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       break-inside: auto;
       page-break-inside: auto;
       overflow: visible;
+      --page-scale: 1;
+    }
+    .print-page-content {
+      transform-origin: top left;
+      transform: scale(var(--page-scale));
+      width: calc(100% / var(--page-scale));
     }
     .export-section-head {
       margin-bottom: 10px;
@@ -1309,7 +1324,7 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       @page { size: landscape; margin: 8mm; }
       html, body { background: #fff; }
       body { padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .export-toolbar { display: none !important; }
+      .export-toolbar, .export-return-status { display: none !important; }
       .export-shell { max-width: none; width: 100%; }
       .export-header, .export-section {
         border-radius: 0;
@@ -1328,9 +1343,16 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       .export-sub, .export-meta { font-size: 10px; }
       .export-section {
         padding: 10px 0;
-        margin-bottom: 10px;
-        break-inside: auto;
-        page-break-inside: auto;
+        margin-bottom: 0;
+        break-inside: avoid-page;
+        page-break-inside: avoid;
+        break-before: page;
+        page-break-before: always;
+        min-height: 0;
+      }
+      .export-section:first-of-type {
+        break-before: auto;
+        page-break-before: auto;
       }
       .export-section-head h2 { font-size: 13px; }
       .export-section-sub, .match-status-meta, .game-summary-sub, .tiny, .scorecard-sub { font-size: 9px; }
@@ -1340,19 +1362,16 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
         break-inside: avoid-page;
         page-break-inside: avoid;
       }
-      .export-section-classic-summary {
-        break-before: page;
-        page-break-before: always;
-      }
       .export-section-classic-only,
       .export-classic-stage,
-      .scorecard-wrap {
+      .scorecard-wrap,
+      .print-page-content {
         break-inside: avoid-page;
         page-break-inside: avoid;
       }
       .payout-section, .payout-table-wrap, .payout-game-table, .settlement-table {
-        break-inside: auto;
-        page-break-inside: auto;
+        break-inside: avoid-page;
+        page-break-inside: avoid;
       }
       .payout-summary-intro, .payout-settlement-head, .export-section-head {
         break-after: avoid-page;
@@ -1380,8 +1399,10 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
 <body>
   <div class="export-shell" data-export-view="${requestedView}">
     <div class="export-toolbar">
+      <button type="button" id="returnToAppBtn">Return to App</button>
       <button type="button" id="manualPrintBtn">Print / Save PDF</button>
     </div>
+    <div class="export-return-status" id="returnStatus" hidden>You can close this tab to return to the app.</div>
     <div class="export-header">
       <div class="export-title">${pageTitle}</div>
       <div class="export-sub">${pageSub}</div>
@@ -1392,6 +1413,32 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
   <script>
     (function () {
       const AUTO_PRINT_DELAY = 260;
+      const PRINT_PAGE_HEIGHT_MM = 215.9;
+      const PRINT_PAGE_MARGIN_MM = 8;
+      const SECTION_GAP_PX = 10;
+      function mmToPx(mm) {
+        const probe = document.createElement('div');
+        probe.style.position = 'absolute';
+        probe.style.visibility = 'hidden';
+        probe.style.height = mm + 'mm';
+        probe.style.pointerEvents = 'none';
+        document.body.appendChild(probe);
+        const px = probe.getBoundingClientRect().height || (mm * 96 / 25.4);
+        probe.remove();
+        return px;
+      }
+      function getPrintablePageHeightPx() {
+        return Math.max(480, mmToPx(PRINT_PAGE_HEIGHT_MM - (PRINT_PAGE_MARGIN_MM * 2)));
+      }
+      function decoratePrintPages() {
+        document.querySelectorAll('.export-section').forEach(function (section) {
+          if (section.querySelector(':scope > .print-page-content')) return;
+          const wrapper = document.createElement('div');
+          wrapper.className = 'print-page-content';
+          while (section.firstChild) wrapper.appendChild(section.firstChild);
+          section.appendChild(wrapper);
+        });
+      }
       function fitStage(stage) {
         if (!stage) return;
         const box = stage.querySelector('.fit-box');
@@ -1413,8 +1460,28 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
         stage.style.setProperty('--fit-scale', String(scale));
         if (height > 0) stage.style.height = Math.ceil(height * scale) + 8 + 'px';
       }
-      function fitAll() {
+      function fitAllStages() {
         document.querySelectorAll('.fit-stage').forEach(fitStage);
+      }
+      function layoutPrintPages() {
+        const printableHeight = getPrintablePageHeightPx();
+        const header = document.querySelector('.export-header');
+        const headerHeight = header ? Math.ceil(header.getBoundingClientRect().height) + SECTION_GAP_PX : 0;
+        document.querySelectorAll('.export-section').forEach(function (section, index) {
+          const content = section.querySelector(':scope > .print-page-content');
+          if (!content) return;
+          section.style.removeProperty('height');
+          section.style.removeProperty('--page-scale');
+          content.style.removeProperty('transform');
+          content.style.removeProperty('width');
+          const sectionChrome = section.offsetHeight - content.offsetHeight;
+          const naturalHeight = Math.max(content.scrollHeight || 0, content.offsetHeight || 0, content.getBoundingClientRect().height || 0);
+          const availableHeight = Math.max(280, printableHeight - sectionChrome - (index === 0 ? headerHeight : 0));
+          let scale = naturalHeight > 0 ? Math.min(1, availableHeight / naturalHeight) : 1;
+          scale = Math.max(0.62, Math.min(scale, 1));
+          section.style.setProperty('--page-scale', String(scale));
+          section.style.height = Math.ceil((naturalHeight * scale) + sectionChrome) + 'px';
+        });
       }
       function runAfterLayout(fn) {
         requestAnimationFrame(function () {
@@ -1423,23 +1490,55 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
           });
         });
       }
+      function prepareExportLayout() {
+        decoratePrintPages();
+        fitAllStages();
+        layoutPrintPages();
+      }
       function startPrint() {
-        fitAll();
+        prepareExportLayout();
         runAfterLayout(function () {
-          fitAll();
+          prepareExportLayout();
           setTimeout(function () {
             try { window.print(); } catch (e) {}
           }, AUTO_PRINT_DELAY);
         });
       }
-      window.addEventListener('resize', fitAll);
-      window.addEventListener('beforeprint', fitAll);
+      function showReturnFallback(message) {
+        const el = document.getElementById('returnStatus');
+        if (!el) return;
+        el.hidden = false;
+        if (message) el.textContent = message;
+      }
+      function returnToApp() {
+        let closed = false;
+        try {
+          window.close();
+          closed = window.closed;
+        } catch (e) {}
+        setTimeout(function () {
+          if (window.closed || closed) return;
+          try {
+            if (window.opener && typeof window.opener.focus === 'function') window.opener.focus();
+          } catch (e) {}
+          try {
+            if (window.history.length > 1) {
+              window.history.back();
+              return;
+            }
+          } catch (e) {}
+          showReturnFallback('You can close this tab to return to the app.');
+        }, 120);
+      }
+      window.addEventListener('resize', prepareExportLayout);
+      window.addEventListener('beforeprint', prepareExportLayout);
       document.getElementById('manualPrintBtn')?.addEventListener('click', function () {
-        fitAll();
+        prepareExportLayout();
         setTimeout(function () {
           try { window.print(); } catch (e) {}
         }, 60);
       });
+      document.getElementById('returnToAppBtn')?.addEventListener('click', returnToApp);
       if (document.readyState === 'complete') {
         startPrint();
       } else {
@@ -2133,7 +2232,7 @@ function buildNetPayoutSummary(match, metrics) {
       const total = totals[player.id] || 0;
       const totalCls = total > 0.0001 ? 'payout-total-positive' : total < -0.0001 ? 'payout-total-negative' : '';
       const totalText = Math.abs(total) > 0.0001 ? formatMoneyAccounting(total) : '—';
-      return `<tr><td class="payout-sticky-player"><strong>${escapeHtml(player.name)}</strong></td>${gameCells}<td class="${totalCls}"><strong>${totalText}</strong></td></tr>`;
+      return `<tr><td class="payout-player-col"><div class="payout-sticky-player"><strong>${escapeHtml(player.name)}</strong></div></td>${gameCells}<td class="${totalCls}"><strong>${totalText}</strong></td></tr>`;
     }).join('');
     const columnFoot = section.games.map(game => {
       const colTotal = players.reduce((sum, player) => sum + (game.amounts[player.id] || 0), 0);
@@ -2150,9 +2249,9 @@ function buildNetPayoutSummary(match, metrics) {
         <div class="payout-summary-intro"><strong>${escapeHtml(section.title)}:</strong> ${escapeHtml(section.intro)}</div>
         <div class="payout-table-wrap payout-table-wrap-${section.key} top-gap">
           <table class="payout-game-table payout-game-table-wide payout-game-table-${section.key}">
-            <thead><tr><th class="payout-sticky-player">Player</th>${headerCells}<th>Total</th></tr></thead>
+            <thead><tr><th class="payout-player-col"><div class="payout-sticky-player">Player</div></th>${headerCells}<th>Total</th></tr></thead>
             <tbody>${playerRows}</tbody>
-            <tfoot><tr><td class="payout-sticky-player"><strong>Total</strong></td>${columnFoot}<td><strong>${formatMoneyAccounting(overallTotal)}</strong></td></tr></tfoot>
+            <tfoot><tr><td class="payout-player-col"><div class="payout-sticky-player"><strong>Total</strong></div></td>${columnFoot}<td><strong>${formatMoneyAccounting(overallTotal)}</strong></td></tr></tfoot>
           </table>
         </div>
         <div class="top-gap payout-settlement-head"><strong>${escapeHtml(section.title)} settlement</strong></div>

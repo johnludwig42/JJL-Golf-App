@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v26.13';
+const APP_VERSION = 'v26.14';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2240,7 +2240,7 @@ function isCompactTeamPayoutViewport() {
 
 function getTeamPayoutMobileWindowSize() {
   const viewportWidth = Math.max(window.innerWidth || 0, document.documentElement?.clientWidth || 0, 0);
-  if (viewportWidth && viewportWidth <= 390) return 2;
+  if (viewportWidth && viewportWidth <= 430) return 2;
   return 3;
 }
 

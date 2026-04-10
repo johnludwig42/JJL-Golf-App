@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v26.9';
+const APP_VERSION = 'v26.10';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2229,6 +2229,37 @@ function buildClassicScorecard(match, metrics) {
   return `<div class="scorecard-sub tiny">Per-hole cells show gross on top and net below, with notation wrapped around the score and dots for strokes received. Course rows include yardage, par, and handicap. Player tees: ${escapeHtml(teeLegend)}</div><div class="scorecard-wrap"><table class="scorecard-table"><thead><tr><th class="scorecard-sticky-name">Player</th><th class="scorecard-sticky-team">Team</th>${holeHeader}${totalColumns}</tr></thead><tbody>${yardageRow}${parRow}${siRow}${playerRows}</tbody></table></div>`;
 }
 
+
+function isCompactTeamPayoutViewport() {
+  const viewportWidth = Math.max(window.innerWidth || 0, document.documentElement?.clientWidth || 0, 0);
+  return viewportWidth > 0 && viewportWidth <= 760;
+}
+
+function buildTeamPayoutMobileCards(section, players, totals) {
+  return `
+    <div class="team-payout-mobile-cards" role="list" aria-label="${escapeHtml(section.title)}">
+      ${players.map(player => {
+        const total = totals[player.id] || 0;
+        const totalCls = total > 0.0001 ? 'positive' : total < -0.0001 ? 'negative' : 'neutral';
+        const totalText = Math.abs(total) > 0.0001 ? formatMoneyAccounting(total) : '—';
+        const gameRows = section.games.map(game => {
+          const amount = game.amounts[player.id] || 0;
+          const cls = amount > 0.0001 ? 'positive' : amount < -0.0001 ? 'negative' : 'neutral';
+          const text = Math.abs(amount) > 0.0001 ? formatMoneyAccounting(amount) : '—';
+          return `<div class="team-payout-mobile-row"><div class="team-payout-mobile-label">${escapeHtml(game.label)}</div><div class="team-payout-mobile-value ${cls}">${text}</div></div>`;
+        }).join('');
+        return `<article class="team-payout-mobile-card" role="listitem">
+          <div class="team-payout-mobile-head">
+            <div class="team-payout-mobile-player">${escapeHtml(player.name)}</div>
+            <div class="team-payout-mobile-total ${totalCls}">${totalText}</div>
+          </div>
+          <div class="team-payout-mobile-subhead">Team games payout total</div>
+          <div class="team-payout-mobile-grid">${gameRows}</div>
+        </article>`;
+      }).join('')}
+    </div>`;
+}
+
 function buildNetPayoutSummary(match, metrics) {
   const selected = getOrderedSelectedGames(match);
   if (!selected.length) return '<div><strong>Net payout (live):</strong> No gambling games selected.</div>';
@@ -2269,8 +2300,11 @@ function buildNetPayoutSummary(match, metrics) {
     const settlementRows = settlements.length
       ? settlements.map(row => `<tr><td>${escapeHtml(getPlayer(row.from)?.name || 'Unknown')}</td><td>${escapeHtml(getPlayer(row.to)?.name || 'Unknown')}</td><td><strong>${formatMoneyAccounting(row.amount)}</strong></td></tr>`).join('')
       : '<tr><td colspan="3">No payouts due right now.</td></tr>';
+    const useMobileTeamCards = section.key === 'team' && isCompactTeamPayoutViewport();
     const payoutTableHtml = section.key === 'team'
-      ? `
+      ? (useMobileTeamCards
+        ? buildTeamPayoutMobileCards(section, players, totals)
+        : `
         <div class="team-payout-split" role="group" aria-label="${escapeHtml(section.title)}">
           <div class="team-payout-fixed-pane">
             <table class="payout-game-table payout-game-table-fixed team-payout-fixed-table" aria-hidden="true">
@@ -2286,7 +2320,7 @@ function buildNetPayoutSummary(match, metrics) {
               <tfoot><tr>${columnFoot}<td><strong>${formatMoneyAccounting(overallTotal)}</strong></td></tr></tfoot>
             </table>
           </div>
-        </div>`
+        </div>`)
       : `
         <div class="payout-table-wrap payout-table-wrap-${section.key} top-gap">
           <table class="payout-game-table payout-game-table-wide payout-game-table-${section.key}">

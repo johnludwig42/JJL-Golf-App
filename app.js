@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v26.4';
+const APP_VERSION = 'v26.5';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -851,14 +851,212 @@ function fitElementScale(element, maxWidth, maxHeight = null) {
   return Math.max(0.58, Math.min(widthScale, heightScale, 1));
 }
 
-function buildClassicScorecardExportDocument(match, metrics) {
+
+function buildExportPlayerLeaderboard(match, metrics) {
+  const sortedPlayers = (metrics?.players || []).slice().sort((a, b) => a.netDiff - b.netDiff || a.toPar - b.toPar || a.player.name.localeCompare(b.player.name));
+  if (!sortedPlayers.length) return '<div class="export-empty">No player leaderboard available.</div>';
+  const rows = sortedPlayers.map(p => `
+    <tr>
+      <td>${escapeHtml(p.player.name)}</td>
+      <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
+      <td>${p.grossTotal || 0}</td>
+      <td>${formatSigned(p.toPar || 0)}</td>
+      <td>${p.netTotal || 0}</td>
+      <td>${formatSigned(p.netDiff || 0)}</td>
+    </tr>
+  `).join('');
+  return `
+    <div class="fit-stage" data-fit="width" data-fit-min="0.84">
+      <div class="fit-box">
+        <table class="export-table">
+          <thead>
+            <tr><th>Player</th><th>Team</th><th>Gross</th><th>Gross to Par</th><th>Net</th><th>Net to Par</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function buildExportTeamLeaderboard(match, metrics) {
+  const sortedTeams = (metrics?.teams || []).slice().sort((a, b) => (a.netTotal - b.netTotal) || (a.grossTotal - b.grossTotal) || (a.team - b.team));
+  if (!sortedTeams.length) return '<div class="export-empty">No team leaderboard available.</div>';
+  const showH2h = showTeamMatchMetric(match, metrics);
+  const rows = sortedTeams.map(t => `
+    <tr>
+      <td>${escapeHtml(getTeamLabel(match, t.team))}</td>
+      <td>${escapeHtml(t.members.map(m => m.player.name).join(', '))}</td>
+      <td>${t.grossTotal || 0}</td>
+      <td>${t.netTotal || 0}</td>
+      <td>${formatSigned(t.toPar || 0)}</td>
+      <td>${formatSigned(t.netDiff || 0)}</td>
+      <td>${showH2h ? formatSigned(t.overall || 0) : '—'}</td>
+    </tr>
+  `).join('');
+  return `
+    <div class="fit-stage" data-fit="width" data-fit-min="0.84">
+      <div class="fit-box">
+        <table class="export-table">
+          <thead>
+            <tr><th>Team</th><th>Players</th><th>Gross</th><th>Net</th><th>To Par</th><th>Net Diff</th><th>${showH2h ? 'H2H' : '—'}</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function buildExportMomentum(match, metrics) {
+  if (!hasMomentumGame(match)) return '';
+  const options = getMomentumOptions(match);
+  const selectedGame = match.momentumGame && options.find(opt => opt.key === match.momentumGame)
+    ? match.momentumGame
+    : (options[0]?.key || 'nassau');
+  const perspectiveTeam = getMomentumPerspectiveTeam(match);
+  let running = 0;
+  const pills = (metrics?.holeResults || []).map(h => {
+    const outcome = computeMomentumOutcome(match, metrics, h, selectedGame);
+    let cls = 'tied';
+    if (outcome === 'team1') {
+      running += 1;
+      cls = perspectiveTeam === 1 ? 'team1' : 'team2';
+    } else if (outcome === 'team2') {
+      running -= 1;
+      cls = perspectiveTeam === 1 ? 'team2' : 'team1';
+    } else if (outcome === 'pending') {
+      cls = 'pending';
+    }
+    const txt = outcome === 'pending' ? '•' : formatPerspectiveStatus(running, perspectiveTeam);
+    return `<div class="export-pill ${cls}">H${h.holeNumber}<span>${escapeHtml(txt)}</span></div>`;
+  }).join('');
+  return `
+    <section class="export-section">
+      <div class="export-section-head">
+        <h2>Hole-by-hole momentum</h2>
+        <div class="export-section-sub">${describeMomentumMeta(match, metrics, selectedGame)}</div>
+      </div>
+      <div class="export-pill-grid">${pills}</div>
+    </section>`;
+}
+
+function buildExportNotes() {
+  const notes = String(state?.notes || '').trim();
+  if (!notes) return '';
+  return `
+    <section class="export-section">
+      <div class="export-section-head">
+        <h2>Notes</h2>
+      </div>
+      <div class="export-note-block">PLACEHOLDER_NOTFOUND</div>
+    </section>`;
+}
+
+function buildSummaryExportBody(match, metrics) {
+  const statusOptions = getMatchStatusOptions(match);
+  const featuredKey = match.matchStatusGame && statusOptions.find(opt => opt.key === match.matchStatusGame)
+    ? match.matchStatusGame
+    : (statusOptions[0]?.key || 'team_match');
+  const showStatTracking = isStatTrackingEnabled(match);
+  const showNinePoint = (match.selectedGames || []).some(g => g.key === 'nine_point');
+  return `
+    <section class="export-section">
+      <div class="export-section-head">
+        <h2>Match status</h2>
+      </div>
+      ${buildFeaturedMatchStatus(match, metrics, featuredKey)}
+    </section>
+
+    ${buildExportMomentum(match, metrics)}
+
+    <section class="export-section">
+      <div class="export-section-head">
+        <h2>Games summary</h2>
+      </div>
+      ${buildSelectedGamesSummary(match, metrics)}
+    </section>
+
+    <section class="export-section">
+      <div class="export-section-head">
+        <h2>Net payout</h2>
+      </div>
+      ${buildNetPayoutSummary(match, metrics)}
+    </section>
+
+    <section class="export-section">
+      <div class="export-section-head">
+        <h2>Team leaderboard</h2>
+      </div>
+      ${buildExportTeamLeaderboard(match, metrics)}
+    </section>
+
+    <section class="export-section">
+      <div class="export-section-head">
+        <h2>Player leaderboard</h2>
+      </div>
+      ${buildExportPlayerLeaderboard(match, metrics)}
+    </section>
+
+    <section class="export-section export-section-classic">
+      <div class="export-section-head">
+        <h2>Classic scorecard</h2>
+        <div class="export-section-sub">Gross on top, net below, dots indicate strokes received.</div>
+      </div>
+      <div class="fit-stage export-classic-stage" data-fit="width-height" data-fit-min="0.52">
+        <div class="fit-box">
+          ${buildClassicScorecard(match, metrics)}
+        </div>
+      </div>
+    </section>
+
+    ${showNinePoint ? `
+    <section class="export-section">
+      <div class="export-section-head">
+        <h2>9-Point game</h2>
+      </div>
+      <div class="fit-stage" data-fit="width" data-fit-min="0.72">
+        <div class="fit-box">
+          ${buildNinePointScorecard(match, metrics)}
+        </div>
+      </div>
+    </section>` : ''}
+
+    ${showStatTracking ? `
+    <section class="export-section">
+      <div class="export-section-head">
+        <h2>Stat tracking</h2>
+      </div>
+      ${buildStatTrackingSummary(match, metrics)}
+    </section>` : ''}
+
+    ${buildExportNotes()}`;
+}
+
+function buildClassicOnlyExportBody(match, metrics) {
+  return `
+    <section class="export-section export-section-classic-only">
+      <div class="export-section-head">
+        <h2>Classic scorecard</h2>
+        <div class="export-section-sub">Gross on top, net below, dots indicate strokes received.</div>
+      </div>
+      <div class="fit-stage export-classic-stage" data-fit="width-height" data-fit-min="0.48">
+        <div class="fit-box">
+          ${buildClassicScorecard(match, metrics)}
+        </div>
+      </div>
+    </section>`;
+}
+
+function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
+  const requestedView = printView === 'scorecard' ? 'scorecard' : 'summary';
   const courseName = metrics?.course?.name || 'No course';
   const teeName = metrics?.tee?.teeName || 'No tee';
-  const title = `${match?.name || 'Round'} — Classic Scorecard`;
-  const subtitle = `${match?.date || todayIso()} · ${courseName} · ${teeName} · ${getPlayableHoleCount(match, metrics?.tee)} holes`;
-  const scorecardHtml = buildClassicScorecard(match, metrics);
-  const pageTitle = escapeHtml(title);
-  const pageSub = escapeHtml(subtitle);
+  const holeCount = getPlayableHoleCount(match, metrics?.tee);
+  const pageTitle = escapeHtml(`${match?.name || 'Round'} — ${requestedView === 'scorecard' ? 'Classic Scorecard' : 'Match Summary'}`);
+  const pageSub = escapeHtml(`${match?.date || todayIso()} · ${courseName} · ${teeName} · ${holeCount} holes`);
+  const pageMeta = escapeHtml(`${metrics ? `${metrics.completed}/${holeCount} holes completed` : 'Scorecard ready to print'}${match?.status === 'complete' ? ' · Final' : ' · Live'} · ${requestedView === 'scorecard' ? 'Classic scorecard only' : 'Full match summary'}`);
+  const bodyHtml = requestedView === 'scorecard'
+    ? buildClassicOnlyExportBody(match, metrics)
+    : buildSummaryExportBody(match, metrics);
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -867,79 +1065,211 @@ function buildClassicScorecardExportDocument(match, metrics) {
   <title>${pageTitle}</title>
   <style>
     :root {
-      --classic-export-scale: 1;
-      --card-border: #d7dde8;
+      --page-bg: #eef3f8;
       --card-bg: #ffffff;
-      --page-bg: #f5f7fb;
+      --border: #d7dde8;
       --text: #152033;
       --muted: #5a667a;
+      --accent: #0b5d3b;
+      --accent-soft: #edf7f1;
+      --pill-team1: #e8f3ec;
+      --pill-team2: #fceaea;
+      --pill-tied: #f4f6f8;
+      --pill-pending: #fff7db;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: var(--page-bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    body { padding: 12px; }
+    body { padding: 14px; }
     .export-shell {
       width: 100%;
       max-width: 1180px;
       margin: 0 auto;
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 14px;
-      padding: 12px;
     }
-    .export-head { margin-bottom: 10px; }
-    .export-title { font-size: 18px; font-weight: 700; line-height: 1.2; }
+    .export-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 10px;
+      gap: 8px;
+    }
+    .export-toolbar button {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: #fff;
+      border-radius: 999px;
+      padding: 10px 14px;
+      font: inherit;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .export-header {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+    }
+    .export-title { font-size: 20px; font-weight: 800; line-height: 1.15; }
     .export-sub { margin-top: 4px; color: var(--muted); font-size: 12px; }
-    .classic-export-stage {
+    .export-meta { margin-top: 6px; color: var(--muted); font-size: 12px; }
+    .export-section {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      margin-bottom: 12px;
+      break-inside: avoid-page;
+      page-break-inside: avoid;
+      overflow: hidden;
+    }
+    .export-section-head { margin-bottom: 10px; }
+    .export-section-head h2 { margin: 0; font-size: 16px; line-height: 1.2; }
+    .export-section-sub { margin-top: 4px; color: var(--muted); font-size: 12px; }
+    .export-empty { color: var(--muted); font-size: 12px; }
+    .export-note-block {
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+    .fit-stage {
       width: 100%;
       overflow: hidden;
       position: relative;
+      --fit-scale: 1;
     }
-    .classic-export-scale-box {
+    .fit-box {
       transform-origin: top left;
-      transform: scale(var(--classic-export-scale));
-      width: calc(100% / var(--classic-export-scale));
+      transform: scale(var(--fit-scale));
+      width: calc(100% / var(--fit-scale));
     }
-    .scorecard-sub { margin-bottom: 8px; color: var(--muted); font-size: 11px; }
-    .scorecard-wrap { width: 100%; overflow: visible; }
-    .scorecard-table {
-      width: auto;
+    .export-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 11px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .export-table th,
+    .export-table td {
+      border: 1px solid var(--border);
+      padding: 6px 7px;
+      text-align: left;
+      vertical-align: top;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+    .export-table th {
+      background: #f7fafc;
+      font-weight: 700;
+    }
+    .export-pill-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .export-pill {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+    }
+    .export-pill span {
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .export-pill.team1 { background: var(--pill-team1); }
+    .export-pill.team2 { background: var(--pill-team2); }
+    .export-pill.tied { background: var(--pill-tied); }
+    .export-pill.pending { background: var(--pill-pending); }
+    .match-status-head { margin-bottom: 10px; }
+    .match-status-grid, .game-summary-grid, .stat-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .match-status-tile, .game-summary-card, .stat-summary-card {
+      border: 1px solid var(--border);
+      background: #fff;
+      border-radius: 14px;
+      padding: 10px;
       min-width: 0;
+    }
+    .match-status-value, .game-summary-value {
+      margin-top: 6px;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
+    }
+    .match-status-meta, .game-summary-sub, .tiny { color: var(--muted); font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
+    .game-summary-card-accent { background: var(--accent-soft); }
+    .payout-summary-stack { display: grid; gap: 14px; }
+    .payout-section { break-inside: avoid-page; page-break-inside: avoid; }
+    .payout-summary-intro, .payout-settlement-head { font-size: 12px; }
+    .payout-table-wrap, .scorecard-wrap { overflow: visible !important; max-width: 100%; }
+    .payout-game-table, .settlement-table, .scorecard-table {
+      width: 100%;
       border-collapse: collapse;
       table-layout: fixed;
       font-size: 10px;
-      color: var(--text);
       background: #fff;
     }
-    .scorecard-table th,
-    .scorecard-table td {
-      border: 1px solid var(--card-border);
-      padding: 3px 4px;
+    .payout-game-table th, .payout-game-table td,
+    .settlement-table th, .settlement-table td,
+    .scorecard-table th, .scorecard-table td {
+      border: 1px solid var(--border);
+      padding: 4px 4px;
       text-align: center;
       vertical-align: middle;
-      white-space: nowrap;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      position: static !important;
+      left: auto !important;
+      box-shadow: none !important;
+      background: #fff !important;
     }
+    .payout-game-table th:first-child, .payout-game-table td:first-child,
+    .settlement-table th:first-child, .settlement-table td:first-child,
+    .scorecard-table th:first-child, .scorecard-table td:first-child { text-align: left; }
+    .scorecard-sub { margin-bottom: 8px; color: var(--muted); font-size: 10px; line-height: 1.35; }
+    .scorecard-wrap {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 0;
+      background: #fff;
+    }
+    .scorecard-table { table-layout: fixed; font-size: 10px; }
     .scorecard-table th.scorecard-sticky-name,
     .scorecard-table td.scorecard-sticky-name {
+      width: 98px;
       min-width: 98px;
       max-width: 98px;
-      width: 98px;
       text-align: left;
       white-space: normal;
       line-height: 1.15;
     }
     .scorecard-table th.scorecard-sticky-team,
     .scorecard-table td.scorecard-sticky-team {
+      width: 56px;
       min-width: 56px;
       max-width: 56px;
-      width: 56px;
       text-align: left;
       white-space: normal;
       line-height: 1.15;
     }
     .scorecard-table th:not(.scorecard-sticky-name):not(.scorecard-sticky-team),
     .scorecard-table td:not(.scorecard-sticky-name):not(.scorecard-sticky-team) {
-      min-width: 33px;
       width: 33px;
+      min-width: 33px;
       max-width: 33px;
     }
     .score-hole-cell { padding: 2px 1px; }
@@ -947,33 +1277,52 @@ function buildClassicScorecardExportDocument(match, metrics) {
     .score-main { font-size: 10px; font-weight: 700; }
     .score-sub { font-size: 8px; margin-top: 1px; }
     .total-sub { margin-top: 2px; }
-    .tiny { font-size: 8px; color: var(--muted); margin-top: 2px; }
     .score-number { display: inline-block; min-width: 10px; }
     .score-empty { color: #94a3b8; }
     .score-dots { margin-left: 2px; font-size: 8px; letter-spacing: -0.5px; }
     .score-eagle { font-weight: 700; }
     .score-birdie { text-decoration: underline; }
-    .score-par { }
-    .score-bogey { opacity: 0.9; }
-    .score-doublebogey { opacity: 0.8; }
+    .payout-total-positive { color: #0b6b3e; }
+    .payout-total-negative { color: #9f1d1d; }
+
+    @media (max-width: 760px) {
+      .export-pill-grid, .match-status-grid, .game-summary-grid, .stat-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .export-toolbar { justify-content: stretch; }
+      .export-toolbar button { width: 100%; }
+    }
+
     @media print {
-      @page { margin: 0.28in; }
+      @page { size: landscape; margin: 8mm; }
       html, body { background: #fff; }
-      body { padding: 0; }
-      .export-shell {
-        max-width: none;
-        width: 100%;
-        border: none;
+      body { padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .export-toolbar { display: none !important; }
+      .export-shell { max-width: none; width: 100%; }
+      .export-header, .export-section {
         border-radius: 0;
-        padding: 0;
-        margin: 0;
+        border-left: none;
+        border-right: none;
+        box-shadow: none;
       }
-      .export-title { font-size: 15px; }
-      .export-sub { font-size: 10px; }
-      .scorecard-sub { font-size: 9px; }
-      .scorecard-table { font-size: 8.5px; }
-      .scorecard-table th,
-      .scorecard-table td { padding: 2px 2px; }
+      .export-header { padding: 0 0 10px 0; margin-bottom: 10px; border-top: none; }
+      .export-title { font-size: 16px; }
+      .export-sub, .export-meta { font-size: 10px; }
+      .export-section { padding: 10px 0; margin-bottom: 10px; }
+      .export-section-head h2 { font-size: 13px; }
+      .export-section-sub, .match-status-meta, .game-summary-sub, .tiny, .scorecard-sub { font-size: 9px; }
+      .match-status-grid, .game-summary-grid, .stat-summary-grid { gap: 8px; }
+      .match-status-tile, .game-summary-card, .stat-summary-card {
+        padding: 8px;
+        break-inside: avoid-page;
+        page-break-inside: avoid;
+      }
+      .match-status-value, .game-summary-value { font-size: 12px; }
+      .export-pill { font-size: 10px; padding: 7px 8px; }
+      .export-table { font-size: 9px; }
+      .export-table th, .export-table td { padding: 4px 5px; }
+      .payout-game-table, .settlement-table, .scorecard-table { font-size: 8.5px; }
+      .payout-game-table th, .payout-game-table td,
+      .settlement-table th, .settlement-table td,
+      .scorecard-table th, .scorecard-table td { padding: 2px 2px; }
       .scorecard-table th.scorecard-sticky-name,
       .scorecard-table td.scorecard-sticky-name { width: 82px; min-width: 82px; max-width: 82px; }
       .scorecard-table th.scorecard-sticky-team,
@@ -982,76 +1331,103 @@ function buildClassicScorecardExportDocument(match, metrics) {
       .scorecard-table td:not(.scorecard-sticky-name):not(.scorecard-sticky-team) { width: 28px; min-width: 28px; max-width: 28px; }
       .score-main { font-size: 8.5px; }
       .score-sub { font-size: 7px; }
-      .tiny { font-size: 6.5px; }
     }
   </style>
 </head>
 <body>
-  <div class="export-shell">
-    <div class="export-head">
+  <div class="export-shell" data-export-view="${requestedView}">
+    <div class="export-toolbar">
+      <button type="button" id="manualPrintBtn">Print / Save PDF</button>
+    </div>
+    <div class="export-header">
       <div class="export-title">${pageTitle}</div>
       <div class="export-sub">${pageSub}</div>
+      <div class="export-meta">${pageMeta}</div>
     </div>
-    <div class="classic-export-stage" id="classicExportStage">
-      <div class="classic-export-scale-box" id="classicExportScaleBox">
-        ${scorecardHtml}
-      </div>
-    </div>
+    ${bodyHtml}
   </div>
   <script>
-    (function(){
-      const stage = document.getElementById('classicExportStage');
-      const box = document.getElementById('classicExportScaleBox');
-      const table = document.querySelector('.scorecard-table');
-      const root = document.documentElement;
-      function fitClassic() {
-        if (!stage || !box || !table) return;
+    (function () {
+      const AUTO_PRINT_DELAY = 260;
+      function fitStage(stage) {
+        if (!stage) return;
+        const box = stage.querySelector('.fit-box');
+        if (!box) return;
+        stage.style.removeProperty('height');
+        stage.style.removeProperty('--fit-scale');
         box.style.removeProperty('transform');
         box.style.removeProperty('width');
-        root.style.setProperty('--classic-export-scale', '1');
-        const availableWidth = Math.max(620, (stage.clientWidth || window.innerWidth || 980) - 2);
-        const availableHeight = Math.max(420, (window.innerHeight || 720) - 120);
-        const tableWidth = Math.max(table.scrollWidth || 0, table.offsetWidth || 0, table.getBoundingClientRect().width || 0);
-        const boxHeight = Math.max(box.scrollHeight || 0, box.offsetHeight || 0, box.getBoundingClientRect().height || 0);
+        const fitMode = stage.getAttribute('data-fit') || 'width';
+        const minScale = Math.max(0.4, Math.min(Number(stage.getAttribute('data-fit-min') || 0.6), 1));
+        const width = Math.max(box.scrollWidth || 0, box.offsetWidth || 0, box.getBoundingClientRect().width || 0);
+        const height = Math.max(box.scrollHeight || 0, box.offsetHeight || 0, box.getBoundingClientRect().height || 0);
+        const availableWidth = Math.max(560, stage.clientWidth || document.documentElement.clientWidth || window.innerWidth || 980);
+        const availableHeight = Math.max(380, window.innerHeight || 720);
         let scale = 1;
-        if (tableWidth > 0) scale = Math.min(scale, availableWidth / tableWidth);
-        if (boxHeight > 0) scale = Math.min(scale, availableHeight / boxHeight);
-        scale = Math.max(0.48, Math.min(scale, 1));
-        root.style.setProperty('--classic-export-scale', String(scale));
-        const scaledHeight = Math.ceil(box.scrollHeight * scale) + 6;
-        stage.style.height = scaledHeight + 'px';
+        if (width > 0) scale = Math.min(scale, availableWidth / width);
+        if (fitMode === 'width-height' && height > 0) scale = Math.min(scale, (availableHeight - 150) / height);
+        scale = Math.max(minScale, Math.min(scale, 1));
+        stage.style.setProperty('--fit-scale', String(scale));
+        if (height > 0) stage.style.height = Math.ceil(height * scale) + 8 + 'px';
       }
-      window.addEventListener('resize', fitClassic);
-      window.addEventListener('beforeprint', fitClassic);
-      document.addEventListener('DOMContentLoaded', function(){
-        requestAnimationFrame(function(){
-          fitClassic();
-          setTimeout(function(){ fitClassic(); }, 120);
-          setTimeout(function(){ try { window.print(); } catch (e) {} }, 350);
+      function fitAll() {
+        document.querySelectorAll('.fit-stage').forEach(fitStage);
+      }
+      function runAfterLayout(fn) {
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            setTimeout(fn, 120);
+          });
         });
+      }
+      function startPrint() {
+        fitAll();
+        runAfterLayout(function () {
+          fitAll();
+          setTimeout(function () {
+            try { window.print(); } catch (e) {}
+          }, AUTO_PRINT_DELAY);
+        });
+      }
+      window.addEventListener('resize', fitAll);
+      window.addEventListener('beforeprint', fitAll);
+      document.getElementById('manualPrintBtn')?.addEventListener('click', function () {
+        fitAll();
+        setTimeout(function () {
+          try { window.print(); } catch (e) {}
+        }, 60);
       });
+      if (document.readyState === 'complete') {
+        startPrint();
+      } else {
+        window.addEventListener('load', startPrint, { once: true });
+      }
     })();
-  </script>
+  <\/script>
 </body>
 </html>`;
 }
 
-function openClassicScorecardExport(match) {
+function openUnifiedExport(match, printView = 'summary') {
   const metrics = computeMatchMetrics(match);
-  if (!metrics?.tee) {
+  if (!metrics) {
+    toast('No round selected to share.');
+    return;
+  }
+  if (printView === 'scorecard' && !metrics?.tee) {
     toast('Classic scorecard is not available for this round.');
     return;
   }
-  const exportHtml = buildClassicScorecardExportDocument(match, metrics);
-  const exportWindow = window.open('', '_blank', 'noopener,noreferrer');
+  const exportWindow = window.open('', '_blank');
   if (!exportWindow) {
-    toast('Please allow pop-ups to share the classic scorecard.');
+    toast('Please allow pop-ups to share this round.');
     return;
   }
+  const exportHtml = buildUnifiedExportDocument(match, metrics, printView);
   exportWindow.document.open();
   exportWindow.document.write(exportHtml);
   exportWindow.document.close();
-  exportWindow.focus();
+  try { exportWindow.focus(); } catch (err) {}
 }
 function prepareScoreboardPrintLayout(printView = 'summary') {
   const root = document.getElementById('leaderboardWrap');
@@ -1091,62 +1467,10 @@ function openPrintScorecard(matchId, printView = null) {
   const match = getMatch(matchId || state.activeMatchId);
   if (!match) return toast('No round selected to share.');
   const requestedView = (printView || match.printView || document.getElementById('scoreboardPrintViewSelect')?.value || 'summary') === 'scorecard' ? 'scorecard' : 'summary';
-  if (requestedView === 'scorecard') {
-    match.printView = 'scorecard';
-    syncScoreboardPrintControls('scorecard');
-    persist();
-    openClassicScorecardExport(match);
-    return;
-  }
-  const previousTab = document.querySelector('.tab.active')?.dataset.tab || 'score';
-  const previouslyActiveMatch = state.activeMatchId;
-  syncScoreboardPrintControls(requestedView);
-  if (state.activeMatchId !== match.id) state.activeMatchId = match.id;
-  const metrics = computeMatchMetrics(match);
-  const printMeta = document.getElementById('printRoundMeta');
-  if (printMeta) {
-    printMeta.innerHTML = buildPrintMeta(match, metrics, requestedView);
-    printMeta.classList.remove('hidden');
-  }
-  activateTab('leaderboard');
-  const selectEl = document.getElementById('scoreboardPrintViewSelect');
-  if (selectEl) {
-    selectEl.value = requestedView;
-  }
   match.printView = requestedView;
-  renderAll();
-  renderLeaderboard();
-  const detailsNodes = Array.from(document.querySelectorAll('#leaderboard details.scoreboard-collapsible'));
-  const priorOpen = detailsNodes.map(node => node.open);
-  detailsNodes.forEach(node => { node.open = true; });
-  document.body.classList.add('printing-scorecard');
-  applyScoreboardPrintView(requestedView);
-  renderAll();
-  renderLeaderboard();
-  detailsNodes.forEach(node => { node.open = true; });
-  prepareScoreboardPrintLayout(requestedView);
-  void document.body.offsetHeight;
-  window.scrollTo(0, 0);
-  const cleanup = () => {
-    document.body.classList.remove('printing-scorecard', 'printing-summary', 'printing-classic-only');
-    document.body.removeAttribute('data-print-view');
-    const root = document.getElementById('leaderboardWrap');
-    if (root) root.removeAttribute('data-print-view');
-    clearPrintScaling();
-    document.querySelectorAll('.print-preview-muted,.print-preview-emphasis').forEach(el => el.classList.remove('print-preview-muted','print-preview-emphasis'));
-    if (printMeta) printMeta.classList.add('hidden');
-    detailsNodes.forEach((node, idx) => { node.open = priorOpen[idx]; });
-    state.activeMatchId = previouslyActiveMatch;
-    renderAll();
-    activateTab(previousTab);
-    window.removeEventListener('afterprint', cleanup);
-  };
-  window.addEventListener('afterprint', cleanup);
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    setTimeout(() => {
-      try { window.print(); } catch (err) { cleanup(); toast('Share / save sheet could not open.'); }
-    }, 650);
-  }));
+  syncScoreboardPrintControls(requestedView);
+  persist({ skipRender: true });
+  openUnifiedExport(match, requestedView);
 }
 
 function normalizeHole(hole, idx) {

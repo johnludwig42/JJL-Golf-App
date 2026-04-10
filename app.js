@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v26.14';
+const APP_VERSION = 'v26.15';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2690,13 +2690,19 @@ function syncTeamPayoutSplitPane(root = document) {
       cell.style.height = '';
       cell.style.minHeight = '';
     });
+    const getRowHeight = row => {
+      const rowRect = row.getBoundingClientRect().height || 0;
+      const cellHeights = Array.from(row.children).map(cell => Math.max(cell.getBoundingClientRect().height || 0, cell.scrollHeight || 0, cell.offsetHeight || 0));
+      return Math.max(rowRect, ...cellHeights, row.scrollHeight || 0, row.offsetHeight || 0);
+    };
     const heights = leftRows.map((leftRow, idx) => {
-      const leftRect = leftRow.getBoundingClientRect();
-      const rightRect = rightRows[idx].getBoundingClientRect();
-      return Math.ceil(Math.max(leftRect.height || 0, rightRect.height || 0));
+      const rightRow = rightRows[idx];
+      const measured = Math.max(getRowHeight(leftRow), getRowHeight(rightRow));
+      return Math.ceil(measured + 1);
     });
     leftRows.forEach((leftRow, idx) => {
-      const height = Math.max(idx === 0 || idx === leftRows.length - 1 ? 42 : 40, heights[idx] || 0);
+      const minimum = idx === 0 || idx === leftRows.length - 1 ? 42 : 40;
+      const height = Math.max(minimum, heights[idx] || 0);
       const rightRow = rightRows[idx];
       leftRow.style.height = height + 'px';
       rightRow.style.height = height + 'px';
@@ -2718,7 +2724,10 @@ function scheduleTeamPayoutSplitPaneSync() {
   syncTeamPayoutSplitPaneTimer = window.requestAnimationFrame(() => {
     syncTeamPayoutSplitPaneTimer = 0;
     syncTeamPayoutSplitPane();
-    window.requestAnimationFrame(() => syncTeamPayoutSplitPane());
+    window.requestAnimationFrame(() => {
+      syncTeamPayoutSplitPane();
+      window.setTimeout(() => syncTeamPayoutSplitPane(), 32);
+    });
   });
 }
 

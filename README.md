@@ -22,4 +22,4 @@ Current version: **v25.0**
 - Hides Scoreboard finish controls from print/PDF output.
 
 
-Latest update: v25.4 adds a persistent in-app version label and a safe service-worker update banner with an explicit Update action.
+Latest update: v25.5 adds a persistent in-app version label and a safe service-worker update banner with an explicit Update action.

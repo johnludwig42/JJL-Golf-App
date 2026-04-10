@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v25.4';
+const APP_VERSION = 'v25.5';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -1944,7 +1944,7 @@ function renderCurrentMatch() {
   const metaEl = document.getElementById('currentMatchMeta');
   const emptyEl = document.getElementById('scoreEntryEmpty');
   const wrapEl = document.getElementById('scoreEntryWrap');
-  finishConfirmArmed = false;
+  if (!match) finishConfirmArmed = false;
   syncFinishRoundUi(match);
   if (!match) {
     metaEl.textContent = 'No active match.';

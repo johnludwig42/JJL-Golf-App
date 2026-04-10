@@ -1,10 +1,10 @@
-const CACHE_NAME = 'the-dye-ledger-v24.9';
+const CACHE_NAME = 'the-dye-ledger-v25.3';
 const ASSETS = [
   './',
   './index.html',
   './style.css',
   './app.js',
-  './manifest.json?v=24.9',
+  './manifest.json?v=25.3',
   './apple-touch-icon.png',
   './favicon-32x32.png',
   './favicon-16x16.png',
@@ -22,17 +22,25 @@ const ASSETS = [
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
+    Promise.all([
+      caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))),
+      self.clients.claim()
+    ])
   );
-  self.clients.claim();
+});
+
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
   event.respondWith(
     caches.match(event.request).then(cached => cached || fetch(event.request))
   );

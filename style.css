@@ -177,6 +177,55 @@ input, select, textarea {
   z-index: 1000;
   font-size: 13px;
 }
+
+.update-banner{
+  position:fixed;
+  left:12px;
+  right:12px;
+  bottom:calc(68px + env(safe-area-inset-bottom));
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:12px 14px;
+  border-radius:16px;
+  border:1px solid rgba(11,93,59,.18);
+  background:rgba(255,255,255,.98);
+  box-shadow:0 10px 26px rgba(0,0,0,.14);
+  z-index:1001;
+}
+.update-banner-copy{display:flex;flex-direction:column;gap:3px;min-width:0}
+.update-banner-copy strong{font-size:13px;color:var(--text)}
+.update-banner-copy span{font-size:12px;color:var(--muted);line-height:1.35}
+.update-banner-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.app-footer-version{
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:0;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  padding:8px 14px calc(8px + env(safe-area-inset-bottom));
+  background:rgba(244,248,246,.97);
+  backdrop-filter:blur(8px);
+  border-top:1px solid rgba(11,93,59,.12);
+  color:var(--muted);
+  font-size:11px;
+  z-index:60;
+}
+main{padding-bottom:calc(64px + env(safe-area-inset-bottom) + var(--keyboard-offset, 0px));}
+@media (max-width: 640px){
+  .update-banner{flex-direction:column;align-items:stretch;bottom:calc(72px + env(safe-area-inset-bottom));}
+  .update-banner-actions{justify-content:stretch}
+  .update-banner-actions button{flex:1 1 0}
+}
+@media print{
+  .update-banner,
+  .app-footer-version{display:none !important;}
+}
+
 .file-label input { display: none; }
 .tee-block + .tee-block { margin-top: 9px; padding-top: 9px; border-top: 1px dashed var(--border); }
 .strong { font-weight: 700; color: var(--text); font-size: 13px; }
@@ -1465,4 +1514,158 @@ body.sheet-open{overflow:hidden}
   body.printing-scorecard.printing-summary .payout-game-table,
   body.printing-scorecard.printing-summary .settlement-table,
   body.printing-scorecard.printing-classic-only .scorecard-table{font-size:9.5px !important;}
+}
+
+
+/* v25.0 mobile-first iPhone optimization */
+:root{
+  --safe-inline-start:max(12px, env(safe-area-inset-left));
+  --safe-inline-end:max(12px, env(safe-area-inset-right));
+}
+html{
+  -webkit-text-size-adjust:100%;
+  text-size-adjust:100%;
+  overflow-x:hidden;
+}
+body{
+  overflow-x:hidden;
+}
+.app-header, .tabs, main{
+  padding-left:var(--safe-inline-start);
+  padding-right:var(--safe-inline-end);
+}
+main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
+  min-width:0;
+}
+.hole-grid-wrap, .score-grid-wrap, .leader-table-wrap, .payout-table-wrap, .scorecard-wrap{
+  max-width:100%;
+}
+@supports (padding:max(0px)) {
+  .sheet-card{padding-bottom:max(8px, env(safe-area-inset-bottom));}
+}
+@media (max-width: 760px){
+  body{font-size:16px;}
+  .app-header{
+    padding-top:calc(10px + env(safe-area-inset-top));
+    gap:8px;
+    align-items:flex-start;
+  }
+  .brand-wrap{gap:10px;min-width:0;}
+  .brand-mark{width:46px;height:46px;flex-basis:46px;}
+  .compact-header h1{font-size:20px;}
+  .card{padding:12px;}
+  .tight-card{padding:12px;}
+  .item-header, .compact-item-header, .scoreboard-section-title{
+    flex-direction:column;
+    align-items:stretch;
+  }
+  .item-header > *, .compact-item-header > *, .scoreboard-section-title > *{min-width:0;}
+  input, select, textarea{
+    font-size:16px;
+    min-height:46px;
+    padding:11px 12px;
+  }
+  button, .button-link, .tab{
+    min-height:44px;
+  }
+  textarea{min-height:120px;}
+  .actions{flex-wrap:wrap;}
+  .actions > *{min-width:0;}
+  .compact-actions button, .compact-actions .button-link{font-size:13px;}
+  .result{font-size:14px;}
+  .hole-grid-wrap, .score-grid-wrap, .leader-table-wrap, .payout-table-wrap, .scorecard-wrap{
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-x:contain;
+  }
+  .sheet-header h3{font-size:20px;}
+  .sheet-card{
+    width:100%;
+    max-height:calc(100svh - env(safe-area-inset-top));
+    border-radius:22px 22px 0 0;
+  }
+}
+@media (max-width: 640px){
+  .top-tabs{
+    position:static;
+    box-shadow:none;
+    background:none;
+    padding-top:0;
+  }
+  .tabs-6{grid-template-columns:repeat(3, minmax(0, 1fr));}
+  .icon-tabs{gap:8px;}
+  .icon-tabs .tab{
+    min-height:62px;
+    padding:8px 6px 9px;
+    border-radius:16px;
+  }
+  .tab-icon-svg, .tab-icon-svg svg{width:24px;height:24px;}
+  .tab-label{font-size:12px;line-height:1.1;}
+  #setup .picker-row{grid-template-columns:1fr;}
+  #setup .player-card-trigger{min-height:56px;}
+  #setup .player-tee-select select{font-size:16px;}
+  #setup .persistent-preview-actions,
+  #setup .preview-card-actions,
+  #score .actions.top-gap.wrap.compact-actions,
+  #leaderboard .print-actions,
+  #leaderboard .momentum-controls{
+    display:grid;
+    grid-template-columns:1fr;
+  }
+  #setup .persistent-preview-actions > *,
+  #setup .preview-card-actions > *,
+  #score .actions.top-gap.wrap.compact-actions > *,
+  #leaderboard .print-actions > *,
+  #leaderboard .momentum-controls > *{width:100%;}
+  #score .score-hole-nav,
+  #leaderboard .panel-head,
+  #score .actions.top-gap.wrap.compact-actions{
+    position:static;
+    top:auto;
+    bottom:auto;
+    box-shadow:none;
+    backdrop-filter:none;
+    background:transparent;
+    border:none;
+    padding-left:0;
+    padding-right:0;
+  }
+  #score .score-grid th, #score .score-grid td{padding:8px 6px;font-size:12px;}
+  #score .score-grid th:first-child, #score .score-grid td:first-child{min-width:94px;}
+  #score .score-grid input.score-input{width:56px;min-height:44px;font-size:17px;}
+  .hole-jump-tiles{grid-template-columns:repeat(3, minmax(0, 1fr));}
+  .hole-jump-tile{min-height:42px;}
+  .match-status-grid, .game-summary-grid, .handicap-preview-grid, .stat-summary-grid{grid-template-columns:1fr;}
+  .leader-mobile-grid{grid-template-columns:1fr 1fr;}
+  #leaderboard .scoreboard-card{overflow:visible;}
+  #leaderboard .leader-mobile-grid > div{min-width:0;}
+  .sheet-search, .sheet-header{padding-left:14px;padding-right:14px;}
+  .sheet-results{padding:0 10px calc(14px + env(safe-area-inset-bottom));}
+}
+@media (max-width: 430px){
+  .app-header{padding-bottom:4px;}
+  .compact-header h1{font-size:18px;}
+  .brand-mark{width:42px;height:42px;flex-basis:42px;}
+  .card h2{font-size:15px;}
+  .tab-label{font-size:11px;}
+  .player-card-label{font-size:15px;}
+  .player-card-hint{font-size:11px;}
+  .badge, .big-badge{font-size:11px;padding:5px 8px;}
+  .greenies-list, .games-picker, .assignment-grid, .stat-entry-grid{grid-template-columns:1fr;}
+  .inline-select{display:grid;grid-template-columns:1fr;gap:6px;}
+  .inline-select select{min-width:0;width:100%;}
+  #leaderboard .hole-momentum{grid-template-columns:repeat(2, minmax(0, 1fr));}
+  #leaderboard .leader-mobile-grid{grid-template-columns:1fr;}
+  #notesBox{min-height:120px;}
+}
+
+
+.scoreboard-round-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.scoreboard-round-actions .actions{justify-content:flex-end}
+.scoreboard-round-actions .round-complete-pill{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:999px;background:rgba(22,163,74,.12);color:#166534;font-weight:700}
+.no-print{display:initial}
+@media print{.no-print{display:none !important}}
+@media (max-width:760px){
+  .scoreboard-round-actions{flex-direction:column;align-items:stretch}
+  .scoreboard-round-actions .actions{justify-content:stretch}
+  .scoreboard-round-actions .actions > *{flex:1 1 auto}
 }

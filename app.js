@@ -1,8 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v25.2';
-let swRegistration = null;
-let swUpdateReady = false;
-let swRefreshPending = false;
+const APP_VERSION = 'v25.3';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -1780,7 +1777,8 @@ function renderAll() {
   populateCalcCourses();
   preserveMatchSetupUi();
   renderSetupHandicapPreview();
-  updateVersionUi();
+  const versionEl = document.getElementById('appVersionLabel'); if (versionEl) versionEl.textContent = APP_VERSION;
+  const footerVersionEl = document.getElementById('appVersionFooter'); if (footerVersionEl) footerVersionEl.textContent = APP_VERSION;
   const notesBox = document.getElementById('notesBox'); if (notesBox && notesBox.value !== state.notes) notesBox.value = state.notes || '';
   const coursesSearchInput = document.getElementById('coursesSearchInput');
   if (coursesSearchInput && coursesSearchInput.value !== uiState.courseSearch) coursesSearchInput.value = uiState.courseSearch;
@@ -3915,11 +3913,6 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   const notesBox = document.getElementById('notesBox');
   if (notesBox) notesBox.addEventListener('input', e => { state.notes = e.target.value || ''; persist({ skipRender: true }); });
 
-  const updateBtn = document.getElementById('applyUpdateBtn');
-  if (updateBtn) updateBtn.addEventListener('click', triggerAppUpdate);
-  const dismissUpdateBtn = document.getElementById('dismissUpdateBannerBtn');
-  if (dismissUpdateBtn) dismissUpdateBtn.addEventListener('click', hideUpdateBanner);
-
   document.getElementById('exportBtn').addEventListener('click', exportJson);
   document.getElementById('importFile').addEventListener('change', async e => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -3942,7 +3935,78 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('installBtn').addEventListener('click', async () => {
     if (!deferredPrompt) return; deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; document.getElementById('installBtn').classList.add('hidden');
   });
+
+  const updateNowBtn = document.getElementById('updateNowBtn');
+  if (updateNowBtn) updateNowBtn.addEventListener('click', () => { triggerAppUpdate(); });
+
+  const updateLaterBtn = document.getElementById('updateLaterBtn');
+  if (updateLaterBtn) updateLaterBtn.addEventListener('click', () => { hideUpdateBanner(); });
 }
+
+
+let swRegistration = null;
+let appUpdateBannerVisible = false;
+let hasReloadedForServiceWorker = false;
+
+function updateVersionUi() {
+  const versionEl = document.getElementById('appVersionLabel');
+  if (versionEl) versionEl.textContent = APP_VERSION;
+  const footerVersionEl = document.getElementById('appVersionFooter');
+  if (footerVersionEl) footerVersionEl.textContent = APP_VERSION;
+}
+
+function showUpdateBanner() {
+  const banner = document.getElementById('updateBanner');
+  if (!banner || appUpdateBannerVisible) return;
+  banner.classList.remove('hidden');
+  appUpdateBannerVisible = true;
+}
+
+function hideUpdateBanner() {
+  const banner = document.getElementById('updateBanner');
+  if (!banner) return;
+  banner.classList.add('hidden');
+  appUpdateBannerVisible = false;
+}
+
+function triggerAppUpdate() {
+  if (!swRegistration?.waiting) return;
+  swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+}
+
+function hookServiceWorkerRegistration(registration) {
+  if (!registration) return;
+  swRegistration = registration;
+  if (registration.waiting) showUpdateBanner();
+
+  registration.addEventListener('updatefound', () => {
+    const newWorker = registration.installing;
+    if (!newWorker) return;
+    newWorker.addEventListener('statechange', () => {
+      if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+        showUpdateBanner();
+      }
+    });
+  });
+}
+
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  window.addEventListener('load', async () => {
+    try {
+      const registration = await navigator.serviceWorker.register('./service-worker.js');
+      hookServiceWorkerRegistration(registration);
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (hasReloadedForServiceWorker) return;
+        hasReloadedForServiceWorker = true;
+        window.location.reload();
+      });
+    } catch (error) {
+      // Keep the app fully usable if service worker registration fails.
+    }
+  });
+}
+
 registerServiceWorker();
 
 installHandlers();
@@ -3951,4 +4015,5 @@ loadPlayerEditor(null);
 loadCourseEditor(null);
 loadTeeEditor(null, null);
 loadMatchEditor(null);
+updateVersionUi();
 renderAll();

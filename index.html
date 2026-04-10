@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>The Dye Ledger</title>
   <meta name="theme-color" content="#0b5d3b" />
-  <link rel="manifest" href="manifest.json?v=24.9" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <link rel="manifest" href="manifest.json?v=25.3" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
   <link rel="shortcut icon" href="./favicon-32x32.png" />
@@ -377,6 +379,13 @@
               <button id="scoreboardShareRoundBtn" type="button" class="secondary">Print / Save PDF</button>
             </div>
           </div>
+          <div class="scoreboard-round-actions no-print">
+            <div id="scoreboardRoundState" class="tiny">Round is live.</div>
+            <div class="actions wrap compact-actions">
+              <button id="scoreboardFinishRoundBtn" type="button" class="secondary">Finish Round</button>
+              <button id="scoreboardConfirmFinishRoundBtn" type="button" class="secondary hidden">Confirm Finish</button>
+            </div>
+          </div>
         </div>
         <div class="card tight-card scoreboard-card print-section-match-status">
           <div class="item-header compact-item-header">
@@ -522,6 +531,7 @@
         <h2>App notes</h2>
         <ul class="tight-list">
           <li>Courses and tees stay manual and editable.</li>
+          <li>Mobile-first iPhone layout now fits the default viewport more naturally without relying on pinch-zoom, with larger touch targets, safer small-screen spacing, and more deliberate small-screen handling for tabs, setup, scoring, scoreboards, and sheets.</li>
           <li>Audited Team Stroke Play scoring so aggregate net stroke play resolves correctly across the Scoreboard, Games Summary, and Net Payout.</li>
           <li>Team Stroke Play now defaults to Aggregate scoring, while Best Team Ball remains available as an option.</li>
           <li>Fixed Game Setup handicap preview so all golfers and their handicap tees reappear correctly when editing a match.</li>
@@ -540,11 +550,28 @@
           <li>Added optional per-hole stat tracking (fairways, GIR, putts, up &amp; downs, sandies).</li>
           <li>Reordered the Scoreboard layout and moved Notes from More to Scoreboard.</li>
           <li>Fixed the Game Setup player assignment flow so team slots save correctly and matches can be created reliably again.</li>
-          <li>App version: <strong id="appVersionLabel">v24.9</strong></li>
+          <li>App version: <strong id="appVersionLabel">v25.3</strong></li>
         </ul>
       </div>
     </section>
   </main>
+
+
+  <div id="updateBanner" class="update-banner hidden" role="status" aria-live="polite">
+    <div class="update-banner-copy">
+      <strong>New version available</strong>
+      <span>Refresh to update to the latest build.</span>
+    </div>
+    <div class="update-banner-actions">
+      <button id="updateNowBtn" type="button">Update</button>
+      <button id="updateLaterBtn" type="button" class="secondary">Later</button>
+    </div>
+  </div>
+
+  <div class="footer app-footer-version">
+    <span>The Dye Ledger</span>
+    <span id="appVersionFooter">v25.3</span>
+  </div>
 
   <div id="toast" class="toast hidden"></div>
 

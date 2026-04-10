@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v25.3';
+const APP_VERSION = 'v25.4';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -1609,6 +1609,7 @@ function renderLeaderboard() {
   const perspectiveSelect = document.getElementById('momentumPerspectiveSelect');
 
   if (!match) {
+    syncFinishRoundUi(null);
     empty.classList.remove('hidden');
     wrap.classList.add('hidden');
     return;
@@ -1624,6 +1625,7 @@ function renderLeaderboard() {
 
   empty.classList.add('hidden');
   wrap.classList.remove('hidden');
+  syncFinishRoundUi(match);
 
   const sortedPlayers = metrics.players.slice().sort((a, b) => a.netDiff - b.netDiff || a.toPar - b.toPar);
   playerBody.innerHTML = sortedPlayers.map(p => `
@@ -1898,14 +1900,52 @@ function renderMatches() {
   }).join('');
 }
 
+function syncFinishRoundUi(match = getActiveMatch()) {
+  const scoringFinishBtn = document.getElementById('finishRoundBtn');
+  const scoringConfirmBtn = document.getElementById('confirmFinishRoundBtn');
+  const scoreboardFinishBtn = document.getElementById('scoreboardFinishRoundBtn');
+  const scoreboardConfirmBtn = document.getElementById('scoreboardConfirmFinishRoundBtn');
+  const scoreboardRoundState = document.getElementById('scoreboardRoundState');
+  const isComplete = !!match && match.status === 'complete';
+  const hasMatch = !!match;
+  if (scoringFinishBtn) scoringFinishBtn.classList.toggle('hidden', !hasMatch || isComplete || finishConfirmArmed);
+  if (scoringConfirmBtn) scoringConfirmBtn.classList.toggle('hidden', !hasMatch || isComplete || !finishConfirmArmed);
+  if (scoreboardFinishBtn) scoreboardFinishBtn.classList.toggle('hidden', !hasMatch || isComplete || finishConfirmArmed);
+  if (scoreboardConfirmBtn) scoreboardConfirmBtn.classList.toggle('hidden', !hasMatch || isComplete || !finishConfirmArmed);
+  if (scoreboardRoundState) {
+    if (!hasMatch) scoreboardRoundState.textContent = 'No active round.';
+    else if (isComplete) scoreboardRoundState.textContent = 'Round complete.';
+    else if (finishConfirmArmed) scoreboardRoundState.textContent = 'Confirm finish to lock this round to history.';
+    else scoreboardRoundState.textContent = 'Round is live.';
+  }
+}
+
+function armFinishRound() {
+  const match = getActiveMatch();
+  if (!match) return toast('No active match.');
+  finishConfirmArmed = true;
+  syncFinishRoundUi(match);
+  toast('Tap Confirm Finish to lock this round to history.');
+}
+
+function completeActiveRound() {
+  const match = getActiveMatch();
+  if (!match || !finishConfirmArmed) return;
+  match.status = 'complete';
+  match.completedAt = new Date().toISOString();
+  finishConfirmArmed = false;
+  state.activeMatchId = null;
+  persist();
+  toast('Round marked complete.');
+}
+
 function renderCurrentMatch() {
   const match = getActiveMatch();
   const metaEl = document.getElementById('currentMatchMeta');
   const emptyEl = document.getElementById('scoreEntryEmpty');
   const wrapEl = document.getElementById('scoreEntryWrap');
-  const finishBtn = document.getElementById('confirmFinishRoundBtn');
-  finishBtn.classList.add('hidden');
   finishConfirmArmed = false;
+  syncFinishRoundUi(match);
   if (!match) {
     metaEl.textContent = 'No active match.';
     emptyEl.classList.remove('hidden');
@@ -3899,16 +3939,12 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('nextHoleBtn').addEventListener('click', () => { saveCurrentHole({ advance: true, silent: true }); });
   document.getElementById('scoreboardShareRoundBtn').addEventListener('click', () => { openPrintScorecard(); });
   document.getElementById('saveScoresBtn').addEventListener('click', () => { saveCurrentHole(); });
-  document.getElementById('finishRoundBtn').addEventListener('click', () => {
-    const match = getActiveMatch(); if (!match) return toast('No active match.');
-    finishConfirmArmed = true;
-    document.getElementById('confirmFinishRoundBtn').classList.remove('hidden');
-    toast('Tap Confirm Finish to lock this round to history.');
-  });
-  document.getElementById('confirmFinishRoundBtn').addEventListener('click', () => {
-    const match = getActiveMatch(); if (!match || !finishConfirmArmed) return;
-    match.status = 'complete'; match.completedAt = new Date().toISOString(); state.activeMatchId = null; persist(); toast('Round marked complete.');
-  });
+  document.getElementById('finishRoundBtn').addEventListener('click', armFinishRound);
+  document.getElementById('confirmFinishRoundBtn').addEventListener('click', completeActiveRound);
+  const scoreboardFinishRoundBtn = document.getElementById('scoreboardFinishRoundBtn');
+  if (scoreboardFinishRoundBtn) scoreboardFinishRoundBtn.addEventListener('click', armFinishRound);
+  const scoreboardConfirmFinishRoundBtn = document.getElementById('scoreboardConfirmFinishRoundBtn');
+  if (scoreboardConfirmFinishRoundBtn) scoreboardConfirmFinishRoundBtn.addEventListener('click', completeActiveRound);
 
   const notesBox = document.getElementById('notesBox');
   if (notesBox) notesBox.addEventListener('input', e => { state.notes = e.target.value || ''; persist({ skipRender: true }); });

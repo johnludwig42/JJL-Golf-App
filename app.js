@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v26.11';
+const APP_VERSION = 'v26.13';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2318,9 +2318,10 @@ function buildTeamPayoutMobileMatrix(match, section, players, totals) {
     return `<td class="team-payout-mobile-game-cell ${cls}"><strong>${formatMoneyAccounting(colTotal)}</strong></td>`;
   }).join('');
   const overallTotal = players.reduce((sum, player) => sum + (totals[player.id] || 0), 0);
+  const visibleCount = Math.max(1, visibleGames.length || 1);
   const colgroup = `<colgroup><col class="team-payout-col-player">${visibleGames.map(() => '<col class="team-payout-col-game">').join('')}<col class="team-payout-col-total"></colgroup>`;
   return `
-    <div class="team-payout-mobile-matrix" data-team-payout-mobile>
+    <div class="team-payout-mobile-matrix" data-team-payout-mobile style="--team-payout-visible-games:${visibleCount};">
       <div class="team-payout-mobile-topline">
         <div class="team-payout-mobile-topline-label">View</div>
         <div class="team-payout-window-chips" role="tablist" aria-label="Visible team payout games">${windowButtons}</div>

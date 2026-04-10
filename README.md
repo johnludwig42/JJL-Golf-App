@@ -1,8 +1,8 @@
 # The Dye Ledger
 
-Current version: **v26.11**
+Current version: **v26.13**
 
-## What changed in v26.11
+## What changed in v26.13
 
 - optimized the default iPhone Safari / installed PWA experience so the app fits and reads more naturally at 100% zoom
 - increased mobile input sizing to reduce iPhone zoom friction and improved safe-area spacing
@@ -14,7 +14,7 @@ Current version: **v26.11**
 - changed the Team Stroke Play default scoring mode to Aggregate while preserving Best Team Ball as an available option
 - fixed Game Setup handicap preview so it rehydrates and renders for all golfers when editing a saved match
 - removed a stale player setup render reference that could interfere with the Game Setup player slot UI
-- updated the app notes and synchronized the displayed app version, manifest version, and service-worker cache version to v26.11
+- updated the app notes and synchronized the displayed app version, manifest version, and service-worker cache version to v26.13
 
 
 ## v25.1
@@ -22,6 +22,6 @@ Current version: **v26.11**
 - Hides Scoreboard finish controls from print/PDF output.
 
 
-Latest update: v26.11 adds a persistent in-app version label and a safe service-worker update banner with an explicit Update action.
+Latest update: v26.13 adds a persistent in-app version label and a safe service-worker update banner with an explicit Update action.
 
 - Share / Save PDF UX now uses a clearer iPhone-first Share Match flow with a simplified export selector.

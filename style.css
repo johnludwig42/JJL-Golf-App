@@ -2050,7 +2050,7 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
   #leaderboard .payout-section-team .team-payout-mobile-cards{display:none !important;}
 }
 
-/* v26.12 precision alignment for team payout + responsive settlement */
+/* v26.13 iphone fit-and-finish for team payout + responsive settlement */
 #leaderboard .payout-section-team .team-payout-split{
   --team-payout-player-col-width:148px;
   --team-payout-game-col-width:108px;
@@ -2104,29 +2104,38 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
   font-weight:800;
 }
 #leaderboard .team-payout-mobile-matrix{
-  --team-payout-mobile-player-col-width:118px;
-  --team-payout-mobile-game-col-width:88px;
-  --team-payout-mobile-total-col-width:92px;
+  --team-payout-mobile-player-col-width:102px;
+  --team-payout-mobile-total-col-width:82px;
+  --team-payout-visible-games:2;
   gap:8px;
-}
-#leaderboard .team-payout-mobile-wrap{padding-bottom:6px;}
-#leaderboard .team-payout-mobile-table{
-  min-width:calc(var(--team-payout-mobile-player-col-width) + var(--team-payout-mobile-total-col-width) + (var(--team-payout-mobile-game-col-width) * 2));
   width:100%;
+  max-width:100%;
+}
+#leaderboard .team-payout-mobile-wrap{
+  padding-bottom:4px;
+  overflow-x:hidden;
+  max-width:100%;
+}
+#leaderboard .team-payout-mobile-table{
+  width:100%;
+  max-width:100%;
+  min-width:0;
   table-layout:fixed;
   border-collapse:separate;
   border-spacing:0;
 }
 #leaderboard .team-payout-mobile-table col.team-payout-col-player{width:var(--team-payout-mobile-player-col-width);}
-#leaderboard .team-payout-mobile-table col.team-payout-col-game{width:var(--team-payout-mobile-game-col-width);}
+#leaderboard .team-payout-mobile-table col.team-payout-col-game{width:calc((100% - var(--team-payout-mobile-player-col-width) - var(--team-payout-mobile-total-col-width)) / var(--team-payout-visible-games));}
 #leaderboard .team-payout-mobile-table col.team-payout-col-total{width:var(--team-payout-mobile-total-col-width);}
 #leaderboard .team-payout-mobile-table th,
 #leaderboard .team-payout-mobile-table td{
-  padding:9px 10px;
-  line-height:1.2;
+  padding:8px 7px;
+  line-height:1.15;
   white-space:nowrap;
   box-sizing:border-box;
   vertical-align:middle;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 #leaderboard .team-payout-mobile-player-head,
 #leaderboard .team-payout-mobile-player-cell{
@@ -2145,10 +2154,10 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
   text-align:right;
 }
 #leaderboard .team-payout-mobile-table thead th{
-  font-size:11px;
+  font-size:10.5px;
   font-weight:800;
   letter-spacing:0;
-  line-height:1.1;
+  line-height:1.05;
 }
 #leaderboard .team-payout-header-button{
   display:block;
@@ -2164,13 +2173,28 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
   text-overflow:ellipsis;
   white-space:nowrap;
 }
-#leaderboard .team-payout-window-chips{align-items:center;}
-#leaderboard .team-payout-window-chip{min-height:30px;display:inline-flex;align-items:center;justify-content:center;}
+#leaderboard .team-payout-window-chips{align-items:center; gap:6px; width:100%;}
+#leaderboard .team-payout-window-chip{min-height:28px;display:inline-flex;align-items:center;justify-content:center;padding:6px 9px;font-size:11px;}
+#leaderboard .team-payout-mobile-topline{gap:6px;}
+#leaderboard .team-payout-mobile-topline-label{font-size:10px;}
 #leaderboard .team-payout-mobile-legend{
-  min-height:20px;
-  padding:0 2px 2px;
-  font-size:11px;
+  min-height:18px;
+  padding:0 1px 1px;
+  font-size:10.5px;
 }
+@supports (width: 100dvw){
+  #leaderboard .team-payout-mobile-matrix{max-width:calc(100dvw - 2px);}
+}
+@media (max-width:390px){
+  #leaderboard .team-payout-mobile-matrix{
+    --team-payout-mobile-player-col-width:96px;
+    --team-payout-mobile-total-col-width:78px;
+  }
+  #leaderboard .team-payout-mobile-table th,
+  #leaderboard .team-payout-mobile-table td{padding:8px 6px;font-size:11.5px;}
+  #leaderboard .team-payout-mobile-table thead th{font-size:10px;}
+}
+
 #leaderboard .settlement-table-responsive{
   width:100%;
   min-width:0 !important;
@@ -2203,9 +2227,8 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
     --team-payout-total-col-width:104px;
   }
   #leaderboard .team-payout-mobile-matrix{
-    --team-payout-mobile-player-col-width:116px;
-    --team-payout-mobile-game-col-width:86px;
-    --team-payout-mobile-total-col-width:92px;
+    --team-payout-mobile-player-col-width:96px;
+    --team-payout-mobile-total-col-width:78px;
   }
   #leaderboard .settlement-table,
   #leaderboard .settlement-table-responsive{

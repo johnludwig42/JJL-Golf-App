@@ -1,5 +1,8 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v25.0';
+const APP_VERSION = 'v25.2';
+let swRegistration = null;
+let swUpdateReady = false;
+let swRefreshPending = false;
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -1777,7 +1780,7 @@ function renderAll() {
   populateCalcCourses();
   preserveMatchSetupUi();
   renderSetupHandicapPreview();
-  const versionEl = document.getElementById('appVersionLabel'); if (versionEl) versionEl.textContent = APP_VERSION;
+  updateVersionUi();
   const notesBox = document.getElementById('notesBox'); if (notesBox && notesBox.value !== state.notes) notesBox.value = state.notes || '';
   const coursesSearchInput = document.getElementById('coursesSearchInput');
   if (coursesSearchInput && coursesSearchInput.value !== uiState.courseSearch) coursesSearchInput.value = uiState.courseSearch;
@@ -3912,6 +3915,11 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   const notesBox = document.getElementById('notesBox');
   if (notesBox) notesBox.addEventListener('input', e => { state.notes = e.target.value || ''; persist({ skipRender: true }); });
 
+  const updateBtn = document.getElementById('applyUpdateBtn');
+  if (updateBtn) updateBtn.addEventListener('click', triggerAppUpdate);
+  const dismissUpdateBtn = document.getElementById('dismissUpdateBannerBtn');
+  if (dismissUpdateBtn) dismissUpdateBtn.addEventListener('click', hideUpdateBanner);
+
   document.getElementById('exportBtn').addEventListener('click', exportJson);
   document.getElementById('importFile').addEventListener('change', async e => {
     const file = e.target.files?.[0]; if (!file) return;
@@ -3935,10 +3943,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (!deferredPrompt) return; deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; document.getElementById('installBtn').classList.add('hidden');
   });
 }
-
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(() => {}));
-}
+registerServiceWorker();
 
 installHandlers();
 renderHoleRows();

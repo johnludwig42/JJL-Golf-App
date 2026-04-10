@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v26.8';
+const APP_VERSION = 'v26.9';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -1065,13 +1065,15 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
   <title>${pageTitle}</title>
   <style>
     :root {
-      --page-bg: #eef3f8;
+      --page-bg: #edf2f7;
       --card-bg: #ffffff;
-      --border: #d7dde8;
+      --border: #d5dde7;
+      --border-strong: #bcc8d8;
       --text: #152033;
       --muted: #5a667a;
       --accent: #0b5d3b;
       --accent-soft: #edf7f1;
+      --ink-soft: #f7fafc;
       --pill-team1: #e8f3ec;
       --pill-team2: #fceaea;
       --pill-tied: #f4f6f8;
@@ -1111,25 +1113,27 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       font-size: 12px;
     }
     .export-header {
-      background: var(--card-bg);
+      background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
       border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 14px 16px;
+      border-radius: 18px;
+      padding: 16px 18px;
       margin-bottom: 12px;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
     }
-    .export-title { font-size: 20px; font-weight: 800; line-height: 1.15; }
-    .export-sub { margin-top: 4px; color: var(--muted); font-size: 12px; }
-    .export-meta { margin-top: 6px; color: var(--muted); font-size: 12px; }
+    .export-title { font-size: 22px; font-weight: 800; line-height: 1.05; letter-spacing: -0.02em; }
+    .export-sub { margin-top: 6px; color: var(--muted); font-size: 12px; font-weight: 600; }
+    .export-meta { margin-top: 8px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
     .export-section {
       background: var(--card-bg);
       border: 1px solid var(--border);
-      border-radius: 16px;
+      border-radius: 18px;
       padding: 14px;
       margin-bottom: 12px;
       break-inside: auto;
       page-break-inside: auto;
       overflow: visible;
       --page-scale: 1;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
     }
     .print-page-content {
       transform-origin: top left;
@@ -1137,12 +1141,14 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       width: calc(100% / var(--page-scale));
     }
     .export-section-head {
-      margin-bottom: 10px;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
       break-after: avoid-page;
       page-break-after: avoid;
     }
-    .export-section-head h2 { margin: 0; font-size: 16px; line-height: 1.2; }
-    .export-section-sub { margin-top: 4px; color: var(--muted); font-size: 12px; }
+    .export-section-head h2 { margin: 0; font-size: 16px; line-height: 1.15; letter-spacing: -0.01em; }
+    .export-section-sub { margin-top: 5px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
     .export-empty { color: var(--muted); font-size: 12px; }
     .export-note-block {
       font-size: 12px;
@@ -1163,12 +1169,13 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     }
     .export-table {
       width: 100%;
-      border-collapse: collapse;
+      border-collapse: separate;
+      border-spacing: 0;
       table-layout: fixed;
       font-size: 11px;
       background: #fff;
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 14px;
       overflow: hidden;
     }
     .export-table th,
@@ -1181,8 +1188,9 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       overflow-wrap: anywhere;
     }
     .export-table th {
-      background: #f7fafc;
-      font-weight: 700;
+      background: linear-gradient(180deg, #f9fbfd 0%, #f2f6fa 100%);
+      font-weight: 800;
+      color: #243247;
     }
     .export-pill-grid {
       display: grid;
@@ -1209,6 +1217,7 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     .export-pill.tied { background: var(--pill-tied); }
     .export-pill.pending { background: var(--pill-pending); }
     .match-status-head { margin-bottom: 10px; }
+    .match-status-head .tiny { text-transform: uppercase; letter-spacing: 0.05em; }
     .match-status-grid, .game-summary-grid, .stat-summary-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1216,10 +1225,11 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     }
     .match-status-tile, .game-summary-card, .stat-summary-card {
       border: 1px solid var(--border);
-      background: #fff;
+      background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
       border-radius: 14px;
-      padding: 10px;
+      padding: 11px;
       min-width: 0;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
     }
     .match-status-value, .game-summary-value {
       margin-top: 6px;
@@ -1231,19 +1241,24 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     .match-status-meta, .game-summary-sub, .tiny { color: var(--muted); font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
     .game-summary-card-accent { background: var(--accent-soft); }
     .payout-summary-stack { display: grid; gap: 14px; }
+    .payout-section { padding: 2px 0 0; }
     .payout-section { break-inside: auto; page-break-inside: auto; }
     .payout-summary-intro, .payout-settlement-head {
       font-size: 12px;
       break-after: avoid-page;
       page-break-after: avoid;
     }
+    .payout-summary-intro strong, .payout-settlement-head strong { color: #243247; }
     .payout-table-wrap, .scorecard-wrap { overflow: visible !important; max-width: 100%; }
     .payout-game-table, .settlement-table, .scorecard-table {
       width: 100%;
-      border-collapse: collapse;
+      border-collapse: separate;
+      border-spacing: 0;
       table-layout: fixed;
       font-size: 10px;
       background: #fff;
+      border-radius: 14px;
+      overflow: hidden;
     }
     .payout-game-table thead, .settlement-table thead, .scorecard-table thead { display: table-header-group; }
     .payout-game-table tfoot, .settlement-table tfoot, .scorecard-table tfoot { display: table-footer-group; }
@@ -1254,8 +1269,9 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     .payout-game-table th, .payout-game-table td,
     .settlement-table th, .settlement-table td,
     .scorecard-table th, .scorecard-table td {
-      border: 1px solid var(--border);
-      padding: 4px 4px;
+      border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 5px 6px;
       text-align: center;
       vertical-align: middle;
       white-space: normal;
@@ -1266,15 +1282,20 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       box-shadow: none !important;
       background: #fff !important;
     }
+    .payout-game-table tr > *:first-child, .settlement-table tr > *:first-child, .scorecard-table tr > *:first-child { border-left: 1px solid var(--border); }
+    .payout-game-table thead th, .settlement-table thead th, .scorecard-table thead th { background: linear-gradient(180deg, #f9fbfd 0%, #f2f6fa 100%) !important; font-weight: 800; color: #243247; }
+    .payout-game-table tbody tr:nth-child(even) td, .settlement-table tbody tr:nth-child(even) td, .scorecard-table tbody tr:nth-child(even) td { background: #fcfdff !important; }
+    .payout-game-table tfoot td, .settlement-table tfoot td, .scorecard-table tfoot td { background: #f7fafc !important; font-weight: 800; }
     .payout-game-table th:first-child, .payout-game-table td:first-child,
     .settlement-table th:first-child, .settlement-table td:first-child,
     .scorecard-table th:first-child, .scorecard-table td:first-child { text-align: left; }
-    .scorecard-sub { margin-bottom: 8px; color: var(--muted); font-size: 10px; line-height: 1.35; }
+    .scorecard-sub { margin-bottom: 8px; color: var(--muted); font-size: 10px; line-height: 1.35; padding: 0 2px; }
     .scorecard-wrap {
       border: 1px solid var(--border);
       border-radius: 14px;
       padding: 0;
       background: #fff;
+      overflow: hidden;
     }
     .scorecard-table { table-layout: fixed; font-size: 10px; }
     .scorecard-table th.scorecard-sticky-name,
@@ -1313,6 +1334,7 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     .score-birdie { text-decoration: underline; }
     .payout-total-positive { color: #0b6b3e; }
     .payout-total-negative { color: #9f1d1d; }
+    strong { font-weight: 800; }
 
     @media (max-width: 760px) {
       .export-pill-grid, .match-status-grid, .game-summary-grid, .stat-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2520,6 +2542,42 @@ function renderLeaderboard() {
   }
 }
 
+
+function syncTeamPayoutSplitPane(root = document) {
+  const groups = Array.from(root.querySelectorAll('#leaderboard .team-payout-split'));
+  groups.forEach(group => {
+    const leftTable = group.querySelector('.team-payout-fixed-table');
+    const rightTable = group.querySelector('.payout-game-table-team');
+    if (!leftTable || !rightTable) return;
+    const leftRows = Array.from(leftTable.querySelectorAll('thead tr, tbody tr, tfoot tr'));
+    const rightRows = Array.from(rightTable.querySelectorAll('thead tr, tbody tr, tfoot tr'));
+    if (!leftRows.length || leftRows.length !== rightRows.length) return;
+    leftRows.forEach(row => row.style.height = '');
+    rightRows.forEach(row => row.style.height = '');
+    const cells = group.querySelectorAll('.team-payout-fixed-table th, .team-payout-fixed-table td, .payout-game-table-team th, .payout-game-table-team td');
+    cells.forEach(cell => cell.style.height = '');
+    const heights = leftRows.map((leftRow, idx) => Math.ceil(Math.max(leftRow.getBoundingClientRect().height || 0, rightRows[idx].getBoundingClientRect().height || 0)));
+    leftRows.forEach((leftRow, idx) => {
+      const height = Math.max(36, heights[idx] || 0);
+      const rightRow = rightRows[idx];
+      leftRow.style.height = height + 'px';
+      rightRow.style.height = height + 'px';
+      Array.from(leftRow.children).forEach(cell => cell.style.height = height + 'px');
+      Array.from(rightRow.children).forEach(cell => cell.style.height = height + 'px');
+    });
+  });
+}
+
+let syncTeamPayoutSplitPaneTimer = 0;
+function scheduleTeamPayoutSplitPaneSync() {
+  if (syncTeamPayoutSplitPaneTimer) window.cancelAnimationFrame(syncTeamPayoutSplitPaneTimer);
+  syncTeamPayoutSplitPaneTimer = window.requestAnimationFrame(() => {
+    syncTeamPayoutSplitPaneTimer = 0;
+    syncTeamPayoutSplitPane();
+    window.requestAnimationFrame(() => syncTeamPayoutSplitPane());
+  });
+}
+
 function renderAll() {
   renderPlayers();
   renderCourses();
@@ -2538,6 +2596,7 @@ function renderAll() {
   const coursesSearchInput = document.getElementById('coursesSearchInput');
   if (coursesSearchInput && coursesSearchInput.value !== uiState.courseSearch) coursesSearchInput.value = uiState.courseSearch;
   syncNewMatchConflictUi();
+  scheduleTeamPayoutSplitPaneSync();
 }
 
 
@@ -4547,6 +4606,15 @@ document.getElementById('scoreboardPrintViewSelect').addEventListener('change', 
   syncScoreboardPrintControls(requestedView);
   applyScoreboardPrintView(requestedView);
 });
+
+window.addEventListener('resize', scheduleTeamPayoutSplitPaneSync);
+window.addEventListener('orientationchange', () => {
+  window.setTimeout(scheduleTeamPayoutSplitPaneSync, 80);
+  window.setTimeout(scheduleTeamPayoutSplitPaneSync, 220);
+});
+if (document.fonts && typeof document.fonts.addEventListener === 'function') {
+  document.fonts.addEventListener('loadingdone', scheduleTeamPayoutSplitPaneSync);
+}
 
 document.getElementById('leaderboard').addEventListener('change', e => {
     const match = getActiveMatch();

@@ -1882,7 +1882,7 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
 }
 
 
-/* v26.8 team payout split-pane fix for iPhone Safari */
+/* v26.9 team payout split-pane alignment fix for iPhone Safari */
 #leaderboard .payout-section-team .team-payout-split{
   display:grid;
   grid-template-columns:minmax(148px, 148px) minmax(0, 1fr);
@@ -1936,17 +1936,17 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
   font-size:12px;
   line-height:1.35;
   white-space:nowrap;
-  height:40px;
+  min-height:40px;
   box-sizing:border-box;
   vertical-align:middle;
 }
 #leaderboard .payout-section-team .team-payout-fixed-table th,
 #leaderboard .payout-section-team .payout-game-table-team th{
-  height:42px;
+  min-height:42px;
 }
 #leaderboard .payout-section-team .team-payout-fixed-table tfoot td,
 #leaderboard .payout-section-team .payout-game-table-team tfoot td{
-  height:42px;
+  min-height:42px;
 }
 #leaderboard .payout-section-team .team-payout-fixed-table .payout-player-col{
   width:148px;
@@ -1967,6 +1967,28 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
   z-index:auto !important;
   box-shadow:none !important;
   background:inherit !important;
+}
+#leaderboard .payout-section-team .team-payout-fixed-table,
+#leaderboard .payout-section-team .payout-game-table-team{
+  font-variant-numeric: tabular-nums;
+}
+#leaderboard .payout-section-team .team-payout-fixed-table tr,
+#leaderboard .payout-section-team .payout-game-table-team tr{
+  height:auto;
+}
+#leaderboard .payout-section-team .team-payout-fixed-table .payout-player-col,
+#leaderboard .payout-section-team .payout-game-table-team td,
+#leaderboard .payout-section-team .payout-game-table-team th{
+  white-space:nowrap;
+}
+#leaderboard .payout-section-team .team-payout-fixed-table .payout-player-col strong,
+#leaderboard .payout-section-team .payout-game-table-team strong{
+  display:inline-block;
+  line-height:1.2;
+}
+#leaderboard .payout-section-team .team-payout-fixed-pane,
+#leaderboard .payout-section-team .team-payout-scroll-pane{
+  align-self:start;
 }
 #leaderboard .payout-section-team .team-payout-scroll-pane::-webkit-scrollbar{height:10px;}
 #leaderboard .payout-section-team .team-payout-scroll-pane::-webkit-scrollbar-thumb{background:rgba(15,23,42,.18);border-radius:999px;}

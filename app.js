@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v26.5';
+const APP_VERSION = 'v26.6';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -930,7 +930,7 @@ function buildExportMomentum(match, metrics) {
     return `<div class="export-pill ${cls}">H${h.holeNumber}<span>${escapeHtml(txt)}</span></div>`;
   }).join('');
   return `
-    <section class="export-section">
+    <section class="export-section export-section-momentum">
       <div class="export-section-head">
         <h2>Hole-by-hole momentum</h2>
         <div class="export-section-sub">${describeMomentumMeta(match, metrics, selectedGame)}</div>
@@ -943,11 +943,11 @@ function buildExportNotes() {
   const notes = String(state?.notes || '').trim();
   if (!notes) return '';
   return `
-    <section class="export-section">
+    <section class="export-section export-section-notes">
       <div class="export-section-head">
         <h2>Notes</h2>
       </div>
-      <div class="export-note-block">PLACEHOLDER_NOTFOUND</div>
+      <div class="export-note-block">${escapeHtml(notes).replace(/\n/g, '<br>')}</div>
     </section>`;
 }
 
@@ -959,7 +959,7 @@ function buildSummaryExportBody(match, metrics) {
   const showStatTracking = isStatTrackingEnabled(match);
   const showNinePoint = (match.selectedGames || []).some(g => g.key === 'nine_point');
   return `
-    <section class="export-section">
+    <section class="export-section export-section-match-status">
       <div class="export-section-head">
         <h2>Match status</h2>
       </div>
@@ -968,35 +968,35 @@ function buildSummaryExportBody(match, metrics) {
 
     ${buildExportMomentum(match, metrics)}
 
-    <section class="export-section">
+    <section class="export-section export-section-games-summary">
       <div class="export-section-head">
         <h2>Games summary</h2>
       </div>
       ${buildSelectedGamesSummary(match, metrics)}
     </section>
 
-    <section class="export-section">
+    <section class="export-section export-section-net-payout">
       <div class="export-section-head">
         <h2>Net payout</h2>
       </div>
       ${buildNetPayoutSummary(match, metrics)}
     </section>
 
-    <section class="export-section">
+    <section class="export-section export-section-team-leaderboard">
       <div class="export-section-head">
         <h2>Team leaderboard</h2>
       </div>
       ${buildExportTeamLeaderboard(match, metrics)}
     </section>
 
-    <section class="export-section">
+    <section class="export-section export-section-player-leaderboard">
       <div class="export-section-head">
         <h2>Player leaderboard</h2>
       </div>
       ${buildExportPlayerLeaderboard(match, metrics)}
     </section>
 
-    <section class="export-section export-section-classic">
+    <section class="export-section export-section-classic export-section-classic-summary">
       <div class="export-section-head">
         <h2>Classic scorecard</h2>
         <div class="export-section-sub">Gross on top, net below, dots indicate strokes received.</div>
@@ -1009,7 +1009,7 @@ function buildSummaryExportBody(match, metrics) {
     </section>
 
     ${showNinePoint ? `
-    <section class="export-section">
+    <section class="export-section export-section-nine-point">
       <div class="export-section-head">
         <h2>9-Point game</h2>
       </div>
@@ -1021,7 +1021,7 @@ function buildSummaryExportBody(match, metrics) {
     </section>` : ''}
 
     ${showStatTracking ? `
-    <section class="export-section">
+    <section class="export-section export-section-stat-tracking">
       <div class="export-section-head">
         <h2>Stat tracking</h2>
       </div>
@@ -1117,11 +1117,15 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       border-radius: 16px;
       padding: 14px;
       margin-bottom: 12px;
-      break-inside: avoid-page;
-      page-break-inside: avoid;
-      overflow: hidden;
+      break-inside: auto;
+      page-break-inside: auto;
+      overflow: visible;
     }
-    .export-section-head { margin-bottom: 10px; }
+    .export-section-head {
+      margin-bottom: 10px;
+      break-after: avoid-page;
+      page-break-after: avoid;
+    }
     .export-section-head h2 { margin: 0; font-size: 16px; line-height: 1.2; }
     .export-section-sub { margin-top: 4px; color: var(--muted); font-size: 12px; }
     .export-empty { color: var(--muted); font-size: 12px; }
@@ -1212,8 +1216,12 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     .match-status-meta, .game-summary-sub, .tiny { color: var(--muted); font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
     .game-summary-card-accent { background: var(--accent-soft); }
     .payout-summary-stack { display: grid; gap: 14px; }
-    .payout-section { break-inside: avoid-page; page-break-inside: avoid; }
-    .payout-summary-intro, .payout-settlement-head { font-size: 12px; }
+    .payout-section { break-inside: auto; page-break-inside: auto; }
+    .payout-summary-intro, .payout-settlement-head {
+      font-size: 12px;
+      break-after: avoid-page;
+      page-break-after: avoid;
+    }
     .payout-table-wrap, .scorecard-wrap { overflow: visible !important; max-width: 100%; }
     .payout-game-table, .settlement-table, .scorecard-table {
       width: 100%;
@@ -1221,6 +1229,12 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       table-layout: fixed;
       font-size: 10px;
       background: #fff;
+    }
+    .payout-game-table thead, .settlement-table thead, .scorecard-table thead { display: table-header-group; }
+    .payout-game-table tfoot, .settlement-table tfoot, .scorecard-table tfoot { display: table-footer-group; }
+    .payout-game-table tr, .settlement-table tr, .scorecard-table tr {
+      break-inside: avoid;
+      page-break-inside: avoid;
     }
     .payout-game-table th, .payout-game-table td,
     .settlement-table th, .settlement-table td,
@@ -1303,10 +1317,21 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
         border-right: none;
         box-shadow: none;
       }
-      .export-header { padding: 0 0 10px 0; margin-bottom: 10px; border-top: none; }
+      .export-header {
+        padding: 0 0 10px 0;
+        margin-bottom: 10px;
+        border-top: none;
+        break-after: avoid-page;
+        page-break-after: avoid;
+      }
       .export-title { font-size: 16px; }
       .export-sub, .export-meta { font-size: 10px; }
-      .export-section { padding: 10px 0; margin-bottom: 10px; }
+      .export-section {
+        padding: 10px 0;
+        margin-bottom: 10px;
+        break-inside: auto;
+        page-break-inside: auto;
+      }
       .export-section-head h2 { font-size: 13px; }
       .export-section-sub, .match-status-meta, .game-summary-sub, .tiny, .scorecard-sub { font-size: 9px; }
       .match-status-grid, .game-summary-grid, .stat-summary-grid { gap: 8px; }
@@ -1314,6 +1339,24 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
         padding: 8px;
         break-inside: avoid-page;
         page-break-inside: avoid;
+      }
+      .export-section-classic-summary {
+        break-before: page;
+        page-break-before: always;
+      }
+      .export-section-classic-only,
+      .export-classic-stage,
+      .scorecard-wrap {
+        break-inside: avoid-page;
+        page-break-inside: avoid;
+      }
+      .payout-section, .payout-table-wrap, .payout-game-table, .settlement-table {
+        break-inside: auto;
+        page-break-inside: auto;
+      }
+      .payout-summary-intro, .payout-settlement-head, .export-section-head {
+        break-after: avoid-page;
+        page-break-after: avoid;
       }
       .match-status-value, .game-summary-value { font-size: 12px; }
       .export-pill { font-size: 10px; padding: 7px 8px; }

@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v26.3';
+const APP_VERSION = 'v26.4';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -850,6 +850,209 @@ function fitElementScale(element, maxWidth, maxHeight = null) {
   const heightScale = maxHeight ? Math.min(1, maxHeight / height) : 1;
   return Math.max(0.58, Math.min(widthScale, heightScale, 1));
 }
+
+function buildClassicScorecardExportDocument(match, metrics) {
+  const courseName = metrics?.course?.name || 'No course';
+  const teeName = metrics?.tee?.teeName || 'No tee';
+  const title = `${match?.name || 'Round'} — Classic Scorecard`;
+  const subtitle = `${match?.date || todayIso()} · ${courseName} · ${teeName} · ${getPlayableHoleCount(match, metrics?.tee)} holes`;
+  const scorecardHtml = buildClassicScorecard(match, metrics);
+  const pageTitle = escapeHtml(title);
+  const pageSub = escapeHtml(subtitle);
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>${pageTitle}</title>
+  <style>
+    :root {
+      --classic-export-scale: 1;
+      --card-border: #d7dde8;
+      --card-bg: #ffffff;
+      --page-bg: #f5f7fb;
+      --text: #152033;
+      --muted: #5a667a;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--page-bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { padding: 12px; }
+    .export-shell {
+      width: 100%;
+      max-width: 1180px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 12px;
+    }
+    .export-head { margin-bottom: 10px; }
+    .export-title { font-size: 18px; font-weight: 700; line-height: 1.2; }
+    .export-sub { margin-top: 4px; color: var(--muted); font-size: 12px; }
+    .classic-export-stage {
+      width: 100%;
+      overflow: hidden;
+      position: relative;
+    }
+    .classic-export-scale-box {
+      transform-origin: top left;
+      transform: scale(var(--classic-export-scale));
+      width: calc(100% / var(--classic-export-scale));
+    }
+    .scorecard-sub { margin-bottom: 8px; color: var(--muted); font-size: 11px; }
+    .scorecard-wrap { width: 100%; overflow: visible; }
+    .scorecard-table {
+      width: auto;
+      min-width: 0;
+      border-collapse: collapse;
+      table-layout: fixed;
+      font-size: 10px;
+      color: var(--text);
+      background: #fff;
+    }
+    .scorecard-table th,
+    .scorecard-table td {
+      border: 1px solid var(--card-border);
+      padding: 3px 4px;
+      text-align: center;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    .scorecard-table th.scorecard-sticky-name,
+    .scorecard-table td.scorecard-sticky-name {
+      min-width: 98px;
+      max-width: 98px;
+      width: 98px;
+      text-align: left;
+      white-space: normal;
+      line-height: 1.15;
+    }
+    .scorecard-table th.scorecard-sticky-team,
+    .scorecard-table td.scorecard-sticky-team {
+      min-width: 56px;
+      max-width: 56px;
+      width: 56px;
+      text-align: left;
+      white-space: normal;
+      line-height: 1.15;
+    }
+    .scorecard-table th:not(.scorecard-sticky-name):not(.scorecard-sticky-team),
+    .scorecard-table td:not(.scorecard-sticky-name):not(.scorecard-sticky-team) {
+      min-width: 33px;
+      width: 33px;
+      max-width: 33px;
+    }
+    .score-hole-cell { padding: 2px 1px; }
+    .score-main, .score-sub { display: block; line-height: 1.05; }
+    .score-main { font-size: 10px; font-weight: 700; }
+    .score-sub { font-size: 8px; margin-top: 1px; }
+    .total-sub { margin-top: 2px; }
+    .tiny { font-size: 8px; color: var(--muted); margin-top: 2px; }
+    .score-number { display: inline-block; min-width: 10px; }
+    .score-empty { color: #94a3b8; }
+    .score-dots { margin-left: 2px; font-size: 8px; letter-spacing: -0.5px; }
+    .score-eagle { font-weight: 700; }
+    .score-birdie { text-decoration: underline; }
+    .score-par { }
+    .score-bogey { opacity: 0.9; }
+    .score-doublebogey { opacity: 0.8; }
+    @media print {
+      @page { margin: 0.28in; }
+      html, body { background: #fff; }
+      body { padding: 0; }
+      .export-shell {
+        max-width: none;
+        width: 100%;
+        border: none;
+        border-radius: 0;
+        padding: 0;
+        margin: 0;
+      }
+      .export-title { font-size: 15px; }
+      .export-sub { font-size: 10px; }
+      .scorecard-sub { font-size: 9px; }
+      .scorecard-table { font-size: 8.5px; }
+      .scorecard-table th,
+      .scorecard-table td { padding: 2px 2px; }
+      .scorecard-table th.scorecard-sticky-name,
+      .scorecard-table td.scorecard-sticky-name { width: 82px; min-width: 82px; max-width: 82px; }
+      .scorecard-table th.scorecard-sticky-team,
+      .scorecard-table td.scorecard-sticky-team { width: 44px; min-width: 44px; max-width: 44px; }
+      .scorecard-table th:not(.scorecard-sticky-name):not(.scorecard-sticky-team),
+      .scorecard-table td:not(.scorecard-sticky-name):not(.scorecard-sticky-team) { width: 28px; min-width: 28px; max-width: 28px; }
+      .score-main { font-size: 8.5px; }
+      .score-sub { font-size: 7px; }
+      .tiny { font-size: 6.5px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="export-shell">
+    <div class="export-head">
+      <div class="export-title">${pageTitle}</div>
+      <div class="export-sub">${pageSub}</div>
+    </div>
+    <div class="classic-export-stage" id="classicExportStage">
+      <div class="classic-export-scale-box" id="classicExportScaleBox">
+        ${scorecardHtml}
+      </div>
+    </div>
+  </div>
+  <script>
+    (function(){
+      const stage = document.getElementById('classicExportStage');
+      const box = document.getElementById('classicExportScaleBox');
+      const table = document.querySelector('.scorecard-table');
+      const root = document.documentElement;
+      function fitClassic() {
+        if (!stage || !box || !table) return;
+        box.style.removeProperty('transform');
+        box.style.removeProperty('width');
+        root.style.setProperty('--classic-export-scale', '1');
+        const availableWidth = Math.max(620, (stage.clientWidth || window.innerWidth || 980) - 2);
+        const availableHeight = Math.max(420, (window.innerHeight || 720) - 120);
+        const tableWidth = Math.max(table.scrollWidth || 0, table.offsetWidth || 0, table.getBoundingClientRect().width || 0);
+        const boxHeight = Math.max(box.scrollHeight || 0, box.offsetHeight || 0, box.getBoundingClientRect().height || 0);
+        let scale = 1;
+        if (tableWidth > 0) scale = Math.min(scale, availableWidth / tableWidth);
+        if (boxHeight > 0) scale = Math.min(scale, availableHeight / boxHeight);
+        scale = Math.max(0.48, Math.min(scale, 1));
+        root.style.setProperty('--classic-export-scale', String(scale));
+        const scaledHeight = Math.ceil(box.scrollHeight * scale) + 6;
+        stage.style.height = scaledHeight + 'px';
+      }
+      window.addEventListener('resize', fitClassic);
+      window.addEventListener('beforeprint', fitClassic);
+      document.addEventListener('DOMContentLoaded', function(){
+        requestAnimationFrame(function(){
+          fitClassic();
+          setTimeout(function(){ fitClassic(); }, 120);
+          setTimeout(function(){ try { window.print(); } catch (e) {} }, 350);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>`;
+}
+
+function openClassicScorecardExport(match) {
+  const metrics = computeMatchMetrics(match);
+  if (!metrics?.tee) {
+    toast('Classic scorecard is not available for this round.');
+    return;
+  }
+  const exportHtml = buildClassicScorecardExportDocument(match, metrics);
+  const exportWindow = window.open('', '_blank', 'noopener,noreferrer');
+  if (!exportWindow) {
+    toast('Please allow pop-ups to share the classic scorecard.');
+    return;
+  }
+  exportWindow.document.open();
+  exportWindow.document.write(exportHtml);
+  exportWindow.document.close();
+  exportWindow.focus();
+}
 function prepareScoreboardPrintLayout(printView = 'summary') {
   const root = document.getElementById('leaderboardWrap');
   const classicCard = document.querySelector('.print-section-classic-scorecard');
@@ -887,9 +1090,16 @@ function prepareScoreboardPrintLayout(printView = 'summary') {
 function openPrintScorecard(matchId, printView = null) {
   const match = getMatch(matchId || state.activeMatchId);
   if (!match) return toast('No round selected to share.');
+  const requestedView = (printView || match.printView || document.getElementById('scoreboardPrintViewSelect')?.value || 'summary') === 'scorecard' ? 'scorecard' : 'summary';
+  if (requestedView === 'scorecard') {
+    match.printView = 'scorecard';
+    syncScoreboardPrintControls('scorecard');
+    persist();
+    openClassicScorecardExport(match);
+    return;
+  }
   const previousTab = document.querySelector('.tab.active')?.dataset.tab || 'score';
   const previouslyActiveMatch = state.activeMatchId;
-  const requestedView = (printView || match.printView || document.getElementById('scoreboardPrintViewSelect')?.value || 'summary') === 'scorecard' ? 'scorecard' : 'summary';
   syncScoreboardPrintControls(requestedView);
   if (state.activeMatchId !== match.id) state.activeMatchId = match.id;
   const metrics = computeMatchMetrics(match);

@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v25.9';
+const APP_VERSION = 'v26.0';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -331,6 +331,7 @@ let editingMatchId = null;
 let currentHole = 1;
 let finishConfirmArmed = false;
 let currentLeaderboardMatchRef = null;
+let newMatchPromptFinishArmed = false;
 const uiState = {
   courseSearch: '',
   expandedCourses: new Set(),
@@ -1784,6 +1785,7 @@ function renderAll() {
   const notesBox = document.getElementById('notesBox'); if (notesBox && notesBox.value !== state.notes) notesBox.value = state.notes || '';
   const coursesSearchInput = document.getElementById('coursesSearchInput');
   if (coursesSearchInput && coursesSearchInput.value !== uiState.courseSearch) coursesSearchInput.value = uiState.courseSearch;
+  syncNewMatchConflictUi();
 }
 
 
@@ -1898,6 +1900,82 @@ function renderMatches() {
       </div>
     `;
   }).join('');
+}
+
+
+function resetFinishRoundConfirmation({ sync = true } = {}) {
+  finishConfirmArmed = false;
+  if (sync) syncFinishRoundUi(getActiveMatch());
+}
+
+function closeNewMatchConflictDialog({ disarmFinish = false } = {}) {
+  const dialog = document.getElementById('newMatchConflictDialog');
+  if (dialog) {
+    dialog.classList.add('hidden');
+    dialog.setAttribute('aria-hidden', 'true');
+  }
+  if (disarmFinish && newMatchPromptFinishArmed && finishConfirmArmed) {
+    resetFinishRoundConfirmation();
+  }
+  newMatchPromptFinishArmed = false;
+  syncNewMatchConflictUi();
+}
+
+function openNewMatchConflictDialog() {
+  const dialog = document.getElementById('newMatchConflictDialog');
+  if (!dialog) return;
+  newMatchPromptFinishArmed = false;
+  dialog.classList.remove('hidden');
+  dialog.setAttribute('aria-hidden', 'false');
+  syncNewMatchConflictUi();
+}
+
+function syncNewMatchConflictUi() {
+  const dialog = document.getElementById('newMatchConflictDialog');
+  if (!dialog || dialog.classList.contains('hidden')) return;
+  const title = document.getElementById('newMatchConflictTitle');
+  const body = document.getElementById('newMatchConflictBody');
+  const finishBtn = document.getElementById('newMatchFinishCurrentBtn');
+  const continueBtn = document.getElementById('newMatchContinueBtn');
+  if (title) title.textContent = newMatchPromptFinishArmed ? 'Confirm finish current round' : 'Round already underway';
+  if (body) body.textContent = newMatchPromptFinishArmed
+    ? 'Tap Confirm Finish to lock the current round to history, then the app will open a blank new match setup.'
+    : 'A round is already underway. You can continue the current round, or finish it before starting a new match.';
+  if (finishBtn) {
+    finishBtn.textContent = newMatchPromptFinishArmed ? 'Confirm Finish' : 'Finish Current Round';
+    finishBtn.classList.toggle('danger', !!newMatchPromptFinishArmed);
+  }
+  if (continueBtn) continueBtn.textContent = 'Continue Current Round';
+}
+
+function handleNewMatchRequest() {
+  const active = getActiveMatch();
+  if (active && matchHasStarted(active)) {
+    openNewMatchConflictDialog();
+    return;
+  }
+  editingMatchId = null;
+  loadMatchEditor(null);
+  renderMatchSetupState();
+  activateTab('setup');
+}
+
+function handleNewMatchFinishAction() {
+  const active = getActiveMatch();
+  if (!active) {
+    closeNewMatchConflictDialog();
+    handleNewMatchRequest();
+    return;
+  }
+  if (!newMatchPromptFinishArmed) {
+    armFinishRound();
+    newMatchPromptFinishArmed = true;
+    syncNewMatchConflictUi();
+    return;
+  }
+  completeActiveRound();
+  closeNewMatchConflictDialog();
+  handleNewMatchRequest();
 }
 
 function syncFinishRoundUi(match = getActiveMatch()) {
@@ -3566,12 +3644,7 @@ function installHandlers() {
   });
 
   
-  document.getElementById('newMatchBtn').addEventListener('click', () => {
-    editingMatchId = null;
-    loadMatchEditor(null);
-    renderMatchSetupState();
-    activateTab('setup');
-  });
+  document.getElementById('newMatchBtn').addEventListener('click', handleNewMatchRequest);
   document.getElementById('editActiveMatchBtn').addEventListener('click', () => {
     const active = getActiveMatch();
     if (!active) return toast('No active match to edit.');
@@ -3580,6 +3653,21 @@ function installHandlers() {
     renderMatchSetupState();
     activateTab('setup');
   });
+
+  const newMatchContinueBtn = document.getElementById('newMatchContinueBtn');
+  if (newMatchContinueBtn) newMatchContinueBtn.addEventListener('click', () => {
+    closeNewMatchConflictDialog({ disarmFinish: true });
+    activateTab('scoring');
+  });
+  const newMatchFinishCurrentBtn = document.getElementById('newMatchFinishCurrentBtn');
+  if (newMatchFinishCurrentBtn) newMatchFinishCurrentBtn.addEventListener('click', handleNewMatchFinishAction);
+  const newMatchCancelBtn = document.getElementById('newMatchCancelBtn');
+  if (newMatchCancelBtn) newMatchCancelBtn.addEventListener('click', () => closeNewMatchConflictDialog({ disarmFinish: true }));
+  const newMatchConflictDialog = document.getElementById('newMatchConflictDialog');
+  if (newMatchConflictDialog) newMatchConflictDialog.addEventListener('click', (e) => {
+    if (e.target === newMatchConflictDialog) closeNewMatchConflictDialog({ disarmFinish: true });
+  });
+
 
   document.getElementById('matchCourseSelect').addEventListener('change', e => { uiState.referenceTeeManual = false; populateMatchTees(e.target.value); const currentSelections = getCurrentMatchEditorSelections(); const defaultTeeId = getDefaultMatchTeeId(e.target.value); const normalizedSelections = currentSelections.map(row => ({ ...row, teeId: defaultTeeId })); syncMatchPlayerDraft(normalizedSelections); normalizeDraftTeeAssignments({ courseId: e.target.value, forceDefault: true }); syncReferenceTeeUi({ courseId: e.target.value, selections: uiState.matchPlayerDraft, forceAuto: true }); populateMatchPlayerPicker(uiState.matchPlayerDraft); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
   document.getElementById('holeCountSelect').addEventListener('change', () => { renderNineHoleConfigUi(); renderSetupHandicapPreview(); });

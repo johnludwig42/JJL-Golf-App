@@ -1725,3 +1725,19 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
   display: block;
   white-space: nowrap;
 }
+
+
+.new-match-sheet{
+  width:min(560px,100%);
+  max-height:min(70vh,520px);
+  border-radius:24px;
+  align-self:center;
+}
+.new-match-sheet-actions{
+  padding:0 16px 18px;
+  display:grid;
+  gap:10px;
+}
+@media (min-width: 641px){
+  .new-match-sheet-actions{grid-template-columns:1fr 1fr;}
+}

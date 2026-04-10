@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=25.9" />
+  <link rel="manifest" href="manifest.json?v=26.0" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
   <link rel="shortcut icon" href="./favicon-32x32.png" />
@@ -550,7 +550,7 @@
           <li>Added optional per-hole stat tracking (fairways, GIR, putts, up &amp; downs, sandies).</li>
           <li>Reordered the Scoreboard layout and moved Notes from More to Scoreboard.</li>
           <li>Fixed the Game Setup player assignment flow so team slots save correctly and matches can be created reliably again.</li>
-          <li>App version: <strong id="appVersionLabel">v25.9</strong></li>
+          <li>App version: <strong id="appVersionLabel">v26.0</strong></li>
         </ul>
       </div>
     </section>
@@ -570,10 +570,29 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v25.9</span>
+    <span id="appVersionFooter">v26.0</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>
+
+
+  <div id="newMatchConflictDialog" class="sheet-backdrop hidden" aria-hidden="true">
+    <div class="sheet-card new-match-sheet" role="dialog" aria-modal="true" aria-labelledby="newMatchConflictTitle">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-header">
+        <div>
+          <div class="tiny">Game setup</div>
+          <h3 id="newMatchConflictTitle">Round already underway</h3>
+          <div id="newMatchConflictBody" class="tiny">A round is already underway. You can continue the current round, or finish it before starting a new match.</div>
+        </div>
+        <button id="newMatchCancelBtn" type="button" class="secondary">Cancel</button>
+      </div>
+      <div class="sheet-actions new-match-sheet-actions">
+        <button id="newMatchContinueBtn" type="button" class="secondary">Continue Current Round</button>
+        <button id="newMatchFinishCurrentBtn" type="button" class="primary">Finish Current Round</button>
+      </div>
+    </div>
+  </div>
 
   <div id="playerSearchSheet" class="sheet-backdrop hidden" aria-hidden="true">
     <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="playerSearchTitle">

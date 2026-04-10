@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v25.6';
+const APP_VERSION = 'v25.9';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -1528,7 +1528,7 @@ function buildNetPayoutSummary(match, metrics) {
     return `
       <div class="payout-section top-gap">
         <div class="payout-summary-intro"><strong>${escapeHtml(section.title)}:</strong> ${escapeHtml(section.intro)}</div>
-        <div class="payout-table-wrap top-gap">
+        <div class="payout-table-wrap payout-table-wrap-${section.key} top-gap">
           <table class="payout-game-table payout-game-table-wide payout-game-table-${section.key}">
             <thead><tr><th class="payout-sticky-player">Player</th>${headerCells}<th>Total</th></tr></thead>
             <tbody>${playerRows}</tbody>

@@ -1685,3 +1685,43 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
 #leaderboard .payout-game-table-team tfoot .payout-sticky-player{z-index:9 !important;background:#fbfcfb !important;}
 #leaderboard .payout-game-table-team td.payout-sticky-player strong,
 #leaderboard .payout-game-table-team tfoot .payout-sticky-player strong{display:block;white-space:nowrap;}
+
+
+/* v25.9 team games payout sticky player column */
+#leaderboard .payout-table-wrap-team{
+  position: relative;
+  overflow-x: auto !important;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+#leaderboard .payout-table-wrap-team .payout-game-table-team{
+  position: relative;
+  border-collapse: separate !important;
+  border-spacing: 0;
+  min-width: max-content;
+  table-layout: auto;
+}
+#leaderboard .payout-table-wrap-team .payout-game-table-team .payout-sticky-player{
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 20 !important;
+  background: #fff !important;
+  background-clip: padding-box;
+  box-shadow: 10px 0 14px -10px rgba(0,0,0,.24);
+  min-width: 148px;
+  max-width: 148px;
+  white-space: nowrap;
+}
+#leaderboard .payout-table-wrap-team .payout-game-table-team thead .payout-sticky-player{
+  z-index: 22 !important;
+  background: #f8fbf9 !important;
+}
+#leaderboard .payout-table-wrap-team .payout-game-table-team tfoot .payout-sticky-player{
+  z-index: 21 !important;
+  background: #fbfcfb !important;
+}
+#leaderboard .payout-table-wrap-team .payout-game-table-team td.payout-sticky-player strong,
+#leaderboard .payout-table-wrap-team .payout-game-table-team tfoot .payout-sticky-player strong{
+  display: block;
+  white-space: nowrap;
+}

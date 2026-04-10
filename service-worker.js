@@ -1,23 +1,23 @@
-const CACHE_NAME = 'the-dye-ledger-v25.6';
+const CACHE_NAME = 'the-dye-ledger-v25.8';
 const ASSETS = [
   './',
   './index.html',
   './style.css',
   './app.js',
-  './manifest.json?v=25.6',
+  './manifest.json?v=25.8',
   './apple-touch-icon.png',
   './favicon-32x32.png',
   './favicon-16x16.png',
-  './icons/icon-192-v4.png',
-  './icons/icon-512-v4.png',
-  './icons/apple-touch-icon-v4.png',
-  './icons/logo-mark.svg',
-  './icons/players.svg',
-  './icons/courses.svg',
-  './icons/setup.svg',
-  './icons/scoring.svg',
-  './icons/leaderboard.svg',
-  './icons/settings.svg'
+  './icon-192-v4.png',
+  './icon-512-v4.png',
+  './apple-touch-icon.png',
+  './logo-mark.svg',
+  './players.svg',
+  './courses.svg',
+  './setup.svg',
+  './scoring.svg',
+  './leaderboard.svg',
+  './settings.svg'
 ];
 
 self.addEventListener('install', event => {

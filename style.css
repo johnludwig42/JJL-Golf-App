@@ -1669,3 +1669,11 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
   .scoreboard-round-actions .actions{justify-content:stretch}
   .scoreboard-round-actions .actions > *{flex:1 1 auto}
 }
+
+
+#leaderboard .payout-game-table{min-width:max-content;table-layout:auto;}
+#leaderboard .payout-game-table .payout-sticky-player{position:sticky;left:0;z-index:5;background:#fff;min-width:148px;max-width:148px;box-shadow:10px 0 14px -10px rgba(0,0,0,.24);white-space:nowrap;}
+#leaderboard .payout-game-table thead .payout-sticky-player{z-index:6;background:#f8fbf9;}
+#leaderboard .payout-game-table tfoot .payout-sticky-player{z-index:6;background:#fbfcfb;}
+#leaderboard .payout-game-table td.payout-sticky-player strong,
+#leaderboard .payout-game-table tfoot .payout-sticky-player strong{display:block;white-space:nowrap;}

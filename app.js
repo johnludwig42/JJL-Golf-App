@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v25.5';
+const APP_VERSION = 'v25.6';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -1513,7 +1513,7 @@ function buildNetPayoutSummary(match, metrics) {
       const total = totals[player.id] || 0;
       const totalCls = total > 0.0001 ? 'payout-total-positive' : total < -0.0001 ? 'payout-total-negative' : '';
       const totalText = Math.abs(total) > 0.0001 ? formatMoneyAccounting(total) : '—';
-      return `<tr><td><strong>${escapeHtml(player.name)}</strong></td>${gameCells}<td class="${totalCls}"><strong>${totalText}</strong></td></tr>`;
+      return `<tr><td class="payout-sticky-player"><strong>${escapeHtml(player.name)}</strong></td>${gameCells}<td class="${totalCls}"><strong>${totalText}</strong></td></tr>`;
     }).join('');
     const columnFoot = section.games.map(game => {
       const colTotal = players.reduce((sum, player) => sum + (game.amounts[player.id] || 0), 0);
@@ -1530,9 +1530,9 @@ function buildNetPayoutSummary(match, metrics) {
         <div class="payout-summary-intro"><strong>${escapeHtml(section.title)}:</strong> ${escapeHtml(section.intro)}</div>
         <div class="payout-table-wrap top-gap">
           <table class="payout-game-table payout-game-table-wide">
-            <thead><tr><th>Player</th>${headerCells}<th>Total</th></tr></thead>
+            <thead><tr><th class="payout-sticky-player">Player</th>${headerCells}<th>Total</th></tr></thead>
             <tbody>${playerRows}</tbody>
-            <tfoot><tr><td><strong>Total</strong></td>${columnFoot}<td><strong>${formatMoneyAccounting(overallTotal)}</strong></td></tr></tfoot>
+            <tfoot><tr><td class="payout-sticky-player"><strong>Total</strong></td>${columnFoot}<td><strong>${formatMoneyAccounting(overallTotal)}</strong></td></tr></tfoot>
           </table>
         </div>
         <div class="top-gap payout-settlement-head"><strong>${escapeHtml(section.title)} settlement</strong></div>
@@ -3297,6 +3297,7 @@ function loadCourseEditor(courseId = null) {
 function activateTab(tabId) {
   document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tabId));
   document.querySelectorAll('.panel').forEach(el => el.classList.toggle('active', el.id === tabId));
+  syncFinishRoundUi(getActiveMatch());
 }
 
 function loadTeeEditor(courseId = null, teeId = null) {

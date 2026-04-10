@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v26.2';
+const APP_VERSION = 'v26.3';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -802,6 +802,45 @@ function clearPrintScaling() {
   }
   if (classicCard) classicCard.style.removeProperty('--classic-print-height');
 }
+let activePrintCleanup = null;
+function cleanupActivePrintSession() {
+  if (typeof activePrintCleanup === 'function') {
+    const cleanup = activePrintCleanup;
+    activePrintCleanup = null;
+    cleanup();
+  }
+}
+function armDeferredPrintCleanup(cleanup) {
+  cleanupActivePrintSession();
+  let done = false;
+  let cleanupTimer = null;
+  const runCleanup = () => {
+    if (done) return;
+    done = true;
+    if (cleanupTimer) clearTimeout(cleanupTimer);
+    window.removeEventListener('afterprint', handleAfterPrint);
+    window.removeEventListener('focus', handleFocusReturn, true);
+    document.removeEventListener('visibilitychange', handleVisibilityReturn, true);
+    cleanup();
+    activePrintCleanup = null;
+  };
+  const scheduleCleanup = (delay = 700) => {
+    if (done) return;
+    if (cleanupTimer) clearTimeout(cleanupTimer);
+    cleanupTimer = setTimeout(() => {
+      if (document.visibilityState === 'visible') runCleanup();
+    }, delay);
+  };
+  const handleAfterPrint = () => scheduleCleanup(900);
+  const handleFocusReturn = () => scheduleCleanup(450);
+  const handleVisibilityReturn = () => {
+    if (document.visibilityState === 'visible') scheduleCleanup(250);
+  };
+  window.addEventListener('afterprint', handleAfterPrint);
+  window.addEventListener('focus', handleFocusReturn, true);
+  document.addEventListener('visibilitychange', handleVisibilityReturn, true);
+  activePrintCleanup = runCleanup;
+}
 function fitElementScale(element, maxWidth, maxHeight = null) {
   if (!element || !maxWidth) return 1;
   const width = Math.max(element.scrollWidth || 0, element.offsetWidth || 0, element.getBoundingClientRect?.().width || 0);
@@ -821,8 +860,8 @@ function prepareScoreboardPrintLayout(printView = 'summary') {
   const viewportWidth = Math.max(window.innerWidth || 0, document.documentElement?.clientWidth || 0, 1180);
   const viewportHeight = Math.max(window.innerHeight || 0, document.documentElement?.clientHeight || 0, 720);
   if (printView === 'scorecard') {
-    const printSafeWidth = 980;
-    const printSafeHeight = 620;
+    const printSafeWidth = 920;
+    const printSafeHeight = 560;
     const scorecardTable = classicScorecard?.querySelector('.scorecard-table');
     const scaleTarget = scorecardTable || classicScorecard;
     let scale = fitElementScale(scaleTarget, printSafeWidth, printSafeHeight);

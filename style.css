@@ -1677,3 +1677,11 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
 #leaderboard .payout-game-table tfoot .payout-sticky-player{z-index:6;background:#fbfcfb;}
 #leaderboard .payout-game-table td.payout-sticky-player strong,
 #leaderboard .payout-game-table tfoot .payout-sticky-player strong{display:block;white-space:nowrap;}
+
+
+#leaderboard .payout-game-table-team{border-collapse:separate;border-spacing:0;}
+#leaderboard .payout-game-table-team .payout-sticky-player{position:sticky !important;left:0 !important;z-index:8 !important;background:#fff !important;min-width:148px;max-width:148px;box-shadow:10px 0 14px -10px rgba(0,0,0,.24);}
+#leaderboard .payout-game-table-team thead .payout-sticky-player{z-index:9 !important;background:#f8fbf9 !important;}
+#leaderboard .payout-game-table-team tfoot .payout-sticky-player{z-index:9 !important;background:#fbfcfb !important;}
+#leaderboard .payout-game-table-team td.payout-sticky-player strong,
+#leaderboard .payout-game-table-team tfoot .payout-sticky-player strong{display:block;white-space:nowrap;}

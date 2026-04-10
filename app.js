@@ -1529,7 +1529,7 @@ function buildNetPayoutSummary(match, metrics) {
       <div class="payout-section top-gap">
         <div class="payout-summary-intro"><strong>${escapeHtml(section.title)}:</strong> ${escapeHtml(section.intro)}</div>
         <div class="payout-table-wrap top-gap">
-          <table class="payout-game-table payout-game-table-wide">
+          <table class="payout-game-table payout-game-table-wide payout-game-table-${section.key}">
             <thead><tr><th class="payout-sticky-player">Player</th>${headerCells}<th>Total</th></tr></thead>
             <tbody>${playerRows}</tbody>
             <tfoot><tr><td class="payout-sticky-player"><strong>Total</strong></td>${columnFoot}<td><strong>${formatMoneyAccounting(overallTotal)}</strong></td></tr></tfoot>
@@ -1908,10 +1908,18 @@ function syncFinishRoundUi(match = getActiveMatch()) {
   const scoreboardRoundState = document.getElementById('scoreboardRoundState');
   const isComplete = !!match && match.status === 'complete';
   const hasMatch = !!match;
-  if (scoringFinishBtn) scoringFinishBtn.classList.toggle('hidden', !hasMatch || isComplete || finishConfirmArmed);
-  if (scoringConfirmBtn) scoringConfirmBtn.classList.toggle('hidden', !hasMatch || isComplete || !finishConfirmArmed);
-  if (scoreboardFinishBtn) scoreboardFinishBtn.classList.toggle('hidden', !hasMatch || isComplete || finishConfirmArmed);
-  if (scoreboardConfirmBtn) scoreboardConfirmBtn.classList.toggle('hidden', !hasMatch || isComplete || !finishConfirmArmed);
+  const show = (el, visible) => {
+    if (!el) return;
+    el.classList.toggle('hidden', !visible);
+    if (visible) el.style.removeProperty('display');
+    else el.style.setProperty('display', 'none');
+    el.disabled = !visible;
+    el.setAttribute('aria-hidden', visible ? 'false' : 'true');
+  };
+  show(scoringFinishBtn, hasMatch && !isComplete && !finishConfirmArmed);
+  show(scoringConfirmBtn, hasMatch && !isComplete && finishConfirmArmed);
+  show(scoreboardFinishBtn, hasMatch && !isComplete && !finishConfirmArmed);
+  show(scoreboardConfirmBtn, hasMatch && !isComplete && finishConfirmArmed);
   if (scoreboardRoundState) {
     if (!hasMatch) scoreboardRoundState.textContent = 'No active round.';
     else if (isComplete) scoreboardRoundState.textContent = 'Round complete.';

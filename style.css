@@ -2277,3 +2277,8 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
 #leaderboard .payout-section-team .team-payout-fixed-table tfoot td{
   overflow:visible;
 }
+
+
+.reference-tee-field, .supabase-card, .shared-match-card { }
+#supabaseStatus { font-size: 1rem; }
+#sharedMatchHint, #supabaseStatusDetail { max-width: 60ch; }

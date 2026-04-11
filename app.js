@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v26.15';
+const APP_VERSION = 'v27.0';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -11,9 +11,22 @@ const GAME_LIBRARY = [
 ];
 
 const GAME_LABELS = Object.fromEntries(GAME_LIBRARY.map(g => [g.key, g.label]));
+const CLOUD_MATCH_CACHE_PREFIX = 'the-dye-ledger-cloud-match:';
+const SHARED_MATCHES_INDEX_KEY = 'the-dye-ledger-shared-index';
+const SUPABASE_CONFIG = window.__DYE_SUPABASE_CONFIG__ || {};
+let supabaseClient = null;
+let supabaseInitPromise = null;
 const SCORE_ENTRY_MODES = {
-  official_scorer: 'Official Scorer',
-  team_input: 'Team Input',
+  single_device: 'One device scores for everyone',
+  team_codes: 'Each team enters its own scores',
+  open_edit: 'Anyone can enter scores',
+};
+const LEGACY_SCORE_ENTRY_MODE_MAP = {
+  official_scorer: 'single_device',
+  team_input: 'team_codes',
+  single_device: 'single_device',
+  team_codes: 'team_codes',
+  open_edit: 'open_edit',
 };
 const SCORE_ACCESS_ROLE_LABELS = {
   event_admin: 'Event Admin',
@@ -24,8 +37,18 @@ const SCORE_ACCESS_ROLE_LABELS = {
 function getGameLabel(key) {
   return GAME_LABELS[key] || key;
 }
-function formatScoreEntryModeLabel(mode = 'official_scorer') {
-  return SCORE_ENTRY_MODES[mode] || SCORE_ENTRY_MODES.official_scorer;
+function normalizeScoringAccessMode(value = 'team_codes') {
+  return LEGACY_SCORE_ENTRY_MODE_MAP[String(value || '').trim()] || 'team_codes';
+}
+function formatScoreEntryModeLabel(mode = 'team_codes') {
+  const normalized = normalizeScoringAccessMode(mode);
+  return SCORE_ENTRY_MODES[normalized] || SCORE_ENTRY_MODES.team_codes;
+}
+function getLegacyScoreEntryMode(mode = 'team_codes') {
+  const normalized = normalizeScoringAccessMode(mode);
+  if (normalized === 'single_device') return 'official_scorer';
+  if (normalized === 'team_codes') return 'team_input';
+  return 'open_edit';
 }
 function formatScoreAccessRoleLabel(role = 'viewer') {
   return SCORE_ACCESS_ROLE_LABELS[role] || SCORE_ACCESS_ROLE_LABELS.viewer;
@@ -51,9 +74,10 @@ function buildTeamScorerAssignments(teamCount = 1, teamNames = [], existing = []
   });
 }
 function getScoreAccessState(match) {
-  const mode = String(match?.scoreEntryMode || 'official_scorer') === 'team_input' ? 'team_input' : 'official_scorer';
-  const role = String(match?.activeScoreRole || (mode === 'team_input' ? 'team_scorer' : 'official_scorer'));
-  const allowedRole = mode === 'official_scorer' && role === 'team_scorer' ? 'official_scorer' : role;
+  const mode = normalizeScoringAccessMode(match?.scoringAccessMode || match?.scoreEntryMode || 'team_codes');
+  const defaultRole = mode === 'team_codes' ? 'team_scorer' : 'official_scorer';
+  const role = String(match?.activeScoreRole || defaultRole);
+  const allowedRole = mode === 'single_device' && role === 'team_scorer' ? 'official_scorer' : role;
   const teamCount = Math.max(1, Number(match?.teamCount) || 1);
   const selectedTeam = Math.min(teamCount, Math.max(1, Number(match?.activeScoreTeam) || 1));
   return {
@@ -65,6 +89,7 @@ function getScoreAccessState(match) {
 function canEditPlayerScore(match, teamNo = 1) {
   const access = getScoreAccessState(match);
   if (access.role === 'event_admin' || access.role === 'official_scorer') return true;
+  if (access.mode === 'open_edit' && access.role !== 'viewer') return true;
   if (access.role === 'team_scorer') return Number(teamNo) === Number(access.team);
   return false;
 }
@@ -73,9 +98,10 @@ function canEditGreenies(match, teamNo = 1) {
 }
 function getScoreAccessHint(match) {
   const access = getScoreAccessState(match);
-  if (access.role === 'event_admin') return 'Event Admin can edit any team, correct scores, and act as the event owner.';
-  if (access.role === 'official_scorer') return 'Official Scorer can enter scores for every team in the event.';
-  if (access.role === 'team_scorer') return `Team Scorer can enter scores only for ${getTeamLabel(match, access.team)}.`;
+  if (access.role === 'event_admin') return 'Organizer / Admin can edit all teams, correct scores, and manage shared-round setup.';
+  if (access.mode === 'open_edit' && access.role !== 'viewer') return 'Anyone Can Enter Scores mode keeps score entry open to any authorized non-viewer device.';
+  if (access.role === 'official_scorer') return 'One Device Scores for Everyone keeps one full-access scorer in charge of entry.';
+  if (access.role === 'team_scorer') return `Each Team Enters Its Own Scores mode limits editing to ${getTeamLabel(match, access.team)}.`;
   return 'Viewer is read-only and can monitor the round without editing any scores.';
 }
 
@@ -393,7 +419,7 @@ function setCourseExpanded(courseId, expanded) {
   else uiState.expandedCourses.delete(courseId);
 }
 function loadState() {
-  const fallback = { players: [], courses: [], matches: [], activeMatchId: null, notes: '' };
+  const fallback = { players: [], courses: [], matches: [], activeMatchId: null, notes: '', sharedMatchIds: [] };
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
       || localStorage.getItem('golf-matchbook-v9')
@@ -406,6 +432,7 @@ function loadState() {
     parsed.matches = Array.isArray(parsed.matches) ? parsed.matches : [];
     parsed.activeMatchId = parsed.activeMatchId || null;
     parsed.notes = typeof parsed.notes === 'string' ? parsed.notes : '';
+    parsed.sharedMatchIds = Array.isArray(parsed.sharedMatchIds) ? parsed.sharedMatchIds : [];
     return parsed;
   } catch {
     return fallback;
@@ -1663,6 +1690,18 @@ function normalizeTee(tee, courseName = '') {
   tee.rating = Number(tee.rating) || 72;
   tee.slope = Number(tee.slope) || 113;
 }
+function computeMatchProgress(match) {
+  const limit = getRequestedHoleCount(match);
+  const players = Array.isArray(match?.players) ? match.players : [];
+  const lastTouchedHole = Math.max(0, ...players.flatMap(mp => (Array.isArray(mp.scores) ? mp.scores : []).filter(s => s.gross && Number(s.holeNumber) <= limit).map(s => Number(s.holeNumber) || 0)), 0);
+  let lastFullyCompletedHole = 0;
+  for (let hole = 1; hole <= limit; hole += 1) {
+    const allComplete = players.length > 0 && players.every(mp => Number(mp?.scores?.[hole - 1]?.gross) > 0);
+    if (!allComplete) break;
+    lastFullyCompletedHole = hole;
+  }
+  return { lastTouchedHole, lastFullyCompletedHole };
+}
 function normalizeMatch(match) {
   match.id = match.id || uid();
   match.date = match.date || todayIso();
@@ -1676,12 +1715,13 @@ function normalizeMatch(match) {
   match.customStartHole = Math.max(1, Math.min(10, Number(match.customStartHole) || 1));
   match.status = match.status || 'active';
   match.completedAt = match.completedAt || null;
-  match.scoreEntryMode = String(match.scoreEntryMode || 'official_scorer') === 'team_input' ? 'team_input' : 'official_scorer';
+  match.scoringAccessMode = normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'team_codes');
+  match.scoreEntryMode = getLegacyScoreEntryMode(match.scoringAccessMode);
   match.officialScorerName = String(match.officialScorerName || 'Official scorer').trim() || 'Official scorer';
   match.teamNames = Array.isArray(match.teamNames) ? match.teamNames : [];
   match.teamScorers = buildTeamScorerAssignments(Number(match.teamCount) || Math.max(1, match.teamNames.length || 1), match.teamNames, match.teamScorers);
-  match.activeScoreRole = match.activeScoreRole || (match.scoreEntryMode === 'team_input' ? 'team_scorer' : 'official_scorer');
-  if (match.scoreEntryMode === 'official_scorer' && match.activeScoreRole === 'team_scorer') match.activeScoreRole = 'official_scorer';
+  match.activeScoreRole = match.activeScoreRole || (match.scoringAccessMode === 'team_codes' ? 'team_scorer' : 'official_scorer');
+  if (match.scoringAccessMode === 'single_device' && match.activeScoreRole === 'team_scorer') match.activeScoreRole = 'official_scorer';
   match.activeScoreTeam = Math.min(Math.max(1, Number(match.activeScoreTeam) || 1), Math.max(1, Number(match.teamCount) || 1));
   match.statTrackingEnabled = !!match.statTrackingEnabled;
   match.players = Array.isArray(match.players) ? match.players : [];
@@ -1696,12 +1736,22 @@ function normalizeMatch(match) {
   match.greeniesWinners = match.greeniesWinners && typeof match.greeniesWinners === 'object' ? match.greeniesWinners : {};
   match.matchStatusGame = match.matchStatusGame || getDefaultFeaturedGameKey(match.selectedGames || []);
   match.momentumGame = match.momentumGame || match.matchStatusGame || getDefaultFeaturedGameKey(match.selectedGames || []);
+  match.storageMode = match.storageMode === 'shared' ? 'shared' : 'local';
+  match.sharedMatchId = String(match.sharedMatchId || match.id || '');
+  match.cloudSyncState = String(match.cloudSyncState || (match.storageMode === 'shared' ? 'local-cache' : 'local-only'));
+  match.lastCloudSyncAt = match.lastCloudSyncAt || null;
+  match.sharedOwnerUserId = match.sharedOwnerUserId || null;
+  match.sharedMatchRef = match.sharedMatchRef || match.sharedMatchId || match.id;
+  const progress = computeMatchProgress(match);
+  match.lastTouchedHole = Number(match.lastTouchedHole) || progress.lastTouchedHole;
+  match.lastFullyCompletedHole = Number(match.lastFullyCompletedHole) || progress.lastFullyCompletedHole;
 }
 function normalizeState() {
   state.players = Array.isArray(state.players) ? state.players : [];
   state.courses = Array.isArray(state.courses) ? state.courses : [];
   state.matches = Array.isArray(state.matches) ? state.matches : [];
   state.notes = typeof state.notes === 'string' ? state.notes : '';
+  state.sharedMatchIds = Array.isArray(state.sharedMatchIds) ? [...new Set(state.sharedMatchIds.filter(Boolean))] : [];
   state.players.forEach(p => {
     p.id = p.id || uid();
     p.name = p.name || '';
@@ -1738,9 +1788,10 @@ function getPlayer(playerId) { return state.players.find(p => p.id === playerId)
 function getMatch(matchId = state.activeMatchId) { return state.matches.find(m => m.id === matchId) || null; }
 function getActiveMatch() { return getMatch(); }
 function completedHoles(match) {
-  if (!match) return 0;
-  const limit = getRequestedHoleCount(match);
-  return Math.max(0, ...match.players.flatMap(mp => mp.scores.filter(s => s.gross && Number(s.holeNumber) <= limit).map(s => s.holeNumber)), 0);
+  return Number(match?.lastTouchedHole) || computeMatchProgress(match).lastTouchedHole || 0;
+}
+function getLastFullyCompletedHole(match) {
+  return Number(match?.lastFullyCompletedHole) || computeMatchProgress(match).lastFullyCompletedHole || 0;
 }
 function holeStrokeAllowanceForPlayer(holeStrokeIndex, playerHandicap, baseHandicap) {
   const diff = Math.max(0, playerHandicap - baseHandicap);
@@ -2731,6 +2782,362 @@ function scheduleTeamPayoutSplitPaneSync() {
   });
 }
 
+function hasSupabaseConfig() {
+  return !!(SUPABASE_CONFIG?.url && SUPABASE_CONFIG?.anonKey && window.supabase?.createClient);
+}
+async function ensureSupabaseClient() {
+  if (!hasSupabaseConfig()) return null;
+  if (supabaseClient) return supabaseClient;
+  if (!supabaseInitPromise) {
+    supabaseInitPromise = (async () => {
+      const client = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey, {
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+      });
+      const existing = await client.auth.getUser();
+      if (!existing?.data?.user) {
+        const signIn = await client.auth.signInAnonymously();
+        if (signIn.error) throw signIn.error;
+      }
+      supabaseClient = client;
+      return client;
+    })().catch(err => {
+      supabaseInitPromise = null;
+      throw err;
+    });
+  }
+  return supabaseInitPromise;
+}
+async function getSupabaseUser() {
+  const client = await ensureSupabaseClient();
+  if (!client) return null;
+  const { data, error } = await client.auth.getUser();
+  if (error) throw error;
+  if (data?.user) return data.user;
+  const signIn = await client.auth.signInAnonymously();
+  if (signIn.error) throw signIn.error;
+  return signIn.data?.user || null;
+}
+function getSharedMatchIndex() {
+  return Array.isArray(state.sharedMatchIds) ? [...new Set(state.sharedMatchIds.filter(Boolean))] : [];
+}
+function rememberSharedMatchId(matchId) {
+  if (!matchId) return;
+  state.sharedMatchIds = [...new Set([...(state.sharedMatchIds || []), matchId])];
+}
+function cacheCloudMatchBundle(matchId, bundle) {
+  if (!matchId || !bundle) return;
+  localStorage.setItem(`${CLOUD_MATCH_CACHE_PREFIX}${matchId}`, JSON.stringify(bundle));
+}
+function readCachedCloudMatchBundle(matchId) {
+  try {
+    const raw = localStorage.getItem(`${CLOUD_MATCH_CACHE_PREFIX}${matchId}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+function getCourseSnapshotForMatch(match) {
+  const course = getCourse(match.courseId);
+  const teeIds = [...new Set([match.teeId, ...match.players.map(p => p.teeId)].filter(Boolean))];
+  const tees = teeIds.map(teeId => {
+    const tee = getTee(match.courseId, teeId);
+    if (!tee) return null;
+    return JSON.parse(JSON.stringify(tee));
+  }).filter(Boolean);
+  return {
+    id: match.courseId,
+    name: course?.name || 'Imported Course',
+    city: course?.city || '',
+    state: course?.state || '',
+    country: course?.country || 'United States of America',
+    strokeIndexes: Array.isArray(course?.strokeIndexes) ? course.strokeIndexes.slice() : null,
+    tees,
+  };
+}
+function buildCloudMatchPayload(match, organizerUserId = null) {
+  const createdAt = new Date().toISOString();
+  const courseSnapshot = getCourseSnapshotForMatch(match);
+  const teams = Array.from({ length: Math.max(1, Number(match.teamCount) || 1) }, (_, idx) => ({
+    id: `${match.sharedMatchId || match.id}:team:${idx + 1}`,
+    match_id: match.sharedMatchId || match.id,
+    team_number: idx + 1,
+    team_name: String(match.teamNames?.[idx] || `Team ${idx + 1}`),
+    created_at: createdAt,
+  }));
+  const players = match.players.map((mp, idx) => {
+    const player = getPlayer(mp.playerId) || { id: mp.playerId, name: `Player ${idx + 1}`, index: 0 };
+    const tee = getTee(match.courseId, mp.teeId || match.teeId);
+    const courseHdcp = tee ? courseHandicap(player.index, tee.slope, tee.rating, tee.par) : 0;
+    const playHdcp = playingHandicap(courseHdcp, match.allowance);
+    return {
+      id: `${match.sharedMatchId || match.id}:player:${player.id}`,
+      match_id: match.sharedMatchId || match.id,
+      player_id: player.id,
+      team_id: `${match.sharedMatchId || match.id}:team:${Number(mp.team) || 1}`,
+      team_number: Number(mp.team) || 1,
+      slot: Number.isFinite(Number(mp.slot)) ? Number(mp.slot) : idx,
+      player_name: String(player.name || `Player ${idx + 1}`),
+      player_index: Number(player.index) || 0,
+      tee_id: mp.teeId || match.teeId || '',
+      tee_name: String(tee?.teeName || ''),
+      course_handicap: Number(courseHdcp) || 0,
+      playing_handicap: Number(playHdcp) || 0,
+      handicap_snapshot: {
+        allowance: Number(match.allowance) || 100,
+        playerIndex: Number(player.index) || 0,
+        tee: tee ? {
+          id: tee.id,
+          teeName: tee.teeName,
+          gender: tee.gender,
+          rating: Number(tee.rating) || 0,
+          slope: Number(tee.slope) || 0,
+          par: Number(tee.par) || 0,
+          holes: Array.isArray(tee.holes) ? tee.holes : [],
+        } : null,
+      },
+      created_at: createdAt,
+    };
+  });
+  const matchRow = {
+    id: match.sharedMatchId || match.id,
+    created_at: match.createdAt || createdAt,
+    updated_at: createdAt,
+    created_by: organizerUserId,
+    name: match.name || 'Round',
+    match_date: match.date || todayIso(),
+    status: match.status || 'active',
+    course_id: match.courseId || '',
+    reference_tee_id: match.teeId || '',
+    course_snapshot: courseSnapshot,
+    format: match.format || 'teams',
+    allowance: Number(match.allowance) || 100,
+    hole_count: getRequestedHoleCount(match),
+    nine_hole_segment: getNineHoleSegment(match),
+    custom_start_hole: Number(match.customStartHole) || 1,
+    team_count: Number(match.teamCount) || 1,
+    players_per_team: Number(match.playersPerTeam) || 1,
+    scoring_access_mode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'team_codes'),
+    stat_tracking_enabled: !!match.statTrackingEnabled,
+    selected_games: normalizeSelectedGamesOrder(match.selectedGames || []),
+    match_status_game: match.matchStatusGame || null,
+    momentum_game: match.momentumGame || null,
+    momentum_perspective: Number(match.momentumPerspective || 1) === 2 ? 2 : 1,
+    locked_after_start: false,
+    setup_locked_at: null,
+    completed_at: match.completedAt || null,
+    last_touched_hole: Number(match.lastTouchedHole || 0) || 0,
+    last_fully_completed_hole: Number(match.lastFullyCompletedHole || 0) || 0,
+  };
+  const membership = organizerUserId ? {
+    id: `${match.sharedMatchId || match.id}:member:${organizerUserId}`,
+    match_id: match.sharedMatchId || match.id,
+    user_id: organizerUserId,
+    role: 'organizer',
+    team_id: null,
+    team_number: null,
+    status: 'active',
+    joined_at: createdAt,
+    last_seen_at: createdAt,
+    device_label: navigator.userAgent.slice(0, 180),
+  } : null;
+  return { matchRow, teams, players, membership };
+}
+async function uploadSharedMatch(match) {
+  const client = await ensureSupabaseClient();
+  if (!client) throw new Error('Supabase is not configured.');
+  const user = await getSupabaseUser();
+  const payload = buildCloudMatchPayload(match, user?.id || null);
+  let response = await client.from('matches').upsert(payload.matchRow, { onConflict: 'id' });
+  if (response.error) throw response.error;
+  if (payload.membership) {
+    response = await client.from('match_memberships').upsert(payload.membership, { onConflict: 'id' });
+    if (response.error) throw response.error;
+  }
+  response = await client.from('match_teams').delete().eq('match_id', payload.matchRow.id);
+  if (response.error) throw response.error;
+  response = await client.from('match_teams').insert(payload.teams);
+  if (response.error) throw response.error;
+  response = await client.from('match_players').delete().eq('match_id', payload.matchRow.id);
+  if (response.error) throw response.error;
+  response = await client.from('match_players').insert(payload.players);
+  if (response.error) throw response.error;
+  match.storageMode = 'shared';
+  match.sharedMatchId = payload.matchRow.id;
+  match.sharedMatchRef = payload.matchRow.id;
+  match.sharedOwnerUserId = user?.id || null;
+  match.cloudSyncState = 'cloud-synced';
+  match.lastCloudSyncAt = new Date().toISOString();
+  rememberSharedMatchId(match.sharedMatchId);
+  return match;
+}
+async function fetchSharedMatchBundle(matchId) {
+  const client = await ensureSupabaseClient();
+  if (!client) throw new Error('Supabase is not configured.');
+  const [{ data: matchRow, error: matchError }, { data: teams, error: teamsError }, { data: players, error: playersError }, { data: scoreEntries, error: scoresError }, { data: notesRows, error: notesError }] = await Promise.all([
+    client.from('matches').select('*').eq('id', matchId).maybeSingle(),
+    client.from('match_teams').select('*').eq('match_id', matchId).order('team_number'),
+    client.from('match_players').select('*').eq('match_id', matchId).order('team_number').order('slot'),
+    client.from('score_entries').select('*').eq('match_id', matchId).order('hole_number'),
+    client.from('match_notes').select('*').eq('match_id', matchId).limit(1),
+  ]);
+  if (matchError) throw matchError;
+  if (teamsError) throw teamsError;
+  if (playersError) throw playersError;
+  if (scoresError) throw scoresError;
+  if (notesError) throw notesError;
+  if (!matchRow) throw new Error('Shared match not found.');
+  const bundle = { matchRow, teams: teams || [], players: players || [], scoreEntries: scoreEntries || [], notes: notesRows?.[0] || null };
+  cacheCloudMatchBundle(matchId, bundle);
+  return bundle;
+}
+function ensureImportedCourseFromSnapshot(matchRow) {
+  const snapshot = matchRow?.course_snapshot;
+  if (!snapshot?.id) return { courseId: matchRow?.course_id || '', teeId: matchRow?.reference_tee_id || '' };
+  let course = getCourse(snapshot.id);
+  if (!course) {
+    course = {
+      id: snapshot.id,
+      name: snapshot.name || 'Imported Course',
+      city: snapshot.city || '',
+      state: snapshot.state || '',
+      country: snapshot.country || 'United States of America',
+      strokeIndexes: Array.isArray(snapshot.strokeIndexes) ? snapshot.strokeIndexes.slice() : null,
+      tees: Array.isArray(snapshot.tees) ? snapshot.tees.map(t => JSON.parse(JSON.stringify(t))) : [],
+    };
+    state.courses.push(course);
+  } else if (Array.isArray(snapshot.tees)) {
+    const existingIds = new Set((course.tees || []).map(t => t.id));
+    snapshot.tees.forEach(tee => {
+      if (!existingIds.has(tee.id)) course.tees.push(JSON.parse(JSON.stringify(tee)));
+    });
+  }
+  normalizeState();
+  return { courseId: snapshot.id, teeId: matchRow?.reference_tee_id || snapshot.tees?.[0]?.id || '' };
+}
+function ensureImportedPlayers(playerRows = []) {
+  playerRows.forEach(row => {
+    if (!row?.player_id) return;
+    if (getPlayer(row.player_id)) return;
+    state.players.push({ id: row.player_id, name: row.player_name || 'Imported Player', index: Number(row.player_index) || 0 });
+  });
+}
+function hydrateMatchFromCloudBundle(bundle) {
+  const { matchRow, teams = [], players = [], scoreEntries = [], notes = null } = bundle || {};
+  const courseIds = ensureImportedCourseFromSnapshot(matchRow || {});
+  ensureImportedPlayers(players);
+  const teamNames = teams.length ? teams.sort((a, b) => Number(a.team_number) - Number(b.team_number)).map(t => t.team_name || `Team ${t.team_number}`) : [];
+  const entriesByPlayerHole = new Map();
+  (scoreEntries || []).forEach(entry => {
+    entriesByPlayerHole.set(`${entry.match_player_id || entry.player_id}:${entry.hole_number}`, entry);
+  });
+  const holeCount = Number(matchRow?.hole_count) === 9 ? 9 : 18;
+  const hydrated = {
+    id: matchRow?.id || uid(),
+    sharedMatchId: matchRow?.id || uid(),
+    sharedMatchRef: matchRow?.id || uid(),
+    sharedOwnerUserId: matchRow?.created_by || null,
+    storageMode: 'shared',
+    cloudSyncState: 'cloud-synced',
+    lastCloudSyncAt: new Date().toISOString(),
+    date: matchRow?.match_date || todayIso(),
+    name: matchRow?.name || 'Round',
+    courseId: courseIds.courseId,
+    teeId: courseIds.teeId,
+    format: matchRow?.format || 'teams',
+    allowance: Number(matchRow?.allowance) || 100,
+    holeCount,
+    nineHoleSegment: String(matchRow?.nine_hole_segment || 'front'),
+    customStartHole: Math.max(1, Math.min(10, Number(matchRow?.custom_start_hole) || 1)),
+    teamCount: Number(matchRow?.team_count) || Math.max(1, teamNames.length || 1),
+    playersPerTeam: Number(matchRow?.players_per_team) || 1,
+    teamNames,
+    scoringAccessMode: normalizeScoringAccessMode(matchRow?.scoring_access_mode || 'team_codes'),
+    officialScorerName: 'Official scorer',
+    statTrackingEnabled: !!matchRow?.stat_tracking_enabled,
+    teamScorers: buildTeamScorerAssignments(Number(matchRow?.team_count) || Math.max(1, teamNames.length || 1), teamNames, []),
+    selectedGames: normalizeSelectedGamesOrder(matchRow?.selected_games || []),
+    status: matchRow?.status || 'active',
+    completedAt: matchRow?.completed_at || null,
+    players: (players || []).map((row, idx) => ({
+      playerId: row.player_id,
+      team: Number(row.team_number) || 1,
+      slot: Number.isFinite(Number(row.slot)) ? Number(row.slot) : idx,
+      teeId: row.tee_id || courseIds.teeId,
+      scores: Array.from({ length: holeCount }, (_, scoreIdx) => {
+        const holeNumber = scoreIdx + 1;
+        const entry = entriesByPlayerHole.get(`${row.id}:${holeNumber}`) || entriesByPlayerHole.get(`${row.player_id}:${holeNumber}`);
+        return { holeNumber, gross: Number(entry?.gross) || null };
+      }),
+      stats: Array.from({ length: holeCount }, (_, statIdx) => {
+        const holeNumber = statIdx + 1;
+        const entry = entriesByPlayerHole.get(`${row.id}:${holeNumber}`) || entriesByPlayerHole.get(`${row.player_id}:${holeNumber}`) || {};
+        return normalizeHoleStat({
+          holeNumber,
+          fairway: !!entry.fairway,
+          green: !!entry.green,
+          putts: Number.isFinite(Number(entry.putts)) ? Number(entry.putts) : null,
+          upAndDown: !!entry.up_and_down,
+          sandy: !!entry.sandy,
+        }, statIdx);
+      }),
+    })),
+    greeniesWinners: {},
+    matchStatusGame: matchRow?.match_status_game || getDefaultFeaturedGameKey(matchRow?.selected_games || []),
+    momentumGame: matchRow?.momentum_game || matchRow?.match_status_game || getDefaultFeaturedGameKey(matchRow?.selected_games || []),
+    momentumPerspective: Number(matchRow?.momentum_perspective || 1) === 2 ? 2 : 1,
+    activeScoreRole: 'official_scorer',
+    activeScoreTeam: 1,
+    lastTouchedHole: Number(matchRow?.last_touched_hole || 0) || 0,
+    lastFullyCompletedHole: Number(matchRow?.last_fully_completed_hole || 0) || 0,
+  };
+  normalizeMatch(hydrated);
+  if (notes?.body && !state.notes) state.notes = String(notes.body);
+  return hydrated;
+}
+function upsertLocalMatch(match) {
+  normalizeMatch(match);
+  const existingIdx = state.matches.findIndex(m => m.id === match.id);
+  if (existingIdx >= 0) state.matches[existingIdx] = match;
+  else state.matches.push(match);
+  rememberSharedMatchId(match.sharedMatchId || match.id);
+  return match;
+}
+async function loadSharedMatchFromCloud(matchId, { activate = true, silent = false } = {}) {
+  const cloudId = String(matchId || '').trim();
+  if (!cloudId) throw new Error('Enter a shared match ID.');
+  let bundle = null;
+  try {
+    bundle = await fetchSharedMatchBundle(cloudId);
+  } catch (err) {
+    bundle = readCachedCloudMatchBundle(cloudId);
+    if (!bundle) throw err;
+  }
+  const hydrated = hydrateMatchFromCloudBundle(bundle);
+  upsertLocalMatch(hydrated);
+  if (activate) {
+    state.activeMatchId = hydrated.id;
+    currentHole = Math.min(getRequestedHoleCount(hydrated), Math.max(1, completedHoles(hydrated) || 1));
+  }
+  persist({ skipRender: true });
+  renderAll();
+  if (!silent) toast('Shared match loaded from Supabase.');
+  return hydrated;
+}
+function updateCloudConfigUi() {
+  const status = document.getElementById('supabaseStatus');
+  const detail = document.getElementById('supabaseStatusDetail');
+  const shareToggle = document.getElementById('sharedMatchEnabled');
+  const shareHint = document.getElementById('sharedMatchHint');
+  const loadBtn = document.getElementById('loadSharedMatchBtn');
+  const refreshBtn = document.getElementById('refreshSharedMatchBtn');
+  const configured = hasSupabaseConfig();
+  if (status) status.textContent = configured ? 'Configured' : 'Not configured';
+  if (detail) detail.textContent = configured ? 'Supabase cloud save is ready. Anonymous auth will initialize when you create or load a shared match.' : 'Add your Supabase URL and anon key in supabase-config.js to enable shared matches.';
+  if (shareToggle) shareToggle.disabled = !configured;
+  if (shareHint) shareHint.textContent = configured ? 'Shared matches save the organizer-created round foundation to Supabase and keep a local fallback cache on this device.' : 'Shared matches are unavailable until supabase-config.js is filled in.';
+  if (loadBtn) loadBtn.disabled = !configured;
+  if (refreshBtn) refreshBtn.disabled = !configured;
+}
 function renderAll() {
   renderPlayers();
   renderCourses();
@@ -2749,6 +3156,7 @@ function renderAll() {
   const coursesSearchInput = document.getElementById('coursesSearchInput');
   if (coursesSearchInput && coursesSearchInput.value !== uiState.courseSearch) coursesSearchInput.value = uiState.courseSearch;
   syncNewMatchConflictUi();
+  updateCloudConfigUi();
   scheduleTeamPayoutSplitPaneSync();
 }
 
@@ -2847,6 +3255,8 @@ function renderMatches() {
     const tee = getTee(match.courseId, match.teeId);
     const metrics = computeMatchMetrics(match);
     const status = match.status === 'complete' ? 'Complete' : (state.activeMatchId === match.id ? 'Active' : 'Saved');
+    const storage = match.storageMode === 'shared' ? 'Shared' : 'Local';
+    const cloudMeta = match.storageMode === 'shared' ? `${storage} · ${match.cloudSyncState || 'local-cache'}${match.sharedMatchRef ? ` · ID ${match.sharedMatchRef}` : ''}` : storage;
     return `
       <div class="item compact-item">
         <div class="item-header compact-item-header">
@@ -2854,10 +3264,12 @@ function renderMatches() {
             <div class="item-title">${escapeHtml(match.name || 'Round')} · ${escapeHtml(match.date)}</div>
             <div class="muted">${escapeHtml(course?.name || 'No course')} · ${escapeHtml(tee?.teeName || 'No tee')} · ${escapeHtml(getHoleSegmentLabel(match, tee))} · ${status}</div>
             <div class="tiny">${metrics ? `${metrics.completed}/${getPlayableHoleCount(match, metrics.tee)} holes completed` : ''}</div>
+            <div class="tiny">${escapeHtml(cloudMeta)}</div>
           </div>
           <div class="actions wrap compact-actions">
-            <button class="secondary" data-load-match="${match.id}">${state.activeMatchId === match.id ? 'Loaded' : 'Load'}</button>
+            <button class="secondary" data-load-match="${match.id}">${state.activeMatchId === match.id ? 'Loaded' : (match.storageMode === 'shared' ? 'Load / Refresh' : 'Load')}</button>
             <button class="secondary" data-share-match="${match.id}">PDF</button>
+            ${match.storageMode === 'shared' ? `<button class="secondary" data-refresh-shared-match="${match.sharedMatchId || match.id}">Cloud Refresh</button>` : ''}
             <button class="secondary" data-delete-match="${match.id}">Delete</button>
           </div>
         </div>
@@ -3008,7 +3420,7 @@ function renderCurrentMatch() {
   const metrics = computeMatchMetrics(match);
   const holeCount = getPlayableHoleCount(match, tee);
   const scoringHoles = getSelectedScoringHoles(match, tee);
-  metaEl.textContent = `${match.date} · ${match.name || 'Round'} · ${course?.name || ''} · ${getHoleSegmentLabel(match, tee)} · ${metrics?.completed || 0}/${holeCount} holes completed`;
+  metaEl.textContent = `${match.date} · ${match.name || 'Round'} · ${course?.name || ''} · ${getHoleSegmentLabel(match, tee)} · ${metrics?.completed || 0}/${holeCount} holes completed${match.storageMode === 'shared' ? ` · Shared ID ${match.sharedMatchRef || match.sharedMatchId || match.id}` : ''}`;
   emptyEl.classList.add('hidden');
   wrapEl.classList.remove('hidden');
   currentHole = Math.min(holeCount, Math.max(1, currentHole));
@@ -3573,20 +3985,22 @@ function renderScoringControlConfig(existingMatch = null) {
   if (!modeSelect || !officialInput || !wrap || !hint) return;
   const teamCount = Number(document.getElementById('teamCountSelect')?.value || existingMatch?.teamCount || 1);
   const teamNames = Array.from({ length: teamCount }, (_, idx) => String(document.querySelector(`[data-team-name="${idx + 1}"]`)?.value || existingMatch?.teamNames?.[idx] || `Team ${idx + 1}`));
-  const mode = modeSelect.value === 'team_input' ? 'team_input' : 'official_scorer';
+  const mode = normalizeScoringAccessMode(modeSelect?.value || existingMatch?.scoringAccessMode || existingMatch?.scoreEntryMode || 'team_codes');
   const teamScorers = buildTeamScorerAssignments(teamCount, teamNames, existingMatch?.teamScorers || []);
   if (existingMatch) existingMatch.teamScorers = teamScorers;
-  wrap.classList.toggle('hidden', mode !== 'team_input');
-  hint.textContent = mode === 'team_input'
-    ? 'Team Input assigns one scorer identity per team. In Supabase, each team scorer would only be allowed to edit that team.'
-    : 'Official Scorer mode keeps one full-access scorer while everyone else can stay read-only.';
-  if (mode !== 'team_input') {
+  wrap.classList.toggle('hidden', mode !== 'team_codes');
+  hint.textContent = mode === 'team_codes'
+    ? 'Each Team Enters Its Own Scores is the default recommended collaboration mode for the Supabase rollout.'
+    : mode === 'open_edit'
+      ? 'Anyone Can Enter Scores keeps scoring open to any authorized non-viewer device once shared scoring is enabled.'
+      : 'One Device Scores for Everyone keeps one lead scorer in charge of entry.';
+  if (mode !== 'team_codes') {
     wrap.innerHTML = '';
     return;
   }
   wrap.innerHTML = `
     <div class="section-label">Team scorer assignments</div>
-    <div class="tiny top-gap">These names and access codes are the local placeholders we can map to Supabase roles later.</div>
+    <div class="tiny top-gap">These team scorer labels and codes are Pass 1 placeholders so the later team-code join flow has clean structure to attach to.</div>
     <div class="grid two compact-grid top-gap">
       ${teamScorers.map(row => `
         <div class="card inset-card compact-grid-item">
@@ -3625,14 +4039,14 @@ function renderScoreAccessCard(match) {
   const mode = access.mode;
   const officialName = match.officialScorerName || 'Official scorer';
   card.classList.remove('hidden');
-  roleSelect.innerHTML = mode === 'team_input'
+  roleSelect.innerHTML = mode === 'team_codes'
     ? `<option value="event_admin">Event Admin</option><option value="official_scorer">Official Scorer</option><option value="team_scorer">Team Scorer</option><option value="viewer">Viewer</option>`
     : `<option value="event_admin">Event Admin</option><option value="official_scorer">Official Scorer</option><option value="viewer">Viewer</option>`;
-  roleSelect.value = (access.role === 'team_scorer' && mode !== 'team_input') ? 'official_scorer' : access.role;
-  teamWrap.classList.toggle('hidden', !(mode === 'team_input' && roleSelect.value === 'team_scorer'));
+  roleSelect.value = (access.role === 'team_scorer' && mode !== 'team_codes') ? 'official_scorer' : access.role;
+  teamWrap.classList.toggle('hidden', !(mode === 'team_codes' && roleSelect.value === 'team_scorer'));
   teamSelect.innerHTML = Array.from({ length: Math.max(1, Number(match.teamCount) || 1) }, (_, idx) => `<option value="${idx + 1}">${escapeHtml(getTeamLabel(match, idx + 1))}</option>`).join('');
   teamSelect.value = String(access.team || 1);
-  meta.textContent = `${formatScoreEntryModeLabel(mode)} · Official scorer: ${officialName}${mode === 'team_input' ? ' · Team scorers are restricted to their own team.' : ' · One scorer can enter all teams.'}`;
+  meta.textContent = `${formatScoreEntryModeLabel(mode)} · Organizer: ${officialName}${mode === 'team_codes' ? ' · Team scorers are restricted to their own team.' : mode === 'open_edit' ? ' · Any authorized non-viewer can enter scores.' : ' · One scorer can enter all teams.'}`;
   hint.textContent = getScoreAccessHint(match);
 }
 
@@ -4409,7 +4823,8 @@ function loadMatchEditor(matchId = null) {
     renderNineHoleConfigUi();
     document.getElementById('teamCountSelect').value = '1';
     document.getElementById('playersPerTeamSelect').value = '1';
-    document.getElementById('scoreEntryModeSelect').value = 'official_scorer';
+    document.getElementById('scoreEntryModeSelect').value = 'team_codes';
+    const sharedMatchToggle = document.getElementById('sharedMatchEnabled'); if (sharedMatchToggle) sharedMatchToggle.checked = false;
     document.getElementById('officialScorerNameInput').value = 'Official scorer';
     const statToggle = document.getElementById('enableStatTrackingInput'); if (statToggle) statToggle.checked = false;
     populateMatchCourseSelects();
@@ -4434,7 +4849,8 @@ function loadMatchEditor(matchId = null) {
   renderNineHoleConfigUi();
   document.getElementById('teamCountSelect').value = String(match.teamCount || 2);
   document.getElementById('playersPerTeamSelect').value = String(match.playersPerTeam || 2);
-  document.getElementById('scoreEntryModeSelect').value = match.scoreEntryMode || 'official_scorer';
+  document.getElementById('scoreEntryModeSelect').value = normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'team_codes');
+  const sharedMatchToggle = document.getElementById('sharedMatchEnabled'); if (sharedMatchToggle) sharedMatchToggle.checked = match.storageMode === 'shared';
   document.getElementById('officialScorerNameInput').value = match.officialScorerName || 'Official scorer';
   const statToggle = document.getElementById('enableStatTrackingInput'); if (statToggle) statToggle.checked = !!match.statTrackingEnabled;
   renderTeamNameInputs(match.teamCount || 2, match.teamNames || []);
@@ -4896,7 +5312,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       updateLiveNetForScoreInput(e.target);
     }
   });
-  document.getElementById('matchForm').addEventListener('submit', e => {
+  document.getElementById('matchForm').addEventListener('submit', async e => {
     e.preventDefault();
     try {
     const fd = new FormData(e.target);
@@ -4916,8 +5332,10 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (selectedGames.some(g => g.key === 'nine_point') && selectedPlayers.length < 3) return toast('9-Point Game requires at least 3 assigned players.');
     if (selectedGames.some(g => g.key === 'nine_point' && (!Array.isArray(g.playerIds) || [...new Set(g.playerIds)].length !== 3))) return toast('Select 3 players for the 9-Point Game.');
     const existing = editingMatchId ? getMatch(editingMatchId) : null;
-    const scoreEntryMode = String(fd.get('scoreEntryMode') || 'official_scorer') === 'team_input' ? 'team_input' : 'official_scorer';
+    const scoringAccessMode = normalizeScoringAccessMode(fd.get('scoreEntryMode') || 'team_codes');
+    const scoreEntryMode = getLegacyScoreEntryMode(scoringAccessMode);
     const officialScorerName = String(fd.get('officialScorerName') || '').trim() || 'Official scorer';
+    const sharedMatchEnabled = fd.get('sharedMatchEnabled') === 'on' && hasSupabaseConfig();
     const teamScorers = collectTeamScorerAssignments(teamCount, teamNames, existing?.teamScorers || []);
     const match = {
       id: editingMatchId || uid(),
@@ -4933,6 +5351,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       teamCount,
       playersPerTeam,
       teamNames,
+      scoringAccessMode,
       scoreEntryMode,
       officialScorerName,
       statTrackingEnabled: fd.get('enableStatTracking') === 'on',
@@ -4948,13 +5367,31 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       matchStatusGame: existing?.matchStatusGame || getDefaultFeaturedGameKey(selectedGames),
       momentumGame: existing?.momentumGame || existing?.matchStatusGame || getDefaultFeaturedGameKey(selectedGames),
       momentumPerspective: Number(existing?.momentumPerspective || 1) === 2 ? 2 : 1,
-      activeScoreRole: existing?.activeScoreRole || (scoreEntryMode === 'team_input' ? 'team_scorer' : 'official_scorer'),
+      activeScoreRole: existing?.activeScoreRole || (scoringAccessMode === 'team_codes' ? 'team_scorer' : 'official_scorer'),
       activeScoreTeam: Math.min(teamCount, Math.max(1, Number(existing?.activeScoreTeam) || 1)),
+      storageMode: sharedMatchEnabled ? 'shared' : (existing?.storageMode === 'shared' ? 'shared' : 'local'),
+      sharedMatchId: existing?.sharedMatchId || null,
+      sharedMatchRef: existing?.sharedMatchRef || existing?.sharedMatchId || null,
+      sharedOwnerUserId: existing?.sharedOwnerUserId || null,
+      cloudSyncState: existing?.cloudSyncState || (sharedMatchEnabled ? 'pending' : 'local-only'),
+      lastCloudSyncAt: existing?.lastCloudSyncAt || null,
     };
     normalizeMatch(match);
     if (!match.courseId) return toast('Select a course.');
     if (!match.players.every(p => p.teeId)) { markMissingTeeRows(); return toast('Each player needs a tee.'); }
     clearMatchTeeErrors();
+    if (sharedMatchEnabled) {
+      match.sharedMatchId = existing?.sharedMatchId || match.id;
+      match.sharedMatchRef = match.sharedMatchId;
+      try {
+        await uploadSharedMatch(match);
+      } catch (cloudErr) {
+        console.error(cloudErr);
+        match.storageMode = 'shared';
+        match.cloudSyncState = 'local-cache';
+        toast('Shared match foundation saved locally, but Supabase sync failed.');
+      }
+    }
     if (editingMatchId) state.matches = state.matches.map(m => m.id === editingMatchId ? match : m); else state.matches.push(match);
     state.activeMatchId = match.id;
     currentHole = Math.min(getRequestedHoleCount(match), Math.max(1, completedHoles(match) || 1));
@@ -4962,7 +5399,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     loadMatchEditor(null);
     renderAll();
     activateTab('score');
-    toast(editingMatchId ? 'Match updated.' : 'Match created and loaded.');
+    toast(editingMatchId ? 'Match updated.' : (sharedMatchEnabled ? 'Shared match created and loaded.' : 'Match created and loaded.'));
     } catch (err) { console.error(err); toast('Could not create match. Please try again.'); }
   });
   document.getElementById('cancelMatchEditBtn').addEventListener('click', () => { loadMatchEditor(null); renderMatchSetupState(); });
@@ -5004,6 +5441,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       delete match.greeniesWinners[String(actualHoleNumber)];
     }
     const savedHole = actualHoleNumber;
+    const progress = computeMatchProgress(match);
+    match.lastTouchedHole = progress.lastTouchedHole;
+    match.lastFullyCompletedHole = progress.lastFullyCompletedHole;
     const maxHole = getPlayableHoleCount(match, getTee(match.courseId, match.teeId));
     if (Number.isFinite(targetHole) && targetHole >= 1 && targetHole <= maxHole) {
       currentHole = targetHole;
@@ -5073,6 +5513,32 @@ let appUpdateBannerVisible = false;
 let hasReloadedForServiceWorker = false;
 
 function updateVersionUi() {
+  const loadSharedMatchBtn = document.getElementById('loadSharedMatchBtn');
+  if (loadSharedMatchBtn) loadSharedMatchBtn.addEventListener('click', async () => {
+    const input = document.getElementById('sharedMatchIdInput');
+    const matchId = String(input?.value || '').trim();
+    if (!matchId) return toast('Enter a shared match ID.');
+    try {
+      await loadSharedMatchFromCloud(matchId, { activate: true, silent: false });
+      activateTab('score');
+    } catch (err) {
+      console.error(err);
+      toast(err.message || 'Could not load shared match.');
+    }
+  });
+  const refreshSharedMatchBtn = document.getElementById('refreshSharedMatchBtn');
+  if (refreshSharedMatchBtn) refreshSharedMatchBtn.addEventListener('click', async () => {
+    const active = getActiveMatch();
+    if (!active?.sharedMatchId) return toast('No shared match is currently loaded.');
+    try {
+      await loadSharedMatchFromCloud(active.sharedMatchId, { activate: true, silent: false });
+    } catch (err) {
+      console.error(err);
+      toast(err.message || 'Could not refresh shared match.');
+    }
+  });
+  updateCloudConfigUi();
+
   const versionEl = document.getElementById('appVersionLabel');
   if (versionEl) versionEl.textContent = APP_VERSION;
   const footerVersionEl = document.getElementById('appVersionFooter');

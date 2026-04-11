@@ -220,20 +220,32 @@
             <div class="item-header compact-item-header">
               <div>
                 <div class="section-label">Scoring control</div>
-                <div class="tiny">Choose whether one official scorer enters everything or each team enters only its own scores.</div>
+                <div class="tiny">Choose the required scoring access model before scoring begins. Team mode is the default collaborative recommendation.</div>
               </div>
             </div>
             <div class="grid two compact-grid top-gap">
               <label><span>Score entry mode</span>
                 <select name="scoreEntryMode" id="scoreEntryModeSelect">
-                  <option value="official_scorer" selected>Official Scorer</option>
-                  <option value="team_input">Team Input</option>
+                  <option value="single_device">One device scores for everyone</option>
+                  <option value="team_codes" selected>Each team enters its own scores</option>
+                  <option value="open_edit">Anyone can enter scores</option>
                 </select>
               </label>
-              <label><span>Official scorer</span><input class="input-match" name="officialScorerName" id="officialScorerNameInput" placeholder="Captain / pro shop / organizer" /></label>
+              <label><span>Organizer / lead scorer</span><input class="input-match" name="officialScorerName" id="officialScorerNameInput" placeholder="Captain / pro shop / organizer" /></label>
             </div>
             <div id="teamInputRoleConfig" class="top-gap hidden"></div>
-            <div id="scoreEntryModeHint" class="tiny top-gap">Official Scorer mode keeps one full-access scorekeeper while everyone else can remain read-only.</div>
+            <div id="scoreEntryModeHint" class="tiny top-gap">Team mode is the recommended collaborative default.</div>
+          </div>
+
+          <div class="span-2 card inset-card">
+            <div class="item-header compact-item-header">
+              <div>
+                <div class="section-label">Shared match storage</div>
+                <div class="tiny">Pass 1 supports organizer-created shared matches in Supabase, with safe local fallback if cloud sync is unavailable.</div>
+              </div>
+            </div>
+            <label class="inline-check top-gap"><input id="sharedMatchEnabled" name="sharedMatchEnabled" type="checkbox" /><span>Create as shared match (Supabase)</span></label>
+            <div id="sharedMatchHint" class="tiny top-gap">Shared matches are unavailable until supabase-config.js is filled in.</div>
           </div>
 
           <div class="span-2 card inset-card">
@@ -527,6 +539,20 @@
           </label>
         </div>
       </div>
+
+      <div class="card tight-card">
+        <h2>Supabase shared rounds</h2>
+        <div class="strong" id="supabaseStatus">Not configured</div>
+        <div class="tiny top-gap" id="supabaseStatusDetail">Add your Supabase URL and anon key in supabase-config.js to enable shared rounds.</div>
+        <div class="grid two compact-grid top-gap">
+          <label class="span-2"><span>Open shared match ID</span><input id="sharedMatchIdInput" placeholder="Paste shared match ID" /></label>
+        </div>
+        <div class="actions wrap top-gap">
+          <button id="loadSharedMatchBtn" type="button" class="secondary">Load shared match</button>
+          <button id="refreshSharedMatchBtn" type="button" class="secondary">Refresh active shared match</button>
+        </div>
+        <div class="tiny top-gap">Pass 1 stores organizer-created shared match foundations in normalized Supabase tables and reloads them back into the app’s current match shape.</div>
+      </div>
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
@@ -550,7 +576,7 @@
           <li>Added optional per-hole stat tracking (fairways, GIR, putts, up &amp; downs, sandies).</li>
           <li>Reordered the Scoreboard layout and moved Notes from More to Scoreboard.</li>
           <li>Fixed the Game Setup player assignment flow so team slots save correctly and matches can be created reliably again.</li>
-          <li>App version: <strong id="appVersionLabel">v26.15</strong></li>
+          <li>App version: <strong id="appVersionLabel">v27.0</strong></li>
         </ul>
       </div>
     </section>
@@ -570,7 +596,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v26.15</span>
+    <span id="appVersionFooter">v27.0</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>
@@ -613,6 +639,8 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

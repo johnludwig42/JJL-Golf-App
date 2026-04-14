@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.3';
+const APP_VERSION = 'v27.4';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -21,6 +21,7 @@ const sharedMatchSyncTimers = new Map();
 const sharedMatchSyncInflight = new Map();
 const SHARED_MATCH_SYNC_DEBOUNCE_MS = 700;
 let pendingScoreCommitFocus = null;
+let scoreAutoAdvanceGeneration = 0;
 const scoreInputSessionState = new Map();
 let pendingScoreAutoAdvanceTimer = null;
 let pendingScoreAutoAdvancePlayerId = null;
@@ -3726,20 +3727,32 @@ function cancelPendingScoreAutoAdvance(playerId = null) {
   pendingScoreAutoAdvancePlayerId = null;
 }
 
+function getLiveScoreInputForPlayer(playerId) {
+  if (!playerId) return null;
+  return document.querySelector(`#score [data-score-player="${playerId}"]`);
+}
+
 function schedulePendingScoreAutoAdvance(inputEl) {
   if (!inputEl || inputEl.disabled) return;
   const playerId = inputEl.dataset.scorePlayer;
   if (!playerId) return;
+  const session = scoreInputSessionState.get(playerId) || {};
+  const generation = ++scoreAutoAdvanceGeneration;
+  scoreInputSessionState.set(playerId, { ...session, generation, lastTypedValue: String(inputEl.value || '') });
   cancelPendingScoreAutoAdvance();
   pendingScoreAutoAdvancePlayerId = playerId;
   pendingScoreAutoAdvanceTimer = setTimeout(() => {
     pendingScoreAutoAdvanceTimer = null;
     pendingScoreAutoAdvancePlayerId = null;
-    commitScoreInput(inputEl, { viaAutoAdvance: true });
+    const liveInput = getLiveScoreInputForPlayer(playerId);
+    const liveSession = scoreInputSessionState.get(playerId) || {};
+    if (!liveInput || liveInput.disabled) return;
+    if ((liveSession.generation || 0) !== generation) return;
+    commitScoreInput(liveInput, { viaAutoAdvance: true, expectedGeneration: generation });
   }, SCORE_AUTO_ADVANCE_DELAY_MS);
 }
 
-function commitScoreInput(inputEl, { viaEnter = false, viaAutoAdvance = false } = {}) {
+function commitScoreInput(inputEl, { viaEnter = false, viaAutoAdvance = false, expectedGeneration = null } = {}) {
   const match = getActiveMatch();
   if (!match || !inputEl || inputEl.disabled) return false;
   const playerId = inputEl.dataset.scorePlayer;
@@ -3748,6 +3761,7 @@ function commitScoreInput(inputEl, { viaEnter = false, viaAutoAdvance = false } 
   const editableInputs = getEditableScoreInputs();
   const currentIndex = editableInputs.findIndex(el => el.dataset.scorePlayer === playerId);
   const priorState = scoreInputSessionState.get(playerId) || {};
+  if (expectedGeneration != null && Number(priorState.generation || 0) !== Number(expectedGeneration)) return false;
   const normalizedValue = normalizeCommittedScoreValue(inputEl.value);
   const initialValue = String(priorState.initialValue ?? inputEl.defaultValue ?? '').trim();
   const changed = normalizedValue !== initialValue;
@@ -5517,8 +5531,12 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('score').addEventListener('focusin', e => {
     if (e.target.matches('[data-score-player]')) {
       cancelPendingScoreAutoAdvance();
-      scoreInputSessionState.set(e.target.dataset.scorePlayer, {
+      const playerId = e.target.dataset.scorePlayer;
+      const existing = scoreInputSessionState.get(playerId) || {};
+      scoreInputSessionState.set(playerId, {
+        ...existing,
         initialValue: String(e.target.value || '').trim(),
+        generation: existing.generation || 0,
       });
     }
     if (e.target.matches('.stat-putts-input') && !e.target.disabled && typeof e.target.select === 'function') {

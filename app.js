@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.6';
+const APP_VERSION = 'v27.7';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -19,7 +19,7 @@ let supabaseInitPromise = null;
 
 const sharedMatchSyncTimers = new Map();
 const sharedMatchSyncInflight = new Map();
-const SHARED_MATCH_SYNC_DEBOUNCE_MS = 700;
+const SHARED_MATCH_SYNC_DEBOUNCE_MS = 200;
 let pendingScoreCommitFocus = null;
 let scoreAutoAdvanceGeneration = 0;
 const scoreInputSessionState = new Map();
@@ -3327,6 +3327,23 @@ function scheduleSharedMatchSync(matchOrId, { immediate = false, silent = true }
   }, delay);
   sharedMatchSyncTimers.set(matchId, timer);
 }
+
+window.addEventListener('pagehide', () => {
+  const active = getActiveMatch();
+  if (!active || active.storageMode !== 'shared') return;
+  try { applyCurrentHoleDomToMatch(active); } catch (err) {}
+  persist({ skipRender: true });
+  scheduleSharedMatchSync(active, { immediate: true, silent: true });
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'hidden') return;
+  const active = getActiveMatch();
+  if (!active || active.storageMode !== 'shared') return;
+  try { applyCurrentHoleDomToMatch(active); } catch (err) {}
+  persist({ skipRender: true });
+  scheduleSharedMatchSync(active, { immediate: true, silent: true });
+});
+
 function updateCloudConfigUi() {
   const status = document.getElementById('supabaseStatus');
   const detail = document.getElementById('supabaseStatusDetail');
@@ -5617,10 +5634,10 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('score').addEventListener('change', e => {
     if (e.target.matches('[data-greenies-winner]')) {
       document.querySelectorAll('[data-greenies-winner]').forEach(el => { if (el !== e.target) el.checked = false; });
-      scheduleSharedActiveMatchSyncFromDom({ immediate: false, silent: true, persistLocal: true });
+      scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
     }
     if (e.target.matches('[data-stat-player][data-stat-key]')) {
-      scheduleSharedActiveMatchSyncFromDom({ immediate: false, silent: true, persistLocal: true });
+      scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
     }
   });
   document.getElementById('score').addEventListener('change', e => {
@@ -5717,17 +5734,21 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('score').addEventListener('blur', e => {
     if (e.target.matches('[data-score-player]')) {
       if (e.target.dataset.scoreWired !== 'direct') handleLiveScoreInputBlur(e.target);
+      scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
+    }
+    if (e.target.matches('[data-stat-player][data-stat-key], .stat-putts-input')) {
+      scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
     }
   }, true);
   document.getElementById('score').addEventListener('input', e => {
     if (e.target.matches('[data-score-player]')) {
       if (e.target.dataset.scoreWired !== 'direct') handleLiveScoreInputEvent(e.target);
-      scheduleSharedActiveMatchSyncFromDom({ immediate: false, silent: true, persistLocal: true });
+      scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
     }
     if (e.target.matches('.stat-putts-input')) {
       const raw = String(e.target.value || '').trim();
       if (raw === '') e.target.value = '0';
-      scheduleSharedActiveMatchSyncFromDom({ immediate: false, silent: true, persistLocal: true });
+      scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
     }
   });
   document.getElementById('matchForm').addEventListener('submit', async e => {
@@ -5839,7 +5860,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       currentHole = Math.min(maxHole, Math.max(currentHole, completedHoles(match) + 1));
     }
     persist();
-    scheduleSharedMatchSync(match, { immediate: false, silent: true });
+    scheduleSharedMatchSync(match, { immediate: true, silent: true });
     if (!silent) toast(`Hole ${savedHole} saved.`);
     return true;
   }

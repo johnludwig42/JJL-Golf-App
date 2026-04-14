@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.5';
+const APP_VERSION = 'v27.6';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2871,6 +2871,99 @@ function getCourseSnapshotForMatch(match) {
     tees,
   };
 }
+function getGreeniesCfg(match) {
+  return (match?.selectedGames || []).find(g => g.key === 'greenies') || null;
+}
+function buildSelectedGamesForCloud(match) {
+  const games = normalizeSelectedGamesOrder(match?.selectedGames || []).map(g => JSON.parse(JSON.stringify(g)));
+  const greeniesCfg = games.find(g => g.key === 'greenies');
+  if (greeniesCfg) {
+    greeniesCfg.winnersByHole = { ...(match?.greeniesWinners || {}) };
+  }
+  return games;
+}
+function extractGreeniesWinnersFromSelectedGames(selectedGames) {
+  const greeniesCfg = (selectedGames || []).find(g => g.key === 'greenies');
+  const winners = greeniesCfg?.winnersByHole;
+  return winners && typeof winners === 'object' ? { ...winners } : {};
+}
+function applyCurrentHoleDomToMatch(match) {
+  if (!match) return false;
+  const scoringHoles = getSelectedScoringHoles(match, getTee(match.courseId, match.teeId));
+  const holeMeta = scoringHoles[currentHole - 1] || null;
+  const actualHoleNumber = holeMeta?.holeNumber || currentHole;
+  let mutated = false;
+  document.querySelectorAll('[data-score-player]').forEach(input => {
+    const playerId = input.dataset.scorePlayer;
+    const mp = match.players.find(p => p.playerId === playerId);
+    if (!mp || !mp.scores?.[currentHole - 1]) return;
+    const nextGross = String(input.value || '').trim() === '' ? null : (Number.isFinite(Number(input.value)) ? Math.round(Number(input.value)) : null);
+    if ((mp.scores[currentHole - 1].gross ?? null) !== nextGross) {
+      mp.scores[currentHole - 1].gross = nextGross;
+      mutated = true;
+    }
+  });
+  if (isStatTrackingEnabled(match)) {
+    document.querySelectorAll('[data-stat-player][data-stat-key]').forEach(input => {
+      const playerId = input.dataset.statPlayer;
+      const key = input.dataset.statKey;
+      const playerRef = match.players.find(p => p.playerId === playerId);
+      if (!playerRef) return;
+      if (!Array.isArray(playerRef.stats) || !playerRef.stats.length) playerRef.stats = buildEmptyStats(getRequestedHoleCount(match));
+      const currentStat = normalizeHoleStat(playerRef.stats[currentHole - 1] || {}, currentHole - 1);
+      const before = JSON.stringify(currentStat);
+      if (key === 'putts') {
+        const raw = String(input.value || '').trim();
+        const putts = Number(raw === '' ? '0' : raw);
+        currentStat.putts = Number.isFinite(putts) ? Math.max(0, Math.round(putts)) : 0;
+      } else {
+        currentStat[key] = !!input.checked;
+      }
+      if (Number(holeMeta?.par) !== 4 && Number(holeMeta?.par) !== 5) currentStat.fairway = false;
+      if (JSON.stringify(currentStat) != before) {
+        playerRef.stats[currentHole - 1] = currentStat;
+        mutated = true;
+      }
+    });
+  }
+  const selectedWinner = document.querySelector('[data-greenies-winner]:checked')?.dataset.greeniesWinner || '';
+  const existingWinner = match.greeniesWinners?.[String(actualHoleNumber)] || '';
+  if (selectedWinner) {
+    if (!match.greeniesWinners) match.greeniesWinners = {};
+    if (existingWinner !== selectedWinner) {
+      match.greeniesWinners[String(actualHoleNumber)] = selectedWinner;
+      mutated = true;
+    }
+  } else if (existingWinner) {
+    delete match.greeniesWinners[String(actualHoleNumber)];
+    mutated = true;
+  }
+  const progress = computeMatchProgress(match);
+  if ((match.lastTouchedHole || 0) !== (progress.lastTouchedHole || 0)) {
+    match.lastTouchedHole = progress.lastTouchedHole;
+    mutated = true;
+  }
+  if ((match.lastFullyCompletedHole || 0) !== (progress.lastFullyCompletedHole || 0)) {
+    match.lastFullyCompletedHole = progress.lastFullyCompletedHole;
+    mutated = true;
+  }
+  const greeniesCfg = getGreeniesCfg(match);
+  if (greeniesCfg) {
+    const nextWinners = { ...(match.greeniesWinners || {}) };
+    if (JSON.stringify(greeniesCfg.winnersByHole || {}) !== JSON.stringify(nextWinners)) {
+      greeniesCfg.winnersByHole = nextWinners;
+      mutated = true;
+    }
+  }
+  return mutated;
+}
+function scheduleSharedActiveMatchSyncFromDom({ immediate = false, silent = true, persistLocal = true } = {}) {
+  const match = getActiveMatch();
+  if (!match || match.storageMode !== 'shared') return;
+  const mutated = applyCurrentHoleDomToMatch(match);
+  if (mutated || persistLocal) persist({ skipRender: true });
+  scheduleSharedMatchSync(match, { immediate, silent });
+}
 function buildCloudMatchPayload(match, organizerUserId = null) {
   const createdAt = new Date().toISOString();
   const courseSnapshot = getCourseSnapshotForMatch(match);
@@ -2935,7 +3028,7 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
     players_per_team: Number(match.playersPerTeam) || 1,
     scoring_access_mode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'team_codes'),
     stat_tracking_enabled: !!match.statTrackingEnabled,
-    selected_games: normalizeSelectedGamesOrder(match.selectedGames || []),
+    selected_games: buildSelectedGamesForCloud(match),
     match_status_game: match.matchStatusGame || null,
     momentum_game: match.momentumGame || null,
     momentum_perspective: Number(match.momentumPerspective || 1) === 2 ? 2 : 1,
@@ -3140,7 +3233,7 @@ function hydrateMatchFromCloudBundle(bundle) {
         }, statIdx);
       }),
     })),
-    greeniesWinners: {},
+    greeniesWinners: extractGreeniesWinnersFromSelectedGames(matchRow?.selected_games || []),
     matchStatusGame: matchRow?.match_status_game || getDefaultFeaturedGameKey(matchRow?.selected_games || []),
     momentumGame: matchRow?.momentum_game || matchRow?.match_status_game || getDefaultFeaturedGameKey(matchRow?.selected_games || []),
     momentumPerspective: Number(matchRow?.momentum_perspective || 1) === 2 ? 2 : 1,
@@ -5524,6 +5617,10 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('score').addEventListener('change', e => {
     if (e.target.matches('[data-greenies-winner]')) {
       document.querySelectorAll('[data-greenies-winner]').forEach(el => { if (el !== e.target) el.checked = false; });
+      scheduleSharedActiveMatchSyncFromDom({ immediate: false, silent: true, persistLocal: true });
+    }
+    if (e.target.matches('[data-stat-player][data-stat-key]')) {
+      scheduleSharedActiveMatchSyncFromDom({ immediate: false, silent: true, persistLocal: true });
     }
   });
   document.getElementById('score').addEventListener('change', e => {
@@ -5625,10 +5722,12 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('score').addEventListener('input', e => {
     if (e.target.matches('[data-score-player]')) {
       if (e.target.dataset.scoreWired !== 'direct') handleLiveScoreInputEvent(e.target);
+      scheduleSharedActiveMatchSyncFromDom({ immediate: false, silent: true, persistLocal: true });
     }
     if (e.target.matches('.stat-putts-input')) {
       const raw = String(e.target.value || '').trim();
       if (raw === '') e.target.value = '0';
+      scheduleSharedActiveMatchSyncFromDom({ immediate: false, silent: true, persistLocal: true });
     }
   });
   document.getElementById('matchForm').addEventListener('submit', async e => {
@@ -5729,41 +5828,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const scoringHoles = getSelectedScoringHoles(match, getTee(match.courseId, match.teeId));
     const holeMeta = scoringHoles[currentHole - 1] || null;
     const actualHoleNumber = holeMeta?.holeNumber || currentHole;
-    const holeInputs = document.querySelectorAll('[data-score-player]');
-    holeInputs.forEach(input => {
-      const playerId = input.dataset.scorePlayer;
-      const mp = match.players.find(p => p.playerId === playerId);
-      if (mp) mp.scores[currentHole - 1].gross = Number(input.value) || null;
-    });
-    if (isStatTrackingEnabled(match)) {
-      document.querySelectorAll('[data-stat-player][data-stat-key]').forEach(input => {
-        const playerId = input.dataset.statPlayer;
-        const key = input.dataset.statKey;
-        const playerRef = match.players.find(p => p.playerId === playerId);
-        if (!playerRef) return;
-        if (!Array.isArray(playerRef.stats) || !playerRef.stats.length) playerRef.stats = buildEmptyStats(getRequestedHoleCount(match));
-        const currentStat = normalizeHoleStat(playerRef.stats[currentHole - 1] || {}, currentHole - 1);
-        if (key === 'putts') {
-          const raw = String(input.value || '').trim();
-          const putts = Number(raw === '' ? '0' : raw);
-          currentStat.putts = Number.isFinite(putts) ? Math.max(0, Math.round(putts)) : 0;
-        } else {
-          currentStat[key] = !!input.checked;
-        }
-        if (Number(holeMeta?.par) !== 4 && Number(holeMeta?.par) !== 5) currentStat.fairway = false;
-        playerRef.stats[currentHole - 1] = currentStat;
-      });
-    }
-    const selectedWinner = document.querySelector('[data-greenies-winner]:checked')?.dataset.greeniesWinner || '';
-    if (selectedWinner) {
-      match.greeniesWinners[String(actualHoleNumber)] = selectedWinner;
-    } else if (match.greeniesWinners && match.greeniesWinners[String(actualHoleNumber)]) {
-      delete match.greeniesWinners[String(actualHoleNumber)];
-    }
+    applyCurrentHoleDomToMatch(match);
     const savedHole = actualHoleNumber;
-    const progress = computeMatchProgress(match);
-    match.lastTouchedHole = progress.lastTouchedHole;
-    match.lastFullyCompletedHole = progress.lastFullyCompletedHole;
     const maxHole = getPlayableHoleCount(match, getTee(match.courseId, match.teeId));
     if (Number.isFinite(targetHole) && targetHole >= 1 && targetHole <= maxHole) {
       currentHole = targetHole;

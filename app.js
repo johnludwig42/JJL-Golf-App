@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.2';
+const APP_VERSION = 'v27.3';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -22,6 +22,9 @@ const sharedMatchSyncInflight = new Map();
 const SHARED_MATCH_SYNC_DEBOUNCE_MS = 700;
 let pendingScoreCommitFocus = null;
 const scoreInputSessionState = new Map();
+let pendingScoreAutoAdvanceTimer = null;
+let pendingScoreAutoAdvancePlayerId = null;
+const SCORE_AUTO_ADVANCE_DELAY_MS = 300;
 const SCORE_ENTRY_MODES = {
   single_device: 'One device scores for everyone',
   team_codes: 'Each team enters its own scores',
@@ -459,18 +462,19 @@ function buildEmptyStats(count = 18) {
     holeNumber: i + 1,
     fairway: false,
     green: false,
-    putts: null,
+    putts: 0,
     upAndDown: false,
     sandy: false,
   }));
 }
 function normalizeHoleStat(stat = {}, idx = 0) {
-  const putts = Number(stat?.putts);
+  const rawPutts = stat?.putts;
+  const putts = rawPutts === '' || rawPutts == null ? 0 : Number(rawPutts);
   return {
     holeNumber: Number(stat?.holeNumber) || idx + 1,
     fairway: !!stat?.fairway,
     green: !!stat?.green,
-    putts: Number.isFinite(putts) && putts >= 0 ? Math.round(putts) : null,
+    putts: Number.isFinite(putts) && putts >= 0 ? Math.round(putts) : 0,
     upAndDown: !!stat?.upAndDown,
     sandy: !!stat?.sandy,
   };
@@ -3587,7 +3591,7 @@ function renderStatTrackingEntry(match, hole, metrics) {
                 <label class="mini-check stat-mini-check"><input type="checkbox" data-stat-player="${p.playerId}" data-stat-key="upAndDown" ${stat.upAndDown ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>Up and down</span></label>
                 <label class="mini-check stat-mini-check"><input type="checkbox" data-stat-player="${p.playerId}" data-stat-key="sandy" ${stat.sandy ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>Sandy</span></label>
               </div>
-              <label class="stat-putts-field top-gap"><span>Putts</span><input class="score-input stat-putts-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" min="0" max="9" data-stat-player="${p.playerId}" data-stat-key="putts" value="${Number.isFinite(stat.putts) ? stat.putts : ''}" ${canEdit ? '' : 'disabled'} /></label>
+              <label class="stat-putts-field top-gap"><span>Putts</span><input class="score-input stat-putts-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" min="0" max="9" data-stat-player="${p.playerId}" data-stat-key="putts" value="${Number.isFinite(stat.putts) ? stat.putts : 0}" ${canEdit ? '' : 'disabled'} /></label>
             </div>`;
         }).join('')}
       </div>
@@ -3715,11 +3719,32 @@ function applyPendingScoreCommitFocus() {
   });
 }
 
-function commitScoreInput(inputEl, { viaEnter = false } = {}) {
+function cancelPendingScoreAutoAdvance(playerId = null) {
+  if (playerId && pendingScoreAutoAdvancePlayerId && pendingScoreAutoAdvancePlayerId !== playerId) return;
+  if (pendingScoreAutoAdvanceTimer) clearTimeout(pendingScoreAutoAdvanceTimer);
+  pendingScoreAutoAdvanceTimer = null;
+  pendingScoreAutoAdvancePlayerId = null;
+}
+
+function schedulePendingScoreAutoAdvance(inputEl) {
+  if (!inputEl || inputEl.disabled) return;
+  const playerId = inputEl.dataset.scorePlayer;
+  if (!playerId) return;
+  cancelPendingScoreAutoAdvance();
+  pendingScoreAutoAdvancePlayerId = playerId;
+  pendingScoreAutoAdvanceTimer = setTimeout(() => {
+    pendingScoreAutoAdvanceTimer = null;
+    pendingScoreAutoAdvancePlayerId = null;
+    commitScoreInput(inputEl, { viaAutoAdvance: true });
+  }, SCORE_AUTO_ADVANCE_DELAY_MS);
+}
+
+function commitScoreInput(inputEl, { viaEnter = false, viaAutoAdvance = false } = {}) {
   const match = getActiveMatch();
   if (!match || !inputEl || inputEl.disabled) return false;
   const playerId = inputEl.dataset.scorePlayer;
   if (!playerId) return false;
+  cancelPendingScoreAutoAdvance(playerId);
   const editableInputs = getEditableScoreInputs();
   const currentIndex = editableInputs.findIndex(el => el.dataset.scorePlayer === playerId);
   const priorState = scoreInputSessionState.get(playerId) || {};
@@ -3729,7 +3754,7 @@ function commitScoreInput(inputEl, { viaEnter = false } = {}) {
   const hasCommittedValue = normalizedValue !== '';
   inputEl.value = normalizedValue;
   updateLiveNetForScoreInput(inputEl);
-  if (!changed && !viaEnter) {
+  if (!changed && !viaEnter && !viaAutoAdvance) {
     scoreInputSessionState.delete(playerId);
     return false;
   }
@@ -5491,8 +5516,14 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   });
   document.getElementById('score').addEventListener('focusin', e => {
     if (e.target.matches('[data-score-player]')) {
+      cancelPendingScoreAutoAdvance();
       scoreInputSessionState.set(e.target.dataset.scorePlayer, {
         initialValue: String(e.target.value || '').trim(),
+      });
+    }
+    if (e.target.matches('.stat-putts-input') && !e.target.disabled && typeof e.target.select === 'function') {
+      requestAnimationFrame(() => {
+        try { e.target.select(); } catch (err) {}
       });
     }
   });
@@ -5511,6 +5542,11 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('score').addEventListener('input', e => {
     if (e.target.matches('[data-score-player]')) {
       updateLiveNetForScoreInput(e.target);
+      schedulePendingScoreAutoAdvance(e.target);
+    }
+    if (e.target.matches('.stat-putts-input')) {
+      const raw = String(e.target.value || '').trim();
+      if (raw === '') e.target.value = '0';
     }
   });
   document.getElementById('matchForm').addEventListener('submit', async e => {
@@ -5627,8 +5663,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
         const currentStat = normalizeHoleStat(playerRef.stats[currentHole - 1] || {}, currentHole - 1);
         if (key === 'putts') {
           const raw = String(input.value || '').trim();
-          const putts = Number(raw);
-          currentStat.putts = raw && Number.isFinite(putts) ? Math.max(0, Math.round(putts)) : null;
+          const putts = Number(raw === '' ? '0' : raw);
+          currentStat.putts = Number.isFinite(putts) ? Math.max(0, Math.round(putts)) : 0;
         } else {
           currentStat[key] = !!input.checked;
         }

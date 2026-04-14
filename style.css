@@ -2092,6 +2092,35 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
 #leaderboard .payout-section-team .payout-game-table-team th{
   text-align:center;
 }
+#leaderboard .payout-section-team .team-payout-fixed-table .payout-player-group-head,
+#leaderboard .payout-section-team .team-payout-fixed-table .payout-player-subhead,
+#leaderboard .payout-section-team .payout-game-table-team .team-payout-games-group-head,
+#leaderboard .payout-section-team .payout-game-table-team .team-payout-total-group-head,
+#leaderboard .payout-section-team .payout-game-table-team .team-payout-total-subhead{
+  vertical-align:bottom !important;
+  font-weight:800;
+}
+#leaderboard .payout-section-team .team-payout-fixed-table .payout-player-group-head,
+#leaderboard .payout-section-team .payout-game-table-team .team-payout-games-group-head,
+#leaderboard .payout-section-team .payout-game-table-team .team-payout-total-group-head{
+  padding-top:12px !important;
+  padding-bottom:6px !important;
+}
+#leaderboard .payout-section-team .team-payout-fixed-table .payout-player-subhead,
+#leaderboard .payout-section-team .payout-game-table-team thead tr:nth-child(2) th{
+  padding-top:6px !important;
+  padding-bottom:10px !important;
+}
+#leaderboard .payout-section-team .team-payout-fixed-table .payout-player-subhead{
+  color:transparent;
+}
+#leaderboard .payout-section-team .payout-game-table-team .team-payout-total-group-head,
+#leaderboard .payout-section-team .payout-game-table-team .team-payout-total-subhead,
+#leaderboard .payout-section-team .payout-game-table-team tbody td:last-child,
+#leaderboard .payout-section-team .payout-game-table-team tfoot td:last-child{
+  background:#f8fafc;
+  font-weight:800;
+}
 #leaderboard .payout-section-team .team-payout-fixed-table th.payout-player-col,
 #leaderboard .payout-section-team .team-payout-fixed-table td.payout-player-col{
   text-align:left;

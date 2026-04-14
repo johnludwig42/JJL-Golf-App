@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.4';
+const APP_VERSION = 'v27.5';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -3696,6 +3696,69 @@ function getEditableScoreInputs() {
   return Array.from(document.querySelectorAll('#score [data-score-player]')).filter(input => !input.disabled);
 }
 
+function isRecentDuplicateScoreCommit(playerId, normalizedValue) {
+  if (!playerId) return false;
+  const session = scoreInputSessionState.get(playerId) || {};
+  const lastAt = Number(session.lastCommittedAt || 0);
+  const lastValue = String(session.lastCommittedValue ?? '');
+  return !!lastAt && lastValue === String(normalizedValue ?? '') && (Date.now() - lastAt) < 1200;
+}
+
+function markRecentScoreCommit(playerId, normalizedValue) {
+  if (!playerId) return;
+  const session = scoreInputSessionState.get(playerId) || {};
+  scoreInputSessionState.set(playerId, {
+    ...session,
+    lastCommittedAt: Date.now(),
+    lastCommittedValue: String(normalizedValue ?? ''),
+  });
+}
+
+function handleLiveScoreInputFocus(inputEl) {
+  if (!inputEl || inputEl.disabled) return;
+  cancelPendingScoreAutoAdvance();
+  const playerId = inputEl.dataset.scorePlayer;
+  const existing = scoreInputSessionState.get(playerId) || {};
+  scoreInputSessionState.set(playerId, {
+    ...existing,
+    initialValue: String(inputEl.value || '').trim(),
+    generation: existing.generation || 0,
+  });
+}
+
+function handleLiveScoreInputEvent(inputEl) {
+  if (!inputEl || inputEl.disabled) return;
+  updateLiveNetForScoreInput(inputEl);
+  schedulePendingScoreAutoAdvance(inputEl);
+}
+
+function handleLiveScoreInputKeydown(event) {
+  const inputEl = event?.target;
+  if (!inputEl || inputEl.disabled || !inputEl.matches?.('[data-score-player]')) return;
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    commitScoreInput(inputEl, { viaEnter: true });
+  }
+}
+
+function handleLiveScoreInputBlur(inputEl) {
+  if (!inputEl || inputEl.disabled) return;
+  commitScoreInput(inputEl);
+}
+
+function wireLiveScoreInputs() {
+  const scoreRoot = document.getElementById('score');
+  if (!scoreRoot) return;
+  scoreRoot.querySelectorAll('[data-score-player]').forEach(input => {
+    if (input.dataset.scoreWired === 'direct') return;
+    input.dataset.scoreWired = 'direct';
+    input.addEventListener('focus', () => handleLiveScoreInputFocus(input));
+    input.addEventListener('input', () => handleLiveScoreInputEvent(input));
+    input.addEventListener('keydown', handleLiveScoreInputKeydown);
+    input.addEventListener('blur', () => handleLiveScoreInputBlur(input));
+  });
+}
+
 function queueScoreCommitFocus(playerId, holeNumber = currentHole) {
   pendingScoreCommitFocus = playerId ? { playerId, holeNumber: Number(holeNumber) || currentHole } : null;
 }
@@ -3709,15 +3772,22 @@ function applyPendingScoreCommitFocus() {
     pendingScoreCommitFocus = null;
     return;
   }
-  requestAnimationFrame(() => {
-    try {
-      target.focus({ preventScroll: false });
-      const end = String(target.value || '').length;
-      if (typeof target.setSelectionRange === 'function') target.setSelectionRange(end, end);
-      target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    } catch (err) {}
-    pendingScoreCommitFocus = null;
-  });
+  setTimeout(() => {
+    requestAnimationFrame(() => {
+      const liveTarget = document.querySelector(`#score [data-score-player="${pending.playerId}"]`);
+      if (!liveTarget || liveTarget.disabled) {
+        pendingScoreCommitFocus = null;
+        return;
+      }
+      try {
+        liveTarget.focus({ preventScroll: false });
+        const end = String(liveTarget.value || '').length;
+        if (typeof liveTarget.setSelectionRange === 'function') liveTarget.setSelectionRange(end, end);
+        liveTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      } catch (err) {}
+      pendingScoreCommitFocus = null;
+    });
+  }, 0);
 }
 
 function cancelPendingScoreAutoAdvance(playerId = null) {
@@ -3772,6 +3842,10 @@ function commitScoreInput(inputEl, { viaEnter = false, viaAutoAdvance = false, e
     scoreInputSessionState.delete(playerId);
     return false;
   }
+  if (!changed && isRecentDuplicateScoreCommit(playerId, normalizedValue)) {
+    return false;
+  }
+  if (changed) markRecentScoreCommit(playerId, normalizedValue);
   if (hasCommittedValue && currentIndex >= 0 && currentIndex < editableInputs.length - 1) {
     const nextInput = editableInputs[currentIndex + 1];
     queueScoreCommitFocus(nextInput?.dataset?.scorePlayer || null, currentHole);
@@ -5530,14 +5604,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   });
   document.getElementById('score').addEventListener('focusin', e => {
     if (e.target.matches('[data-score-player]')) {
-      cancelPendingScoreAutoAdvance();
-      const playerId = e.target.dataset.scorePlayer;
-      const existing = scoreInputSessionState.get(playerId) || {};
-      scoreInputSessionState.set(playerId, {
-        ...existing,
-        initialValue: String(e.target.value || '').trim(),
-        generation: existing.generation || 0,
-      });
+      if (e.target.dataset.scoreWired !== 'direct') handleLiveScoreInputFocus(e.target);
     }
     if (e.target.matches('.stat-putts-input') && !e.target.disabled && typeof e.target.select === 'function') {
       requestAnimationFrame(() => {
@@ -5547,20 +5614,17 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   });
   document.getElementById('score').addEventListener('keydown', e => {
     if (!e.target.matches('[data-score-player]')) return;
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      commitScoreInput(e.target, { viaEnter: true });
-    }
+    if (e.target.dataset.scoreWired === 'direct') return;
+    handleLiveScoreInputKeydown(e);
   });
   document.getElementById('score').addEventListener('blur', e => {
     if (e.target.matches('[data-score-player]')) {
-      commitScoreInput(e.target);
+      if (e.target.dataset.scoreWired !== 'direct') handleLiveScoreInputBlur(e.target);
     }
   }, true);
   document.getElementById('score').addEventListener('input', e => {
     if (e.target.matches('[data-score-player]')) {
-      updateLiveNetForScoreInput(e.target);
-      schedulePendingScoreAutoAdvance(e.target);
+      if (e.target.dataset.scoreWired !== 'direct') handleLiveScoreInputEvent(e.target);
     }
     if (e.target.matches('.stat-putts-input')) {
       const raw = String(e.target.value || '').trim();

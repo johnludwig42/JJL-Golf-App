@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.7';
+const APP_VERSION = 'v27.8';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -19,6 +19,7 @@ let supabaseInitPromise = null;
 
 const sharedMatchSyncTimers = new Map();
 const sharedMatchSyncInflight = new Map();
+const sharedMatchSyncDirty = new Map();
 const SHARED_MATCH_SYNC_DEBOUNCE_MS = 200;
 let pendingScoreCommitFocus = null;
 let scoreAutoAdvanceGeneration = 0;
@@ -429,7 +430,7 @@ function setCourseExpanded(courseId, expanded) {
   else uiState.expandedCourses.delete(courseId);
 }
 function loadState() {
-  const fallback = { players: [], courses: [], matches: [], activeMatchId: null, notes: '', sharedMatchIds: [] };
+  const fallback = { players: [], courses: [], matches: [], activeMatchId: null, notes: '', sharedMatchIds: [], lastOpenedSharedMatchId: null };
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
       || localStorage.getItem('golf-matchbook-v9')
@@ -443,6 +444,7 @@ function loadState() {
     parsed.activeMatchId = parsed.activeMatchId || null;
     parsed.notes = typeof parsed.notes === 'string' ? parsed.notes : '';
     parsed.sharedMatchIds = Array.isArray(parsed.sharedMatchIds) ? parsed.sharedMatchIds : [];
+    parsed.lastOpenedSharedMatchId = typeof parsed.lastOpenedSharedMatchId === 'string' && parsed.lastOpenedSharedMatchId.trim() ? parsed.lastOpenedSharedMatchId.trim() : null;
     return parsed;
   } catch {
     return fallback;
@@ -1763,6 +1765,7 @@ function normalizeState() {
   state.matches = Array.isArray(state.matches) ? state.matches : [];
   state.notes = typeof state.notes === 'string' ? state.notes : '';
   state.sharedMatchIds = Array.isArray(state.sharedMatchIds) ? [...new Set(state.sharedMatchIds.filter(Boolean))] : [];
+  state.lastOpenedSharedMatchId = typeof state.lastOpenedSharedMatchId === 'string' && state.lastOpenedSharedMatchId.trim() ? state.lastOpenedSharedMatchId.trim() : null;
   state.players.forEach(p => {
     p.id = p.id || uid();
     p.name = p.name || '';
@@ -1785,6 +1788,10 @@ function normalizeState() {
   state.matches.forEach(normalizeMatch);
   if (state.activeMatchId && !state.matches.find(m => m.id === state.activeMatchId && m.status === 'active')) {
     state.activeMatchId = null;
+  }
+  if (!state.lastOpenedSharedMatchId) {
+    const active = state.matches.find(m => m.id === state.activeMatchId && m.storageMode === 'shared');
+    state.lastOpenedSharedMatchId = active?.sharedMatchId || active?.sharedMatchRef || null;
   }
 }
 function courseHandicap(index, slope, rating, par) {
@@ -3246,12 +3253,18 @@ function hydrateMatchFromCloudBundle(bundle) {
   if (notes?.body && !state.notes) state.notes = String(notes.body);
   return hydrated;
 }
+function setLastOpenedSharedMatch(matchOrId = null) {
+  const match = typeof matchOrId === 'string' ? getMatch(matchOrId) : matchOrId;
+  const sharedId = match?.sharedMatchId || match?.sharedMatchRef || (typeof matchOrId === 'string' ? String(matchOrId || '').trim() : '');
+  state.lastOpenedSharedMatchId = sharedId || null;
+}
 function upsertLocalMatch(match) {
   normalizeMatch(match);
   const existingIdx = state.matches.findIndex(m => m.id === match.id);
   if (existingIdx >= 0) state.matches[existingIdx] = match;
   else state.matches.push(match);
   rememberSharedMatchId(match.sharedMatchId || match.id);
+  if (match.storageMode === 'shared') setLastOpenedSharedMatch(match);
   return match;
 }
 async function loadSharedMatchFromCloud(matchId, { activate = true, silent = false } = {}) {
@@ -3268,6 +3281,7 @@ async function loadSharedMatchFromCloud(matchId, { activate = true, silent = fal
   upsertLocalMatch(hydrated);
   if (activate) {
     state.activeMatchId = hydrated.id;
+    setLastOpenedSharedMatch(hydrated);
     currentHole = Math.min(getRequestedHoleCount(hydrated), Math.max(1, completedHoles(hydrated) || 1));
   }
   persist({ skipRender: true });
@@ -3288,6 +3302,7 @@ async function flushSharedMatchSync(matchId, { silent = true } = {}) {
   const match = getMatch(matchId);
   if (!match || match.storageMode !== 'shared' || !hasSupabaseConfig()) return;
   if (sharedMatchSyncInflight.has(matchId)) {
+    sharedMatchSyncDirty.set(matchId, true);
     try { await sharedMatchSyncInflight.get(matchId); } catch {}
     return;
   }
@@ -3296,6 +3311,7 @@ async function flushSharedMatchSync(matchId, { silent = true } = {}) {
   const task = (async () => {
     try {
       await uploadSharedMatch(match);
+      setLastOpenedSharedMatch(match);
       persist({ skipRender: true });
       if (!silent) toast('Shared match synced.');
     } catch (err) {
@@ -3310,6 +3326,10 @@ async function flushSharedMatchSync(matchId, { silent = true } = {}) {
     await task;
   } finally {
     sharedMatchSyncInflight.delete(matchId);
+    if (sharedMatchSyncDirty.get(matchId)) {
+      sharedMatchSyncDirty.delete(matchId);
+      await flushSharedMatchSync(matchId, { silent: true });
+    }
   }
 }
 function scheduleSharedMatchSync(matchOrId, { immediate = false, silent = true } = {}) {
@@ -3317,6 +3337,13 @@ function scheduleSharedMatchSync(matchOrId, { immediate = false, silent = true }
   if (!matchId) return;
   const match = typeof matchOrId === 'string' ? getMatch(matchId) : matchOrId;
   if (!match || match.storageMode !== 'shared' || !hasSupabaseConfig()) return;
+  setLastOpenedSharedMatch(match);
+  if (sharedMatchSyncInflight.has(matchId)) {
+    sharedMatchSyncDirty.set(matchId, true);
+    match.cloudSyncState = 'pending-sync';
+    persist({ skipRender: true });
+    return;
+  }
   clearScheduledSharedMatchSync(matchId);
   const delay = immediate ? 0 : SHARED_MATCH_SYNC_DEBOUNCE_MS;
   match.cloudSyncState = immediate ? 'syncing' : 'pending-sync';
@@ -5834,6 +5861,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
     if (editingMatchId) state.matches = state.matches.map(m => m.id === editingMatchId ? match : m); else state.matches.push(match);
     state.activeMatchId = match.id;
+    if (match.storageMode === 'shared') setLastOpenedSharedMatch(match);
     currentHole = Math.min(getRequestedHoleCount(match), Math.max(1, completedHoles(match) || 1));
     persist({ skipRender: true });
     loadMatchEditor(null);
@@ -5867,7 +5895,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
 
   document.getElementById('matchesList').addEventListener('click', e => {
     const loadId = e.target.dataset.loadMatch; const shareId = e.target.dataset.shareMatch; const deleteId = e.target.dataset.deleteMatch;
-    if (loadId) { state.activeMatchId = loadId; currentHole = Math.min(getRequestedHoleCount(getMatch(loadId)), Math.max(1, completedHoles(getMatch(loadId)) || 1)); persist(); activateTab('score'); }
+    if (loadId) { state.activeMatchId = loadId; const loadedMatch = getMatch(loadId); if (loadedMatch?.storageMode === 'shared') setLastOpenedSharedMatch(loadedMatch); currentHole = Math.min(getRequestedHoleCount(getMatch(loadId)), Math.max(1, completedHoles(getMatch(loadId)) || 1)); persist(); activateTab('score'); }
     if (shareId) { openPrintScorecard(shareId); }
     if (deleteId && confirm('Delete this match?')) { state.matches = state.matches.filter(m => m.id !== deleteId); if (state.activeMatchId === deleteId) state.activeMatchId = null; persist(); }
   });
@@ -5959,6 +5987,29 @@ function updateVersionUi() {
   if (footerVersionEl) footerVersionEl.textContent = APP_VERSION;
 }
 
+async function resumeActiveSharedMatchOnStartup() {
+  if (!hasSupabaseConfig()) return;
+  const active = getActiveMatch();
+  if (active?.storageMode === 'shared') {
+    setLastOpenedSharedMatch(active);
+    persist({ skipRender: true });
+    return;
+  }
+  const sharedId = String(state.lastOpenedSharedMatchId || '').trim();
+  if (!sharedId) return;
+  try {
+    await loadSharedMatchFromCloud(sharedId, { activate: true, silent: true });
+  } catch (err) {
+    const local = state.matches.find(m => (m.sharedMatchId === sharedId || m.sharedMatchRef === sharedId) && m.storageMode === 'shared');
+    if (local) {
+      state.activeMatchId = local.id;
+      currentHole = Math.min(getRequestedHoleCount(local), Math.max(1, completedHoles(local) || 1));
+      persist({ skipRender: true });
+      renderAll();
+    }
+  }
+}
+
 function showUpdateBanner() {
   const banner = document.getElementById('updateBanner');
   if (!banner || appUpdateBannerVisible) return;
@@ -6021,3 +6072,4 @@ loadTeeEditor(null, null);
 loadMatchEditor(null);
 updateVersionUi();
 renderAll();
+resumeActiveSharedMatchOnStartup();

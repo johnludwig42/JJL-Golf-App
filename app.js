@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.9';
+const APP_VERSION = 'v27.10';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -3651,12 +3651,20 @@ function armFinishRound() {
 function completeActiveRound() {
   const match = getActiveMatch();
   if (!match || !finishConfirmArmed) return;
+  copyCurrentHoleDomToMatch(match);
   match.status = 'complete';
   match.completedAt = new Date().toISOString();
+  match.lastTouchedHole = getLastTouchedHole(match);
+  match.lastFullyCompletedHole = getLastFullyCompletedHole(match);
   finishConfirmArmed = false;
-  state.activeMatchId = null;
+  state.activeMatchId = match.id;
+  if (match.storageMode === 'shared') setLastOpenedSharedMatch(match);
   persist();
   scheduleSharedMatchSync(match, { immediate: true, silent: true });
+  syncFinishRoundUi(match);
+  renderMatchesList();
+  renderCurrentMatch();
+  renderLeaderboard();
   toast('Round marked complete.');
 }
 
@@ -5320,6 +5328,29 @@ function findStatPuttsInput(playerId) {
   const escapedId = window.CSS && typeof window.CSS.escape === 'function' ? window.CSS.escape(String(playerId || '')) : String(playerId || '').replace(/"/g, '\"');
   return document.querySelector(`.stat-putts-input[data-stat-player="${escapedId}"]`);
 }
+function updateActiveMatchPuttsSource(playerId, puttsValue, source) {
+  const match = getActiveMatch();
+  if (!match || !playerId) return;
+  const mp = (match.players || []).find(row => row.playerId === playerId);
+  if (!mp) return;
+  const idx = Math.max(0, Math.min(getRequestedHoleCount(match) - 1, currentHole - 1));
+  const stat = getPlayerStatEntry(mp, idx);
+  stat.putts = Number.isFinite(Number(puttsValue)) ? Math.max(0, Math.round(Number(puttsValue))) : 2;
+  stat.puttsSource = normalizePuttsSource(source, 'default');
+}
+
+function commitSmartPuttsDomValue(puttsInput, sourceOverride) {
+  if (!puttsInput || puttsInput.disabled) return false;
+  const playerId = puttsInput.dataset.statPlayer;
+  const value = Number(puttsInput.value === '' ? '2' : puttsInput.value);
+  const normalized = Number.isFinite(value) ? Math.max(0, Math.round(value)) : 2;
+  const source = normalizePuttsSource(sourceOverride || puttsInput.dataset.puttsSource || 'default', 'default');
+  puttsInput.value = String(normalized);
+  puttsInput.dataset.puttsSource = source;
+  updateActiveMatchPuttsSource(playerId, normalized, source);
+  return true;
+}
+
 function applySmartPuttsAdjustmentFromCheckbox(checkbox) {
   if (!checkbox || !checkbox.matches('[data-stat-player][data-stat-key]')) return false;
   const key = checkbox.dataset.statKey;
@@ -5336,15 +5367,19 @@ function applySmartPuttsAdjustmentFromCheckbox(checkbox) {
     if (puttsInput.value !== '1' || source !== 'auto') {
       puttsInput.value = '1';
       puttsInput.dataset.puttsSource = 'auto';
+      commitSmartPuttsDomValue(puttsInput, 'auto');
       return true;
     }
+    commitSmartPuttsDomValue(puttsInput, 'auto');
     return false;
   }
   if (source === 'auto') {
     puttsInput.value = '2';
     puttsInput.dataset.puttsSource = 'default';
+    commitSmartPuttsDomValue(puttsInput, 'default');
     return true;
   }
+  commitSmartPuttsDomValue(puttsInput, source);
   return false;
 }
 
@@ -5806,7 +5841,11 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       if (e.target.dataset.scoreWired !== 'direct') handleLiveScoreInputBlur(e.target);
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
     }
-    if (e.target.matches('[data-stat-player][data-stat-key], .stat-putts-input')) {
+    if (e.target.matches('.stat-putts-input')) {
+      commitSmartPuttsDomValue(e.target, e.target.dataset.puttsSource || 'user');
+      persist({ skipRender: true });
+      scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
+    } else if (e.target.matches('[data-stat-player][data-stat-key]')) {
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
     }
   }, true);
@@ -5817,6 +5856,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
     if (e.target.matches('.stat-putts-input')) {
       e.target.dataset.puttsSource = 'user';
+      commitSmartPuttsDomValue(e.target, 'user');
+      persist({ skipRender: true });
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
     }
   });

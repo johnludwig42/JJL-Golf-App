@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.8';
+const APP_VERSION = 'v27.9';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -465,19 +465,27 @@ function buildEmptyStats(count = 18) {
     holeNumber: i + 1,
     fairway: false,
     green: false,
-    putts: 0,
+    putts: 2,
+    puttsSource: 'default',
     upAndDown: false,
     sandy: false,
   }));
 }
+function normalizePuttsSource(source, fallback = 'default') {
+  return ['default', 'auto', 'user'].includes(source) ? source : fallback;
+}
 function normalizeHoleStat(stat = {}, idx = 0) {
   const rawPutts = stat?.putts;
-  const putts = rawPutts === '' || rawPutts == null ? 0 : Number(rawPutts);
+  const hasRawPutts = rawPutts !== '' && rawPutts != null;
+  const putts = hasRawPutts ? Number(rawPutts) : 2;
+  const explicitSource = normalizePuttsSource(stat?.puttsSource || stat?._puttsSource || '', '');
+  const inferredSource = explicitSource || (hasRawPutts && Number(rawPutts) !== 2 ? 'user' : 'default');
   return {
     holeNumber: Number(stat?.holeNumber) || idx + 1,
     fairway: !!stat?.fairway,
     green: !!stat?.green,
-    putts: Number.isFinite(putts) && putts >= 0 ? Math.round(putts) : 0,
+    putts: Number.isFinite(putts) && putts >= 0 ? Math.round(putts) : 2,
+    puttsSource: normalizePuttsSource(inferredSource, 'default'),
     upAndDown: !!stat?.upAndDown,
     sandy: !!stat?.sandy,
   };
@@ -2923,8 +2931,10 @@ function applyCurrentHoleDomToMatch(match) {
         const raw = String(input.value || '').trim();
         const putts = Number(raw === '' ? '0' : raw);
         currentStat.putts = Number.isFinite(putts) ? Math.max(0, Math.round(putts)) : 0;
+        currentStat.puttsSource = normalizePuttsSource(input.dataset.puttsSource || 'user', 'user');
       } else {
         currentStat[key] = !!input.checked;
+        currentStat.puttsSource = normalizePuttsSource(currentStat.puttsSource || 'default', 'default');
       }
       if (Number(holeMeta?.par) !== 4 && Number(holeMeta?.par) !== 5) currentStat.fairway = false;
       if (JSON.stringify(currentStat) != before) {
@@ -3729,7 +3739,7 @@ function renderStatTrackingEntry(match, hole, metrics) {
                 <label class="mini-check stat-mini-check"><input type="checkbox" data-stat-player="${p.playerId}" data-stat-key="upAndDown" ${stat.upAndDown ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>Up and down</span></label>
                 <label class="mini-check stat-mini-check"><input type="checkbox" data-stat-player="${p.playerId}" data-stat-key="sandy" ${stat.sandy ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>Sandy</span></label>
               </div>
-              <label class="stat-putts-field top-gap"><span>Putts</span><input class="score-input stat-putts-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" min="0" max="9" data-stat-player="${p.playerId}" data-stat-key="putts" value="${Number.isFinite(stat.putts) ? stat.putts : 0}" ${canEdit ? '' : 'disabled'} /></label>
+              <label class="stat-putts-field top-gap"><span>Putts</span><input class="score-input stat-putts-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" min="0" max="9" data-stat-player="${p.playerId}" data-stat-key="putts" data-putts-source="${escapeHtml(normalizePuttsSource(stat.puttsSource || 'default', 'default'))}" value="${Number.isFinite(stat.putts) ? stat.putts : 2}" ${canEdit ? '' : 'disabled'} /></label>
             </div>`;
         }).join('')}
       </div>
@@ -5306,6 +5316,38 @@ function exportJson() {
   URL.revokeObjectURL(url);
 }
 
+function findStatPuttsInput(playerId) {
+  const escapedId = window.CSS && typeof window.CSS.escape === 'function' ? window.CSS.escape(String(playerId || '')) : String(playerId || '').replace(/"/g, '\"');
+  return document.querySelector(`.stat-putts-input[data-stat-player="${escapedId}"]`);
+}
+function applySmartPuttsAdjustmentFromCheckbox(checkbox) {
+  if (!checkbox || !checkbox.matches('[data-stat-player][data-stat-key]')) return false;
+  const key = checkbox.dataset.statKey;
+  if (key !== 'upAndDown' && key !== 'sandy') return false;
+  const playerId = checkbox.dataset.statPlayer;
+  const puttsInput = findStatPuttsInput(playerId);
+  if (!puttsInput || puttsInput.disabled) return false;
+  const source = normalizePuttsSource(puttsInput.dataset.puttsSource || 'default', 'default');
+  if (source === 'user') return false;
+  const escapedId = window.CSS && typeof window.CSS.escape === 'function' ? window.CSS.escape(String(playerId || '')) : String(playerId || '').replace(/"/g, '\"');
+  const upAndDownChecked = !!document.querySelector(`[data-stat-player="${escapedId}"][data-stat-key="upAndDown"]`)?.checked;
+  const sandyChecked = !!document.querySelector(`[data-stat-player="${escapedId}"][data-stat-key="sandy"]`)?.checked;
+  if (upAndDownChecked || sandyChecked) {
+    if (puttsInput.value !== '1' || source !== 'auto') {
+      puttsInput.value = '1';
+      puttsInput.dataset.puttsSource = 'auto';
+      return true;
+    }
+    return false;
+  }
+  if (source === 'auto') {
+    puttsInput.value = '2';
+    puttsInput.dataset.puttsSource = 'default';
+    return true;
+  }
+  return false;
+}
+
 function installHandlers() {
   document.querySelectorAll('.tab').forEach(btn => btn.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
@@ -5664,6 +5706,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
     }
     if (e.target.matches('[data-stat-player][data-stat-key]')) {
+      applySmartPuttsAdjustmentFromCheckbox(e.target);
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
     }
   });
@@ -5773,8 +5816,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
     }
     if (e.target.matches('.stat-putts-input')) {
-      const raw = String(e.target.value || '').trim();
-      if (raw === '') e.target.value = '0';
+      e.target.dataset.puttsSource = 'user';
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
     }
   });

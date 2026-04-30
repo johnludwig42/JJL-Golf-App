@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.11';
+const APP_VERSION = 'v27.12';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -3612,7 +3612,8 @@ function handleNewMatchFinishAction() {
     syncNewMatchConflictUi();
     return;
   }
-  completeActiveRound();
+  const finished = completeActiveRound();
+  if (!finished) return;
   closeNewMatchConflictDialog();
   handleNewMatchRequest();
 }
@@ -3655,22 +3656,40 @@ function armFinishRound() {
 
 function completeActiveRound() {
   const match = getActiveMatch();
-  if (!match || !finishConfirmArmed) return;
-  copyCurrentHoleDomToMatch(match);
-  match.status = 'complete';
-  match.completedAt = new Date().toISOString();
-  match.lastTouchedHole = getLastTouchedHole(match);
-  match.lastFullyCompletedHole = getLastFullyCompletedHole(match);
-  finishConfirmArmed = false;
-  state.activeMatchId = match.id;
-  if (match.storageMode === 'shared') setLastOpenedSharedMatch(match);
-  persist();
-  scheduleSharedMatchSync(match, { immediate: true, silent: true });
-  syncFinishRoundUi(match);
-  renderMatches();
-  renderCurrentMatch();
-  renderLeaderboard();
-  toast('Round marked complete.');
+  if (!match || !finishConfirmArmed) return false;
+  try {
+    // Persist the currently visible hole before marking the round complete.
+    // v27.12: the prior implementation called copyCurrentHoleDomToMatch(),
+    // which is not defined in this codebase. applyCurrentHoleDomToMatch() is
+    // the real DOM-to-match mutation path used by scoring saves.
+    if (typeof applyCurrentHoleDomToMatch === 'function') {
+      applyCurrentHoleDomToMatch(match);
+    }
+    match.status = 'complete';
+    match.completedAt = new Date().toISOString();
+    match.lastTouchedHole = getLastTouchedHole(match);
+    match.lastFullyCompletedHole = getLastFullyCompletedHole(match);
+    finishConfirmArmed = false;
+    newMatchPromptFinishArmed = false;
+    state.activeMatchId = match.id;
+    if (match.storageMode === 'shared') setLastOpenedSharedMatch(match);
+    persist();
+    scheduleSharedMatchSync(match, { immediate: true, silent: true });
+    syncFinishRoundUi(match);
+    renderMatches();
+    renderCurrentMatch();
+    renderLeaderboard();
+    renderMatchSetupState();
+    toast('Round marked complete.');
+    return true;
+  } catch (err) {
+    console.error('Confirm Finish failed:', err);
+    finishConfirmArmed = false;
+    newMatchPromptFinishArmed = false;
+    syncFinishRoundUi(match);
+    toast('Could not finish round. Please try again.');
+    return false;
+  }
 }
 
 function renderCurrentMatch() {
@@ -5281,6 +5300,10 @@ function loadMatchEditor(matchId = null) {
   const form = document.getElementById('matchForm');
   editingMatchId = matchId;
   document.getElementById('cancelMatchEditBtn').classList.toggle('hidden', !matchId);
+  const topUpdateBtn = document.getElementById('topUpdateMatchBtn');
+  const topUpdateNote = document.getElementById('topUpdateMatchNote');
+  if (topUpdateBtn) topUpdateBtn.classList.toggle('hidden', !matchId);
+  if (topUpdateNote) topUpdateNote.classList.toggle('hidden', !matchId);
   document.getElementById('matchFormTitle').textContent = matchId ? 'Edit match' : 'Setup match';
   document.getElementById('matchSubmitBtn').textContent = matchId ? 'Update Match' : 'Create Match';
   activateTab('setup');

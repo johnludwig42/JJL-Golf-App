@@ -162,6 +162,7 @@
           <div class="actions compact-actions momentum-controls">
             <button id="newMatchBtn" type="button" class="secondary">New Match</button>
             <button id="editActiveMatchBtn" type="button" class="secondary">Edit Active Match</button>
+            <button id="topCreateMatchBtn" type="submit" form="matchForm">Create Match</button>
             <button id="topUpdateMatchBtn" type="submit" form="matchForm" class="hidden">Update Match</button>
           </div>
         </div>
@@ -610,13 +611,13 @@
         <div>
           <div class="tiny">Game setup</div>
           <h3 id="newMatchConflictTitle">Round already underway</h3>
-          <div id="newMatchConflictBody" class="tiny">A round is already underway. You can continue the current round, or finish it before starting a new match.</div>
+          <div id="newMatchConflictBody" class="tiny">This match has unsaved changes. What would you like to do?</div>
         </div>
         <button id="newMatchCancelBtn" type="button" class="secondary">Cancel</button>
       </div>
       <div class="sheet-actions new-match-sheet-actions">
-        <button id="newMatchContinueBtn" type="button" class="secondary">Continue Current Round</button>
-        <button id="newMatchFinishCurrentBtn" type="button" class="primary">Finish Current Round</button>
+        <button id="newMatchContinueBtn" type="button" class="secondary">Start New Without Saving</button>
+        <button id="newMatchFinishCurrentBtn" type="button" class="primary">Save &amp; Start New Match</button>
       </div>
     </div>
   </div>

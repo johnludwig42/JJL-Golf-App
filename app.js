@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.10';
+const APP_VERSION = 'v27.11';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -1377,8 +1377,12 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     .score-main { font-size: 10px; font-weight: 700; }
     .score-sub { font-size: 8px; margin-top: 1px; }
     .total-sub { margin-top: 2px; }
-    .score-number { display: inline-block; min-width: 10px; }
-    .score-empty { color: #94a3b8; }
+    .score-number { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; line-height: 1; border: 1.5px solid transparent; padding: 0 4px; background: #fff; color: #111827; font-weight: 800; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .score-empty { color: #94a3b8; background: transparent; border-color: transparent; }
+    .score-birdie { border-color: #111827; border-radius: 999px; text-decoration: none; }
+    .score-eagle { border-color: #111827; box-shadow: 0 0 0 1.25px #111827 inset; border-radius: 999px; }
+    .score-bogey { border-color: #111827; border-radius: 3px; }
+    .score-doublebogey { border-color: #111827; box-shadow: 0 0 0 1.25px #111827 inset; border-radius: 3px; }
     .score-dots { margin-left: 2px; font-size: 8px; letter-spacing: -0.5px; }
     .score-eagle { font-weight: 700; }
     .score-birdie { text-decoration: underline; }
@@ -2294,9 +2298,10 @@ function buildClassicScorecard(match, metrics) {
       const gross = Number(playerScores[idx]?.gross) || null;
       const playerHole = getPlayerHole(match, p, idx, tee) || hole;
       const strokes = holeStrokeAllowanceForPlayer(playerHole.strokeIndex, p.playHdcp, metrics.lowPlaying);
-      if (!gross) return `<td class="score-hole-cell"><div class="score-main">${formatGolfScoreMarkup(null, hole.par, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(null, hole.par, 'net')}${dotMarkup(strokes)}</div></td>`;
+      const editAttrs = `data-scorecard-edit="1" data-edit-hole="${idx + 1}" data-edit-player="${p.playerId}" title="Edit ${escapeHtml(p.player.name)} on hole ${hole.holeNumber}"`;
+      if (!gross) return `<td class="score-hole-cell editable-scorecard-cell" ${editAttrs}><div class="score-main">${formatGolfScoreMarkup(null, hole.par, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(null, hole.par, 'net')}${dotMarkup(strokes)}</div></td>`;
       const net = gross - strokes;
-      return `<td class="score-hole-cell"><div class="score-main">${formatGolfScoreMarkup(gross, hole.par, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(net, hole.par, 'net')}${dotMarkup(strokes)}</div></td>`;
+      return `<td class="score-hole-cell editable-scorecard-cell" ${editAttrs}><div class="score-main">${formatGolfScoreMarkup(gross, hole.par, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(net, hole.par, 'net')}${dotMarkup(strokes)}</div></td>`;
     }).join('');
     const totals = back.length
       ? `<td><strong>${frontGross}</strong><div class="score-sub total-sub">${frontNet || '—'}</div></td><td><strong>${backGross}</strong><div class="score-sub total-sub">${backNet || '—'}</div></td><td><strong>${p.grossTotal || 0}</strong><div class="score-sub total-sub">${p.netTotal || 0}</div></td>`
@@ -2929,8 +2934,8 @@ function applyCurrentHoleDomToMatch(match) {
       const before = JSON.stringify(currentStat);
       if (key === 'putts') {
         const raw = String(input.value || '').trim();
-        const putts = Number(raw === '' ? '0' : raw);
-        currentStat.putts = Number.isFinite(putts) ? Math.max(0, Math.round(putts)) : 0;
+        const putts = Number(raw === '' ? '2' : raw);
+        currentStat.putts = Number.isFinite(putts) ? Math.max(0, Math.round(putts)) : 2;
         currentStat.puttsSource = normalizePuttsSource(input.dataset.puttsSource || 'user', 'user');
       } else {
         currentStat[key] = !!input.checked;
@@ -3584,7 +3589,7 @@ function syncNewMatchConflictUi() {
 
 function handleNewMatchRequest() {
   const active = getActiveMatch();
-  if (active && matchHasStarted(active)) {
+  if (active && active.status !== 'complete' && matchHasStarted(active)) {
     openNewMatchConflictDialog();
     return;
   }
@@ -3662,7 +3667,7 @@ function completeActiveRound() {
   persist();
   scheduleSharedMatchSync(match, { immediate: true, silent: true });
   syncFinishRoundUi(match);
-  renderMatchesList();
+  renderMatches();
   renderCurrentMatch();
   renderLeaderboard();
   toast('Round marked complete.');
@@ -3692,7 +3697,7 @@ function renderCurrentMatch() {
   wrapEl.classList.remove('hidden');
   currentHole = Math.min(holeCount, Math.max(1, currentHole));
   const hole = scoringHoles[currentHole - 1];
-  document.getElementById('currentHoleBadge').textContent = `Hole ${hole?.holeNumber || currentHole}`;
+  renderHoleSelector(match, scoringHoles);
   const teamText = metrics?.teams?.length === 2 ? `${formatMatchDiff(metrics.matchDiff, match)} overall` : 'Singles leaderboard';
   const teeYardages = hole ? [...new Map((metrics?.players || []).map(p => {
     const playerHole = getPlayerHole(match, p, currentHole - 1, tee) || hole;
@@ -3710,6 +3715,19 @@ function renderCurrentMatch() {
   applyPendingScoreCommitFocus();
 }
 
+
+function renderHoleSelector(match, scoringHoles = []) {
+  const badge = document.getElementById('currentHoleBadge');
+  if (!badge) return;
+  const holes = Array.isArray(scoringHoles) && scoringHoles.length ? scoringHoles : getSelectedScoringHoles(match, getTee(match?.courseId, match?.teeId));
+  const maxHole = holes.length || getRequestedHoleCount(match) || 18;
+  const options = Array.from({ length: maxHole }, (_, idx) => {
+    const holeNo = idx + 1;
+    const displayHole = holes[idx]?.holeNumber || holeNo;
+    return `<option value="${holeNo}" ${holeNo === currentHole ? 'selected' : ''}>Hole ${displayHole}</option>`;
+  }).join('');
+  badge.innerHTML = `<label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select>`;
+}
 
 function renderStatTrackingEntry(match, hole, metrics) {
   const wrap = document.getElementById('statTrackingEntryWrap');
@@ -3775,6 +3793,9 @@ function renderGreeniesEntry(match, hole) {
 function renderHoleJumpTiles(match) {
   const wrap = document.getElementById('holeJumpTiles');
   if (!wrap) return;
+  wrap.innerHTML = '';
+  wrap.classList.add('hidden');
+  return;
   const holeCount = getPlayableHoleCount(match, getTee(match.courseId, match.teeId));
   const played = Array.from({ length: holeCount }, (_, idx) => {
     const hasScore = (match.players || []).some(mp => Number(mp.scores?.[idx]?.gross));
@@ -4423,7 +4444,7 @@ function renderTeamNameInputs(teamCount = Number(document.getElementById('teamCo
   wrap.innerHTML = Array.from({ length: teamCount }, (_, idx) => `
     <label>
       <span>Team ${idx + 1} name</span>
-      <input data-team-name="${idx + 1}" maxlength="25" value="${escapeHtml((teamNames[idx] || `Team ${idx + 1}`).slice(0,25))}" placeholder="Team ${idx + 1}" />
+      <input data-team-name="${idx + 1}" maxlength="25" value="${escapeHtml((teamNames[idx] || '').slice(0,25))}" placeholder="Team ${idx + 1}" />
     </label>
   `).join('');
 }
@@ -4434,7 +4455,7 @@ function renderScoringControlConfig(existingMatch = null) {
   const hint = document.getElementById('scoreEntryModeHint');
   if (!modeSelect || !officialInput || !wrap || !hint) return;
   const teamCount = Number(document.getElementById('teamCountSelect')?.value || existingMatch?.teamCount || 1);
-  const teamNames = Array.from({ length: teamCount }, (_, idx) => String(document.querySelector(`[data-team-name="${idx + 1}"]`)?.value || existingMatch?.teamNames?.[idx] || `Team ${idx + 1}`));
+  const teamNames = Array.from({ length: teamCount }, (_, idx) => String(document.querySelector(`[data-team-name="${idx + 1}"]`)?.value || existingMatch?.teamNames?.[idx] || '').trim());
   const mode = normalizeScoringAccessMode(modeSelect?.value || existingMatch?.scoringAccessMode || existingMatch?.scoreEntryMode || 'team_codes');
   const teamScorers = buildTeamScorerAssignments(teamCount, teamNames, existingMatch?.teamScorers || []);
   if (existingMatch) existingMatch.teamScorers = teamScorers;
@@ -4605,7 +4626,7 @@ function populateMatchPlayerPicker(selected = []) {
   uiState.matchPlayerDraft = draftSelections;
   const selectedBySlot = draftSelections.map(s => s.playerId || '');
   const teeBySlot = draftSelections.map(s => s.teeId || defaultTeeId || '');
-  const teamNames = Array.from({ length: teamCount }, (_, i) => document.querySelector(`[data-team-name="${i + 1}"]`)?.value || `Team ${i + 1}`);
+  const teamNames = Array.from({ length: teamCount }, (_, i) => String(document.querySelector(`[data-team-name="${i + 1}"]`)?.value || '').trim().slice(0,25));
   container.innerHTML = Array.from({ length: slotCount }, (_, idx) => {
     const teamNo = Math.floor(idx / playersPerTeam) + 1;
     const slotNo = (idx % playersPerTeam) + 1;
@@ -4621,9 +4642,9 @@ function populateMatchPlayerPicker(selected = []) {
       : '<div class="tiny">Select a course first to choose tees.</div>';
     return `
       <div class="picker-row picker-row-stack picker-card-row" data-assignment-slot="${idx}">
-        <div class="tiny"><strong>${escapeHtml(teamNames[teamNo - 1])}</strong> · Player ${slotNo}</div>
+        <div class="tiny"><strong>${escapeHtml(teamNames[teamNo - 1] || `Team ${teamNo}`)}</strong> · Player ${slotNo}</div>
         <input type="hidden" data-player-slot="${idx}" data-slot-team="${teamNo}" value="${current}">
-        <button type="button" class="${buttonClass}" data-open-player-sheet="${idx}" data-slot-team="${teamNo}" aria-label="Select player for ${escapeHtml(teamNames[teamNo - 1])} player ${slotNo}" ${hasSavedPlayers ? '' : 'disabled'}>
+        <button type="button" class="${buttonClass}" data-open-player-sheet="${idx}" data-slot-team="${teamNo}" aria-label="Select player for ${escapeHtml(teamNames[teamNo - 1] || `Team ${teamNo}`)} player ${slotNo}" ${hasSavedPlayers ? '' : 'disabled'}>
           <span class="player-card-label">${buttonLabel}</span>
           <span class="player-card-hint">${hasSavedPlayers ? (currentPlayer ? 'Change player' : 'Search saved players') : 'Add players on the Players tab'}</span>
         </button>
@@ -5821,6 +5842,22 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       saveCurrentHole({ targetHole: Number(jumpHole), silent: true });
     }
   });
+  document.getElementById('score').addEventListener('change', e => {
+    if (e.target && e.target.id === 'currentHoleSelect') {
+      saveCurrentHole({ targetHole: Number(e.target.value), silent: true });
+      return;
+    }
+    if (e.target && e.target.matches('[data-stat-player][data-stat-key]')) {
+      if (e.target.matches('input[type="checkbox"]')) {
+        applySmartPuttsAdjustmentFromCheckbox(e.target);
+      } else if (e.target.matches('.stat-putts-input')) {
+        e.target.dataset.puttsSource = 'user';
+        commitSmartPuttsDomValue(e.target, 'user');
+      }
+      persist({ skipRender: true });
+      scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
+    }
+  });
   document.getElementById('score').addEventListener('focusin', e => {
     if (e.target.matches('[data-score-player]')) {
       if (e.target.dataset.scoreWired !== 'direct') handleLiveScoreInputFocus(e.target);
@@ -5868,7 +5905,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const teamCount = Number(fd.get('teamCount')) || 1;
     const playersPerTeam = Number(fd.get('playersPerTeam')) || 1;
     if ((teamCount * playersPerTeam) > 32) return toast('Limit is 32 total players.');
-    const teamNames = Array.from({ length: teamCount }, (_, i) => String(document.querySelector(`[data-team-name="${i + 1}"]`)?.value || `Team ${i + 1}`).slice(0, 25));
+    const teamNames = Array.from({ length: teamCount }, (_, i) => String(document.querySelector(`[data-team-name="${i + 1}"]`)?.value || '').trim().slice(0, 25));
     const selectedPlayers = getSelectedPlayersFromSetup();
     const uniqueIds = new Set(selectedPlayers.map(p => p.playerId));
     if (selectedPlayers.length !== uniqueIds.size) return toast('Each player can only be selected once.');
@@ -5982,7 +6019,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (shareId) { openPrintScorecard(shareId); }
     if (deleteId && confirm('Delete this match?')) { state.matches = state.matches.filter(m => m.id !== deleteId); if (state.activeMatchId === deleteId) state.activeMatchId = null; persist(); }
   });
-  document.getElementById('prevHoleBtn').addEventListener('click', () => { currentHole = Math.max(1, currentHole - 1); renderCurrentMatch(); });
+  document.getElementById('prevHoleBtn').addEventListener('click', () => { saveCurrentHole({ targetHole: Math.max(1, currentHole - 1), silent: true }); });
   document.getElementById('nextHoleBtn').addEventListener('click', () => { saveCurrentHole({ advance: true, silent: true }); });
   document.getElementById('scoreboardShareRoundBtn').addEventListener('click', () => { openPrintScorecard(); });
   document.getElementById('saveScoresBtn').addEventListener('click', () => { saveCurrentHole(); });
@@ -5992,6 +6029,19 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   if (scoreboardFinishRoundBtn) scoreboardFinishRoundBtn.addEventListener('click', armFinishRound);
   const scoreboardConfirmFinishRoundBtn = document.getElementById('scoreboardConfirmFinishRoundBtn');
   if (scoreboardConfirmFinishRoundBtn) scoreboardConfirmFinishRoundBtn.addEventListener('click', completeActiveRound);
+  document.getElementById('leaderboard')?.addEventListener('click', e => {
+    const cell = e.target.closest('[data-scorecard-edit]');
+    if (!cell) return;
+    const match = getActiveMatch();
+    if (!match) return;
+    const holeNo = Number(cell.dataset.editHole);
+    const playerId = cell.dataset.editPlayer;
+    if (!Number.isFinite(holeNo) || holeNo < 1 || !playerId) return;
+    currentHole = Math.max(1, Math.min(getRequestedHoleCount(match) || 18, holeNo));
+    queueScoreCommitFocus(playerId, currentHole);
+    activateTab('score');
+    renderCurrentMatch();
+  });
 
   const notesBox = document.getElementById('notesBox');
   if (notesBox) notesBox.addEventListener('input', e => {

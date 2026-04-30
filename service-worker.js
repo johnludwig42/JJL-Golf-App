@@ -1,4 +1,4 @@
-const CACHE_NAME = 'the-dye-ledger-v27.10';
+const CACHE_NAME = 'the-dye-ledger-v27.11';
 const ASSETS = [
   './',
   './index.html',

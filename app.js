@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.17';
+const APP_VERSION = 'v27.18';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -3678,7 +3678,7 @@ function createBlankSetupDraft() {
   });
 }
 
-function resetToBlankMatchSetup() {
+function startCleanNewMatchSetup() {
   const priorId = state.activeMatchId;
   if (priorId) {
     clearScheduledSharedMatchSync(priorId);
@@ -3715,8 +3715,12 @@ function resetToBlankMatchSetup() {
   activateTab('setup');
 }
 
+function resetToBlankMatchSetup() {
+  startCleanNewMatchSetup();
+}
+
 function clearActiveMatchForNewSetup() {
-  resetToBlankMatchSetup();
+  startCleanNewMatchSetup();
 }
 
 async function persistCurrentMatch({ applyDom = true, awaitShared = false, immediateShared = true, silent = true } = {}) {
@@ -3738,7 +3742,7 @@ async function persistCurrentMatch({ applyDom = true, awaitShared = false, immed
 }
 
 function beginCleanNewMatchSetup({ message = 'New match setup ready.' } = {}) {
-  clearActiveMatchForNewSetup();
+  startCleanNewMatchSetup();
   toast(message);
 }
 
@@ -3758,20 +3762,11 @@ function editCurrentMatchFromNewMatchDialog() {
 }
 
 function proceedFromNewMatchIntentDialog() {
+  // Final Create New Match confirmation: perform the clean reset directly.
+  // Do not call handleNewMatchRequest() again or branch on completion status after confirmation.
   if (newMatchStartInProgress) return;
-  const active = getActiveMatch();
-  if (!active) {
-    closeNewMatchConflictDialog({ disarmFinish: true });
-    beginCleanNewMatchSetup();
-    return;
-  }
-  if (active.status === 'complete') {
-    closeNewMatchConflictDialog({ disarmFinish: true });
-    beginCleanNewMatchSetup();
-    return;
-  }
-  newMatchDialogMode = 'unfinished';
-  syncNewMatchConflictUi();
+  closeNewMatchConflictDialog({ disarmFinish: true });
+  beginCleanNewMatchSetup();
 }
 
 function handleNewMatchRequest() {

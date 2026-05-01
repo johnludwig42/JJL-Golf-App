@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.14';
+const APP_VERSION = 'v27.15';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -3626,14 +3626,14 @@ function syncNewMatchConflictUi() {
   const saveBtn = document.getElementById('newMatchFinishCurrentBtn');
   const withoutBtn = document.getElementById('newMatchContinueBtn');
   const cancelBtn = document.getElementById('newMatchCancelBtn');
-  if (title) title.textContent = 'Start a new match?';
+  if (title) title.textContent = 'Create a new match setup?';
   if (body) body.textContent = 'This match has unsaved changes. What would you like to do?';
   if (saveBtn) {
-    saveBtn.textContent = newMatchStartInProgress ? 'Saving...' : 'Save & Start New Match';
+    saveBtn.textContent = newMatchStartInProgress ? 'Saving...' : 'Save & Create New Match';
     saveBtn.disabled = newMatchStartInProgress;
   }
   if (withoutBtn) {
-    withoutBtn.textContent = 'Start New Without Saving';
+    withoutBtn.textContent = 'Create New Without Saving';
     withoutBtn.disabled = newMatchStartInProgress;
   }
   if (cancelBtn) cancelBtn.disabled = newMatchStartInProgress;
@@ -3712,9 +3712,9 @@ async function handleNewMatchSaveAndStartAction() {
     await persistCurrentMatch({ applyDom: true, awaitShared: active.storageMode === 'shared', immediateShared: true, silent: true });
     closeNewMatchConflictDialog();
     clearActiveMatchForNewSetup();
-    toast('Current match saved. Ready for a new match.');
+    toast('Current match saved. New match setup ready.');
   } catch (err) {
-    console.error('Save & Start New Match failed:', err);
+    console.error('Save & Create New Match failed:', err);
     newMatchStartInProgress = false;
     syncNewMatchConflictUi();
     toast('Could not save match. Please try again.');
@@ -3725,7 +3725,7 @@ function handleNewMatchStartWithoutSavingAction() {
   if (newMatchStartInProgress) return;
   closeNewMatchConflictDialog({ disarmFinish: true });
   clearActiveMatchForNewSetup();
-  toast('Ready for a new match.');
+  toast('New match setup ready.');
 }
 
 function syncFinishRoundUi(match = getActiveMatch()) {
@@ -3789,7 +3789,7 @@ function completeActiveRound() {
     renderCurrentMatch();
     renderLeaderboard();
     renderMatchSetupState();
-    toast('Match updated successfully.');
+    toast('Match setup saved.');
     return true;
   } catch (err) {
     console.error('Confirm Finish failed:', err);
@@ -5319,6 +5319,22 @@ function fillTotalsFromHoles() {
 function matchHasStarted(match) {
   return !!(match && completedHoles(match) > 0);
 }
+function updateSetupActionButtonStates() {
+  const active = getActiveMatch();
+  const editingActive = !!(editingMatchId && active && editingMatchId === active.id);
+  const editBtn = document.getElementById("editActiveMatchBtn");
+  const finalizeBtns = [document.getElementById("topCreateMatchBtn"), document.getElementById("matchSubmitBtn")].filter(Boolean);
+  if (editBtn) {
+    editBtn.disabled = !active || editingActive;
+    editBtn.classList.toggle("is-active", editingActive);
+    editBtn.textContent = editingActive ? "Editing Match" : "Edit Match";
+  }
+  finalizeBtns.forEach(btn => {
+    btn.textContent = "Finalize Match Setup";
+    btn.disabled = false;
+  });
+}
+
 function renderMatchSetupState() {
   const wrap = document.getElementById('matchSetupFormWrap');
   const msg = document.getElementById('setupLockMsg');
@@ -5328,11 +5344,12 @@ function renderMatchSetupState() {
   if (!wrap || !msg) return;
   if (started && !editingActive) {
     wrap.classList.add('hidden');
-    msg.textContent = `Scoring has started for ${active.name || 'the active match'}. Use Edit Active Match to make changes with confirmation.`;
+    msg.textContent = `Scoring has started for ${active.name || 'the active match'}. Use Edit Match to make changes with confirmation.`;
   } else {
     wrap.classList.remove('hidden');
-    msg.textContent = active ? `${active.name || 'Active match'} · ${completedHoles(active)}/${getRequestedHoleCount(active)} holes entered.` : 'Build a new match, or edit the active one.';
+    msg.textContent = active ? `${active.name || 'Active match'} · ${completedHoles(active)}/${getRequestedHoleCount(active)} holes entered.` : 'Create a new match setup, or edit the active match.';
   }
+  updateSetupActionButtonStates();
 }
 
 function loadPlayerEditor(playerId = null) {
@@ -5412,11 +5429,13 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
   const topUpdateBtn = document.getElementById('topUpdateMatchBtn');
   const topCreateBtn = document.getElementById('topCreateMatchBtn');
   const topUpdateNote = document.getElementById('topUpdateMatchNote');
-  if (topUpdateBtn) topUpdateBtn.classList.toggle('hidden', !matchId);
-  if (topCreateBtn) topCreateBtn.classList.toggle('hidden', !!matchId);
+  if (topUpdateBtn) topUpdateBtn.classList.add('hidden');
+  if (topCreateBtn) topCreateBtn.classList.remove('hidden');
   if (topUpdateNote) topUpdateNote.classList.toggle('hidden', !matchId);
-  document.getElementById('matchFormTitle').textContent = matchId ? 'Edit match' : 'Setup match';
-  document.getElementById('matchSubmitBtn').textContent = matchId ? 'Update Match' : 'Create Match';
+  document.getElementById('matchFormTitle').textContent = matchId ? 'Edit match setup' : 'Match setup';
+  document.getElementById('matchSubmitBtn').textContent = 'Finalize Match Setup';
+  if (topCreateBtn) topCreateBtn.textContent = 'Finalize Match Setup';
+  updateSetupActionButtonStates();
   activateTab('setup');
   if (!matchId) {
     const draft = draftMatch || createEmptyMatch();
@@ -6127,8 +6146,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     loadMatchEditor(null);
     renderAll();
     activateTab('score');
-    toast(editingMatchId ? 'Match updated successfully.' : (sharedMatchEnabled ? 'Shared match created and loaded.' : 'Match created and loaded.'));
-    } catch (err) { console.error(err); toast('Could not create match. Please try again.'); }
+    toast(editingMatchId ? 'Match setup saved.' : (sharedMatchEnabled ? 'Shared match setup saved.' : 'Match setup saved.'));
+    } catch (err) { console.error(err); toast('Could not finalize match setup. Please try again.'); }
   });
   document.getElementById('cancelMatchEditBtn').addEventListener('click', () => { loadMatchEditor(null); renderMatchSetupState(); });
   function saveCurrentHole({ advance = false, targetHole = null, silent = false } = {}) {

@@ -2332,3 +2332,103 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
   .score-bogey{border-color:#a07a14!important;border-radius:3px!important}
   .score-doublebogey{border-color:#a07a14!important;box-shadow:0 0 0 1.25px #a07a14 inset!important;border-radius:3px!important}
 }
+
+/* v27.14 Game Setup lifecycle + button alignment polish */
+#setup .setup-match-actions,
+#setup .preview-card-actions{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  align-items:center;
+  gap:10px;
+  width:100%;
+}
+#setup .item-header.compact-item-header{
+  align-items:center;
+}
+#setup .item-header.compact-item-header > .setup-match-actions{
+  flex:1 1 100%;
+}
+#setup .setup-action-btn{
+  min-height:42px;
+  min-width:132px;
+  padding:10px 16px;
+  border-radius:999px;
+  font-size:14px;
+  font-weight:800;
+  line-height:1.1;
+  text-align:center;
+}
+#score #currentHoleBadge{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+}
+#score #currentHoleBadge .hole-select{
+  margin-left:auto;
+  margin-right:auto;
+  text-align:center;
+  text-align-last:center;
+}
+@media (max-width:760px){
+  #setup .setup-match-actions,
+  #setup .preview-card-actions{
+    display:grid;
+    grid-template-columns:1fr;
+    justify-items:center;
+  }
+  #setup .setup-action-btn{
+    width:min(100%, 280px);
+  }
+  #score #currentHoleBadge{justify-self:center;}
+}
+
+/* v27.15 Match setup lifecycle labels + equal-width action row */
+#setup .setup-match-actions{
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+  gap:10px;
+  width:100%;
+  justify-content:center;
+  align-items:stretch;
+}
+#setup .setup-match-actions .setup-action-btn:not(.hidden){
+  width:100%;
+  min-width:0;
+  min-height:50px;
+  height:100%;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  text-align:center;
+  font-size:13px;
+  line-height:1.15;
+  padding:9px 8px;
+}
+#setup .setup-match-actions .setup-action-btn.is-active,
+#setup .setup-match-actions .setup-action-btn:disabled{
+  opacity:.65;
+}
+#setup .preview-card-actions{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  gap:10px;
+}
+#setup .preview-card-actions .setup-action-btn{
+  width:min(100%, 280px);
+}
+@media (max-width:760px){
+  #setup .setup-match-actions{
+    grid-template-columns:repeat(3, minmax(0, 1fr));
+    gap:8px;
+  }
+  #setup .setup-match-actions .setup-action-btn:not(.hidden){
+    min-height:54px;
+    font-size:12px;
+    padding:8px 6px;
+  }
+}

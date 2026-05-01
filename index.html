@@ -162,10 +162,10 @@
           <div class="actions compact-actions setup-match-actions">
             <button id="newMatchBtn" type="button" class="secondary setup-action-btn">Create New Match</button>
             <button id="editActiveMatchBtn" type="button" class="secondary setup-action-btn">Edit Match</button>
-            <button id="topCreateMatchBtn" type="submit" form="matchForm" class="setup-action-btn">Finalize Match Setup</button>
-            <button id="topUpdateMatchBtn" type="submit" form="matchForm" class="setup-action-btn hidden">Finalize Match Setup</button>
+            <button id="topCreateMatchBtn" type="submit" form="matchForm" class="secondary setup-action-btn">Finalize Match Setup</button>
+            <button id="topUpdateMatchBtn" type="submit" form="matchForm" class="secondary setup-action-btn hidden">Finalize Match Setup</button>
             <button id="setupFinishRoundBtn" type="button" class="secondary setup-action-btn hidden">Finish Round</button>
-            <button id="setupConfirmFinishRoundBtn" type="button" class="setup-action-btn hidden">Confirm Round</button>
+            <button id="setupConfirmFinishRoundBtn" type="button" class="secondary setup-action-btn hidden">Confirm Round</button>
           </div>
         </div>
         <div id="topUpdateMatchNote" class="tiny hidden top-gap">After making changes, tap <strong>Finalize Match Setup</strong> to update the match setup.</div>
@@ -580,7 +580,7 @@
           <li>Added optional per-hole stat tracking (fairways, GIR, putts, up &amp; downs, sandies).</li>
           <li>Reordered the Scoreboard layout and moved Notes from More to Scoreboard.</li>
           <li>Fixed the Game Setup player assignment flow so team slots save correctly and matches can be created reliably again.</li>
-          <li>App version: <strong id="appVersionLabel">v27.15</strong></li>
+          <li>App version: <strong id="appVersionLabel">v27.16</strong></li>
         </ul>
       </div>
     </section>
@@ -600,7 +600,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v27.15</span>
+    <span id="appVersionFooter">v27.16</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>
@@ -618,8 +618,9 @@
         <button id="newMatchCancelBtn" type="button" class="secondary">Cancel</button>
       </div>
       <div class="sheet-actions new-match-sheet-actions">
-        <button id="newMatchContinueBtn" type="button" class="secondary">Start New Without Saving</button>
-        <button id="newMatchFinishCurrentBtn" type="button" class="primary">Save &amp; Start Create New Match</button>
+        <button id="newMatchContinueBtn" type="button" class="secondary">Create New Match</button>
+        <button id="newMatchEditCurrentBtn" type="button" class="secondary">Edit Current Match</button>
+        <button id="newMatchFinishCurrentBtn" type="button" class="secondary hidden">Finish &amp; Confirm Current Match</button>
       </div>
     </div>
   </div>

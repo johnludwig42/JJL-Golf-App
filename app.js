@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.15';
+const APP_VERSION = 'v27.16';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -370,6 +370,7 @@ let finishConfirmArmed = false;
 let currentLeaderboardMatchRef = null;
 let newMatchPromptFinishArmed = false;
 let newMatchStartInProgress = false;
+let newMatchDialogMode = 'intent';
 const uiState = {
   courseSearch: '',
   expandedCourses: new Set(),
@@ -3605,17 +3606,27 @@ function closeNewMatchConflictDialog({ disarmFinish = false } = {}) {
   }
   newMatchPromptFinishArmed = false;
   newMatchStartInProgress = false;
+  newMatchDialogMode = 'intent';
   syncNewMatchConflictUi();
 }
 
-function openNewMatchConflictDialog() {
+function openNewMatchConflictDialog(mode = 'intent') {
   const dialog = document.getElementById('newMatchConflictDialog');
   if (!dialog) return;
   newMatchPromptFinishArmed = false;
   newMatchStartInProgress = false;
+  newMatchDialogMode = mode;
   dialog.classList.remove('hidden');
   dialog.setAttribute('aria-hidden', 'false');
   syncNewMatchConflictUi();
+}
+
+function setNewMatchDialogButton(button, { text = '', visible = true, disabled = false, className = '' } = {}) {
+  if (!button) return;
+  button.textContent = text;
+  button.classList.toggle('hidden', !visible);
+  button.disabled = disabled || !visible;
+  if (className) button.className = className;
 }
 
 function syncNewMatchConflictUi() {
@@ -3623,20 +3634,24 @@ function syncNewMatchConflictUi() {
   if (!dialog || dialog.classList.contains('hidden')) return;
   const title = document.getElementById('newMatchConflictTitle');
   const body = document.getElementById('newMatchConflictBody');
-  const saveBtn = document.getElementById('newMatchFinishCurrentBtn');
-  const withoutBtn = document.getElementById('newMatchContinueBtn');
+  const continueBtn = document.getElementById('newMatchContinueBtn');
+  const editBtn = document.getElementById('newMatchEditCurrentBtn');
+  const finishBtn = document.getElementById('newMatchFinishCurrentBtn');
   const cancelBtn = document.getElementById('newMatchCancelBtn');
-  if (title) title.textContent = 'Create a new match setup?';
-  if (body) body.textContent = 'This match has unsaved changes. What would you like to do?';
-  if (saveBtn) {
-    saveBtn.textContent = newMatchStartInProgress ? 'Saving...' : 'Save & Create New Match';
-    saveBtn.disabled = newMatchStartInProgress;
-  }
-  if (withoutBtn) {
-    withoutBtn.textContent = 'Create New Without Saving';
-    withoutBtn.disabled = newMatchStartInProgress;
-  }
   if (cancelBtn) cancelBtn.disabled = newMatchStartInProgress;
+  if (newMatchDialogMode === 'unfinished') {
+    if (title) title.textContent = 'Finish current match first?';
+    if (body) body.textContent = 'The current match is not finished. Would you like to finish and confirm it before creating a new match?';
+    setNewMatchDialogButton(continueBtn, { text: 'Create New Match Anyway', visible: true, disabled: newMatchStartInProgress, className: 'secondary' });
+    setNewMatchDialogButton(editBtn, { visible: false });
+    setNewMatchDialogButton(finishBtn, { text: newMatchStartInProgress ? 'Finishing...' : 'Finish & Confirm Current Match', visible: true, disabled: newMatchStartInProgress, className: 'secondary' });
+    return;
+  }
+  if (title) title.textContent = 'Create a new match?';
+  if (body) body.textContent = 'You already have an active match. Do you want to create a new match instead of editing the current one?';
+  setNewMatchDialogButton(continueBtn, { text: 'Create New Match', visible: true, disabled: newMatchStartInProgress, className: 'secondary' });
+  setNewMatchDialogButton(editBtn, { text: 'Edit Current Match', visible: true, disabled: newMatchStartInProgress, className: 'secondary' });
+  setNewMatchDialogButton(finishBtn, { visible: false });
 }
 
 function clearActiveMatchForNewSetup() {
@@ -3657,6 +3672,7 @@ function clearActiveMatchForNewSetup() {
   finishConfirmArmed = false;
   newMatchPromptFinishArmed = false;
   newMatchStartInProgress = false;
+  newMatchDialogMode = 'intent';
   uiState.matchPlayerDraft = [];
   uiState.referenceTeeManual = false;
   uiState.referenceTeeAutoId = '';
@@ -3685,47 +3701,85 @@ async function persistCurrentMatch({ applyDom = true, awaitShared = false, immed
   return true;
 }
 
-function handleNewMatchRequest() {
-  const active = getActiveMatch();
-  if (!active) {
-    clearActiveMatchForNewSetup();
-    return;
-  }
-  if (active.status === 'complete') {
-    clearActiveMatchForNewSetup();
-    return;
-  }
-  openNewMatchConflictDialog();
+function beginCleanNewMatchSetup({ message = 'New match setup ready.' } = {}) {
+  clearActiveMatchForNewSetup();
+  toast(message);
 }
 
-async function handleNewMatchSaveAndStartAction() {
+function editCurrentMatchFromNewMatchDialog() {
   if (newMatchStartInProgress) return;
   const active = getActiveMatch();
   if (!active) {
-    closeNewMatchConflictDialog();
-    clearActiveMatchForNewSetup();
+    closeNewMatchConflictDialog({ disarmFinish: true });
+    beginCleanNewMatchSetup();
+    return;
+  }
+  closeNewMatchConflictDialog({ disarmFinish: true });
+  loadMatchEditor(active.id);
+  renderMatchSetupState();
+  activateTab('setup');
+  toast('Editing current match.');
+}
+
+function proceedFromNewMatchIntentDialog() {
+  if (newMatchStartInProgress) return;
+  const active = getActiveMatch();
+  if (!active) {
+    closeNewMatchConflictDialog({ disarmFinish: true });
+    beginCleanNewMatchSetup();
+    return;
+  }
+  if (active.status === 'complete') {
+    closeNewMatchConflictDialog({ disarmFinish: true });
+    beginCleanNewMatchSetup();
+    return;
+  }
+  newMatchDialogMode = 'unfinished';
+  syncNewMatchConflictUi();
+}
+
+function handleNewMatchRequest() {
+  const active = getActiveMatch();
+  if (!active) {
+    beginCleanNewMatchSetup();
+    return;
+  }
+  openNewMatchConflictDialog('intent');
+}
+
+async function handleNewMatchFinishAndConfirmAction() {
+  if (newMatchStartInProgress) return;
+  const active = getActiveMatch();
+  if (!active) {
+    closeNewMatchConflictDialog({ disarmFinish: true });
+    beginCleanNewMatchSetup();
     return;
   }
   newMatchStartInProgress = true;
+  newMatchPromptFinishArmed = true;
+  finishConfirmArmed = true;
   syncNewMatchConflictUi();
   try {
-    await persistCurrentMatch({ applyDom: true, awaitShared: active.storageMode === 'shared', immediateShared: true, silent: true });
-    closeNewMatchConflictDialog();
-    clearActiveMatchForNewSetup();
-    toast('Current match saved. New match setup ready.');
+    const completed = completeActiveRound();
+    if (!completed) throw new Error('completeActiveRound returned false');
+    await persistCurrentMatch({ applyDom: false, awaitShared: active.storageMode === 'shared', immediateShared: true, silent: true });
+    closeNewMatchConflictDialog({ disarmFinish: false });
+    beginCleanNewMatchSetup({ message: 'Current match finished and saved. New match setup ready.' });
   } catch (err) {
-    console.error('Save & Create New Match failed:', err);
+    console.error('Finish & Confirm Current Match failed:', err);
     newMatchStartInProgress = false;
+    newMatchPromptFinishArmed = false;
+    finishConfirmArmed = false;
+    syncFinishRoundUi(active);
     syncNewMatchConflictUi();
-    toast('Could not save match. Please try again.');
+    toast('Could not finish current match. Please try again.');
   }
 }
 
 function handleNewMatchStartWithoutSavingAction() {
   if (newMatchStartInProgress) return;
   closeNewMatchConflictDialog({ disarmFinish: true });
-  clearActiveMatchForNewSetup();
-  toast('New match setup ready.');
+  beginCleanNewMatchSetup();
 }
 
 function syncFinishRoundUi(match = getActiveMatch()) {
@@ -5724,9 +5778,14 @@ function installHandlers() {
   });
 
   const newMatchContinueBtn = document.getElementById('newMatchContinueBtn');
-  if (newMatchContinueBtn) newMatchContinueBtn.addEventListener('click', handleNewMatchStartWithoutSavingAction);
+  if (newMatchContinueBtn) newMatchContinueBtn.addEventListener('click', () => {
+    if (newMatchDialogMode === 'unfinished') handleNewMatchStartWithoutSavingAction();
+    else proceedFromNewMatchIntentDialog();
+  });
+  const newMatchEditCurrentBtn = document.getElementById('newMatchEditCurrentBtn');
+  if (newMatchEditCurrentBtn) newMatchEditCurrentBtn.addEventListener('click', editCurrentMatchFromNewMatchDialog);
   const newMatchFinishCurrentBtn = document.getElementById('newMatchFinishCurrentBtn');
-  if (newMatchFinishCurrentBtn) newMatchFinishCurrentBtn.addEventListener('click', handleNewMatchSaveAndStartAction);
+  if (newMatchFinishCurrentBtn) newMatchFinishCurrentBtn.addEventListener('click', handleNewMatchFinishAndConfirmAction);
   const newMatchCancelBtn = document.getElementById('newMatchCancelBtn');
   if (newMatchCancelBtn) newMatchCancelBtn.addEventListener('click', () => closeNewMatchConflictDialog({ disarmFinish: true }));
   const newMatchConflictDialog = document.getElementById('newMatchConflictDialog');

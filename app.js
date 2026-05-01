@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.13';
+const APP_VERSION = 'v27.14';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -1727,6 +1727,41 @@ function normalizeTee(tee, courseName = '') {
   tee.rating = Number(tee.rating) || 72;
   tee.slope = Number(tee.slope) || 113;
 }
+
+function createEmptyMatch(overrides = {}) {
+  const empty = {
+    id: overrides.id || uid(),
+    date: overrides.date || todayIso(),
+    name: overrides.name || 'Round',
+    courseId: overrides.courseId || '',
+    teeId: overrides.teeId || '',
+    format: 'teams',
+    allowance: Number(overrides.allowance) || 100,
+    holeCount: Number(overrides.holeCount) === 9 ? 9 : 18,
+    nineHoleSegment: overrides.nineHoleSegment || 'front',
+    customStartHole: Number(overrides.customStartHole) || 1,
+    teamCount: Number(overrides.teamCount) || 1,
+    playersPerTeam: Number(overrides.playersPerTeam) || 1,
+    teamNames: Array.isArray(overrides.teamNames) ? overrides.teamNames : [],
+    scoringAccessMode: normalizeScoringAccessMode(overrides.scoringAccessMode || overrides.scoreEntryMode || 'team_codes'),
+    scoreEntryMode: getLegacyScoreEntryMode(normalizeScoringAccessMode(overrides.scoringAccessMode || overrides.scoreEntryMode || 'team_codes')),
+    officialScorerName: String(overrides.officialScorerName || 'Official scorer').trim() || 'Official scorer',
+    statTrackingEnabled: !!overrides.statTrackingEnabled,
+    selectedGames: Array.isArray(overrides.selectedGames) ? overrides.selectedGames : [],
+    status: 'active',
+    completedAt: null,
+    players: Array.isArray(overrides.players) ? overrides.players : [],
+    greeniesWinners: {},
+    storageMode: 'local',
+    sharedMatchId: '',
+    sharedMatchRef: '',
+    cloudSyncState: 'local-only',
+    notes: ''
+  };
+  normalizeMatch(empty);
+  return empty;
+}
+
 function computeMatchProgress(match) {
   const limit = getRequestedHoleCount(match);
   const players = Array.isArray(match?.players) ? match.players : [];
@@ -3605,6 +3640,7 @@ function syncNewMatchConflictUi() {
 }
 
 function clearActiveMatchForNewSetup() {
+  const draft = createEmptyMatch();
   const priorId = state.activeMatchId;
   if (priorId) {
     clearScheduledSharedMatchSync(priorId);
@@ -3624,7 +3660,7 @@ function clearActiveMatchForNewSetup() {
   uiState.matchPlayerDraft = [];
   uiState.referenceTeeManual = false;
   uiState.referenceTeeAutoId = '';
-  loadMatchEditor(null);
+  loadMatchEditor(null, draft);
   renderMatchSetupState();
   persist({ skipRender: true });
   renderAll();
@@ -3697,6 +3733,8 @@ function syncFinishRoundUi(match = getActiveMatch()) {
   const scoringConfirmBtn = document.getElementById('confirmFinishRoundBtn');
   const scoreboardFinishBtn = document.getElementById('scoreboardFinishRoundBtn');
   const scoreboardConfirmBtn = document.getElementById('scoreboardConfirmFinishRoundBtn');
+  const setupFinishBtn = document.getElementById('setupFinishRoundBtn');
+  const setupConfirmBtn = document.getElementById('setupConfirmFinishRoundBtn');
   const scoreboardRoundState = document.getElementById('scoreboardRoundState');
   const isComplete = !!match && match.status === 'complete';
   const hasMatch = !!match;
@@ -3712,6 +3750,8 @@ function syncFinishRoundUi(match = getActiveMatch()) {
   show(scoringConfirmBtn, hasMatch && !isComplete && finishConfirmArmed);
   show(scoreboardFinishBtn, hasMatch && !isComplete && !finishConfirmArmed);
   show(scoreboardConfirmBtn, hasMatch && !isComplete && finishConfirmArmed);
+  show(setupFinishBtn, hasMatch && editingMatchId === match?.id && !isComplete && !finishConfirmArmed);
+  show(setupConfirmBtn, hasMatch && editingMatchId === match?.id && !isComplete && finishConfirmArmed);
   if (scoreboardRoundState) {
     if (!hasMatch) scoreboardRoundState.textContent = 'No active round.';
     else if (isComplete) scoreboardRoundState.textContent = 'Round complete.';
@@ -3749,7 +3789,7 @@ function completeActiveRound() {
     renderCurrentMatch();
     renderLeaderboard();
     renderMatchSetupState();
-    toast('Round marked complete.');
+    toast('Match updated successfully.');
     return true;
   } catch (err) {
     console.error('Confirm Finish failed:', err);
@@ -5365,7 +5405,7 @@ function loadTeeEditor(courseId = null, teeId = null) {
   window.scrollTo({ top: document.getElementById('teeFormTitle').getBoundingClientRect().top + window.scrollY - 20, behavior: 'smooth' });
 }
 
-function loadMatchEditor(matchId = null) {
+function loadMatchEditor(matchId = null, draftMatch = null) {
   const form = document.getElementById('matchForm');
   editingMatchId = matchId;
   document.getElementById('cancelMatchEditBtn').classList.toggle('hidden', !matchId);
@@ -5379,27 +5419,29 @@ function loadMatchEditor(matchId = null) {
   document.getElementById('matchSubmitBtn').textContent = matchId ? 'Update Match' : 'Create Match';
   activateTab('setup');
   if (!matchId) {
+    const draft = draftMatch || createEmptyMatch();
     form.reset();
-    form.elements.namedItem('date').value = todayIso();
-    form.elements.namedItem('allowance').value = 100;
-    form.elements.namedItem('holeCount').value = '18';
-    document.getElementById('nineHoleSegmentSelect').value = 'front';
-    document.getElementById('customNineHoleStartSelect').value = '1';
+    form.elements.namedItem('date').value = draft.date || todayIso();
+    form.elements.namedItem('name').value = draft.name === 'Round' ? '' : (draft.name || '');
+    form.elements.namedItem('allowance').value = draft.allowance || 100;
+    form.elements.namedItem('holeCount').value = String(getRequestedHoleCount(draft));
+    document.getElementById('nineHoleSegmentSelect').value = draft.nineHoleSegment || 'front';
+    document.getElementById('customNineHoleStartSelect').value = String(draft.customStartHole || 1);
     renderNineHoleConfigUi();
-    document.getElementById('teamCountSelect').value = '1';
-    document.getElementById('playersPerTeamSelect').value = '1';
-    document.getElementById('scoreEntryModeSelect').value = 'team_codes';
+    document.getElementById('teamCountSelect').value = String(draft.teamCount || 1);
+    document.getElementById('playersPerTeamSelect').value = String(draft.playersPerTeam || 1);
+    document.getElementById('scoreEntryModeSelect').value = draft.scoringAccessMode || 'team_codes';
     const sharedMatchToggle = document.getElementById('sharedMatchEnabled'); if (sharedMatchToggle) sharedMatchToggle.checked = false;
-    document.getElementById('officialScorerNameInput').value = 'Official scorer';
+    document.getElementById('officialScorerNameInput').value = draft.officialScorerName || 'Official scorer';
     const statToggle = document.getElementById('enableStatTrackingInput'); if (statToggle) statToggle.checked = false;
-    populateMatchCourseSelects();
-    renderTeamNameInputs(1, []);
-    renderScoringControlConfig();
-    uiState.matchPlayerDraft = [];
+    populateMatchCourseSelects(draft.courseId || '', draft.teeId || '');
+    renderTeamNameInputs(draft.teamCount || 1, draft.teamNames || []);
+    renderScoringControlConfig(draft);
+    uiState.matchPlayerDraft = Array.isArray(draft.players) ? draft.players : [];
     uiState.referenceTeeManual = false;
     uiState.referenceTeeAutoId = '';
-    populateMatchPlayerPicker([]);
-    renderGamesPicker([]);
+    populateMatchPlayerPicker(uiState.matchPlayerDraft);
+    renderGamesPicker(draft.selectedGames || []);
     renderSetupHandicapPreview();
     return;
   }
@@ -5649,6 +5691,10 @@ function installHandlers() {
 
   
   document.getElementById('newMatchBtn').addEventListener('click', handleNewMatchRequest);
+  const setupFinishRoundBtn = document.getElementById('setupFinishRoundBtn');
+  if (setupFinishRoundBtn) setupFinishRoundBtn.addEventListener('click', armFinishRound);
+  const setupConfirmFinishRoundBtn = document.getElementById('setupConfirmFinishRoundBtn');
+  if (setupConfirmFinishRoundBtn) setupConfirmFinishRoundBtn.addEventListener('click', completeActiveRound);
   document.getElementById('editActiveMatchBtn').addEventListener('click', () => {
     const active = getActiveMatch();
     if (!active) return toast('No active match to edit.');
@@ -6081,7 +6127,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     loadMatchEditor(null);
     renderAll();
     activateTab('score');
-    toast(editingMatchId ? 'Match updated.' : (sharedMatchEnabled ? 'Shared match created and loaded.' : 'Match created and loaded.'));
+    toast(editingMatchId ? 'Match updated successfully.' : (sharedMatchEnabled ? 'Shared match created and loaded.' : 'Match created and loaded.'));
     } catch (err) { console.error(err); toast('Could not create match. Please try again.'); }
   });
   document.getElementById('cancelMatchEditBtn').addEventListener('click', () => { loadMatchEditor(null); renderMatchSetupState(); });

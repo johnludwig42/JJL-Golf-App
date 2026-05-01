@@ -2432,3 +2432,52 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
     padding:8px 6px;
   }
 }
+
+/* v27.20 Handicap Preview one-line row polish */
+.handicap-preview-cardline{
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+}
+.handicap-preview-meta,
+#setup .persistent-preview-card .handicap-preview-meta{
+  display:flex;
+  flex-wrap:nowrap;
+  align-items:flex-start;
+  gap:8px;
+  white-space:nowrap;
+  min-width:max-content;
+}
+.handicap-preview-meta > div,
+#setup .persistent-preview-card .handicap-preview-meta > div{
+  flex:0 0 auto;
+  min-width:48px;
+  white-space:nowrap;
+}
+.handicap-preview-meta > div:first-child,
+#setup .persistent-preview-card .handicap-preview-meta > div:first-child{
+  min-width:72px;
+}
+.handicap-preview-meta span,
+#setup .persistent-preview-card .handicap-preview-meta span{
+  display:block;
+  white-space:nowrap;
+}
+.handicap-preview-meta strong,
+#setup .persistent-preview-card .handicap-preview-meta strong{
+  display:block;
+  white-space:nowrap;
+  line-height:1.2;
+}
+@media (max-width:760px){
+  .handicap-preview-cardline{padding:9px 10px;}
+  #setup .persistent-preview-card .handicap-preview-cardline{padding:10px 10px;}
+  .handicap-preview-meta,
+  #setup .persistent-preview-card .handicap-preview-meta{
+    gap:7px;
+    font-size:11px;
+  }
+  .handicap-preview-meta .tiny,
+  #setup .persistent-preview-card .handicap-preview-meta .tiny{
+    font-size:9px;
+  }
+}

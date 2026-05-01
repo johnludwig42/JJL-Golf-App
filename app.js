@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.16';
+const APP_VERSION = 'v27.17';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -371,6 +371,7 @@ let currentLeaderboardMatchRef = null;
 let newMatchPromptFinishArmed = false;
 let newMatchStartInProgress = false;
 let newMatchDialogMode = 'intent';
+let cleanNewMatchSetupInProgress = false;
 const uiState = {
   courseSearch: '',
   expandedCourses: new Set(),
@@ -3654,8 +3655,30 @@ function syncNewMatchConflictUi() {
   setNewMatchDialogButton(finishBtn, { visible: false });
 }
 
-function clearActiveMatchForNewSetup() {
-  const draft = createEmptyMatch();
+function createBlankSetupDraft() {
+  return createEmptyMatch({
+    id: uid(),
+    date: todayIso(),
+    name: 'Round',
+    courseId: '',
+    teeId: '',
+    allowance: 100,
+    holeCount: 18,
+    nineHoleSegment: 'front',
+    customStartHole: 1,
+    teamCount: 1,
+    playersPerTeam: 1,
+    teamNames: [],
+    scoringAccessMode: 'team_codes',
+    scoreEntryMode: 'team',
+    officialScorerName: 'Official scorer',
+    statTrackingEnabled: false,
+    selectedGames: [],
+    players: [],
+  });
+}
+
+function resetToBlankMatchSetup() {
   const priorId = state.activeMatchId;
   if (priorId) {
     clearScheduledSharedMatchSync(priorId);
@@ -3673,14 +3696,27 @@ function clearActiveMatchForNewSetup() {
   newMatchPromptFinishArmed = false;
   newMatchStartInProgress = false;
   newMatchDialogMode = 'intent';
+  state.notes = '';
   uiState.matchPlayerDraft = [];
   uiState.referenceTeeManual = false;
   uiState.referenceTeeAutoId = '';
-  loadMatchEditor(null, draft);
-  renderMatchSetupState();
+  const draft = createBlankSetupDraft();
+  cleanNewMatchSetupInProgress = true;
+  try {
+    loadMatchEditor(null, draft);
+    renderMatchSetupState();
+    updateCloudConfigUi();
+  } finally {
+    cleanNewMatchSetupInProgress = false;
+  }
+  const notesBox = document.getElementById('notesBox');
+  if (notesBox) notesBox.value = '';
   persist({ skipRender: true });
-  renderAll();
   activateTab('setup');
+}
+
+function clearActiveMatchForNewSetup() {
+  resetToBlankMatchSetup();
 }
 
 async function persistCurrentMatch({ applyDom = true, awaitShared = false, immediateShared = true, silent = true } = {}) {
@@ -5029,6 +5065,7 @@ function refreshMatchPlayerSlots(options = {}) {
   renderSetupHandicapPreview();
 }
 function preserveMatchSetupUi() {
+  if (cleanNewMatchSetupInProgress) return;
   const form = document.getElementById('matchForm');
   if (!form) return;
   const selectedCourseId = document.getElementById('matchCourseSelect')?.value || '';
@@ -5507,10 +5544,12 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
     const sharedMatchToggle = document.getElementById('sharedMatchEnabled'); if (sharedMatchToggle) sharedMatchToggle.checked = false;
     document.getElementById('officialScorerNameInput').value = draft.officialScorerName || 'Official scorer';
     const statToggle = document.getElementById('enableStatTrackingInput'); if (statToggle) statToggle.checked = false;
+    state.notes = '';
+    const notesBox = document.getElementById('notesBox'); if (notesBox) notesBox.value = '';
     populateMatchCourseSelects(draft.courseId || '', draft.teeId || '');
     renderTeamNameInputs(draft.teamCount || 1, draft.teamNames || []);
     renderScoringControlConfig(draft);
-    uiState.matchPlayerDraft = Array.isArray(draft.players) ? draft.players : [];
+    uiState.matchPlayerDraft = [];
     uiState.referenceTeeManual = false;
     uiState.referenceTeeAutoId = '';
     populateMatchPlayerPicker(uiState.matchPlayerDraft);

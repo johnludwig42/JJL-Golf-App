@@ -2384,7 +2384,7 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
   #score #currentHoleBadge{justify-self:center;}
 }
 
-/* v27.16 Match setup lifecycle labels + equal-width action row */
+/* v27.16 Match setup lifecycle labels + equal-width action row; v27.17 clean setup reset */
 #setup .setup-match-actions{
   display:grid;
   grid-template-columns:repeat(3, minmax(0, 1fr));

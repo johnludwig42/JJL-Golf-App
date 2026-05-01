@@ -490,7 +490,7 @@ body.keyboard-open .top-tabs{
 .handicap-preview-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .handicap-preview-cardline{border:1px solid var(--border);border-radius:12px;padding:10px;background:#fff}
 .handicap-preview-name{font-weight:700;font-size:13px;margin-bottom:4px}
-.handicap-preview-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;font-size:12px}
+.handicap-preview-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(64px,1fr));gap:6px;font-size:12px}
 .handicap-preview-meta span{display:block}
 .leader-mobile-cards{display:none}
 .leader-mobile-card{border:1px solid var(--border);border-radius:12px;padding:10px;background:#fbfdfc;display:grid;gap:6px}
@@ -506,7 +506,7 @@ body.keyboard-open .top-tabs{
   .leader-table{min-width:640px}
   .leader-table th,.leader-table td{padding:8px 8px;font-size:11px}
   .handicap-preview-grid{grid-template-columns:1fr}
-  .handicap-preview-meta{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .handicap-preview-meta{grid-template-columns:repeat(auto-fit,minmax(64px,1fr))}
   .scoreboard-stack{gap:10px}
   .scoreboard-card{padding:12px}
   #leaderboard .card h2{font-size:15px}
@@ -548,7 +548,7 @@ body.keyboard-open .top-tabs{
 #setup .persistent-preview-card{margin-top:10px}
 #setup .persistent-preview-card .handicap-preview-grid{display:grid;gap:10px}
 #setup .persistent-preview-card .handicap-preview-cardline{padding:12px 14px;border:1px solid var(--border);border-radius:14px;background:#fbfdfc}
-#setup .persistent-preview-card .handicap-preview-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:8px}
+#setup .persistent-preview-card .handicap-preview-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(64px,1fr));gap:10px;margin-top:8px}
 
 .leader-table th,.leader-table td{white-space:nowrap}
 @media (max-width:760px){

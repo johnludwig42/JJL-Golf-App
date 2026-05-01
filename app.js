@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.18';
+const APP_VERSION = 'v27.19';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2056,9 +2056,10 @@ function renderSetupHandicapPreview() {
     const player = getPlayer(sp.playerId);
     const playerTee = getTee(courseId, sp.teeId || teeId) || tee;
     if (!player || !playerTee) return null;
-    const ch = courseHandicap(player.index, playerTee.slope, playerTee.rating, playerTee.par);
+    const playerIndex = Number(player.index) || 0;
+    const ch = courseHandicap(playerIndex, playerTee.slope, playerTee.rating, playerTee.par);
     const ph = playingHandicap(ch, allowance);
-    return { player, team: sp.team, tee: playerTee, courseHdcp: ch, playHdcp: ph };
+    return { player, playerIndex, team: sp.team, tee: playerTee, courseHdcp: ch, playHdcp: ph };
   }).filter(Boolean);
   if (!enriched.length) {
     wrap.innerHTML = '<div class="tiny">No valid players selected.</div>';
@@ -2073,10 +2074,11 @@ function renderSetupHandicapPreview() {
       return `<div class="handicap-preview-cardline">
         <div class="handicap-preview-name">${escapeHtml(row.player.name)} <span class="tiny">· ${escapeHtml(teamLabel)}</span></div>
         <div class="handicap-preview-meta">
-          <div><span class="tiny">Course</span><strong>${row.courseHdcp}</strong></div>
+          <div><span class="tiny">Tee</span><strong>${escapeHtml(row.tee?.teeName || tee.teeName)}</strong></div>
+          <div><span class="tiny">Index</span><strong>${Number(row.playerIndex || 0).toFixed(1)}</strong></div>
+          <div><span class="tiny">Course HCP</span><strong>${row.courseHdcp}</strong></div>
           <div><span class="tiny">Playing</span><strong>${row.playHdcp}</strong></div>
           <div><span class="tiny">Gets</span><strong>${strokes}</strong></div>
-          <div><span class="tiny">Tee</span><strong>${escapeHtml(row.tee?.teeName || tee.teeName)}</strong></div>
         </div>
       </div>`;
     }).join('')}</div>`;
@@ -3701,6 +3703,9 @@ function startCleanNewMatchSetup() {
   uiState.referenceTeeManual = false;
   uiState.referenceTeeAutoId = '';
   const draft = createBlankSetupDraft();
+  const picker = document.getElementById('matchPlayersPicker');
+  if (picker) picker.innerHTML = '';
+  document.querySelectorAll('[data-player-slot], [data-player-tee-slot]').forEach(el => { el.value = ''; });
   cleanNewMatchSetupInProgress = true;
   try {
     loadMatchEditor(null, draft);
@@ -4782,16 +4787,19 @@ function syncMatchPlayerDraft(selected = null) {
   const defaultTeeId = getReferenceFallbackTeeId();
   const incoming = Array.isArray(selected) ? selected : [];
   const currentDraft = Array.isArray(uiState.matchPlayerDraft) ? uiState.matchPlayerDraft : [];
+  const suppressDomCarryover = cleanNewMatchSetupInProgress && Array.isArray(selected) && selected.length === 0;
   const next = Array.from({ length: slotCount }, (_, idx) => {
     const draft = currentDraft.find(s => Number(s.slot) === idx) || {};
     const direct = incoming.find(s => Number(s.slot) === idx) || {};
-    const domPlayerId = document.querySelector(`[data-player-slot="${idx}"]`)?.value || '';
-    const domTeeId = document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '';
+    const domPlayerId = suppressDomCarryover ? '' : (document.querySelector(`[data-player-slot="${idx}"]`)?.value || '');
+    const domTeeId = suppressDomCarryover ? '' : (document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '');
+    const hasDirectPlayer = Object.prototype.hasOwnProperty.call(direct, 'playerId');
+    const hasDirectTee = Object.prototype.hasOwnProperty.call(direct, 'teeId');
     return {
       slot: idx,
       team: Math.floor(idx / playersPerTeam) + 1,
-      playerId: String(direct.playerId ?? draft.playerId ?? domPlayerId ?? ''),
-      teeId: String(direct.teeId ?? draft.teeId ?? domTeeId ?? defaultTeeId ?? ''),
+      playerId: String(hasDirectPlayer ? (direct.playerId || '') : (draft.playerId || domPlayerId || '')),
+      teeId: String(hasDirectTee ? (direct.teeId || '') : (draft.teeId || domTeeId || defaultTeeId || '')),
     };
   });
   uiState.matchPlayerDraft = next;

@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.20';
+const APP_VERSION = 'v27.21';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2592,16 +2592,25 @@ ${settlementTableHtml}
   return `<div class="payout-summary-stack">${sections.map(renderSection).join('')}</div>`;
 }
 
+function getCompletedStatHoleLimit(match, metrics) {
+  const limit = Number(getLastFullyCompletedHole(match)) || Number(metrics?.completed) || 0;
+  const holeCount = Number(metrics?.holeCount) || getRequestedHoleCount(match);
+  return Math.max(0, Math.min(limit, holeCount));
+}
+
 function computeStatTrackingSummary(match, metrics) {
+  const completedLimit = getCompletedStatHoleLimit(match, metrics);
+  if (!completedLimit) return [];
   const summary = (metrics?.players || []).map(playerMetric => {
     const playerRef = match.players.find(row => row.playerId === playerMetric.playerId);
     const totals = { fairwaysHit: 0, fairwayOpps: 0, greens: 0, putts: 0, upAndDowns: 0, sandies: 0 };
-    (metrics?.holeResults || []).forEach((holeResult, holeIdx) => {
+    (metrics?.holeResults || []).slice(0, completedLimit).forEach((holeResult, holeIdx) => {
+      if (!holeResult?.completed) return;
       const scoreObj = holeResult?.playerScores?.find(ps => ps.playerId === playerMetric.playerId);
       if (!Number.isFinite(Number(scoreObj?.gross))) return;
       const hole = getPlayerHole(match, playerMetric, holeIdx, metrics?.tee) || metrics?.tee?.holes?.[holeIdx] || null;
       const stat = getPlayerStatEntry(playerRef, holeIdx);
-      const par = Number(hole?.par) || 0;
+      const par = Number(hole?.par) || Number(scoreObj?.par) || 0;
       if (par === 4 || par === 5) {
         totals.fairwayOpps += 1;
         if (stat.fairway) totals.fairwaysHit += 1;
@@ -2616,10 +2625,66 @@ function computeStatTrackingSummary(match, metrics) {
   return summary;
 }
 
+function computeScoreDistributionSummary(match, metrics) {
+  const completedLimit = getCompletedStatHoleLimit(match, metrics);
+  if (!completedLimit) return [];
+  return (metrics?.players || []).map(playerMetric => {
+    const totals = { hio: 0, albatross: 0, eagle: 0, birdie: 0, par: 0, bogey: 0, doubleBogey: 0, other: 0 };
+    (metrics?.holeResults || []).slice(0, completedLimit).forEach((holeResult, holeIdx) => {
+      if (!holeResult?.completed) return;
+      const scoreObj = holeResult?.playerScores?.find(ps => ps.playerId === playerMetric.playerId);
+      const gross = Number(scoreObj?.gross);
+      if (!Number.isFinite(gross) || gross <= 0) return;
+      const hole = getPlayerHole(match, playerMetric, holeIdx, metrics?.tee) || metrics?.tee?.holes?.[holeIdx] || null;
+      const holePar = Number(scoreObj?.par) || Number(hole?.par) || Number(holeResult?.par) || 0;
+      if (!holePar) return;
+      const diff = gross - holePar;
+      if (gross === 1) totals.hio += 1;
+      else if (diff <= -3) totals.albatross += 1;
+      else if (diff === -2) totals.eagle += 1;
+      else if (diff === -1) totals.birdie += 1;
+      else if (diff === 0) totals.par += 1;
+      else if (diff === 1) totals.bogey += 1;
+      else if (diff === 2) totals.doubleBogey += 1;
+      else totals.other += 1;
+    });
+    return { playerMetric, totals };
+  });
+}
+
+function buildScoreDistributionSummary(match, metrics) {
+  const rows = computeScoreDistributionSummary(match, metrics);
+  if (!rows.length) return '';
+  return `
+    <div class="score-distribution-wrap top-gap">
+      <div class="section-subhead">Score distribution</div>
+      <div class="tiny">Gross scores only; completed holes only.</div>
+      <div class="score-distribution-scroll top-gap">
+        <table class="score-distribution-table">
+          <thead><tr><th>Player</th><th>HIO</th><th>Albatross</th><th>Eagle</th><th>Birdie</th><th>Par</th><th>Bogey</th><th>Double</th><th>Other</th></tr></thead>
+          <tbody>${rows.map(({ playerMetric, totals }) => `
+            <tr>
+              <td><strong>${escapeHtml(playerMetric.player.name)}</strong></td>
+              <td>${totals.hio}</td>
+              <td>${totals.albatross}</td>
+              <td>${totals.eagle}</td>
+              <td>${totals.birdie}</td>
+              <td>${totals.par}</td>
+              <td>${totals.bogey}</td>
+              <td>${totals.doubleBogey}</td>
+              <td>${totals.other}</td>
+            </tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
 function buildStatTrackingSummary(match, metrics) {
+  const completedLimit = getCompletedStatHoleLimit(match, metrics);
+  if (!completedLimit) return '<div class="tiny">No completed holes yet.</div>';
   const summary = computeStatTrackingSummary(match, metrics);
   if (!summary.length) return '<div class="tiny">No player stats available yet.</div>';
-  return `<div class="stat-summary-grid">${summary.map(({ playerMetric, totals }) => `
+  const manualStatsHtml = `<div class="stat-summary-grid">${summary.map(({ playerMetric, totals }) => `
     <div class="stat-summary-card">
       <div class="stat-summary-name">${escapeHtml(playerMetric.player.name)}</div>
       <div class="tiny">${escapeHtml(getTeamLabel(match, playerMetric.team))}</div>
@@ -2631,6 +2696,7 @@ function buildStatTrackingSummary(match, metrics) {
         <div><span>Sandies</span><strong>${totals.sandies}</strong></div>
       </div>
     </div>`).join('')}</div>`;
+  return manualStatsHtml + buildScoreDistributionSummary(match, metrics);
 }
 
 function renderLeaderboard() {
@@ -3747,8 +3813,21 @@ async function persistCurrentMatch({ applyDom = true, awaitShared = false, immed
 }
 
 function beginCleanNewMatchSetup({ message = 'New match setup ready.' } = {}) {
-  startCleanNewMatchSetup();
-  toast(message);
+  if (newMatchStartInProgress) return;
+  newMatchStartInProgress = true;
+  try {
+    closeNewMatchConflictDialog({ disarmFinish: true });
+    startCleanNewMatchSetup();
+    toast(message);
+  } catch (err) {
+    console.error('Create New Match reset failed:', err);
+    toast('Could not start a new match. Please try again.');
+  } finally {
+    newMatchStartInProgress = false;
+    newMatchPromptFinishArmed = false;
+    newMatchDialogMode = 'intent';
+    syncNewMatchConflictUi();
+  }
 }
 
 function editCurrentMatchFromNewMatchDialog() {
@@ -3769,8 +3848,6 @@ function editCurrentMatchFromNewMatchDialog() {
 function proceedFromNewMatchIntentDialog() {
   // Final Create New Match confirmation: perform the clean reset directly.
   // Do not call handleNewMatchRequest() again or branch on completion status after confirmation.
-  if (newMatchStartInProgress) return;
-  closeNewMatchConflictDialog({ disarmFinish: true });
   beginCleanNewMatchSetup();
 }
 
@@ -3813,8 +3890,6 @@ async function handleNewMatchFinishAndConfirmAction() {
 }
 
 function handleNewMatchStartWithoutSavingAction() {
-  if (newMatchStartInProgress) return;
-  closeNewMatchConflictDialog({ disarmFinish: true });
   beginCleanNewMatchSetup();
 }
 

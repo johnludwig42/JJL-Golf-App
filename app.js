@@ -3908,8 +3908,10 @@ function beginCleanNewMatchSetup({ message = 'New match setup ready.' } = {}) {
     startCleanNewMatchSetup();
     toast(message);
   } catch (err) {
-    console.error('Create New Match reset failed:', err);
-    toast('Could not start a new match. Please try again.');
+  console.error('Create New Match reset failed:', err);
+  const errMessage = err?.message || String(err);
+  const errLine = err?.stack ? (err.stack.split('\n')[1] || '').trim() : '';
+  toast(`New match failed: ${errMessage} ${errLine ? '(' + errLine + ')' : ''}`, 8000);
   } finally {
     newMatchStartInProgress = false;
     newMatchPromptFinishArmed = false;

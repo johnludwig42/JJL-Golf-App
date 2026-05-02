@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.21';
+const APP_VERSION = 'v27.22';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -3664,7 +3664,7 @@ function resetFinishRoundConfirmation({ sync = true } = {}) {
   if (sync) syncFinishRoundUi(getActiveMatch());
 }
 
-function closeNewMatchConflictDialog({ disarmFinish = false } = {}) {
+function closeNewMatchConflictDialog({ disarmFinish = false, resetMode = true } = {}) {
   const dialog = document.getElementById('newMatchConflictDialog');
   if (dialog) {
     dialog.classList.add('hidden');
@@ -3674,9 +3674,10 @@ function closeNewMatchConflictDialog({ disarmFinish = false } = {}) {
     resetFinishRoundConfirmation();
   }
   newMatchPromptFinishArmed = false;
-  newMatchStartInProgress = false;
-  newMatchDialogMode = 'intent';
-  syncNewMatchConflictUi();
+  if (resetMode) {
+    newMatchDialogMode = 'intent';
+    syncNewMatchConflictUi();
+  }
 }
 
 function openNewMatchConflictDialog(mode = 'intent') {
@@ -3746,44 +3747,103 @@ function createBlankSetupDraft() {
   });
 }
 
-function startCleanNewMatchSetup() {
-  const priorId = state.activeMatchId;
-  if (priorId) {
-    clearScheduledSharedMatchSync(priorId);
-    sharedMatchSyncDirty.delete(priorId);
-  }
-  state.activeMatchId = null;
-  state.lastOpenedSharedMatchId = null;
-  editingMatchId = null;
-  currentHole = 1;
-  pendingScoreFocus = null;
-  scoreAdvanceTimers.forEach(timer => window.clearTimeout(timer));
-  scoreAdvanceTimers.clear();
-  scoreAdvanceGenerations.clear();
-  finishConfirmArmed = false;
-  newMatchPromptFinishArmed = false;
-  newMatchStartInProgress = false;
-  newMatchDialogMode = 'intent';
-  state.notes = '';
-  uiState.matchPlayerDraft = [];
-  uiState.referenceTeeManual = false;
-  uiState.referenceTeeAutoId = '';
-  const draft = createBlankSetupDraft();
-  const picker = document.getElementById('matchPlayersPicker');
-  if (picker) picker.innerHTML = '';
-  document.querySelectorAll('[data-player-slot], [data-player-tee-slot]').forEach(el => { el.value = ''; });
-  cleanNewMatchSetupInProgress = true;
+function clonePlain(value) {
   try {
-    loadMatchEditor(null, draft);
-    renderMatchSetupState();
-    updateCloudConfigUi();
-  } finally {
-    cleanNewMatchSetupInProgress = false;
+    return JSON.parse(JSON.stringify(value));
+  } catch (err) {
+    return value;
   }
-  const notesBox = document.getElementById('notesBox');
-  if (notesBox) notesBox.value = '';
-  persist({ skipRender: true });
-  activateTab('setup');
+}
+
+function isMatchFinished(match) {
+  return !!match && match.status === 'complete';
+}
+
+function shouldPromptToFinishBeforeNewMatch(match) {
+  if (!match || isMatchFinished(match)) return false;
+  const progress = computeMatchProgress(match);
+  if ((progress.lastTouchedHole || 0) > 0 || (progress.lastFullyCompletedHole || 0) > 0) return true;
+  return Array.isArray(match.players) && match.players.some(player =>
+    Array.isArray(player.scores) && player.scores.some(score => Number(score?.gross) > 0)
+  );
+}
+
+function startCleanNewMatchSetup() {
+  const snapshot = {
+    activeMatchId: state.activeMatchId,
+    lastOpenedSharedMatchId: state.lastOpenedSharedMatchId,
+    editingMatchId,
+    currentHole,
+    pendingScoreFocus,
+    finishConfirmArmed,
+    newMatchPromptFinishArmed,
+    newMatchDialogMode,
+    notes: state.notes,
+    matchPlayerDraft: clonePlain(uiState.matchPlayerDraft),
+    referenceTeeManual: uiState.referenceTeeManual,
+    referenceTeeAutoId: uiState.referenceTeeAutoId,
+  };
+
+  const priorId = state.activeMatchId;
+  try {
+    if (priorId) {
+      clearScheduledSharedMatchSync(priorId);
+      sharedMatchSyncDirty.delete(priorId);
+    }
+    state.activeMatchId = null;
+    state.lastOpenedSharedMatchId = null;
+    editingMatchId = null;
+    currentHole = 1;
+    pendingScoreFocus = null;
+    scoreAdvanceTimers.forEach(timer => window.clearTimeout(timer));
+    scoreAdvanceTimers.clear();
+    scoreAdvanceGenerations.clear();
+    finishConfirmArmed = false;
+    newMatchPromptFinishArmed = false;
+    newMatchDialogMode = 'intent';
+    state.notes = '';
+    uiState.matchPlayerDraft = [];
+    uiState.referenceTeeManual = false;
+    uiState.referenceTeeAutoId = '';
+    const draft = createBlankSetupDraft();
+    const picker = document.getElementById('matchPlayersPicker');
+    if (picker) picker.innerHTML = '';
+    document.querySelectorAll('[data-player-slot], [data-player-tee-slot]').forEach(el => { el.value = ''; });
+    cleanNewMatchSetupInProgress = true;
+    try {
+      loadMatchEditor(null, draft);
+      renderMatchSetupState();
+      updateCloudConfigUi();
+    } finally {
+      cleanNewMatchSetupInProgress = false;
+    }
+    const notesBox = document.getElementById('notesBox');
+    if (notesBox) notesBox.value = '';
+    persist({ skipRender: true });
+    activateTab('setup');
+  } catch (err) {
+    cleanNewMatchSetupInProgress = false;
+    state.activeMatchId = snapshot.activeMatchId;
+    state.lastOpenedSharedMatchId = snapshot.lastOpenedSharedMatchId;
+    editingMatchId = snapshot.editingMatchId;
+    currentHole = snapshot.currentHole;
+    pendingScoreFocus = snapshot.pendingScoreFocus;
+    finishConfirmArmed = snapshot.finishConfirmArmed;
+    newMatchPromptFinishArmed = snapshot.newMatchPromptFinishArmed;
+    newMatchDialogMode = snapshot.newMatchDialogMode;
+    state.notes = snapshot.notes;
+    uiState.matchPlayerDraft = Array.isArray(snapshot.matchPlayerDraft) ? snapshot.matchPlayerDraft : [];
+    uiState.referenceTeeManual = snapshot.referenceTeeManual;
+    uiState.referenceTeeAutoId = snapshot.referenceTeeAutoId;
+    try {
+      if (snapshot.editingMatchId || snapshot.activeMatchId) loadMatchEditor(snapshot.editingMatchId || snapshot.activeMatchId);
+      renderMatchSetupState();
+      updateCloudConfigUi();
+    } catch (restoreErr) {
+      console.error('Could not restore setup state after failed new-match reset:', restoreErr);
+    }
+    throw err;
+  }
 }
 
 function resetToBlankMatchSetup() {
@@ -3846,14 +3906,17 @@ function editCurrentMatchFromNewMatchDialog() {
 }
 
 function proceedFromNewMatchIntentDialog() {
-  // Final Create New Match confirmation: perform the clean reset directly.
-  // Do not call handleNewMatchRequest() again or branch on completion status after confirmation.
+  const active = getActiveMatch();
+  if (shouldPromptToFinishBeforeNewMatch(active)) {
+    openNewMatchConflictDialog('unfinished');
+    return;
+  }
   beginCleanNewMatchSetup();
 }
 
 function handleNewMatchRequest() {
   const active = getActiveMatch();
-  if (!active) {
+  if (!active || isMatchFinished(active)) {
     beginCleanNewMatchSetup();
     return;
   }
@@ -3877,19 +3940,26 @@ async function handleNewMatchFinishAndConfirmAction() {
     if (!completed) throw new Error('completeActiveRound returned false');
     await persistCurrentMatch({ applyDom: false, awaitShared: active.storageMode === 'shared', immediateShared: true, silent: true });
     closeNewMatchConflictDialog({ disarmFinish: false });
-    beginCleanNewMatchSetup({ message: 'Current match finished and saved. New match setup ready.' });
+    startCleanNewMatchSetup();
+    toast('Current match finished and saved. New match setup ready.');
   } catch (err) {
     console.error('Finish & Confirm Current Match failed:', err);
-    newMatchStartInProgress = false;
     newMatchPromptFinishArmed = false;
     finishConfirmArmed = false;
     syncFinishRoundUi(active);
     syncNewMatchConflictUi();
     toast('Could not finish current match. Please try again.');
+  } finally {
+    newMatchStartInProgress = false;
+    newMatchPromptFinishArmed = false;
+    syncNewMatchConflictUi();
   }
 }
 
 function handleNewMatchStartWithoutSavingAction() {
+  if (newMatchStartInProgress) return;
+  const ok = window.confirm('Create a new match anyway? The current unfinished match will remain saved, but it will not be finished or confirmed before the new setup opens.');
+  if (!ok) return;
   beginCleanNewMatchSetup();
 }
 
@@ -5908,8 +5978,7 @@ function installHandlers() {
   const newMatchConflictDialog = document.getElementById('newMatchConflictDialog');
   if (newMatchConflictDialog) newMatchConflictDialog.addEventListener('click', (e) => {
     if (e.target === newMatchConflictDialog && !newMatchStartInProgress) {
-      // Blocking modal: ignore backdrop taps so the user must choose an explicit option.
-      e.preventDefault();
+      toast('Choose Cancel, Edit Current Match, or Create New Match.');
     }
   });
 

@@ -2482,7 +2482,7 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
   }
 }
 
-/* v27.21 Stat tracking completed-hole and score distribution polish */
+/* v27.22 Stat tracking completed-hole and score distribution polish */
 .score-distribution-wrap{margin-top:14px}
 .section-subhead{font-weight:700;color:var(--ink);margin-bottom:4px}
 .score-distribution-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:14px;background:#fff}

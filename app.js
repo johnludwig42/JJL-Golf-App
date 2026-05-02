@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.25';
+const APP_VERSION = 'v27.26';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -3804,7 +3804,6 @@ function startCleanNewMatchSetup() {
     lastOpenedSharedMatchId: state.lastOpenedSharedMatchId,
     editingMatchId,
     currentHole,
-    pendingScoreFocus,
     finishConfirmArmed,
     newMatchPromptFinishArmed,
     newMatchDialogMode,
@@ -3826,7 +3825,6 @@ function startCleanNewMatchSetup() {
     state.lastOpenedSharedMatchId = null;
     editingMatchId = null;
     currentHole = 1;
-    pendingScoreFocus = null;
     pendingScoreCommitFocus = null;
     scoreInputSessionState.clear();
     scoreAdvanceTimers.forEach(timer => window.clearTimeout(timer));
@@ -3853,7 +3851,6 @@ function startCleanNewMatchSetup() {
     state.lastOpenedSharedMatchId = snapshot.lastOpenedSharedMatchId;
     editingMatchId = snapshot.editingMatchId;
     currentHole = snapshot.currentHole;
-    pendingScoreFocus = snapshot.pendingScoreFocus;
     finishConfirmArmed = snapshot.finishConfirmArmed;
     newMatchPromptFinishArmed = snapshot.newMatchPromptFinishArmed;
     newMatchDialogMode = snapshot.newMatchDialogMode;
@@ -3908,10 +3905,8 @@ function beginCleanNewMatchSetup({ message = 'New match setup ready.' } = {}) {
     startCleanNewMatchSetup();
     toast(message);
   } catch (err) {
-  console.error('Create New Match reset failed:', err);
-  const errMessage = err?.message || String(err);
-  const errLine = err?.stack ? (err.stack.split('\n')[1] || '').trim() : '';
-  toast(`New match failed: ${errMessage} ${errLine ? '(' + errLine + ')' : ''}`, 8000);
+    console.error('Create New Match reset failed:', err);
+    toast('Could not start a new match. Please try again.');
   } finally {
     newMatchStartInProgress = false;
     newMatchPromptFinishArmed = false;

@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.27';
+const APP_VERSION = 'v27.28';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2629,7 +2629,7 @@ function computeScoreDistributionSummary(match, metrics) {
   const completedLimit = getCompletedStatHoleLimit(match, metrics);
   if (!completedLimit) return [];
   return (metrics?.players || []).map(playerMetric => {
-    const totals = { hio: 0, albatross: 0, eagle: 0, birdie: 0, par: 0, bogey: 0, doubleBogey: 0, other: 0 };
+    const totals = { eagle: 0, birdie: 0, par: 0, bogey: 0, doubleBogey: 0, other: 0 };
     (metrics?.holeResults || []).slice(0, completedLimit).forEach((holeResult, holeIdx) => {
       if (!holeResult?.completed) return;
       const scoreObj = holeResult?.playerScores?.find(ps => ps.playerId === playerMetric.playerId);
@@ -2639,9 +2639,7 @@ function computeScoreDistributionSummary(match, metrics) {
       const holePar = Number(scoreObj?.par) || Number(hole?.par) || Number(holeResult?.par) || 0;
       if (!holePar) return;
       const diff = gross - holePar;
-      if (gross === 1) totals.hio += 1;
-      else if (diff <= -3) totals.albatross += 1;
-      else if (diff === -2) totals.eagle += 1;
+      if (diff === -2) totals.eagle += 1;
       else if (diff === -1) totals.birdie += 1;
       else if (diff === 0) totals.par += 1;
       else if (diff === 1) totals.bogey += 1;
@@ -2653,20 +2651,20 @@ function computeScoreDistributionSummary(match, metrics) {
 }
 
 function buildScoreDistributionSummary(match, metrics) {
+  const completedLimit = getCompletedStatHoleLimit(match, metrics);
+  if (!completedLimit) return '<div class="tiny">No completed holes yet.</div>';
   const rows = computeScoreDistributionSummary(match, metrics);
-  if (!rows.length) return '';
+  if (!rows.length) return '<div class="tiny">No player scores available yet.</div>';
   return `
     <div class="score-distribution-wrap top-gap">
       <div class="section-subhead">Score distribution</div>
-      <div class="tiny">Gross scores only; completed holes only.</div>
+      <div class="tiny">Gross scores only; completed holes only. Hole-in-ones, albatrosses, and triple bogeys or worse are included in Other.</div>
       <div class="score-distribution-scroll top-gap">
         <table class="score-distribution-table">
-          <thead><tr><th>Player</th><th>HIO</th><th>Albatross</th><th>Eagle</th><th>Birdie</th><th>Par</th><th>Bogey</th><th>Double</th><th>Other</th></tr></thead>
+          <thead><tr><th>Player</th><th>Eagle</th><th>Birdie</th><th>Par</th><th>Bogey</th><th>Double Bogey</th><th>Other</th></tr></thead>
           <tbody>${rows.map(({ playerMetric, totals }) => `
             <tr>
               <td><strong>${escapeHtml(playerMetric.player.name)}</strong></td>
-              <td>${totals.hio}</td>
-              <td>${totals.albatross}</td>
               <td>${totals.eagle}</td>
               <td>${totals.birdie}</td>
               <td>${totals.par}</td>
@@ -2680,11 +2678,13 @@ function buildScoreDistributionSummary(match, metrics) {
 }
 
 function buildStatTrackingSummary(match, metrics) {
+  const scoreDistributionHtml = buildScoreDistributionSummary(match, metrics);
+  if (!isStatTrackingEnabled(match)) return scoreDistributionHtml;
   const completedLimit = getCompletedStatHoleLimit(match, metrics);
-  if (!completedLimit) return '<div class="tiny">No completed holes yet.</div>';
+  if (!completedLimit) return scoreDistributionHtml;
   const summary = computeStatTrackingSummary(match, metrics);
-  if (!summary.length) return '<div class="tiny">No player stats available yet.</div>';
-  const manualStatsHtml = `<div class="stat-summary-grid">${summary.map(({ playerMetric, totals }) => `
+  if (!summary.length) return scoreDistributionHtml;
+  const manualStatsHtml = `<div class="section-subhead">Manual stat tracking</div><div class="stat-summary-grid top-gap">${summary.map(({ playerMetric, totals }) => `
     <div class="stat-summary-card">
       <div class="stat-summary-name">${escapeHtml(playerMetric.player.name)}</div>
       <div class="tiny">${escapeHtml(getTeamLabel(match, playerMetric.team))}</div>
@@ -2696,7 +2696,7 @@ function buildStatTrackingSummary(match, metrics) {
         <div><span>Sandies</span><strong>${totals.sandies}</strong></div>
       </div>
     </div>`).join('')}</div>`;
-  return manualStatsHtml + buildScoreDistributionSummary(match, metrics);
+  return manualStatsHtml + scoreDistributionHtml;
 }
 
 function renderLeaderboard() {
@@ -2815,9 +2815,8 @@ function renderLeaderboard() {
     classicScorecard.innerHTML = buildClassicScorecard(match, metrics);
   }
   if (statTrackingCard && statTrackingSummary) {
-    const showStatTracking = isStatTrackingEnabled(match);
-    statTrackingCard.classList.toggle('hidden', !showStatTracking);
-    statTrackingSummary.innerHTML = showStatTracking ? buildStatTrackingSummary(match, metrics) : '';
+    statTrackingCard.classList.remove('hidden');
+    statTrackingSummary.innerHTML = buildStatTrackingSummary(match, metrics);
   }
   if (ninePointCard && ninePointScorecard) {
     const hasNinePoint = (match.selectedGames || []).some(g => g.key === 'nine_point');
@@ -4915,29 +4914,10 @@ function collectTeamScorerAssignments(teamCount, teamNames, existing = []) {
 }
 function renderScoreAccessCard(match) {
   const card = document.getElementById('scoreAccessCard');
-  const meta = document.getElementById('scoreAccessMeta');
-  const hint = document.getElementById('scoreAccessHint');
-  const roleSelect = document.getElementById('scoreAccessRoleSelect');
-  const teamWrap = document.getElementById('scoreAccessTeamWrap');
-  const teamSelect = document.getElementById('scoreAccessTeamSelect');
-  if (!card || !meta || !hint || !roleSelect || !teamWrap || !teamSelect) return;
-  if (!match) {
-    card.classList.add('hidden');
-    return;
-  }
-  const access = getScoreAccessState(match);
-  const mode = access.mode;
-  const officialName = match.officialScorerName || 'Official scorer';
-  card.classList.remove('hidden');
-  roleSelect.innerHTML = mode === 'team_codes'
-    ? `<option value="event_admin">Event Admin</option><option value="official_scorer">Official Scorer</option><option value="team_scorer">Team Scorer</option><option value="viewer">Viewer</option>`
-    : `<option value="event_admin">Event Admin</option><option value="official_scorer">Official Scorer</option><option value="viewer">Viewer</option>`;
-  roleSelect.value = (access.role === 'team_scorer' && mode !== 'team_codes') ? 'official_scorer' : access.role;
-  teamWrap.classList.toggle('hidden', !(mode === 'team_codes' && roleSelect.value === 'team_scorer'));
-  teamSelect.innerHTML = Array.from({ length: Math.max(1, Number(match.teamCount) || 1) }, (_, idx) => `<option value="${idx + 1}">${escapeHtml(getTeamLabel(match, idx + 1))}</option>`).join('');
-  teamSelect.value = String(access.team || 1);
-  meta.textContent = `${formatScoreEntryModeLabel(mode)} · Organizer: ${officialName}${mode === 'team_codes' ? ' · Team scorers are restricted to their own team.' : mode === 'open_edit' ? ' · Any authorized non-viewer can enter scores.' : ' · One scorer can enter all teams.'}`;
-  hint.textContent = getScoreAccessHint(match);
+  if (!card) return;
+  // Hide the Scoring Access preview from the Scoring Input tab until collaborative/Supabase scoring is fully implemented.
+  // The underlying scoring-access configuration and Supabase data model are intentionally left intact.
+  card.classList.add('hidden');
 }
 
 function renderNineHoleConfigUi() {

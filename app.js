@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.22';
+const APP_VERSION = 'v27.23';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -3094,6 +3094,7 @@ function applyCurrentHoleDomToMatch(match) {
       mutated = true;
     }
   }
+  if (mutated) markRoundReopenedForEditing(match);
   return mutated;
 }
 function scheduleSharedActiveMatchSyncFromDom({ immediate = false, silent = true, persistLocal = true } = {}) {
@@ -3768,6 +3769,34 @@ function shouldPromptToFinishBeforeNewMatch(match) {
   );
 }
 
+function hasActiveNewMatchConflict(match) {
+  return !!match && !isMatchFinished(match);
+}
+
+function markRoundReopenedForEditing(match) {
+  if (!match || match.status !== 'complete') return false;
+  match.previousCompletedAt = match.completedAt || match.previousCompletedAt || null;
+  match.reopenedAt = new Date().toISOString();
+  match.status = 'active';
+  match.completedAt = null;
+  finishConfirmArmed = false;
+  toast('Round reopened for editing.');
+  return true;
+}
+
+function resetMatchSetupFormDomToBlank() {
+  const form = document.getElementById('matchForm');
+  if (form) form.reset();
+  const notesBox = document.getElementById('notesBox');
+  if (notesBox) notesBox.value = '';
+  const picker = document.getElementById('matchPlayersPicker');
+  if (picker) picker.innerHTML = '';
+  document.querySelectorAll('[data-player-slot], [data-player-tee-slot], [data-team-name], [data-game-key], [data-game-config], [data-side-field], [data-nine-point-player], [data-greenie-player]').forEach(el => {
+    if (el.type === 'checkbox' || el.type === 'radio') el.checked = false;
+    else el.value = '';
+  });
+}
+
 function startCleanNewMatchSetup() {
   const snapshot = {
     activeMatchId: state.activeMatchId,
@@ -3786,15 +3815,19 @@ function startCleanNewMatchSetup() {
 
   const priorId = state.activeMatchId;
   try {
+    cleanNewMatchSetupInProgress = true;
     if (priorId) {
       clearScheduledSharedMatchSync(priorId);
       sharedMatchSyncDirty.delete(priorId);
     }
+
     state.activeMatchId = null;
     state.lastOpenedSharedMatchId = null;
     editingMatchId = null;
     currentHole = 1;
     pendingScoreFocus = null;
+    pendingScoreCommitFocus = null;
+    scoreInputSessionState.clear();
     scoreAdvanceTimers.forEach(timer => window.clearTimeout(timer));
     scoreAdvanceTimers.clear();
     scoreAdvanceGenerations.clear();
@@ -3805,24 +3838,16 @@ function startCleanNewMatchSetup() {
     uiState.matchPlayerDraft = [];
     uiState.referenceTeeManual = false;
     uiState.referenceTeeAutoId = '';
+
+    resetMatchSetupFormDomToBlank();
     const draft = createBlankSetupDraft();
-    const picker = document.getElementById('matchPlayersPicker');
-    if (picker) picker.innerHTML = '';
-    document.querySelectorAll('[data-player-slot], [data-player-tee-slot]').forEach(el => { el.value = ''; });
-    cleanNewMatchSetupInProgress = true;
-    try {
-      loadMatchEditor(null, draft);
-      renderMatchSetupState();
-      updateCloudConfigUi();
-    } finally {
-      cleanNewMatchSetupInProgress = false;
-    }
-    const notesBox = document.getElementById('notesBox');
-    if (notesBox) notesBox.value = '';
+    loadMatchEditor(null, draft);
+    renderMatchSetupState();
+    renderSetupHandicapPreview();
+    updateCloudConfigUi();
     persist({ skipRender: true });
     activateTab('setup');
   } catch (err) {
-    cleanNewMatchSetupInProgress = false;
     state.activeMatchId = snapshot.activeMatchId;
     state.lastOpenedSharedMatchId = snapshot.lastOpenedSharedMatchId;
     editingMatchId = snapshot.editingMatchId;
@@ -3843,6 +3868,8 @@ function startCleanNewMatchSetup() {
       console.error('Could not restore setup state after failed new-match reset:', restoreErr);
     }
     throw err;
+  } finally {
+    cleanNewMatchSetupInProgress = false;
   }
 }
 
@@ -3916,7 +3943,7 @@ function proceedFromNewMatchIntentDialog() {
 
 function handleNewMatchRequest() {
   const active = getActiveMatch();
-  if (!active || isMatchFinished(active)) {
+  if (!hasActiveNewMatchConflict(active)) {
     beginCleanNewMatchSetup();
     return;
   }
@@ -4010,8 +4037,11 @@ function completeActiveRound() {
     if (typeof applyCurrentHoleDomToMatch === 'function') {
       applyCurrentHoleDomToMatch(match);
     }
+    const wasReopened = !!(match.reopenedAt || match.previousCompletedAt);
     match.status = 'complete';
     match.completedAt = new Date().toISOString();
+    delete match.reopenedAt;
+    delete match.previousCompletedAt;
     const progress = computeMatchProgress(match);
     match.lastTouchedHole = progress.lastTouchedHole;
     match.lastFullyCompletedHole = progress.lastFullyCompletedHole;
@@ -4024,7 +4054,7 @@ function completeActiveRound() {
     renderCurrentMatch();
     renderLeaderboard();
     renderMatchSetupState();
-    toast('Match setup saved.');
+    toast(wasReopened ? 'Round updated successfully.' : 'Round finished and saved.');
     return true;
   } catch (err) {
     console.error('Confirm Finish failed:', err);

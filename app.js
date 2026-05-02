@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.24';
+const APP_VERSION = 'v27.25';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -3095,7 +3095,6 @@ function applyCurrentHoleDomToMatch(match) {
       mutated = true;
     }
   }
-  if (mutated) markRoundReopenedForEditing(match);
   return mutated;
 }
 function scheduleSharedActiveMatchSyncFromDom({ immediate = false, silent = true, persistLocal = true } = {}) {
@@ -3945,7 +3944,10 @@ function proceedFromNewMatchIntentDialog() {
 
 function handleNewMatchRequest() {
   const active = getActiveMatch();
-  if (active && typeof applyCurrentHoleDomToMatch === 'function') {
+  // Capture pending score DOM only for non-complete matches. applyCurrentHoleDomToMatch()
+  // intentionally no longer reopens completed rounds, and this guard prevents passive
+  // Create New Match checks from treating a completed round as an edit action.
+  if (active && active.status !== 'complete' && typeof applyCurrentHoleDomToMatch === 'function') {
     try {
       applyCurrentHoleDomToMatch(active);
       persist({ skipRender: true });
@@ -6402,6 +6404,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       selectedGames: normalizeSelectedGamesOrder(selectedGames),
       status: existing?.status || 'active',
       completedAt: existing?.completedAt || null,
+      previousCompletedAt: existing?.previousCompletedAt || null,
+      reopenedAt: existing?.reopenedAt || null,
       players: selectedPlayers.map(sp => {
         const old = existing?.players.find(op => op.playerId === sp.playerId);
         return old ? { ...old, team: sp.team, slot: sp.slot, teeId: sp.teeId || selectedPlayers[0]?.teeId || '', stats: Array.isArray(old.stats) && old.stats.length ? old.stats : buildEmptyStats(Number(fd.get('holeCount')) === 9 ? 9 : 18) } : { playerId: sp.playerId, team: sp.team, slot: sp.slot, teeId: sp.teeId || selectedPlayers[0]?.teeId || '', scores: buildEmptyScores(Number(fd.get('holeCount')) === 9 ? 9 : 18), stats: buildEmptyStats(Number(fd.get('holeCount')) === 9 ? 9 : 18) };
@@ -6454,7 +6458,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const scoringHoles = getSelectedScoringHoles(match, getTee(match.courseId, match.teeId));
     const holeMeta = scoringHoles[currentHole - 1] || null;
     const actualHoleNumber = holeMeta?.holeNumber || currentHole;
-    applyCurrentHoleDomToMatch(match);
+    const wasCompleteBeforeSave = match.status === 'complete';
+    const mutated = applyCurrentHoleDomToMatch(match);
+    if (wasCompleteBeforeSave && mutated) markRoundReopenedForEditing(match);
     const savedHole = actualHoleNumber;
     const maxHole = getPlayableHoleCount(match, getTee(match.courseId, match.teeId));
     if (Number.isFinite(targetHole) && targetHole >= 1 && targetHole <= maxHole) {

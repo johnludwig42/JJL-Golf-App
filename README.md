@@ -1,27 +1,16 @@
 # The Dye Ledger
 
-Current version: **v26.15**
+Current version: **v27.24**
 
-## What changed in v26.15
+## What changed in v27.24
 
-- optimized the default iPhone Safari / installed PWA experience so the app fits and reads more naturally at 100% zoom
-- increased mobile input sizing to reduce iPhone zoom friction and improved safe-area spacing
-- adapted top navigation, setup rows, action groups, score entry controls, and bottom sheets for small portrait screens
-- preserved desktop layouts while making wide content deliberately scrollable or stacked on mobile
-
-- fixed the Scoreboard Team Stroke Play display so the selected stroke play event now shows actual team stroke totals and margin instead of match-play style hole status
-- audited Team Stroke Play scoring so aggregate net stroke play resolves correctly as a summed team total across Scoreboard, Games Summary, and Net Payout
-- changed the Team Stroke Play default scoring mode to Aggregate while preserving Best Team Ball as an available option
-- fixed Game Setup handicap preview so it rehydrates and renders for all golfers when editing a saved match
-- removed a stale player setup render reference that could interfere with the Game Setup player slot UI
-- updated the app notes and synchronized the displayed app version, manifest version, and service-worker cache version to v26.15
-
-
-## v25.1
-- Added Finish Round controls to the Scoreboard tab using the same shared completion workflow as the Scoring tab.
-- Hides Scoreboard finish controls from print/PDF output.
-
-
-Latest update: v26.15 adds a persistent in-app version label and a safe service-worker update banner with an explicit Update action.
-
-- Share / Save PDF UX now uses a clearer iPhone-first Share Match flow with a simplified export selector.
+- Refined the Create New Match workflow for unscored active matches so the app uses a single confirmation and then opens a clean setup draft.
+- Captures pending score-entry DOM values before showing the new-match dialog so Edit Current Match preserves current-hole edits.
+- Ensures Cancel in the new-match conflict dialog disarms any pending Finish Round confirmation state.
+- Removed the nonfunctional backdrop-click handler from the new-match conflict dialog.
+- Shows Setup-tab Finish Round controls for any non-complete active match, not only when the editor is open.
+- Adds an explicit reopen prompt when loading a completed saved match, allowing users to choose view/share or reopen for editing.
+- Adds reopened-round messaging in the scoring meta line and scoreboard state.
+- Relabels Finish Round controls to Save Updates & Finish / Confirm Save Updates when editing a previously completed round.
+- Confirms reopened rounds overwrite the existing saved match record on finish.
+- Updates manifest and service-worker cache version to v27.24.

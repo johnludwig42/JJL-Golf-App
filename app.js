@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.23';
+const APP_VERSION = 'v27.24';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -3034,8 +3034,9 @@ function applyCurrentHoleDomToMatch(match) {
     const playerId = input.dataset.scorePlayer;
     const mp = match.players.find(p => p.playerId === playerId);
     if (!mp || !mp.scores?.[currentHole - 1]) return;
+    const prevGross = mp.scores[currentHole - 1].gross ?? null;
     const nextGross = String(input.value || '').trim() === '' ? null : (Number.isFinite(Number(input.value)) ? Math.round(Number(input.value)) : null);
-    if ((mp.scores[currentHole - 1].gross ?? null) !== nextGross) {
+    if (prevGross !== nextGross) {
       mp.scores[currentHole - 1].gross = nextGross;
       mutated = true;
     }
@@ -3671,10 +3672,11 @@ function closeNewMatchConflictDialog({ disarmFinish = false, resetMode = true } 
     dialog.classList.add('hidden');
     dialog.setAttribute('aria-hidden', 'true');
   }
-  if (disarmFinish && newMatchPromptFinishArmed && finishConfirmArmed) {
+  if (disarmFinish && finishConfirmArmed) {
     resetFinishRoundConfirmation();
   }
   newMatchPromptFinishArmed = false;
+  newMatchStartInProgress = false;
   if (resetMode) {
     newMatchDialogMode = 'intent';
     syncNewMatchConflictUi();
@@ -3943,7 +3945,20 @@ function proceedFromNewMatchIntentDialog() {
 
 function handleNewMatchRequest() {
   const active = getActiveMatch();
+  if (active && typeof applyCurrentHoleDomToMatch === 'function') {
+    try {
+      applyCurrentHoleDomToMatch(active);
+      persist({ skipRender: true });
+    } catch (err) {
+      console.warn('Could not capture current hole before Create New Match:', err);
+    }
+  }
   if (!hasActiveNewMatchConflict(active)) {
+    beginCleanNewMatchSetup();
+    return;
+  }
+  if (!shouldPromptToFinishBeforeNewMatch(active) && !matchHasStarted(active)) {
+    if (!window.confirm('Discard the current unscored match setup and start a new one?')) return;
     beginCleanNewMatchSetup();
     return;
   }
@@ -4000,6 +4015,9 @@ function syncFinishRoundUi(match = getActiveMatch()) {
   const scoreboardRoundState = document.getElementById('scoreboardRoundState');
   const isComplete = !!match && match.status === 'complete';
   const hasMatch = !!match;
+  const reopenedEdit = !!match?.previousCompletedAt;
+  const finishLabel = reopenedEdit ? 'Save Updates & Finish' : 'Finish Round';
+  const confirmLabel = reopenedEdit ? 'Confirm Save Updates' : 'Confirm Finish';
   const show = (el, visible) => {
     if (!el) return;
     el.classList.toggle('hidden', !visible);
@@ -4012,12 +4030,15 @@ function syncFinishRoundUi(match = getActiveMatch()) {
   show(scoringConfirmBtn, hasMatch && !isComplete && finishConfirmArmed);
   show(scoreboardFinishBtn, hasMatch && !isComplete && !finishConfirmArmed);
   show(scoreboardConfirmBtn, hasMatch && !isComplete && finishConfirmArmed);
-  show(setupFinishBtn, hasMatch && editingMatchId === match?.id && !isComplete && !finishConfirmArmed);
-  show(setupConfirmBtn, hasMatch && editingMatchId === match?.id && !isComplete && finishConfirmArmed);
+  show(setupFinishBtn, hasMatch && !isComplete && !finishConfirmArmed);
+  show(setupConfirmBtn, hasMatch && !isComplete && finishConfirmArmed);
+  [scoringFinishBtn, scoreboardFinishBtn, setupFinishBtn].forEach(btn => { if (btn) btn.textContent = finishLabel; });
+  [scoringConfirmBtn, scoreboardConfirmBtn, setupConfirmBtn].forEach(btn => { if (btn) btn.textContent = confirmLabel; });
   if (scoreboardRoundState) {
     if (!hasMatch) scoreboardRoundState.textContent = 'No active round.';
     else if (isComplete) scoreboardRoundState.textContent = 'Round complete.';
-    else if (finishConfirmArmed) scoreboardRoundState.textContent = 'Confirm finish to lock this round to history.';
+    else if (finishConfirmArmed) scoreboardRoundState.textContent = reopenedEdit ? 'Confirm save updates to overwrite the saved round.' : 'Confirm finish to lock this round to history.';
+    else if (reopenedEdit) scoreboardRoundState.textContent = 'Editing previously completed round. Finish Round will overwrite the saved round.';
     else scoreboardRoundState.textContent = 'Round is live.';
   }
 }
@@ -4027,7 +4048,9 @@ function armFinishRound() {
   if (!match) return toast('No active match.');
   finishConfirmArmed = true;
   syncFinishRoundUi(match);
-  toast('Tap Confirm Finish to lock this round to history.');
+  toast(match.previousCompletedAt
+    ? 'Tap Confirm Save Updates to overwrite the saved round.'
+    : 'Tap Confirm Finish to lock this round to history.');
 }
 
 function completeActiveRound() {
@@ -4048,13 +4071,17 @@ function completeActiveRound() {
     finishConfirmArmed = false;
     newMatchPromptFinishArmed = false;
     state.activeMatchId = match.id;
+    // Note: for a reopened round, this overwrites both local and shared (Supabase) copies
+    // because match.id is preserved by markRoundReopenedForEditing. Shared sync is upsert-by-id.
     persistCurrentMatch({ applyDom: false, awaitShared: false, immediateShared: true, silent: true });
     syncFinishRoundUi(match);
     renderMatches();
     renderCurrentMatch();
     renderLeaderboard();
     renderMatchSetupState();
-    toast(wasReopened ? 'Round updated successfully.' : 'Round finished and saved.');
+    toast(wasReopened
+      ? 'Saved round updated. Existing match record overwritten.'
+      : 'Round finished and saved.');
     return true;
   } catch (err) {
     console.error('Confirm Finish failed:', err);
@@ -4085,7 +4112,10 @@ function renderCurrentMatch() {
   const metrics = computeMatchMetrics(match);
   const holeCount = getPlayableHoleCount(match, tee);
   const scoringHoles = getSelectedScoringHoles(match, tee);
-  metaEl.textContent = `${match.date} · ${match.name || 'Round'} · ${course?.name || ''} · ${getHoleSegmentLabel(match, tee)} · ${metrics?.completed || 0}/${holeCount} holes completed${match.storageMode === 'shared' ? ` · Shared ID ${match.sharedMatchRef || match.sharedMatchId || match.id}` : ''}`;
+  const reopenedNote = match.previousCompletedAt
+    ? ' · Reopened from completed round (Finish Round will overwrite the saved round)'
+    : '';
+  metaEl.textContent = `${match.date} · ${match.name || 'Round'} · ${course?.name || ''} · ${getHoleSegmentLabel(match, tee)} · ${metrics?.completed || 0}/${holeCount} holes completed${match.storageMode === 'shared' ? ` · Shared ID ${match.sharedMatchRef || match.sharedMatchId || match.id}` : ''}${reopenedNote}`;
   emptyEl.classList.add('hidden');
   wrapEl.classList.remove('hidden');
   currentHole = Math.min(holeCount, Math.max(1, currentHole));
@@ -6005,13 +6035,6 @@ function installHandlers() {
   if (newMatchFinishCurrentBtn) newMatchFinishCurrentBtn.addEventListener('click', handleNewMatchFinishAndConfirmAction);
   const newMatchCancelBtn = document.getElementById('newMatchCancelBtn');
   if (newMatchCancelBtn) newMatchCancelBtn.addEventListener('click', () => closeNewMatchConflictDialog({ disarmFinish: true }));
-  const newMatchConflictDialog = document.getElementById('newMatchConflictDialog');
-  if (newMatchConflictDialog) newMatchConflictDialog.addEventListener('click', (e) => {
-    if (e.target === newMatchConflictDialog && !newMatchStartInProgress) {
-      toast('Choose Cancel, Edit Current Match, or Create New Match.');
-    }
-  });
-
 
   document.getElementById('matchCourseSelect').addEventListener('change', e => { uiState.referenceTeeManual = false; populateMatchTees(e.target.value); const currentSelections = getCurrentMatchEditorSelections(); const defaultTeeId = getDefaultMatchTeeId(e.target.value); const normalizedSelections = currentSelections.map(row => ({ ...row, teeId: defaultTeeId })); syncMatchPlayerDraft(normalizedSelections); normalizeDraftTeeAssignments({ courseId: e.target.value, forceDefault: true }); syncReferenceTeeUi({ courseId: e.target.value, selections: uiState.matchPlayerDraft, forceAuto: true }); populateMatchPlayerPicker(uiState.matchPlayerDraft); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
   document.getElementById('holeCountSelect').addEventListener('change', () => { renderNineHoleConfigUi(); renderSetupHandicapPreview(); });
@@ -6448,10 +6471,42 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   }
 
   document.getElementById('matchesList').addEventListener('click', e => {
-    const loadId = e.target.dataset.loadMatch; const shareId = e.target.dataset.shareMatch; const deleteId = e.target.dataset.deleteMatch;
-    if (loadId) { state.activeMatchId = loadId; const loadedMatch = getMatch(loadId); if (loadedMatch?.storageMode === 'shared') setLastOpenedSharedMatch(loadedMatch); currentHole = Math.min(getRequestedHoleCount(getMatch(loadId)), Math.max(1, completedHoles(getMatch(loadId)) || 1)); persist(); activateTab('score'); }
+    const loadId = e.target.dataset.loadMatch;
+    const shareId = e.target.dataset.shareMatch;
+    const deleteId = e.target.dataset.deleteMatch;
+    if (loadId) {
+      const target = getMatch(loadId);
+      state.activeMatchId = loadId;
+      if (target?.storageMode === 'shared') setLastOpenedSharedMatch(target);
+      currentHole = Math.min(getRequestedHoleCount(target), Math.max(1, completedHoles(target) || 1));
+      persist();
+      if (target && target.status === 'complete') {
+        const reopen = window.confirm(
+          `"${target.name || 'Round'}" is marked complete. Reopen it for editing?
+
+` +
+          `OK = reopen and edit (Finish Round will overwrite the saved round when you confirm).
+` +
+          `Cancel = just view the leaderboard / scorecard.`
+        );
+        if (reopen) {
+          markRoundReopenedForEditing(target);
+          persist({ skipRender: true });
+          activateTab('score');
+        } else {
+          activateTab('leaderboard');
+        }
+        renderAll();
+        return;
+      }
+      activateTab('score');
+    }
     if (shareId) { openPrintScorecard(shareId); }
-    if (deleteId && confirm('Delete this match?')) { state.matches = state.matches.filter(m => m.id !== deleteId); if (state.activeMatchId === deleteId) state.activeMatchId = null; persist(); }
+    if (deleteId && confirm('Delete this match?')) {
+      state.matches = state.matches.filter(m => m.id !== deleteId);
+      if (state.activeMatchId === deleteId) state.activeMatchId = null;
+      persist();
+    }
   });
   document.getElementById('prevHoleBtn').addEventListener('click', () => { saveCurrentHole({ targetHole: Math.max(1, currentHole - 1), silent: true }); });
   document.getElementById('nextHoleBtn').addEventListener('click', () => { saveCurrentHole({ advance: true, silent: true }); });

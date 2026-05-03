@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.28';
+const APP_VERSION = 'v27.29';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -1020,7 +1020,7 @@ function buildSummaryExportBody(match, metrics) {
   const featuredKey = match.matchStatusGame && statusOptions.find(opt => opt.key === match.matchStatusGame)
     ? match.matchStatusGame
     : (statusOptions[0]?.key || 'team_match');
-  const showStatTracking = isStatTrackingEnabled(match);
+  const exportStatTrackingHtml = buildExportStatTrackingSummary(match, metrics);
   const showNinePoint = (match.selectedGames || []).some(g => g.key === 'nine_point');
   return `
     <section class="export-section export-section-match-status">
@@ -1084,12 +1084,13 @@ function buildSummaryExportBody(match, metrics) {
       </div>
     </section>` : ''}
 
-    ${showStatTracking ? `
+    ${exportStatTrackingHtml ? `
     <section class="export-section export-section-stat-tracking">
       <div class="export-section-head">
-        <h2>Stat tracking</h2>
+        <h2>Stat Tracking Summary</h2>
+        <div class="export-section-sub">Completed holes only.</div>
       </div>
-      ${buildStatTrackingSummary(match, metrics)}
+      ${exportStatTrackingHtml}
     </section>` : ''}
 
     ${buildExportNotes()}`;
@@ -2672,6 +2673,58 @@ function buildScoreDistributionSummary(match, metrics) {
               <td>${totals.doubleBogey}</td>
               <td>${totals.other}</td>
             </tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function buildExportStatTrackingSummary(match, metrics) {
+  if (!isStatTrackingEnabled(match)) return '';
+  const completedLimit = getCompletedStatHoleLimit(match, metrics);
+  if (!completedLimit) return '';
+  const rows = (metrics?.players || []).map(playerMetric => {
+    const playerRef = match.players.find(row => row.playerId === playerMetric.playerId);
+    const totals = { fairwaysHit: 0, fairwayOpps: 0, greens: 0, greenOpps: 0, putts: 0, puttOpps: 0, upAndDowns: 0, sandies: 0 };
+    (metrics?.holeResults || []).slice(0, completedLimit).forEach((holeResult, holeIdx) => {
+      if (!holeResult?.completed) return;
+      const scoreObj = holeResult?.playerScores?.find(ps => ps.playerId === playerMetric.playerId);
+      if (!Number.isFinite(Number(scoreObj?.gross))) return;
+      const hole = getPlayerHole(match, playerMetric, holeIdx, metrics?.tee) || metrics?.tee?.holes?.[holeIdx] || null;
+      const stat = getPlayerStatEntry(playerRef, holeIdx);
+      const par = Number(hole?.par) || Number(scoreObj?.par) || 0;
+      if (par === 4 || par === 5) {
+        totals.fairwayOpps += 1;
+        if (stat.fairway) totals.fairwaysHit += 1;
+      }
+      totals.greenOpps += 1;
+      if (stat.green) totals.greens += 1;
+      if (Number.isFinite(Number(stat.putts))) {
+        totals.putts += Number(stat.putts);
+        totals.puttOpps += 1;
+      }
+      if (stat.upAndDown) totals.upAndDowns += 1;
+      if (stat.sandy) totals.sandies += 1;
+    });
+    const avgPutts = totals.puttOpps ? (totals.putts / totals.puttOpps).toFixed(1) : '—';
+    return `
+      <tr>
+        <td><strong>${escapeHtml(playerMetric.player.name)}</strong></td>
+        <td>${totals.fairwaysHit} / ${totals.fairwayOpps}</td>
+        <td>${totals.greens} / ${totals.greenOpps}</td>
+        <td>${avgPutts}</td>
+        <td>${totals.upAndDowns}</td>
+        <td>${totals.sandies}</td>
+      </tr>`;
+  }).join('');
+  if (!rows) return '';
+  return `
+    <div class="fit-stage" data-fit="width" data-fit-min="0.84">
+      <div class="fit-box">
+        <table class="export-table export-stat-summary-table">
+          <thead>
+            <tr><th>Player</th><th>Fairways</th><th>GIR</th><th>Avg Putts</th><th>Up & Downs</th><th>Sandies</th></tr>
+          </thead>
+          <tbody>${rows}</tbody>
         </table>
       </div>
     </div>`;
@@ -5551,12 +5604,33 @@ function loadTeeCopySource(courseId = '', sourceTeeId = '') {
   toast(`Copied ${sourceTee.teeName} into the tee editor.`);
 }
 
+function getParStrokeSourceTee(course, excludeTeeId = '') {
+  const sourceTees = getSortedTeesByYardage(course).filter(t => t.id !== excludeTeeId && Array.isArray(t.holes) && t.holes.length);
+  return sourceTees[0] || null;
+}
 function buildTeeHoleRows(courseId = '', holes = null) {
   const course = getCourse(courseId);
   const template = getCourseStrokeTemplate(course);
   let rows = holes ? holes.map(normalizeHole) : buildDefaultHoles();
-  if (!holes && template) rows = rows.map((h, idx) => ({ ...h, strokeIndex: Number(template[idx]) || null }));
-  return template ? applyStrokeTemplate(rows, template) : rows;
+  let usedSourceTeeTemplate = false;
+  if (!holes) {
+    const sourceTee = getParStrokeSourceTee(course, editingTeeRef?.teeId || '');
+    if (sourceTee) {
+      rows = rows.map((h, idx) => {
+        const sourceHole = sourceTee.holes?.[idx] || {};
+        return normalizeHole({
+          ...h,
+          yardage: null,
+          par: Number(sourceHole.par) || null,
+          strokeIndex: Number(sourceHole.strokeIndex) || null,
+        });
+      });
+      usedSourceTeeTemplate = true;
+    } else if (template) {
+      rows = rows.map((h, idx) => ({ ...h, strokeIndex: Number(template[idx]) || null }));
+    }
+  }
+  return template && !usedSourceTeeTemplate ? applyStrokeTemplate(rows, template) : rows;
 }
 function updateTeeStrokeTemplateHint(courseId = '') {
   const hint = document.getElementById('teeStrokeHint');

@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.29';
+const APP_VERSION = 'v27.30';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -1020,6 +1020,7 @@ function buildSummaryExportBody(match, metrics) {
   const featuredKey = match.matchStatusGame && statusOptions.find(opt => opt.key === match.matchStatusGame)
     ? match.matchStatusGame
     : (statusOptions[0]?.key || 'team_match');
+  const exportScoreDistributionHtml = buildExportScoreDistributionSummary(match, metrics);
   const exportStatTrackingHtml = buildExportStatTrackingSummary(match, metrics);
   const showNinePoint = (match.selectedGames || []).some(g => g.key === 'nine_point');
   return `
@@ -1070,6 +1071,14 @@ function buildSummaryExportBody(match, metrics) {
           ${buildClassicScorecard(match, metrics)}
         </div>
       </div>
+    </section>
+
+    <section class="export-section export-section-score-distribution">
+      <div class="export-section-head">
+        <h2>Score Distribution</h2>
+        <div class="export-section-sub">Gross scores only; completed holes only.</div>
+      </div>
+      ${exportScoreDistributionHtml}
     </section>
 
     ${showNinePoint ? `
@@ -2663,6 +2672,34 @@ function buildScoreDistributionSummary(match, metrics) {
       <div class="score-distribution-scroll top-gap">
         <table class="score-distribution-table">
           <thead><tr><th>Player</th><th>Eagle</th><th>Birdie</th><th>Par</th><th>Bogey</th><th>Double Bogey</th><th>Other</th></tr></thead>
+          <tbody>${rows.map(({ playerMetric, totals }) => `
+            <tr>
+              <td><strong>${escapeHtml(playerMetric.player.name)}</strong></td>
+              <td>${totals.eagle}</td>
+              <td>${totals.birdie}</td>
+              <td>${totals.par}</td>
+              <td>${totals.bogey}</td>
+              <td>${totals.doubleBogey}</td>
+              <td>${totals.other}</td>
+            </tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+
+function buildExportScoreDistributionSummary(match, metrics) {
+  const completedLimit = getCompletedStatHoleLimit(match, metrics);
+  if (!completedLimit) return '<div class="export-empty">No completed holes yet.</div>';
+  const rows = computeScoreDistributionSummary(match, metrics);
+  if (!rows.length) return '<div class="export-empty">No player scores available yet.</div>';
+  return `
+    <div class="fit-stage" data-fit="width" data-fit-min="0.84">
+      <div class="fit-box">
+        <table class="export-table export-score-distribution-table">
+          <thead>
+            <tr><th>Player</th><th>Eagle</th><th>Birdie</th><th>Par</th><th>Bogey</th><th>Double Bogey</th><th>Other</th></tr>
+          </thead>
           <tbody>${rows.map(({ playerMetric, totals }) => `
             <tr>
               <td><strong>${escapeHtml(playerMetric.player.name)}</strong></td>

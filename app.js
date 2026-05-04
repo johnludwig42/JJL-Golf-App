@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.30';
+const APP_VERSION = 'v27.31';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -262,11 +262,19 @@ function computeNinePointResults(match, metrics, cfg = {}) {
       runningTotals: { ...result.totals },
     });
   });
-  const totalPoints = Object.values(result.totals).reduce((sum, value) => sum + value, 0);
-  const averagePoints = uniqueIds.length ? (totalPoints / uniqueIds.length) : 0;
-  uniqueIds.forEach(id => {
-    result.amounts[id] = (result.totals[id] - averagePoints) * stakePerPoint;
-  });
+  // Settlement-only change: keep existing per-hole 9-point scoring, but settle
+  // final totals head-to-head so every unique player pair is evaluated once.
+  for (let i = 0; i < uniqueIds.length; i += 1) {
+    for (let j = i + 1; j < uniqueIds.length; j += 1) {
+      const playerI = uniqueIds[i];
+      const playerJ = uniqueIds[j];
+      const diff = (Number(result.totals[playerI]) || 0) - (Number(result.totals[playerJ]) || 0);
+      const amount = diff * stakePerPoint;
+      if (Math.abs(amount) <= 0.0001) continue;
+      result.amounts[playerI] = (result.amounts[playerI] || 0) + amount;
+      result.amounts[playerJ] = (result.amounts[playerJ] || 0) - amount;
+    }
+  }
   result.leaderboard = uniqueIds.map(id => {
     const playerMetric = chosenMetrics.find(p => p.playerId === id);
     return {
@@ -590,6 +598,12 @@ function formatMoneyAccounting(amount) {
   const abs = Math.abs(value).toFixed(2);
   if (Math.abs(value) < 0.0001) return "$0.00";
   return value < 0 ? `($${abs})` : `$${abs}`;
+}
+function formatFinalNetSettlementMoney(amount) {
+  const value = Number(amount) || 0;
+  const abs = Math.abs(value).toFixed(2);
+  if (Math.abs(value) < 0.0001) return '$0.00';
+  return value < 0 ? `($${abs})` : `+$${abs}`;
 }
 function getFeaturedGameLabel(match, gameKey) {
   const cfg = (match.selectedGames || []).find(g => g.key === gameKey) || {};
@@ -1323,6 +1337,12 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       page-break-after: avoid;
     }
     .payout-summary-intro strong, .payout-settlement-head strong { color: #243247; }
+    .final-net-settlement-card { border: 1px solid var(--border); border-radius: 14px; background: #fbfcfd; padding: 10px; display: grid; gap: 8px; }
+    .final-net-settlement-list { display: grid; gap: 5px; }
+    .final-net-settlement-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 7px 9px; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
+    .final-net-settlement-player { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .final-net-settlement-amount { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .final-net-settlement-crossfoot { font-size: 10px; text-align: right; color: #65758b; font-variant-numeric: tabular-nums; }
     .payout-table-wrap, .scorecard-wrap { overflow: visible !important; max-width: 100%; }
     .payout-game-table, .settlement-table, .scorecard-table {
       width: 100%;
@@ -2450,19 +2470,15 @@ function buildTeamPayoutMobileMatrix(match, section, players, totals) {
       const text = Math.abs(amount) > 0.0001 ? formatMoneyAccounting(amount) : '—';
       return `<td class="team-payout-mobile-game-cell ${cls}">${text}</td>`;
     }).join('');
-    const total = totals[player.id] || 0;
-    const totalCls = total > 0.0001 ? 'payout-total-positive' : total < -0.0001 ? 'payout-total-negative' : '';
-    const totalText = Math.abs(total) > 0.0001 ? formatMoneyAccounting(total) : '—';
-    return `<tr><th scope="row" class="team-payout-mobile-player-cell"><strong>${escapeHtml(player.name)}</strong></th>${gameCells}<td class="team-payout-mobile-total-cell ${totalCls}"><strong>${totalText}</strong></td></tr>`;
+    return `<tr><th scope="row" class="team-payout-mobile-player-cell"><strong>${escapeHtml(player.name)}</strong></th>${gameCells}</tr>`;
   }).join('');
   const columnFoot = visibleGames.map(game => {
     const colTotal = players.reduce((sum, player) => sum + (game.amounts[player.id] || 0), 0);
     const cls = Math.abs(colTotal) <= 0.0001 ? '' : (colTotal > 0 ? 'payout-total-positive' : 'payout-total-negative');
     return `<td class="team-payout-mobile-game-cell ${cls}"><strong>${formatMoneyAccounting(colTotal)}</strong></td>`;
   }).join('');
-  const overallTotal = players.reduce((sum, player) => sum + (totals[player.id] || 0), 0);
   const visibleCount = Math.max(1, visibleGames.length || 1);
-  const colgroup = `<colgroup><col class="team-payout-col-player">${visibleGames.map(() => '<col class="team-payout-col-game">').join('')}<col class="team-payout-col-total"></colgroup>`;
+  const colgroup = `<colgroup><col class="team-payout-col-player">${visibleGames.map(() => '<col class="team-payout-col-game">').join('')}</colgroup>`;
   return `
     <div class="team-payout-mobile-matrix" data-team-payout-mobile style="--team-payout-visible-games:${visibleCount};">
       <div class="team-payout-mobile-topline">
@@ -2473,14 +2489,13 @@ function buildTeamPayoutMobileMatrix(match, section, players, totals) {
       <div class="payout-table-wrap team-payout-mobile-wrap">
         <table class="payout-game-table team-payout-mobile-table">
           ${colgroup}
-          <thead><tr><th class="team-payout-mobile-player-head">Player</th>${headerCells}<th class="team-payout-mobile-total-head">Total</th></tr></thead>
+          <thead><tr><th class="team-payout-mobile-player-head">Player</th>${headerCells}</tr></thead>
           <tbody>${bodyRows}</tbody>
-          <tfoot><tr><th scope="row" class="team-payout-mobile-player-cell"><strong>Total</strong></th>${columnFoot}<td class="team-payout-mobile-total-cell"><strong>${formatMoneyAccounting(overallTotal)}</strong></td></tr></tfoot>
+          <tfoot><tr><th scope="row" class="team-payout-mobile-player-cell"><strong>Total</strong></th>${columnFoot}</tr></tfoot>
         </table>
       </div>
     </div>`;
 }
-
 function buildResponsiveSettlementTable(settlements) {
   const rows = settlements.length
     ? settlements.map(row => `
@@ -2504,11 +2519,33 @@ function buildResponsiveSettlementTable(settlements) {
     </div>`;
 }
 
+function buildFinalNetSettlementSection(players, totals) {
+  const rows = players.map(player => {
+    const amount = totals[player.id] || 0;
+    const cls = amount > 0.0001 ? 'payout-total-positive' : amount < -0.0001 ? 'payout-total-negative' : '';
+    return `
+      <div class="final-net-settlement-row">
+        <div class="final-net-settlement-player"><strong>${escapeHtml(player.name)}</strong></div>
+        <div class="final-net-settlement-amount ${cls}"><strong>${formatFinalNetSettlementMoney(amount)}</strong></div>
+      </div>`;
+  }).join('');
+  const crossFoot = players.reduce((sum, player) => sum + (totals[player.id] || 0), 0);
+  const crossFootClass = Math.abs(crossFoot) <= 0.0001 ? '' : 'payout-total-negative';
+  return `
+    <div class="final-net-settlement-card top-gap">
+      <div class="payout-settlement-head"><strong>Final Net Settlement</strong></div>
+      <div class="final-net-settlement-list">${rows}</div>
+      <div class="final-net-settlement-crossfoot ${crossFootClass}">Cross-foot: ${formatMoneyAccounting(crossFoot)}</div>
+    </div>`;
+}
+
 function buildNetPayoutSummary(match, metrics) {
   const selected = getOrderedSelectedGames(match);
   if (!selected.length) return '<div><strong>Net payout (live):</strong> No gambling games selected.</div>';
   const games = computeLivePayoutGames(match, metrics);
   const players = metrics.players.map(p => ({ id: p.playerId, name: p.player.name }));
+  const finalTotals = {};
+  games.forEach(game => addAmounts(finalTotals, game.amounts));
   const sections = [
     { key: 'team', title: 'Team games payout', intro: 'Team-format games only. Side matches are tracked separately below.', games: games.filter(game => game.group !== 'side') },
     { key: 'side', title: 'Side games payout', intro: 'Separate player side games, kept outside the team payout total.', games: games.filter(game => game.group === 'side') },
@@ -2526,10 +2563,7 @@ function buildNetPayoutSummary(match, metrics) {
         const text = Math.abs(amount) > 0.0001 ? formatMoneyAccounting(amount) : '—';
         return `<td class="${cls}">${text}</td>`;
       }).join('');
-      const total = totals[player.id] || 0;
-      const totalCls = total > 0.0001 ? 'payout-total-positive' : total < -0.0001 ? 'payout-total-negative' : '';
-      const totalText = Math.abs(total) > 0.0001 ? formatMoneyAccounting(total) : '—';
-      return `<tr>${gameCells}<td class="${totalCls}"><strong>${totalText}</strong></td></tr>`;
+      return `<tr>${gameCells}</tr>`;
     }).join('');
     const playerRows = players.map(player => (
       `<tr><td class="payout-player-col"><strong>${escapeHtml(player.name)}</strong></td></tr>`
@@ -2539,7 +2573,6 @@ function buildNetPayoutSummary(match, metrics) {
       const cls = Math.abs(colTotal) <= 0.0001 ? '' : (colTotal > 0 ? 'payout-total-positive' : 'payout-total-negative');
       return `<td class="${cls}"><strong>${formatMoneyAccounting(colTotal)}</strong></td>`;
     }).join('');
-    const overallTotal = players.reduce((sum, player) => sum + (totals[player.id] || 0), 0);
     const settlements = optimalSettlementRows(totals);
     const settlementTableHtml = buildResponsiveSettlementTable(settlements);
     const useMobileTeamCards = section.key === 'team' && isCompactTeamPayoutViewport();
@@ -2561,20 +2594,20 @@ function buildNetPayoutSummary(match, metrics) {
           </div>
           <div class="team-payout-scroll-pane payout-table-wrap payout-table-wrap-team">
             <table class="payout-game-table payout-game-table-wide payout-game-table-${section.key} payout-game-table-team">
-              <colgroup>${section.games.map(() => '<col class="team-payout-col-game-desktop">').join('')}<col class="team-payout-col-total-desktop"></colgroup>
+              <colgroup>${section.games.map(() => '<col class="team-payout-col-game-desktop">').join('')}</colgroup>
               <thead>
-                <tr><th class="team-payout-games-group-head" colspan="${section.games.length || 1}">Games</th><th class="team-payout-total-group-head">Total</th></tr>
-                <tr>${headerCells}<th class="team-payout-total-subhead" aria-hidden="true">&nbsp;</th></tr>
+                <tr><th class="team-payout-games-group-head" colspan="${section.games.length || 1}">Games</th></tr>
+                <tr>${headerCells}</tr>
               </thead>
               <tbody>${valueRows}</tbody>
-              <tfoot><tr>${columnFoot}<td><strong>${formatMoneyAccounting(overallTotal)}</strong></td></tr></tfoot>
+              <tfoot><tr>${columnFoot}</tr></tfoot>
             </table>
           </div>
         </div>`)
       : `
         <div class="payout-table-wrap payout-table-wrap-${section.key} top-gap">
           <table class="payout-game-table payout-game-table-wide payout-game-table-${section.key}">
-            <thead><tr><th class="payout-player-col"><div class="payout-sticky-player">Player</div></th>${headerCells}<th>Total</th></tr></thead>
+            <thead><tr><th class="payout-player-col"><div class="payout-sticky-player">Player</div></th>${headerCells}</tr></thead>
             <tbody>${players.map(player => {
               const gameCells = section.games.map(game => {
                 const amount = game.amounts[player.id] || 0;
@@ -2582,12 +2615,9 @@ function buildNetPayoutSummary(match, metrics) {
                 const text = Math.abs(amount) > 0.0001 ? formatMoneyAccounting(amount) : '—';
                 return `<td class="${cls}">${text}</td>`;
               }).join('');
-              const total = totals[player.id] || 0;
-              const totalCls = total > 0.0001 ? 'payout-total-positive' : total < -0.0001 ? 'payout-total-negative' : '';
-              const totalText = Math.abs(total) > 0.0001 ? formatMoneyAccounting(total) : '—';
-              return `<tr><td class="payout-player-col"><div class="payout-sticky-player"><strong>${escapeHtml(player.name)}</strong></div></td>${gameCells}<td class="${totalCls}"><strong>${totalText}</strong></td></tr>`;
+              return `<tr><td class="payout-player-col"><div class="payout-sticky-player"><strong>${escapeHtml(player.name)}</strong></div></td>${gameCells}</tr>`;
             }).join('')}</tbody>
-            <tfoot><tr><td class="payout-player-col"><div class="payout-sticky-player"><strong>Total</strong></div></td>${columnFoot}<td><strong>${formatMoneyAccounting(overallTotal)}</strong></td></tr></tfoot>
+            <tfoot><tr><td class="payout-player-col"><div class="payout-sticky-player"><strong>Total</strong></div></td>${columnFoot}</tr></tfoot>
           </table>
         </div>`;
     return `
@@ -2599,9 +2629,8 @@ ${settlementTableHtml}
       </div>`;
   };
 
-  return `<div class="payout-summary-stack">${sections.map(renderSection).join('')}</div>`;
+  return `<div class="payout-summary-stack">${sections.map(renderSection).join('')}${buildFinalNetSettlementSection(players, finalTotals)}</div>`;
 }
-
 function getCompletedStatHoleLimit(match, metrics) {
   const limit = Number(getLastFullyCompletedHole(match)) || Number(metrics?.completed) || 0;
   const holeCount = Number(metrics?.holeCount) || getRequestedHoleCount(match);

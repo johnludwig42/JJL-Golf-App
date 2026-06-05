@@ -2518,7 +2518,7 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
 @media (max-width:640px){.course-library-status{width:100%;border-radius:12px;}.settle-up-row{grid-template-columns:minmax(0,1fr) auto;}.settle-up-route{font-size:.9rem;}}
 
 
-/* v27.34 Supabase course library controls */
+/* v27.35 Supabase course library controls */
 .course-library-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
 .course-library-actions .course-search-inline { min-width: min(220px, 100%); }
 @media (max-width: 640px) {

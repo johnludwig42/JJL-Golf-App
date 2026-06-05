@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.34';
+const APP_VERSION = 'v27.35';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -3269,6 +3269,12 @@ async function loadSupabaseCourses({ silent = false } = {}) {
 function getCloudCourseMatchKey(course = {}) {
   return [course.name, course.city, course.state].map(v => String(v || '').trim().toLowerCase()).join('|');
 }
+function getCloudCourseNameKey(course = {}) {
+  return String(course?.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+function isSupabaseCourse(course = {}) {
+  return String(course?.source || '').toLowerCase() === 'supabase' || !!course?.cloudCourseId || course?.cloudSyncState === 'synced';
+}
 function getCloudTeeMatchKey(tee = {}) {
   return [tee.teeName, tee.gender || 'M'].map(v => String(v || '').trim().toLowerCase()).join('|');
 }
@@ -3391,6 +3397,67 @@ async function flushPendingCourseSync({ silent = true } = {}) {
   const pending = state.courses.filter(c => c.cloudSyncState === 'pending-sync');
   for (const course of pending) {
     await syncCourseToSupabase(course, { silent });
+  }
+}
+async function syncLocalCoursesToCloud() {
+  if (!hasSupabaseConfig()) {
+    uiState.cloudCoursesStatus = 'Cloud sync unavailable. Local courses are still available.';
+    renderCourses();
+    toast('Cloud sync unavailable. Local courses are still available.');
+    return { uploaded: 0, existed: 0, failed: 0 };
+  }
+  if (uiState.cloudCoursesLoading) return { uploaded: 0, existed: 0, failed: 0 };
+  uiState.cloudCoursesLoading = true;
+  uiState.cloudCoursesStatus = 'Cloud Course Library: Syncing local courses...';
+  renderCourses();
+  const summary = { uploaded: 0, existed: 0, failed: 0 };
+  try {
+    const client = await ensureSupabaseClient({ anonymousAuth: false });
+    if (!client) throw new Error('Supabase client unavailable.');
+    const { data: cloudRows, error: cloudError } = await client.from('courses').select('id,name,city,state');
+    if (cloudError) throw cloudError;
+    const cloudNameKeys = new Set((cloudRows || []).map(row => getCloudCourseNameKey(row)).filter(Boolean));
+    const localCourses = state.courses.filter(c => c?.name && String(c.source || '').toLowerCase() !== 'supabase');
+    if (!localCourses.length) {
+      uiState.cloudCoursesStatus = 'No local-only courses found to sync.';
+      renderCourses();
+      toast('No local-only courses found to sync.');
+      return summary;
+    }
+    for (const course of localCourses) {
+      const nameKey = getCloudCourseNameKey(course);
+      if (!nameKey) continue;
+      if (cloudNameKeys.has(nameKey)) {
+        course.cloudSyncState = 'synced';
+        course.cloudSyncError = '';
+        summary.existed += 1;
+        continue;
+      }
+      const result = await syncCourseToSupabase(course, { silent: true });
+      if (result?.synced) {
+        cloudNameKeys.add(nameKey);
+        summary.uploaded += 1;
+      } else if (result?.pending || result?.error) {
+        summary.failed += 1;
+      } else if (result?.skipped) {
+        summary.existed += 1;
+      }
+    }
+    persist({ skipRender: true });
+    await loadSupabaseCourses({ silent: true });
+    uiState.cloudCoursesStatus = `Cloud sync complete: ${summary.uploaded} uploaded, ${summary.existed} already existed, ${summary.failed} failed.`;
+    renderAll();
+    toast(`${summary.uploaded} courses uploaded · ${summary.existed} already existed · ${summary.failed} failed`);
+    return summary;
+  } catch (err) {
+    console.warn('Manual local course sync failed:', err);
+    uiState.cloudCoursesStatus = 'Cloud sync unavailable. Local courses are still available.';
+    renderCourses();
+    toast('Cloud sync unavailable. Local courses are still available.');
+    return { ...summary, error: err };
+  } finally {
+    uiState.cloudCoursesLoading = false;
+    renderCourses();
   }
 }
 async function refreshCourseLibraryFromCloud({ silent = true, force = false } = {}) {
@@ -4017,6 +4084,7 @@ function renderCourses() {
   const cloudStatus = document.getElementById('cloudCoursesStatus');
   const setupCloudStatus = document.getElementById('setupCourseLibraryStatus');
   const cloudBtn = document.getElementById('refreshCloudCoursesBtn');
+  const syncLocalCoursesBtn = document.getElementById('syncLocalCoursesBtn');
   const statusMessage = getCourseLibraryStatusMessage();
   const statusClass = getCourseLibraryStatusClass(statusMessage);
   [cloudStatus, setupCloudStatus].filter(Boolean).forEach(node => {
@@ -4024,6 +4092,7 @@ function renderCourses() {
     node.className = `course-library-status tiny top-gap ${statusClass}`;
   });
   if (cloudBtn) cloudBtn.disabled = uiState.cloudCoursesLoading || !hasSupabaseConfig();
+  if (syncLocalCoursesBtn) syncLocalCoursesBtn.disabled = uiState.cloudCoursesLoading || !hasSupabaseConfig();
   const query = getCourseSearchValue();
   const courses = state.courses.filter(c => {
     if (!query) return true;
@@ -6353,6 +6422,8 @@ function installHandlers() {
   });
   const refreshCloudCoursesBtn = document.getElementById('refreshCloudCoursesBtn');
   if (refreshCloudCoursesBtn) refreshCloudCoursesBtn.addEventListener('click', () => loadSupabaseCourses({ silent: false }));
+  const syncLocalCoursesBtn = document.getElementById('syncLocalCoursesBtn');
+  if (syncLocalCoursesBtn) syncLocalCoursesBtn.addEventListener('click', () => syncLocalCoursesToCloud());
   document.getElementById('teeForm').addEventListener('submit', e => {
     e.preventDefault();
     const fd = new FormData(e.target);

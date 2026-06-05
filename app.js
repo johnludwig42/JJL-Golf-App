@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.31';
+const APP_VERSION = 'v27.33';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -383,6 +383,8 @@ let cleanNewMatchSetupInProgress = false;
 const uiState = {
   courseSearch: '',
   expandedCourses: new Set(),
+  cloudCoursesStatus: '',
+  cloudCoursesLoading: false,
   matchPlayerDraft: [],
   referenceTeeManual: false,
   referenceTeeAutoId: '',
@@ -2330,7 +2332,7 @@ function buildFeaturedMatchStatus(match, metrics, gameKey) {
   if (gameKey === 'nine_point') {
     const nine = computeNinePointResults(match, metrics, cfg);
     const leaders = nine.leaderboard.map(row => `${escapeHtml(row.name)} (${row.total})`).join(' · ');
-    return `<div class="match-status-head"><strong>9-Point Game</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Basis</div><div class="match-status-value">${escapeHtml(formatBasisLabel(nine.basis || cfg.basis))}</div></div><div class="match-status-tile"><div class="tiny">Leaders</div><div class="match-status-value">${leaders || 'Select 3 players'}</div></div><div class="match-status-tile"><div class="tiny">$ / point</div><div class="match-status-value">${formatMoneyAccounting(nine.stakePerPoint || cfg.stakePerPoint || 0)}</div></div></div>`;
+    return `<div class="match-status-head"><strong>9-Point Game</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Basis</div><div class="match-status-value">${escapeHtml(formatBasisLabel(nine.basis || cfg.basis))}</div></div><div class="match-status-tile"><div class="tiny">Leaders</div><div class="match-status-value">${leaders || 'Select 3 players'}</div></div><div class="match-status-tile"><div class="tiny">$ / point</div><div class="match-status-value">${formatMoneyAccounting(nine.stakePerPoint || cfg.stakePerPoint || 0)}</div></div></div><div class="nine-point-settlement-note top-gap">Hole scoring remains 9 points per hole. Payouts settle final point differentials head-to-head × the stake.</div>`;
   }
   return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-tile"><div class="tiny">Status</div><div class="match-status-value">Live</div></div>`;
 }
@@ -2519,6 +2521,15 @@ function buildResponsiveSettlementTable(settlements) {
     </div>`;
 }
 
+function buildSettleUpList(settlements) {
+  if (!settlements.length) return '<div class="tiny">No payments needed.</div>';
+  return `<div class="settle-up-list">${settlements.map(row => `
+    <div class="settle-up-row">
+      <div class="settle-up-route"><strong>${escapeHtml(getPlayer(row.from)?.name || 'Unknown')}</strong><span aria-hidden="true">→</span><strong>${escapeHtml(getPlayer(row.to)?.name || 'Unknown')}</strong></div>
+      <div class="settle-up-amount"><strong>${formatMoneyAccounting(row.amount)}</strong></div>
+    </div>`).join('')}</div>`;
+}
+
 function buildFinalNetSettlementSection(players, totals) {
   const rows = players.map(player => {
     const amount = totals[player.id] || 0;
@@ -2531,11 +2542,17 @@ function buildFinalNetSettlementSection(players, totals) {
   }).join('');
   const crossFoot = players.reduce((sum, player) => sum + (totals[player.id] || 0), 0);
   const crossFootClass = Math.abs(crossFoot) <= 0.0001 ? '' : 'payout-total-negative';
+  const settlements = optimalSettlementRows(totals || {});
   return `
     <div class="final-net-settlement-card top-gap">
       <div class="payout-settlement-head"><strong>Final Net Settlement</strong></div>
       <div class="final-net-settlement-list">${rows}</div>
       <div class="final-net-settlement-crossfoot ${crossFootClass}">Cross-foot: ${formatMoneyAccounting(crossFoot)}</div>
+      <div class="settle-up-card">
+        <div class="payout-settlement-head"><strong>Settle Up</strong></div>
+        <div class="tiny">Minimum payments needed to settle all games.</div>
+        ${buildSettleUpList(settlements)}
+      </div>
     </div>`;
 }
 
@@ -3057,19 +3074,24 @@ function scheduleTeamPayoutSplitPaneSync() {
 function hasSupabaseConfig() {
   return !!(SUPABASE_CONFIG?.url && SUPABASE_CONFIG?.anonKey && window.supabase?.createClient);
 }
-async function ensureSupabaseClient() {
+async function ensureSupabaseClient(options = {}) {
   if (!hasSupabaseConfig()) return null;
-  if (supabaseClient) return supabaseClient;
+  const anonymousAuth = options?.anonymousAuth !== false;
+  if (supabaseClient) {
+    if (anonymousAuth) {
+      const existing = await supabaseClient.auth.getUser();
+      if (!existing?.data?.user) {
+        const signIn = await supabaseClient.auth.signInAnonymously();
+        if (signIn.error) throw signIn.error;
+      }
+    }
+    return supabaseClient;
+  }
   if (!supabaseInitPromise) {
     supabaseInitPromise = (async () => {
       const client = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey, {
         auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
       });
-      const existing = await client.auth.getUser();
-      if (!existing?.data?.user) {
-        const signIn = await client.auth.signInAnonymously();
-        if (signIn.error) throw signIn.error;
-      }
       supabaseClient = client;
       return client;
     })().catch(err => {
@@ -3077,7 +3099,15 @@ async function ensureSupabaseClient() {
       throw err;
     });
   }
-  return supabaseInitPromise;
+  const client = await supabaseInitPromise;
+  if (anonymousAuth) {
+    const existing = await client.auth.getUser();
+    if (!existing?.data?.user) {
+      const signIn = await client.auth.signInAnonymously();
+      if (signIn.error) throw signIn.error;
+    }
+  }
+  return client;
 }
 async function getSupabaseUser() {
   const client = await ensureSupabaseClient();
@@ -3091,6 +3121,136 @@ async function getSupabaseUser() {
 }
 function getSharedMatchIndex() {
   return Array.isArray(state.sharedMatchIds) ? [...new Set(state.sharedMatchIds.filter(Boolean))] : [];
+}
+
+function normalizeCloudCourseRow(row = {}) {
+  const id = String(row.id || row.course_id || row.name || uid());
+  return {
+    id,
+    name: String(row.name || 'Imported Course').trim() || 'Imported Course',
+    city: String(row.city || '').trim(),
+    state: String(row.state || '').trim(),
+    country: String(row.country || 'United States of America').trim() || 'United States of America',
+    strokeIndexes: null,
+    tees: [],
+    source: 'supabase',
+    cloudCourseId: id,
+  };
+}
+function normalizeCloudTeeRow(row = {}, courseName = '') {
+  const holes = Array.isArray(row.holes) && row.holes.length ? row.holes.map(normalizeHole) : buildDefaultHoles();
+  const tee = {
+    id: String(row.id || row.tee_id || uid()),
+    courseName,
+    teeName: String(row.tee_name || row.teeName || row.name || 'Tee').trim() || 'Tee',
+    gender: String(row.gender || 'M').toUpperCase() === 'F' ? 'F' : 'M',
+    isCombo: false,
+    comboSources: buildDefaultHoles().map(h => ({ holeNumber: h.holeNumber, sourceTeeId: '' })),
+    length: Number(row.total_yards ?? row.length) || sumYardage(holes) || null,
+    par: Number(row.total_par ?? row.par) || sumPar(holes) || 72,
+    rating: Number(row.rating) || 72,
+    slope: Number(row.slope) || 113,
+    holes,
+    source: 'supabase',
+    cloudTeeId: String(row.id || row.tee_id || ''),
+  };
+  normalizeTee(tee, courseName);
+  return tee;
+}
+function mergeSupabaseCourses(cloudCourses = []) {
+  let added = 0;
+  let updated = 0;
+  cloudCourses.forEach(course => {
+    if (!course?.id || !course?.name) return;
+    const existingIdx = state.courses.findIndex(c => c.id === course.id);
+    const nameKey = String(course.name || '').trim().toLowerCase();
+    const cityKey = String(course.city || '').trim().toLowerCase();
+    const stateKey = String(course.state || '').trim().toLowerCase();
+    const duplicateIdx = existingIdx >= 0 ? existingIdx : state.courses.findIndex(c => (
+      String(c.name || '').trim().toLowerCase() === nameKey
+      && String(c.city || '').trim().toLowerCase() === cityKey
+      && String(c.state || '').trim().toLowerCase() === stateKey
+    ));
+    if (duplicateIdx >= 0) {
+      const existing = state.courses[duplicateIdx];
+      const localOnlyTees = (existing.tees || []).filter(t => !(course.tees || []).some(ct => ct.id === t.id));
+      state.courses[duplicateIdx] = { ...existing, ...course, tees: [...(course.tees || []), ...localOnlyTees] };
+      updated += 1;
+    } else {
+      state.courses.push(course);
+      added += 1;
+    }
+  });
+  normalizeState();
+  return { added, updated };
+}
+async function loadSupabaseCourses({ silent = false } = {}) {
+  if (!hasSupabaseConfig()) {
+    uiState.cloudCoursesStatus = 'Supabase not configured. Manual course entry remains available.';
+    if (!silent) { renderCourses(); toast('Supabase is not configured.'); }
+    return { added: 0, updated: 0 };
+  }
+  if (uiState.cloudCoursesLoading) return { added: 0, updated: 0 };
+  uiState.cloudCoursesLoading = true;
+  uiState.cloudCoursesStatus = 'Loading cloud course library…';
+  renderCourses();
+  try {
+    const client = await ensureSupabaseClient({ anonymousAuth: false });
+    if (!client) throw new Error('Supabase client unavailable.');
+    const [{ data: courseRows, error: courseError }, { data: teeRows, error: teeError }, { data: holeRows, error: holeError }] = await Promise.all([
+      client.from('courses').select('*').order('name'),
+      client.from('course_tees').select('*').order('tee_name'),
+      client.from('course_holes').select('*').order('hole_number'),
+    ]);
+    if (courseError) throw courseError;
+    if (teeError) throw teeError;
+    if (holeError) throw holeError;
+    const holesByTee = new Map();
+    (holeRows || []).forEach(row => {
+      const teeId = String(row.tee_id || '');
+      if (!teeId) return;
+      if (!holesByTee.has(teeId)) holesByTee.set(teeId, []);
+      holesByTee.get(teeId).push({
+        holeNumber: Number(row.hole_number) || 1,
+        yardage: Number(row.yardage) || null,
+        par: Number(row.par) || null,
+        strokeIndex: Number(row.handicap_index ?? row.stroke_index) || null,
+      });
+    });
+    const teesByCourse = new Map();
+    (teeRows || []).forEach(row => {
+      const courseId = String(row.course_id || '');
+      if (!courseId) return;
+      if (!teesByCourse.has(courseId)) teesByCourse.set(courseId, []);
+      const holes = (holesByTee.get(String(row.id)) || []).sort((a, b) => a.holeNumber - b.holeNumber);
+      teesByCourse.get(courseId).push({ ...row, holes: holes.length ? holes : buildDefaultHoles() });
+    });
+    const cloudCourses = (courseRows || []).map(row => {
+      const course = normalizeCloudCourseRow(row);
+      const tees = (teesByCourse.get(course.id) || []).map(teeRow => normalizeCloudTeeRow(teeRow, course.name));
+      course.tees = getSortedTeesByYardage({ tees });
+      const firstTemplate = tees.map(t => extractStrokeTemplate(t.holes)).find(Boolean);
+      course.strokeIndexes = firstTemplate || null;
+      return course;
+    });
+    const result = mergeSupabaseCourses(cloudCourses);
+    persist({ skipRender: true });
+    uiState.cloudCoursesStatus = cloudCourses.length
+      ? `Cloud course library loaded: ${cloudCourses.length} course${cloudCourses.length === 1 ? '' : 's'} (${result.added} new, ${result.updated} refreshed).`
+      : 'Cloud course library is configured, but no courses are available yet.';
+    renderAll();
+    if (!silent) toast('Course library refreshed.');
+    return result;
+  } catch (err) {
+    console.warn('Could not load Supabase course library:', err);
+    uiState.cloudCoursesStatus = 'Could not load cloud courses. Manual/local courses are still available.';
+    renderCourses();
+    if (!silent) toast('Could not load cloud courses.');
+    return { added: 0, updated: 0, error: err };
+  } finally {
+    uiState.cloudCoursesLoading = false;
+    renderCourses();
+  }
 }
 function rememberSharedMatchId(matchId) {
   if (!matchId) return;
@@ -3622,6 +3782,21 @@ document.addEventListener('visibilitychange', () => {
   scheduleSharedMatchSync(active, { immediate: true, silent: true });
 });
 
+function getCourseLibraryStatusMessage() {
+  if (uiState.cloudCoursesLoading) return 'Loading cloud course library… manual setup remains available.';
+  if (uiState.cloudCoursesStatus) return uiState.cloudCoursesStatus;
+  return hasSupabaseConfig()
+    ? 'Cloud course library connected. Manual setup remains available.'
+    : 'Supabase not configured. Manual course entry remains available.';
+}
+function getCourseLibraryStatusClass(message = '') {
+  const text = String(message || '').toLowerCase();
+  if (text.includes('loading')) return 'is-loading';
+  if (text.includes('loaded') || text.includes('connected') || text.includes('available')) return 'is-connected';
+  if (text.includes('not configured')) return 'is-not-configured';
+  return 'is-unavailable';
+}
+
 function updateCloudConfigUi() {
   const status = document.getElementById('supabaseStatus');
   const detail = document.getElementById('supabaseStatusDetail');
@@ -3689,6 +3864,16 @@ function strokeIndexSummary(holes, course) {
 }
 function renderCourses() {
   const el = document.getElementById('coursesList');
+  const cloudStatus = document.getElementById('cloudCoursesStatus');
+  const setupCloudStatus = document.getElementById('setupCourseLibraryStatus');
+  const cloudBtn = document.getElementById('refreshCloudCoursesBtn');
+  const statusMessage = getCourseLibraryStatusMessage();
+  const statusClass = getCourseLibraryStatusClass(statusMessage);
+  [cloudStatus, setupCloudStatus].filter(Boolean).forEach(node => {
+    node.textContent = statusMessage;
+    node.className = `course-library-status tiny top-gap ${statusClass}`;
+  });
+  if (cloudBtn) cloudBtn.disabled = uiState.cloudCoursesLoading || !hasSupabaseConfig();
   const query = getCourseSearchValue();
   const courses = state.courses.filter(c => {
     if (!query) return true;
@@ -4843,7 +5028,7 @@ function buildSelectedGamesSummary(match, metrics) {
     else if (cfg.key === 'nine_point') {
       const nine = computeNinePointResults(match, metrics, cfg);
       value = nine.leaderboard.length ? nine.leaderboard.map(row => `${row.name} (${row.total})`).join(' · ') : 'Select 3 players';
-      sub = nine.leaderboard.length ? `${formatBasisLabel(nine.basis)} · ${formatMoneyAccounting(nine.stakePerPoint)} / point · ${nine.completedHoles} hole(s) complete` : '9-Point Game requires three selected players with scores.';
+      sub = nine.leaderboard.length ? `${formatBasisLabel(nine.basis)} · ${formatMoneyAccounting(nine.stakePerPoint)} / point · ${nine.completedHoles} hole(s) complete · Final differentials settle head-to-head` : '9-Point Game requires three selected players with scores.';
     }
     return `<div class="game-summary-card"><div class="game-summary-title">${escapeHtml(title)}</div><div class="game-summary-value">${escapeHtml(value)}</div>${sub ? `<div class="game-summary-sub">${escapeHtml(sub)}</div>` : ''}</div>`;
   });
@@ -5488,6 +5673,7 @@ function renderGamesPicker(existing = []) {
       const playerOptions = getNinePointPlayerOptions(players, selectedIds);
       return `<div class="card inset-card game-config-card">
         <div class="game-config-header"><div class="section-label">9-Point Game</div><div class="tiny">3-player only side game. Points per hole sum to 9.</div></div>
+        <div class="nine-point-settlement-note top-gap">Payouts settle final point differentials head-to-head between each player.</div>
         <div class="grid two compact-grid top-gap">
           <label><span>Basis</span><select data-game-config="${game.key}" data-field="basis"><option value="net" ${cfg.basis !== 'gross' ? 'selected' : ''}>Net</option><option value="gross" ${cfg.basis === 'gross' ? 'selected' : ''}>Gross</option></select></label>
           <label><span>$ / point</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stakePerPoint" value="${cfg.stakePerPoint ?? 1}" /></label>
@@ -6013,6 +6199,8 @@ function installHandlers() {
     uiState.courseSearch = e.target.value || '';
     renderCourses();
   });
+  const refreshCloudCoursesBtn = document.getElementById('refreshCloudCoursesBtn');
+  if (refreshCloudCoursesBtn) refreshCloudCoursesBtn.addEventListener('click', () => loadSupabaseCourses({ silent: false }));
   document.getElementById('teeForm').addEventListener('submit', e => {
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -6814,4 +7002,7 @@ loadTeeEditor(null, null);
 loadMatchEditor(null);
 updateVersionUi();
 renderAll();
+if (hasSupabaseConfig()) {
+  window.setTimeout(() => loadSupabaseCourses({ silent: true }), 250);
+}
 resumeActiveSharedMatchOnStartup();

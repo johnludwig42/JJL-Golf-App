@@ -2480,7 +2480,7 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
 .score-distribution-table tbody tr:last-child td{border-bottom:0}
 @media (max-width: 640px){.score-distribution-table{font-size:.82rem;min-width:620px}.score-distribution-table th,.score-distribution-table td{padding:8px 8px}}
 
-/* v27.31 final net settlement summary */
+/* v27.33 final net settlement and settle-up summary */
 .final-net-settlement-card{
   border:1px solid var(--border);
   border-radius:16px;
@@ -2503,3 +2503,25 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
 .final-net-settlement-player{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .final-net-settlement-amount{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
 .final-net-settlement-crossfoot{font-size:12px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums;}
+
+.settle-up-card{border-top:1px solid rgba(12,55,33,.10);padding-top:10px;display:grid;gap:8px;}
+.settle-up-list{display:grid;gap:6px;}
+.settle-up-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:12px;background:#fff;}
+.settle-up-route{display:flex;gap:7px;align-items:center;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.settle-up-amount{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.nine-point-settlement-note{border:1px solid rgba(21,91,55,.16);border-radius:12px;background:rgba(21,91,55,.06);color:var(--muted);font-size:12px;line-height:1.35;padding:8px 10px;}
+.course-library-status{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border);border-radius:999px;background:#fff;padding:6px 10px;line-height:1.25;max-width:100%;}
+.course-library-status::before{content:'';width:8px;height:8px;border-radius:999px;background:var(--muted);flex:0 0 auto;}
+.course-library-status.is-connected::before{background:#177245;}
+.course-library-status.is-loading::before{background:#b7791f;}
+.course-library-status.is-unavailable::before,.course-library-status.is-not-configured::before{background:#718096;}
+@media (max-width:640px){.course-library-status{width:100%;border-radius:12px;}.settle-up-row{grid-template-columns:minmax(0,1fr) auto;}.settle-up-route{font-size:.9rem;}}
+
+
+/* v27.33 Supabase course library controls */
+.course-library-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
+.course-library-actions .course-search-inline { min-width: min(220px, 100%); }
+@media (max-width: 640px) {
+  .course-library-actions { width: 100%; justify-content: stretch; }
+  .course-library-actions button, .course-library-actions .course-search-inline { width: 100%; }
+}

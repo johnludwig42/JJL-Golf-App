@@ -1,3 +1,67 @@
+-- The Dye Ledger v27.33 Supabase course-library schema
+-- Run this before using the Course Library refresh feature.
+
+create table if not exists public.courses (
+  id text primary key default gen_random_uuid()::text,
+  name text not null,
+  city text null,
+  state text null,
+  country text not null default 'United States of America',
+  external_id text null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.course_tees (
+  id text primary key default gen_random_uuid()::text,
+  course_id text not null references public.courses(id) on delete cascade,
+  tee_name text not null,
+  gender text not null default 'M' check (gender in ('M','F')),
+  rating numeric null,
+  slope integer null,
+  total_yards integer null,
+  total_par integer null,
+  display_order integer null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.course_holes (
+  id text primary key default gen_random_uuid()::text,
+  course_id text not null references public.courses(id) on delete cascade,
+  tee_id text not null references public.course_tees(id) on delete cascade,
+  hole_number integer not null check (hole_number between 1 and 18),
+  par integer null,
+  handicap_index integer null check (handicap_index between 1 and 18),
+  yardage integer null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique(tee_id, hole_number)
+);
+
+create index if not exists idx_course_tees_course_id on public.course_tees(course_id);
+create index if not exists idx_course_holes_course_id on public.course_holes(course_id);
+create index if not exists idx_course_holes_tee_id on public.course_holes(tee_id);
+
+alter table public.courses enable row level security;
+alter table public.course_tees enable row level security;
+alter table public.course_holes enable row level security;
+
+-- Phase 1 course library is public read-only reference data for the PWA.
+drop policy if exists courses_select_anon on public.courses;
+create policy courses_select_anon on public.courses for select to anon using (true);
+drop policy if exists course_tees_select_anon on public.course_tees;
+create policy course_tees_select_anon on public.course_tees for select to anon using (true);
+drop policy if exists course_holes_select_anon on public.course_holes;
+create policy course_holes_select_anon on public.course_holes for select to anon using (true);
+
+drop policy if exists courses_select_authenticated on public.courses;
+create policy courses_select_authenticated on public.courses for select to authenticated using (true);
+drop policy if exists course_tees_select_authenticated on public.course_tees;
+create policy course_tees_select_authenticated on public.course_tees for select to authenticated using (true);
+drop policy if exists course_holes_select_authenticated on public.course_holes;
+create policy course_holes_select_authenticated on public.course_holes for select to authenticated using (true);
+
 -- The Dye Ledger Pass 1 Supabase foundation schema
 
 create table if not exists public.matches (

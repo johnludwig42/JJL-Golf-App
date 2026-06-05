@@ -73,11 +73,15 @@
             <h2>Saved courses &amp; tees</h2>
             <div class="tiny">Search courses, then expand a course to view or edit its tees.</div>
           </div>
-          <label class="compact-search course-search-inline">
-            <span class="sr-only">Search courses</span>
-            <input id="coursesSearchInput" type="search" placeholder="Search courses" autocomplete="off" />
-          </label>
+          <div class="course-library-actions">
+            <button id="refreshCloudCoursesBtn" type="button" class="secondary">Refresh Cloud Courses</button>
+            <label class="compact-search course-search-inline">
+              <span class="sr-only">Search courses</span>
+              <input id="coursesSearchInput" type="search" placeholder="Search courses" autocomplete="off" />
+            </label>
+          </div>
         </div>
+        <div id="cloudCoursesStatus" class="course-library-status tiny top-gap is-not-configured">Supabase course library not configured. Manual course entry remains available.</div>
         <div id="coursesList" class="list top-gap"></div>
       </div>
 
@@ -177,6 +181,7 @@
           <label><span>Match date</span><input name="date" type="date" required /></label>
           <label><span>Match name</span><input class="input-match" name="name" placeholder="Saturday game" /></label>
           <label><span>Course</span><select name="courseId" id="matchCourseSelect" required></select></label>
+          <div id="setupCourseLibraryStatus" class="course-library-status tiny top-gap span-2 is-not-configured">Supabase not configured. Manual course entry remains available.</div>
           <div id="referenceTeeField" class="reference-tee-field hidden">
             <label><span>Reference tee <span id="referenceTeeBadge" class="tiny"></span></span><select name="teeId" id="matchTeeSelect"></select></label>
             <div id="referenceTeeHelp" class="tiny">Used only when players are on different tees.</div>
@@ -580,7 +585,7 @@
           <li>Added optional per-hole stat tracking (fairways, GIR, putts, up &amp; downs, sandies).</li>
           <li>Reordered the Scoreboard layout and moved Notes from More to Scoreboard.</li>
           <li>Fixed the Game Setup player assignment flow so team slots save correctly and matches can be created reliably again.</li>
-          <li>App version: <strong id="appVersionLabel">v27.31</strong></li>
+          <li>App version: <strong id="appVersionLabel">v27.33</strong></li>
         </ul>
       </div>
     </section>
@@ -600,7 +605,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v27.31</span>
+    <span id="appVersionFooter">v27.33</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>

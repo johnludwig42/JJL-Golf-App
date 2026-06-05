@@ -1,13 +1,10 @@
-# The Dye Ledger
+# The Dye Ledger v27.33 Build Notes
 
-Current version: **v27.33**
-
-## What changed in v27.33
+## What changed
 
 - Added compact Course Library status indicators in Courses and Game Setup so Supabase availability is visible while manual setup remains available.
 - Added a Settle Up breakdown under Final Net Settlement using the fully aggregated net payout across all games.
 - Added 9-Point Game explanatory notes clarifying that hole scoring remains 9 points per hole while payouts settle final point differentials head-to-head times the stake.
-- Updated app, manifest, service-worker cache, and README version references to v27.33.
 
 ## Guardrails
 

@@ -43,3 +43,14 @@ The Supabase JavaScript client can be loaded in the browser from a CDN, and Supa
 - Full audit logging behavior and triggers
 - Round locking / override flows
 - Offline mutation queue
+
+
+## v27.33 Course Library
+
+This build adds course-library tables to `supabase-schema.sql`:
+
+- `courses`
+- `course_tees`
+- `course_holes`
+
+The app can read these as public reference data using the anon key. Manual course entry and localStorage fallback remain in place. See `SUPABASE_COURSE_LIBRARY.md` for the course data structure and setup notes.

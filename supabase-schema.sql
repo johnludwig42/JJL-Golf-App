@@ -1,4 +1,4 @@
--- The Dye Ledger v27.33 Supabase course-library schema
+-- The Dye Ledger v27.34 Supabase course-library schema
 -- Run this before using the Course Library refresh feature.
 
 create table if not exists public.courses (
@@ -61,6 +61,34 @@ drop policy if exists course_tees_select_authenticated on public.course_tees;
 create policy course_tees_select_authenticated on public.course_tees for select to authenticated using (true);
 drop policy if exists course_holes_select_authenticated on public.course_holes;
 create policy course_holes_select_authenticated on public.course_holes for select to authenticated using (true);
+
+-- v27.34 Course Library sync: allow the public PWA anon key to create/update course reference data.
+-- This keeps course sync login-free for now; tighten these policies when user accounts/curation are introduced.
+drop policy if exists courses_insert_anon on public.courses;
+create policy courses_insert_anon on public.courses for insert to anon with check (true);
+drop policy if exists courses_update_anon on public.courses;
+create policy courses_update_anon on public.courses for update to anon using (true) with check (true);
+drop policy if exists course_tees_insert_anon on public.course_tees;
+create policy course_tees_insert_anon on public.course_tees for insert to anon with check (true);
+drop policy if exists course_tees_update_anon on public.course_tees;
+create policy course_tees_update_anon on public.course_tees for update to anon using (true) with check (true);
+drop policy if exists course_holes_insert_anon on public.course_holes;
+create policy course_holes_insert_anon on public.course_holes for insert to anon with check (true);
+drop policy if exists course_holes_update_anon on public.course_holes;
+create policy course_holes_update_anon on public.course_holes for update to anon using (true) with check (true);
+
+drop policy if exists courses_insert_authenticated on public.courses;
+create policy courses_insert_authenticated on public.courses for insert to authenticated with check (true);
+drop policy if exists courses_update_authenticated on public.courses;
+create policy courses_update_authenticated on public.courses for update to authenticated using (true) with check (true);
+drop policy if exists course_tees_insert_authenticated on public.course_tees;
+create policy course_tees_insert_authenticated on public.course_tees for insert to authenticated with check (true);
+drop policy if exists course_tees_update_authenticated on public.course_tees;
+create policy course_tees_update_authenticated on public.course_tees for update to authenticated using (true) with check (true);
+drop policy if exists course_holes_insert_authenticated on public.course_holes;
+create policy course_holes_insert_authenticated on public.course_holes for insert to authenticated with check (true);
+drop policy if exists course_holes_update_authenticated on public.course_holes;
+create policy course_holes_update_authenticated on public.course_holes for update to authenticated using (true) with check (true);
 
 -- The Dye Ledger Pass 1 Supabase foundation schema
 

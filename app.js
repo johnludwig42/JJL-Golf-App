@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.33';
+const APP_VERSION = 'v27.34';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -385,6 +385,8 @@ const uiState = {
   expandedCourses: new Set(),
   cloudCoursesStatus: '',
   cloudCoursesLoading: false,
+  cloudCoursesLastLoadAt: 0,
+  courseSyncTimers: {},
   matchPlayerDraft: [],
   referenceTeeManual: false,
   referenceTeeAutoId: '',
@@ -3173,8 +3175,19 @@ function mergeSupabaseCourses(cloudCourses = []) {
     ));
     if (duplicateIdx >= 0) {
       const existing = state.courses[duplicateIdx];
-      const localOnlyTees = (existing.tees || []).filter(t => !(course.tees || []).some(ct => ct.id === t.id));
-      state.courses[duplicateIdx] = { ...existing, ...course, tees: [...(course.tees || []), ...localOnlyTees] };
+      const cloudTees = (course.tees || []).map(ct => {
+        const localMatch = (existing.tees || []).find(t => (t.cloudTeeId && t.cloudTeeId === ct.cloudTeeId) || (String(t.teeName || '').trim().toLowerCase() === String(ct.teeName || '').trim().toLowerCase() && String(t.gender || 'M') === String(ct.gender || 'M')));
+        return localMatch ? { ...localMatch, ...ct, id: localMatch.id, cloudTeeId: ct.cloudTeeId || localMatch.cloudTeeId || ct.id, source: 'supabase' } : ct;
+      });
+      const localOnlyTees = (existing.tees || []).filter(t => !cloudTees.some(ct => ct.id === t.id || (ct.cloudTeeId && ct.cloudTeeId === t.cloudTeeId) || (String(ct.teeName || '').trim().toLowerCase() === String(t.teeName || '').trim().toLowerCase() && String(ct.gender || 'M') === String(t.gender || 'M'))));
+      state.courses[duplicateIdx] = {
+        ...existing,
+        ...course,
+        id: existing.id,
+        cloudCourseId: course.cloudCourseId || course.id || existing.cloudCourseId,
+        cloudSyncState: 'synced',
+        tees: [...cloudTees, ...localOnlyTees],
+      };
       updated += 1;
     } else {
       state.courses.push(course);
@@ -3252,6 +3265,143 @@ async function loadSupabaseCourses({ silent = false } = {}) {
     renderCourses();
   }
 }
+
+function getCloudCourseMatchKey(course = {}) {
+  return [course.name, course.city, course.state].map(v => String(v || '').trim().toLowerCase()).join('|');
+}
+function getCloudTeeMatchKey(tee = {}) {
+  return [tee.teeName, tee.gender || 'M'].map(v => String(v || '').trim().toLowerCase()).join('|');
+}
+function markCoursePendingSync(course, reason = '') {
+  if (!course) return;
+  course.cloudSyncState = 'pending-sync';
+  course.cloudSyncError = reason ? String(reason).slice(0, 160) : '';
+}
+function buildCloudCoursePayload(course, cloudId) {
+  return {
+    id: String(cloudId || course.cloudCourseId || course.id),
+    name: String(course.name || '').trim(),
+    city: String(course.city || '').trim() || null,
+    state: String(course.state || '').trim() || null,
+    country: String(course.country || 'United States of America').trim() || 'United States of America',
+    updated_at: new Date().toISOString(),
+  };
+}
+function buildCloudTeePayload(courseId, tee, cloudTeeId) {
+  return {
+    id: String(cloudTeeId || tee.cloudTeeId || tee.id),
+    course_id: String(courseId),
+    tee_name: String(tee.teeName || '').trim(),
+    gender: String(tee.gender || 'M').toUpperCase() === 'F' ? 'F' : 'M',
+    rating: Number.isFinite(Number(tee.rating)) ? Number(tee.rating) : null,
+    slope: Number.isFinite(Number(tee.slope)) ? Number(tee.slope) : null,
+    total_yards: getTeeTotalYardage(tee) || null,
+    total_par: sumPar(tee.holes || []) || Number(tee.par) || null,
+    updated_at: new Date().toISOString(),
+  };
+}
+function buildCloudHolePayloads(courseId, teeId, tee) {
+  return (Array.isArray(tee.holes) ? tee.holes : buildDefaultHoles()).map(h => ({
+    id: `${teeId}-${Number(h.holeNumber) || 1}`,
+    course_id: String(courseId),
+    tee_id: String(teeId),
+    hole_number: Number(h.holeNumber) || 1,
+    par: Number(h.par) || null,
+    handicap_index: Number(h.strokeIndex) || null,
+    yardage: Number(h.yardage) || null,
+    updated_at: new Date().toISOString(),
+  }));
+}
+async function findCloudCourseRow(client, course) {
+  const name = String(course?.name || '').trim();
+  if (!name) return null;
+  const { data, error } = await client.from('courses').select('*').eq('name', name).limit(20);
+  if (error) throw error;
+  const targetKey = getCloudCourseMatchKey(course);
+  return (data || []).find(row => getCloudCourseMatchKey(row) === targetKey) || (data || [])[0] || null;
+}
+async function syncCourseToSupabase(course, { silent = true } = {}) {
+  if (!course?.name) return { skipped: true };
+  if (!hasSupabaseConfig()) {
+    markCoursePendingSync(course, 'Supabase not configured');
+    uiState.cloudCoursesStatus = 'Cloud course library not configured. Course saved locally and marked pending sync.';
+    persist({ skipRender: true });
+    renderCourses();
+    return { pending: true };
+  }
+  try {
+    uiState.cloudCoursesStatus = 'Cloud Course Library: Syncing... manual setup remains available.';
+    renderCourses();
+    const client = await ensureSupabaseClient({ anonymousAuth: false });
+    if (!client) throw new Error('Supabase client unavailable.');
+    const existingCourse = await findCloudCourseRow(client, course);
+    const cloudCourseId = existingCourse?.id || course.cloudCourseId || course.id;
+    const { error: courseError } = await client.from('courses').upsert(buildCloudCoursePayload(course, cloudCourseId), { onConflict: 'id' });
+    if (courseError) throw courseError;
+    course.cloudCourseId = String(cloudCourseId);
+    course.cloudSyncState = 'synced';
+    course.cloudSyncError = '';
+    let existingTees = [];
+    const { data: teeRows, error: teeLoadError } = await client.from('course_tees').select('*').eq('course_id', cloudCourseId);
+    if (!teeLoadError) existingTees = teeRows || [];
+    for (const tee of (course.tees || [])) {
+      if (!tee?.teeName) continue;
+      const existingTee = existingTees.find(row => getCloudTeeMatchKey({ teeName: row.tee_name, gender: row.gender }) === getCloudTeeMatchKey(tee));
+      const cloudTeeId = existingTee?.id || tee.cloudTeeId || tee.id;
+      const { error: teeError } = await client.from('course_tees').upsert(buildCloudTeePayload(cloudCourseId, tee, cloudTeeId), { onConflict: 'id' });
+      if (teeError) throw teeError;
+      tee.cloudTeeId = String(cloudTeeId);
+      tee.source = 'supabase';
+      const holePayloads = buildCloudHolePayloads(cloudCourseId, cloudTeeId, tee);
+      if (holePayloads.length) {
+        const { error: holesError } = await client.from('course_holes').upsert(holePayloads, { onConflict: 'tee_id,hole_number' });
+        if (holesError) throw holesError;
+      }
+    }
+    uiState.cloudCoursesStatus = 'Cloud Course Library: Connected ✓';
+    persist({ skipRender: true });
+    renderAll();
+    if (!silent) toast('Course synced to cloud.');
+    return { synced: true };
+  } catch (err) {
+    console.warn('Course sync failed:', err);
+    markCoursePendingSync(course, err?.message || 'Course sync failed');
+    uiState.cloudCoursesStatus = 'Cloud Course Library: Offline. Course saved locally and will sync later.';
+    persist({ skipRender: true });
+    renderCourses();
+    if (!silent) toast('Course saved locally. Cloud sync failed.');
+    return { pending: true, error: err };
+  }
+}
+function scheduleCourseSync(courseOrId, { immediate = false, silent = true } = {}) {
+  const courseId = typeof courseOrId === 'string' ? courseOrId : courseOrId?.id;
+  const course = typeof courseOrId === 'string' ? getCourse(courseId) : courseOrId;
+  if (!course) return;
+  markCoursePendingSync(course);
+  persist({ skipRender: true });
+  const delay = immediate ? 0 : 800;
+  if (uiState.courseSyncTimers[courseId]) clearTimeout(uiState.courseSyncTimers[courseId]);
+  uiState.courseSyncTimers[courseId] = window.setTimeout(() => {
+    delete uiState.courseSyncTimers[courseId];
+    syncCourseToSupabase(course, { silent });
+  }, delay);
+}
+async function flushPendingCourseSync({ silent = true } = {}) {
+  if (!hasSupabaseConfig()) return;
+  const pending = state.courses.filter(c => c.cloudSyncState === 'pending-sync');
+  for (const course of pending) {
+    await syncCourseToSupabase(course, { silent });
+  }
+}
+async function refreshCourseLibraryFromCloud({ silent = true, force = false } = {}) {
+  const now = Date.now();
+  if (!force && uiState.cloudCoursesLastLoadAt && (now - uiState.cloudCoursesLastLoadAt < 60000)) return;
+  uiState.cloudCoursesLastLoadAt = now;
+  await flushPendingCourseSync({ silent: true });
+  await loadSupabaseCourses({ silent });
+  await flushPendingCourseSync({ silent: true });
+}
+
 function rememberSharedMatchId(matchId) {
   if (!matchId) return;
   state.sharedMatchIds = [...new Set([...(state.sharedMatchIds || []), matchId])];
@@ -6168,6 +6318,7 @@ function installHandlers() {
     document.querySelectorAll('.panel').forEach(el => el.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById(btn.dataset.tab).classList.add('active');
+    if (['courses','setup'].includes(btn.dataset.tab)) refreshCourseLibraryFromCloud({ silent: true });
   }));
 
   document.getElementById('playerForm').addEventListener('submit', e => {
@@ -6192,7 +6343,8 @@ function installHandlers() {
     const course = { ...base, id: editingCourseId || uid(), name: String(fd.get('name') || '').trim(), city: String(fd.get('city') || '').trim(), state: String(fd.get('state') || '').trim(), country: String(fd.get('country') || '').trim() || 'United States of America' };
     if (!course.name) return toast('Course name is required.');
     if (editingCourseId) state.courses = state.courses.map(c => c.id === editingCourseId ? course : c); else state.courses.push(course);
-    loadCourseEditor(null); persist(); toast(editingCourseId ? 'Course updated.' : 'Course added.');
+    markCoursePendingSync(course);
+    loadCourseEditor(null); persist(); scheduleCourseSync(course, { silent: true }); toast(editingCourseId ? 'Course updated.' : 'Course added.');
   });
   document.getElementById('cancelCourseEditBtn').addEventListener('click', () => loadCourseEditor(null));
   document.getElementById('coursesSearchInput').addEventListener('input', e => {
@@ -6238,7 +6390,8 @@ function installHandlers() {
     if (!tee.teeName) return toast('Tee name is required.');
     if (editingTeeRef) course.tees = course.tees.map(t => t.id === editingTeeRef.teeId ? tee : t); else course.tees.push(tee);
     if (!getCourseStrokeTemplate(course) && savedTemplate) course.strokeIndexes = savedTemplate;
-    loadTeeEditor(courseId, null); persist(); toast(editingTeeRef ? 'Tee updated.' : 'Tee saved.');
+    markCoursePendingSync(course);
+    loadTeeEditor(courseId, null); persist(); scheduleCourseSync(course, { silent: true }); toast(editingTeeRef ? 'Tee updated.' : 'Tee saved.');
   });
   document.getElementById('cancelTeeEditBtn').addEventListener('click', () => loadTeeEditor(null, null));
   document.getElementById('teeCourseSelect').addEventListener('change', e => {
@@ -7003,6 +7156,6 @@ loadMatchEditor(null);
 updateVersionUi();
 renderAll();
 if (hasSupabaseConfig()) {
-  window.setTimeout(() => loadSupabaseCourses({ silent: true }), 250);
+  window.setTimeout(() => refreshCourseLibraryFromCloud({ silent: true, force: true }), 250);
 }
 resumeActiveSharedMatchOnStartup();

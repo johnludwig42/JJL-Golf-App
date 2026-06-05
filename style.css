@@ -2480,7 +2480,7 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
 .score-distribution-table tbody tr:last-child td{border-bottom:0}
 @media (max-width: 640px){.score-distribution-table{font-size:.82rem;min-width:620px}.score-distribution-table th,.score-distribution-table td{padding:8px 8px}}
 
-/* v27.33 final net settlement and settle-up summary */
+/* v27.34 final net settlement and settle-up summary */
 .final-net-settlement-card{
   border:1px solid var(--border);
   border-radius:16px;
@@ -2518,7 +2518,7 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
 @media (max-width:640px){.course-library-status{width:100%;border-radius:12px;}.settle-up-row{grid-template-columns:minmax(0,1fr) auto;}.settle-up-route{font-size:.9rem;}}
 
 
-/* v27.33 Supabase course library controls */
+/* v27.34 Supabase course library controls */
 .course-library-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
 .course-library-actions .course-search-inline { min-width: min(220px, 100%); }
 @media (max-width: 640px) {

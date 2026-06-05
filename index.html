@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=27.35" />
+  <link rel="manifest" href="manifest.json?v=27.36" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
   <link rel="shortcut icon" href="./favicon-32x32.png" />
@@ -75,7 +75,6 @@
           </div>
           <div class="course-library-actions">
             <button id="refreshCloudCoursesBtn" type="button" class="secondary">Refresh Cloud Courses</button>
-            <button id="syncLocalCoursesBtn" type="button" class="secondary">Sync Local Courses to Cloud</button>
             <label class="compact-search course-search-inline">
               <span class="sr-only">Search courses</span>
               <input id="coursesSearchInput" type="search" placeholder="Search courses" autocomplete="off" />
@@ -528,6 +527,17 @@
         <div id="matchesList" class="list top-gap"></div>
       </details>
 
+      <details class="card tight-card scoreboard-card scoreboard-collapsible" open>
+        <summary><h2>Course Library</h2></summary>
+        <div class="tiny top-gap">Cloud course tools for syncing saved local courses into the Supabase Course Library. Local/manual courses remain available even when cloud sync is offline.</div>
+        <div id="cloudCoursesStatusMore" class="course-library-status tiny top-gap is-not-configured">Supabase course library not configured. Manual course entry remains available.</div>
+        <div id="cloudCourseSyncUnavailable" class="tiny top-gap hidden">Cloud sync unavailable. Local courses are still available.</div>
+        <div id="cloudCourseSyncActions" class="actions wrap top-gap hidden">
+          <button id="syncLocalCoursesMoreBtn" type="button" class="secondary">Sync Local Courses to Cloud</button>
+        </div>
+        <div id="localCourseSyncResult" class="sync-result tiny top-gap hidden" aria-live="polite"></div>
+      </details>
+
       <div class="card tight-card">
         <h2>Handicap calculator</h2>
         <form id="calcForm" class="grid two compact-grid">
@@ -567,6 +577,7 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
+          <li>Added Sync Local Courses to Cloud under More → Course Library to migrate existing local courses into Supabase.</li>
           <li>Courses and tees stay manual and editable.</li>
           <li>Mobile-first iPhone layout now fits the default viewport more naturally without relying on pinch-zoom, with larger touch targets, safer small-screen spacing, and more deliberate small-screen handling for tabs, setup, scoring, scoreboards, and sheets.</li>
           <li>Audited Team Stroke Play scoring so aggregate net stroke play resolves correctly across the Scoreboard, Games Summary, and Net Payout.</li>
@@ -587,7 +598,7 @@
           <li>Added optional per-hole stat tracking (fairways, GIR, putts, up &amp; downs, sandies).</li>
           <li>Reordered the Scoreboard layout and moved Notes from More to Scoreboard.</li>
           <li>Fixed the Game Setup player assignment flow so team slots save correctly and matches can be created reliably again.</li>
-          <li>App version: <strong id="appVersionLabel">v27.35</strong></li>
+          <li>App version: <strong id="appVersionLabel">v27.36</strong></li>
         </ul>
       </div>
     </section>
@@ -607,7 +618,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v27.35</span>
+    <span id="appVersionFooter">v27.36</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>

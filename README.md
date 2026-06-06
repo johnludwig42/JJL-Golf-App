@@ -1,17 +1,15 @@
 # The Dye Ledger
 
-Current version: **v27.38**
+Current version: **v27.40**
 
-## What changed in v27.38
+## What changed in v27.40
 
-- Added compact Course Library status indicators in Courses and Game Setup so Supabase availability is visible while manual setup remains available.
-- Added a Settle Up breakdown under Final Net Settlement using the fully aggregated net payout across all games.
-- Added 9-Point Game explanatory notes clarifying that hole scoring remains 9 points per hole while payouts settle final point differentials head-to-head times the stake.
-- Updated app, manifest, service-worker cache, and README version references to v27.38.
+- Added AI-assisted scorecard import under More → Course Library.
+- Supports PDF and image upload/capture through the browser file picker.
+- Added editable Review Imported Course workflow before saving.
+- Imported courses save locally first and can be uploaded later with Sync Course Library.
+- Preserved scoring, payouts, saved matches, PDF export, manual course entry, and offline/local-first behavior.
 
-## Guardrails
+## AI import service note
 
-- No intentional changes to scoring logic.
-- No intentional changes to payout calculations.
-- No changes to saved-round behavior.
-- Supabase remains optional/local-first.
+AI extraction requires a scorecard-import backend/edge function. If that service is not configured or unavailable, the app will continue to work normally and manual course entry remains available.

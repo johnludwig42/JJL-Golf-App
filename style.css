@@ -2525,3 +2525,20 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
   .course-library-actions { width: 100%; justify-content: stretch; }
   .course-library-actions button, .course-library-actions .course-search-inline { width: 100%; }
 }
+
+/* v27.40 Scorecard Import */
+.soft-divider { border: 0; border-top: 1px solid var(--border); margin: 14px 0; }
+.scorecard-import-review-card h3 { margin: 0 0 4px; }
+.import-confidence { margin-top: 8px; font-size: 0.9rem; }
+.warning-text { color: #9a5a00; }
+.import-tee-card { border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin-top: 10px; background: rgba(255,255,255,0.7); }
+.import-tee-card summary { cursor: pointer; }
+.scorecard-import-hole-grid { display: grid; grid-template-columns: 48px repeat(3, minmax(56px, 1fr)); gap: 6px; align-items: center; }
+.scorecard-import-hole-head { font-size: 0.72rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.scorecard-import-hole-row { display: contents; }
+.scorecard-import-hole-num { font-weight: 800; color: var(--muted); }
+.scorecard-import-hole-grid input { width: 100%; min-width: 0; padding: 8px 6px; }
+@media (max-width: 430px) {
+  .scorecard-import-hole-grid { grid-template-columns: 38px repeat(3, minmax(48px, 1fr)); gap: 5px; }
+  .scorecard-import-hole-grid input { padding: 7px 4px; font-size: 0.85rem; }
+}

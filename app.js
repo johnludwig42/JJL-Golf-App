@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.38';
+const APP_VERSION = 'v27.40';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -387,6 +387,10 @@ const uiState = {
   cloudCoursesLoading: false,
   cloudCoursesLastLoadAt: 0,
   courseSyncTimers: {},
+  scorecardImportData: null,
+  scorecardImportFileName: '',
+  scorecardImportStatus: '',
+  scorecardImportLoading: false,
   matchPlayerDraft: [],
   referenceTeeManual: false,
   referenceTeeAutoId: '',
@@ -4134,6 +4138,308 @@ function renderLocalCourseSyncResult(summary) {
   });
 }
 
+
+function getScorecardImportEndpoint() {
+  const configured = String(SUPABASE_CONFIG.scorecardImportEndpoint || SUPABASE_CONFIG.scorecard_import_endpoint || '').trim();
+  if (configured) return configured;
+  const url = String(SUPABASE_CONFIG.url || '').replace(/\/$/, '');
+  return url ? `${url}/functions/v1/scorecard-import` : '';
+}
+function getScorecardImportHeaders() {
+  const headers = { 'Content-Type': 'application/json' };
+  const key = String(SUPABASE_CONFIG.anonKey || SUPABASE_CONFIG.anon_key || '').trim();
+  if (key) {
+    headers.Authorization = `Bearer ${key}`;
+    headers.apikey = key;
+  }
+  return headers;
+}
+function isSupportedScorecardFile(file) {
+  const name = String(file?.name || '').toLowerCase();
+  const type = String(file?.type || '').toLowerCase();
+  return type === 'application/pdf' || type.startsWith('image/') || /\.(pdf|png|jpe?g|heic|heif)$/i.test(name);
+}
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('Could not read file.'));
+    reader.readAsDataURL(file);
+  });
+}
+function normalizeImportedHole(raw, holeNumber) {
+  const par = Number(raw?.par);
+  const strokeIndex = Number(raw?.strokeIndex ?? raw?.handicapIndex ?? raw?.handicap ?? raw?.si);
+  const yardage = Number(raw?.yardage ?? raw?.yards);
+  return {
+    holeNumber: Number(raw?.holeNumber ?? raw?.hole ?? holeNumber) || holeNumber,
+    par: Number.isFinite(par) && par > 0 ? par : null,
+    strokeIndex: Number.isFinite(strokeIndex) && strokeIndex > 0 ? strokeIndex : null,
+    yardage: Number.isFinite(yardage) && yardage > 0 ? yardage : null,
+  };
+}
+function getImportedCommonHole(rawCourse, holeNumber) {
+  const holes = Array.isArray(rawCourse?.holes) ? rawCourse.holes : [];
+  return holes.find(h => Number(h?.holeNumber ?? h?.hole) === holeNumber) || {};
+}
+function normalizeScorecardImportResult(raw) {
+  const root = raw?.course ? raw.course : raw;
+  const courseName = String(root?.courseName || root?.name || raw?.courseName || '').trim();
+  const holeCount = Number(root?.holeCount || root?.holesCount || (Array.isArray(root?.holes) ? root.holes.length : 18)) || 18;
+  const cappedHoleCount = Math.max(1, Math.min(36, holeCount));
+  const commonHoles = Array.from({ length: cappedHoleCount }, (_, idx) => normalizeImportedHole(getImportedCommonHole(root, idx + 1), idx + 1));
+  const rawTees = Array.isArray(root?.tees) ? root.tees : Array.isArray(root?.teeBoxes) ? root.teeBoxes : [];
+  let tees = rawTees.map((tee, teeIdx) => {
+    const teeHoles = Array.isArray(tee?.holes) ? tee.holes : [];
+    const yardsByHole = Array.isArray(tee?.yardages) ? tee.yardages : Array.isArray(tee?.yards) ? tee.yards : [];
+    const holes = commonHoles.map((common, idx) => {
+      const rawHole = teeHoles.find(h => Number(h?.holeNumber ?? h?.hole) === idx + 1) || teeHoles[idx] || {};
+      const merged = { ...common, ...rawHole };
+      if ((merged.yardage === null || merged.yardage === undefined) && yardsByHole[idx] !== undefined) merged.yardage = yardsByHole[idx];
+      const normalized = normalizeImportedHole(merged, idx + 1);
+      if (!normalized.par && common.par) normalized.par = common.par;
+      if (!normalized.strokeIndex && common.strokeIndex) normalized.strokeIndex = common.strokeIndex;
+      return normalized;
+    });
+    const rating = Number(tee?.rating ?? tee?.courseRating);
+    const slope = Number(tee?.slope ?? tee?.slopeRating);
+    const totalYards = Number(tee?.totalYardage ?? tee?.totalYards ?? tee?.yardsTotal);
+    return {
+      id: uid(),
+      teeName: String(tee?.teeName || tee?.name || `Tee ${teeIdx + 1}`).trim(),
+      gender: String(tee?.gender || 'M'),
+      isCombo: false,
+      comboSources: [],
+      length: Number.isFinite(totalYards) && totalYards > 0 ? totalYards : null,
+      par: holes.reduce((sum, h) => sum + (Number(h.par) || 0), 0) || null,
+      rating: Number.isFinite(rating) ? rating : null,
+      slope: Number.isFinite(slope) ? slope : null,
+      holes,
+      source: 'scorecard-import',
+    };
+  }).filter(t => t.teeName);
+  if (!tees.length) {
+    tees = [{
+      id: uid(), teeName: 'Imported Tee', gender: 'M', isCombo: false, comboSources: [], length: null,
+      par: commonHoles.reduce((sum, h) => sum + (Number(h.par) || 0), 0) || null,
+      rating: null, slope: null, holes: commonHoles, source: 'scorecard-import'
+    }];
+  }
+  tees.forEach(t => normalizeTee(t, courseName || 'Imported Course'));
+  const confidence = Number(root?.confidence ?? raw?.confidence ?? 0);
+  return {
+    name: courseName,
+    city: String(root?.city || '').trim(),
+    state: String(root?.state || '').trim(),
+    country: String(root?.country || '').trim() || 'United States of America',
+    holeCount: cappedHoleCount,
+    totalPar: Number(root?.totalPar || root?.parTotal) || (tees[0]?.holes || []).reduce((sum, h) => sum + (Number(h.par) || 0), 0) || null,
+    tees,
+    confidence: Number.isFinite(confidence) && confidence > 0 ? Math.round(confidence) : null,
+    uncertainFields: Array.isArray(root?.uncertainFields) ? root.uncertainFields : Array.isArray(raw?.uncertainFields) ? raw.uncertainFields : [],
+  };
+}
+async function requestAiScorecardExtraction(file) {
+  const endpoint = getScorecardImportEndpoint();
+  if (!endpoint) throw new Error('AI scorecard import is not configured.');
+  const dataUrl = await fileToDataUrl(file);
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: getScorecardImportHeaders(),
+    body: JSON.stringify({
+      fileName: file.name,
+      mimeType: file.type || 'application/octet-stream',
+      dataUrl,
+      requestedSchema: 'the-dye-ledger-scorecard-v1',
+    }),
+  });
+  const text = await response.text();
+  let payload = null;
+  try { payload = text ? JSON.parse(text) : null; } catch (_) { payload = null; }
+  if (!response.ok) throw new Error(payload?.error || payload?.message || text || 'AI extraction failed.');
+  const extracted = payload?.extracted || payload?.course || payload;
+  return normalizeScorecardImportResult(extracted);
+}
+function collectScorecardImportReviewData() {
+  const wrap = document.getElementById('scorecardImportReview');
+  if (!wrap) return null;
+  const courseName = String(wrap.querySelector('[data-import-field="name"]')?.value || '').trim();
+  const city = String(wrap.querySelector('[data-import-field="city"]')?.value || '').trim();
+  const stateValue = String(wrap.querySelector('[data-import-field="state"]')?.value || '').trim();
+  const country = String(wrap.querySelector('[data-import-field="country"]')?.value || '').trim() || 'United States of America';
+  const teeCards = Array.from(wrap.querySelectorAll('[data-import-tee]'));
+  const tees = teeCards.map((card, idx) => {
+    const teeName = String(card.querySelector('[data-tee-field="teeName"]')?.value || `Tee ${idx + 1}`).trim();
+    const rating = Number(card.querySelector('[data-tee-field="rating"]')?.value);
+    const slope = Number(card.querySelector('[data-tee-field="slope"]')?.value);
+    const holes = Array.from(card.querySelectorAll('[data-import-hole]')).map(row => {
+      const holeNumber = Number(row.dataset.importHole) || 1;
+      const par = Number(row.querySelector('[data-hole-field="par"]')?.value);
+      const strokeIndex = Number(row.querySelector('[data-hole-field="strokeIndex"]')?.value);
+      const yardage = Number(row.querySelector('[data-hole-field="yardage"]')?.value);
+      return {
+        holeNumber,
+        par: Number.isFinite(par) && par > 0 ? par : null,
+        strokeIndex: Number.isFinite(strokeIndex) && strokeIndex > 0 ? strokeIndex : null,
+        yardage: Number.isFinite(yardage) && yardage > 0 ? yardage : null,
+      };
+    });
+    const tee = {
+      id: uid(),
+      courseName,
+      teeName,
+      gender: 'M',
+      isCombo: false,
+      comboSources: [],
+      length: holes.reduce((sum, h) => sum + (Number(h.yardage) || 0), 0) || null,
+      par: holes.reduce((sum, h) => sum + (Number(h.par) || 0), 0) || null,
+      rating: Number.isFinite(rating) ? rating : null,
+      slope: Number.isFinite(slope) ? slope : null,
+      holes,
+      source: 'scorecard-import',
+    };
+    normalizeTee(tee, courseName || 'Imported Course');
+    return tee;
+  }).filter(t => t.teeName);
+  return { courseName, city, state: stateValue, country, tees };
+}
+function saveImportedScorecardCourse() {
+  const reviewed = collectScorecardImportReviewData();
+  if (!reviewed?.courseName) return toast('Course name is required before saving.');
+  if (!reviewed.tees.length) return toast('At least one tee is required before saving.');
+  const course = {
+    id: uid(),
+    name: reviewed.courseName,
+    city: reviewed.city,
+    state: reviewed.state,
+    country: reviewed.country,
+    tees: reviewed.tees,
+    strokeIndexes: extractStrokeTemplate(reviewed.tees[0]?.holes || []) || null,
+    source: 'scorecard-import',
+    cloudSyncState: 'pending-sync',
+    cloudSyncError: '',
+    importedAt: new Date().toISOString(),
+  };
+  course.tees.forEach(t => { t.courseName = course.name; normalizeTee(t, course.name); });
+  state.courses.push(course);
+  markCoursePendingSync(course);
+  uiState.expandedCourses.add(course.id);
+  uiState.scorecardImportStatus = 'Course saved locally. Use Sync Course Library to upload it to the cloud.';
+  uiState.scorecardImportData = null;
+  uiState.scorecardImportFileName = '';
+  persist();
+  renderAll();
+  scheduleCourseSync(course, { silent: true });
+  toast('Course saved locally.');
+}
+function renderScorecardImportReview() {
+  const el = document.getElementById('scorecardImportReview');
+  if (!el) return;
+  const data = uiState.scorecardImportData;
+  if (!data) {
+    el.classList.add('hidden');
+    el.innerHTML = '';
+    return;
+  }
+  const confidence = data.confidence ? `<div class="import-confidence"><strong>Confidence:</strong> ${escapeHtml(data.confidence)}%</div>` : '<div class="import-confidence"><strong>Confidence:</strong> Review required</div>';
+  const uncertain = Array.isArray(data.uncertainFields) && data.uncertainFields.length
+    ? `<div class="tiny warning-text">Please review: ${data.uncertainFields.slice(0, 8).map(escapeHtml).join(', ')}</div>`
+    : '<div class="tiny">Review and correct the imported course before saving.</div>';
+  const teeHtml = data.tees.map((tee, teeIdx) => `
+    <details class="import-tee-card" data-import-tee="${teeIdx}" open>
+      <summary><strong>${escapeHtml(tee.teeName || `Tee ${teeIdx + 1}`)}</strong> <span class="tiny">${Number(tee.par) || '—'} par · ${Number(tee.length) || '—'} yds</span></summary>
+      <div class="grid three compact-grid top-gap">
+        <label><span>Tee name</span><input data-tee-field="teeName" value="${escapeHtml(tee.teeName || '')}" /></label>
+        <label><span>Rating</span><input data-tee-field="rating" type="number" step="0.1" value="${tee.rating ?? ''}" /></label>
+        <label><span>Slope</span><input data-tee-field="slope" type="number" step="1" value="${tee.slope ?? ''}" /></label>
+      </div>
+      <div class="scorecard-import-hole-grid top-gap">
+        <div class="scorecard-import-hole-head">Hole</div><div class="scorecard-import-hole-head">Par</div><div class="scorecard-import-hole-head">Hcp</div><div class="scorecard-import-hole-head">Yds</div>
+        ${(tee.holes || []).map(h => `
+          <div class="scorecard-import-hole-row" data-import-hole="${Number(h.holeNumber) || 1}">
+            <div class="scorecard-import-hole-num">${Number(h.holeNumber) || 1}</div>
+            <input data-hole-field="par" type="number" inputmode="numeric" value="${h.par ?? ''}" />
+            <input data-hole-field="strokeIndex" type="number" inputmode="numeric" value="${h.strokeIndex ?? ''}" />
+            <input data-hole-field="yardage" type="number" inputmode="numeric" value="${h.yardage ?? ''}" />
+          </div>`).join('')}
+      </div>
+    </details>`).join('');
+  el.classList.remove('hidden');
+  el.innerHTML = `
+    <div class="item compact-item scorecard-import-review-card">
+      <div class="item-header compact-item-header"><div><h3>Review Imported Course</h3><div class="tiny">${escapeHtml(uiState.scorecardImportFileName || 'Scorecard import')}</div></div></div>
+      ${confidence}
+      ${uncertain}
+      <div class="grid two compact-grid top-gap">
+        <label><span>Course name</span><input data-import-field="name" value="${escapeHtml(data.name || '')}" required /></label>
+        <label><span>City</span><input data-import-field="city" value="${escapeHtml(data.city || '')}" /></label>
+        <label><span>State</span><input data-import-field="state" value="${escapeHtml(data.state || '')}" /></label>
+        <label><span>Country</span><input data-import-field="country" value="${escapeHtml(data.country || 'United States of America')}" /></label>
+      </div>
+      ${teeHtml}
+      <div class="actions wrap top-gap">
+        <button id="saveImportedScorecardCourseBtn" type="button">Save Course</button>
+        <button id="editImportedScorecardManuallyBtn" type="button" class="secondary">Edit Manually</button>
+        <button id="cancelImportedScorecardBtn" type="button" class="secondary">Cancel</button>
+      </div>
+    </div>`;
+  document.getElementById('saveImportedScorecardCourseBtn')?.addEventListener('click', saveImportedScorecardCourse);
+  document.getElementById('editImportedScorecardManuallyBtn')?.addEventListener('click', () => {
+    const reviewed = collectScorecardImportReviewData();
+    document.querySelector('#courseForm [name="name"]').value = reviewed?.courseName || data.name || '';
+    document.querySelector('#courseForm [name="city"]').value = reviewed?.city || data.city || '';
+    document.querySelector('#courseForm [name="state"]').value = reviewed?.state || data.state || '';
+    document.querySelector('#courseForm [name="country"]').value = reviewed?.country || data.country || 'United States of America';
+    document.querySelector('[data-tab="courses"]')?.click();
+    toast('Imported course copied to manual editor.');
+  });
+  document.getElementById('cancelImportedScorecardBtn')?.addEventListener('click', () => {
+    uiState.scorecardImportData = null;
+    uiState.scorecardImportStatus = '';
+    renderScorecardImportReview();
+    updateScorecardImportStatus();
+  });
+}
+function updateScorecardImportStatus() {
+  const status = document.getElementById('scorecardImportStatus');
+  if (!status) return;
+  const message = uiState.scorecardImportStatus || 'Upload a scorecard image or PDF. AI extraction requires the scorecard-import service to be configured.';
+  status.textContent = message;
+  status.className = `tiny top-gap ${uiState.scorecardImportLoading ? 'is-loading' : ''}`;
+}
+async function handleScorecardImportFile(file) {
+  if (!file) return;
+  if (!isSupportedScorecardFile(file)) {
+    uiState.scorecardImportStatus = 'Unsupported file type. Please choose a PDF, PNG, JPG, JPEG, or HEIC file.';
+    updateScorecardImportStatus();
+    return;
+  }
+  uiState.scorecardImportLoading = true;
+  uiState.scorecardImportFileName = file.name || 'Scorecard file';
+  uiState.scorecardImportStatus = 'Reading scorecard with AI…';
+  updateScorecardImportStatus();
+  renderScorecardImportReview();
+  try {
+    const imported = await requestAiScorecardExtraction(file);
+    if (!imported?.name && !(imported?.tees || []).length) throw new Error('Could not extract usable course data.');
+    uiState.scorecardImportData = imported;
+    uiState.scorecardImportStatus = 'Import complete. Review before saving.';
+    renderScorecardImportReview();
+    updateScorecardImportStatus();
+    toast('Scorecard imported. Review before saving.');
+  } catch (err) {
+    console.warn('Scorecard import failed:', err);
+    uiState.scorecardImportData = null;
+    uiState.scorecardImportStatus = `${err?.message || 'Could not read this scorecard.'} Please try a clearer image or complete the course manually.`;
+    renderScorecardImportReview();
+    updateScorecardImportStatus();
+    toast('Could not read this scorecard.', 3000);
+  } finally {
+    uiState.scorecardImportLoading = false;
+    updateScorecardImportStatus();
+  }
+}
+
 function updateCloudConfigUi() {
   const status = document.getElementById('supabaseStatus');
   const detail = document.getElementById('supabaseStatusDetail');
@@ -4168,6 +4474,8 @@ function renderAll() {
   if (coursesSearchInput && coursesSearchInput.value !== uiState.courseSearch) coursesSearchInput.value = uiState.courseSearch;
   syncNewMatchConflictUi();
   updateCloudConfigUi();
+  renderScorecardImportReview();
+  updateScorecardImportStatus();
   scheduleTeamPayoutSplitPaneSync();
 }
 
@@ -6560,6 +6868,14 @@ function installHandlers() {
   if (syncLocalCoursesBtn) syncLocalCoursesBtn.addEventListener('click', () => syncLocalCoursesToCloud());
   const syncLocalCoursesMoreBtn = document.getElementById('syncLocalCoursesMoreBtn');
   if (syncLocalCoursesMoreBtn) syncLocalCoursesMoreBtn.addEventListener('click', () => syncLocalCoursesToCloud());
+  const importScorecardInput = document.getElementById('importScorecardInput');
+  const importScorecardBtn = document.getElementById('importScorecardBtn');
+  if (importScorecardBtn && importScorecardInput) importScorecardBtn.addEventListener('click', () => importScorecardInput.click());
+  if (importScorecardInput) importScorecardInput.addEventListener('change', e => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    handleScorecardImportFile(file);
+  });
   document.getElementById('teeForm').addEventListener('submit', e => {
     e.preventDefault();
     const fd = new FormData(e.target);

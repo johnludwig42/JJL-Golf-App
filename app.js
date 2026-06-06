@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.42';
+const APP_VERSION = 'v27.43';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -6984,7 +6984,7 @@ function installHandlers() {
   const clearScorecardImportBtn = document.getElementById('clearScorecardImportBtn');
   if (importScorecardBtn && importScorecardInput) importScorecardBtn.addEventListener('click', () => importScorecardInput.click());
   if (importScorecardInput) importScorecardInput.addEventListener('change', e => {
-    const files = e.target.files;
+    const files = Array.from(e.target.files || []);
     e.target.value = '';
     handleScorecardImportFiles(files);
   });

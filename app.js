@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.36';
+const APP_VERSION = 'v27.37';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -3283,9 +3283,8 @@ function markCoursePendingSync(course, reason = '') {
   course.cloudSyncState = 'pending-sync';
   course.cloudSyncError = reason ? String(reason).slice(0, 160) : '';
 }
-function buildCloudCoursePayload(course, cloudId) {
+function buildCloudCoursePayload(course) {
   return {
-    id: String(cloudId || course.cloudCourseId || course.id),
     name: String(course.name || '').trim(),
     city: String(course.city || '').trim() || null,
     state: String(course.state || '').trim() || null,
@@ -3293,22 +3292,18 @@ function buildCloudCoursePayload(course, cloudId) {
     updated_at: new Date().toISOString(),
   };
 }
-function buildCloudTeePayload(courseId, tee, cloudTeeId) {
+function buildCloudTeePayload(courseId, tee) {
   return {
-    id: String(cloudTeeId || tee.cloudTeeId || tee.id),
     course_id: String(courseId),
     tee_name: String(tee.teeName || '').trim(),
-    gender: String(tee.gender || 'M').toUpperCase() === 'F' ? 'F' : 'M',
     rating: Number.isFinite(Number(tee.rating)) ? Number(tee.rating) : null,
     slope: Number.isFinite(Number(tee.slope)) ? Number(tee.slope) : null,
     total_yards: getTeeTotalYardage(tee) || null,
-    total_par: sumPar(tee.holes || []) || Number(tee.par) || null,
     updated_at: new Date().toISOString(),
   };
 }
 function buildCloudHolePayloads(courseId, teeId, tee) {
   return (Array.isArray(tee.holes) ? tee.holes : buildDefaultHoles()).map(h => ({
-    id: `${teeId}-${Number(h.holeNumber) || 1}`,
     course_id: String(courseId),
     tee_id: String(teeId),
     hole_number: Number(h.holeNumber) || 1,
@@ -3317,6 +3312,38 @@ function buildCloudHolePayloads(courseId, teeId, tee) {
     yardage: Number(h.yardage) || null,
     updated_at: new Date().toISOString(),
   }));
+}
+async function insertOrUpdateCloudCourse(client, course, existingCourse = null) {
+  const payload = buildCloudCoursePayload(course);
+  if (existingCourse?.id || course.cloudCourseId) {
+    const id = String(existingCourse?.id || course.cloudCourseId);
+    const { data, error } = await client.from('courses').update(payload).eq('id', id).select('*').single();
+    if (error) throw error;
+    return data || { id, ...payload };
+  }
+  const { data, error } = await client.from('courses').insert(payload).select('*').single();
+  if (error) throw error;
+  return data;
+}
+async function insertOrUpdateCloudTee(client, courseId, tee, existingTee = null) {
+  const payload = buildCloudTeePayload(courseId, tee);
+  if (existingTee?.id || tee.cloudTeeId) {
+    const id = String(existingTee?.id || tee.cloudTeeId);
+    const { data, error } = await client.from('course_tees').update(payload).eq('id', id).select('*').single();
+    if (error) throw error;
+    return data || { id, ...payload };
+  }
+  const { data, error } = await client.from('course_tees').insert(payload).select('*').single();
+  if (error) throw error;
+  return data;
+}
+async function replaceCloudTeeHoles(client, courseId, teeId, tee) {
+  const holePayloads = buildCloudHolePayloads(courseId, teeId, tee);
+  if (!holePayloads.length) return;
+  const { error: deleteError } = await client.from('course_holes').delete().eq('tee_id', String(teeId));
+  if (deleteError) throw deleteError;
+  const { error: insertError } = await client.from('course_holes').insert(holePayloads);
+  if (insertError) throw insertError;
 }
 async function findCloudCourseRow(client, course) {
   const name = String(course?.name || '').trim();
@@ -3341,27 +3368,29 @@ async function syncCourseToSupabase(course, { silent = true } = {}) {
     const client = await ensureSupabaseClient({ anonymousAuth: false });
     if (!client) throw new Error('Supabase client unavailable.');
     const existingCourse = await findCloudCourseRow(client, course);
-    const cloudCourseId = existingCourse?.id || course.cloudCourseId || course.id;
-    const { error: courseError } = await client.from('courses').upsert(buildCloudCoursePayload(course, cloudCourseId), { onConflict: 'id' });
-    if (courseError) throw courseError;
-    course.cloudCourseId = String(cloudCourseId);
+    const savedCourse = await insertOrUpdateCloudCourse(client, course, existingCourse);
+    const cloudCourseId = String(savedCourse?.id || existingCourse?.id || course.cloudCourseId || '');
+    if (!cloudCourseId) throw new Error('Cloud course save did not return a course id.');
+    course.cloudCourseId = cloudCourseId;
     course.cloudSyncState = 'synced';
     course.cloudSyncError = '';
+
     let existingTees = [];
     const { data: teeRows, error: teeLoadError } = await client.from('course_tees').select('*').eq('course_id', cloudCourseId);
     if (!teeLoadError) existingTees = teeRows || [];
+
     for (const tee of (course.tees || [])) {
       if (!tee?.teeName) continue;
       const existingTee = existingTees.find(row => getCloudTeeMatchKey({ teeName: row.tee_name, gender: row.gender }) === getCloudTeeMatchKey(tee));
-      const cloudTeeId = existingTee?.id || tee.cloudTeeId || tee.id;
-      const { error: teeError } = await client.from('course_tees').upsert(buildCloudTeePayload(cloudCourseId, tee, cloudTeeId), { onConflict: 'id' });
-      if (teeError) throw teeError;
-      tee.cloudTeeId = String(cloudTeeId);
+      const savedTee = await insertOrUpdateCloudTee(client, cloudCourseId, tee, existingTee);
+      const cloudTeeId = String(savedTee?.id || existingTee?.id || tee.cloudTeeId || '');
+      if (!cloudTeeId) continue;
+      tee.cloudTeeId = cloudTeeId;
       tee.source = 'supabase';
-      const holePayloads = buildCloudHolePayloads(cloudCourseId, cloudTeeId, tee);
-      if (holePayloads.length) {
-        const { error: holesError } = await client.from('course_holes').upsert(holePayloads, { onConflict: 'tee_id,hole_number' });
-        if (holesError) throw holesError;
+      try {
+        await replaceCloudTeeHoles(client, cloudCourseId, cloudTeeId, tee);
+      } catch (holeErr) {
+        console.warn('Course tee synced, but hole detail sync failed:', holeErr);
       }
     }
     uiState.cloudCoursesStatus = 'Cloud Course Library: Connected ✓';
@@ -4028,21 +4057,28 @@ function isCourseCloudReachableStatus(message = '') {
   return !(text.includes('could not') || text.includes('offline') || text.includes('unavailable') || text.includes('not configured'));
 }
 function renderLocalCourseSyncResult(summary) {
-  const el = document.getElementById('localCourseSyncResult');
-  if (!el) return;
+  const targets = ['localCourseSyncResult', 'localCourseSyncResultCourses']
+    .map(id => document.getElementById(id))
+    .filter(Boolean);
+  if (!targets.length) return;
   if (!summary) {
-    el.classList.add('hidden');
-    el.innerHTML = '';
+    targets.forEach(el => {
+      el.classList.add('hidden');
+      el.innerHTML = '';
+    });
     return;
   }
-  el.classList.remove('hidden');
   const uploaded = Number(summary.uploaded) || 0;
   const existed = Number(summary.existed) || 0;
   const failed = Number(summary.failed) || 0;
   const details = Array.isArray(summary.errors) && summary.errors.length
     ? `<details class="top-gap"><summary>View Details</summary><ul class="tight-list">${summary.errors.slice(0, 8).map(msg => `<li>${escapeHtml(msg)}</li>`).join('')}</ul></details>`
     : '';
-  el.innerHTML = `<strong>Course Sync Complete</strong><br>${uploaded} courses uploaded<br>${existed} already existed<br>${failed} failed${details}`;
+  const html = `<strong>Course Sync Complete</strong><br>${uploaded} courses uploaded<br>${existed} already existed<br>${failed} failed${details}`;
+  targets.forEach(el => {
+    el.classList.remove('hidden');
+    el.innerHTML = html;
+  });
 }
 
 function updateCloudConfigUi() {
@@ -6465,6 +6501,8 @@ function installHandlers() {
   });
   const refreshCloudCoursesBtn = document.getElementById('refreshCloudCoursesBtn');
   if (refreshCloudCoursesBtn) refreshCloudCoursesBtn.addEventListener('click', () => loadSupabaseCourses({ silent: false }));
+  const refreshCloudCoursesMoreBtn = document.getElementById('refreshCloudCoursesMoreBtn');
+  if (refreshCloudCoursesMoreBtn) refreshCloudCoursesMoreBtn.addEventListener('click', () => loadSupabaseCourses({ silent: false }));
   const syncLocalCoursesBtn = document.getElementById('syncLocalCoursesBtn');
   if (syncLocalCoursesBtn) syncLocalCoursesBtn.addEventListener('click', () => syncLocalCoursesToCloud());
   const syncLocalCoursesMoreBtn = document.getElementById('syncLocalCoursesMoreBtn');

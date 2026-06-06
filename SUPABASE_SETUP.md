@@ -45,7 +45,7 @@ The Supabase JavaScript client can be loaded in the browser from a CDN, and Supa
 - Offline mutation queue
 
 
-## v27.37 Course Library
+## v27.38 Course Library
 
 This build adds course-library tables to `supabase-schema.sql`:
 

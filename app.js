@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.37';
+const APP_VERSION = 'v27.38';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -3292,6 +3292,18 @@ function buildCloudCoursePayload(course) {
     updated_at: new Date().toISOString(),
   };
 }
+function removeBlankUpdateFields(payload, existing = {}, alwaysKeep = []) {
+  const cleaned = { ...payload };
+  Object.keys(cleaned).forEach(key => {
+    if (alwaysKeep.includes(key)) return;
+    const value = cleaned[key];
+    const existingValue = existing[key];
+    const localBlank = value === null || value === undefined || String(value).trim?.() === '';
+    const cloudHasValue = existingValue !== null && existingValue !== undefined && String(existingValue).trim?.() !== '';
+    if (localBlank && cloudHasValue) delete cleaned[key];
+  });
+  return cleaned;
+}
 function buildCloudTeePayload(courseId, tee) {
   return {
     course_id: String(courseId),
@@ -3317,9 +3329,10 @@ async function insertOrUpdateCloudCourse(client, course, existingCourse = null) 
   const payload = buildCloudCoursePayload(course);
   if (existingCourse?.id || course.cloudCourseId) {
     const id = String(existingCourse?.id || course.cloudCourseId);
-    const { data, error } = await client.from('courses').update(payload).eq('id', id).select('*').single();
+    const updatePayload = removeBlankUpdateFields(payload, existingCourse || {}, ['name', 'updated_at']);
+    const { data, error } = await client.from('courses').update(updatePayload).eq('id', id).select('*').single();
     if (error) throw error;
-    return data || { id, ...payload };
+    return data || { id, ...existingCourse, ...updatePayload };
   }
   const { data, error } = await client.from('courses').insert(payload).select('*').single();
   if (error) throw error;
@@ -3329,21 +3342,36 @@ async function insertOrUpdateCloudTee(client, courseId, tee, existingTee = null)
   const payload = buildCloudTeePayload(courseId, tee);
   if (existingTee?.id || tee.cloudTeeId) {
     const id = String(existingTee?.id || tee.cloudTeeId);
-    const { data, error } = await client.from('course_tees').update(payload).eq('id', id).select('*').single();
+    const updatePayload = removeBlankUpdateFields(payload, existingTee || {}, ['course_id', 'tee_name', 'updated_at']);
+    const { data, error } = await client.from('course_tees').update(updatePayload).eq('id', id).select('*').single();
     if (error) throw error;
-    return data || { id, ...payload };
+    return data || { id, ...existingTee, ...updatePayload };
   }
   const { data, error } = await client.from('course_tees').insert(payload).select('*').single();
   if (error) throw error;
   return data;
 }
-async function replaceCloudTeeHoles(client, courseId, teeId, tee) {
+async function insertOrUpdateCloudTeeHoles(client, courseId, teeId, tee) {
   const holePayloads = buildCloudHolePayloads(courseId, teeId, tee);
-  if (!holePayloads.length) return;
-  const { error: deleteError } = await client.from('course_holes').delete().eq('tee_id', String(teeId));
-  if (deleteError) throw deleteError;
-  const { error: insertError } = await client.from('course_holes').insert(holePayloads);
-  if (insertError) throw insertError;
+  if (!holePayloads.length) return { inserted: 0, updated: 0 };
+  const { data: existingRows, error: loadError } = await client.from('course_holes').select('*').eq('tee_id', String(teeId));
+  if (loadError) throw loadError;
+  const existingByHole = new Map((existingRows || []).map(row => [Number(row.hole_number), row]));
+  const summary = { inserted: 0, updated: 0 };
+  for (const payload of holePayloads) {
+    const existing = existingByHole.get(Number(payload.hole_number));
+    if (existing?.id) {
+      const updatePayload = removeBlankUpdateFields(payload, existing, ['course_id', 'tee_id', 'hole_number', 'updated_at']);
+      const { error } = await client.from('course_holes').update(updatePayload).eq('id', existing.id);
+      if (error) throw error;
+      summary.updated += 1;
+    } else {
+      const { error } = await client.from('course_holes').insert(payload);
+      if (error) throw error;
+      summary.inserted += 1;
+    }
+  }
+  return summary;
 }
 async function findCloudCourseRow(client, course) {
   const name = String(course?.name || '').trim();
@@ -3388,7 +3416,7 @@ async function syncCourseToSupabase(course, { silent = true } = {}) {
       tee.cloudTeeId = cloudTeeId;
       tee.source = 'supabase';
       try {
-        await replaceCloudTeeHoles(client, cloudCourseId, cloudTeeId, tee);
+        await insertOrUpdateCloudTeeHoles(client, cloudCourseId, cloudTeeId, tee);
       } catch (holeErr) {
         console.warn('Course tee synced, but hole detail sync failed:', holeErr);
       }
@@ -3428,66 +3456,89 @@ async function flushPendingCourseSync({ silent = true } = {}) {
     await syncCourseToSupabase(course, { silent });
   }
 }
-async function syncLocalCoursesToCloud() {
+async function syncCourseLibrary() {
   if (!hasSupabaseConfig()) {
     uiState.cloudCoursesStatus = 'Cloud sync unavailable. Local courses are still available.';
     renderCourses();
-    const unavailableSummary = { uploaded: 0, existed: 0, failed: 0, errors: ['Cloud sync unavailable. Local courses are still available.'] };
+    const unavailableSummary = { uploaded: 0, updated: 0, current: 0, failed: 0, errors: ['Cloud sync unavailable. Local courses are still available.'] };
     renderLocalCourseSyncResult(unavailableSummary);
     toast('Cloud sync unavailable. Local courses are still available.');
     return unavailableSummary;
   }
-  if (uiState.cloudCoursesLoading) return { uploaded: 0, existed: 0, failed: 0 };
+  if (uiState.cloudCoursesLoading) return { uploaded: 0, updated: 0, current: 0, failed: 0 };
   uiState.cloudCoursesLoading = true;
-  uiState.cloudCoursesStatus = 'Cloud Course Library: Syncing local courses...';
+  uiState.cloudCoursesStatus = 'Cloud Course Library: Syncing course library...';
   renderCourses();
-  const summary = { uploaded: 0, existed: 0, failed: 0, errors: [] };
+  const summary = { uploaded: 0, updated: 0, current: 0, failed: 0, errors: [] };
   try {
     const client = await ensureSupabaseClient({ anonymousAuth: false });
     if (!client) throw new Error('Supabase client unavailable.');
-    const { data: cloudRows, error: cloudError } = await client.from('courses').select('id,name,city,state');
+    const { data: cloudRows, error: cloudError } = await client.from('courses').select('*');
     if (cloudError) throw cloudError;
-    const cloudNameKeys = new Set((cloudRows || []).map(row => getCloudCourseNameKey(row)).filter(Boolean));
-    const localCourses = state.courses.filter(c => c?.name && String(c.source || '').toLowerCase() !== 'supabase');
+    const cloudByNameKey = new Map((cloudRows || []).map(row => [getCloudCourseNameKey(row), row]).filter(([key]) => !!key));
+    const localCourses = state.courses.filter(c => c?.name);
     if (!localCourses.length) {
-      uiState.cloudCoursesStatus = 'No local-only courses found to sync.';
+      uiState.cloudCoursesStatus = 'No local courses found to sync.';
       renderCourses();
       renderLocalCourseSyncResult(summary);
-      toast('No local-only courses found to sync.');
+      toast('No local courses found to sync.');
       return summary;
     }
     for (const course of localCourses) {
       const nameKey = getCloudCourseNameKey(course);
       if (!nameKey) continue;
-      if (cloudNameKeys.has(nameKey)) {
+      const existingCourse = course.cloudCourseId
+        ? (cloudRows || []).find(row => String(row.id) === String(course.cloudCourseId)) || cloudByNameKey.get(nameKey) || null
+        : cloudByNameKey.get(nameKey) || null;
+      try {
+        const wasExisting = !!existingCourse;
+        const wasPending = course.cloudSyncState === 'pending-sync';
+        const savedCourse = await insertOrUpdateCloudCourse(client, course, existingCourse);
+        const cloudCourseId = String(savedCourse?.id || existingCourse?.id || course.cloudCourseId || '');
+        if (!cloudCourseId) throw new Error('Cloud course save did not return a course id.');
+        course.cloudCourseId = cloudCourseId;
         course.cloudSyncState = 'synced';
         course.cloudSyncError = '';
-        summary.existed += 1;
-        continue;
-      }
-      const result = await syncCourseToSupabase(course, { silent: true });
-      if (result?.synced) {
-        cloudNameKeys.add(nameKey);
-        summary.uploaded += 1;
-      } else if (result?.pending || result?.error) {
+
+        let existingTees = [];
+        const { data: teeRows, error: teeLoadError } = await client.from('course_tees').select('*').eq('course_id', cloudCourseId);
+        if (teeLoadError) throw teeLoadError;
+        existingTees = teeRows || [];
+        for (const tee of (course.tees || [])) {
+          if (!tee?.teeName) continue;
+          const existingTee = tee.cloudTeeId
+            ? existingTees.find(row => String(row.id) === String(tee.cloudTeeId)) || null
+            : existingTees.find(row => getCloudTeeMatchKey({ teeName: row.tee_name, gender: row.gender }) === getCloudTeeMatchKey(tee)) || null;
+          const savedTee = await insertOrUpdateCloudTee(client, cloudCourseId, tee, existingTee);
+          const cloudTeeId = String(savedTee?.id || existingTee?.id || tee.cloudTeeId || '');
+          if (!cloudTeeId) continue;
+          tee.cloudTeeId = cloudTeeId;
+          tee.source = 'supabase';
+          await insertOrUpdateCloudTeeHoles(client, cloudCourseId, cloudTeeId, tee);
+        }
+        cloudByNameKey.set(nameKey, { ...(existingCourse || {}), ...(savedCourse || {}) });
+        if (!wasExisting) summary.uploaded += 1;
+        else if (wasPending) summary.updated += 1;
+        else summary.current += 1;
+      } catch (courseErr) {
         summary.failed += 1;
-        summary.errors.push(`${course.name}: ${result?.error?.message || course.cloudSyncError || 'Upload failed'}`);
-      } else if (result?.skipped) {
-        summary.existed += 1;
+        markCoursePendingSync(course, courseErr?.message || 'Course sync failed');
+        summary.errors.push(`${course.name}: ${courseErr?.message || 'Sync failed'}`);
       }
     }
     persist({ skipRender: true });
     await loadSupabaseCourses({ silent: true });
-    uiState.cloudCoursesStatus = `Cloud sync complete: ${summary.uploaded} uploaded, ${summary.existed} already existed, ${summary.failed} failed.`;
+    uiState.cloudCoursesStatus = `Cloud sync complete: ${summary.uploaded} uploaded, ${summary.updated} updated, ${summary.current} already current, ${summary.failed} failed.`;
     renderAll();
     renderLocalCourseSyncResult(summary);
-    toast(`${summary.uploaded} courses uploaded · ${summary.existed} already existed · ${summary.failed} failed`);
+    toast(`${summary.uploaded} uploaded · ${summary.updated} updated · ${summary.current} current · ${summary.failed} failed`);
     return summary;
   } catch (err) {
-    console.warn('Manual local course sync failed:', err);
+    console.warn('Course library sync failed:', err);
     uiState.cloudCoursesStatus = 'Cloud sync unavailable. Local courses are still available.';
     renderCourses();
     summary.error = err;
+    summary.failed = summary.failed || 0;
     summary.errors.push(err?.message || 'Cloud sync unavailable. Local courses are still available.');
     renderLocalCourseSyncResult(summary);
     toast('Cloud sync unavailable. Local courses are still available.');
@@ -3497,6 +3548,7 @@ async function syncLocalCoursesToCloud() {
     renderCourses();
   }
 }
+const syncLocalCoursesToCloud = syncCourseLibrary;
 async function refreshCourseLibraryFromCloud({ silent = true, force = false } = {}) {
   const now = Date.now();
   if (!force && uiState.cloudCoursesLastLoadAt && (now - uiState.cloudCoursesLastLoadAt < 60000)) return;
@@ -4069,12 +4121,13 @@ function renderLocalCourseSyncResult(summary) {
     return;
   }
   const uploaded = Number(summary.uploaded) || 0;
-  const existed = Number(summary.existed) || 0;
+  const updated = Number(summary.updated) || 0;
+  const current = Number(summary.current ?? summary.existed) || 0;
   const failed = Number(summary.failed) || 0;
   const details = Array.isArray(summary.errors) && summary.errors.length
     ? `<details class="top-gap"><summary>View Details</summary><ul class="tight-list">${summary.errors.slice(0, 8).map(msg => `<li>${escapeHtml(msg)}</li>`).join('')}</ul></details>`
     : '';
-  const html = `<strong>Course Sync Complete</strong><br>${uploaded} courses uploaded<br>${existed} already existed<br>${failed} failed${details}`;
+  const html = `<strong>Course Sync Complete</strong><br>${uploaded} courses uploaded<br>${updated} courses updated<br>${current} already current<br>${failed} failed${details}`;
   targets.forEach(el => {
     el.classList.remove('hidden');
     el.innerHTML = html;

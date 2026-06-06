@@ -1,4 +1,4 @@
-# The Dye Ledger Supabase Course Library (v27.37)
+# The Dye Ledger Supabase Course Library (v27.38)
 
 This build adds Supabase-backed course reference data only. It does not migrate matches, scores, payouts, saved rounds, or PDF export logic.
 

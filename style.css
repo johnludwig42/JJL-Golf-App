@@ -2526,7 +2526,7 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
   .course-library-actions button, .course-library-actions .course-search-inline { width: 100%; }
 }
 
-/* v27.40 Scorecard Import */
+/* v27.42 Scorecard Import */
 .soft-divider { border: 0; border-top: 1px solid var(--border); margin: 14px 0; }
 .scorecard-import-review-card h3 { margin: 0 0 4px; }
 .import-confidence { margin-top: 8px; font-size: 0.9rem; }
@@ -2542,3 +2542,15 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
   .scorecard-import-hole-grid { grid-template-columns: 38px repeat(3, minmax(48px, 1fr)); gap: 5px; }
   .scorecard-import-hole-grid input { padding: 7px 4px; font-size: 0.85rem; }
 }
+
+
+/* v27.42 Multi-image scorecard import */
+.scorecard-import-selection-card{border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.72);padding:10px;}
+.scorecard-import-file-list{margin:8px 0 0;padding-left:20px;display:grid;gap:8px;}
+.scorecard-import-file-row{padding:8px;border:1px solid rgba(12,55,33,.10);border-radius:12px;background:#fff;}
+.scorecard-import-file-row::marker{font-weight:800;color:var(--muted);}
+.scorecard-import-file-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;}
+.scorecard-import-file-meta{display:grid;gap:2px;min-width:0;}
+.scorecard-import-file-meta span{font-size:.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+button.mini{padding:6px 9px;font-size:.78rem;}
+@media (max-width:430px){.scorecard-import-file-row{grid-template-columns:1fr;}.scorecard-import-file-row button{width:100%;}}

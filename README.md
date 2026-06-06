@@ -1,15 +1,13 @@
 # The Dye Ledger
 
-Current version: **v27.40**
+Current version: **v27.42**
 
-## What changed in v27.40
+## What changed in v27.42
 
-- Added AI-assisted scorecard import under More → Course Library.
-- Supports PDF and image upload/capture through the browser file picker.
-- Added editable Review Imported Course workflow before saving.
-- Imported courses save locally first and can be uploaded later with Sync Course Library.
-- Preserved scoring, payouts, saved matches, PDF export, manual course entry, and offline/local-first behavior.
+- Multi-image scorecard import for front/back scorecard photos and multi-file imports.
+- Combo tee total yardage now displays consistently with standard tees.
+- Includes updated `scorecard-import` Edge Function code for multi-file payloads.
 
-## AI import service note
+## Notes
 
-AI extraction requires a scorecard-import backend/edge function. If that service is not configured or unavailable, the app will continue to work normally and manual course entry remains available.
+Imported scorecards still save locally first. Use **Sync Course Library** to upload saved courses to Supabase.

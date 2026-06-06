@@ -1,6 +1,6 @@
 # Supabase Edge Function: scorecard-import
 
-v27.40 adds the browser workflow for AI-assisted scorecard imports. The PWA calls a backend endpoint so API keys are not exposed in client-side code.
+v27.42 supports the browser workflow for AI-assisted scorecard imports. The PWA calls a backend endpoint so API keys are not exposed in client-side code.
 
 ## Expected endpoint
 
@@ -59,3 +59,30 @@ You may override this by adding `scorecardImportEndpoint` to `supabase-config.js
 Use a Supabase Edge Function or other backend service that calls a vision-capable model. Do not put model API keys in `supabase-config.js` or any client-side file.
 
 The edge function should return JSON only, conforming to the schema above. For PDFs, render pages or pass supported file content to the vision service and merge scorecard data across pages before returning the response.
+
+
+## v27.42 multi-file payload
+
+The Edge Function should also accept:
+
+```json
+{
+  "files": [
+    {
+      "fileName": "front-nine.jpg",
+      "mimeType": "image/jpeg",
+      "dataUrl": "data:image/jpeg;base64,...",
+      "label": "Front / Page 1"
+    },
+    {
+      "fileName": "back-nine.jpg",
+      "mimeType": "image/jpeg",
+      "dataUrl": "data:image/jpeg;base64,...",
+      "label": "Back / Page 2"
+    }
+  ],
+  "requestedSchema": "the-dye-ledger-scorecard-v1"
+}
+```
+
+The v27.42 zip includes updated deployable Edge Function code at `supabase/functions/scorecard-import/index.ts`.

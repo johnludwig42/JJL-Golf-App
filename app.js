@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.40';
+const APP_VERSION = 'v27.42';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -389,6 +389,7 @@ const uiState = {
   courseSyncTimers: {},
   scorecardImportData: null,
   scorecardImportFileName: '',
+  scorecardImportFiles: [],
   scorecardImportStatus: '',
   scorecardImportLoading: false,
   matchPlayerDraft: [],
@@ -561,7 +562,12 @@ function getHoleSegmentLabel(match, tee = null) {
   return `Custom ${first}-${last}`;
 }
 function sumYardage(holes) { return holes.reduce((sum, h) => sum + (Number(h.yardage) || 0), 0) || null; }
-function getTeeTotalYardage(tee) { return Number(tee?.length) || sumYardage(Array.isArray(tee?.holes) ? tee.holes : []) || 0; }
+function getTeeTotalYardage(tee) {
+  const holeTotal = sumYardage(Array.isArray(tee?.holes) ? tee.holes : []);
+  const lengthTotal = Number(tee?.length) || null;
+  if (tee?.isCombo) return holeTotal || lengthTotal || 0;
+  return lengthTotal || holeTotal || 0;
+}
 function getSortedTeesByYardage(course) { return Array.isArray(course?.tees) ? course.tees.slice().sort((a, b) => getTeeTotalYardage(b) - getTeeTotalYardage(a) || String(a?.teeName || '').localeCompare(String(b?.teeName || ''))) : []; }
 function sumPar(holes) { return holes.reduce((sum, h) => sum + (Number(h.par) || 0), 0) || null; }
 function getCourseStrokeTemplate(course) {
@@ -4167,6 +4173,91 @@ function fileToDataUrl(file) {
     reader.readAsDataURL(file);
   });
 }
+
+function getScorecardImportFiles() {
+  return Array.isArray(uiState.scorecardImportFiles) ? uiState.scorecardImportFiles : [];
+}
+function getScorecardImportFileLabel(file, idx) {
+  if (file?.label) return file.label;
+  if (idx === 0) return 'Front / Page 1';
+  if (idx === 1) return 'Back / Page 2';
+  return `Page ${idx + 1}`;
+}
+function formatFileSize(bytes) {
+  const n = Number(bytes) || 0;
+  if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  if (n >= 1024) return `${Math.round(n / 1024)} KB`;
+  return `${n} B`;
+}
+function scorecardImportFileKey(file) {
+  return [file?.name || 'scorecard', file?.size || 0, file?.lastModified || 0].join('|');
+}
+function addScorecardImportFiles(fileList) {
+  const incoming = Array.from(fileList || []);
+  if (!incoming.length) return;
+  const existing = getScorecardImportFiles();
+  const existingKeys = new Set(existing.map(scorecardImportFileKey));
+  const accepted = [];
+  const rejected = [];
+  incoming.forEach(file => {
+    if (!isSupportedScorecardFile(file)) {
+      rejected.push(file?.name || 'Unsupported file');
+      return;
+    }
+    const key = scorecardImportFileKey(file);
+    if (!existingKeys.has(key)) {
+      existingKeys.add(key);
+      accepted.push(file);
+    }
+  });
+  uiState.scorecardImportFiles = existing.concat(accepted);
+  uiState.scorecardImportFileName = uiState.scorecardImportFiles.map(f => f.name || 'Scorecard file').join(', ');
+  if (rejected.length) uiState.scorecardImportStatus = 'Unsupported file type. Please choose PDF, PNG, JPG, JPEG, or HEIC files.';
+  else if (accepted.length) uiState.scorecardImportStatus = `${uiState.scorecardImportFiles.length} file${uiState.scorecardImportFiles.length === 1 ? '' : 's'} selected. Tap Analyze Scorecard when ready.`;
+  renderScorecardImportSelection();
+  updateScorecardImportStatus();
+}
+function removeScorecardImportFile(index) {
+  uiState.scorecardImportFiles = getScorecardImportFiles().filter((_, idx) => idx !== index);
+  uiState.scorecardImportFileName = uiState.scorecardImportFiles.map(f => f.name || 'Scorecard file').join(', ');
+  uiState.scorecardImportStatus = uiState.scorecardImportFiles.length
+    ? `${uiState.scorecardImportFiles.length} file${uiState.scorecardImportFiles.length === 1 ? '' : 's'} selected. Tap Analyze Scorecard when ready.`
+    : 'Add one or more scorecard photos/files to begin.';
+  renderScorecardImportSelection();
+  updateScorecardImportStatus();
+}
+function clearScorecardImportFiles() {
+  uiState.scorecardImportFiles = [];
+  uiState.scorecardImportFileName = '';
+  uiState.scorecardImportData = null;
+  uiState.scorecardImportStatus = 'Add one or more scorecard photos/files to begin.';
+  renderScorecardImportSelection();
+  renderScorecardImportReview();
+  updateScorecardImportStatus();
+}
+function renderScorecardImportSelection() {
+  const el = document.getElementById('scorecardImportSelection');
+  if (!el) return;
+  const files = getScorecardImportFiles();
+  if (!files.length) {
+    el.innerHTML = '<div class="tiny">No scorecard files selected yet. Add a front/back photo, PDF, or image file.</div>';
+    return;
+  }
+  el.innerHTML = `
+    <div class="scorecard-import-selection-card">
+      <div class="strong">Selected files</div>
+      <ol class="scorecard-import-file-list">
+        ${files.map((file, idx) => `
+          <li class="scorecard-import-file-row">
+            <div class="scorecard-import-file-meta">
+              <strong>${escapeHtml(getScorecardImportFileLabel(file, idx))}</strong>
+              <span>${escapeHtml(file.name || 'Scorecard file')} · ${formatFileSize(file.size)}</span>
+            </div>
+            <button type="button" class="secondary mini" data-remove-scorecard-file="${idx}">Remove</button>
+          </li>`).join('')}
+      </ol>
+    </div>`;
+}
 function normalizeImportedHole(raw, holeNumber) {
   const par = Number(raw?.par);
   const strokeIndex = Number(raw?.strokeIndex ?? raw?.handicapIndex ?? raw?.handicap ?? raw?.si);
@@ -4239,19 +4330,35 @@ function normalizeScorecardImportResult(raw) {
     uncertainFields: Array.isArray(root?.uncertainFields) ? root.uncertainFields : Array.isArray(raw?.uncertainFields) ? raw.uncertainFields : [],
   };
 }
-async function requestAiScorecardExtraction(file) {
+async function requestAiScorecardExtraction(filesOrFile) {
   const endpoint = getScorecardImportEndpoint();
   if (!endpoint) throw new Error('AI scorecard import is not configured.');
-  const dataUrl = await fileToDataUrl(file);
+  const files = Array.isArray(filesOrFile) ? filesOrFile.filter(Boolean) : [filesOrFile].filter(Boolean);
+  if (!files.length) throw new Error('No scorecard file was selected.');
+  const unsupported = files.find(file => !isSupportedScorecardFile(file));
+  if (unsupported) throw new Error('Unsupported file type. Please choose a PDF, PNG, JPG, JPEG, or HEIC file.');
+  const totalBytes = files.reduce((sum, file) => sum + (Number(file.size) || 0), 0);
+  const maxBytes = 24 * 1024 * 1024;
+  if (totalBytes > maxBytes) throw new Error('These files are too large to import at once. Please use fewer or smaller images.');
+  const encodedFiles = await Promise.all(files.map(async (file, idx) => ({
+    fileName: file.name || `scorecard-${idx + 1}`,
+    mimeType: file.type || 'application/octet-stream',
+    dataUrl: await fileToDataUrl(file),
+    label: getScorecardImportFileLabel(file, idx),
+  })));
+  const body = encodedFiles.length === 1 ? {
+    fileName: encodedFiles[0].fileName,
+    mimeType: encodedFiles[0].mimeType,
+    dataUrl: encodedFiles[0].dataUrl,
+    requestedSchema: 'the-dye-ledger-scorecard-v1',
+  } : {
+    files: encodedFiles,
+    requestedSchema: 'the-dye-ledger-scorecard-v1',
+  };
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: getScorecardImportHeaders(),
-    body: JSON.stringify({
-      fileName: file.name,
-      mimeType: file.type || 'application/octet-stream',
-      dataUrl,
-      requestedSchema: 'the-dye-ledger-scorecard-v1',
-    }),
+    body: JSON.stringify(body),
   });
   const text = await response.text();
   let payload = null;
@@ -4326,6 +4433,7 @@ function saveImportedScorecardCourse() {
   uiState.expandedCourses.add(course.id);
   uiState.scorecardImportStatus = 'Course saved locally. Use Sync Course Library to upload it to the cloud.';
   uiState.scorecardImportData = null;
+  uiState.scorecardImportFiles = [];
   uiState.scorecardImportFileName = '';
   persist();
   renderAll();
@@ -4347,7 +4455,7 @@ function renderScorecardImportReview() {
     : '<div class="tiny">Review and correct the imported course before saving.</div>';
   const teeHtml = data.tees.map((tee, teeIdx) => `
     <details class="import-tee-card" data-import-tee="${teeIdx}" open>
-      <summary><strong>${escapeHtml(tee.teeName || `Tee ${teeIdx + 1}`)}</strong> <span class="tiny">${Number(tee.par) || '—'} par · ${Number(tee.length) || '—'} yds</span></summary>
+      <summary><strong>${escapeHtml(tee.teeName || `Tee ${teeIdx + 1}`)}</strong> <span class="tiny">${Number(tee.par) || '—'} par · ${getTeeTotalYardage(tee) ? formatYardageValue(getTeeTotalYardage(tee)) : '—'} yds</span></summary>
       <div class="grid three compact-grid top-gap">
         <label><span>Tee name</span><input data-tee-field="teeName" value="${escapeHtml(tee.teeName || '')}" /></label>
         <label><span>Rating</span><input data-tee-field="rating" type="number" step="0.1" value="${tee.rating ?? ''}" /></label>
@@ -4395,7 +4503,10 @@ function renderScorecardImportReview() {
   });
   document.getElementById('cancelImportedScorecardBtn')?.addEventListener('click', () => {
     uiState.scorecardImportData = null;
+    uiState.scorecardImportFiles = [];
+    uiState.scorecardImportFileName = '';
     uiState.scorecardImportStatus = '';
+    renderScorecardImportSelection();
     renderScorecardImportReview();
     updateScorecardImportStatus();
   });
@@ -4407,20 +4518,16 @@ function updateScorecardImportStatus() {
   status.textContent = message;
   status.className = `tiny top-gap ${uiState.scorecardImportLoading ? 'is-loading' : ''}`;
 }
-async function handleScorecardImportFile(file) {
-  if (!file) return;
-  if (!isSupportedScorecardFile(file)) {
-    uiState.scorecardImportStatus = 'Unsupported file type. Please choose a PDF, PNG, JPG, JPEG, or HEIC file.';
-    updateScorecardImportStatus();
-    return;
-  }
+async function analyzeSelectedScorecardImportFiles() {
+  const files = getScorecardImportFiles();
+  if (!files.length) return toast('Add at least one scorecard photo or file first.');
   uiState.scorecardImportLoading = true;
-  uiState.scorecardImportFileName = file.name || 'Scorecard file';
-  uiState.scorecardImportStatus = 'Reading scorecard with AI…';
+  uiState.scorecardImportFileName = files.map(f => f.name || 'Scorecard file').join(', ');
+  uiState.scorecardImportStatus = files.length === 1 ? 'Reading scorecard with AI…' : `Reading ${files.length} scorecard files with AI…`;
   updateScorecardImportStatus();
   renderScorecardImportReview();
   try {
-    const imported = await requestAiScorecardExtraction(file);
+    const imported = await requestAiScorecardExtraction(files);
     if (!imported?.name && !(imported?.tees || []).length) throw new Error('Could not extract usable course data.');
     uiState.scorecardImportData = imported;
     uiState.scorecardImportStatus = 'Import complete. Review before saving.';
@@ -4430,7 +4537,7 @@ async function handleScorecardImportFile(file) {
   } catch (err) {
     console.warn('Scorecard import failed:', err);
     uiState.scorecardImportData = null;
-    uiState.scorecardImportStatus = `${err?.message || 'Could not read this scorecard.'} Please try a clearer image or complete the course manually.`;
+    uiState.scorecardImportStatus = `${err?.message || 'Could not read this scorecard.'} Please try clearer images or complete the course manually.`;
     renderScorecardImportReview();
     updateScorecardImportStatus();
     toast('Could not read this scorecard.', 3000);
@@ -4438,6 +4545,9 @@ async function handleScorecardImportFile(file) {
     uiState.scorecardImportLoading = false;
     updateScorecardImportStatus();
   }
+}
+function handleScorecardImportFiles(fileList) {
+  addScorecardImportFiles(fileList);
 }
 
 function updateCloudConfigUi() {
@@ -6870,12 +6980,22 @@ function installHandlers() {
   if (syncLocalCoursesMoreBtn) syncLocalCoursesMoreBtn.addEventListener('click', () => syncLocalCoursesToCloud());
   const importScorecardInput = document.getElementById('importScorecardInput');
   const importScorecardBtn = document.getElementById('importScorecardBtn');
+  const analyzeScorecardImportBtn = document.getElementById('analyzeScorecardImportBtn');
+  const clearScorecardImportBtn = document.getElementById('clearScorecardImportBtn');
   if (importScorecardBtn && importScorecardInput) importScorecardBtn.addEventListener('click', () => importScorecardInput.click());
   if (importScorecardInput) importScorecardInput.addEventListener('change', e => {
-    const file = e.target.files && e.target.files[0];
+    const files = e.target.files;
     e.target.value = '';
-    handleScorecardImportFile(file);
+    handleScorecardImportFiles(files);
   });
+  if (analyzeScorecardImportBtn) analyzeScorecardImportBtn.addEventListener('click', analyzeSelectedScorecardImportFiles);
+  if (clearScorecardImportBtn) clearScorecardImportBtn.addEventListener('click', clearScorecardImportFiles);
+  const scorecardImportSelection = document.getElementById('scorecardImportSelection');
+  if (scorecardImportSelection) scorecardImportSelection.addEventListener('click', e => {
+    const btn = e.target.closest('[data-remove-scorecard-file]');
+    if (btn) removeScorecardImportFile(Number(btn.dataset.removeScorecardFile));
+  });
+  renderScorecardImportSelection();
   document.getElementById('teeForm').addEventListener('submit', e => {
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -6899,8 +7019,8 @@ function installHandlers() {
       gender: String(fd.get('gender') || 'M'),
       isCombo,
       comboSources,
-      length: Number(fd.get('length')) || null,
-      par: Number(fd.get('par')) || null,
+      length: isCombo ? (sumYardage(holes) || null) : (Number(fd.get('length')) || null),
+      par: isCombo ? (sumPar(holes) || null) : (Number(fd.get('par')) || null),
       rating: Number(fd.get('rating')) || null,
       slope: Number(fd.get('slope')) || null,
       holes,

@@ -540,12 +540,15 @@
         <div id="localCourseSyncResult" class="result compact-result top-gap hidden"></div>
         <hr class="soft-divider" />
         <h3>Import Scorecard</h3>
-        <div class="tiny">Upload or photograph a scorecard. AI extraction will create an editable course draft that saves locally first.</div>
+        <div class="tiny">Upload or photograph one or more scorecard files. Use this for front/back scorecard photos, separate tee panels, or PDFs. Imported courses save locally first.</div>
         <div class="actions wrap top-gap">
-          <button id="importScorecardBtn" type="button" class="secondary">Import Scorecard</button>
-          <input id="importScorecardInput" class="sr-only" type="file" accept="application/pdf,image/png,image/jpeg,image/jpg,image/heic,image/heif,.pdf,.png,.jpg,.jpeg,.heic,.heif" />
+          <button id="importScorecardBtn" type="button" class="secondary">Add Photo / File</button>
+          <button id="analyzeScorecardImportBtn" type="button">Analyze Scorecard</button>
+          <button id="clearScorecardImportBtn" type="button" class="secondary">Clear</button>
+          <input id="importScorecardInput" class="sr-only" type="file" multiple accept="application/pdf,image/png,image/jpeg,image/jpg,image/heic,image/heif,.pdf,.png,.jpg,.jpeg,.heic,.heif" />
         </div>
-        <div id="scorecardImportStatus" class="tiny top-gap">Upload a scorecard image or PDF. AI extraction requires the scorecard-import service to be configured.</div>
+        <div id="scorecardImportSelection" class="top-gap"></div>
+        <div id="scorecardImportStatus" class="tiny top-gap">Add one or more scorecard photos/files. AI extraction requires the scorecard-import service to be configured.</div>
         <div id="scorecardImportReview" class="top-gap hidden"></div>
       </div>
 
@@ -608,7 +611,7 @@
           <li>Added optional per-hole stat tracking (fairways, GIR, putts, up &amp; downs, sandies).</li>
           <li>Reordered the Scoreboard layout and moved Notes from More to Scoreboard.</li>
           <li>Fixed the Game Setup player assignment flow so team slots save correctly and matches can be created reliably again.</li>
-          <li>App version: <strong id="appVersionLabel">v27.40</strong></li>
+          <li>App version: <strong id="appVersionLabel">v27.42</strong></li>
         </ul>
       </div>
     </section>
@@ -628,7 +631,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v27.40</span>
+    <span id="appVersionFooter">v27.42</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>

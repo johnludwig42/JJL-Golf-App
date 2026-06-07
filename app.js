@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.1';
+const APP_VERSION = 'v28.2';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -366,7 +366,8 @@ function hasMomentumGame(match) {
 function hasTeamMomentumMatch(match, metrics) {
   const teams = metrics?.teams || [];
   const hasTwoCompetingTeams = teams.length === 2 && teams.every(team => Array.isArray(team.members) && team.members.length > 0);
-  return hasTwoCompetingTeams && hasMomentumGame(match);
+  const hasSideMatch = getSideMatchConfigs(match).some(row => ['nassau', 'match_play'].includes(String(row?.game || 'nassau').toLowerCase()));
+  return (hasTwoCompetingTeams || hasSideMatch) && hasMomentumGame(match);
 }
 function formatPerspectiveStatus(diff, perspectiveTeam = 1) {
   const oriented = perspectiveTeam === 2 ? -Number(diff || 0) : Number(diff || 0);
@@ -1011,10 +1012,9 @@ function buildExportTeamLeaderboard(match, metrics) {
 
 function buildExportMomentum(match, metrics) {
   if (!hasTeamMomentumMatch(match, metrics)) return '';
-  const options = getMomentumOptions(match);
-  const selectedGame = match.momentumGame && options.find(opt => opt.key === match.momentumGame)
-    ? match.momentumGame
-    : (options[0]?.key || 'nassau');
+  const options = getMomentumOptions(match, metrics);
+  const selectedGame = getDefaultMomentumGameKey(match, metrics);
+  if (!selectedGame || !options.length) return '';
   const perspectiveTeam = getMomentumPerspectiveTeam(match);
   let running = 0;
   const pills = (metrics?.holeResults || []).map(h => {
@@ -1110,8 +1110,6 @@ function buildSummaryExportBody(match, metrics) {
       ${buildExportTeamLeaderboard(match, metrics)}
     </section>` : ''}
 
-    ${exportMomentumHtml}
-
     <section class="export-section export-section-classic export-section-classic-summary">
       <div class="export-section-head">
         <h2>Classic scorecard</h2>
@@ -1123,6 +1121,8 @@ function buildSummaryExportBody(match, metrics) {
         </div>
       </div>
     </section>
+
+    ${exportMomentumHtml}
 
     <section class="export-section export-section-score-distribution">
       <div class="export-section-head">
@@ -1492,10 +1492,56 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     .score-doublebogey { border-color: #a07a14; box-shadow: 0 0 0 1.25px #a07a14 inset; border-radius: 3px; }
     .score-dots { margin-left: 2px; font-size: 8px; letter-spacing: -0.5px; }
     .score-eagle { font-weight: 700; }
-    .score-birdie { text-decoration: underline; }
+    .score-birdie { text-decoration: none; }
     .payout-total-positive { color: #0b6b3e; }
     .payout-total-negative { color: #9f1d1d; }
     strong { font-weight: 800; }
+
+    .export-section-games-summary,
+    .export-section-net-payout,
+    .export-section-player-leaderboard,
+    .export-section-team-leaderboard,
+    .export-section-momentum,
+    .export-section-score-distribution,
+    .export-section-stat-tracking,
+    .export-section-gross-game-detail,
+    .export-section-nine-point,
+    .export-section-notes,
+    .gross-game-player-card,
+    .gross-game-section,
+    .game-summary-card,
+    .match-status-tile,
+    .final-net-settlement-card,
+    .export-pill-grid,
+    .export-table {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .export-section-gross-game-detail {
+      break-before: auto;
+      page-break-before: auto;
+    }
+    @media print {
+      .export-section-gross-game-detail {
+        break-before: page;
+        page-break-before: always;
+      }
+      .export-section-head {
+        break-after: avoid;
+        page-break-after: avoid;
+      }
+      .gross-game-player-card,
+      .gross-game-section,
+      .final-net-settlement-row,
+      .game-summary-card,
+      .export-pill {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+      .score-birdie {
+        text-decoration: none !important;
+      }
+    }
 
     @media (max-width: 760px) {
       .export-pill-grid, .match-status-grid, .game-summary-grid, .stat-summary-grid, .export-header-players { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2335,6 +2381,13 @@ function getMatchStatusOptions(match) {
 }
 
 function describeMomentumMeta(match, metrics, gameKey) {
+  const sidePairing = getMomentumSidePairing(match, metrics, gameKey);
+  if (sidePairing) {
+    const gameLabel = getSideMatchGameLabel(sidePairing.game || 'nassau');
+    const basis = formatBasisLabel(sidePairing.basis || 'net', 'Net');
+    const perspective = getMomentumPerspectiveLabel(match, metrics, gameKey);
+    return `${escapeHtml(sidePairing.label)} · ${escapeHtml(gameLabel)} · ${escapeHtml(basis)} · ${escapeHtml(perspective)} perspective`;
+  }
   const cfg = (match.selectedGames || []).find(g => g.key === gameKey) || {};
   const perspectiveTeam = getMomentumPerspectiveTeam(match);
   const teamName = getTeamName(match, perspectiveTeam);
@@ -3064,33 +3117,38 @@ function renderLeaderboard() {
     else ninePointScorecard.innerHTML = '';
   }
   const momentumCard = document.querySelector('.print-section-momentum');
-  const showMomentum = hasMomentumGame(match);
+  const showMomentum = hasTeamMomentumMatch(match, metrics);
   if (momentumCard) momentumCard.classList.toggle('hidden', !showMomentum);
   const momentumSelect = document.getElementById('momentumGameSelect');
-  const options = getMomentumOptions(match);
+  const options = getMomentumOptions(match, metrics);
   if (showMomentum && momentumSelect) {
     momentumSelect.innerHTML = options.map(opt => `<option value="${opt.key}" ${opt.key === match.momentumGame ? 'selected' : ''}>${escapeHtml(opt.label)}</option>`).join('');
     if (!options.find(opt => opt.key === match.momentumGame)) {
-      match.momentumGame = options[0]?.key || 'nassau';
+      match.momentumGame = getDefaultMomentumGameKey(match, metrics) || options[0]?.key || '';
       momentumSelect.value = match.momentumGame;
     }
   }
   if (showMomentum && perspectiveSelect) {
-    const teamOptions = metrics.teams.slice(0, 2).map(t => `<option value="${t.team}" ${t.team === getMomentumPerspectiveTeam(match) ? 'selected' : ''}>${escapeHtml(getTeamName(match, t.team))}</option>`).join('');
-    perspectiveSelect.innerHTML = teamOptions;
-    if (!metrics.teams.find(t => t.team === getMomentumPerspectiveTeam(match))) {
+    const activeMomentumGame = getDefaultMomentumGameKey(match, metrics) || match.momentumGame || options[0]?.key || '';
+    const sides = getMomentumSides(match, metrics, activeMomentumGame);
+    perspectiveSelect.innerHTML = [
+      `<option value="1" ${getMomentumPerspectiveTeam(match) === 1 ? 'selected' : ''}>${escapeHtml(sides.side1Label || 'Side 1')}</option>`,
+      `<option value="2" ${getMomentumPerspectiveTeam(match) === 2 ? 'selected' : ''}>${escapeHtml(sides.side2Label || 'Side 2')}</option>`
+    ].join('');
+    if (![1, 2].includes(getMomentumPerspectiveTeam(match))) {
       match.momentumPerspective = 1;
       perspectiveSelect.value = '1';
     }
   }
+  const activeMomentumGame = getDefaultMomentumGameKey(match, metrics) || match.momentumGame || options[0]?.key || '';
   if (showMomentum && momentumMeta) {
-    momentumMeta.textContent = describeMomentumMeta(match, metrics, match.momentumGame || options[0]?.key || 'nassau');
+    momentumMeta.textContent = describeMomentumMeta(match, metrics, activeMomentumGame);
   }
   if (showMomentum && holeMomentum) {
     let running = 0;
     const perspectiveTeam = getMomentumPerspectiveTeam(match);
     holeMomentum.innerHTML = metrics.holeResults.map(h => {
-      const outcome = computeMomentumOutcome(match, metrics, h, match.momentumGame || 'nassau');
+      const outcome = computeMomentumOutcome(match, metrics, h, activeMomentumGame);
       let cls = 'tied';
       if (outcome === 'team1') {
         running += 1;
@@ -5631,23 +5689,104 @@ function commitScoreInput(inputEl, { viaEnter = false, viaAutoAdvance = false, e
   return true;
 }
 
-function getMomentumOptions(match) {
+function getMomentumSidePairings(match, metrics) {
+  return getIndividualMatchPairings(match, metrics).filter(pair => ['nassau', 'match_play'].includes(String(pair?.game || 'nassau').toLowerCase()));
+}
+function getMomentumSidePairing(match, metrics, gameKey) {
+  const pairings = getMomentumSidePairings(match, metrics);
+  if (!pairings.length) return null;
+  const key = String(gameKey || '');
+  if (key.startsWith('individual_match:')) {
+    const id = key.slice('individual_match:'.length);
+    return pairings.find(pair => String(pair.id) === id) || pairings[0];
+  }
+  if (key === 'individual_match') return pairings[0];
+  return null;
+}
+function getMomentumTeamOptions(match) {
   const selected = Array.isArray(match?.selectedGames) ? match.selectedGames : [];
   const keys = [];
   selected.forEach(g => {
     if (g.key === 'nassau' || g.key === 'team_match' || g.key === 'team_stroke') keys.push(g.key);
-    if (g.key === 'individual_match') {
-      const rows = Array.isArray(g.matchups) ? g.matchups : [];
-      if (rows.some(row => String(row?.game || 'nassau').toLowerCase() === 'nassau')) keys.push('nassau');
-      if (rows.some(row => String(row?.game || '').toLowerCase() === 'match_play')) keys.push('team_match');
-    }
   });
   const unique = [...new Set(keys)];
   unique.sort((a,b) => (a === 'nassau' ? -1 : b === 'nassau' ? 1 : 0));
-  return unique.map(key => ({ key, label: key === 'team_match' ? 'Match Play' : getGameLabel(key) }));
+  return unique.map(key => ({ key, label: key === 'team_match' ? 'Match Play' : getGameLabel(key), type: 'team' }));
+}
+function getMomentumOptions(match, metrics = null) {
+  const options = [];
+  const teamOptions = getMomentumTeamOptions(match);
+  if ((metrics?.teams || []).length === 2) options.push(...teamOptions);
+  const sidePairings = metrics ? getMomentumSidePairings(match, metrics) : [];
+  sidePairings.forEach((pair, idx) => {
+    const gameLabel = getSideMatchGameLabel(pair.game || 'nassau');
+    const basisLabel = formatBasisLabel(pair.basis || 'net', 'Net');
+    options.push({
+      key: `individual_match:${pair.id || idx + 1}`,
+      label: `${pair.label} (${gameLabel} · ${basisLabel})`,
+      type: 'side_match',
+      pairId: pair.id,
+    });
+  });
+  if (!options.length && !metrics) return teamOptions;
+  return options;
+}
+function getDefaultMomentumGameKey(match, metrics = null) {
+  const options = getMomentumOptions(match, metrics);
+  if (!options.length) return '';
+  const current = String(match?.momentumGame || '');
+  if (options.some(opt => opt.key === current)) return current;
+  if (current === 'nassau') {
+    const sideNassau = options.find(opt => opt.type === 'side_match' && /nassau/i.test(opt.label || ''));
+    if (sideNassau) return sideNassau.key;
+  }
+  return options[0].key;
+}
+function getMomentumSides(match, metrics, gameKey) {
+  const sidePairing = getMomentumSidePairing(match, metrics, gameKey);
+  if (sidePairing) {
+    return {
+      type: 'side_match',
+      side1Label: sidePairing.playerA?.player?.name || sidePairing.team1Player?.player?.name || 'Side 1',
+      side2Label: sidePairing.playerB?.player?.name || sidePairing.team2Player?.player?.name || 'Side 2',
+      side1Members: [sidePairing.playerA?.player?.name || sidePairing.team1Player?.player?.name].filter(Boolean),
+      side2Members: [sidePairing.playerB?.player?.name || sidePairing.team2Player?.player?.name].filter(Boolean),
+      pairing: sidePairing,
+    };
+  }
+  const teams = metrics?.teams || [];
+  const t1 = teams.find(t => Number(t.team) === 1) || teams[0];
+  const t2 = teams.find(t => Number(t.team) === 2) || teams[1];
+  return {
+    type: 'team',
+    side1Label: getTeamLabel(match, Number(t1?.team) || 1),
+    side2Label: getTeamLabel(match, Number(t2?.team) || 2),
+    side1Members: (t1?.members || []).map(m => m.player?.name).filter(Boolean),
+    side2Members: (t2?.members || []).map(m => m.player?.name).filter(Boolean),
+    team1: Number(t1?.team) || 1,
+    team2: Number(t2?.team) || 2,
+  };
+}
+function getMomentumPerspectiveLabel(match, metrics, gameKey) {
+  const sides = getMomentumSides(match, metrics, gameKey);
+  const perspective = getMomentumPerspectiveTeam(match);
+  return perspective === 2 ? sides.side2Label : sides.side1Label;
 }
 function computeMomentumOutcome(match, metrics, holeResult, gameKey) {
   if (!holeResult?.completed) return 'pending';
+  const sidePairing = getMomentumSidePairing(match, metrics, gameKey);
+  if (sidePairing) {
+    const holeIdx = Math.max(0, (metrics?.holeResults || []).indexOf(holeResult));
+    const scoreAObj = holeResult.playerScores.find(ps => ps.playerId === sidePairing.playerA?.playerId || ps.playerId === sidePairing.team1Player?.playerId);
+    const scoreBObj = holeResult.playerScores.find(ps => ps.playerId === sidePairing.playerB?.playerId || ps.playerId === sidePairing.team2Player?.playerId);
+    const grossA = Number(scoreAObj?.gross) || null;
+    const grossB = Number(scoreBObj?.gross) || null;
+    if (!grossA || !grossB) return 'pending';
+    const useNet = String(sidePairing.basis || 'net').toLowerCase() !== 'gross';
+    const scoreA = useNet ? getSideMatchNetHoleScore(match, holeIdx, sidePairing.playerA || sidePairing.team1Player, sidePairing.sideLowPlaying, holeResult) : grossA;
+    const scoreB = useNet ? getSideMatchNetHoleScore(match, holeIdx, sidePairing.playerB || sidePairing.team2Player, sidePairing.sideLowPlaying, holeResult) : grossB;
+    return getHeadToHeadOutcome(scoreA, scoreB);
+  }
   const config = (match.selectedGames || []).find(g => g.key === gameKey) || {};
   if (gameKey === 'team_stroke') {
     const basis = String(config.basis || 'net').toLowerCase();

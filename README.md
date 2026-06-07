@@ -1,13 +1,13 @@
 # The Dye Ledger
 
-Current version: **v27.44**
+Current version: **v27.45**
 
-## What changed in v27.44
+## What changed in v27.45
 
-- Multi-image scorecard import for front/back scorecard photos and multi-file imports.
-- Combo tee total yardage now displays consistently with standard tees.
-- Includes updated `scorecard-import` Edge Function code for multi-file payloads.
+- Matched the Penalty Strokes input width and numeric styling to the Putts input.
+- Updated Player Leaderboard Net and Net to Par to use each player's own Course Handicap stroke allocation hole-by-hole.
+- Preserved game/match scoring, skins, 9-point scoring, settlement calculations, Supabase Course Library sync, AI scorecard import, and localStorage compatibility.
 
 ## Notes
 
-Imported scorecards still save locally first. Use **Sync Course Library** to upload saved courses to Supabase.
+This release is limited to the two focused v27.45 corrections.

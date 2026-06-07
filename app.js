@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.44';
+const APP_VERSION = 'v27.45';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -947,7 +947,7 @@ function fitElementScale(element, maxWidth, maxHeight = null) {
 
 
 function buildExportPlayerLeaderboard(match, metrics) {
-  const sortedPlayers = (metrics?.players || []).slice().sort((a, b) => a.netDiff - b.netDiff || a.toPar - b.toPar || a.player.name.localeCompare(b.player.name));
+  const sortedPlayers = (metrics?.players || []).slice().sort((a, b) => a.leaderboardNetDiff - b.leaderboardNetDiff || a.toPar - b.toPar || a.player.name.localeCompare(b.player.name));
   if (!sortedPlayers.length) return '<div class="export-empty">No player leaderboard available.</div>';
   const rows = sortedPlayers.map(p => `
     <tr>
@@ -956,8 +956,8 @@ function buildExportPlayerLeaderboard(match, metrics) {
       <td>${p.grossTotal || 0}</td>
       <td>${p.postableTotal || 0}</td>
       <td>${formatSigned(p.toPar || 0)}</td>
-      <td>${p.netTotal || 0}</td>
-      <td>${formatSigned(p.netDiff || 0)}</td>
+      <td>${p.leaderboardNetTotal || 0}</td>
+      <td>${formatSigned(p.leaderboardNetDiff || 0)}</td>
     </tr>
   `).join('');
   return `
@@ -1970,10 +1970,12 @@ function computeMatchMetrics(match) {
       const strokeIndex = Number(playerHole?.strokeIndex) || Number(hole?.strokeIndex);
       const strokes = holeStrokeAllowanceForPlayer(strokeIndex, p.playHdcp, lowPlaying);
       const postingStrokes = holePostingStrokeAllowance(strokeIndex, p.courseHdcp);
+      const leaderboardStrokes = holePostingStrokeAllowance(strokeIndex, p.courseHdcp);
       const postableLimit = playerPar + 2 + postingStrokes;
       const postable = gross ? Math.min(gross, postableLimit) : null;
       const net = gross ? gross - strokes : null;
-      return { playerId: p.playerId, team: p.team, gross, net, strokes, par: playerPar, teeId: p.teeId, postingStrokes, postableLimit, postable };
+      const leaderboardNet = gross ? gross - leaderboardStrokes : null;
+      return { playerId: p.playerId, team: p.team, gross, net, strokes, leaderboardNet, leaderboardStrokes, par: playerPar, teeId: p.teeId, postingStrokes, postableLimit, postable };
     });
     const completed = playerScores.every(s => s.gross !== null);
     const par = Number(hole.par) || 4;
@@ -2017,18 +2019,22 @@ function computeMatchMetrics(match) {
     const grossTotal = scoredHoles.reduce((sum, s) => sum + (s.gross || 0), 0);
     const postableTotal = scoredHoles.reduce((sum, s) => sum + (Number.isFinite(Number(s.postable)) ? Number(s.postable) : (s.gross || 0)), 0);
     const netTotal = scoredHoles.reduce((sum, s) => sum + (s.net || 0), 0);
+    const leaderboardNetTotal = scoredHoles.reduce((sum, s) => sum + (Number.isFinite(Number(s.leaderboardNet)) ? Number(s.leaderboardNet) : (s.gross || 0)), 0);
     const totalPar = scoredHoles.reduce((sum, s) => sum + (Number(s.par) || 0), 0);
     const toPar = grossTotal - totalPar;
     const netDiff = netTotal - totalPar;
+    const leaderboardNetDiff = leaderboardNetTotal - totalPar;
     const skins = holeResults.filter(h => h.completed && h.indivWinners.length === 1 && h.indivWinners[0] === p.playerId).length;
     return {
       ...p,
       grossTotal,
       postableTotal,
       netTotal,
+      leaderboardNetTotal,
       totalPar,
       toPar,
       netDiff,
+      leaderboardNetDiff,
       skins,
       holesPlayed: scoredHoles.length,
     };
@@ -2061,7 +2067,7 @@ function computeMatchMetrics(match) {
   }).filter(Boolean);
 
   const completed = holeResults.filter(h => h.completed).length;
-  const bestPlayerNet = playersWithTotals.slice().sort((a, b) => a.netDiff - b.netDiff || a.grossTotal - b.grossTotal)[0];
+  const bestPlayerNet = playersWithTotals.slice().sort((a, b) => a.leaderboardNetDiff - b.leaderboardNetDiff || a.grossTotal - b.grossTotal)[0];
   const bestTeam = teams.slice().sort((a, b) => a.netDiff - b.netDiff || a.grossTotal - b.grossTotal)[0];
   const matchDiff = holeResults.reduce((sum, h) => sum + (h.teamWinner === 1 ? 1 : h.teamWinner === 2 ? -1 : 0), 0);
 
@@ -2906,7 +2912,7 @@ function renderLeaderboard() {
   wrap.classList.remove('hidden');
   syncFinishRoundUi(match);
 
-  const sortedPlayers = metrics.players.slice().sort((a, b) => a.netDiff - b.netDiff || a.toPar - b.toPar);
+  const sortedPlayers = metrics.players.slice().sort((a, b) => a.leaderboardNetDiff - b.leaderboardNetDiff || a.toPar - b.toPar);
   playerBody.innerHTML = sortedPlayers.map(p => `
     <tr>
       <td>${escapeHtml(p.player.name)}</td>
@@ -2914,8 +2920,8 @@ function renderLeaderboard() {
       <td>${p.grossTotal || 0}</td>
       <td>${p.postableTotal || 0}</td>
       <td>${formatSigned(p.toPar || 0)}</td>
-      <td>${p.netTotal || 0}</td>
-      <td>${formatSigned(p.netDiff || 0)}</td>
+      <td>${p.leaderboardNetTotal || 0}</td>
+      <td>${formatSigned(p.leaderboardNetDiff || 0)}</td>
     </tr>
   `).join('');
   const playerMobile = document.getElementById('playerLeaderboardMobile');
@@ -2927,8 +2933,8 @@ function renderLeaderboard() {
           <div><div class="leader-mobile-label">Gross</div><div>${p.grossTotal || 0}</div></div>
           <div><div class="leader-mobile-label">Postable</div><div>${p.postableTotal || 0}</div></div>
           <div><div class="leader-mobile-label">Gross to Par</div><div>${formatSigned(p.toPar || 0)}</div></div>
-          <div><div class="leader-mobile-label">Net</div><div>${p.netTotal || 0}</div></div>
-          <div><div class="leader-mobile-label">Net to Par</div><div>${formatSigned(p.netDiff || 0)}</div></div>
+          <div><div class="leader-mobile-label">Net</div><div>${p.leaderboardNetTotal || 0}</div></div>
+          <div><div class="leader-mobile-label">Net to Par</div><div>${formatSigned(p.leaderboardNetDiff || 0)}</div></div>
         </div>
       </div>
     `).join('');

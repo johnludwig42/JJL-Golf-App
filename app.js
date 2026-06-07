@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.47';
+const APP_VERSION = 'v27.48';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -975,6 +975,7 @@ function buildExportPlayerLeaderboard(match, metrics) {
 }
 
 function buildExportTeamLeaderboard(match, metrics) {
+  if (!hasMultiPlayerTeam(metrics)) return '';
   const sortedTeams = (metrics?.teams || []).slice().sort((a, b) => (a.netTotal - b.netTotal) || (a.grossTotal - b.grossTotal) || (a.team - b.team));
   if (!sortedTeams.length) return '<div class="export-empty">No team leaderboard available.</div>';
   const showH2h = showTeamMatchMetric(match, metrics);
@@ -1079,12 +1080,12 @@ function buildSummaryExportBody(match, metrics) {
       ${buildNetPayoutSummary(match, metrics)}
     </section>
 
-    <section class="export-section export-section-team-leaderboard">
+    ${hasMultiPlayerTeam(metrics) ? `<section class="export-section export-section-team-leaderboard">
       <div class="export-section-head">
         <h2>Team leaderboard</h2>
       </div>
       ${buildExportTeamLeaderboard(match, metrics)}
-    </section>
+    </section>` : ''}
 
     <section class="export-section export-section-player-leaderboard">
       <div class="export-section-head">
@@ -2625,7 +2626,7 @@ function buildGrossGamePaymentDetail(players, games) {
     const gameTotal = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
     const totalLine = gameTotal > 0.0001 ? `<div class="gross-game-section-total">Gross movement: ${formatMoneyAccounting(gameTotal)}</div>` : '';
     return `<div class="gross-game-section">
-      <div class="gross-game-section-title">${escapeHtml(game.label)}</div>
+      <div class="gross-game-section-title">${escapeHtml(game.key === 'nine_point' ? '9-Point Gross Result' : game.label)}</div>
       <div class="gross-game-section-lines">${body}</div>
       ${totalLine}
     </div>`;
@@ -2918,12 +2919,15 @@ function renderLeaderboard() {
   }
 
   const sortedTeams = metrics.teams.slice().sort((a, b) => (a.netTotal - b.netTotal) || (a.grossTotal - b.grossTotal) || (a.team - b.team));
-  const teamMatchRelevant = showTeamMatchMetric(match, metrics);
+  const showTeamLeaderboard = hasMultiPlayerTeam(metrics);
+  const teamLeaderboardCard = teamBody?.closest('details');
+  if (teamLeaderboardCard) teamLeaderboardCard.classList.toggle('hidden', !showTeamLeaderboard);
+  const teamMatchRelevant = showTeamLeaderboard && showTeamMatchMetric(match, metrics);
   const teamMetricLabel = teamMatchRelevant ? 'H2H' : '—';
   const teamMetricValue = t => teamMatchRelevant ? formatSigned(t.overall) : '—';
   const teamLeaderHeader = document.querySelectorAll('#leaderboard .leader-table thead tr th:last-child')[1];
   if (teamLeaderHeader) teamLeaderHeader.textContent = teamMatchRelevant ? 'H2H' : '—';
-  teamBody.innerHTML = sortedTeams.map(t => `
+  teamBody.innerHTML = showTeamLeaderboard ? sortedTeams.map(t => `
     <tr>
       <td>${escapeHtml(getTeamLabel(match, t.team))}</td>
       <td>${escapeHtml(t.members.map(m => m.player.name).join(', '))}</td>
@@ -2933,10 +2937,10 @@ function renderLeaderboard() {
       <td>${formatSigned(t.netDiff)}</td>
       <td>${teamMetricValue(t)}</td>
     </tr>
-  `).join('');
+  `).join('') : '';
   const teamMobile = document.getElementById('teamLeaderboardMobile');
   if (teamMobile) {
-    teamMobile.innerHTML = sortedTeams.map(t => `
+    teamMobile.innerHTML = showTeamLeaderboard ? sortedTeams.map(t => `
       <div class="leader-mobile-card">
         <div><strong>${escapeHtml(getTeamLabel(match, t.team))}</strong></div>
         <div class="tiny">${escapeHtml(t.members.map(m => m.player.name).join(', '))}</div>
@@ -2948,7 +2952,7 @@ function renderLeaderboard() {
           <div><div class="leader-mobile-label">${teamMetricLabel}</div><div>${teamMetricValue(t)}</div></div>
         </div>
       </div>
-    `).join('');
+    `).join('') : '';
   }
 
   const activePrintView = (match.printView === 'scorecard') ? 'scorecard' : 'summary';
@@ -5601,6 +5605,9 @@ function addAmounts(target, source) {
   Object.entries(source || {}).forEach(([playerId, amount]) => {
     target[playerId] = (target[playerId] || 0) + amount;
   });
+}
+function hasMultiPlayerTeam(metrics) {
+  return (metrics?.teams || []).some(team => Array.isArray(team.members) && team.members.length > 1);
 }
 function computeLivePayoutGames(match, metrics) {
   const selected = getOrderedSelectedGames(match);

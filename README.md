@@ -1,12 +1,11 @@
 # The Dye Ledger
 
-Current version: **v28.0**
+Current version: **v28.1**
 
-## What changed in v28.0
+## What changed in v28.1
 
-- Established one canonical Match Summary report structure across platforms.
-- Standardized Match Summary output ordering and responsive rendering philosophy.
-- Added Total Putts alongside Avg Putts in Stat Tracking Summary.
-- Preserved Classic Scorecard rendering exactly as a frozen component for this release.
+- Restored the Match Summary Momentum Chart for true two-team matches.
+- Added player Index, Tee, and Course Handicap details to the Match Summary header.
+- Improved Match Summary print/PDF pagination so major sections stay together when practical without forcing excessive whitespace.
 
-This release is focused on Match Summary Unification and the Total Putts report enhancement only.
+This release is focused only on Match Summary refinements following v28.0.

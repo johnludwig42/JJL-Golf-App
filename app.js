@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.0';
+const APP_VERSION = 'v28.1';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -361,7 +361,12 @@ function getMomentumPerspectiveTeam(match) {
 }
 function hasMomentumGame(match) {
   const selected = Array.isArray(match?.selectedGames) ? match.selectedGames : [];
-  return selected.some(g => g.key === 'nassau' || g.key === 'team_match' || (g.key === 'individual_match' && Array.isArray(g.matchups) && g.matchups.some(row => ['nassau','match_play'].includes(String(row?.game || 'nassau').toLowerCase()))));
+  return selected.some(g => g.key === 'nassau' || g.key === 'team_match' || g.key === 'team_stroke' || (g.key === 'individual_match' && Array.isArray(g.matchups) && g.matchups.some(row => ['nassau','match_play'].includes(String(row?.game || 'nassau').toLowerCase()))));
+}
+function hasTeamMomentumMatch(match, metrics) {
+  const teams = metrics?.teams || [];
+  const hasTwoCompetingTeams = teams.length === 2 && teams.every(team => Array.isArray(team.members) && team.members.length > 0);
+  return hasTwoCompetingTeams && hasMomentumGame(match);
 }
 function formatPerspectiveStatus(diff, perspectiveTeam = 1) {
   const oriented = perspectiveTeam === 2 ? -Number(diff || 0) : Number(diff || 0);
@@ -1005,7 +1010,7 @@ function buildExportTeamLeaderboard(match, metrics) {
 }
 
 function buildExportMomentum(match, metrics) {
-  if (!hasMomentumGame(match)) return '';
+  if (!hasTeamMomentumMatch(match, metrics)) return '';
   const options = getMomentumOptions(match);
   const selectedGame = match.momentumGame && options.find(opt => opt.key === match.momentumGame)
     ? match.momentumGame
@@ -1049,10 +1054,32 @@ function buildExportNotes() {
     </section>`;
 }
 
+function buildExportHeaderPlayers(match, metrics) {
+  const players = Array.isArray(metrics?.players) ? metrics.players : [];
+  if (!players.length) return '';
+  const rows = players.map(p => {
+    const indexValue = Number(p?.player?.index);
+    const indexText = Number.isFinite(indexValue) ? indexValue.toFixed(1) : '—';
+    const teeText = p?.tee?.teeName || '—';
+    const courseHdcpText = Number.isFinite(Number(p?.courseHdcp)) ? String(Number(p.courseHdcp)) : '—';
+    return `
+      <div class="export-header-player-card">
+        <div class="export-header-player-name">${escapeHtml(p?.player?.name || 'Player')}</div>
+        <div class="export-header-player-meta">
+          <span>Index: <strong>${escapeHtml(indexText)}</strong></span>
+          <span>Tee: <strong>${escapeHtml(teeText)}</strong></span>
+          <span>Course HCP: <strong>${escapeHtml(courseHdcpText)}</strong></span>
+        </div>
+      </div>`;
+  }).join('');
+  return `<div class="export-header-players">${rows}</div>`;
+}
+
 function buildSummaryExportBody(match, metrics) {
   const exportScoreDistributionHtml = buildExportScoreDistributionSummary(match, metrics);
   const exportStatTrackingHtml = buildExportStatTrackingSummary(match, metrics);
   const exportGrossGameDetailHtml = buildExportGrossGameDetailSummary(match, metrics);
+  const exportMomentumHtml = buildExportMomentum(match, metrics);
   const showNinePoint = (match.selectedGames || []).some(g => g.key === 'nine_point');
   return `
     <section class="export-section export-section-games-summary">
@@ -1082,6 +1109,8 @@ function buildSummaryExportBody(match, metrics) {
       </div>
       ${buildExportTeamLeaderboard(match, metrics)}
     </section>` : ''}
+
+    ${exportMomentumHtml}
 
     <section class="export-section export-section-classic export-section-classic-summary">
       <div class="export-section-head">
@@ -1227,6 +1256,11 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     .export-title { font-size: 22px; font-weight: 800; line-height: 1.05; letter-spacing: -0.02em; }
     .export-sub { margin-top: 6px; color: var(--muted); font-size: 12px; font-weight: 600; }
     .export-meta { margin-top: 8px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .export-header-players { margin-top: 12px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .export-header-player-card { border: 1px solid var(--border); background: #fff; border-radius: 12px; padding: 8px 9px; min-width: 0; }
+    .export-header-player-name { font-size: 12px; font-weight: 800; color: #243247; overflow-wrap: anywhere; }
+    .export-header-player-meta { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 5px 10px; color: var(--muted); font-size: 10px; line-height: 1.3; }
+    .export-header-player-meta strong { color: #243247; }
     .export-section {
       background: var(--card-bg);
       border: 1px solid var(--border);
@@ -1464,7 +1498,7 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     strong { font-weight: 800; }
 
     @media (max-width: 760px) {
-      .export-pill-grid, .match-status-grid, .game-summary-grid, .stat-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .export-pill-grid, .match-status-grid, .game-summary-grid, .stat-summary-grid, .export-header-players { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .export-toolbar { justify-content: stretch; }
       .export-toolbar button { width: 100%; }
     }
@@ -1490,23 +1524,29 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       }
       .export-title { font-size: 16px; }
       .export-sub, .export-meta { font-size: 10px; }
+      .export-header-players { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; break-inside: avoid-page; page-break-inside: avoid; }
+      .export-header-player-card { padding: 6px 7px; break-inside: avoid-page; page-break-inside: avoid; }
+      .export-header-player-name { font-size: 10px; }
+      .export-header-player-meta { font-size: 8.5px; gap: 3px 7px; }
       .export-section {
         padding: 10px 0;
-        margin-bottom: 0;
+        margin-bottom: 10px;
         break-inside: avoid-page;
         page-break-inside: avoid;
-        break-before: page;
-        page-break-before: always;
-        min-height: 0;
-      }
-      .export-section:first-of-type {
         break-before: auto;
         page-break-before: auto;
+        min-height: 0;
+      }
+      .export-section-classic-summary,
+      .export-section-nine-point,
+      .export-section-notes {
+        break-inside: auto;
+        page-break-inside: auto;
       }
       .export-section-head h2 { font-size: 13px; }
       .export-section-sub, .match-status-meta, .game-summary-sub, .tiny, .scorecard-sub { font-size: 9px; }
       .match-status-grid, .game-summary-grid, .stat-summary-grid { gap: 8px; }
-      .match-status-tile, .game-summary-card, .stat-summary-card {
+      .match-status-tile, .game-summary-card, .stat-summary-card, .gross-game-player-card, .gross-game-section, .export-pill {
         padding: 8px;
         break-inside: avoid-page;
         page-break-inside: avoid;
@@ -1556,6 +1596,7 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       <div class="export-title">${pageTitle}</div>
       <div class="export-sub">${pageSub}</div>
       <div class="export-meta">${pageMeta}</div>
+      ${requestedView === 'summary' ? buildExportHeaderPlayers(match, metrics) : ''}
     </div>
     ${bodyHtml}
   </div>
@@ -5594,7 +5635,7 @@ function getMomentumOptions(match) {
   const selected = Array.isArray(match?.selectedGames) ? match.selectedGames : [];
   const keys = [];
   selected.forEach(g => {
-    if (g.key === 'nassau' || g.key === 'team_match') keys.push(g.key);
+    if (g.key === 'nassau' || g.key === 'team_match' || g.key === 'team_stroke') keys.push(g.key);
     if (g.key === 'individual_match') {
       const rows = Array.isArray(g.matchups) ? g.matchups : [];
       if (rows.some(row => String(row?.game || 'nassau').toLowerCase() === 'nassau')) keys.push('nassau');

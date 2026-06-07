@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.48';
+const APP_VERSION = 'v28.0';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -950,23 +950,24 @@ function fitElementScale(element, maxWidth, maxHeight = null) {
 function buildExportPlayerLeaderboard(match, metrics) {
   const sortedPlayers = (metrics?.players || []).slice().sort((a, b) => a.leaderboardNetDiff - b.leaderboardNetDiff || a.toPar - b.toPar || a.player.name.localeCompare(b.player.name));
   if (!sortedPlayers.length) return '<div class="export-empty">No player leaderboard available.</div>';
+  const showTeamColumn = hasMultiPlayerTeam(metrics);
   const rows = sortedPlayers.map(p => `
     <tr>
       <td>${escapeHtml(p.player.name)}</td>
-      <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
+      ${showTeamColumn ? `<td>${escapeHtml(getTeamLabel(match, p.team))}</td>` : ''}
       <td>${p.grossTotal || 0}</td>
-      <td>${p.postableTotal || 0}</td>
-      <td>${formatSigned(p.toPar || 0)}</td>
       <td>${p.leaderboardNetTotal || 0}</td>
       <td>${formatSigned(p.leaderboardNetDiff || 0)}</td>
+      <td>${p.postableTotal || 0}</td>
     </tr>
   `).join('');
+  const teamHead = showTeamColumn ? '<th>Team</th>' : '';
   return `
     <div class="fit-stage" data-fit="width" data-fit-min="0.84">
       <div class="fit-box">
         <table class="export-table">
           <thead>
-            <tr><th>Player</th><th>Team</th><th>Gross</th><th>Postable</th><th>Gross to Par</th><th>Net</th><th>Net to Par</th></tr>
+            <tr><th>Player</th>${teamHead}<th>Gross</th><th>Net</th><th>Net to Par</th><th>Postable</th></tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
@@ -1049,23 +1050,11 @@ function buildExportNotes() {
 }
 
 function buildSummaryExportBody(match, metrics) {
-  const statusOptions = getMatchStatusOptions(match);
-  const featuredKey = match.matchStatusGame && statusOptions.find(opt => opt.key === match.matchStatusGame)
-    ? match.matchStatusGame
-    : (statusOptions[0]?.key || 'team_match');
   const exportScoreDistributionHtml = buildExportScoreDistributionSummary(match, metrics);
   const exportStatTrackingHtml = buildExportStatTrackingSummary(match, metrics);
+  const exportGrossGameDetailHtml = buildExportGrossGameDetailSummary(match, metrics);
   const showNinePoint = (match.selectedGames || []).some(g => g.key === 'nine_point');
   return `
-    <section class="export-section export-section-match-status">
-      <div class="export-section-head">
-        <h2>Match status</h2>
-      </div>
-      ${buildFeaturedMatchStatus(match, metrics, featuredKey)}
-    </section>
-
-    ${buildExportMomentum(match, metrics)}
-
     <section class="export-section export-section-games-summary">
       <div class="export-section-head">
         <h2>Games summary</h2>
@@ -1075,9 +1064,16 @@ function buildSummaryExportBody(match, metrics) {
 
     <section class="export-section export-section-net-payout">
       <div class="export-section-head">
-        <h2>Net payout</h2>
+        <h2>Final Net Settlement — Efficient Cash Payments</h2>
       </div>
-      ${buildNetPayoutSummary(match, metrics)}
+      ${buildExportFinalNetSettlementSummary(match, metrics)}
+    </section>
+
+    <section class="export-section export-section-player-leaderboard">
+      <div class="export-section-head">
+        <h2>Player leaderboard</h2>
+      </div>
+      ${buildExportPlayerLeaderboard(match, metrics)}
     </section>
 
     ${hasMultiPlayerTeam(metrics) ? `<section class="export-section export-section-team-leaderboard">
@@ -1086,13 +1082,6 @@ function buildSummaryExportBody(match, metrics) {
       </div>
       ${buildExportTeamLeaderboard(match, metrics)}
     </section>` : ''}
-
-    <section class="export-section export-section-player-leaderboard">
-      <div class="export-section-head">
-        <h2>Player leaderboard</h2>
-      </div>
-      ${buildExportPlayerLeaderboard(match, metrics)}
-    </section>
 
     <section class="export-section export-section-classic export-section-classic-summary">
       <div class="export-section-head">
@@ -1114,6 +1103,23 @@ function buildSummaryExportBody(match, metrics) {
       ${exportScoreDistributionHtml}
     </section>
 
+    ${exportStatTrackingHtml ? `
+    <section class="export-section export-section-stat-tracking">
+      <div class="export-section-head">
+        <h2>Stat Tracking Summary</h2>
+        <div class="export-section-sub">Completed holes only.</div>
+      </div>
+      ${exportStatTrackingHtml}
+    </section>` : ''}
+
+    ${exportGrossGameDetailHtml ? `
+    <section class="export-section export-section-gross-game-detail">
+      <div class="export-section-head">
+        <h2>Gross Game Detail</h2>
+      </div>
+      ${exportGrossGameDetailHtml}
+    </section>` : ''}
+
     ${showNinePoint ? `
     <section class="export-section export-section-nine-point">
       <div class="export-section-head">
@@ -1124,15 +1130,6 @@ function buildSummaryExportBody(match, metrics) {
           ${buildNinePointScorecard(match, metrics)}
         </div>
       </div>
-    </section>` : ''}
-
-    ${exportStatTrackingHtml ? `
-    <section class="export-section export-section-stat-tracking">
-      <div class="export-section-head">
-        <h2>Stat Tracking Summary</h2>
-        <div class="export-section-sub">Completed holes only.</div>
-      </div>
-      ${exportStatTrackingHtml}
     </section>` : ''}
 
     ${buildExportNotes()}`;
@@ -1362,6 +1359,19 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     .final-net-settlement-player { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .final-net-settlement-amount { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .final-net-settlement-crossfoot { font-size: 10px; text-align: right; color: #65758b; font-variant-numeric: tabular-nums; }
+    .gross-game-detail-body { display: grid; gap: 11px; }
+    .gross-game-player-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+    .gross-game-player-card, .gross-game-section { border: 1px solid var(--border); border-radius: 14px; background: #fff; padding: 9px; display: grid; gap: 7px; }
+    .gross-game-player-name, .gross-game-section-title { font-weight: 800; color: #243247; }
+    .gross-game-card-lines, .gross-game-section-lines { display: grid; gap: 5px; }
+    .gross-game-card-line, .gross-game-card-total { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; font-variant-numeric: tabular-nums; }
+    .gross-game-card-line span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+    .gross-game-card-total { border-top: 1px solid var(--border); padding-top: 7px; font-weight: 800; }
+    .gross-game-detail-list { display: grid; gap: 9px; }
+    .gross-game-payment-row { font-size: 11px; line-height: 1.35; color: #334155; }
+    .gross-game-section-total { font-size: 10px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+    @media (max-width: 760px) { .gross-game-player-cards { grid-template-columns: 1fr; } }
+    
     .payout-table-wrap, .scorecard-wrap { overflow: visible !important; max-width: 100%; }
     .payout-game-table, .settlement-table, .scorecard-table {
       width: 100%;
@@ -2649,17 +2659,43 @@ function buildGrossGameDetailSection(match, players, games) {
   </div>`;
 }
 
-function buildNetPayoutSummary(match, metrics) {
+
+function getPayoutReportContext(match, metrics) {
   const selected = getOrderedSelectedGames(match);
-  if (!selected.length) return '<div><strong>Net payout (live):</strong> No gambling games selected.</div>';
   const games = computeLivePayoutGames(match, metrics);
-  const players = metrics.players.map(p => ({ id: p.playerId, name: p.player.name }));
-  const finalTotals = {};
-  games.forEach(game => addAmounts(finalTotals, game.amounts));
+  const players = (metrics?.players || []).map(p => ({ id: p.playerId, name: p.player.name }));
   const selectedKeys = new Set(selected.map(game => game.key));
   const payoutGames = games.filter(game => game && game.amounts && selectedKeys.has(game.key));
-  if (!payoutGames.length) return '<div><strong>Net payout (live):</strong> No payout-producing games selected.</div>';
-  return `<div class="payout-summary-stack">${buildFinalNetSettlementSection(players, finalTotals)}${buildGrossGameDetailSection(match, players, payoutGames)}</div>`;
+  const finalTotals = {};
+  payoutGames.forEach(game => addAmounts(finalTotals, game.amounts));
+  return { selected, games, players, payoutGames, finalTotals };
+}
+
+function buildExportFinalNetSettlementSummary(match, metrics) {
+  const ctx = getPayoutReportContext(match, metrics);
+  if (!ctx.selected.length) return '<div><strong>Net payout (live):</strong> No gambling games selected.</div>';
+  if (!ctx.payoutGames.length) return '<div><strong>Net payout (live):</strong> No payout-producing games selected.</div>';
+  return `<div class="payout-summary-stack">${buildFinalNetSettlementSection(ctx.players, ctx.finalTotals)}</div>`;
+}
+
+function buildExportGrossGameDetailSummary(match, metrics) {
+  const ctx = getPayoutReportContext(match, metrics);
+  if (!ctx.selected.length) return '';
+  if (!ctx.payoutGames.length) return '<div class="export-empty">No gross game detail available.</div>';
+  return `
+    <div class="gross-game-detail-body export-gross-game-detail-body">
+      <div class="payout-summary-intro"><strong>Player Gross Summary</strong><br><span class="tiny">Gross game results by player before the final efficient settlement.</span></div>
+      ${buildPlayerGrossSummaryCards(ctx.players, ctx.payoutGames)}
+      <div class="payout-summary-intro top-gap"><strong>Game-by-Game Payout Detail</strong><br><span class="tiny">Audit trail of the gross payment lines that reconcile to the final net settlement above.</span></div>
+      ${buildGrossGamePaymentDetail(ctx.players, ctx.payoutGames)}
+    </div>`;
+}
+
+function buildNetPayoutSummary(match, metrics) {
+  const ctx = getPayoutReportContext(match, metrics);
+  if (!ctx.selected.length) return '<div><strong>Net payout (live):</strong> No gambling games selected.</div>';
+  if (!ctx.payoutGames.length) return '<div><strong>Net payout (live):</strong> No payout-producing games selected.</div>';
+  return `<div class="payout-summary-stack">${buildFinalNetSettlementSection(ctx.players, ctx.finalTotals)}${buildGrossGameDetailSection(match, ctx.players, ctx.payoutGames)}</div>`;
 }
 function getCompletedStatHoleLimit(match, metrics) {
   const limit = Number(getLastFullyCompletedHole(match)) || Number(metrics?.completed) || 0;
@@ -2809,6 +2845,7 @@ function buildExportStatTrackingSummary(match, metrics) {
         <td><strong>${escapeHtml(playerMetric.player.name)}</strong></td>
         <td>${totals.fairwaysHit} / ${totals.fairwayOpps}</td>
         <td>${totals.greens} / ${totals.greenOpps}</td>
+        <td>${totals.putts}</td>
         <td>${avgPutts}</td>
         <td>${totals.penaltyStrokes}</td>
         <td>${totals.upAndDowns}</td>
@@ -2821,7 +2858,7 @@ function buildExportStatTrackingSummary(match, metrics) {
       <div class="fit-box">
         <table class="export-table export-stat-summary-table">
           <thead>
-            <tr><th>Player</th><th>Fairways</th><th>GIR</th><th>Avg Putts</th><th>Penalty</th><th>Up & Downs</th><th>Sandies</th></tr>
+            <tr><th>Player</th><th>Fairways</th><th>GIR</th><th>Total Putts</th><th>Avg Putts</th><th>Penalty</th><th>Up & Downs</th><th>Sandies</th></tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
@@ -2891,6 +2928,9 @@ function renderLeaderboard() {
   syncFinishRoundUi(match);
 
   const sortedPlayers = metrics.players.slice().sort((a, b) => a.leaderboardNetDiff - b.leaderboardNetDiff || a.toPar - b.toPar);
+  const showPlayerTeamColumn = hasMultiPlayerTeam(metrics);
+  const playerLeaderboardCard = playerBody?.closest('details');
+  if (playerLeaderboardCard) playerLeaderboardCard.classList.toggle('hide-player-team-column', !showPlayerTeamColumn);
   playerBody.innerHTML = sortedPlayers.map(p => `
     <tr>
       <td>${escapeHtml(p.player.name)}</td>
@@ -2906,7 +2946,7 @@ function renderLeaderboard() {
   if (playerMobile) {
     playerMobile.innerHTML = sortedPlayers.map(p => `
       <div class="leader-mobile-card">
-        <div><strong>${escapeHtml(p.player.name)}</strong> <span class="tiny">· ${escapeHtml(getTeamLabel(match, p.team))}</span></div>
+        <div><strong>${escapeHtml(p.player.name)}</strong>${showPlayerTeamColumn ? ` <span class="tiny">· ${escapeHtml(getTeamLabel(match, p.team))}</span>` : ''}</div>
         <div class="leader-mobile-grid">
           <div><div class="leader-mobile-label">Gross</div><div>${p.grossTotal || 0}</div></div>
           <div><div class="leader-mobile-label">Postable</div><div>${p.postableTotal || 0}</div></div>

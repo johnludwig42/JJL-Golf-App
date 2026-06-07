@@ -1,13 +1,12 @@
 # The Dye Ledger
 
-Current version: **v27.48**
+Current version: **v28.0**
 
-## What changed in v27.48
+## What changed in v28.0
 
-- Renamed the transaction-level 9-Point audit label to **9-Point Gross Result**.
-- Hid the Team Leaderboard when every team contains only one player.
-- Preserved Player Leaderboard behavior, all scoring/payout math, settlement calculations, Supabase Course Library sync, AI scorecard import, and localStorage compatibility.
+- Established one canonical Match Summary report structure across platforms.
+- Standardized Match Summary output ordering and responsive rendering philosophy.
+- Added Total Putts alongside Avg Putts in Stat Tracking Summary.
+- Preserved Classic Scorecard rendering exactly as a frozen component for this release.
 
-## Notes
-
-This release is limited to the two focused v27.48 UX corrections.
+This release is focused on Match Summary Unification and the Total Putts report enhancement only.

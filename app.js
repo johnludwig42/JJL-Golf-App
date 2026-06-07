@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.46';
+const APP_VERSION = 'v27.47';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2616,11 +2616,13 @@ function buildPlayerGrossSummaryCards(players, games) {
 function buildGrossGamePaymentDetail(players, games) {
   if (!games.length) return '<div class="tiny">No gross game detail available.</div>';
   return `<div class="gross-game-detail-list">${games.map(game => {
-    const rows = optimalSettlementRows(game.amounts || {});
+    const rows = Array.isArray(game.paymentLines) && game.paymentLines.length
+      ? game.paymentLines
+      : optimalSettlementRows(game.amounts || {});
     const body = rows.length
       ? rows.map(row => `<div class="gross-game-payment-row"><span><strong>${escapeHtml(getPlayer(row.to)?.name || 'Unknown')}</strong> receives ${formatMoneyAccounting(row.amount)} from <strong>${escapeHtml(getPlayer(row.from)?.name || 'Unknown')}</strong></span></div>`).join('')
       : '<div class="tiny">No payout.</div>';
-    const gameTotal = players.reduce((sum, player) => sum + Math.max(0, Number(game.amounts?.[player.id] || 0)), 0);
+    const gameTotal = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
     const totalLine = gameTotal > 0.0001 ? `<div class="gross-game-section-total">Gross movement: ${formatMoneyAccounting(gameTotal)}</div>` : '';
     return `<div class="gross-game-section">
       <div class="gross-game-section-title">${escapeHtml(game.label)}</div>
@@ -2653,7 +2655,8 @@ function buildNetPayoutSummary(match, metrics) {
   const players = metrics.players.map(p => ({ id: p.playerId, name: p.player.name }));
   const finalTotals = {};
   games.forEach(game => addAmounts(finalTotals, game.amounts));
-  const payoutGames = games.filter(game => game && game.amounts);
+  const selectedKeys = new Set(selected.map(game => game.key));
+  const payoutGames = games.filter(game => game && game.amounts && selectedKeys.has(game.key));
   if (!payoutGames.length) return '<div><strong>Net payout (live):</strong> No payout-producing games selected.</div>';
   return `<div class="payout-summary-stack">${buildFinalNetSettlementSection(players, finalTotals)}${buildGrossGameDetailSection(match, players, payoutGames)}</div>`;
 }
@@ -5623,7 +5626,7 @@ function computeLivePayoutGames(match, metrics) {
     amounts[winnerId] = (amounts[winnerId] || 0) + perOpponent * others.length;
     others.forEach(id => { amounts[id] = (amounts[id] || 0) - perOpponent; });
   };
-  const pushGame = (key, label, amounts, group = 'team') => games.push({ key, label, amounts, group });
+  const pushGame = (key, label, amounts, group = 'team', paymentLines = null) => games.push({ key, label, amounts, group, paymentLines: Array.isArray(paymentLines) ? paymentLines : null });
 
   selected.forEach(cfg => {
     if (cfg.key === 'nassau' && metrics.teams.length === 2) {
@@ -5740,9 +5743,24 @@ function computeLivePayoutGames(match, metrics) {
     }
     if (cfg.key === 'nine_point') {
       const amounts = {};
+      const paymentLines = [];
       const nine = computeNinePointResults(match, metrics, cfg);
       Object.entries(nine.amounts || {}).forEach(([playerId, amount]) => { amounts[playerId] = Number(amount) || 0; });
-      pushGame(cfg.key, `9-Point Game (${formatBasisLabel(nine.basis)})`, amounts, 'side');
+      // Player Gross Summary should show each player's aggregate 9-Point result,
+      // but Game-by-Game Payout Detail should preserve the raw pairwise 9-Point
+      // obligations rather than optimizing them inside the game.
+      const ids = Array.isArray(nine.playerIds) ? nine.playerIds : [];
+      ids.forEach((playerI, i) => {
+        ids.slice(i + 1).forEach(playerJ => {
+          const diff = (Number(nine.totals?.[playerI]) || 0) - (Number(nine.totals?.[playerJ]) || 0);
+          const amount = Math.abs(diff * (Number(nine.stakePerPoint) || 0));
+          if (amount <= 0.0001) return;
+          paymentLines.push(diff > 0
+            ? { from: playerJ, to: playerI, amount }
+            : { from: playerI, to: playerJ, amount });
+        });
+      });
+      pushGame(cfg.key, `9-Point Game (${formatBasisLabel(nine.basis)})`, amounts, 'side', paymentLines);
       return;
     }
     pushGame(cfg.key, getGameLabel(cfg.key), {});

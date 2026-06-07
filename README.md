@@ -1,8 +1,8 @@
 # The Dye Ledger
 
-Current version: **v27.43**
+Current version: **v27.44**
 
-## What changed in v27.43
+## What changed in v27.44
 
 - Multi-image scorecard import for front/back scorecard photos and multi-file imports.
 - Combo tee total yardage now displays consistently with standard tees.

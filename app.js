@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v27.43';
+const APP_VERSION = 'v27.44';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -487,6 +487,7 @@ function buildEmptyStats(count = 18) {
     green: false,
     putts: 2,
     puttsSource: 'default',
+    penaltyStrokes: 0,
     upAndDown: false,
     sandy: false,
   }));
@@ -506,6 +507,7 @@ function normalizeHoleStat(stat = {}, idx = 0) {
     green: !!stat?.green,
     putts: Number.isFinite(putts) && putts >= 0 ? Math.round(putts) : 2,
     puttsSource: normalizePuttsSource(inferredSource, 'default'),
+    penaltyStrokes: Number.isFinite(Number(stat?.penaltyStrokes ?? stat?.penalties ?? stat?.penalty_strokes)) && Number(stat?.penaltyStrokes ?? stat?.penalties ?? stat?.penalty_strokes) >= 0 ? Math.round(Number(stat?.penaltyStrokes ?? stat?.penalties ?? stat?.penalty_strokes)) : 0,
     upAndDown: !!stat?.upAndDown,
     sandy: !!stat?.sandy,
   };
@@ -952,6 +954,7 @@ function buildExportPlayerLeaderboard(match, metrics) {
       <td>${escapeHtml(p.player.name)}</td>
       <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
       <td>${p.grossTotal || 0}</td>
+      <td>${p.postableTotal || 0}</td>
       <td>${formatSigned(p.toPar || 0)}</td>
       <td>${p.netTotal || 0}</td>
       <td>${formatSigned(p.netDiff || 0)}</td>
@@ -962,7 +965,7 @@ function buildExportPlayerLeaderboard(match, metrics) {
       <div class="fit-box">
         <table class="export-table">
           <thead>
-            <tr><th>Player</th><th>Team</th><th>Gross</th><th>Gross to Par</th><th>Net</th><th>Net to Par</th></tr>
+            <tr><th>Player</th><th>Team</th><th>Gross</th><th>Postable</th><th>Gross to Par</th><th>Net</th><th>Net to Par</th></tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
@@ -1923,6 +1926,14 @@ function holeStrokeAllowanceForPlayer(holeStrokeIndex, playerHandicap, baseHandi
   const remainder = diff % 18;
   return fullRounds + (holeStrokeIndex <= remainder ? 1 : 0);
 }
+function holePostingStrokeAllowance(holeStrokeIndex, playerHandicap) {
+  const handicap = Math.max(0, Math.round(Number(playerHandicap) || 0));
+  const strokeIndex = Math.round(Number(holeStrokeIndex) || 0);
+  if (!handicap || !strokeIndex) return 0;
+  const fullRounds = Math.floor(handicap / 18);
+  const remainder = handicap % 18;
+  return fullRounds + (strokeIndex <= remainder ? 1 : 0);
+}
 function computeMatchMetrics(match) {
   if (!match) return null;
   const course = getCourse(match.courseId);
@@ -1956,9 +1967,13 @@ function computeMatchMetrics(match) {
       const gross = Number(p.scores[idx]?.gross) || null;
       const playerHole = getPlayerHole(match, p, idx, tee) || hole;
       const playerPar = Number(playerHole?.par) || Number(hole?.par) || 4;
-      const strokes = holeStrokeAllowanceForPlayer(Number(playerHole?.strokeIndex) || Number(hole?.strokeIndex), p.playHdcp, lowPlaying);
+      const strokeIndex = Number(playerHole?.strokeIndex) || Number(hole?.strokeIndex);
+      const strokes = holeStrokeAllowanceForPlayer(strokeIndex, p.playHdcp, lowPlaying);
+      const postingStrokes = holePostingStrokeAllowance(strokeIndex, p.courseHdcp);
+      const postableLimit = playerPar + 2 + postingStrokes;
+      const postable = gross ? Math.min(gross, postableLimit) : null;
       const net = gross ? gross - strokes : null;
-      return { playerId: p.playerId, team: p.team, gross, net, strokes, par: playerPar, teeId: p.teeId };
+      return { playerId: p.playerId, team: p.team, gross, net, strokes, par: playerPar, teeId: p.teeId, postingStrokes, postableLimit, postable };
     });
     const completed = playerScores.every(s => s.gross !== null);
     const par = Number(hole.par) || 4;
@@ -2000,6 +2015,7 @@ function computeMatchMetrics(match) {
   const playersWithTotals = players.map(p => {
     const scoredHoles = holeResults.filter(h => h.completed).map(h => h.playerScores.find(ps => ps.playerId === p.playerId)).filter(Boolean);
     const grossTotal = scoredHoles.reduce((sum, s) => sum + (s.gross || 0), 0);
+    const postableTotal = scoredHoles.reduce((sum, s) => sum + (Number.isFinite(Number(s.postable)) ? Number(s.postable) : (s.gross || 0)), 0);
     const netTotal = scoredHoles.reduce((sum, s) => sum + (s.net || 0), 0);
     const totalPar = scoredHoles.reduce((sum, s) => sum + (Number(s.par) || 0), 0);
     const toPar = grossTotal - totalPar;
@@ -2008,6 +2024,7 @@ function computeMatchMetrics(match) {
     return {
       ...p,
       grossTotal,
+      postableTotal,
       netTotal,
       totalPar,
       toPar,
@@ -2671,7 +2688,7 @@ function computeStatTrackingSummary(match, metrics) {
   if (!completedLimit) return [];
   const summary = (metrics?.players || []).map(playerMetric => {
     const playerRef = match.players.find(row => row.playerId === playerMetric.playerId);
-    const totals = { fairwaysHit: 0, fairwayOpps: 0, greens: 0, putts: 0, upAndDowns: 0, sandies: 0 };
+    const totals = { fairwaysHit: 0, fairwayOpps: 0, greens: 0, putts: 0, penaltyStrokes: 0, upAndDowns: 0, sandies: 0 };
     (metrics?.holeResults || []).slice(0, completedLimit).forEach((holeResult, holeIdx) => {
       if (!holeResult?.completed) return;
       const scoreObj = holeResult?.playerScores?.find(ps => ps.playerId === playerMetric.playerId);
@@ -2685,6 +2702,7 @@ function computeStatTrackingSummary(match, metrics) {
       }
       if (stat.green) totals.greens += 1;
       if (Number.isFinite(stat.putts)) totals.putts += stat.putts;
+      if (Number.isFinite(Number(stat.penaltyStrokes))) totals.penaltyStrokes += Number(stat.penaltyStrokes);
       if (stat.upAndDown) totals.upAndDowns += 1;
       if (stat.sandy) totals.sandies += 1;
     });
@@ -2779,7 +2797,7 @@ function buildExportStatTrackingSummary(match, metrics) {
   if (!completedLimit) return '';
   const rows = (metrics?.players || []).map(playerMetric => {
     const playerRef = match.players.find(row => row.playerId === playerMetric.playerId);
-    const totals = { fairwaysHit: 0, fairwayOpps: 0, greens: 0, greenOpps: 0, putts: 0, puttOpps: 0, upAndDowns: 0, sandies: 0 };
+    const totals = { fairwaysHit: 0, fairwayOpps: 0, greens: 0, greenOpps: 0, putts: 0, puttOpps: 0, penaltyStrokes: 0, upAndDowns: 0, sandies: 0 };
     (metrics?.holeResults || []).slice(0, completedLimit).forEach((holeResult, holeIdx) => {
       if (!holeResult?.completed) return;
       const scoreObj = holeResult?.playerScores?.find(ps => ps.playerId === playerMetric.playerId);
@@ -2797,6 +2815,7 @@ function buildExportStatTrackingSummary(match, metrics) {
         totals.putts += Number(stat.putts);
         totals.puttOpps += 1;
       }
+      if (Number.isFinite(Number(stat.penaltyStrokes))) totals.penaltyStrokes += Number(stat.penaltyStrokes);
       if (stat.upAndDown) totals.upAndDowns += 1;
       if (stat.sandy) totals.sandies += 1;
     });
@@ -2807,6 +2826,7 @@ function buildExportStatTrackingSummary(match, metrics) {
         <td>${totals.fairwaysHit} / ${totals.fairwayOpps}</td>
         <td>${totals.greens} / ${totals.greenOpps}</td>
         <td>${avgPutts}</td>
+        <td>${totals.penaltyStrokes}</td>
         <td>${totals.upAndDowns}</td>
         <td>${totals.sandies}</td>
       </tr>`;
@@ -2817,7 +2837,7 @@ function buildExportStatTrackingSummary(match, metrics) {
       <div class="fit-box">
         <table class="export-table export-stat-summary-table">
           <thead>
-            <tr><th>Player</th><th>Fairways</th><th>GIR</th><th>Avg Putts</th><th>Up & Downs</th><th>Sandies</th></tr>
+            <tr><th>Player</th><th>Fairways</th><th>GIR</th><th>Avg Putts</th><th>Penalty</th><th>Up & Downs</th><th>Sandies</th></tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
@@ -2840,6 +2860,7 @@ function buildStatTrackingSummary(match, metrics) {
         <div><span>Fairways hit</span><strong>${totals.fairwaysHit} / ${totals.fairwayOpps}</strong></div>
         <div><span>Greens in regulation</span><strong>${totals.greens}</strong></div>
         <div><span>Total putts</span><strong>${totals.putts}</strong></div>
+        <div><span>Penalty strokes</span><strong>${totals.penaltyStrokes}</strong></div>
         <div><span>Up and downs</span><strong>${totals.upAndDowns}</strong></div>
         <div><span>Sandies</span><strong>${totals.sandies}</strong></div>
       </div>
@@ -2891,6 +2912,7 @@ function renderLeaderboard() {
       <td>${escapeHtml(p.player.name)}</td>
       <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
       <td>${p.grossTotal || 0}</td>
+      <td>${p.postableTotal || 0}</td>
       <td>${formatSigned(p.toPar || 0)}</td>
       <td>${p.netTotal || 0}</td>
       <td>${formatSigned(p.netDiff || 0)}</td>
@@ -2903,6 +2925,7 @@ function renderLeaderboard() {
         <div><strong>${escapeHtml(p.player.name)}</strong> <span class="tiny">· ${escapeHtml(getTeamLabel(match, p.team))}</span></div>
         <div class="leader-mobile-grid">
           <div><div class="leader-mobile-label">Gross</div><div>${p.grossTotal || 0}</div></div>
+          <div><div class="leader-mobile-label">Postable</div><div>${p.postableTotal || 0}</div></div>
           <div><div class="leader-mobile-label">Gross to Par</div><div>${formatSigned(p.toPar || 0)}</div></div>
           <div><div class="leader-mobile-label">Net</div><div>${p.netTotal || 0}</div></div>
           <div><div class="leader-mobile-label">Net to Par</div><div>${formatSigned(p.netDiff || 0)}</div></div>
@@ -3649,6 +3672,11 @@ function applyCurrentHoleDomToMatch(match) {
         const putts = Number(raw === '' ? '2' : raw);
         currentStat.putts = Number.isFinite(putts) ? Math.max(0, Math.round(putts)) : 2;
         currentStat.puttsSource = normalizePuttsSource(input.dataset.puttsSource || 'user', 'user');
+      } else if (key === 'penaltyStrokes') {
+        const raw = String(input.value || '').trim();
+        const penalties = Number(raw === '' ? '0' : raw);
+        currentStat.penaltyStrokes = Number.isFinite(penalties) ? Math.max(0, Math.round(penalties)) : 0;
+        currentStat.puttsSource = normalizePuttsSource(currentStat.puttsSource || 'default', 'default');
       } else {
         currentStat[key] = !!input.checked;
         currentStat.puttsSource = normalizePuttsSource(currentStat.puttsSource || 'default', 'default');
@@ -3962,6 +3990,7 @@ function hydrateMatchFromCloudBundle(bundle) {
           fairway: !!entry.fairway,
           green: !!entry.green,
           putts: Number.isFinite(Number(entry.putts)) ? Number(entry.putts) : null,
+          penaltyStrokes: Number.isFinite(Number(entry.penalty_strokes ?? entry.penaltyStrokes)) ? Number(entry.penalty_strokes ?? entry.penaltyStrokes) : 0,
           upAndDown: !!entry.up_and_down,
           sandy: !!entry.sandy,
         }, statIdx);
@@ -5257,6 +5286,7 @@ function renderStatTrackingEntry(match, hole, metrics) {
                 <label class="mini-check stat-mini-check"><input type="checkbox" data-stat-player="${p.playerId}" data-stat-key="sandy" ${stat.sandy ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>Sandy</span></label>
               </div>
               <label class="stat-putts-field top-gap"><span>Putts</span><input class="score-input stat-putts-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" min="0" max="9" data-stat-player="${p.playerId}" data-stat-key="putts" data-putts-source="${escapeHtml(normalizePuttsSource(stat.puttsSource || 'default', 'default'))}" value="${Number.isFinite(stat.putts) ? stat.putts : 2}" ${canEdit ? '' : 'disabled'} /></label>
+              <label class="stat-putts-field top-gap"><span>Penalty strokes</span><input class="score-input stat-penalty-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" min="0" max="9" data-stat-player="${p.playerId}" data-stat-key="penaltyStrokes" value="${Number.isFinite(Number(stat.penaltyStrokes)) ? Number(stat.penaltyStrokes) : 0}" ${canEdit ? '' : 'disabled'} /></label>
             </div>`;
         }).join('')}
       </div>

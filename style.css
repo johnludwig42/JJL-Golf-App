@@ -2554,3 +2554,23 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
 .scorecard-import-file-meta span{font-size:.78rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 button.mini{padding:6px 9px;font-size:.78rem;}
 @media (max-width:430px){.scorecard-import-file-row{grid-template-columns:1fr;}.scorecard-import-file-row button{width:100%;}}
+
+/* v27.46 Gross Game Detail audit trail */
+.gross-game-detail-card{border:1px solid rgba(12,55,33,.12);border-radius:16px;background:#fbfcfb;padding:10px;display:grid;gap:10px;}
+.gross-game-detail-toggle{width:100%;border:1px solid rgba(12,55,33,.18);border-radius:12px;background:#fff;color:#0c3721;font-weight:800;padding:10px 12px;text-align:left;display:flex;justify-content:space-between;align-items:center;cursor:pointer;}
+.gross-game-detail-toggle:focus-visible{outline:3px solid rgba(11,93,59,.22);outline-offset:2px;}
+.gross-game-detail-body{display:grid;gap:12px;}
+.gross-game-player-cards{display:grid;gap:10px;}
+.gross-game-player-card{border:1px solid var(--border);border-radius:14px;background:#fff;padding:10px;display:grid;gap:8px;}
+.gross-game-player-name{font-weight:900;color:#0c3721;font-size:1rem;}
+.gross-game-card-lines{display:grid;gap:5px;}
+.gross-game-card-line,.gross-game-card-total{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;font-variant-numeric:tabular-nums;}
+.gross-game-card-line span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);}
+.gross-game-card-total{border-top:1px solid rgba(12,55,33,.10);padding-top:8px;font-weight:900;}
+.gross-game-detail-list{display:grid;gap:10px;}
+.gross-game-section{border:1px solid var(--border);border-radius:14px;background:#fff;padding:10px;display:grid;gap:7px;}
+.gross-game-section-title{font-weight:900;color:#243247;}
+.gross-game-section-lines{display:grid;gap:6px;}
+.gross-game-payment-row{line-height:1.35;color:#334155;}
+.gross-game-section-total{font-size:12px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums;}
+@media (max-width:420px){.gross-game-card-line,.gross-game-card-total{grid-template-columns:minmax(0,1fr) auto;gap:8px}.gross-game-detail-card{padding:9px}.gross-game-player-card,.gross-game-section{padding:9px}}

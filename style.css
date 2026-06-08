@@ -2578,3 +2578,34 @@ button.mini{padding:6px 9px;font-size:.78rem;}
 /* v28.1 Match Summary Unification: hide duplicative team column when all teams are one-player teams. */
 .hide-player-team-column .leader-table th:nth-child(2),
 .hide-player-team-column .leader-table td:nth-child(2){display:none;}
+
+
+/* v28.3: 9-Point scorecard keeps only player names fixed on narrow screens. */
+.nine-point-scorecard-table th:nth-child(2),
+.nine-point-scorecard-table td:nth-child(2){
+  position: static !important;
+  left: auto !important;
+  z-index: auto !important;
+  box-shadow: none !important;
+  text-align: center !important;
+}
+.nine-point-scorecard-wrap::before,
+.nine-point-scorecard-wrap::after{
+  display: none !important;
+}
+.nine-point-scorecard-table .scorecard-sticky-name{
+  position: sticky !important;
+  left: 0 !important;
+  z-index: 7 !important;
+  background: #fff !important;
+  box-shadow: 8px 0 10px -8px rgba(0,0,0,.22) !important;
+}
+@media (max-width:760px){
+  #leaderboard .nine-point-scorecard-table .scorecard-sticky-name{min-width:112px;max-width:112px;}
+  #leaderboard .nine-point-scorecard-table{min-width:780px;}
+}
+body.printing-scorecard .nine-point-scorecard-table th:nth-child(2),
+body.printing-scorecard .nine-point-scorecard-table td:nth-child(2){
+  position: static !important;
+  left: auto !important;
+}

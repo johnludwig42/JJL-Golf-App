@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.2';
+const APP_VERSION = 'v28.3';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -312,8 +312,8 @@ function buildNinePointScorecard(match, metrics) {
     ? `<div class="payout-table-wrap top-gap"><table class="settlement-table"><thead><tr><th>From</th><th>To</th><th>Amount</th></tr></thead><tbody>${results.settlements.map(s => `<tr><td>${escapeHtml(getPlayer(s.from)?.name || s.from)}</td><td>${escapeHtml(getPlayer(s.to)?.name || s.to)}</td><td>${formatMoneyAccounting(s.amount)}</td></tr>`).join('')}</tbody></table></div>`
     : `<div class="tiny top-gap">No settlement yet.</div>`;
   return `<div class="tiny">${escapeHtml(formatBasisLabel(results.basis))} · ${formatMoneyAccounting(results.stakePerPoint)} per point · ${results.completedHoles}/${getPlayableHoleCount(match, metrics?.tee)} holes complete</div>
-    <div class="scorecard-wrap top-gap">
-      <table class="scorecard-table">
+    <div class="scorecard-wrap nine-point-scorecard-wrap top-gap">
+      <table class="scorecard-table nine-point-scorecard-table">
         <thead><tr><th>Player</th>${holeHeaders}<th>Total</th><th>Payout</th></tr></thead>
         <tbody>${playerRows}</tbody>
       </table>
@@ -1081,6 +1081,18 @@ function buildSummaryExportBody(match, metrics) {
   const exportGrossGameDetailHtml = buildExportGrossGameDetailSummary(match, metrics);
   const exportMomentumHtml = buildExportMomentum(match, metrics);
   const showNinePoint = (match.selectedGames || []).some(g => g.key === 'nine_point');
+  const exportNinePointScorecardHtml = showNinePoint ? `
+    <section class="export-section export-section-nine-point export-section-nine-point-scorecard">
+      <div class="export-section-head">
+        <h2>9-Point Scorecard</h2>
+        <div class="export-section-sub">Hole-by-hole 9-Point scoring and payout totals.</div>
+      </div>
+      <div class="fit-stage" data-fit="width" data-fit-min="0.72">
+        <div class="fit-box">
+          ${buildNinePointScorecard(match, metrics)}
+        </div>
+      </div>
+    </section>` : '';
   return `
     <section class="export-section export-section-games-summary">
       <div class="export-section-head">
@@ -1122,6 +1134,8 @@ function buildSummaryExportBody(match, metrics) {
       </div>
     </section>
 
+    ${exportNinePointScorecardHtml}
+
     ${exportMomentumHtml}
 
     <section class="export-section export-section-score-distribution">
@@ -1142,23 +1156,12 @@ function buildSummaryExportBody(match, metrics) {
     </section>` : ''}
 
     ${exportGrossGameDetailHtml ? `
+    <div class="export-page-break export-page-break-before-gross-game-detail"></div>
     <section class="export-section export-section-gross-game-detail">
       <div class="export-section-head">
         <h2>Gross Game Detail</h2>
       </div>
       ${exportGrossGameDetailHtml}
-    </section>` : ''}
-
-    ${showNinePoint ? `
-    <section class="export-section export-section-nine-point">
-      <div class="export-section-head">
-        <h2>9-Point game</h2>
-      </div>
-      <div class="fit-stage" data-fit="width" data-fit-min="0.72">
-        <div class="fit-box">
-          ${buildNinePointScorecard(match, metrics)}
-        </div>
-      </div>
     </section>` : ''}
 
     ${buildExportNotes()}`;
@@ -1521,10 +1524,36 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       break-before: auto;
       page-break-before: auto;
     }
+    .export-page-break {
+      display: block;
+      height: 0;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      break-before: page;
+      page-break-before: always;
+    }
+    .nine-point-scorecard-table th:nth-child(2),
+    .nine-point-scorecard-table td:nth-child(2) {
+      position: static !important;
+      left: auto !important;
+      z-index: auto !important;
+      box-shadow: none !important;
+      text-align: center !important;
+    }
+    .nine-point-scorecard-wrap::before,
+    .nine-point-scorecard-wrap::after {
+      display: none !important;
+    }
     @media print {
+      .export-page-break-before-gross-game-detail {
+        display: block !important;
+        break-before: page !important;
+        page-break-before: always !important;
+      }
       .export-section-gross-game-detail {
-        break-before: page;
-        page-break-before: always;
+        break-before: auto;
+        page-break-before: auto;
       }
       .export-section-head {
         break-after: avoid;

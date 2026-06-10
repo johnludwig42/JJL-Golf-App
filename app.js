@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.8';
+const APP_VERSION = 'v28.9';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -1370,7 +1370,7 @@ function buildSummaryExportBody(match, metrics) {
   return `
     ${exportRoundRecapHtml}
 
-    <section class="export-section export-section-games-summary">
+    <section class="export-section export-section-games-summary${exportRoundRecapHtml ? ' export-section-games-summary-after-recap' : ''}">
       <div class="export-section-head">
         <h2>Games summary</h2>
       </div>
@@ -1825,6 +1825,16 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       break-before: page;
       page-break-before: always;
     }
+    .export-force-page-before {
+      break-before: page !important;
+      page-break-before: always !important;
+    }
+    .export-section-round-recap {
+      break-before: avoid-page;
+      page-break-before: avoid;
+      break-inside: avoid-page;
+      page-break-inside: avoid;
+    }
     .nine-point-scorecard-table th:nth-child(2),
     .nine-point-scorecard-table td:nth-child(2) {
       position: static !important;
@@ -1840,6 +1850,10 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     @media print {
       .export-page-break-before-gross-game-detail {
         display: block !important;
+        break-before: page !important;
+        page-break-before: always !important;
+      }
+      .export-force-page-before {
         break-before: page !important;
         page-break-before: always !important;
       }
@@ -2040,6 +2054,21 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
           section.style.height = Math.ceil((naturalHeight * scale) + sectionChrome) + 'px';
         });
       }
+      function reserveFirstPageForRecap() {
+        const recap = document.querySelector('.export-section-round-recap');
+        const games = document.querySelector('.export-section-games-summary-after-recap');
+        if (!recap || !games) return;
+        games.classList.remove('export-force-page-before');
+        const printableHeight = getPrintablePageHeightPx();
+        const header = document.querySelector('.export-header');
+        const headerHeight = header ? Math.ceil(header.getBoundingClientRect().height) : 0;
+        const recapHeight = Math.ceil(recap.getBoundingClientRect().height || recap.offsetHeight || 0);
+        const gamesHeight = Math.ceil(games.getBoundingClientRect().height || games.offsetHeight || 0);
+        const buffer = SECTION_GAP_PX * 3;
+        if (headerHeight + recapHeight + gamesHeight + buffer > printableHeight) {
+          games.classList.add('export-force-page-before');
+        }
+      }
       function runAfterLayout(fn) {
         requestAnimationFrame(function () {
           requestAnimationFrame(function () {
@@ -2051,6 +2080,7 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
         decoratePrintPages();
         fitAllStages();
         layoutPrintPages();
+        reserveFirstPageForRecap();
       }
       function startPrint() {
         prepareExportLayout();

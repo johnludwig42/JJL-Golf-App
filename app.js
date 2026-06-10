@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.6';
+const APP_VERSION = 'v28.7';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -1046,6 +1046,26 @@ function buildExportMomentum(match, metrics) {
 function getStoredRoundRecap(match) {
   return String(match?.roundRecap || '').trim();
 }
+
+function splitRoundRecapParagraphs(text) {
+  const raw = String(text || '').replace(/\r\n/g, '\n').trim();
+  if (!raw) return [];
+  const paragraphs = raw.split(/\n\s*\n+/).map(p => p.replace(/\s*\n\s*/g, ' ').trim()).filter(Boolean);
+  if (paragraphs.length > 1) return paragraphs;
+  const sentences = raw.match(/[^.!?]+[.!?]+(?:["')\]]+)?/g) || [raw];
+  if (sentences.length < 6) return [raw.replace(/\s+/g, ' ').trim()];
+  const per = Math.ceil(sentences.length / 3);
+  return [
+    sentences.slice(0, per).join(' '),
+    sentences.slice(per, per * 2).join(' '),
+    sentences.slice(per * 2).join(' '),
+  ].map(p => p.replace(/\s+/g, ' ').trim()).filter(Boolean);
+}
+function formatRoundRecapHtml(text) {
+  const paragraphs = splitRoundRecapParagraphs(text);
+  if (!paragraphs.length) return '';
+  return paragraphs.map(p => `<p>${escapeHtml(p)}</p>`).join('');
+}
 function buildRoundRecapExport(match) {
   const recap = getStoredRoundRecap(match);
   if (!recap) return '';
@@ -1054,7 +1074,7 @@ function buildRoundRecapExport(match) {
       <div class="export-section-head">
         <h2>The Dye Ledger Round Recap</h2>
       </div>
-      <div class="export-round-recap-text">${escapeHtml(recap).replace(/\n/g, '<br>')}</div>
+      <div class="export-round-recap-text">${formatRoundRecapHtml(recap)}</div>
     </section>`;
 }
 function buildRoundRecapStatus(match) {
@@ -1080,7 +1100,7 @@ function buildRoundRecapControls(match) {
         <button id="generateRoundRecapBtn" type="button" class="secondary" ${disabled ? 'disabled' : ''}>${recap ? 'Regenerate Round Recap' : 'Generate Round Recap'}</button>
         ${recap ? '<button id="clearRoundRecapBtn" type="button" class="secondary">Clear Recap</button>' : ''}
       </div>
-      ${recap ? `<div class="round-recap-preview tiny">${escapeHtml(recap)}</div>` : ''}
+      ${recap ? `<div class="round-recap-preview tiny">${formatRoundRecapHtml(recap)}</div>` : ''}
     </div>`;
 }
 function summarizeSelectedGamesForRecap(match, metrics) {
@@ -1113,6 +1133,70 @@ function summarizeSelectedGamesForRecap(match, metrics) {
     }
     return item;
   });
+}
+
+function sortRecapLeaderboard(players, key) {
+  return (players || [])
+    .filter(p => Number.isFinite(Number(p[key])) && Number(p[key]) > 0)
+    .slice()
+    .sort((a, b) => Number(a[key]) - Number(b[key]) || String(a.name).localeCompare(String(b.name)))
+    .map((p, idx) => ({ rank: idx + 1, player: p.name, value: Number(p[key]) }));
+}
+function buildRoundRecapStatLeaders(playerSummaries) {
+  const stats = playerSummaries || [];
+  const leaderFor = (label, path, mode = 'max') => {
+    const rows = stats.map(p => {
+      const val = path.reduce((obj, part) => obj && obj[part], p);
+      return { player: p.name, value: Number(val) };
+    }).filter(r => Number.isFinite(r.value));
+    if (!rows.length) return null;
+    const target = mode === 'min' ? Math.min(...rows.map(r => r.value)) : Math.max(...rows.map(r => r.value));
+    return { label, mode, value: target, players: rows.filter(r => r.value === target).map(r => r.player) };
+  };
+  return {
+    totalPutts: leaderFor('Total Putts', ['stats', 'puttsTotal'], 'min') || leaderFor('Total Putts', ['stats', 'totalPutts'], 'min'),
+    averagePutts: leaderFor('Average Putts', ['stats', 'avgPutts'], 'min') || leaderFor('Average Putts', ['stats', 'puttsAvg'], 'min'),
+    gir: leaderFor('GIR', ['stats', 'girMade'], 'max') || leaderFor('GIR', ['stats', 'gir'], 'max'),
+    fairways: leaderFor('Fairways', ['stats', 'fairwaysMade'], 'max') || leaderFor('Fairways', ['stats', 'fairways'], 'max'),
+    penalties: leaderFor('Penalty Strokes', ['stats', 'penalties'], 'min') || leaderFor('Penalty Strokes', ['stats', 'penaltyStrokes'], 'min'),
+    upAndDowns: leaderFor('Up & Downs', ['stats', 'upAndDowns'], 'max'),
+    sandies: leaderFor('Sandies', ['stats', 'sandies'], 'max'),
+  };
+}
+function buildRoundRecapAuthoritativeFacts(match, metrics, playerSummaries, finalSettlement, payoutGames) {
+  const grossLeaderboard = sortRecapLeaderboard(playerSummaries, 'gross');
+  const netLeaderboard = sortRecapLeaderboard(playerSummaries, 'net');
+  const lowGrossScore = grossLeaderboard[0]?.value ?? null;
+  const lowNetScore = netLeaderboard[0]?.value ?? null;
+  const lowGrossPlayers = lowGrossScore == null ? [] : grossLeaderboard.filter(r => r.value === lowGrossScore).map(r => r.player);
+  const lowNetPlayers = lowNetScore == null ? [] : netLeaderboard.filter(r => r.value === lowNetScore).map(r => r.player);
+  const gameWinners = (payoutGames || []).map(game => {
+    const amounts = Object.entries(game.amounts || {}).map(([player, amount]) => ({ player, amount: Number(amount || 0) }));
+    const max = amounts.length ? Math.max(...amounts.map(r => r.amount)) : 0;
+    const winners = amounts.filter(r => r.amount === max && r.amount > 0).map(r => ({ player: r.player, amount: r.amount }));
+    return { label: game.label, winners, amounts, paymentLines: game.paymentLines || [] };
+  });
+  const settlementTotals = {};
+  (finalSettlement || []).forEach(row => {
+    settlementTotals[row.from] = (settlementTotals[row.from] || 0) - Number(row.amount || 0);
+    settlementTotals[row.to] = (settlementTotals[row.to] || 0) + Number(row.amount || 0);
+  });
+  return {
+    lowGrossPlayer: lowGrossPlayers.join(', ') || null,
+    lowGrossPlayers,
+    lowGrossScore,
+    lowNetPlayer: lowNetPlayers.join(', ') || null,
+    lowNetPlayers,
+    lowNetScore,
+    grossLeaderboard,
+    netLeaderboard,
+    finalSettlement,
+    finalSettlementTotals: settlementTotals,
+    gameResults: gameWinners,
+    gameWinners,
+    greenieWinners: (summarizeSelectedGamesForRecap(match, metrics).find(g => g.key === 'greenies')?.summary?.winners) || [],
+    statLeaders: buildRoundRecapStatLeaders(playerSummaries),
+  };
 }
 function buildRoundRecapPayload(match, metrics) {
   const courseName = metrics?.course?.name || getCourse(match?.courseId)?.name || 'Course';
@@ -1173,6 +1257,7 @@ function buildRoundRecapPayload(match, metrics) {
     finalSettlement,
     payoutGames,
     momentum,
+    authoritativeFacts: buildRoundRecapAuthoritativeFacts(match, metrics, playerSummaries, finalSettlement, payoutGames),
   };
 }
 async function generateRoundRecapForActiveMatch() {
@@ -1494,6 +1579,14 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       white-space: normal;
       overflow-wrap: anywhere;
       color: #243247;
+    }
+    .export-round-recap-text p,
+    .round-recap-preview p {
+      margin: 0 0 0.72em;
+    }
+    .export-round-recap-text p:last-child,
+    .round-recap-preview p:last-child {
+      margin-bottom: 0;
     }
     .fit-stage {
       width: 100%;

@@ -1,8 +1,8 @@
 # The Dye Ledger
 
-Current version: **v28.6**
+Current version: **v28.7**
 
-## What changed in v28.6
+## What changed in v28.7
 
 - Refined Match Summary report flow by moving Round Recap above Games Summary and Player Leaderboard above Final Net Settlement.
 - Increased Match Summary Round Recap body text size.

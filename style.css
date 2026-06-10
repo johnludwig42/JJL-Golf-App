@@ -2609,3 +2609,19 @@ body.printing-scorecard .nine-point-scorecard-table td:nth-child(2){
   position: static !important;
   left: auto !important;
 }
+
+
+/* v28.4 Round Recap controls */
+.round-recap-control-card {
+  border: 1px solid var(--border);
+  background: var(--surface-soft, #f8fafc);
+  border-radius: 14px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+.round-recap-preview {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  line-height: 1.45;
+}

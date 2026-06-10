@@ -9,6 +9,12 @@ Current version: **v28.2**
 - Included Momentum Chart after Classic Scorecard when relevant.
 - Fixed Momentum Chart team/side mapping for head-to-head team matches.
 
+## v28.4
+- Added optional Generate Round Recap workflow.
+- Added new round-recap Supabase Edge Function for CBS Fantasy-style round summaries.
+- Round Recaps are saved locally with the match and included in the Match Summary report when generated.
+- No scoring, settlement, Classic Scorecard, Supabase schema, or cloud sync changes.
+
 ## v28.3
 
 - Gross Game Detail starts on a fresh page in Match Summary PDF output.

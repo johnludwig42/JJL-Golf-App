@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.3';
+const APP_VERSION = 'v28.4';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -1042,6 +1042,194 @@ function buildExportMomentum(match, metrics) {
     </section>`;
 }
 
+
+function getStoredRoundRecap(match) {
+  return String(match?.roundRecap || '').trim();
+}
+function buildRoundRecapExport(match) {
+  const recap = getStoredRoundRecap(match);
+  if (!recap) return '';
+  return `
+    <section class="export-section export-section-round-recap">
+      <div class="export-section-head">
+        <h2>The Dye Ledger Round Recap</h2>
+      </div>
+      <div class="export-round-recap-text">${escapeHtml(recap).replace(/\n/g, '<br>')}</div>
+    </section>`;
+}
+function buildRoundRecapStatus(match) {
+  const status = String(match?.roundRecapStatus || '').trim();
+  const generatedAt = match?.roundRecapGeneratedAt ? new Date(match.roundRecapGeneratedAt) : null;
+  const generatedText = generatedAt && !Number.isNaN(generatedAt.getTime()) ? `Generated ${generatedAt.toLocaleString()}.` : '';
+  return status || generatedText || '';
+}
+function buildRoundRecapControls(match) {
+  if (!match) return '';
+  const recap = getStoredRoundRecap(match);
+  const online = navigator.onLine !== false;
+  const configured = !!getRoundRecapUrl();
+  const disabled = !online || !configured;
+  const reason = !configured ? 'Configure Supabase to enable AI round recaps.' : (!online ? 'Round Recap requires an internet connection.' : 'Optional AI recap. Saved locally with this match after generation.');
+  return `
+    <div class="round-recap-control-card no-print">
+      <div>
+        <div class="section-label">The Dye Ledger Round Recap</div>
+        <div class="tiny">${escapeHtml(buildRoundRecapStatus(match) || reason)}</div>
+      </div>
+      <div class="actions wrap compact-actions">
+        <button id="generateRoundRecapBtn" type="button" class="secondary" ${disabled ? 'disabled' : ''}>${recap ? 'Regenerate Round Recap' : 'Generate Round Recap'}</button>
+        ${recap ? '<button id="clearRoundRecapBtn" type="button" class="secondary">Clear Recap</button>' : ''}
+      </div>
+      ${recap ? `<div class="round-recap-preview tiny">${escapeHtml(recap)}</div>` : ''}
+    </div>`;
+}
+function summarizeSelectedGamesForRecap(match, metrics) {
+  const selected = getOrderedSelectedGames(match);
+  return selected.map(cfg => {
+    const item = { key: cfg.key, label: getFeaturedGameLabel(match, cfg.key) };
+    try {
+      if (cfg.key === 'greenies') {
+        const g = getGreeniesResults(match, metrics, cfg);
+        item.summary = {
+          winners: g.winnersByHole.map(h => ({ hole: h.holeNumber, player: getPlayer(h.winner)?.name || 'Unknown' })),
+          counts: Object.fromEntries(Object.entries(g.counts || {}).map(([id, n]) => [getPlayer(id)?.name || id, n])),
+        };
+      } else if (cfg.key === 'nine_point') {
+        const nine = computeNinePointResults(match, metrics, cfg);
+        item.summary = {
+          basis: formatBasisLabel(nine.basis),
+          stakePerPoint: nine.stakePerPoint,
+          completedHoles: nine.completedHoles,
+          leaderboard: nine.leaderboard.map(r => ({ player: r.name, points: r.total, payout: Number(r.amount || 0) })),
+        };
+      } else if (cfg.key === 'individual_match') {
+        item.summary = getIndividualMatchPairings(match, metrics).map(p => ({ label: p.label, game: getSideMatchGameLabel(p.game), basis: formatBasisLabel(p.basis), stake: Number(p.stake) || 0, status: p.status, completedHoles: p.completedCount }));
+      } else if (cfg.key === 'nassau' || cfg.key === 'team_match') {
+        const diffs = computeTeamGameDiffs(match, metrics, cfg.key);
+        item.summary = { basis: formatBasisLabel(cfg.basis), front: diffs.front, back: diffs.back, overall: diffs.overall, status: formatTeamGameStatus(match, metrics, diffs.overall) };
+      }
+    } catch (err) {
+      item.summary = 'Unavailable';
+    }
+    return item;
+  });
+}
+function buildRoundRecapPayload(match, metrics) {
+  const courseName = metrics?.course?.name || getCourse(match?.courseId)?.name || 'Course';
+  const teeName = metrics?.tee?.teeName || getTee(match?.courseId, match?.teeId)?.teeName || 'Tee';
+  const payoutCtx = getPayoutReportContext(match, metrics);
+  const finalSettlement = optimalSettlementRows(payoutCtx.finalTotals || {}).map(row => ({
+    from: getPlayer(row.from)?.name || row.from,
+    to: getPlayer(row.to)?.name || row.to,
+    amount: Number(row.amount || 0),
+  }));
+  const playerSummaries = (metrics?.players || []).map(pm => {
+    const dist = computeScoreDistributionSummary(match, metrics).find(r => r.playerMetric?.playerId === pm.playerId)?.totals || {};
+    const stat = computeStatTrackingSummary(match, metrics).find(r => r.playerMetric?.playerId === pm.playerId)?.totals || {};
+    return {
+      name: pm.player?.name || 'Player',
+      team: getTeamLabel(match, pm.team),
+      index: Number(pm.player?.index),
+      tee: pm.tee?.teeName || '',
+      courseHandicap: Number(pm.courseHdcp),
+      playingHandicap: Number(pm.playHdcp),
+      gross: Number(pm.grossTotal || 0),
+      net: Number(pm.leaderboardNetTotal || pm.netTotal || 0),
+      netToPar: Number(pm.leaderboardNetDiff || 0),
+      postable: Number(pm.postableTotal || 0),
+      scoreDistribution: dist,
+      stats: stat,
+    };
+  });
+  const payoutGames = (payoutCtx.payoutGames || []).map(game => ({
+    label: game.label,
+    amounts: Object.fromEntries(Object.entries(game.amounts || {}).map(([id, amt]) => [getPlayer(id)?.name || id, Number(amt || 0)])),
+    paymentLines: Array.isArray(game.paymentLines) ? game.paymentLines.map(line => ({ from: getPlayer(line.from)?.name || line.from, to: getPlayer(line.to)?.name || line.to, amount: Number(line.amount || 0) })) : [],
+  }));
+  let momentum = null;
+  try {
+    const key = getDefaultMomentumGameKey(match, metrics) || match.momentumGame || '';
+    if (key && hasTeamMomentumMatch(match, metrics)) {
+      momentum = { description: describeMomentumMeta(match, metrics, key), holes: [] };
+      let running = 0;
+      (metrics?.holeResults || []).forEach(h => {
+        const outcome = computeMomentumOutcome(match, metrics, h, key);
+        if (outcome === 'team1') running += 1;
+        else if (outcome === 'team2') running -= 1;
+        if (outcome !== 'pending') momentum.holes.push({ hole: h.holeNumber, status: formatPerspectiveStatus(running, getMomentumPerspectiveTeam(match)) });
+      });
+    }
+  } catch (_) {}
+  return {
+    app: 'The Dye Ledger',
+    course: courseName,
+    tee: teeName,
+    date: match?.date || todayIso(),
+    holesCompleted: Number(metrics?.completed || 0),
+    holeCount: getPlayableHoleCount(match, metrics?.tee),
+    status: match?.status || 'active',
+    players: playerSummaries,
+    games: summarizeSelectedGamesForRecap(match, metrics),
+    finalSettlement,
+    payoutGames,
+    momentum,
+  };
+}
+async function generateRoundRecapForActiveMatch() {
+  const match = getActiveMatch();
+  if (!match) return toast('Create or load a match first.');
+  if (navigator.onLine === false) return toast('Round Recap requires an internet connection.');
+  const url = getRoundRecapUrl();
+  if (!url) return toast('Configure Supabase before generating a Round Recap.');
+  const metrics = computeMatchMetrics(match);
+  if (!metrics) return toast('Match data is not ready yet.');
+  const btn = document.getElementById('generateRoundRecapBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Generating…';
+  }
+  match.roundRecapStatus = 'Generating Round Recap…';
+  persist({ skipRender: true });
+  renderRoundRecapControlPanel(match);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: getRoundRecapHeaders(),
+      body: JSON.stringify({ match: buildRoundRecapPayload(match, metrics) }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data?.success === false) throw new Error(data?.error || `Round Recap failed (${response.status}).`);
+    const recap = String(data?.recap || data?.text || '').trim();
+    if (!recap) throw new Error('Round Recap returned no text.');
+    match.roundRecap = recap;
+    match.roundRecapGeneratedAt = new Date().toISOString();
+    match.roundRecapStatus = 'Round Recap generated and saved locally with this match.';
+    persist({ skipRender: true });
+    renderLeaderboard();
+    toast('Round Recap generated.');
+  } catch (err) {
+    console.error(err);
+    match.roundRecapStatus = err?.message || 'Round Recap unavailable.';
+    persist({ skipRender: true });
+    renderLeaderboard();
+    toast('Round Recap unavailable. Match Summary still works normally.');
+  }
+}
+function clearRoundRecapForActiveMatch() {
+  const match = getActiveMatch();
+  if (!match) return;
+  match.roundRecap = '';
+  match.roundRecapGeneratedAt = null;
+  match.roundRecapStatus = 'Round Recap cleared.';
+  persist({ skipRender: true });
+  renderLeaderboard();
+}
+function renderRoundRecapControlPanel(match = getActiveMatch()) {
+  const panel = document.getElementById('roundRecapControls');
+  if (!panel) return;
+  panel.innerHTML = match ? buildRoundRecapControls(match) : '';
+}
+
 function buildExportNotes() {
   const notes = String(state?.notes || '').trim();
   if (!notes) return '';
@@ -1080,6 +1268,7 @@ function buildSummaryExportBody(match, metrics) {
   const exportStatTrackingHtml = buildExportStatTrackingSummary(match, metrics);
   const exportGrossGameDetailHtml = buildExportGrossGameDetailSummary(match, metrics);
   const exportMomentumHtml = buildExportMomentum(match, metrics);
+  const exportRoundRecapHtml = buildRoundRecapExport(match);
   const showNinePoint = (match.selectedGames || []).some(g => g.key === 'nine_point');
   const exportNinePointScorecardHtml = showNinePoint ? `
     <section class="export-section export-section-nine-point export-section-nine-point-scorecard">
@@ -1100,6 +1289,8 @@ function buildSummaryExportBody(match, metrics) {
       </div>
       ${buildSelectedGamesSummary(match, metrics)}
     </section>
+
+    ${exportRoundRecapHtml}
 
     <section class="export-section export-section-net-payout">
       <div class="export-section-head">
@@ -1291,11 +1482,15 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     .export-section-head h2 { margin: 0; font-size: 16px; line-height: 1.15; letter-spacing: -0.01em; }
     .export-section-sub { margin-top: 5px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
     .export-empty { color: var(--muted); font-size: 12px; }
-    .export-note-block {
+    .export-note-block,
+    .export-round-recap-text {
       font-size: 12px;
       line-height: 1.45;
       white-space: normal;
       overflow-wrap: anywhere;
+    }
+    .export-round-recap-text {
+      color: #243247;
     }
     .fit-stage {
       width: 100%;
@@ -1501,6 +1696,7 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     strong { font-weight: 800; }
 
     .export-section-games-summary,
+    .export-section-round-recap,
     .export-section-net-payout,
     .export-section-player-leaderboard,
     .export-section-team-leaderboard,
@@ -1991,6 +2187,9 @@ function normalizeMatch(match) {
   match.lastCloudSyncAt = match.lastCloudSyncAt || null;
   match.sharedOwnerUserId = match.sharedOwnerUserId || null;
   match.sharedMatchRef = match.sharedMatchRef || match.sharedMatchId || match.id;
+  match.roundRecap = typeof match.roundRecap === 'string' ? match.roundRecap : '';
+  match.roundRecapGeneratedAt = match.roundRecapGeneratedAt || null;
+  match.roundRecapStatus = typeof match.roundRecapStatus === 'string' ? match.roundRecapStatus : '';
   const progress = computeMatchProgress(match);
   match.lastTouchedHole = Number(match.lastTouchedHole) || progress.lastTouchedHole;
   match.lastFullyCompletedHole = Number(match.lastFullyCompletedHole) || progress.lastFullyCompletedHole;
@@ -3121,6 +3320,7 @@ function renderLeaderboard() {
   const activePrintView = (match.printView === 'scorecard') ? 'scorecard' : 'summary';
   syncScoreboardPrintControls(activePrintView);
   applyScoreboardPrintView(activePrintView);
+  renderRoundRecapControlPanel(match);
 
   const statusOptions = getMatchStatusOptions(match);
   if (matchStatusGameSelect) {
@@ -4343,6 +4543,13 @@ function getScorecardImportHeaders() {
     headers.apikey = key;
   }
   return headers;
+}
+function getRoundRecapUrl() {
+  const url = String(SUPABASE_CONFIG.url || '').replace(/\/$/, '');
+  return url ? `${url}/functions/v1/round-recap` : '';
+}
+function getRoundRecapHeaders() {
+  return getScorecardImportHeaders();
 }
 function isSupportedScorecardFile(file) {
   const name = String(file?.name || '').toLowerCase();
@@ -7812,6 +8019,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       cloudSyncState: existing?.cloudSyncState || (sharedMatchEnabled ? 'pending' : 'local-only'),
       lastCloudSyncAt: existing?.lastCloudSyncAt || null,
       notes: existing?.notes || state.notes || '',
+      roundRecap: existing?.roundRecap || '',
+      roundRecapGeneratedAt: existing?.roundRecapGeneratedAt || null,
+      roundRecapStatus: existing?.roundRecapStatus || '',
     };
     normalizeMatch(match);
     if (!match.courseId) return toast('Select a course.');
@@ -7905,6 +8115,16 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   });
   document.getElementById('prevHoleBtn').addEventListener('click', () => { saveCurrentHole({ targetHole: Math.max(1, currentHole - 1), silent: true }); });
   document.getElementById('nextHoleBtn').addEventListener('click', () => { saveCurrentHole({ advance: true, silent: true }); });
+  document.getElementById('leaderboard')?.addEventListener('click', e => {
+    if (e.target.closest('#generateRoundRecapBtn')) {
+      generateRoundRecapForActiveMatch();
+      return;
+    }
+    if (e.target.closest('#clearRoundRecapBtn')) {
+      clearRoundRecapForActiveMatch();
+      return;
+    }
+  });
   document.getElementById('scoreboardShareRoundBtn').addEventListener('click', () => { openPrintScorecard(); });
   document.getElementById('saveScoresBtn').addEventListener('click', () => { saveCurrentHole(); });
   document.getElementById('finishRoundBtn').addEventListener('click', armFinishRound);

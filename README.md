@@ -1,13 +1,12 @@
 # The Dye Ledger
 
-Current version: **v28.2**
+Current version: **v28.5**
 
-## What changed in v28.2
+## What changed in v28.5
 
-- Improved Match Summary PDF page-break behavior.
-- Removed unwanted PDF underline styling from Classic Scorecard birdies.
-- Included Momentum Chart after Classic Scorecard when relevant.
-- Fixed Momentum Chart team/side mapping for head-to-head team matches.
+- Refined Match Summary report flow by moving Round Recap above Games Summary and Player Leaderboard above Final Net Settlement.
+- Increased Match Summary Round Recap body text size.
+- Expanded AI Round Recap generation to target 10–12 sentences with richer gross scoring, gaming, momentum, and player-highlight detail.
 
 ## v28.4
 - Added optional Generate Round Recap workflow.

@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.4';
+const APP_VERSION = 'v28.5';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -1283,20 +1283,13 @@ function buildSummaryExportBody(match, metrics) {
       </div>
     </section>` : '';
   return `
+    ${exportRoundRecapHtml}
+
     <section class="export-section export-section-games-summary">
       <div class="export-section-head">
         <h2>Games summary</h2>
       </div>
       ${buildSelectedGamesSummary(match, metrics)}
-    </section>
-
-    ${exportRoundRecapHtml}
-
-    <section class="export-section export-section-net-payout">
-      <div class="export-section-head">
-        <h2>Final Net Settlement — Efficient Cash Payments</h2>
-      </div>
-      ${buildExportFinalNetSettlementSummary(match, metrics)}
     </section>
 
     <section class="export-section export-section-player-leaderboard">
@@ -1312,6 +1305,13 @@ function buildSummaryExportBody(match, metrics) {
       </div>
       ${buildExportTeamLeaderboard(match, metrics)}
     </section>` : ''}
+
+    <section class="export-section export-section-net-payout">
+      <div class="export-section-head">
+        <h2>Final Net Settlement — Efficient Cash Payments</h2>
+      </div>
+      ${buildExportFinalNetSettlementSummary(match, metrics)}
+    </section>
 
     <section class="export-section export-section-classic export-section-classic-summary">
       <div class="export-section-head">
@@ -1482,14 +1482,17 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     .export-section-head h2 { margin: 0; font-size: 16px; line-height: 1.15; letter-spacing: -0.01em; }
     .export-section-sub { margin-top: 5px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
     .export-empty { color: var(--muted); font-size: 12px; }
-    .export-note-block,
-    .export-round-recap-text {
+    .export-note-block {
       font-size: 12px;
       line-height: 1.45;
       white-space: normal;
       overflow-wrap: anywhere;
     }
     .export-round-recap-text {
+      font-size: 14px;
+      line-height: 1.48;
+      white-space: normal;
+      overflow-wrap: anywhere;
       color: #243247;
     }
     .fit-stage {

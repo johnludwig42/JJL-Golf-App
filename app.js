@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.10';
+const APP_VERSION = 'v28.11';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -521,6 +521,36 @@ function normalizeHoleStat(stat = {}, idx = 0) {
 }
 function isStatTrackingEnabled(match) {
   return !!match?.statTrackingEnabled;
+}
+function getMatchPlayerIds(match) {
+  return Array.isArray(match?.players) ? match.players.map(p => String(p.playerId || '')).filter(Boolean) : [];
+}
+function getStatTrackingParticipantIds(match) {
+  if (!isStatTrackingEnabled(match)) return [];
+  const playerIds = getMatchPlayerIds(match);
+  if (!playerIds.length) return [];
+  if (!Array.isArray(match?.statTrackingPlayerIds)) return playerIds;
+  const selected = new Set(match.statTrackingPlayerIds.map(id => String(id || '')).filter(Boolean));
+  return playerIds.filter(id => selected.has(id));
+}
+function isPlayerStatTrackingEnabled(match, playerId) {
+  if (!isStatTrackingEnabled(match) || !playerId) return false;
+  return getStatTrackingParticipantIds(match).includes(String(playerId));
+}
+function normalizeStatTrackingParticipants(match) {
+  if (!match) return [];
+  const playerIds = getMatchPlayerIds(match);
+  if (!match.statTrackingEnabled) {
+    match.statTrackingPlayerIds = [];
+    return match.statTrackingPlayerIds;
+  }
+  if (!Array.isArray(match.statTrackingPlayerIds)) {
+    match.statTrackingPlayerIds = playerIds.slice();
+  } else {
+    const selected = new Set(match.statTrackingPlayerIds.map(id => String(id || '')).filter(Boolean));
+    match.statTrackingPlayerIds = playerIds.filter(id => selected.has(id));
+  }
+  return match.statTrackingPlayerIds;
 }
 function getPlayerStatEntry(playerRef, holeIdx) {
   return playerRef?.stats?.[holeIdx] || normalizeHoleStat({}, holeIdx);
@@ -1148,7 +1178,7 @@ function sortRecapLeaderboard(players, key) {
     .map((p, idx) => ({ rank: idx + 1, player: p.name, value: Number(p[key]) }));
 }
 function buildRoundRecapStatLeaders(playerSummaries) {
-  const stats = playerSummaries || [];
+  const stats = (playerSummaries || []).filter(p => p.statsTracked !== false && p.stats);
   const leaderFor = (label, path, mode = 'max') => {
     const rows = stats.map(p => {
       const val = path.reduce((obj, part) => obj && obj[part], p);
@@ -1214,7 +1244,8 @@ function buildRoundRecapPayload(match, metrics) {
   }));
   const playerSummaries = (metrics?.players || []).map(pm => {
     const dist = computeScoreDistributionSummary(match, metrics).find(r => r.playerMetric?.playerId === pm.playerId)?.totals || {};
-    const stat = computeStatTrackingSummary(match, metrics).find(r => r.playerMetric?.playerId === pm.playerId)?.totals || {};
+    const statsTracked = isPlayerStatTrackingEnabled(match, pm.playerId);
+    const stat = statsTracked ? (computeStatTrackingSummary(match, metrics).find(r => r.playerMetric?.playerId === pm.playerId)?.totals || {}) : null;
     return {
       name: pm.player?.name || 'Player',
       team: getTeamLabel(match, pm.team),
@@ -1227,6 +1258,7 @@ function buildRoundRecapPayload(match, metrics) {
       netToPar: Number(pm.leaderboardNetDiff || 0),
       postable: Number(pm.postableTotal || 0),
       scoreDistribution: dist,
+      statsTracked,
       stats: stat,
     };
   });
@@ -2281,6 +2313,7 @@ function createEmptyMatch(overrides = {}) {
     scoreEntryMode: getLegacyScoreEntryMode(normalizeScoringAccessMode(overrides.scoringAccessMode || overrides.scoreEntryMode || 'team_codes')),
     officialScorerName: String(overrides.officialScorerName || 'Official scorer').trim() || 'Official scorer',
     statTrackingEnabled: !!overrides.statTrackingEnabled,
+    statTrackingPlayerIds: Array.isArray(overrides.statTrackingPlayerIds) ? overrides.statTrackingPlayerIds.map(String) : null,
     selectedGames: Array.isArray(overrides.selectedGames) ? overrides.selectedGames : [],
     status: 'active',
     completedAt: null,
@@ -2340,6 +2373,7 @@ function normalizeMatch(match) {
     scores: Array.isArray(mp.scores) && mp.scores.length ? mp.scores.map((s, scoreIdx) => ({ holeNumber: scoreIdx + 1, gross: Number(s.gross) || null })) : buildEmptyScores(match.holeCount),
     stats: Array.isArray(mp.stats) && mp.stats.length ? mp.stats.map((s, statIdx) => normalizeHoleStat(s, statIdx)) : buildEmptyStats(match.holeCount),
   }));
+  normalizeStatTrackingParticipants(match);
   match.greeniesWinners = match.greeniesWinners && typeof match.greeniesWinners === 'object' ? match.greeniesWinners : {};
   match.matchStatusGame = match.matchStatusGame || getDefaultFeaturedGameKey(match.selectedGames || []);
   match.momentumGame = match.momentumGame || match.matchStatusGame || getDefaultFeaturedGameKey(match.selectedGames || []);
@@ -3191,7 +3225,8 @@ function getCompletedStatHoleLimit(match, metrics) {
 function computeStatTrackingSummary(match, metrics) {
   const completedLimit = getCompletedStatHoleLimit(match, metrics);
   if (!completedLimit) return [];
-  const summary = (metrics?.players || []).map(playerMetric => {
+  const trackedPlayers = (metrics?.players || []).filter(playerMetric => isPlayerStatTrackingEnabled(match, playerMetric.playerId));
+  const summary = trackedPlayers.map(playerMetric => {
     const playerRef = match.players.find(row => row.playerId === playerMetric.playerId);
     const totals = { fairwaysHit: 0, fairwayOpps: 0, greens: 0, putts: 0, penaltyStrokes: 0, upAndDowns: 0, sandies: 0 };
     (metrics?.holeResults || []).slice(0, completedLimit).forEach((holeResult, holeIdx) => {
@@ -3300,7 +3335,9 @@ function buildExportStatTrackingSummary(match, metrics) {
   if (!isStatTrackingEnabled(match)) return '';
   const completedLimit = getCompletedStatHoleLimit(match, metrics);
   if (!completedLimit) return '';
-  const rows = (metrics?.players || []).map(playerMetric => {
+  const trackedPlayers = (metrics?.players || []).filter(playerMetric => isPlayerStatTrackingEnabled(match, playerMetric.playerId));
+  if (!trackedPlayers.length) return '';
+  const rows = trackedPlayers.map(playerMetric => {
     const playerRef = match.players.find(row => row.playerId === playerMetric.playerId);
     const totals = { fairwaysHit: 0, fairwayOpps: 0, greens: 0, greenOpps: 0, putts: 0, puttOpps: 0, penaltyStrokes: 0, upAndDowns: 0, sandies: 0 };
     (metrics?.holeResults || []).slice(0, completedLimit).forEach((holeResult, holeIdx) => {
@@ -3357,7 +3394,7 @@ function buildStatTrackingSummary(match, metrics) {
   const completedLimit = getCompletedStatHoleLimit(match, metrics);
   if (!completedLimit) return scoreDistributionHtml;
   const summary = computeStatTrackingSummary(match, metrics);
-  if (!summary.length) return scoreDistributionHtml;
+  if (!summary.length) return '<div class="tiny">No players were selected for stat tracking.</div>' + scoreDistributionHtml;
   const manualStatsHtml = `<div class="section-subhead">Manual stat tracking</div><div class="stat-summary-grid top-gap">${summary.map(({ playerMetric, totals }) => `
     <div class="stat-summary-card">
       <div class="stat-summary-name">${escapeHtml(playerMetric.player.name)}</div>
@@ -5783,7 +5820,12 @@ function renderStatTrackingEntry(match, hole, metrics) {
     return;
   }
   const isFairwayHole = Number(hole?.par) === 4 || Number(hole?.par) === 5;
+  const statPlayers = (metrics?.players || []).filter(p => isPlayerStatTrackingEnabled(match, p.playerId));
   wrap.classList.remove('hidden');
+  if (!statPlayers.length) {
+    wrap.innerHTML = '<div class="card inset-card stat-entry-card"><div class="section-label">Stat tracking</div><div class="tiny top-gap">No players were selected for stat tracking.</div></div>';
+    return;
+  }
   wrap.innerHTML = `
     <div class="card inset-card stat-entry-card">
       <div class="item-header compact-item-header">
@@ -5793,7 +5835,7 @@ function renderStatTrackingEntry(match, hole, metrics) {
         </div>
       </div>
       <div class="stat-entry-grid top-gap">
-        ${metrics.players.map(p => {
+        ${statPlayers.map(p => {
           const stat = getPlayerStatEntry(match.players.find(mp => mp.playerId === p.playerId), currentHole - 1);
           const canEdit = canEditPlayerScore(match, p.team);
           const playerHole = getPlayerHole(match, p, currentHole - 1, hole) || hole || null;
@@ -6788,6 +6830,7 @@ function populateMatchPlayerPicker(selected = []) {
     summary.textContent = `${base}${teeMsg}${playerMsg}`;
   }
   bindPlayerPickerTriggers();
+  renderStatTrackingPlayerSelector();
 }
 
 
@@ -6797,6 +6840,59 @@ function bindPlayerPickerTriggers() {
   container.querySelectorAll('[data-open-player-sheet]').forEach(btn => {
     btn.setAttribute('type', 'button');
   });
+}
+
+function getCurrentSetupPlayerIds() {
+  return getSelectedPlayersFromSetup().map(row => row.playerId).filter(Boolean);
+}
+function collectStatTrackingPlayerIdsFromSetup(selectedPlayers = null) {
+  const enabled = !!document.getElementById('enableStatTrackingInput')?.checked;
+  if (!enabled) return [];
+  const boxes = Array.from(document.querySelectorAll('[data-stat-track-player]'));
+  if (boxes.length) return boxes.filter(el => el.checked).map(el => String(el.value || '')).filter(Boolean);
+  const players = Array.isArray(selectedPlayers) ? selectedPlayers : getSelectedPlayersFromSetup();
+  return players.map(row => String(row.playerId || '')).filter(Boolean);
+}
+function renderStatTrackingPlayerSelector(explicitIds = null) {
+  const wrap = document.getElementById('statTrackingPlayersWrap');
+  if (!wrap) return;
+  const enabled = !!document.getElementById('enableStatTrackingInput')?.checked;
+  const selectedPlayers = getSelectedPlayersFromSetup();
+  if (!enabled) {
+    wrap.classList.add('hidden');
+    wrap.innerHTML = '';
+    return;
+  }
+  wrap.classList.remove('hidden');
+  if (!selectedPlayers.length) {
+    wrap.innerHTML = '<div class="tiny top-gap">Select players above to choose who will have stat tracking enabled.</div>';
+    return;
+  }
+  const existingBoxes = Array.from(document.querySelectorAll('[data-stat-track-player]'));
+  let selectedIds;
+  if (Array.isArray(explicitIds)) selectedIds = explicitIds.map(String);
+  else if (existingBoxes.length) selectedIds = existingBoxes.filter(el => el.checked).map(el => String(el.value || ''));
+  else if (editingMatchId) {
+    const match = getMatch(editingMatchId);
+    selectedIds = Array.isArray(match?.statTrackingPlayerIds) ? match.statTrackingPlayerIds.map(String) : selectedPlayers.map(row => String(row.playerId));
+  } else selectedIds = selectedPlayers.map(row => String(row.playerId));
+  const selectedSet = new Set(selectedIds.filter(Boolean));
+  wrap.innerHTML = `
+    <div class="top-gap stat-participants-card">
+      <div class="section-subhead">Enable Stat Tracking For</div>
+      <div class="tiny">Choose which players should show optional stat inputs and appear in Stat Tracking Summary.</div>
+      <div class="stat-participant-list top-gap">
+        ${selectedPlayers.map(row => {
+          const player = getPlayer(row.playerId);
+          if (!player) return '';
+          return `<label class="mini-check stat-participant-check"><input type="checkbox" data-stat-track-player value="${escapeHtml(row.playerId)}" ${selectedSet.has(String(row.playerId)) ? 'checked' : ''} /><span>${escapeHtml(player.name)}</span></label>`;
+        }).join('')}
+      </div>
+      <div class="actions wrap compact-actions top-gap">
+        <button type="button" class="secondary" id="statTrackingSelectAllBtn">Select All</button>
+        <button type="button" class="secondary" id="statTrackingClearAllBtn">Clear All</button>
+      </div>
+    </div>`;
 }
 
 function getDefaultGameConfigs() {
@@ -7477,6 +7573,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
     const sharedMatchToggle = document.getElementById('sharedMatchEnabled'); if (sharedMatchToggle) sharedMatchToggle.checked = false;
     document.getElementById('officialScorerNameInput').value = draft.officialScorerName || 'Official scorer';
     const statToggle = document.getElementById('enableStatTrackingInput'); if (statToggle) statToggle.checked = false;
+    renderStatTrackingPlayerSelector([]);
     state.notes = '';
     const notesBox = document.getElementById('notesBox'); if (notesBox) notesBox.value = '';
     populateMatchCourseSelects(draft.courseId || '', draft.teeId || '');
@@ -7513,6 +7610,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
   syncReferenceTeeUi({ courseId: match.courseId, selections: uiState.matchPlayerDraft, forceAuto: !match.teeId });
   uiState.referenceTeeManual = !!(match.teeId && document.getElementById('matchTeeSelect')?.value === match.teeId);
   populateMatchPlayerPicker(uiState.matchPlayerDraft);
+  renderStatTrackingPlayerSelector(Array.isArray(match.statTrackingPlayerIds) ? match.statTrackingPlayerIds : null);
   renderGamesPicker(match.selectedGames || []);
   renderSetupHandicapPreview();
   window.scrollTo({ top: document.getElementById('matchFormTitle').getBoundingClientRect().top + window.scrollY - 20, behavior: 'smooth' });
@@ -8003,7 +8101,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
   document.getElementById('setup').addEventListener('change', e => {
-    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #scoreEntryModeSelect, #officialScorerNameInput, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-game-config]')) {
+    if (e.target && (e.target.id === 'enableStatTrackingInput' || e.target.matches('[data-player-slot], [data-stat-track-player]'))) renderStatTrackingPlayerSelector();
+    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #scoreEntryModeSelect, #officialScorerNameInput, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-game-config], #enableStatTrackingInput, [data-stat-track-player]')) {
       setTimeout(() => { renderSetupHandicapPreview(); renderGamesPicker(collectSelectedGames()); }, 0);
     }
   });
@@ -8013,6 +8112,14 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
   document.getElementById('setup').addEventListener('click', e => {
+    if (e.target.id === 'statTrackingSelectAllBtn') {
+      document.querySelectorAll('[data-stat-track-player]').forEach(el => { el.checked = true; });
+      return;
+    }
+    if (e.target.id === 'statTrackingClearAllBtn') {
+      document.querySelectorAll('[data-stat-track-player]').forEach(el => { el.checked = false; });
+      return;
+    }
     if (e.target.id === 'greeniesSelectAllBtn') {
       document.querySelectorAll('[data-greenie-player]').forEach(el => { el.checked = true; });
       return;
@@ -8159,6 +8266,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       scoreEntryMode,
       officialScorerName,
       statTrackingEnabled: fd.get('enableStatTracking') === 'on',
+      statTrackingPlayerIds: fd.get('enableStatTracking') === 'on' ? collectStatTrackingPlayerIdsFromSetup(selectedPlayers) : [],
       teamScorers,
       selectedGames: normalizeSelectedGamesOrder(selectedGames),
       status: existing?.status || 'active',

@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.12';
+const APP_VERSION = 'v28.13';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2220,6 +2220,11 @@ function openUnifiedExport(match, printView = 'summary') {
     return;
   }
   const exportHtml = buildUnifiedExportDocument(match, metrics, printView);
+  try {
+    const versionQuery = String(APP_VERSION || '').replace(/^v/i, '');
+    const basePath = window.location.pathname || '/';
+    exportWindow.history.replaceState(null, '', `${window.location.origin}${basePath}?v=${encodeURIComponent(versionQuery)}`);
+  } catch (err) {}
   exportWindow.document.open();
   exportWindow.document.write(exportHtml);
   exportWindow.document.close();
@@ -3151,7 +3156,7 @@ function buildGrossGamePaymentDetail(players, games) {
       : optimalSettlementRows(game.amounts || {});
     const body = rows.length
       ? rows.map(row => `<div class="gross-game-payment-row"><span><strong>${escapeHtml(getPlayer(row.to)?.name || 'Unknown')}</strong> receives ${formatMoneyAccounting(row.amount)} from <strong>${escapeHtml(getPlayer(row.from)?.name || 'Unknown')}</strong></span></div>`).join('')
-      : '<div class="tiny">No payout.</div>';
+      : (game?.meta?.noWagerConfigured ? '<div class="tiny">Nassau enabled with no wager configured.</div>' : '<div class="tiny">No payout.</div>');
     const gameTotal = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
     const totalLine = gameTotal > 0.0001 ? `<div class="gross-game-section-total">Gross movement: ${formatMoneyAccounting(gameTotal)}</div>` : '';
     return `<div class="gross-game-section">
@@ -3184,7 +3189,13 @@ function getPayoutReportContext(match, metrics) {
   const games = computeLivePayoutGames(match, metrics);
   const players = (metrics?.players || []).map(p => ({ id: p.playerId, name: p.player.name }));
   const selectedKeys = new Set(selected.map(game => game.key));
-  const payoutGames = games.filter(game => game && game.amounts && selectedKeys.has(game.key));
+  const isSelectedPayoutGame = (game) => {
+    if (!game || !game.amounts) return false;
+    if (selectedKeys.has(game.key) || selectedKeys.has(game.sourceKey)) return true;
+    if (String(game.key || '').startsWith('nassau_') && selectedKeys.has('nassau')) return true;
+    return false;
+  };
+  const payoutGames = games.filter(isSelectedPayoutGame);
   const finalTotals = {};
   payoutGames.forEach(game => addAmounts(finalTotals, game.amounts));
   return { selected, games, players, payoutGames, finalTotals };
@@ -6294,7 +6305,7 @@ function computeLivePayoutGames(match, metrics) {
     amounts[winnerId] = (amounts[winnerId] || 0) + perOpponent * others.length;
     others.forEach(id => { amounts[id] = (amounts[id] || 0) - perOpponent; });
   };
-  const pushGame = (key, label, amounts, group = 'team', paymentLines = null) => games.push({ key, label, amounts, group, paymentLines: Array.isArray(paymentLines) ? paymentLines : null });
+  const pushGame = (key, label, amounts, group = 'team', paymentLines = null, sourceKey = key, meta = {}) => games.push({ key, sourceKey, label, amounts, group, paymentLines: Array.isArray(paymentLines) ? paymentLines : null, meta });
 
   selected.forEach(cfg => {
     if (cfg.key === 'nassau' && metrics.teams.length === 2) {
@@ -6310,7 +6321,13 @@ function computeLivePayoutGames(match, metrics) {
         if (frontLeader && front) transferTeamStakePerPerson(amounts, frontLeader, frontLeader === 1 ? 2 : 1, front);
         if (backLeader && back) transferTeamStakePerPerson(amounts, backLeader, backLeader === 1 ? 2 : 1, back);
         if (overallLeader && overall) transferTeamStakePerPerson(amounts, overallLeader, overallLeader === 1 ? 2 : 1, overall);
-        pushGame('nassau_' + basisKey, `Nassau (${basisLabel})`, amounts);
+        const noWagerConfigured = !front && !back && !overall;
+        pushGame('nassau_' + basisKey, `Nassau (${basisLabel})`, amounts, 'team', null, 'nassau', {
+          noWagerConfigured,
+          stakesFront: front,
+          stakesBack: back,
+          stakesOverall: overall,
+        });
       };
       if (String(cfg.basis || 'net').toLowerCase() === 'both') {
         runNassau('Gross', 'gross');
@@ -6448,7 +6465,11 @@ function buildSelectedGamesSummary(match, metrics) {
     if (cfg.key === 'nassau') {
       const diffs = computeTeamGameDiffs(match, metrics, cfg.key);
       value = formatTeamGameStatus(match, metrics, diffs.overall);
-      sub = getPlayableHoleCount(match, metrics.tee) <= 9 ? `Format: ${getHoleSegmentLabel(match, metrics.tee)}` : `Front 9: ${formatTeamGameStatus(match, metrics, diffs.front)} · Back 9: ${formatTeamGameStatus(match, metrics, diffs.back)}`;
+      const frontStake = Number(cfg.stakesFront || 0);
+      const backStake = Number(cfg.stakesBack || 0);
+      const overallStake = Number(cfg.stakesOverall || 0);
+      const wagerNote = (!frontStake && !backStake && !overallStake) ? ' · Nassau enabled with no wager configured.' : '';
+      sub = (getPlayableHoleCount(match, metrics.tee) <= 9 ? `Format: ${getHoleSegmentLabel(match, metrics.tee)}` : `Front 9: ${formatTeamGameStatus(match, metrics, diffs.front)} · Back 9: ${formatTeamGameStatus(match, metrics, diffs.back)}`) + wagerNote;
     } else if (cfg.key === 'team_match') {
       const diffs = computeTeamGameDiffs(match, metrics, cfg.key);
       value = formatTeamGameStatus(match, metrics, diffs.overall);

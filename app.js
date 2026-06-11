@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.9';
+const APP_VERSION = 'v28.10';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -1096,6 +1096,11 @@ function buildRoundRecapControls(match) {
         <div class="section-label">The Dye Ledger Round Recap</div>
         <div class="tiny">${escapeHtml(buildRoundRecapStatus(match) || reason)}</div>
       </div>
+      <div class="round-recap-notes-field">
+        <label for="roundRecapNotesBox">Round Notes for Recap</label>
+        <div class="tiny">Add memorable shots, stories, weather conditions, side bets, funny moments, milestones, or anything else you'd like included in the recap.</div>
+        <textarea id="roundRecapNotesBox" rows="3" placeholder="Example: Tom made a 35-foot birdie putt on 16. John nearly holed out on 7. Strong winds made club selection difficult all day.">${escapeHtml(match.roundRecapNotes || '')}</textarea>
+      </div>
       <div class="actions wrap compact-actions">
         <button id="generateRoundRecapBtn" type="button" class="secondary" ${disabled ? 'disabled' : ''}>${recap ? 'Regenerate Round Recap' : 'Generate Round Recap'}</button>
         ${recap ? '<button id="clearRoundRecapBtn" type="button" class="secondary">Clear Recap</button>' : ''}
@@ -1252,6 +1257,7 @@ function buildRoundRecapPayload(match, metrics) {
     holesCompleted: Number(metrics?.completed || 0),
     holeCount: getPlayableHoleCount(match, metrics?.tee),
     status: match?.status || 'active',
+    roundNotes: String(match?.roundRecapNotes || '').trim(),
     players: playerSummaries,
     games: summarizeSelectedGamesForRecap(match, metrics),
     finalSettlement,
@@ -1587,6 +1593,35 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     .export-round-recap-text p:last-child,
     .round-recap-preview p:last-child {
       margin-bottom: 0;
+    }
+    .round-recap-notes-field {
+      width: 100%;
+      margin-top: 10px;
+    }
+    .round-recap-notes-field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 800;
+      color: #243247;
+      margin-bottom: 4px;
+    }
+    .round-recap-notes-field textarea {
+      width: 100%;
+      min-height: 72px;
+      resize: vertical;
+      margin-top: 6px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 11px;
+      font: inherit;
+      font-size: 13px;
+      line-height: 1.35;
+      color: #243247;
+      background: #fff;
+    }
+    .round-recap-notes-field textarea:focus {
+      outline: 2px solid rgba(22, 101, 52, 0.18);
+      border-color: rgba(22, 101, 52, 0.45);
     }
     .fit-stage {
       width: 100%;
@@ -2255,7 +2290,8 @@ function createEmptyMatch(overrides = {}) {
     sharedMatchId: '',
     sharedMatchRef: '',
     cloudSyncState: 'local-only',
-    notes: ''
+    notes: '',
+    roundRecapNotes: ''
   };
   normalizeMatch(empty);
   return empty;
@@ -2316,6 +2352,7 @@ function normalizeMatch(match) {
   match.roundRecap = typeof match.roundRecap === 'string' ? match.roundRecap : '';
   match.roundRecapGeneratedAt = match.roundRecapGeneratedAt || null;
   match.roundRecapStatus = typeof match.roundRecapStatus === 'string' ? match.roundRecapStatus : '';
+  match.roundRecapNotes = typeof match.roundRecapNotes === 'string' ? match.roundRecapNotes : '';
   const progress = computeMatchProgress(match);
   match.lastTouchedHole = Number(match.lastTouchedHole) || progress.lastTouchedHole;
   match.lastFullyCompletedHole = Number(match.lastFullyCompletedHole) || progress.lastFullyCompletedHole;
@@ -8148,6 +8185,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       roundRecap: existing?.roundRecap || '',
       roundRecapGeneratedAt: existing?.roundRecapGeneratedAt || null,
       roundRecapStatus: existing?.roundRecapStatus || '',
+      roundRecapNotes: existing?.roundRecapNotes || '',
     };
     normalizeMatch(match);
     if (!match.courseId) return toast('Select a course.');
@@ -8250,6 +8288,14 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       clearRoundRecapForActiveMatch();
       return;
     }
+  });
+  document.getElementById('leaderboard')?.addEventListener('input', e => {
+    if (!e.target || e.target.id !== 'roundRecapNotesBox') return;
+    const match = getActiveMatch();
+    if (!match) return;
+    match.roundRecapNotes = e.target.value || '';
+    persist({ skipRender: true });
+    scheduleSharedMatchSync(match, { immediate: false, silent: true });
   });
   document.getElementById('scoreboardShareRoundBtn').addEventListener('click', () => { openPrintScorecard(); });
   document.getElementById('saveScoresBtn').addEventListener('click', () => { saveCurrentHole(); });

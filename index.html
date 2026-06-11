@@ -168,18 +168,22 @@
           <div class="actions compact-actions setup-match-actions">
             <button id="newMatchBtn" type="button" class="secondary setup-action-btn">Create New Match</button>
             <button id="editActiveMatchBtn" type="button" class="secondary setup-action-btn">Edit Match</button>
-            <button id="topCreateMatchBtn" type="submit" form="matchForm" class="secondary setup-action-btn">Finalize Match Setup</button>
-            <button id="topUpdateMatchBtn" type="submit" form="matchForm" class="secondary setup-action-btn hidden">Finalize Match Setup</button>
+            <button id="topCreateMatchBtn" type="submit" form="matchForm" class="secondary setup-action-btn">Create Match</button>
+            <button id="topUpdateMatchBtn" type="submit" form="matchForm" class="secondary setup-action-btn hidden">Update Match</button>
             <button id="setupFinishRoundBtn" type="button" class="secondary setup-action-btn hidden">Finish Round</button>
             <button id="setupConfirmFinishRoundBtn" type="button" class="secondary setup-action-btn hidden">Confirm Round</button>
           </div>
         </div>
-        <div id="topUpdateMatchNote" class="tiny hidden top-gap">After making changes, tap <strong>Finalize Match Setup</strong> to update the match setup.</div>
+        <div id="topUpdateMatchNote" class="tiny hidden top-gap">After making changes, tap <strong>Update Match</strong> to update the match setup.</div>
       </div>
 
       <div id="matchSetupFormWrap" class="card tight-card">
         <h2 id="matchFormTitle">Game setup</h2>
         <form id="matchForm" class="grid two compact-grid">
+          <div class="span-2 setup-flow-section">
+            <div class="section-label">Match Details</div>
+            <div class="tiny">Set the basic round information first.</div>
+          </div>
           <label><span>Match date</span><input name="date" type="date" required /></label>
           <label><span>Match name</span><input class="input-match" name="name" placeholder="Saturday game" /></label>
           <label><span>Course</span><select name="courseId" id="matchCourseSelect" required></select></label>
@@ -206,79 +210,51 @@
               <select id="customNineHoleStartSelect" name="customStartHole"></select>
             </label>
           </div>
-          <label><span># Teams</span>
-            <select name="teamCount" id="teamCountSelect">
-              <option value="1">1 team</option>
-              <option value="2">2 teams</option>
-              <option value="3">3 teams</option>
-              <option value="4">4 teams</option>
-              <option value="5">5 teams</option>
-              <option value="6">6 teams</option>
-              <option value="7">7 teams</option>
-              <option value="8">8 teams</option>
-            </select>
-          </label>
-          <label><span>Players / team</span>
-            <select name="playersPerTeam" id="playersPerTeamSelect">
-              <option value="1">1 player</option>
-              <option value="2">2 players</option>
-              <option value="3">3 players</option>
-              <option value="4">4 players</option>
-            </select>
-          </label>
           <label class="span-2"><span>Allowance %</span><input class="input-match" name="allowance" type="number" min="0" max="100" value="100" required /></label>
+
+          <div class="span-2 card inset-card setup-summary-card">
+            <div class="item-header compact-item-header">
+              <div>
+                <div class="section-label">Today's Match</div>
+                <div class="tiny">A quick confidence check before play begins.</div>
+              </div>
+            </div>
+            <div id="todaysMatchSummary" class="setup-summary-list top-gap tiny">Choose a course and players to build the match summary.</div>
+          </div>
 
           <div class="span-2 card inset-card">
             <div class="item-header compact-item-header">
               <div>
-                <div class="section-label">Scoring control</div>
-                <div class="tiny">Choose the required scoring access model before scoring begins. Team mode is the default collaborative recommendation.</div>
+                <div class="section-label">Players &amp; Teams</div>
+                <div class="tiny">Choose the team structure, team names, and player assignments.</div>
               </div>
             </div>
             <div class="grid two compact-grid top-gap">
-              <label><span>Score entry mode</span>
-                <select name="scoreEntryMode" id="scoreEntryModeSelect">
-                  <option value="single_device">One device scores for everyone</option>
-                  <option value="team_codes" selected>Each team enters its own scores</option>
-                  <option value="open_edit">Anyone can enter scores</option>
+              <label><span># Teams</span>
+                <select name="teamCount" id="teamCountSelect">
+                  <option value="1">1 team</option>
+                  <option value="2">2 teams</option>
+                  <option value="3">3 teams</option>
+                  <option value="4">4 teams</option>
+                  <option value="5">5 teams</option>
+                  <option value="6">6 teams</option>
+                  <option value="7">7 teams</option>
+                  <option value="8">8 teams</option>
                 </select>
               </label>
-              <label><span>Organizer / lead scorer</span><input class="input-match" name="officialScorerName" id="officialScorerNameInput" placeholder="Captain / pro shop / organizer" /></label>
+              <label><span>Players / team</span>
+                <select name="playersPerTeam" id="playersPerTeamSelect">
+                  <option value="1">1 player</option>
+                  <option value="2">2 players</option>
+                  <option value="3">3 players</option>
+                  <option value="4">4 players</option>
+                </select>
+              </label>
             </div>
-            <div id="teamInputRoleConfig" class="top-gap hidden"></div>
-            <div id="scoreEntryModeHint" class="tiny top-gap">Team mode is the recommended collaborative default.</div>
-          </div>
-
-          <div class="span-2 card inset-card">
-            <div class="item-header compact-item-header">
-              <div>
-                <div class="section-label">Shared match storage</div>
-                <div class="tiny">Pass 1 supports organizer-created shared matches in Supabase, with safe local fallback if cloud sync is unavailable.</div>
-              </div>
-            </div>
-            <label class="inline-check top-gap"><input id="sharedMatchEnabled" name="sharedMatchEnabled" type="checkbox" /><span>Create as shared match (Supabase)</span></label>
-            <div id="sharedMatchHint" class="tiny top-gap">Shared matches are unavailable until supabase-config.js is filled in.</div>
-          </div>
-
-          <div class="span-2 card inset-card">
-            <div class="item-header compact-item-header">
-              <div>
-                <div class="section-label">Optional round tracking</div>
-                <div class="tiny">Turn on per-hole stat tracking for fairways, greens, putts, up &amp; downs, and sandies.</div>
-              </div>
-            </div>
-            <label class="inline-check top-gap"><input id="enableStatTrackingInput" name="enableStatTracking" type="checkbox" /><span>Enable Stat Tracking</span></label>
-            <div id="statTrackingPlayersWrap" class="top-gap hidden"></div>
-          </div>
-
-          <div class="span-2 card inset-card">
-            <div class="section-label">Teams</div>
+            <div class="section-subhead top-gap">Teams</div>
             <div id="teamNamesGrid" class="grid two compact-grid top-gap"></div>
-          </div>
-
-          <div class="span-2 card inset-card">
-            <div class="item-header">
-              <div class="section-label">Player assignments</div>
+            <div class="item-header top-gap">
+              <div class="section-subhead">Player assignments</div>
               <div id="assignmentSummary" class="tiny">Choose teams first. Each player will have a tee selection.</div>
             </div>
             <div id="matchPlayersPicker" class="assignment-grid top-gap"></div>
@@ -287,7 +263,7 @@
           <div class="span-2 card inset-card">
             <div class="item-header compact-item-header">
               <div>
-                <div class="section-label">Gambling games</div>
+                <div class="section-label">Games</div>
                 <div class="tiny">Choose up to 5. Only selected games will be scored and saved.</div>
               </div>
             </div>
@@ -297,19 +273,61 @@
             <div id="gameConfigs" class="top-gap"></div>
           </div>
 
-        <div class="span-2 card inset-card handicap-preview-card top-gap">
-          <div class="item-header compact-item-header">
-            <div>
-              <div class="section-label">Handicap preview</div>
-              <div class="tiny">Course handicap, playing handicap, and strokes received for the selected course / tee.</div>
+          <div class="span-2 card inset-card">
+            <div class="item-header compact-item-header">
+              <div>
+                <div class="section-label">Stat Tracking</div>
+                <div class="tiny">Turn on per-hole stat tracking and choose which players should be tracked.</div>
+              </div>
+            </div>
+            <label class="inline-check top-gap"><input id="enableStatTrackingInput" name="enableStatTracking" type="checkbox" /><span>Enable Stat Tracking</span></label>
+            <div id="statTrackingPlayersWrap" class="top-gap hidden"></div>
+          </div>
+
+          <div class="span-2 card inset-card">
+            <div class="item-header compact-item-header">
+              <div>
+                <div class="section-label">Optional Features</div>
+                <div class="tiny">Advanced setup controls are available when needed.</div>
+              </div>
+            </div>
+            <details class="setup-advanced-details top-gap">
+              <summary>Shared Match Storage</summary>
+              <div class="tiny top-gap">Pass 1 supports organizer-created shared matches in Supabase, with safe local fallback if cloud sync is unavailable.</div>
+              <label class="inline-check top-gap"><input id="sharedMatchEnabled" name="sharedMatchEnabled" type="checkbox" /><span>Create as shared match (Supabase)</span></label>
+              <div id="sharedMatchHint" class="tiny top-gap">Shared matches are unavailable until supabase-config.js is filled in.</div>
+            </details>
+            <details class="setup-advanced-details top-gap">
+              <summary>Scoring Control</summary>
+              <div class="tiny top-gap">Choose the scoring access model before scoring begins.</div>
+              <div class="grid two compact-grid top-gap">
+                <label><span>Score entry mode</span>
+                  <select name="scoreEntryMode" id="scoreEntryModeSelect">
+                    <option value="single_device" selected>One device scores for everyone</option>
+                    <option value="team_codes">Each team enters its own scores</option>
+                    <option value="open_edit">Anyone can enter scores</option>
+                  </select>
+                </label>
+                <label><span>Organizer / lead scorer</span><input class="input-match" name="officialScorerName" id="officialScorerNameInput" placeholder="Captain / pro shop / organizer" /></label>
+              </div>
+              <div id="teamInputRoleConfig" class="top-gap hidden"></div>
+              <div id="scoreEntryModeHint" class="tiny top-gap">One Device Scores for Everyone keeps one lead scorer in charge of entry.</div>
+            </details>
+          </div>
+
+          <div class="span-2 card inset-card handicap-preview-card top-gap">
+            <div class="item-header compact-item-header">
+              <div>
+                <div class="section-label">Handicap preview</div>
+                <div class="tiny">Course handicap, playing handicap, and strokes received for the selected course / tee.</div>
+              </div>
+            </div>
+            <div id="setupHandicapPreview" class="top-gap"></div>
+            <div class="actions top-gap preview-card-actions">
+              <button id="matchSubmitBtn" type="submit" form="matchForm" class="setup-action-btn">Create Match</button>
+              <button id="cancelMatchEditBtn" type="button" class="secondary hidden">Cancel</button>
             </div>
           </div>
-          <div id="setupHandicapPreview" class="top-gap"></div>
-          <div class="actions top-gap preview-card-actions">
-            <button id="matchSubmitBtn" type="submit" form="matchForm" class="setup-action-btn">Finalize Match Setup</button>
-            <button id="cancelMatchEditBtn" type="button" class="secondary hidden">Cancel</button>
-          </div>
-        </div>
         </form>
       </div>
     </section>
@@ -614,7 +632,7 @@
           <li>Added optional per-hole stat tracking (fairways, GIR, putts, up &amp; downs, sandies).</li>
           <li>Reordered the Scoreboard layout and moved Notes from More to Scoreboard.</li>
           <li>Fixed the Game Setup player assignment flow so team slots save correctly and matches can be created reliably again.</li>
-          <li>App version: <strong id="appVersionLabel">v28.11</strong></li>
+          <li>App version: <strong id="appVersionLabel">v28.12</strong></li>
         </ul>
       </div>
     </section>
@@ -634,7 +652,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v28.11</span>
+    <span id="appVersionFooter">v28.12</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>

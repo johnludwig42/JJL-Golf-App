@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.11';
+const APP_VERSION = 'v28.12';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -6648,7 +6648,7 @@ function renderScoringControlConfig(existingMatch = null) {
   if (existingMatch) existingMatch.teamScorers = teamScorers;
   wrap.classList.toggle('hidden', mode !== 'team_codes');
   hint.textContent = mode === 'team_codes'
-    ? 'Each Team Enters Its Own Scores is the default recommended collaboration mode for the Supabase rollout.'
+    ? 'Each Team Enters Its Own Scores lets each team enter its own scores.'
     : mode === 'open_edit'
       ? 'Anyone Can Enter Scores keeps scoring open to any authorized non-viewer device once shared scoring is enabled.'
       : 'One Device Scores for Everyone keeps one lead scorer in charge of entry.';
@@ -6893,6 +6893,32 @@ function renderStatTrackingPlayerSelector(explicitIds = null) {
         <button type="button" class="secondary" id="statTrackingClearAllBtn">Clear All</button>
       </div>
     </div>`;
+}
+
+
+function renderTodaysMatchSummary() {
+  const wrap = document.getElementById('todaysMatchSummary');
+  if (!wrap) return;
+  const courseId = document.getElementById('matchCourseSelect')?.value || '';
+  const teeId = document.getElementById('matchTeeSelect')?.value || getReferenceFallbackTeeId(courseId) || '';
+  const course = getCourse(courseId);
+  const tee = course ? getTee(courseId, teeId) : null;
+  const selectedPlayers = getSelectedPlayersFromSetup();
+  const teamCount = getCurrentSetupTeamCount();
+  const selectedGames = collectSelectedGames();
+  const gameNames = selectedGames.map(g => getGameLabel(g)).filter(Boolean);
+  const statEnabled = !!document.getElementById('enableStatTrackingInput')?.checked;
+  const statIds = statEnabled ? collectStatTrackingPlayerIdsFromSetup(selectedPlayers) : [];
+  const statNames = statIds.map(id => getPlayer(id)?.name || '').filter(Boolean);
+  const rows = [
+    ['Course', course?.name || 'Select course'],
+    ['Tee', tee?.teeName || 'Select tee'],
+    ['Players', selectedPlayers.length ? String(selectedPlayers.length) : 'Select players'],
+    ['Teams', String(teamCount)],
+    ['Games', gameNames.length ? gameNames.join(', ') : 'None selected'],
+    ['Stat Tracking', statEnabled ? (statNames.length ? statNames.join(', ') : 'No players selected') : 'Off'],
+  ];
+  wrap.innerHTML = rows.map(([label, value]) => `<div class="setup-summary-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('');
 }
 
 function getDefaultGameConfigs() {
@@ -7450,7 +7476,7 @@ function updateSetupActionButtonStates() {
     editBtn.textContent = editingActive ? "Editing Match" : "Edit Match";
   }
   finalizeBtns.forEach(btn => {
-    btn.textContent = "Finalize Match Setup";
+    btn.textContent = editingMatchId ? "Update Match" : "Create Match";
     btn.disabled = false;
   });
 }
@@ -7553,8 +7579,10 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
   if (topCreateBtn) topCreateBtn.classList.remove('hidden');
   if (topUpdateNote) topUpdateNote.classList.toggle('hidden', !matchId);
   document.getElementById('matchFormTitle').textContent = matchId ? 'Edit match setup' : 'Match setup';
-  document.getElementById('matchSubmitBtn').textContent = 'Finalize Match Setup';
-  if (topCreateBtn) topCreateBtn.textContent = 'Finalize Match Setup';
+  const setupActionLabel = matchId ? 'Update Match' : 'Create Match';
+  document.getElementById('matchSubmitBtn').textContent = setupActionLabel;
+  if (topCreateBtn) topCreateBtn.textContent = setupActionLabel;
+  if (topUpdateBtn) topUpdateBtn.textContent = 'Update Match';
   updateSetupActionButtonStates();
   activateTab('setup');
   if (!matchId) {
@@ -7569,7 +7597,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
     renderNineHoleConfigUi();
     document.getElementById('teamCountSelect').value = String(draft.teamCount || 1);
     document.getElementById('playersPerTeamSelect').value = String(draft.playersPerTeam || 1);
-    document.getElementById('scoreEntryModeSelect').value = draft.scoringAccessMode || 'team_codes';
+    document.getElementById('scoreEntryModeSelect').value = draft.scoringAccessMode || 'single_device';
     const sharedMatchToggle = document.getElementById('sharedMatchEnabled'); if (sharedMatchToggle) sharedMatchToggle.checked = false;
     document.getElementById('officialScorerNameInput').value = draft.officialScorerName || 'Official scorer';
     const statToggle = document.getElementById('enableStatTrackingInput'); if (statToggle) statToggle.checked = false;
@@ -7585,6 +7613,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
     populateMatchPlayerPicker(uiState.matchPlayerDraft);
     renderGamesPicker(draft.selectedGames || []);
     renderSetupHandicapPreview();
+    renderTodaysMatchSummary();
     return;
   }
   const match = getMatch(matchId); if (!match) return;
@@ -7613,6 +7642,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
   renderStatTrackingPlayerSelector(Array.isArray(match.statTrackingPlayerIds) ? match.statTrackingPlayerIds : null);
   renderGamesPicker(match.selectedGames || []);
   renderSetupHandicapPreview();
+  renderTodaysMatchSummary();
   window.scrollTo({ top: document.getElementById('matchFormTitle').getBoundingClientRect().top + window.scrollY - 20, behavior: 'smooth' });
 }
 
@@ -7888,29 +7918,33 @@ function installHandlers() {
   const newMatchCancelBtn = document.getElementById('newMatchCancelBtn');
   if (newMatchCancelBtn) newMatchCancelBtn.addEventListener('click', () => closeNewMatchConflictDialog({ disarmFinish: true }));
 
-  document.getElementById('matchCourseSelect').addEventListener('change', e => { uiState.referenceTeeManual = false; populateMatchTees(e.target.value); const currentSelections = getCurrentMatchEditorSelections(); const defaultTeeId = getDefaultMatchTeeId(e.target.value); const normalizedSelections = currentSelections.map(row => ({ ...row, teeId: defaultTeeId })); syncMatchPlayerDraft(normalizedSelections); normalizeDraftTeeAssignments({ courseId: e.target.value, forceDefault: true }); syncReferenceTeeUi({ courseId: e.target.value, selections: uiState.matchPlayerDraft, forceAuto: true }); populateMatchPlayerPicker(uiState.matchPlayerDraft); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
-  document.getElementById('holeCountSelect').addEventListener('change', () => { renderNineHoleConfigUi(); renderSetupHandicapPreview(); });
-  document.getElementById('nineHoleSegmentSelect').addEventListener('change', () => { renderNineHoleConfigUi(); renderSetupHandicapPreview(); });
-  document.getElementById('customNineHoleStartSelect').addEventListener('change', () => { renderSetupHandicapPreview(); });
+  document.getElementById('matchCourseSelect').addEventListener('change', e => { uiState.referenceTeeManual = false; populateMatchTees(e.target.value); const currentSelections = getCurrentMatchEditorSelections(); const defaultTeeId = getDefaultMatchTeeId(e.target.value); const normalizedSelections = currentSelections.map(row => ({ ...row, teeId: defaultTeeId })); syncMatchPlayerDraft(normalizedSelections); normalizeDraftTeeAssignments({ courseId: e.target.value, forceDefault: true }); syncReferenceTeeUi({ courseId: e.target.value, selections: uiState.matchPlayerDraft, forceAuto: true }); populateMatchPlayerPicker(uiState.matchPlayerDraft); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); renderTodaysMatchSummary(); });
+  document.getElementById('holeCountSelect').addEventListener('change', () => { renderNineHoleConfigUi(); renderSetupHandicapPreview(); renderTodaysMatchSummary(); });
+  document.getElementById('nineHoleSegmentSelect').addEventListener('change', () => { renderNineHoleConfigUi(); renderSetupHandicapPreview(); renderTodaysMatchSummary(); });
+  document.getElementById('customNineHoleStartSelect').addEventListener('change', () => { renderSetupHandicapPreview(); renderTodaysMatchSummary(); });
   document.getElementById('teamCountSelect').addEventListener('change', () => {
     const teamCount = getCurrentSetupTeamCount();
     const teamNames = Array.from(document.querySelectorAll('[data-team-name]')).map(el => el.value);
     renderTeamNameInputs(teamCount, teamNames);
     renderScoringControlConfig();
     refreshMatchPlayerSlots({ preserveSelections: true });
+    renderTodaysMatchSummary();
   });
   document.getElementById('playersPerTeamSelect').addEventListener('change', () => {
     refreshMatchPlayerSlots({ preserveSelections: true });
+    renderTodaysMatchSummary();
   });
   document.getElementById('teamCountSelect').addEventListener('input', () => {
     refreshMatchPlayerSlots({ preserveSelections: true });
+    renderTodaysMatchSummary();
   });
   document.getElementById('playersPerTeamSelect').addEventListener('input', () => {
     refreshMatchPlayerSlots({ preserveSelections: true });
+    renderTodaysMatchSummary();
   });
-  document.getElementById('scoreEntryModeSelect').addEventListener('change', () => { renderScoringControlConfig(); });
-  document.getElementById('matchTeeSelect').addEventListener('change', e => { uiState.referenceTeeManual = true; uiState.referenceTeeAutoId = e.target.value || uiState.referenceTeeAutoId; const draft = normalizeDraftTeeAssignments({ forceDefault: false }).map(row => ({ ...row, teeId: row.teeId || e.target.value || '' })); syncMatchPlayerDraft(draft); normalizeDraftTeeAssignments({ forceDefault: false }); syncReferenceTeeUi({ selections: uiState.matchPlayerDraft, forceAuto: false }); populateMatchPlayerPicker(uiState.matchPlayerDraft); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
-  document.getElementById('teamNamesGrid').addEventListener('input', () => { const currentSelections = getCurrentMatchEditorSelections(); renderScoringControlConfig(); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); });
+  document.getElementById('scoreEntryModeSelect').addEventListener('change', () => { renderScoringControlConfig(); renderTodaysMatchSummary(); });
+  document.getElementById('matchTeeSelect').addEventListener('change', e => { uiState.referenceTeeManual = true; uiState.referenceTeeAutoId = e.target.value || uiState.referenceTeeAutoId; const draft = normalizeDraftTeeAssignments({ forceDefault: false }).map(row => ({ ...row, teeId: row.teeId || e.target.value || '' })); syncMatchPlayerDraft(draft); normalizeDraftTeeAssignments({ forceDefault: false }); syncReferenceTeeUi({ selections: uiState.matchPlayerDraft, forceAuto: false }); populateMatchPlayerPicker(uiState.matchPlayerDraft); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); renderTodaysMatchSummary(); });
+  document.getElementById('teamNamesGrid').addEventListener('input', () => { const currentSelections = getCurrentMatchEditorSelections(); renderScoringControlConfig(); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); renderTodaysMatchSummary(); });
   const matchPlayersPickerEl = document.getElementById('matchPlayersPicker');
   const handlePlayerPickerOpen = e => {
     const trigger = e.target.closest('[data-open-player-sheet]');
@@ -8103,21 +8137,24 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('setup').addEventListener('change', e => {
     if (e.target && (e.target.id === 'enableStatTrackingInput' || e.target.matches('[data-player-slot], [data-stat-track-player]'))) renderStatTrackingPlayerSelector();
     if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #scoreEntryModeSelect, #officialScorerNameInput, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-game-config], #enableStatTrackingInput, [data-stat-track-player]')) {
-      setTimeout(() => { renderSetupHandicapPreview(); renderGamesPicker(collectSelectedGames()); }, 0);
+      setTimeout(() => { renderSetupHandicapPreview(); renderGamesPicker(collectSelectedGames()); renderTodaysMatchSummary(); }, 0);
     }
   });
   document.getElementById('setup').addEventListener('input', e => {
     if (e.target.matches('[data-team-name], [name="allowance"], #scoreEntryModeSelect, #officialScorerNameInput, [data-team-scorer-label], [data-team-scorer-code], [data-game-config], [data-nine-point-player], #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect')) {
       renderSetupHandicapPreview();
+      renderTodaysMatchSummary();
     }
   });
   document.getElementById('setup').addEventListener('click', e => {
     if (e.target.id === 'statTrackingSelectAllBtn') {
       document.querySelectorAll('[data-stat-track-player]').forEach(el => { el.checked = true; });
+      renderTodaysMatchSummary();
       return;
     }
     if (e.target.id === 'statTrackingClearAllBtn') {
       document.querySelectorAll('[data-stat-track-player]').forEach(el => { el.checked = false; });
+      renderTodaysMatchSummary();
       return;
     }
     if (e.target.id === 'greeniesSelectAllBtn') {

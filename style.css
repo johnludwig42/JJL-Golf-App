@@ -2727,3 +2727,19 @@ body.printing-scorecard .nine-point-scorecard-table td:nth-child(2){
 .player-hole-stat-table tbody tr:last-child td {
   border-bottom: 0;
 }
+
+
+/* v28.15 desktop course grid */
+@media (min-width: 1024px){
+  #coursesList{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:flex-start;
+    gap:16px;
+  }
+  #coursesList .course-card{
+    width:460px;
+    flex:0 0 460px;
+    max-width:460px;
+  }
+}

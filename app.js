@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.15';
+const APP_VERSION = 'v28.16';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2441,9 +2441,31 @@ function getCourse(courseId) { return state.courses.find(c => c.id === courseId)
 function getTee(courseId, teeId) { return getCourse(courseId)?.tees.find(t => t.id === teeId); }
 function getComboSourceTeeName(courseId, comboTee, holeIdx) {
   if (!comboTee?.isCombo || !Array.isArray(comboTee.comboSources)) return '';
-  const sourceId = comboTee.comboSources[holeIdx]?.sourceTeeId || '';
-  if (!sourceId) return '';
-  return getTee(courseId, sourceId)?.teeName || '';
+  const displayHoleNumber = Number(comboTee.holes?.[holeIdx]?.holeNumber) || holeIdx + 1;
+  const source = comboTee.comboSources.find(row => Number(row?.holeNumber) === displayHoleNumber) || comboTee.comboSources[holeIdx];
+  const sourceId = source?.sourceTeeId || '';
+  if (!sourceId) return inferComboSourceTeeName(courseId, comboTee, holeIdx);
+  return getTee(courseId, sourceId)?.teeName || inferComboSourceTeeName(courseId, comboTee, holeIdx);
+}
+function inferComboSourceTeeName(courseId, comboTee, holeIdx) {
+  const course = getCourse(courseId);
+  const comboHole = comboTee?.holes?.[holeIdx];
+  if (!course || !comboHole) return '';
+  const displayHoleNumber = Number(comboHole.holeNumber) || holeIdx + 1;
+  const candidate = (course.tees || []).find(t => {
+    if (!t || t.id === comboTee.id || t.isCombo) return false;
+    const h = (t.holes || []).find(row => Number(row?.holeNumber) === displayHoleNumber) || t.holes?.[holeIdx];
+    return h
+      && Number(h.yardage) === Number(comboHole.yardage)
+      && Number(h.par) === Number(comboHole.par)
+      && Number(h.strokeIndex) === Number(comboHole.strokeIndex);
+  });
+  return candidate?.teeName || '';
+}
+function getHoleTeeNameForDisplay(courseId, tee, holeIdx) {
+  if (!tee) return '';
+  if (tee.isCombo) return getComboSourceTeeName(courseId, tee, holeIdx) || '';
+  return tee.teeName || '';
 }
 function formatComboHoleTeeIndicator(courseId, comboTee, holeIdx, prefix = 'Tee') {
   const teeName = getComboSourceTeeName(courseId, comboTee, holeIdx);
@@ -5843,12 +5865,13 @@ function renderCurrentMatch() {
   renderHoleSelector(match, scoringHoles);
   const teamText = metrics?.teams?.length === 2 ? `${formatMatchDiff(metrics.matchDiff, match)} overall` : 'Singles leaderboard';
   const teeYardages = hole ? [...new Map((metrics?.players || []).map(p => {
+    const playerTee = p.tee || tee;
     const playerHole = getPlayerHole(match, p, currentHole - 1, tee) || hole;
-    const key = `${p.tee?.id || p.teeId || ''}|${playerHole?.yardage || ''}`;
-    return [key, `${p.tee?.teeName || tee?.teeName || 'Tee'} ${playerHole?.yardage ? `${formatYardageValue(playerHole.yardage)} yds` : '— yds'}`];
+    const holeTeeName = getHoleTeeNameForDisplay(match.courseId, playerTee, currentHole - 1) || playerTee?.teeName || 'Tee';
+    const key = `${playerTee?.id || p.teeId || ''}|${holeTeeName}|${playerHole?.yardage || ''}`;
+    return [key, `${holeTeeName} ${playerHole?.yardage ? `${formatYardageValue(playerHole.yardage)} yds` : '— yds'}`];
   })).values()].join(' · ') : '';
-  const comboIndicator = tee?.isCombo ? formatComboHoleTeeIndicator(match.courseId, tee, currentHole - 1, 'Playing') : '';
-  document.getElementById('holeSummary').textContent = hole ? `Hole ${hole.holeNumber} · Par ${hole.par || '-'} · SI ${hole.strokeIndex || '-'} · ${comboIndicator ? `${comboIndicator} · ` : ''}${teeYardages || `${hole.yardage ? formatYardageValue(hole.yardage) : '-'} yds`} · ${teamText}` : '';
+  document.getElementById('holeSummary').textContent = hole ? `Hole ${hole.holeNumber} · Par ${hole.par || '-'} · SI ${hole.strokeIndex || '-'} · ${teeYardages || `${hole.yardage ? formatYardageValue(hole.yardage) : '-'} yds`} · ${teamText}` : '';
   renderScoreAccessCard(match);
   renderScoreGrid(match, tee, metrics, scoringHoles);
   renderStatTrackingEntry(match, hole, metrics);
@@ -5980,7 +6003,7 @@ function renderScoreGrid(match, tee, metrics, scoringHoles = null) {
     const canEdit = canEditPlayerScore(match, p.team);
     return `
       <tr class="${canEdit ? '' : 'score-row-readonly'}">
-        <td>${escapeHtml(p.player.name)}<div class="tiny">${escapeHtml(p.tee?.teeName || tee?.teeName || 'Tee')}${p.tee?.isCombo ? ` · ${escapeHtml(formatComboHoleTeeIndicator(match.courseId, p.tee, currentHole - 1, 'Playing'))}` : ''}${canEdit ? '' : ' · read only'}</div></td>
+        <td>${escapeHtml(p.player.name)}<div class="tiny">${escapeHtml(getHoleTeeNameForDisplay(match.courseId, p.tee || tee, currentHole - 1) || p.tee?.teeName || tee?.teeName || 'Tee')}${canEdit ? '' : ' · read only'}</div></td>
         <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
         <td><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="next" min="1" max="15" data-score-player="${p.playerId}" value="${gross}" ${canEdit ? '' : 'disabled'} /></td>
         <td>${strokes}</td>

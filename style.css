@@ -2657,3 +2657,73 @@ body.printing-scorecard .nine-point-scorecard-table td:nth-child(2){
   .setup-summary-row { display: grid; grid-template-columns: 7.5rem 1fr; }
   .setup-summary-row strong { text-align: left; }
 }
+
+/* v28.14 desktop course-card sizing and stat hole details */
+@media (min-width: 900px) {
+  #coursesList {
+    align-items: start;
+    justify-items: start;
+  }
+  #coursesList .course-card {
+    width: min(620px, 50vw);
+    max-width: 620px;
+  }
+}
+@media (max-width: 899px) {
+  #coursesList .course-card {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+.player-hole-stat-details {
+  border-top: 1px solid rgba(12,55,33,.08);
+  padding-top: 10px;
+}
+.player-hole-stat-details summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--accent);
+}
+.player-hole-stat-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+}
+.player-hole-stat-table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.player-hole-stat-table th,
+.player-hole-stat-table td {
+  padding: 8px 9px;
+  border-bottom: 1px solid rgba(12,55,33,.08);
+  text-align: center;
+  white-space: nowrap;
+}
+.player-hole-stat-table th:first-child,
+.player-hole-stat-table td:first-child {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  background: #fff;
+  z-index: 1;
+}
+.player-hole-stat-table thead th {
+  background: #f7faf8;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.player-hole-stat-table thead th:first-child {
+  background: #f7faf8;
+  z-index: 2;
+}
+.player-hole-stat-table tbody tr:last-child td {
+  border-bottom: 0;
+}

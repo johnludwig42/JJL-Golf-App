@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.13';
+const APP_VERSION = 'v28.14';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2439,6 +2439,16 @@ function playingHandicap(courseHdcp, allowancePct) {
 }
 function getCourse(courseId) { return state.courses.find(c => c.id === courseId); }
 function getTee(courseId, teeId) { return getCourse(courseId)?.tees.find(t => t.id === teeId); }
+function getComboSourceTeeName(courseId, comboTee, holeIdx) {
+  if (!comboTee?.isCombo || !Array.isArray(comboTee.comboSources)) return '';
+  const sourceId = comboTee.comboSources[holeIdx]?.sourceTeeId || '';
+  if (!sourceId) return '';
+  return getTee(courseId, sourceId)?.teeName || '';
+}
+function formatComboHoleTeeIndicator(courseId, comboTee, holeIdx, prefix = 'Tee') {
+  const teeName = getComboSourceTeeName(courseId, comboTee, holeIdx);
+  return teeName ? `${prefix}: ${teeName}` : '';
+}
 function getPlayer(playerId) { return state.players.find(p => p.id === playerId); }
 function getMatch(matchId = state.activeMatchId) { return state.matches.find(m => m.id === matchId) || null; }
 function getActiveMatch() { return getMatch(); }
@@ -3399,6 +3409,42 @@ function buildExportStatTrackingSummary(match, metrics) {
     </div>`;
 }
 
+function buildPlayerHoleStatSummaryTable(match, metrics, playerMetric, completedLimit) {
+  const playerRef = match.players.find(row => row.playerId === playerMetric.playerId);
+  if (!playerRef) return '<div class="tiny top-gap">No hole-by-hole stats available.</div>';
+  const rows = (metrics?.holeResults || []).slice(0, completedLimit).map((holeResult, holeIdx) => {
+    if (!holeResult?.completed) return '';
+    const scoreObj = holeResult?.playerScores?.find(ps => ps.playerId === playerMetric.playerId);
+    const gross = Number(scoreObj?.gross);
+    if (!Number.isFinite(gross) || gross <= 0) return '';
+    const hole = getPlayerHole(match, playerMetric, holeIdx, metrics?.tee) || metrics?.tee?.holes?.[holeIdx] || null;
+    const stat = getPlayerStatEntry(playerRef, holeIdx);
+    const par = Number(hole?.par) || Number(scoreObj?.par) || 0;
+    const strokes = holeStrokeAllowanceForPlayer(hole?.strokeIndex, playerMetric.playHdcp, metrics?.lowPlaying);
+    const net = gross - strokes;
+    const fairwayEligible = par === 4 || par === 5;
+    const fairwayText = fairwayEligible ? (stat.fairway ? 'Yes' : 'No') : '—';
+    return `
+      <tr>
+        <td>${escapeHtml(hole?.holeNumber || holeIdx + 1)}</td>
+        <td>${gross}</td>
+        <td>${net}</td>
+        <td>${Number.isFinite(Number(stat.putts)) ? Number(stat.putts) : '—'}</td>
+        <td>${Number.isFinite(Number(stat.penaltyStrokes)) ? Number(stat.penaltyStrokes) : 0}</td>
+        <td>${fairwayText}</td>
+        <td>${stat.green ? 'Yes' : 'No'}</td>
+      </tr>`;
+  }).filter(Boolean).join('');
+  if (!rows) return '<div class="tiny top-gap">No completed stat holes available.</div>';
+  return `
+    <div class="player-hole-stat-scroll top-gap">
+      <table class="player-hole-stat-table">
+        <thead><tr><th>Hole</th><th>Score</th><th>Net</th><th>Putts</th><th>Penalty</th><th>Fairway</th><th>GIR</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
 function buildStatTrackingSummary(match, metrics) {
   const scoreDistributionHtml = buildScoreDistributionSummary(match, metrics);
   if (!isStatTrackingEnabled(match)) return scoreDistributionHtml;
@@ -3418,6 +3464,10 @@ function buildStatTrackingSummary(match, metrics) {
         <div><span>Up and downs</span><strong>${totals.upAndDowns}</strong></div>
         <div><span>Sandies</span><strong>${totals.sandies}</strong></div>
       </div>
+      <details class="player-hole-stat-details top-gap">
+        <summary>Hole-by-hole stats</summary>
+        ${buildPlayerHoleStatSummaryTable(match, metrics, playerMetric, completedLimit)}
+      </details>
     </div>`).join('')}</div>`;
   return manualStatsHtml + scoreDistributionHtml;
 }
@@ -5797,7 +5847,8 @@ function renderCurrentMatch() {
     const key = `${p.tee?.id || p.teeId || ''}|${playerHole?.yardage || ''}`;
     return [key, `${p.tee?.teeName || tee?.teeName || 'Tee'} ${playerHole?.yardage ? `${formatYardageValue(playerHole.yardage)} yds` : '— yds'}`];
   })).values()].join(' · ') : '';
-  document.getElementById('holeSummary').textContent = hole ? `Hole ${hole.holeNumber} · Par ${hole.par || '-'} · SI ${hole.strokeIndex || '-'} · ${teeYardages || `${hole.yardage ? formatYardageValue(hole.yardage) : '-'} yds`} · ${teamText}` : '';
+  const comboIndicator = tee?.isCombo ? formatComboHoleTeeIndicator(match.courseId, tee, currentHole - 1, 'Playing') : '';
+  document.getElementById('holeSummary').textContent = hole ? `Hole ${hole.holeNumber} · Par ${hole.par || '-'} · SI ${hole.strokeIndex || '-'} · ${comboIndicator ? `${comboIndicator} · ` : ''}${teeYardages || `${hole.yardage ? formatYardageValue(hole.yardage) : '-'} yds`} · ${teamText}` : '';
   renderScoreAccessCard(match);
   renderScoreGrid(match, tee, metrics, scoringHoles);
   renderStatTrackingEntry(match, hole, metrics);
@@ -5929,7 +5980,7 @@ function renderScoreGrid(match, tee, metrics, scoringHoles = null) {
     const canEdit = canEditPlayerScore(match, p.team);
     return `
       <tr class="${canEdit ? '' : 'score-row-readonly'}">
-        <td>${escapeHtml(p.player.name)}<div class="tiny">${escapeHtml(p.tee?.teeName || tee?.teeName || 'Tee')}${canEdit ? '' : ' · read only'}</div></td>
+        <td>${escapeHtml(p.player.name)}<div class="tiny">${escapeHtml(p.tee?.teeName || tee?.teeName || 'Tee')}${p.tee?.isCombo ? ` · ${escapeHtml(formatComboHoleTeeIndicator(match.courseId, p.tee, currentHole - 1, 'Playing'))}` : ''}${canEdit ? '' : ' · read only'}</div></td>
         <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
         <td><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="next" min="1" max="15" data-score-player="${p.playerId}" value="${gross}" ${canEdit ? '' : 'disabled'} /></td>
         <td>${strokes}</td>

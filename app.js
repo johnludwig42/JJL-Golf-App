@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.16';
+const APP_VERSION = 'v28.17';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -2439,36 +2439,73 @@ function playingHandicap(courseHdcp, allowancePct) {
 }
 function getCourse(courseId) { return state.courses.find(c => c.id === courseId); }
 function getTee(courseId, teeId) { return getCourse(courseId)?.tees.find(t => t.id === teeId); }
-function getComboSourceTeeName(courseId, comboTee, holeIdx) {
-  if (!comboTee?.isCombo || !Array.isArray(comboTee.comboSources)) return '';
-  const displayHoleNumber = Number(comboTee.holes?.[holeIdx]?.holeNumber) || holeIdx + 1;
-  const source = comboTee.comboSources.find(row => Number(row?.holeNumber) === displayHoleNumber) || comboTee.comboSources[holeIdx];
-  const sourceId = source?.sourceTeeId || '';
-  if (!sourceId) return inferComboSourceTeeName(courseId, comboTee, holeIdx);
-  return getTee(courseId, sourceId)?.teeName || inferComboSourceTeeName(courseId, comboTee, holeIdx);
+function holeMetadataMatches(a, b) {
+  if (!a || !b) return false;
+  const ay = Number(a.yardage) || 0;
+  const by = Number(b.yardage) || 0;
+  const ap = Number(a.par) || 0;
+  const bp = Number(b.par) || 0;
+  const asi = Number(a.strokeIndex) || 0;
+  const bsi = Number(b.strokeIndex) || 0;
+  return ay > 0 && by > 0 && ay === by && (!ap || !bp || ap === bp) && (!asi || !bsi || asi === bsi);
+}
+function getHoleByNumberOrIndex(tee, holeNumber, holeIdx) {
+  const holes = Array.isArray(tee?.holes) ? tee.holes : [];
+  return holes.find(row => Number(row?.holeNumber) === Number(holeNumber)) || holes[holeIdx] || null;
+}
+function getNonComboSourceTeeCandidates(courseId, targetTee) {
+  const course = getCourse(courseId);
+  const all = Array.isArray(course?.tees) ? course.tees : [];
+  return all.filter(t => t && t.id !== targetTee?.id && !t.isCombo && Array.isArray(t.holes) && t.holes.length);
 }
 function inferComboSourceTeeName(courseId, comboTee, holeIdx) {
   const course = getCourse(courseId);
   const comboHole = comboTee?.holes?.[holeIdx];
   if (!course || !comboHole) return '';
   const displayHoleNumber = Number(comboHole.holeNumber) || holeIdx + 1;
-  const candidate = (course.tees || []).find(t => {
-    if (!t || t.id === comboTee.id || t.isCombo) return false;
-    const h = (t.holes || []).find(row => Number(row?.holeNumber) === displayHoleNumber) || t.holes?.[holeIdx];
-    return h
-      && Number(h.yardage) === Number(comboHole.yardage)
-      && Number(h.par) === Number(comboHole.par)
-      && Number(h.strokeIndex) === Number(comboHole.strokeIndex);
+  const matches = getNonComboSourceTeeCandidates(courseId, comboTee).filter(t => holeMetadataMatches(getHoleByNumberOrIndex(t, displayHoleNumber, holeIdx), comboHole));
+  return matches.length === 1 ? (matches[0]?.teeName || '') : '';
+}
+function inferFlattenedComboSourceTeeName(courseId, tee, holeIdx) {
+  if (!tee || tee.isCombo) return '';
+  const targetHoles = Array.isArray(tee.holes) ? tee.holes : [];
+  if (!targetHoles.length) return '';
+  const teeNameText = String(tee.teeName || '').trim().toLowerCase();
+  const nameCandidates = getNonComboSourceTeeCandidates(courseId, tee).filter(t => {
+    const name = String(t?.teeName || '').trim().toLowerCase();
+    return name && teeNameText.includes(name);
   });
-  return candidate?.teeName || '';
+  if (nameCandidates.length < 2) return '';
+  const resolvedByHole = targetHoles.map((targetHole, idx) => {
+    const displayHoleNumber = Number(targetHole?.holeNumber) || idx + 1;
+    const matches = nameCandidates.filter(t => holeMetadataMatches(getHoleByNumberOrIndex(t, displayHoleNumber, idx), targetHole));
+    return matches.length === 1 ? matches[0] : null;
+  });
+  if (resolvedByHole.some(row => !row)) return '';
+  const distinctIds = new Set(resolvedByHole.map(t => t.id));
+  if (distinctIds.size < 2) return '';
+  return resolvedByHole[holeIdx]?.teeName || '';
+}
+function getComboSourceTeeName(courseId, comboTee, holeIdx) {
+  if (!comboTee?.isCombo) return '';
+  const displayHoleNumber = Number(comboTee.holes?.[holeIdx]?.holeNumber) || holeIdx + 1;
+  const source = Array.isArray(comboTee.comboSources)
+    ? (comboTee.comboSources.find(row => Number(row?.holeNumber) === displayHoleNumber) || comboTee.comboSources[holeIdx])
+    : null;
+  const sourceId = source?.sourceTeeId || '';
+  if (sourceId) {
+    const sourceTee = getTee(courseId, sourceId);
+    if (sourceTee?.teeName) return sourceTee.teeName;
+  }
+  return inferComboSourceTeeName(courseId, comboTee, holeIdx);
 }
 function getHoleTeeNameForDisplay(courseId, tee, holeIdx) {
   if (!tee) return '';
   if (tee.isCombo) return getComboSourceTeeName(courseId, tee, holeIdx) || '';
-  return tee.teeName || '';
+  return inferFlattenedComboSourceTeeName(courseId, tee, holeIdx) || tee.teeName || '';
 }
 function formatComboHoleTeeIndicator(courseId, comboTee, holeIdx, prefix = 'Tee') {
-  const teeName = getComboSourceTeeName(courseId, comboTee, holeIdx);
+  const teeName = comboTee?.isCombo ? getComboSourceTeeName(courseId, comboTee, holeIdx) : inferFlattenedComboSourceTeeName(courseId, comboTee, holeIdx);
   return teeName ? `${prefix}: ${teeName}` : '';
 }
 function getPlayer(playerId) { return state.players.find(p => p.id === playerId); }

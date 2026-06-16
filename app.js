@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.18';
+const APP_VERSION = 'v28.18.1';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -5931,23 +5931,23 @@ function renderCurrentMatch() {
 
 
 function getShortStatusName(name, maxLen = 10) {
-  const raw = String(name || '').trim();
-  if (!raw) return '';
-  const parts = raw.split(/\s+/).filter(Boolean);
-  const first = parts[0] || raw;
-  if (first.length <= maxLen) return first;
-  return first.slice(0, Math.max(3, maxLen - 1)) + '…';
+  // v28.18.1: Preserve live-status player names and let the header wrap naturally
+  // rather than truncating names with ellipses. Keep the maxLen argument for
+  // backward-compatible call sites, but do not shorten the returned label here.
+  return String(name || '').trim();
 }
 
 function getConciseTeamName(match, teamNo, metrics, maxLen = 12) {
+  // v28.18.1: Preserve custom team names and player-derived team labels.
+  // The live status line is styled to wrap instead of forcing truncation.
   const custom = String(match?.teamNames?.[Number(teamNo) - 1] || '').trim();
-  if (custom) return custom.length <= maxLen ? custom : custom.slice(0, maxLen - 1) + '…';
+  if (custom) return custom;
   const members = (metrics?.teams || []).find(t => Number(t.team) === Number(teamNo))?.members || [];
   if (members.length) {
-    const names = members.map(m => getShortStatusName(m?.player?.name || '', 7)).filter(Boolean);
+    const names = members.map(m => getShortStatusName(m?.player?.name || '')).filter(Boolean);
     if (names.length === 1) return names[0];
     const joined = names.join('/');
-    return joined.length <= maxLen ? joined : `Team ${teamNo}`;
+    return joined || `Team ${teamNo}`;
   }
   return `Team ${teamNo}`;
 }
@@ -6034,9 +6034,8 @@ function buildLiveNinePointStatus(match, metrics, cfg = {}) {
   const nine = computeNinePointResults(match, metrics, cfg);
   const rows = Array.isArray(nine.leaderboard) ? nine.leaderboard : [];
   if (rows.length !== 3) return '';
-  const parts = rows.map(row => `${getShortStatusName(row.name, 6)} ${formatSigned(Number(row.total) || 0)}`);
-  const full = `9PT: ${parts.join(' ')}`;
-  return full.length <= 48 ? full : `9PT: ${getShortStatusName(rows[0].name, 8)} ${formatSigned(Number(rows[0].total) || 0)} lead`;
+  const parts = rows.map(row => `${getShortStatusName(row.name)} ${formatSigned(Number(row.total) || 0)}`);
+  return `9PT: ${parts.join(' ')}`;
 }
 
 function buildLiveGreeniesStatus(match, metrics, cfg = {}) {

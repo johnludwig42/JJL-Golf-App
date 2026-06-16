@@ -2743,3 +2743,11 @@ body.printing-scorecard .nine-point-scorecard-table td:nth-child(2){
     max-width:460px;
   }
 }
+
+/* v28.18 compact live match status in scoring header */
+#score #holeSummary .score-hole-meta{line-height:1.25}
+#score #holeSummary .score-live-status{margin-top:2px;font-size:12px;line-height:1.25;font-weight:800;color:#0b5d3b;white-space:normal;overflow-wrap:anywhere}
+@media (max-width:760px){
+  #score #holeSummary{margin-top:6px}
+  #score #holeSummary .score-live-status{font-size:11px;line-height:1.2}
+}

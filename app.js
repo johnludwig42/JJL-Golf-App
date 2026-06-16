@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.17';
+const APP_VERSION = 'v28.18';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -5908,7 +5908,16 @@ function renderCurrentMatch() {
     const key = `${playerTee?.id || p.teeId || ''}|${holeTeeName}|${playerHole?.yardage || ''}`;
     return [key, `${holeTeeName} ${playerHole?.yardage ? `${formatYardageValue(playerHole.yardage)} yds` : '— yds'}`];
   })).values()].join(' · ') : '';
-  document.getElementById('holeSummary').textContent = hole ? `Hole ${hole.holeNumber} · Par ${hole.par || '-'} · SI ${hole.strokeIndex || '-'} · ${teeYardages || `${hole.yardage ? formatYardageValue(hole.yardage) : '-'} yds`} · ${teamText}` : '';
+  const liveStatusLine = buildLiveScoringStatusLine(match, metrics);
+  const holeSummaryEl = document.getElementById('holeSummary');
+  if (holeSummaryEl) {
+    if (hole) {
+      const holeMeta = `Hole ${hole.holeNumber} · Par ${hole.par || '-'} · SI ${hole.strokeIndex || '-'} · ${teeYardages || `${hole.yardage ? formatYardageValue(hole.yardage) : '-'} yds`} · ${teamText}`;
+      holeSummaryEl.innerHTML = `<div class="score-hole-meta">${escapeHtml(holeMeta)}</div>${liveStatusLine ? `<div class="score-live-status">${escapeHtml(liveStatusLine)}</div>` : ''}`;
+    } else {
+      holeSummaryEl.innerHTML = '';
+    }
+  }
   renderScoreAccessCard(match);
   renderScoreGrid(match, tee, metrics, scoringHoles);
   renderStatTrackingEntry(match, hole, metrics);
@@ -5919,6 +5928,145 @@ function renderCurrentMatch() {
   applyPendingScoreCommitFocus();
 }
 
+
+
+function getShortStatusName(name, maxLen = 10) {
+  const raw = String(name || '').trim();
+  if (!raw) return '';
+  const parts = raw.split(/\s+/).filter(Boolean);
+  const first = parts[0] || raw;
+  if (first.length <= maxLen) return first;
+  return first.slice(0, Math.max(3, maxLen - 1)) + '…';
+}
+
+function getConciseTeamName(match, teamNo, metrics, maxLen = 12) {
+  const custom = String(match?.teamNames?.[Number(teamNo) - 1] || '').trim();
+  if (custom) return custom.length <= maxLen ? custom : custom.slice(0, maxLen - 1) + '…';
+  const members = (metrics?.teams || []).find(t => Number(t.team) === Number(teamNo))?.members || [];
+  if (members.length) {
+    const names = members.map(m => getShortStatusName(m?.player?.name || '', 7)).filter(Boolean);
+    if (names.length === 1) return names[0];
+    const joined = names.join('/');
+    return joined.length <= maxLen ? joined : `Team ${teamNo}`;
+  }
+  return `Team ${teamNo}`;
+}
+
+function formatConciseTeamDiff(match, metrics, diff) {
+  const n = Number(diff) || 0;
+  if (!Number.isFinite(n) || n === 0) return 'AS';
+  const teamNo = n > 0 ? 1 : 2;
+  return `${getConciseTeamName(match, teamNo, metrics)} +${Math.abs(n)}`;
+}
+
+function buildLiveNassauStatus(match, metrics) {
+  if (!match || !metrics || (metrics?.teams || []).length !== 2) return '';
+  const diffs = computeTeamGameDiffs(match, metrics, 'nassau');
+  const holeCount = getPlayableHoleCount(match, metrics.tee);
+  if (holeCount <= 9) return `Nassau: ${formatConciseTeamDiff(match, metrics, diffs.overall)}`;
+  const segment = currentHole <= 9 ? 'F' : 'B';
+  const diff = currentHole <= 9 ? diffs.front : diffs.back;
+  return `Nassau ${segment}: ${formatConciseTeamDiff(match, metrics, diff)}`;
+}
+
+function buildLiveTeamMatchStatus(match, metrics) {
+  if (!match || !metrics || (metrics?.teams || []).length !== 2) return '';
+  const diffs = computeTeamGameDiffs(match, metrics, 'team_match');
+  return `Match: ${formatConciseTeamDiff(match, metrics, diffs.overall)}`;
+}
+
+function buildLiveIndividualMatchStatus(match, metrics) {
+  const pairings = getIndividualMatchPairings(match, metrics);
+  const pairing = pairings.find(p => ['match_play', 'nassau'].includes(String(p.game || '').toLowerCase())) || pairings[0];
+  if (!pairing) return '';
+  if (String(pairing.game || '').toLowerCase() === 'nassau') {
+    const diff = currentHole <= 9 ? pairing.front : pairing.back;
+    const segment = currentHole <= 9 ? 'F' : 'B';
+    if (!Number.isFinite(Number(diff)) || Number(diff) === 0) return `Match ${segment}: AS`;
+    const leader = Number(diff) > 0 ? pairing.playerA?.player?.name : pairing.playerB?.player?.name;
+    return `Match ${segment}: ${getShortStatusName(leader, 9)} +${Math.abs(Number(diff))}`;
+  }
+  const diff = Number(pairing.diff) || 0;
+  if (!diff) return 'Match: AS';
+  return `Match: ${getShortStatusName(pairing.leaderName, 9)} +${Math.abs(diff)}`;
+}
+
+function getSkinCarryoverCount(match, metrics, cfg = {}) {
+  const basis = String(cfg.basis || 'net').toLowerCase();
+  const isTeam = cfg.skinsType === 'team';
+  let carry = 0;
+  (metrics?.holeResults || []).forEach(h => {
+    if (!h.completed) return;
+    let hasWinner = false;
+    if (isTeam) {
+      const scoredTeams = (metrics.teams || []).map(t => ({ team: t.team, value: getTeamHoleScore(h, t.team, basis, 'best_ball') })).filter(t => Number.isFinite(t.value));
+      if (scoredTeams.length >= 2) {
+        const best = Math.min(...scoredTeams.map(t => t.value));
+        hasWinner = scoredTeams.filter(t => t.value === best).length === 1;
+      }
+    } else {
+      const scoredPlayers = (h.playerScores || []).map(ps => ({ playerId: ps.playerId, value: getHoleValueForBasis(ps, basis) })).filter(p => Number.isFinite(p.value));
+      if (scoredPlayers.length >= 2) {
+        const best = Math.min(...scoredPlayers.map(p => p.value));
+        hasWinner = scoredPlayers.filter(p => p.value === best).length === 1;
+      }
+    }
+    carry = hasWinner ? 0 : carry + 1;
+  });
+  return carry;
+}
+
+function buildLiveSkinsStatus(match, metrics, cfg = {}) {
+  const skins = computeSkinResults(match, metrics, cfg);
+  const carry = getSkinCarryoverCount(match, metrics, cfg);
+  if (carry > 0) return `Skins: ${carry} CO`;
+  const counts = skins.counts || {};
+  const max = Math.max(0, ...Object.values(counts).map(Number));
+  if (max <= 0) return 'Skins: 0';
+  const leaders = Object.entries(counts).filter(([, n]) => Number(n) === max);
+  const label = cfg.skinsType === 'team'
+    ? getConciseTeamName(match, leaders[0]?.[0], metrics, 9)
+    : getShortStatusName(getPlayer(leaders[0]?.[0])?.name || 'Player', 9);
+  return `Skins: ${label} ${max}`;
+}
+
+function buildLiveNinePointStatus(match, metrics, cfg = {}) {
+  const nine = computeNinePointResults(match, metrics, cfg);
+  const rows = Array.isArray(nine.leaderboard) ? nine.leaderboard : [];
+  if (rows.length !== 3) return '';
+  const parts = rows.map(row => `${getShortStatusName(row.name, 6)} ${formatSigned(Number(row.total) || 0)}`);
+  const full = `9PT: ${parts.join(' ')}`;
+  return full.length <= 48 ? full : `9PT: ${getShortStatusName(rows[0].name, 8)} ${formatSigned(Number(rows[0].total) || 0)} lead`;
+}
+
+function buildLiveGreeniesStatus(match, metrics, cfg = {}) {
+  const greenies = getGreeniesResults(match, metrics, cfg);
+  const counts = greenies.counts || {};
+  const max = Math.max(0, ...Object.values(counts).map(Number));
+  if (max <= 0) return '';
+  const leaders = Object.entries(counts).filter(([, n]) => Number(n) === max);
+  const label = getShortStatusName(getPlayer(leaders[0]?.[0])?.name || 'Player', 8);
+  return `G: ${label} ${max}`;
+}
+
+function buildLiveScoringStatusLine(match, metrics) {
+  if (!match || !metrics) return '';
+  const games = Array.isArray(match.selectedGames) ? match.selectedGames : [];
+  if (!games.length) return '';
+  const byKey = new Map(games.map(g => [g.key, g]));
+  const items = [];
+  const push = (text) => {
+    const clean = String(text || '').trim();
+    if (clean && items.length < 3) items.push(clean);
+  };
+  if (byKey.has('nassau')) push(buildLiveNassauStatus(match, metrics));
+  if (byKey.has('team_match')) push(buildLiveTeamMatchStatus(match, metrics));
+  if (byKey.has('individual_match')) push(buildLiveIndividualMatchStatus(match, metrics));
+  if (byKey.has('skins')) push(buildLiveSkinsStatus(match, metrics, byKey.get('skins')));
+  if (byKey.has('nine_point')) push(buildLiveNinePointStatus(match, metrics, byKey.get('nine_point')));
+  if (byKey.has('greenies')) push(buildLiveGreeniesStatus(match, metrics, byKey.get('greenies')));
+  return items.slice(0, 3).join(' | ');
+}
 
 function renderHoleSelector(match, scoringHoles = []) {
   const badge = document.getElementById('currentHoleBadge');

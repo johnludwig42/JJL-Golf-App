@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.18.1';
+const APP_VERSION = 'v28.20';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -5931,14 +5931,14 @@ function renderCurrentMatch() {
 
 
 function getShortStatusName(name, maxLen = 10) {
-  // v28.18.1: Preserve live-status player names and let the header wrap naturally
+  // v28.20: Preserve live-status player names and let the header wrap naturally
   // rather than truncating names with ellipses. Keep the maxLen argument for
   // backward-compatible call sites, but do not shorten the returned label here.
   return String(name || '').trim();
 }
 
 function getConciseTeamName(match, teamNo, metrics, maxLen = 12) {
-  // v28.18.1: Preserve custom team names and player-derived team labels.
+  // v28.20: Preserve custom team names and player-derived team labels.
   // The live status line is styled to wrap instead of forcing truncation.
   const custom = String(match?.teamNames?.[Number(teamNo) - 1] || '').trim();
   if (custom) return custom;
@@ -6095,36 +6095,65 @@ function renderStatTrackingEntry(match, hole, metrics) {
     wrap.innerHTML = '<div class="card inset-card stat-entry-card"><div class="section-label">Stat tracking</div><div class="tiny top-gap">No players were selected for stat tracking.</div></div>';
     return;
   }
+  const canShowFairway = isFairwayHole;
+  const columns = [
+    ...(canShowFairway ? [{ key: 'fairway', label: 'FW' }] : []),
+    { key: 'green', label: 'GIR' },
+    { key: 'putts', label: 'Putts' },
+    { key: 'upAndDown', label: 'U&D' },
+    { key: 'sandy', label: 'Sandy' },
+    { key: 'penaltyStrokes', label: 'Pen' },
+  ];
+  const stepper = (playerId, key, value, disabled, extraAttrs = '') => `
+    <div class="stat-stepper ${disabled ? 'is-disabled' : ''}" role="group" aria-label="${escapeHtml(key === 'putts' ? 'Putts' : 'Penalty strokes')}">
+      <button type="button" class="stat-step-btn" data-stat-step="down" data-stat-player="${escapeHtml(playerId)}" data-stat-key="${escapeHtml(key)}" ${disabled ? 'disabled' : ''}>−</button>
+      <input class="score-input ${key === 'putts' ? 'stat-putts-input' : 'stat-penalty-input'} stat-step-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" min="0" max="9" data-stat-player="${escapeHtml(playerId)}" data-stat-key="${escapeHtml(key)}" value="${Number.isFinite(Number(value)) ? Math.max(0, Math.round(Number(value))) : (key === 'putts' ? 2 : 0)}" ${extraAttrs} ${disabled ? 'disabled' : ''} />
+      <button type="button" class="stat-step-btn" data-stat-step="up" data-stat-player="${escapeHtml(playerId)}" data-stat-key="${escapeHtml(key)}" ${disabled ? 'disabled' : ''}>+</button>
+    </div>`;
   wrap.innerHTML = `
-    <div class="card inset-card stat-entry-card">
+    <div class="card inset-card stat-entry-card stat-matrix-card">
       <div class="item-header compact-item-header">
         <div>
           <div class="section-label">Stat tracking · Hole ${hole?.holeNumber || currentHole}</div>
-          <div class="tiny">Track optional player stats for this hole. Fairways only appear on par 4s and par 5s.</div>
+          <div class="tiny">Enter stats in one quick pass across the group.${canShowFairway ? '' : ' Fairway is hidden on par 3s.'}</div>
         </div>
       </div>
-      <div class="stat-entry-grid top-gap">
-        ${statPlayers.map(p => {
-          const stat = getPlayerStatEntry(match.players.find(mp => mp.playerId === p.playerId), currentHole - 1);
-          const canEdit = canEditPlayerScore(match, p.team);
-          const playerHole = getPlayerHole(match, p, currentHole - 1, hole) || hole || null;
-          const showFairway = Number(playerHole?.par) === 4 || Number(playerHole?.par) === 5 || isFairwayHole;
-          return `
-            <div class="stat-player-card ${canEdit ? '' : 'is-readonly'}">
-              <div class="stat-player-head">
-                <div><strong>${escapeHtml(p.player.name)}</strong></div>
-                <div class="tiny">${escapeHtml(getTeamLabel(match, p.team))}${canEdit ? '' : ' · read only'}</div>
-              </div>
-              <div class="stat-check-grid top-gap ${showFairway ? 'stat-check-grid--with-fairway' : ''}">
-                ${showFairway ? `<label class="mini-check stat-mini-check stat-mini-check--fairway"><input type="checkbox" data-stat-player="${p.playerId}" data-stat-key="fairway" ${stat.fairway ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>Fairway hit</span></label>` : ''}
-                <label class="mini-check stat-mini-check"><input type="checkbox" data-stat-player="${p.playerId}" data-stat-key="green" ${stat.green ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>Green in regulation</span></label>
-                <label class="mini-check stat-mini-check"><input type="checkbox" data-stat-player="${p.playerId}" data-stat-key="upAndDown" ${stat.upAndDown ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>Up and down</span></label>
-                <label class="mini-check stat-mini-check"><input type="checkbox" data-stat-player="${p.playerId}" data-stat-key="sandy" ${stat.sandy ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>Sandy</span></label>
-              </div>
-              <label class="stat-putts-field top-gap"><span>Putts</span><input class="score-input stat-putts-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" min="0" max="9" data-stat-player="${p.playerId}" data-stat-key="putts" data-putts-source="${escapeHtml(normalizePuttsSource(stat.puttsSource || 'default', 'default'))}" value="${Number.isFinite(stat.putts) ? stat.putts : 2}" ${canEdit ? '' : 'disabled'} /></label>
-              <label class="stat-putts-field top-gap"><span>Penalty strokes</span><input class="score-input stat-penalty-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" min="0" max="9" data-stat-player="${p.playerId}" data-stat-key="penaltyStrokes" value="${Number.isFinite(Number(stat.penaltyStrokes)) ? Number(stat.penaltyStrokes) : 0}" ${canEdit ? '' : 'disabled'} /></label>
-            </div>`;
-        }).join('')}
+      <div class="stat-matrix-wrap top-gap">
+        <div class="stat-matrix-scroll">
+          <table class="stat-matrix-table">
+            <thead>
+              <tr>
+                <th class="stat-player-col">Player</th>
+                ${columns.map(col => `<th>${escapeHtml(col.label)}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${statPlayers.map(p => {
+                const matchPlayer = match.players.find(mp => mp.playerId === p.playerId);
+                const stat = getPlayerStatEntry(matchPlayer, currentHole - 1);
+                const canEdit = canEditPlayerScore(match, p.team);
+                const playerName = p.player?.name || 'Player';
+                const teamLabel = getTeamLabel(match, p.team);
+                return `<tr class="${canEdit ? '' : 'is-readonly'}">
+                  <th class="stat-player-col" scope="row">
+                    <span class="stat-matrix-player-name">${escapeHtml(playerName)}</span>
+                    <span class="stat-matrix-team tiny">${escapeHtml(teamLabel)}${canEdit ? '' : ' · read only'}</span>
+                  </th>
+                  ${columns.map(col => {
+                    if (col.key === 'putts') {
+                      return `<td>${stepper(p.playerId, 'putts', Number.isFinite(Number(stat.putts)) ? Number(stat.putts) : 2, !canEdit, `data-putts-source="${escapeHtml(normalizePuttsSource(stat.puttsSource || 'default', 'default'))}"`)}</td>`;
+                    }
+                    if (col.key === 'penaltyStrokes') {
+                      return `<td>${stepper(p.playerId, 'penaltyStrokes', Number.isFinite(Number(stat.penaltyStrokes)) ? Number(stat.penaltyStrokes) : 0, !canEdit)}</td>`;
+                    }
+                    const label = col.key === 'fairway' ? 'Fairway hit' : col.key === 'green' ? 'Green in regulation' : col.key === 'upAndDown' ? 'Up and down' : 'Sandy';
+                    return `<td><label class="stat-matrix-check" aria-label="${escapeHtml(label)}"><input type="checkbox" data-stat-player="${escapeHtml(p.playerId)}" data-stat-key="${escapeHtml(col.key)}" ${stat[col.key] ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>${stat[col.key] ? '✓' : ''}</span></label></td>`;
+                  }).join('')}
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>`;
 }
@@ -8478,6 +8507,30 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
   document.getElementById('score').addEventListener('click', e => {
+    const stepBtn = e.target.closest('[data-stat-step]');
+    if (stepBtn) {
+      const match = getActiveMatch();
+      if (!match) return;
+      const playerId = stepBtn.dataset.statPlayer || '';
+      const key = stepBtn.dataset.statKey || '';
+      const dir = stepBtn.dataset.statStep === 'down' ? -1 : 1;
+      const escapedId = cssEscape(playerId);
+      const escapedKey = cssEscape(key);
+      const input = document.querySelector(`input[data-stat-player="${escapedId}"][data-stat-key="${escapedKey}"]`);
+      if (!input || input.disabled) return;
+      const fallback = key === 'putts' ? 2 : 0;
+      const current = Number.isFinite(Number(input.value)) ? Number(input.value) : fallback;
+      const next = Math.max(0, Math.min(9, Math.round(current + dir)));
+      input.value = String(next);
+      if (key === 'putts') {
+        input.dataset.puttsSource = 'user';
+        commitSmartPuttsDomValue(input, 'user');
+      }
+      applyCurrentHoleDomToMatch(match);
+      persist({ skipRender: true });
+      scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
+      return;
+    }
     const jumpHole = e.target.closest('[data-jump-hole]')?.dataset.jumpHole;
     if (jumpHole) {
       saveCurrentHole({ targetHole: Number(jumpHole), silent: true });

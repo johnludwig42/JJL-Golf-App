@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.20';
+const APP_VERSION = 'v28.20.1';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -1127,9 +1127,23 @@ function buildRoundRecapControls(match) {
         <div class="tiny">${escapeHtml(buildRoundRecapStatus(match) || reason)}</div>
       </div>
       <div class="round-recap-notes-field">
-        <label for="roundRecapNotesBox">Round Notes for Recap</label>
-        <div class="tiny">Add memorable shots, stories, weather conditions, side bets, funny moments, milestones, or anything else you'd like included in the recap.</div>
-        <textarea id="roundRecapNotesBox" rows="3" placeholder="Example: Tom made a 35-foot birdie putt on 16. John nearly holed out on 7. Strong winds made club selection difficult all day.">${escapeHtml(match.roundRecapNotes || '')}</textarea>
+        <label for="roundRecapNotesBox">Round Notes</label>
+        <div class="tiny">Capture memorable moments, betting drama, course conditions, and highlights. These notes help generate your AI Round Recap. Type or dictate notes using your phone's keyboard microphone.</div>
+        <div class="actions wrap top-gap round-notes-prompt-buttons" id="roundNotesPromptButtons">
+          <button type="button" class="secondary round-note-prompt-btn" data-round-note-prompt="Key Moments:">Key Moments</button>
+          <button type="button" class="secondary round-note-prompt-btn" data-round-note-prompt="Best Shots:">Best Shots</button>
+          <button type="button" class="secondary round-note-prompt-btn" data-round-note-prompt="Betting Drama:">Betting Drama</button>
+          <button type="button" class="secondary round-note-prompt-btn" data-round-note-prompt="Funny Moments:">Funny Moments</button>
+          <button type="button" class="secondary round-note-prompt-btn" data-round-note-prompt="Course Conditions:">Course Conditions</button>
+          <button type="button" class="secondary round-note-prompt-btn" data-round-note-prompt="Turning Points:">Turning Points</button>
+        </div>
+        <textarea id="roundRecapNotesBox" rows="8" placeholder="Examples:
+• Mike won the Nassau on 18.
+• John chipped in for eagle on 9.
+• Wind made the back nine extremely difficult.
+• Closest match of the trip so far.
+• Best moment of the trip so far.
+• Funniest event of the day.">${escapeHtml(match.roundRecapNotes || '')}</textarea>
       </div>
       <div class="actions wrap compact-actions">
         <button id="generateRoundRecapBtn" type="button" class="secondary" ${disabled ? 'disabled' : ''}>${recap ? 'Regenerate Round Recap' : 'Generate Round Recap'}</button>
@@ -2347,6 +2361,20 @@ function computeMatchProgress(match) {
   }
   return { lastTouchedHole, lastFullyCompletedHole };
 }
+
+function mergeRoundNoteText(primary, legacy) {
+  const cleanPrimary = String(primary || '').trim();
+  const cleanLegacy = String(legacy || '').trim();
+  if (!cleanPrimary) return cleanLegacy;
+  if (!cleanLegacy) return cleanPrimary;
+  if (cleanPrimary === cleanLegacy || cleanPrimary.includes(cleanLegacy)) return cleanPrimary;
+  if (cleanLegacy.includes(cleanPrimary)) return cleanLegacy;
+  return `${cleanPrimary}
+
+Legacy Notes:
+${cleanLegacy}`;
+}
+
 function normalizeMatch(match) {
   match.id = match.id || uid();
   match.date = match.date || todayIso();
@@ -2391,7 +2419,9 @@ function normalizeMatch(match) {
   match.roundRecap = typeof match.roundRecap === 'string' ? match.roundRecap : '';
   match.roundRecapGeneratedAt = match.roundRecapGeneratedAt || null;
   match.roundRecapStatus = typeof match.roundRecapStatus === 'string' ? match.roundRecapStatus : '';
-  match.roundRecapNotes = typeof match.roundRecapNotes === 'string' ? match.roundRecapNotes : '';
+  match.notes = typeof match.notes === 'string' ? match.notes : '';
+  match.roundRecapNotes = mergeRoundNoteText(match.roundRecapNotes, match.notes);
+  match.notes = match.roundRecapNotes;
   const progress = computeMatchProgress(match);
   match.lastTouchedHole = Number(match.lastTouchedHole) || progress.lastTouchedHole;
   match.lastFullyCompletedHole = Number(match.lastFullyCompletedHole) || progress.lastFullyCompletedHole;
@@ -2423,6 +2453,13 @@ function normalizeState() {
     }
   });
   state.matches.forEach(normalizeMatch);
+  if (state.notes && state.activeMatchId) {
+    const activeForNotes = state.matches.find(m => m.id === state.activeMatchId);
+    if (activeForNotes && !String(activeForNotes.roundRecapNotes || '').trim()) {
+      activeForNotes.roundRecapNotes = String(state.notes || '').trim();
+      activeForNotes.notes = activeForNotes.roundRecapNotes;
+    }
+  }
   if (state.activeMatchId && !state.matches.find(m => m.id === state.activeMatchId)) {
     state.activeMatchId = null;
   }
@@ -4506,7 +4543,7 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
   });
   const notesRow = {
     match_id: match.sharedMatchId || match.id,
-    body: String(match.notes || ''),
+    body: String(match.roundRecapNotes || match.notes || ''),
     updated_at: createdAt,
     updated_by: organizerUserId,
   };
@@ -4644,6 +4681,7 @@ function hydrateMatchFromCloudBundle(bundle) {
     statTrackingEnabled: !!matchRow?.stat_tracking_enabled,
     teamScorers: buildTeamScorerAssignments(Number(matchRow?.team_count) || Math.max(1, teamNames.length || 1), teamNames, []),
     notes: String(notes?.body || ''),
+    roundRecapNotes: String(notes?.body || ''),
     selectedGames: normalizeSelectedGamesOrder(matchRow?.selected_games || []),
     status: matchRow?.status || 'active',
     completedAt: matchRow?.completed_at || null,
@@ -5290,7 +5328,6 @@ function renderAll() {
   renderSetupHandicapPreview();
   const versionEl = document.getElementById('appVersionLabel'); if (versionEl) versionEl.textContent = APP_VERSION;
   const footerVersionEl = document.getElementById('appVersionFooter'); if (footerVersionEl) footerVersionEl.textContent = APP_VERSION;
-  const notesBox = document.getElementById('notesBox'); if (notesBox && notesBox.value !== state.notes) notesBox.value = state.notes || '';
   const coursesSearchInput = document.getElementById('coursesSearchInput');
   if (coursesSearchInput && coursesSearchInput.value !== uiState.courseSearch) coursesSearchInput.value = uiState.courseSearch;
   syncNewMatchConflictUi();
@@ -5571,8 +5608,6 @@ function markRoundReopenedForEditing(match) {
 function resetMatchSetupFormDomToBlank() {
   const form = document.getElementById('matchForm');
   if (form) form.reset();
-  const notesBox = document.getElementById('notesBox');
-  if (notesBox) notesBox.value = '';
   const picker = document.getElementById('matchPlayersPicker');
   if (picker) picker.innerHTML = '';
   document.querySelectorAll('[data-player-slot], [data-player-tee-slot], [data-team-name], [data-game-key], [data-game-config], [data-side-field], [data-nine-point-player], [data-greenie-player]').forEach(el => {
@@ -5931,14 +5966,14 @@ function renderCurrentMatch() {
 
 
 function getShortStatusName(name, maxLen = 10) {
-  // v28.20: Preserve live-status player names and let the header wrap naturally
+  // v28.20.1: Preserve live-status player names and let the header wrap naturally
   // rather than truncating names with ellipses. Keep the maxLen argument for
   // backward-compatible call sites, but do not shorten the returned label here.
   return String(name || '').trim();
 }
 
 function getConciseTeamName(match, teamNo, metrics, maxLen = 12) {
-  // v28.20: Preserve custom team names and player-derived team labels.
+  // v28.20.1: Preserve custom team names and player-derived team labels.
   // The live status line is styled to wrap instead of forcing truncation.
   const custom = String(match?.teamNames?.[Number(teamNo) - 1] || '').trim();
   if (custom) return custom;
@@ -7910,8 +7945,6 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
     document.getElementById('officialScorerNameInput').value = draft.officialScorerName || 'Official scorer';
     const statToggle = document.getElementById('enableStatTrackingInput'); if (statToggle) statToggle.checked = false;
     renderStatTrackingPlayerSelector([]);
-    state.notes = '';
-    const notesBox = document.getElementById('notesBox'); if (notesBox) notesBox.value = '';
     populateMatchCourseSelects(draft.courseId || '', draft.teeId || '');
     renderTeamNameInputs(draft.teamCount || 1, draft.teamNames || []);
     renderScoringControlConfig(draft);
@@ -8658,11 +8691,11 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       sharedOwnerUserId: existing?.sharedOwnerUserId || null,
       cloudSyncState: existing?.cloudSyncState || (sharedMatchEnabled ? 'pending' : 'local-only'),
       lastCloudSyncAt: existing?.lastCloudSyncAt || null,
-      notes: existing?.notes || state.notes || '',
+      notes: mergeRoundNoteText(existing?.roundRecapNotes, existing?.notes || state.notes || ''),
       roundRecap: existing?.roundRecap || '',
       roundRecapGeneratedAt: existing?.roundRecapGeneratedAt || null,
       roundRecapStatus: existing?.roundRecapStatus || '',
-      roundRecapNotes: existing?.roundRecapNotes || '',
+      roundRecapNotes: mergeRoundNoteText(existing?.roundRecapNotes, existing?.notes || state.notes || ''),
     };
     normalizeMatch(match);
     if (!match.courseId) return toast('Select a course.');
@@ -8757,6 +8790,23 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('prevHoleBtn').addEventListener('click', () => { saveCurrentHole({ targetHole: Math.max(1, currentHole - 1), silent: true }); });
   document.getElementById('nextHoleBtn').addEventListener('click', () => { saveCurrentHole({ advance: true, silent: true }); });
   document.getElementById('leaderboard')?.addEventListener('click', e => {
+    const promptBtn = e.target.closest('[data-round-note-prompt]');
+    if (promptBtn) {
+      const match = getActiveMatch();
+      const box = document.getElementById('roundRecapNotesBox');
+      if (!match || !box) return;
+      const prompt = String(promptBtn.dataset.roundNotePrompt || promptBtn.textContent || '').trim();
+      if (!prompt) return;
+      const prefix = box.value && !box.value.endsWith('\n') ? '\n\n' : '';
+      box.value = `${box.value || ''}${prefix}${prompt}\n`;
+      match.roundRecapNotes = box.value;
+      match.notes = match.roundRecapNotes;
+      persist({ skipRender: true });
+      scheduleSharedMatchSync(match, { immediate: false, silent: true });
+      box.focus();
+      try { box.setSelectionRange(box.value.length, box.value.length); } catch (_) {}
+      return;
+    }
     if (e.target.closest('#generateRoundRecapBtn')) {
       generateRoundRecapForActiveMatch();
       return;
@@ -8771,6 +8821,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const match = getActiveMatch();
     if (!match) return;
     match.roundRecapNotes = e.target.value || '';
+    match.notes = match.roundRecapNotes;
     persist({ skipRender: true });
     scheduleSharedMatchSync(match, { immediate: false, silent: true });
   });
@@ -8794,15 +8845,6 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     queueScoreCommitFocus(playerId, currentHole);
     activateTab('score');
     renderCurrentMatch();
-  });
-
-  const notesBox = document.getElementById('notesBox');
-  if (notesBox) notesBox.addEventListener('input', e => {
-    state.notes = e.target.value || '';
-    const active = getActiveMatch();
-    if (active && active.storageMode === 'shared') active.notes = state.notes;
-    persist({ skipRender: true });
-    scheduleSharedMatchSync(active, { immediate: false, silent: true });
   });
 
   document.getElementById('exportBtn').addEventListener('click', exportJson);

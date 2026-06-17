@@ -525,29 +525,7 @@
           <h2>Stats</h2>
           <div id="statTrackingSummary" class="top-gap"></div>
         </div>
-
-        <div id="notesCard" class="card tight-card scoreboard-card print-section-notes">
-          <h2>Notes</h2>
-          <label><span>Round / app notes</span>
-<div class="tiny">Use your keyboard microphone to quickly capture round highlights, betting drama, key shots, and memorable moments.</div>
-<div class="actions wrap top-gap" id="notesPromptButtons">
-<button type="button" class="secondary note-prompt-btn">Key Moments:</button>
-<button type="button" class="secondary note-prompt-btn">Best Shots:</button>
-<button type="button" class="secondary note-prompt-btn">Betting Drama:</button>
-<button type="button" class="secondary note-prompt-btn">Funny Moments:</button>
-<button type="button" class="secondary note-prompt-btn">Course Conditions:</button>
-<button type="button" class="secondary note-prompt-btn">Turning Points:</button>
-</div>
-<textarea id="notesBox" rows="10" placeholder="Examples:
-• Mike won the Nassau on 18.
-• John chipped in for eagle on 9.
-• Wind made the back nine extremely difficult.
-• Closest match of the trip so far.
-• Best moment of the trip so far.
-• Funniest event of the day."></textarea></label>
-        </div>
-
-        <div id="ninePointScorecardCard" class="card tight-card scoreboard-card print-section-nine-point hidden">
+<div id="ninePointScorecardCard" class="card tight-card scoreboard-card print-section-nine-point hidden">
           <h2>9-Point game scorecard</h2>
           <div id="ninePointScorecard" class="top-gap"></div>
         </div>
@@ -648,7 +626,7 @@
           <li>Added optional per-hole stat tracking (fairways, GIR, putts, up &amp; downs, sandies).</li>
           <li>Reordered the Scoreboard layout and moved Notes from More to Scoreboard.</li>
           <li>Fixed the Game Setup player assignment flow so team slots save correctly and matches can be created reliably again.</li>
-          <li>App version: <strong id="appVersionLabel">v28.20</strong></li>
+          <li>App version: <strong id="appVersionLabel">v28.20.1</strong></li>
         </ul>
       </div>
     </section>
@@ -668,7 +646,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v28.20</span>
+    <span id="appVersionFooter">v28.20.1</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>
@@ -716,16 +694,5 @@
   <script src="supabase-config.js"></script>
   <script src="app.js"></script>
 
-<script>
-document.addEventListener('click',function(e){
- const b=e.target.closest('.note-prompt-btn');
- if(!b) return;
- const t=document.getElementById('notesBox');
- if(!t) return;
- const insert=(t.value && !t.value.endsWith('\n') ? '\n\n' : '') + b.textContent + '\n';
- t.value += insert;
- t.focus();
-});
-</script>
 </body>
 </html>

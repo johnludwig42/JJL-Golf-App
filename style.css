@@ -857,7 +857,7 @@ body.keyboard-open .top-tabs{
   }
 }
 
-#notesBox{min-height:140px;resize:vertical}
+#roundRecapNotesBox{min-height:160px;resize:vertical}
 @media print {
   body.printing-scorecard #leaderboard .print-section-match-status,
   body.printing-scorecard #leaderboard .print-section-scoreboard-summary,
@@ -1670,7 +1670,7 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
   .inline-select select{min-width:0;width:100%;}
   #leaderboard .hole-momentum{grid-template-columns:repeat(2, minmax(0, 1fr));}
   #leaderboard .leader-mobile-grid{grid-template-columns:1fr;}
-  #notesBox{min-height:120px;}
+  #roundRecapNotesBox{min-height:140px;}
 }
 
 

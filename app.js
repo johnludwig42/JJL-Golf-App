@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.20.1';
+const APP_VERSION = 'v28.21';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -1133,8 +1133,8 @@ function buildRoundRecapControls(match) {
           <button type="button" class="secondary round-note-prompt-btn" data-round-note-prompt="Key Moments:">Key Moments</button>
           <button type="button" class="secondary round-note-prompt-btn" data-round-note-prompt="Best Shots:">Best Shots</button>
           <button type="button" class="secondary round-note-prompt-btn" data-round-note-prompt="Betting Drama:">Betting Drama</button>
-          <button type="button" class="secondary round-note-prompt-btn" data-round-note-prompt="Funny Moments:">Funny Moments</button>
-          <button type="button" class="secondary round-note-prompt-btn" data-round-note-prompt="Course Conditions:">Course Conditions</button>
+          
+          
           <button type="button" class="secondary round-note-prompt-btn" data-round-note-prompt="Turning Points:">Turning Points</button>
         </div>
         <textarea id="roundRecapNotesBox" rows="8" placeholder="Examples:
@@ -6182,7 +6182,7 @@ function renderStatTrackingEntry(match, hole, metrics) {
                       return `<td>${stepper(p.playerId, 'penaltyStrokes', Number.isFinite(Number(stat.penaltyStrokes)) ? Number(stat.penaltyStrokes) : 0, !canEdit)}</td>`;
                     }
                     const label = col.key === 'fairway' ? 'Fairway hit' : col.key === 'green' ? 'Green in regulation' : col.key === 'upAndDown' ? 'Up and down' : 'Sandy';
-                    return `<td><label class="stat-matrix-check" aria-label="${escapeHtml(label)}"><input type="checkbox" data-stat-player="${escapeHtml(p.playerId)}" data-stat-key="${escapeHtml(col.key)}" ${stat[col.key] ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>${stat[col.key] ? '✓' : ''}</span></label></td>`;
+                    return `<td><label class="stat-matrix-check" aria-label="${escapeHtml(label)}"><input type="checkbox" data-stat-player="${escapeHtml(p.playerId)}" data-stat-key="${escapeHtml(col.key)}" ${stat[col.key] ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span></span></label></td>`;
                   }).join('')}
                 </tr>`;
               }).join('')}

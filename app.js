@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.21';
+const APP_VERSION = 'v28.21.1';
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
@@ -5966,14 +5966,14 @@ function renderCurrentMatch() {
 
 
 function getShortStatusName(name, maxLen = 10) {
-  // v28.20.1: Preserve live-status player names and let the header wrap naturally
+  // v28.21.1: Preserve live-status player names and let the header wrap naturally
   // rather than truncating names with ellipses. Keep the maxLen argument for
   // backward-compatible call sites, but do not shorten the returned label here.
   return String(name || '').trim();
 }
 
 function getConciseTeamName(match, teamNo, metrics, maxLen = 12) {
-  // v28.20.1: Preserve custom team names and player-derived team labels.
+  // v28.21.1: Preserve custom team names and player-derived team labels.
   // The live status line is styled to wrap instead of forcing truncation.
   const custom = String(match?.teamNames?.[Number(teamNo) - 1] || '').trim();
   if (custom) return custom;
@@ -8991,6 +8991,47 @@ function registerServiceWorker() {
 }
 
 registerServiceWorker();
+
+
+function resetHorizontalViewportPosition() {
+  // v28.21.1: iPhone Safari can horizontally reposition the page when focusing
+  // score inputs if any descendant has internal overflow. Keep page-level scroll
+  // locked at the left edge while preserving intended internal stat-matrix scrolling.
+  const root = document.documentElement;
+  const body = document.body;
+  if (root && root.scrollLeft) root.scrollLeft = 0;
+  if (body && body.scrollLeft) body.scrollLeft = 0;
+  if (window.scrollX) window.scrollTo(0, window.scrollY || 0);
+}
+
+function installViewportStabilityGuards() {
+  const resetSoon = () => {
+    resetHorizontalViewportPosition();
+    window.requestAnimationFrame(resetHorizontalViewportPosition);
+    window.setTimeout(resetHorizontalViewportPosition, 60);
+    window.setTimeout(resetHorizontalViewportPosition, 250);
+  };
+  window.addEventListener('resize', resetSoon, { passive: true });
+  window.addEventListener('orientationchange', resetSoon, { passive: true });
+  document.addEventListener('focusin', (event) => {
+    const target = event.target;
+    if (!target || !target.closest) return;
+    if (target.closest('#score')) resetSoon();
+  });
+  document.addEventListener('input', (event) => {
+    const target = event.target;
+    if (!target || !target.closest) return;
+    if (target.closest('#score')) resetSoon();
+  }, { passive: true });
+  document.addEventListener('scroll', () => {
+    if (document.documentElement.scrollLeft || document.body.scrollLeft) {
+      resetHorizontalViewportPosition();
+    }
+  }, { passive: true, capture: true });
+}
+
+
+installViewportStabilityGuards();
 
 installHandlers();
 renderHoleRows();

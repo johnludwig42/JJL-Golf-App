@@ -2785,3 +2785,83 @@ body.printing-scorecard .nine-point-scorecard-table td:nth-child(2){
 
 html,body{overflow-x:hidden;max-width:100%;}
 .stat-matrix-card,.stat-matrix-wrap,.stat-matrix-scroll{max-width:100vw;}
+
+
+/* v28.21.1 iPhone viewport stability: prevent page-level horizontal drift while preserving internal stat-matrix scrolling. */
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+  position: relative;
+}
+@supports (overflow: clip) {
+  html,
+  body {
+    overflow-x: clip;
+  }
+}
+body {
+  touch-action: pan-y;
+}
+.app-header,
+.tabs,
+main,
+.panel,
+.card,
+#score,
+#score .card,
+#score .score-grid-wrap,
+#score .stat-matrix-card,
+#score .stat-matrix-wrap,
+#score .stat-matrix-scroll {
+  max-width: 100%;
+  min-width: 0;
+}
+#score .score-grid-wrap,
+#score .stat-matrix-card,
+#score .stat-matrix-wrap {
+  overflow-x: hidden;
+}
+#score .stat-matrix-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+#score .stat-matrix-table {
+  width: max-content;
+  max-width: none;
+}
+@media (max-width: 520px) {
+  #score .stat-matrix-card {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  #score .stat-matrix-table {
+    min-width: 474px;
+  }
+  #score .stat-matrix-table .stat-player-col {
+    min-width: 82px;
+    max-width: 96px;
+  }
+  #score .stat-matrix-table th,
+  #score .stat-matrix-table td {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  #score .stat-stepper {
+    grid-template-columns: 26px 30px 26px;
+  }
+  #score .stat-step-btn,
+  #score .stat-step-input {
+    height: 30px !important;
+  }
+  #score .stat-matrix-check {
+    width: 30px;
+    height: 30px;
+  }
+}

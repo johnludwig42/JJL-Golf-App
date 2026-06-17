@@ -1,5 +1,12 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.21.1';
+const APP_VERSION = 'v28.21.2';
+
+function cssEscape(value) {
+  const text = String(value == null ? '' : value);
+  if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(text);
+  return text.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },

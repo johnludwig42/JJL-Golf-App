@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.21.2';
+const APP_VERSION = 'v28.21.3';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -6141,9 +6141,9 @@ function renderStatTrackingEntry(match, hole, metrics) {
   const columns = [
     ...(canShowFairway ? [{ key: 'fairway', label: 'FW' }] : []),
     { key: 'green', label: 'GIR' },
-    { key: 'putts', label: 'Putts' },
     { key: 'upAndDown', label: 'U&D' },
     { key: 'sandy', label: 'Sandy' },
+    { key: 'putts', label: 'Putts' },
     { key: 'penaltyStrokes', label: 'Pen' },
   ];
   const stepper = (playerId, key, value, disabled, extraAttrs = '') => `
@@ -8588,6 +8588,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
         e.target.dataset.puttsSource = 'user';
         commitSmartPuttsDomValue(e.target, 'user');
       }
+      applyCurrentHoleDomToMatch(match);
       persist({ skipRender: true });
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
     }

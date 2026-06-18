@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v29.2.2';
+const APP_VERSION = 'v29.2.3';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -472,6 +472,7 @@ let editingTeeRef = null;
 let editingMatchId = null;
 let currentHole = 1;
 let finishConfirmArmed = false;
+let roundCompletePromptShownForMatchId = null;
 let currentLeaderboardMatchRef = null;
 let newMatchPromptFinishArmed = false;
 let newMatchStartInProgress = false;
@@ -5762,6 +5763,7 @@ function startCleanNewMatchSetup() {
     scoreInputSessionState.clear();
     finishConfirmArmed = false;
     newMatchPromptFinishArmed = false;
+    roundCompletePromptShownForMatchId = null;
     newMatchDialogMode = 'intent';
     state.notes = '';
     uiState.matchPlayerDraft = [];
@@ -5935,6 +5937,53 @@ function handleNewMatchStartWithoutSavingAction() {
   beginCleanNewMatchSetup();
 }
 
+
+function hideRoundCompletePrompt() {
+  const modal = document.getElementById('roundCompletePrompt');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+}
+function showRoundCompletePrompt(match = getActiveMatch()) {
+  if (!match || match.status === 'complete') return;
+  const requested = getRequestedHoleCount(match);
+  if (completedHoles(match) < requested) return;
+  if (roundCompletePromptShownForMatchId === match.id) return;
+  roundCompletePromptShownForMatchId = match.id;
+  const modal = document.getElementById('roundCompletePrompt');
+  const title = document.getElementById('roundCompletePromptTitle');
+  const text = document.getElementById('roundCompletePromptText');
+  if (title) title.textContent = 'Round Complete';
+  if (text) text.textContent = `${requested}/${requested} holes completed. Generate Match Summary?`;
+  if (!modal) {
+    const finishNow = window.confirm(`${requested}/${requested} holes completed. Finish round and generate Match Summary?\n\nOK = Finish Round\nCancel = Review Final Hole`);
+    if (finishNow) {
+      finishConfirmArmed = true;
+      completeActiveRound();
+    } else {
+      currentHole = requested;
+      renderCurrentMatch();
+    }
+    return;
+  }
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  setTimeout(() => {
+    try { document.getElementById('roundCompleteFinishBtn')?.focus?.({ preventScroll: true }); } catch (_) {}
+  }, 0);
+}
+function reviewFinalHoleFromPrompt() {
+  const match = getActiveMatch();
+  if (match) currentHole = Math.max(1, getRequestedHoleCount(match));
+  hideRoundCompletePrompt();
+  renderCurrentMatch();
+}
+function finishRoundFromPrompt() {
+  hideRoundCompletePrompt();
+  finishConfirmArmed = true;
+  completeActiveRound();
+}
+
 function syncFinishRoundUi(match = getActiveMatch()) {
   const scoringFinishBtn = document.getElementById('finishRoundBtn');
   const scoringConfirmBtn = document.getElementById('confirmFinishRoundBtn');
@@ -5956,12 +6005,13 @@ function syncFinishRoundUi(match = getActiveMatch()) {
     el.disabled = !visible;
     el.setAttribute('aria-hidden', visible ? 'false' : 'true');
   };
-  show(scoringFinishBtn, hasMatch && !isComplete && !finishConfirmArmed);
-  show(scoringConfirmBtn, hasMatch && !isComplete && finishConfirmArmed);
-  show(scoreboardFinishBtn, hasMatch && !isComplete && !finishConfirmArmed);
-  show(scoreboardConfirmBtn, hasMatch && !isComplete && finishConfirmArmed);
-  show(setupFinishBtn, hasMatch && !isComplete && !finishConfirmArmed);
-  show(setupConfirmBtn, hasMatch && !isComplete && finishConfirmArmed);
+  const holesCompleteForFinish = hasMatch && !isComplete && completedHoles(match) >= getRequestedHoleCount(match);
+  show(scoringFinishBtn, false);
+  show(scoringConfirmBtn, false);
+  show(scoreboardFinishBtn, holesCompleteForFinish && !finishConfirmArmed);
+  show(scoreboardConfirmBtn, holesCompleteForFinish && finishConfirmArmed);
+  show(setupFinishBtn, holesCompleteForFinish && !finishConfirmArmed);
+  show(setupConfirmBtn, holesCompleteForFinish && finishConfirmArmed);
   [scoringFinishBtn, scoreboardFinishBtn, setupFinishBtn].forEach(btn => { if (btn) btn.textContent = finishLabel; });
   [scoringConfirmBtn, scoreboardConfirmBtn, setupConfirmBtn].forEach(btn => { if (btn) btn.textContent = confirmLabel; });
   if (scoreboardRoundState) {
@@ -7112,7 +7162,7 @@ function renderScoringControlConfig(existingMatch = null) {
   }
   wrap.innerHTML = `
     <div class="section-label">Assigned player scoring</div>
-    <div class="tiny top-gap">v29.2.2 stabilizes setup scrolling, host match editing, combo tee display, and desktop course alignment.</div>`;
+    <div class="tiny top-gap">v29.2.3 refines Game Setup entry styling, scroll stability, and round completion flow.</div>`;
 }
 function collectTeamScorerAssignments(teamCount, teamNames, existing = []) {
   const fallback = buildTeamScorerAssignments(teamCount, teamNames, existing);
@@ -7248,12 +7298,23 @@ function buildSetupSlotSelections(selected = []) {
 }
 
 
+
+function getStableSetupAnchorSelector(el = document.activeElement) {
+  const target = el?.closest?.('[data-assignment-slot], .match-player-assignment, .player-card, .tee-card, .combo-tee-row, .game-config-card, .shared-assignment-row, .card, select, input, button');
+  if (!target) return null;
+  if (target.id) return `#${CSS.escape(target.id)}`;
+  if (target.dataset?.assignmentSlot) return `#matchPlayersPicker [data-assignment-slot="${CSS.escape(String(target.dataset.assignmentSlot))}"]`;
+  if (target.dataset?.playerTeeSlot) return `#matchPlayersPicker [data-assignment-slot="${CSS.escape(String(target.dataset.playerTeeSlot))}"]`;
+  if (target.dataset?.playerSelectSlot) return `#matchPlayersPicker [data-assignment-slot="${CSS.escape(String(target.dataset.playerSelectSlot))}"]`;
+  return null;
+}
 function captureSetupScrollAnchor(selector = null) {
   const active = document.activeElement;
-  const target = selector ? document.querySelector(selector) : null;
+  const resolvedSelector = selector || getStableSetupAnchorSelector(active);
+  const target = resolvedSelector ? document.querySelector(resolvedSelector) : null;
   return {
     scrollY: window.scrollY || 0,
-    selector,
+    selector: resolvedSelector,
     anchorTop: target ? target.getBoundingClientRect().top + (window.scrollY || 0) : null,
     activeId: active?.id || '',
   };
@@ -7263,20 +7324,24 @@ function restoreSetupScrollAnchor(anchor = null) {
   const restore = () => {
     try {
       const target = anchor.selector ? document.querySelector(anchor.selector) : null;
-      if (target && Number.isFinite(Number(anchor.anchorTop))) {
-        const nextTop = target.getBoundingClientRect().top + (window.scrollY || 0);
-        const delta = nextTop - Number(anchor.anchorTop);
-        window.scrollTo({ top: Math.max(0, (window.scrollY || 0) + delta), behavior: 'auto' });
-      } else {
-        window.scrollTo({ top: Math.max(0, Number(anchor.scrollY) || 0), behavior: 'auto' });
+      if (target) {
+        if (Number.isFinite(Number(anchor.anchorTop))) {
+          const nextTop = target.getBoundingClientRect().top + (window.scrollY || 0);
+          const delta = nextTop - Number(anchor.anchorTop);
+          window.scrollTo({ top: Math.max(0, (window.scrollY || 0) + delta), behavior: 'auto' });
+        }
+        try { target.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' }); } catch (_) {}
+        return;
       }
+      window.scrollTo({ top: Math.max(0, Number(anchor.scrollY) || 0), behavior: 'auto' });
     } catch (_) {
       try { window.scrollTo({ top: Math.max(0, Number(anchor.scrollY) || 0), behavior: 'auto' }); } catch (__) {}
     }
   };
   requestAnimationFrame(() => {
     restore();
-    setTimeout(restore, 60);
+    requestAnimationFrame(restore);
+    setTimeout(restore, 120);
   });
 }
 function preserveSetupScrollDuring(callback, selector = null) {
@@ -7285,7 +7350,6 @@ function preserveSetupScrollDuring(callback, selector = null) {
   restoreSetupScrollAnchor(anchor);
   return result;
 }
-
 function getNextIncompletePlayerSetupSlot(completedSlot = -1) {
   const rows = Array.from(document.querySelectorAll('#matchPlayersPicker [data-assignment-slot]'));
   if (!rows.length) return null;
@@ -9108,6 +9172,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     persist();
     scheduleSharedMatchSync(match, { immediate: true, silent: true });
     if (!silent) toast(`Hole ${savedHole} saved.`);
+    if (!wasCompleteBeforeSave && completedHoles(match) >= maxHole) {
+      showRoundCompletePrompt(match);
+    }
     return true;
   }
 
@@ -9218,6 +9285,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   });
   document.getElementById('finishRoundBtn').addEventListener('click', armFinishRound);
   document.getElementById('confirmFinishRoundBtn').addEventListener('click', completeActiveRound);
+  document.getElementById('roundCompleteFinishBtn')?.addEventListener('click', finishRoundFromPrompt);
+  document.getElementById('roundCompleteReviewBtn')?.addEventListener('click', reviewFinalHoleFromPrompt);
   const scoreboardFinishRoundBtn = document.getElementById('scoreboardFinishRoundBtn');
   if (scoreboardFinishRoundBtn) scoreboardFinishRoundBtn.addEventListener('click', armFinishRound);
   const scoreboardConfirmFinishRoundBtn = document.getElementById('scoreboardConfirmFinishRoundBtn');

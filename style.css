@@ -2729,7 +2729,7 @@ body.printing-scorecard .nine-point-scorecard-table td:nth-child(2){
 }
 
 
-/* v29.2.4 desktop course grid alignment */
+/* v29.2.5 desktop course grid alignment */
 @media (min-width: 1024px){
   #coursesList{
     display:grid;
@@ -2995,3 +2995,47 @@ main,
 
 .modal-body{padding:18px;}
 .modal-body h3{margin:0;}
+
+
+/* v29.2.5 true left-aligned desktop course grid */
+@media (min-width: 900px) {
+  #coursesList {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, 560px) !important;
+    grid-auto-flow: row !important;
+    justify-content: start !important;
+    justify-items: stretch !important;
+    align-items: start !important;
+    gap: 18px 24px !important;
+    width: 100%;
+  }
+  #coursesList .course-card {
+    width: 560px !important;
+    max-width: 560px !important;
+    min-width: 0 !important;
+    box-sizing: border-box;
+  }
+  #coursesList .course-card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  #coursesList .course-card .course-expand-btn {
+    min-width: 0;
+  }
+  #coursesList .course-card .item-title,
+  #coursesList .course-card .course-meta-line {
+    overflow-wrap: anywhere;
+  }
+}
+@media (max-width: 899px) {
+  #coursesList {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 12px !important;
+  }
+  #coursesList .course-card {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}

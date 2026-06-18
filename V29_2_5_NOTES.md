@@ -1,12 +1,4 @@
-# The Dye Ledger
-
-A compact match-and-games ledger for golf groups.
-
-## Current Version
-
-v29.2.5
-
-## v29.2.5 Build Notes
+# v29.2.5 Build Notes
 
 • Imported scorecard courses now remain local until explicitly synchronized to the cloud using Sync Course Library.
 

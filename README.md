@@ -1,21 +1,13 @@
 # The Dye Ledger
 
-Current version: **v28.8**
+Current version: **v29.0**
 
-## What changed in v28.8
+## What changed in v29.0
 
-- Refined Match Summary report flow by moving Round Recap above Games Summary and Player Leaderboard above Final Net Settlement.
-- Increased Match Summary Round Recap body text size.
-- Expanded AI Round Recap generation to target 10–12 sentences with richer gross scoring, gaming, momentum, and player-highlight detail.
+- Added the Shared Match Scoring Foundation.
+- Added Assigned Players Score Entry as a local-first shared scoring mode.
+- Added shared match codes, device registration, player assignment controls, Sync Now, and Last Sync status.
+- Preserved One Device Scores for Everyone as the default scoring mode.
+- Preserved existing scoring, stat tracking, settlements, Match Summary, AI Recap, Supabase Course Library, and local saved-match compatibility.
 
-## v28.4
-- Added optional Generate Round Recap workflow.
-- Added new round-recap Supabase Edge Function for CBS Fantasy-style round summaries.
-- Round Recaps are saved locally with the match and included in the Match Summary report when generated.
-- No scoring, settlement, Classic Scorecard, Supabase schema, or cloud sync changes.
-
-## v28.3
-
-- Gross Game Detail starts on a fresh page in Match Summary PDF output.
-- Match Summary includes a 9-Point Scorecard after the Classic Scorecard when selected.
-- iPhone 9-Point Scorecard scrolling keeps player names fixed and scrolls holes from H1.
+See `V29_0_NOTES.md` for build notes and architecture summary.

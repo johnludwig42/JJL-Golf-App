@@ -110,7 +110,7 @@ create table if not exists public.matches (
   custom_start_hole integer not null default 1,
   team_count integer not null default 1,
   players_per_team integer not null default 1,
-  scoring_access_mode text not null default 'team_codes' check (scoring_access_mode in ('single_device','team_codes','open_edit')),
+  scoring_access_mode text not null default 'single_device' check (scoring_access_mode in ('single_device','assigned_players','team_codes','open_edit')),
   stat_tracking_enabled boolean not null default false,
   selected_games jsonb not null default '[]'::jsonb,
   match_status_game text null,
@@ -283,3 +283,12 @@ create policy match_notes_all_authenticated on public.match_notes for all to aut
 -- 1) tighten select/update policies to require a matching row in match_memberships
 -- 2) add RPCs for redeem_team_code, revoke_team_code, and regenerate_team_code
 -- 3) add audit triggers on score_entries and match_notes
+
+
+-- v29.0 shared scoring migration notes
+-- If your matches table already exists, run this migration before using Assigned Players Score Entry:
+-- alter table public.matches drop constraint if exists matches_scoring_access_mode_check;
+-- alter table public.matches add constraint matches_scoring_access_mode_check check (scoring_access_mode in ('single_device','assigned_players','team_codes','open_edit'));
+-- alter table public.matches alter column scoring_access_mode set default 'single_device';
+-- v29.0 stores local-first shared scoring device metadata inside matches.course_snapshot->'sharedMatchMeta'
+-- and per-player assignment metadata inside match_players.handicap_snapshot->'assignedDeviceId' to avoid a disruptive schema expansion.

@@ -2865,3 +2865,46 @@ main,
     height: 30px;
   }
 }
+
+/* v29.0 Shared Match Scoring Foundation */
+.shared-match-panel {
+  border: 1px solid var(--line, #d7e0da);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(11, 93, 59, 0.04);
+}
+.shared-match-code span {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--muted, #66736c);
+}
+.shared-match-code strong {
+  display: inline-block;
+  margin-top: 2px;
+  font-size: 1.2rem;
+  letter-spacing: .05em;
+}
+.shared-assignment-list {
+  display: grid;
+  gap: 8px;
+}
+.shared-assignment-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(130px, 180px);
+  gap: 10px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--line, #d7e0da);
+  border-radius: 10px;
+  background: #fff;
+}
+.shared-assignment-row select {
+  width: 100%;
+}
+@media (max-width: 520px) {
+  .shared-assignment-row {
+    grid-template-columns: 1fr;
+  }
+}

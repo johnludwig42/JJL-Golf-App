@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v28.21.3';
+const APP_VERSION = 'v28.21.4';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -4378,7 +4378,7 @@ function applyCurrentHoleDomToMatch(match) {
     }
   });
   if (isStatTrackingEnabled(match)) {
-    document.querySelectorAll('[data-stat-player][data-stat-key]').forEach(input => {
+    document.querySelectorAll('input[data-stat-player][data-stat-key]').forEach(input => {
       const playerId = input.dataset.statPlayer;
       const key = input.dataset.statKey;
       const playerRef = match.players.find(p => p.playerId === playerId);
@@ -8581,7 +8581,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       saveCurrentHole({ targetHole: Number(e.target.value), silent: true });
       return;
     }
-    if (e.target && e.target.matches('[data-stat-player][data-stat-key]')) {
+    if (e.target && e.target.matches('input[data-stat-player][data-stat-key]')) {
+      const match = getActiveMatch();
+      if (!match) return;
       if (e.target.matches('input[type="checkbox"]')) {
         applySmartPuttsAdjustmentFromCheckbox(e.target);
       } else if (e.target.matches('.stat-putts-input')) {
@@ -8617,7 +8619,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       commitSmartPuttsDomValue(e.target, e.target.dataset.puttsSource || 'user');
       persist({ skipRender: true });
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
-    } else if (e.target.matches('[data-stat-player][data-stat-key]')) {
+    } else if (e.target.matches('input[data-stat-player][data-stat-key]')) {
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
     }
   }, true);

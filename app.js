@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v29.2.5';
+const APP_VERSION = 'v29.2.6';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -5350,14 +5350,39 @@ function saveImportedScorecardCourse() {
   course.tees.forEach(t => { t.courseName = course.name; normalizeTee(t, course.name); });
   state.courses.push(course);
   uiState.expandedCourses.add(course.id);
-  uiState.scorecardImportStatus = 'Course saved locally. Use Sync Course Library to upload it to the cloud.';
+  uiState.scorecardImportStatus = 'Course saved locally. Use Publish Local Changes to upload it to the cloud.';
   uiState.scorecardImportData = null;
   uiState.scorecardImportFiles = [];
   uiState.scorecardImportFileName = '';
   persist();
   renderAll();
-  toast('Course saved locally. Use Sync Course Library when you are ready to publish it.');
+  toast('Course saved locally. Use Publish Local Changes when you are ready to publish it.');
 }
+
+function deleteImportedScorecardTee(teeIdx) {
+  const data = uiState.scorecardImportData;
+  if (!data || !Array.isArray(data.tees)) return;
+  const reviewed = collectScorecardImportReviewData();
+  const currentTees = Array.isArray(reviewed?.tees) ? reviewed.tees : data.tees;
+  const tee = currentTees[teeIdx] || data.tees[teeIdx];
+  const teeName = tee?.teeName || `Tee ${teeIdx + 1}`;
+  const ok = window.confirm(`Delete Tee?\n\n${teeName}\n\nAll holes associated with this tee will also be removed.`);
+  if (!ok) return;
+  const remainingTees = currentTees.filter((_, idx) => idx !== Number(teeIdx));
+  uiState.scorecardImportData = {
+    ...data,
+    name: reviewed?.courseName || data.name,
+    city: reviewed?.city || data.city,
+    state: reviewed?.state || data.state,
+    country: reviewed?.country || data.country || 'United States of America',
+    holeCount: Math.max(1, ...remainingTees.map(t => (Array.isArray(t.holes) ? t.holes.length : 0))),
+    totalPar: remainingTees[0]?.par || data.totalPar || null,
+    tees: remainingTees,
+  };
+  renderScorecardImportReview();
+  toast(`${teeName} deleted from imported course review.`);
+}
+
 function renderScorecardImportReview() {
   const el = document.getElementById('scorecardImportReview');
   if (!el) return;
@@ -5374,6 +5399,10 @@ function renderScorecardImportReview() {
   const teeHtml = data.tees.map((tee, teeIdx) => `
     <details class="import-tee-card" data-import-tee="${teeIdx}" open>
       <summary><strong>${escapeHtml(tee.teeName || `Tee ${teeIdx + 1}`)}</strong> <span class="tiny">${Number(tee.par) || '—'} par · ${getTeeTotalYardage(tee) ? formatYardageValue(getTeeTotalYardage(tee)) : '—'} yds</span></summary>
+      <div class="actions wrap compact-actions top-gap import-tee-actions">
+        <button type="button" class="secondary mini" data-edit-import-tee="${teeIdx}">Edit</button>
+        <button type="button" class="secondary mini danger-lite" data-delete-import-tee="${teeIdx}">Delete</button>
+      </div>
       <div class="grid three compact-grid top-gap">
         <label><span>Tee name</span><input data-tee-field="teeName" value="${escapeHtml(tee.teeName || '')}" /></label>
         <label><span>Rating</span><input data-tee-field="rating" type="number" step="0.1" value="${tee.rating ?? ''}" /></label>
@@ -5410,6 +5439,20 @@ function renderScorecardImportReview() {
       </div>
     </div>`;
   document.getElementById('saveImportedScorecardCourseBtn')?.addEventListener('click', saveImportedScorecardCourse);
+  el.querySelectorAll('[data-delete-import-tee]').forEach(btn => btn.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    deleteImportedScorecardTee(Number(btn.dataset.deleteImportTee));
+  }));
+  el.querySelectorAll('[data-edit-import-tee]').forEach(btn => btn.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const details = btn.closest('[data-import-tee]');
+    if (details) details.open = true;
+    setTimeout(() => {
+      try { details?.querySelector('[data-tee-field="teeName"]')?.focus({ preventScroll: true }); } catch (_) {}
+    }, 0);
+  }));
   document.getElementById('editImportedScorecardManuallyBtn')?.addEventListener('click', () => {
     const reviewed = collectScorecardImportReviewData();
     document.querySelector('#courseForm [name="name"]').value = reviewed?.courseName || data.name || '';
@@ -7272,7 +7315,7 @@ function renderScoringControlConfig(existingMatch = null) {
   }
   wrap.innerHTML = `
     <div class="section-label">Assigned player scoring</div>
-    <div class="tiny top-gap">v29.2.5 restores host match editing, left-aligns setup choices, and adds Scoreboard Finish / End Round workflow.</div>`;
+    <div class="tiny top-gap">Assigned Players Score Entry creates a shared match while course publishing remains intentional.</div>`;
 }
 function collectTeamScorerAssignments(teamCount, teamNames, existing = []) {
   const fallback = buildTeamScorerAssignments(teamCount, teamNames, existing);
@@ -8560,7 +8603,7 @@ function installHandlers() {
     if (!course.name) return toast('Course name is required.');
     if (editingCourseId) state.courses = state.courses.map(c => c.id === editingCourseId ? course : c); else state.courses.push(course);
     markCoursePendingSync(course);
-    loadCourseEditor(null); persist(); toast(editingCourseId ? 'Course updated locally. Use Sync Course Library to publish changes.' : 'Course added locally. Use Sync Course Library to publish it.');
+    loadCourseEditor(null); persist(); toast(editingCourseId ? 'Course updated locally. Use Publish Local Changes to publish changes.' : 'Course added locally. Use Publish Local Changes to publish it.');
   });
   document.getElementById('cancelCourseEditBtn').addEventListener('click', () => loadCourseEditor(null));
   document.getElementById('coursesSearchInput').addEventListener('input', e => {
@@ -8631,7 +8674,7 @@ function installHandlers() {
     if (editingTeeRef) course.tees = course.tees.map(t => t.id === editingTeeRef.teeId ? tee : t); else course.tees.push(tee);
     if (!getCourseStrokeTemplate(course) && savedTemplate) course.strokeIndexes = savedTemplate;
     markCoursePendingSync(course);
-    loadTeeEditor(courseId, null); persist(); toast(editingTeeRef ? 'Tee updated locally. Use Sync Course Library to publish changes.' : 'Tee saved locally. Use Sync Course Library to publish changes.');
+    loadTeeEditor(courseId, null); persist(); toast(editingTeeRef ? 'Tee updated locally. Use Publish Local Changes to publish changes.' : 'Tee saved locally. Use Publish Local Changes to publish changes.');
   });
   document.getElementById('cancelTeeEditBtn').addEventListener('click', () => loadTeeEditor(null, null));
   document.getElementById('teeCourseSelect').addEventListener('change', e => {

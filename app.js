@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v29.0';
+const APP_VERSION = 'v29.1';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -133,6 +133,30 @@ function canCurrentDeviceEditPlayer(match, playerId) {
   const assigned = getAssignedDeviceForPlayer(match, playerId);
   if (!assigned) return match.sharedHostDeviceId === currentDeviceId;
   return assigned === currentDeviceId;
+}
+
+function isCurrentDeviceMatchHost(match) {
+  if (!match) return true;
+  if (match.storageMode !== 'shared') return true;
+  const hostId = match.sharedHostDeviceId || '';
+  return !hostId || hostId === getSharedDeviceId();
+}
+function getSetupRoleLabel(match = getActiveMatch()) {
+  if (!match) return setupWorkflowMode === 'join' ? 'Join a Match' : 'No active match';
+  if (match.storageMode !== 'shared') return 'Host Device';
+  return isCurrentDeviceMatchHost(match) ? 'Host Device' : 'Joined Device';
+}
+function setSetupWorkflowMode(mode = 'landing') {
+  setupWorkflowMode = ['landing', 'create', 'join'].includes(mode) ? mode : 'landing';
+  renderMatchSetupState();
+}
+function copyTextToClipboard(text = '') {
+  const value = String(text || '');
+  if (!value) return Promise.resolve(false);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(value).then(() => true).catch(() => false);
+  }
+  return Promise.resolve(false);
 }
 
 function buildTeamScorerAssignments(teamCount = 1, teamNames = [], existing = []) {
@@ -5830,6 +5854,7 @@ function editCurrentMatchFromNewMatchDialog() {
     return;
   }
   closeNewMatchConflictDialog({ disarmFinish: true });
+  setupWorkflowMode = 'create';
   loadMatchEditor(active.id);
   renderMatchSetupState();
   activateTab('setup');
@@ -7087,7 +7112,7 @@ function renderScoringControlConfig(existingMatch = null) {
   }
   wrap.innerHTML = `
     <div class="section-label">Assigned player scoring</div>
-    <div class="tiny top-gap">v29.0 foundation: create a shared match, invite devices by Match Code, then assign which players each device may edit after devices join.</div>`;
+    <div class="tiny top-gap">v29.1 foundation: create a shared match, invite devices by Match Code, then assign which players each device may edit after devices join.</div>`;
 }
 function collectTeamScorerAssignments(teamCount, teamNames, existing = []) {
   const fallback = buildTeamScorerAssignments(teamCount, teamNames, existing);
@@ -7111,39 +7136,21 @@ function renderScoreAccessCard(match) {
     return;
   }
   ensureSharedDeviceRegistered(match);
-  const currentDeviceId = getSharedDeviceId();
-  const isHost = match.sharedHostDeviceId === currentDeviceId;
-  const devices = Array.isArray(match.sharedDevices) && match.sharedDevices.length ? match.sharedDevices : [{ id: currentDeviceId, name: 'Host Device' }];
+  const isHost = isCurrentDeviceMatchHost(match);
   const code = normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || '');
   const mode = normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device');
-  card.classList.remove('hidden');
   const lastSync = match.lastCloudSyncAt ? new Date(match.lastCloudSyncAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'Not synced yet';
-  const assignmentRows = mode === 'assigned_players' ? (match.players || []).map(mp => {
-    const player = getPlayer(mp.playerId) || { name: 'Player' };
-    const assigned = getAssignedDeviceForPlayer(match, mp.playerId) || match.sharedHostDeviceId || currentDeviceId;
-    const assignedDevice = devices.find(d => d.id === assigned);
-    const options = devices.map(d => `<option value="${escapeHtml(d.id)}" ${d.id === assigned ? 'selected' : ''}>${escapeHtml(d.name || d.id)}</option>`).join('');
-    return `<div class="shared-assignment-row">
-      <div><strong>${escapeHtml(player.name)}</strong><div class="tiny">${escapeHtml(getTeamLabel(match, mp.team))}</div></div>
-      ${isHost ? `<select data-shared-player-assignment="${escapeHtml(mp.playerId)}">${options}</select>` : `<div class="tiny">${escapeHtml(assignedDevice?.name || 'Unassigned')}</div>`}
-    </div>`;
-  }).join('') : '';
+  card.classList.remove('hidden');
   card.innerHTML = `
     <div class="item-header compact-item-header">
       <div>
         <div class="section-label">Shared Match</div>
-        <div class="tiny">${mode === 'assigned_players' ? 'Assigned Players Score Entry' : 'One Device Scores for Everyone'} · ${isHost ? 'Host Device' : escapeHtml(getSharedDeviceName(match))}</div>
+        <div class="tiny">${escapeHtml(formatScoreEntryModeLabel(mode))} · ${isHost ? 'Host Device' : 'Joined Device'} · Last Sync: ${escapeHtml(lastSync)}</div>
       </div>
-    </div>
-    <div class="shared-match-panel top-gap">
-      <div class="shared-match-code"><span>Match Code</span><strong>${escapeHtml(code || '—')}</strong></div>
-      <div class="actions wrap compact-actions top-gap">
-        <button type="button" class="secondary" data-copy-shared-code="${escapeHtml(code)}">Copy Code</button>
+      <div class="actions wrap compact-actions">
         <button type="button" class="secondary" id="syncSharedMatchNowBtn">Sync Now</button>
       </div>
-      <div class="tiny top-gap">Last Sync: ${escapeHtml(lastSync)} · Cloud state: ${escapeHtml(match.cloudSyncState || 'local-cache')}</div>
     </div>
-    ${mode === 'assigned_players' ? `<div class="top-gap"><div class="section-label">Player assignments</div><div class="tiny top-gap">All players remain visible. This device can edit only assigned players.</div><div class="shared-assignment-list top-gap">${assignmentRows}</div></div>` : ''}
     <div id="scoreAccessHint" class="tiny top-gap">${escapeHtml(getScoreAccessHint(match))}</div>`;
 }
 function renderNineHoleConfigUi() {
@@ -7925,33 +7932,109 @@ function matchHasStarted(match) {
 function updateSetupActionButtonStates() {
   const active = getActiveMatch();
   const editingActive = !!(editingMatchId && active && editingMatchId === active.id);
+  const hostCanEdit = !active || isCurrentDeviceMatchHost(active);
   const editBtn = document.getElementById("editActiveMatchBtn");
-  const finalizeBtns = [document.getElementById("topCreateMatchBtn"), document.getElementById("matchSubmitBtn")].filter(Boolean);
+  const finalizeBtns = [document.getElementById("topCreateMatchBtn"), document.getElementById("matchSubmitBtn"), document.getElementById("topUpdateMatchBtn")].filter(Boolean);
   if (editBtn) {
-    editBtn.disabled = !active || editingActive;
+    const showEdit = !!active && hostCanEdit;
+    editBtn.classList.toggle('hidden', !showEdit);
+    editBtn.disabled = !active || editingActive || !hostCanEdit;
     editBtn.classList.toggle("is-active", editingActive);
     editBtn.textContent = editingActive ? "Editing Match" : "Edit Match";
   }
   finalizeBtns.forEach(btn => {
     btn.textContent = editingMatchId ? "Update Match" : "Create Match";
-    btn.disabled = false;
+    btn.disabled = !!active && !hostCanEdit;
+    if (!!active && !hostCanEdit) btn.classList.add('hidden');
   });
+}
+
+function renderSetupSharedAdminPanel() {
+  const panel = document.getElementById('setupSharedAdminPanel');
+  if (!panel) return;
+  const match = getActiveMatch();
+  if (!match || match.storageMode !== 'shared') {
+    panel.classList.add('hidden');
+    panel.innerHTML = '';
+    return;
+  }
+  ensureSharedDeviceRegistered(match);
+  const isHost = isCurrentDeviceMatchHost(match);
+  const mode = normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device');
+  const code = normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || '');
+  const devices = Array.isArray(match.sharedDevices) && match.sharedDevices.length ? match.sharedDevices : [{ id: getSharedDeviceId(), name: isHost ? 'Host Device' : 'This Device' }];
+  const lastSync = match.lastCloudSyncAt ? new Date(match.lastCloudSyncAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'Not synced yet';
+  const assignmentRows = mode === 'assigned_players' ? (match.players || []).map(mp => {
+    const player = getPlayer(mp.playerId) || { name: 'Player' };
+    const assigned = getAssignedDeviceForPlayer(match, mp.playerId) || match.sharedHostDeviceId || getSharedDeviceId();
+    const assignedDevice = devices.find(d => d.id === assigned);
+    const options = devices.map(d => `<option value="${escapeHtml(d.id)}" ${d.id === assigned ? 'selected' : ''}>${escapeHtml(d.name || d.id)}</option>`).join('');
+    return `<div class="shared-assignment-row">
+      <div><strong>${escapeHtml(player.name)}</strong><div class="tiny">${escapeHtml(getTeamLabel(match, mp.team))}</div></div>
+      ${isHost ? `<select data-shared-player-assignment="${escapeHtml(mp.playerId)}">${options}</select>` : `<div class="tiny">${escapeHtml(assignedDevice?.name || 'Unassigned')}</div>`}
+    </div>`;
+  }).join('') : '';
+  panel.classList.remove('hidden');
+  panel.innerHTML = `
+    <div class="item-header compact-item-header">
+      <div>
+        <h2>Shared Match</h2>
+        <div class="tiny">${escapeHtml(formatScoreEntryModeLabel(mode))} · ${isHost ? 'Host Device' : 'Joined Device'}</div>
+      </div>
+      <span class="setup-role-badge">${isHost ? 'Host' : 'Joined'}</span>
+    </div>
+    <div class="shared-match-panel top-gap">
+      <div class="shared-match-code"><span>Match Code</span><strong>${escapeHtml(code || '—')}</strong></div>
+      <div class="actions wrap compact-actions top-gap">
+        <button type="button" class="secondary" data-copy-shared-code="${escapeHtml(code)}">Copy Code</button>
+        <button type="button" class="secondary" id="setupSyncSharedMatchNowBtn">Sync Now</button>
+      </div>
+      <div class="tiny top-gap">Last Sync: ${escapeHtml(lastSync)} · Cloud state: ${escapeHtml(match.cloudSyncState || 'local-cache')}</div>
+    </div>
+    ${mode === 'assigned_players' ? `<div class="top-gap">
+      <div class="section-label">Player assignments</div>
+      <div class="tiny top-gap">${isHost ? 'Assign each player to the device responsible for score entry.' : 'The host controls player assignments. You can score only assigned players.'}</div>
+      <div class="shared-assignment-list top-gap">${assignmentRows}</div>
+    </div>` : ''}
+  `;
 }
 
 function renderMatchSetupState() {
   const wrap = document.getElementById('matchSetupFormWrap');
   const msg = document.getElementById('setupLockMsg');
+  const entry = document.getElementById('setupEntryCard');
+  const joinPanel = document.getElementById('setupJoinPanel');
   const active = getActiveMatch();
   const started = matchHasStarted(active);
   const editingActive = !!(editingMatchId && active && editingMatchId === active.id);
+  const hostCanEdit = !active || isCurrentDeviceMatchHost(active);
   if (!wrap || !msg) return;
-  if (started && !editingActive) {
+  if (active?.storageMode === 'shared' && !hostCanEdit) setupWorkflowMode = 'join';
+  if (editingMatchId || (!active && setupWorkflowMode === 'create')) setupWorkflowMode = 'create';
+  const showJoin = setupWorkflowMode === 'join' && !(active && !hostCanEdit);
+  const showForm = hostCanEdit && (setupWorkflowMode === 'create' || editingMatchId || (active && !started));
+  if (entry) entry.classList.toggle('hidden', !!editingMatchId);
+  if (joinPanel) joinPanel.classList.toggle('hidden', !showJoin);
+  if (active?.storageMode === 'shared' && !hostCanEdit) {
     wrap.classList.add('hidden');
-    msg.textContent = `Scoring has started for ${active.name || 'the active match'}. Use Edit Match to make changes with confirmation.`;
+    msg.textContent = `${active.name || 'Shared match'} · Joined Device · ${formatScoreEntryModeLabel(active.scoringAccessMode || active.scoreEntryMode)}. Match setup is controlled by the host.`;
+  } else if (started && !editingActive) {
+    wrap.classList.add('hidden');
+    msg.textContent = `Scoring has started for ${active.name || 'the active match'}. ${hostCanEdit ? 'Use Edit Match to make changes with confirmation.' : 'Match setup is controlled by the host.'}`;
+  } else if (!showForm) {
+    wrap.classList.add('hidden');
+    msg.textContent = active ? `${active.name || 'Active match'} · ${getSetupRoleLabel(active)} · ${completedHoles(active)}/${getRequestedHoleCount(active)} holes entered.` : 'Create a new match as host, or join a match created by another host.';
   } else {
     wrap.classList.remove('hidden');
-    msg.textContent = active ? `${active.name || 'Active match'} · ${completedHoles(active)}/${getRequestedHoleCount(active)} holes entered.` : 'Create a new match setup, or edit the active match.';
+    msg.textContent = active ? `${active.name || 'Active match'} · ${getSetupRoleLabel(active)} · ${completedHoles(active)}/${getRequestedHoleCount(active)} holes entered.` : 'Create a new match setup.';
   }
+  const topCreateBtn = document.getElementById('topCreateMatchBtn');
+  const topUpdateBtn = document.getElementById('topUpdateMatchBtn');
+  const matchSubmitBtn = document.getElementById('matchSubmitBtn');
+  if (topCreateBtn) topCreateBtn.classList.toggle('hidden', !showForm || !!editingMatchId);
+  if (topUpdateBtn) topUpdateBtn.classList.toggle('hidden', !showForm || !editingMatchId);
+  if (matchSubmitBtn) matchSubmitBtn.classList.toggle('hidden', !showForm);
+  renderSetupSharedAdminPanel();
   updateSetupActionButtonStates();
 }
 
@@ -8347,7 +8430,7 @@ function installHandlers() {
   });
 
   
-  document.getElementById('newMatchBtn').addEventListener('click', handleNewMatchRequest);
+  document.getElementById('newMatchBtn').addEventListener('click', () => { setupWorkflowMode = 'create'; handleNewMatchRequest(); });
   const setupFinishRoundBtn = document.getElementById('setupFinishRoundBtn');
   if (setupFinishRoundBtn) setupFinishRoundBtn.addEventListener('click', armFinishRound);
   const setupConfirmFinishRoundBtn = document.getElementById('setupConfirmFinishRoundBtn');
@@ -8742,6 +8825,65 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
     }
   });
+  document.getElementById('setupCreateMatchChoiceBtn')?.addEventListener('click', () => {
+    setupWorkflowMode = 'create';
+    handleNewMatchRequest();
+  });
+  document.getElementById('setupJoinMatchChoiceBtn')?.addEventListener('click', () => {
+    setupWorkflowMode = 'join';
+    renderMatchSetupState();
+    document.getElementById('setupJoinMatchCodeInput')?.focus();
+  });
+  document.getElementById('setupJoinCancelBtn')?.addEventListener('click', () => {
+    setupWorkflowMode = 'landing';
+    renderMatchSetupState();
+  });
+  document.getElementById('setupJoinMatchBtn')?.addEventListener('click', async () => {
+    const input = document.getElementById('setupJoinMatchCodeInput');
+    const matchId = normalizeMatchCode(input?.value || '');
+    if (!matchId) return toast('Enter a shared match code.');
+    try {
+      const joined = await loadSharedMatchFromCloud(matchId, { activate: true, silent: false });
+      setupWorkflowMode = 'join';
+      if (joined) {
+        joined.activeScoreRole = 'assigned_player_scorer';
+        ensureSharedDeviceRegistered(joined, getSharedDeviceName(joined));
+        persist({ skipRender: true });
+        scheduleSharedMatchSync(joined, { immediate: true, silent: true });
+      }
+      renderAll();
+      activateTab('score');
+    } catch (err) {
+      console.error(err);
+      toast(err.message || 'Could not join shared match.');
+    }
+  });
+  document.getElementById('setupSharedAdminPanel')?.addEventListener('click', async e => {
+    const copyBtn = e.target.closest('[data-copy-shared-code]');
+    if (copyBtn) {
+      const code = copyBtn.dataset.copySharedCode || '';
+      const copied = await copyTextToClipboard(code);
+      toast(copied ? 'Match code copied.' : (code || 'No match code.'));
+      return;
+    }
+    if (e.target.closest('#setupSyncSharedMatchNowBtn')) {
+      const match = getActiveMatch();
+      if (!match?.sharedMatchId) return toast('No shared match is active.');
+      await flushSharedMatchSync(match.id, { silent: false });
+      renderAll();
+    }
+  });
+  document.getElementById('setupSharedAdminPanel')?.addEventListener('change', e => {
+    if (!e.target.matches('[data-shared-player-assignment]')) return;
+    const match = getActiveMatch();
+    if (!match || !isCurrentDeviceMatchHost(match)) return;
+    match.sharedPlayerAssignments = match.sharedPlayerAssignments && typeof match.sharedPlayerAssignments === 'object' ? match.sharedPlayerAssignments : {};
+    match.sharedPlayerAssignments[e.target.dataset.sharedPlayerAssignment] = e.target.value;
+    persist({ skipRender: true });
+    scheduleSharedMatchSync(match, { immediate: true, silent: true });
+    renderAll();
+  });
+
   document.getElementById('matchForm').addEventListener('submit', async e => {
     e.preventDefault();
     try {
@@ -9045,6 +9187,7 @@ function updateVersionUi() {
     if (!matchId) return toast('Enter a shared match code or ID.');
     try {
       await loadSharedMatchFromCloud(matchId, { activate: true, silent: false });
+      setupWorkflowMode = 'join';
       activateTab('score');
     } catch (err) {
       console.error(err);
@@ -9194,6 +9337,7 @@ loadPlayerEditor(null);
 loadCourseEditor(null);
 loadTeeEditor(null, null);
 loadMatchEditor(null);
+setupWorkflowMode = getActiveMatch() ? 'create' : 'landing';
 updateVersionUi();
 renderAll();
 if (hasSupabaseConfig()) {

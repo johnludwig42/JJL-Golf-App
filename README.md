@@ -1,8 +1,8 @@
 # The Dye Ledger
 
-Current version: **v29.0**
+Current version: **v29.1**
 
-## What changed in v29.0
+## What changed in v29.1
 
 - Added the Shared Match Scoring Foundation.
 - Added Assigned Players Score Entry as a local-first shared scoring mode.

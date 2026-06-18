@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=29.0" />
+  <link rel="manifest" href="manifest.json?v=29.1" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
   <link rel="shortcut icon" href="./favicon-32x32.png" />
@@ -177,6 +177,44 @@
         <div id="topUpdateMatchNote" class="tiny hidden top-gap">After making changes, tap <strong>Update Match</strong> to update the match setup.</div>
       </div>
 
+      <div id="setupEntryCard" class="card tight-card setup-entry-card">
+        <div class="item-header compact-item-header">
+          <div>
+            <h2>Start setup</h2>
+            <div class="tiny">Create a match as host, or join a match created by another host.</div>
+          </div>
+        </div>
+        <div class="setup-choice-grid top-gap">
+          <button id="setupCreateMatchChoiceBtn" type="button" class="setup-choice-btn">
+            <strong>Create New Match</strong>
+            <span>You are the host and can edit match setup.</span>
+          </button>
+          <button id="setupJoinMatchChoiceBtn" type="button" class="setup-choice-btn secondary">
+            <strong>Join a Match</strong>
+            <span>Enter a code from the host and score assigned players.</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="setupJoinPanel" class="card tight-card hidden">
+        <div class="item-header compact-item-header">
+          <div>
+            <h2>Join a Match</h2>
+            <div class="tiny">Enter the match code provided by the host.</div>
+          </div>
+        </div>
+        <div class="grid two compact-grid top-gap">
+          <label class="span-2"><span>Match Code</span><input id="setupJoinMatchCodeInput" placeholder="DYE-4827" /></label>
+        </div>
+        <div class="actions wrap top-gap">
+          <button id="setupJoinMatchBtn" type="button">Join Match</button>
+          <button id="setupJoinCancelBtn" type="button" class="secondary">Cancel</button>
+        </div>
+        <div class="tiny top-gap">Joined devices can view the match and enter scores only for players assigned by the host.</div>
+      </div>
+
+      <div id="setupSharedAdminPanel" class="card tight-card hidden"></div>
+
       <div id="matchSetupFormWrap" class="card tight-card">
         <h2 id="matchFormTitle">Game setup</h2>
         <form id="matchForm" class="grid two compact-grid">
@@ -293,7 +331,7 @@
             </div>
             <details class="setup-advanced-details top-gap">
               <summary>Shared Match Storage</summary>
-              <div class="tiny top-gap">v29.0 supports local-first shared match scoring with Supabase as the synchronization layer. Assigned Players Score Entry automatically creates a shared match when Supabase is configured.</div>
+              <div class="tiny top-gap">v29.1 supports local-first shared match scoring with Supabase as the synchronization layer. Assigned Players Score Entry automatically creates a shared match when Supabase is configured.</div>
               <label class="inline-check top-gap"><input id="sharedMatchEnabled" name="sharedMatchEnabled" type="checkbox" /><span>Create as shared match (Supabase)</span></label>
               <div id="sharedMatchHint" class="tiny top-gap">Shared matches are unavailable until supabase-config.js is filled in.</div>
             </details>
@@ -606,7 +644,7 @@
           <button id="loadSharedMatchBtn" type="button" class="secondary">Join Shared Match</button>
           <button id="refreshSharedMatchBtn" type="button" class="secondary">Refresh active shared match</button>
         </div>
-        <div class="tiny top-gap">v29.0 joins a local-first shared match by code or ID, then keeps this device synchronized on Save Hole, load, manual refresh, and opportunistic sync.</div>
+        <div class="tiny top-gap">v29.1 joins a local-first shared match by code or ID, then keeps this device synchronized on Save Hole, load, manual refresh, and opportunistic sync.</div>
       </div>
       <div class="card tight-card">
         <h2>App notes</h2>
@@ -631,7 +669,7 @@
           <li>Added optional per-hole stat tracking (fairways, GIR, putts, up &amp; downs, sandies).</li>
           <li>Reordered the Scoreboard layout and moved Notes from More to Scoreboard.</li>
           <li>Fixed the Game Setup player assignment flow so team slots save correctly and matches can be created reliably again.</li>
-          <li>App version: <strong id="appVersionLabel">v29.0</strong></li>
+          <li>App version: <strong id="appVersionLabel">v29.1</strong></li>
         </ul>
       </div>
     </section>
@@ -651,7 +689,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v29.0</span>
+    <span id="appVersionFooter">v29.1</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>

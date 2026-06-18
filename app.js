@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v29.2.3';
+const APP_VERSION = 'v29.2.4';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -5995,8 +5995,6 @@ function syncFinishRoundUi(match = getActiveMatch()) {
   const isComplete = !!match && match.status === 'complete';
   const hasMatch = !!match;
   const reopenedEdit = !!match?.previousCompletedAt;
-  const finishLabel = reopenedEdit ? 'Save Updates & Finish' : 'Finish Round';
-  const confirmLabel = reopenedEdit ? 'Confirm Save Updates' : 'Confirm Finish';
   const show = (el, visible) => {
     if (!el) return;
     el.classList.toggle('hidden', !visible);
@@ -6005,23 +6003,82 @@ function syncFinishRoundUi(match = getActiveMatch()) {
     el.disabled = !visible;
     el.setAttribute('aria-hidden', visible ? 'false' : 'true');
   };
-  const holesCompleteForFinish = hasMatch && !isComplete && completedHoles(match) >= getRequestedHoleCount(match);
   show(scoringFinishBtn, false);
   show(scoringConfirmBtn, false);
-  show(scoreboardFinishBtn, holesCompleteForFinish && !finishConfirmArmed);
-  show(scoreboardConfirmBtn, holesCompleteForFinish && finishConfirmArmed);
-  show(setupFinishBtn, holesCompleteForFinish && !finishConfirmArmed);
-  show(setupConfirmBtn, holesCompleteForFinish && finishConfirmArmed);
-  [scoringFinishBtn, scoreboardFinishBtn, setupFinishBtn].forEach(btn => { if (btn) btn.textContent = finishLabel; });
-  [scoringConfirmBtn, scoreboardConfirmBtn, setupConfirmBtn].forEach(btn => { if (btn) btn.textContent = confirmLabel; });
+  show(scoreboardFinishBtn, hasMatch && !isComplete);
+  show(scoreboardConfirmBtn, false);
+  show(setupFinishBtn, false);
+  show(setupConfirmBtn, false);
+  if (scoreboardFinishBtn) scoreboardFinishBtn.textContent = reopenedEdit ? 'Save / End Round' : 'Finish / End Round';
   if (scoreboardRoundState) {
     if (!hasMatch) scoreboardRoundState.textContent = 'No active round.';
     else if (isComplete) scoreboardRoundState.textContent = 'Round complete.';
-    else if (finishConfirmArmed) scoreboardRoundState.textContent = reopenedEdit ? 'Confirm save updates to overwrite the saved round.' : 'Confirm finish to lock this round to history.';
-    else if (reopenedEdit) scoreboardRoundState.textContent = 'Editing previously completed round. Finish Round will overwrite the saved round.';
-    else scoreboardRoundState.textContent = 'Round is live.';
+    else if (reopenedEdit) scoreboardRoundState.textContent = 'Editing previously completed round. Finish / End Round will overwrite the saved round.';
+    else scoreboardRoundState.textContent = `${completedHoles(match)}/${getRequestedHoleCount(match)} holes completed.`;
   }
 }
+
+function hideRoundEndPrompt() {
+  const modal = document.getElementById('roundEndPrompt');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+}
+function showRoundEndPrompt(mode, match = getActiveMatch()) {
+  if (!match) return toast('No active match.');
+  const requested = getRequestedHoleCount(match);
+  const completed = completedHoles(match);
+  const modal = document.getElementById('roundEndPrompt');
+  const title = document.getElementById('roundEndPromptTitle');
+  const text = document.getElementById('roundEndPromptText');
+  const primary = document.getElementById('roundEndPrimaryBtn');
+  const secondary = document.getElementById('roundEndSecondaryBtn');
+  if (!modal || !title || !text || !primary || !secondary) {
+    if (mode === 'early') {
+      const ok = window.confirm(`End Round Early?\n\n${completed} of ${requested} holes completed.\n\nOK = End Round\nCancel = Continue Playing`);
+      if (ok) finishRoundFromPrompt();
+      return;
+    }
+    const ok = window.confirm(`Round Complete\n\nGenerate Match Summary?\n\nOK = Finish Round\nCancel = Review Final Hole`);
+    if (ok) finishRoundFromPrompt();
+    else reviewFinalHoleFromPrompt();
+    return;
+  }
+  modal.dataset.roundEndMode = mode;
+  if (mode === 'early') {
+    title.textContent = 'End Round Early?';
+    text.textContent = `${completed} of ${requested} holes completed.`;
+    primary.textContent = 'End Round';
+    secondary.textContent = 'Continue Playing';
+  } else {
+    title.textContent = 'Round Complete';
+    text.textContent = 'Generate Match Summary?';
+    primary.textContent = 'Finish Round';
+    secondary.textContent = 'Review Final Hole';
+  }
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  setTimeout(() => { try { primary.focus({ preventScroll: true }); } catch (_) {} }, 0);
+}
+function handleScoreboardFinishEndRound() {
+  const match = getActiveMatch();
+  if (!match) return toast('No active match.');
+  const requested = getRequestedHoleCount(match);
+  const completed = completedHoles(match);
+  showRoundEndPrompt(completed >= requested ? 'complete' : 'early', match);
+}
+function handleRoundEndPrimary() {
+  hideRoundEndPrompt();
+  finishConfirmArmed = true;
+  completeActiveRound();
+}
+function handleRoundEndSecondary() {
+  const modal = document.getElementById('roundEndPrompt');
+  const mode = modal?.dataset?.roundEndMode || '';
+  hideRoundEndPrompt();
+  if (mode === 'complete') reviewFinalHoleFromPrompt();
+}
+
 
 function armFinishRound() {
   const match = getActiveMatch();
@@ -7162,7 +7219,7 @@ function renderScoringControlConfig(existingMatch = null) {
   }
   wrap.innerHTML = `
     <div class="section-label">Assigned player scoring</div>
-    <div class="tiny top-gap">v29.2.3 refines Game Setup entry styling, scroll stability, and round completion flow.</div>`;
+    <div class="tiny top-gap">v29.2.4 restores host match editing, left-aligns setup choices, and adds Scoreboard Finish / End Round workflow.</div>`;
 }
 function collectTeamScorerAssignments(teamCount, teamNames, existing = []) {
   const fallback = buildTeamScorerAssignments(teamCount, teamNames, existing);
@@ -8154,29 +8211,43 @@ function renderMatchSetupState() {
   const wrap = document.getElementById('matchSetupFormWrap');
   const msg = document.getElementById('setupLockMsg');
   const entry = document.getElementById('setupEntryCard');
+  const entryTitle = entry?.querySelector('h2');
   const joinPanel = document.getElementById('setupJoinPanel');
   const active = getActiveMatch();
   const started = matchHasStarted(active);
   const editingActive = !!(editingMatchId && active && editingMatchId === active.id);
   const hostCanEdit = !active || isCurrentDeviceMatchHost(active);
   if (!wrap || !msg) return;
+
   if (active?.storageMode === 'shared' && !hostCanEdit) setupWorkflowMode = 'join';
   if (editingMatchId || (!active && setupWorkflowMode === 'create')) setupWorkflowMode = 'create';
+
   const showJoin = setupWorkflowMode === 'join' && !(active && !hostCanEdit);
-  const showForm = hostCanEdit && (setupWorkflowMode === 'create' || editingMatchId || (active && !started));
+  const showForm = hostCanEdit && (setupWorkflowMode === 'create' || editingMatchId) && !(active && !editingActive);
+  const showCurrentMatchPanel = !!active && !showForm && !showJoin;
   const choiceGrid = document.getElementById('setupChoiceGrid');
-  if (entry) entry.classList.toggle('hidden', showForm || showJoin || (active?.storageMode === 'shared' && !hostCanEdit));
+
+  if (entry) entry.classList.toggle('hidden', showForm || showJoin || (active?.storageMode === 'shared' && !hostCanEdit && !showCurrentMatchPanel));
   if (choiceGrid) choiceGrid.classList.toggle('hidden', !!active || setupWorkflowMode !== 'landing');
   if (joinPanel) joinPanel.classList.toggle('hidden', !showJoin);
+
+  if (entryTitle) entryTitle.textContent = active && !showForm ? 'Current Match' : 'Game setup';
+
   if (active?.storageMode === 'shared' && !hostCanEdit) {
     wrap.classList.add('hidden');
-    msg.textContent = `${active.name || 'Shared match'} · Joined Device · ${formatScoreEntryModeLabel(active.scoringAccessMode || active.scoreEntryMode)}. Match setup is controlled by the host.`;
-  } else if (started && !editingActive) {
+    msg.textContent = `${active.name || 'Shared match'} · ${getCourse(active.courseId)?.name || 'Course'} · Joined Device / Read Only Setup · ${formatScoreEntryModeLabel(active.scoringAccessMode || active.scoreEntryMode)}.`;
+  } else if (active && !showForm) {
     wrap.classList.add('hidden');
-    msg.textContent = `Scoring has started for ${active.name || 'the active match'}. ${hostCanEdit ? 'Use Edit Match to make changes with confirmation.' : 'Match setup is controlled by the host.'}`;
+    const courseName = getCourse(active.courseId)?.name || 'Course not selected';
+    const playerCount = Array.isArray(active.players) ? active.players.length : 0;
+    const mode = formatScoreEntryModeLabel(active.scoringAccessMode || active.scoreEntryMode || 'single_device');
+    const sharedCode = normalizeMatchCode(active.sharedMatchCode || active.sharedMatchRef || active.sharedMatchId || '');
+    const sharedLabel = sharedCode ? ` · Shared Match: ${sharedCode}` : '';
+    const startedLabel = started ? ` · ${completedHoles(active)}/${getRequestedHoleCount(active)} holes entered` : '';
+    msg.textContent = `${active.name || 'Active Match'} · ${courseName} · ${playerCount} players · ${mode}${sharedLabel}${startedLabel}`;
   } else if (!showForm) {
     wrap.classList.add('hidden');
-    msg.textContent = active ? `${active.name || 'Active match'} · ${getSetupRoleLabel(active)} · ${completedHoles(active)}/${getRequestedHoleCount(active)} holes entered.` : 'Create a new match as host, or join a match created by another host.';
+    msg.textContent = 'Create a new match as host, or join a match created by another host.';
   } else {
     wrap.classList.remove('hidden');
     msg.textContent = active ? `${active.name || 'Active match'} · ${getSetupRoleLabel(active)} · ${completedHoles(active)}/${getRequestedHoleCount(active)} holes entered.` : 'Create a new match setup.';
@@ -9287,8 +9358,10 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('confirmFinishRoundBtn').addEventListener('click', completeActiveRound);
   document.getElementById('roundCompleteFinishBtn')?.addEventListener('click', finishRoundFromPrompt);
   document.getElementById('roundCompleteReviewBtn')?.addEventListener('click', reviewFinalHoleFromPrompt);
+  document.getElementById('roundEndPrimaryBtn')?.addEventListener('click', handleRoundEndPrimary);
+  document.getElementById('roundEndSecondaryBtn')?.addEventListener('click', handleRoundEndSecondary);
   const scoreboardFinishRoundBtn = document.getElementById('scoreboardFinishRoundBtn');
-  if (scoreboardFinishRoundBtn) scoreboardFinishRoundBtn.addEventListener('click', armFinishRound);
+  if (scoreboardFinishRoundBtn) scoreboardFinishRoundBtn.addEventListener('click', handleScoreboardFinishEndRound);
   const scoreboardConfirmFinishRoundBtn = document.getElementById('scoreboardConfirmFinishRoundBtn');
   if (scoreboardConfirmFinishRoundBtn) scoreboardConfirmFinishRoundBtn.addEventListener('click', completeActiveRound);
   document.getElementById('leaderboard')?.addEventListener('click', e => {

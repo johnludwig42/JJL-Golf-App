@@ -322,7 +322,7 @@
             </div>
             <details class="setup-advanced-details top-gap">
               <summary>Shared Match Storage</summary>
-              <div class="tiny top-gap">v29.2.3 restores setup stability, host editing, combo tee display, and desktop course alignment.</div>
+              <div class="tiny top-gap">v29.2.4 restores setup stability, host editing, combo tee display, and desktop course alignment.</div>
               <label class="inline-check top-gap"><input id="sharedMatchEnabled" name="sharedMatchEnabled" type="checkbox" /><span>Create as shared match (Supabase)</span></label>
               <div id="sharedMatchHint" class="tiny top-gap">Shared matches are unavailable until supabase-config.js is filled in.</div>
             </details>
@@ -453,7 +453,7 @@
           <div class="scoreboard-round-actions no-print">
             <div id="scoreboardRoundState" class="tiny">Round is live.</div>
             <div class="actions wrap compact-actions">
-              <button id="scoreboardFinishRoundBtn" type="button" class="secondary">Finish Round</button>
+              <button id="scoreboardFinishRoundBtn" type="button" class="secondary">Finish / End Round</button>
               <button id="scoreboardConfirmFinishRoundBtn" type="button" class="secondary hidden">Confirm Finish</button>
             </div>
           </div>
@@ -640,11 +640,11 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
-          <li>v29.2.3 improves Game Setup scroll stability after player, tee, and team selections.</li>
-          <li>v29.2.3 restores host ability to edit existing match setup, with warning after scoring has started.</li>
-          <li>v29.2.3 restores combo tee hole-specific source tee display in Scoring Input.</li>
-          <li>v29.2.3 standardizes desktop Saved Courses &amp; Tees grid alignment.</li>
-          <li>App version: <strong id="appVersionLabel">v29.2.3</strong></li>
+          <li>v29.2.4 restores host ability to reopen and edit current match setup.</li>
+          <li>v29.2.4 simplifies and left-aligns Create New Match and Join a Match entry cards.</li>
+          <li>v29.2.4 adds a persistent Finish / End Round action to the Scoreboard tab.</li>
+          <li>v29.2.4 adds early-ending and completed-round confirmation workflows.</li>
+          <li>App version: <strong id="appVersionLabel">v29.2.4</strong></li>
         </ul>
       </div>
     </section>
@@ -664,10 +664,24 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v29.2.3</span>
+    <span id="appVersionFooter">v29.2.4</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>
+
+
+  <div id="roundEndPrompt" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="roundEndPromptTitle">
+      <div class="modal-body">
+        <h3 id="roundEndPromptTitle">Round Complete</h3>
+        <div id="roundEndPromptText" class="tiny top-gap">Generate Match Summary?</div>
+        <div class="actions wrap top-gap">
+          <button id="roundEndPrimaryBtn" type="button">Finish Round</button>
+          <button id="roundEndSecondaryBtn" type="button" class="secondary">Review Final Hole</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
 
   <div id="newMatchConflictDialog" class="sheet-backdrop hidden" aria-hidden="true">

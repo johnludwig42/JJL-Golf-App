@@ -2729,7 +2729,7 @@ body.printing-scorecard .nine-point-scorecard-table td:nth-child(2){
 }
 
 
-/* v29.2.3 desktop course grid alignment */
+/* v29.2.4 desktop course grid alignment */
 @media (min-width: 1024px){
   #coursesList{
     display:grid;
@@ -2923,10 +2923,12 @@ main,
 /* Game Setup workflow refinement */
 .setup-choice-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(280px, 460px);
+  justify-content: start;
   gap: 10px;
 }
 .setup-choice-btn {
+  width: 100%;
   text-align: left;
   display: grid;
   gap: 4px;
@@ -2990,3 +2992,6 @@ main,
 }
 .modal-card h2 { margin: 0 0 8px; }
 .modal-card p { margin: 0; color: var(--muted, #6c756f); }
+
+.modal-body{padding:18px;}
+.modal-body h3{margin:0;}

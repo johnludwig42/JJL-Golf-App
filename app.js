@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v29.2.1';
+const APP_VERSION = 'v29.2.2';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -147,8 +147,10 @@ function getSetupRoleLabel(match = getActiveMatch()) {
   return isCurrentDeviceMatchHost(match) ? 'Host Device' : 'Joined Device';
 }
 function setSetupWorkflowMode(mode = 'landing') {
+  const anchor = captureSetupScrollAnchor('#setupEntryCard');
   setupWorkflowMode = ['landing', 'create', 'join'].includes(mode) ? mode : 'landing';
   renderMatchSetupState();
+  restoreSetupScrollAnchor(anchor);
 }
 function copyTextToClipboard(text = '') {
   const value = String(text || '');
@@ -2634,7 +2636,7 @@ function getComboSourceTeeName(courseId, comboTee, holeIdx) {
     : null;
   const sourceId = source?.sourceTeeId || '';
   if (sourceId) {
-    const sourceTee = getTee(courseId, sourceId);
+    const sourceTee = getTee(courseId, sourceId) || (getCourse(courseId)?.tees || []).find(t => String(t?.id || '') === String(sourceId));
     if (sourceTee?.teeName) return sourceTee.teeName;
   }
   return inferComboSourceTeeName(courseId, comboTee, holeIdx);
@@ -7110,7 +7112,7 @@ function renderScoringControlConfig(existingMatch = null) {
   }
   wrap.innerHTML = `
     <div class="section-label">Assigned player scoring</div>
-    <div class="tiny top-gap">v29.2.1 setup workflow: choose Create New Match or Join a Match, then continue without duplicate setup prompts or scroll jumps.</div>`;
+    <div class="tiny top-gap">v29.2.2 stabilizes setup scrolling, host match editing, combo tee display, and desktop course alignment.</div>`;
 }
 function collectTeamScorerAssignments(teamCount, teamNames, existing = []) {
   const fallback = buildTeamScorerAssignments(teamCount, teamNames, existing);
@@ -7258,7 +7260,7 @@ function captureSetupScrollAnchor(selector = null) {
 }
 function restoreSetupScrollAnchor(anchor = null) {
   if (!anchor) return;
-  requestAnimationFrame(() => {
+  const restore = () => {
     try {
       const target = anchor.selector ? document.querySelector(anchor.selector) : null;
       if (target && Number.isFinite(Number(anchor.anchorTop))) {
@@ -7271,6 +7273,10 @@ function restoreSetupScrollAnchor(anchor = null) {
     } catch (_) {
       try { window.scrollTo({ top: Math.max(0, Number(anchor.scrollY) || 0), behavior: 'auto' }); } catch (__) {}
     }
+  };
+  requestAnimationFrame(() => {
+    restore();
+    setTimeout(restore, 60);
   });
 }
 function preserveSetupScrollDuring(callback, selector = null) {
@@ -8458,9 +8464,12 @@ function installHandlers() {
   });
   document.getElementById('teeForm').addEventListener('change', e => {
     if (e.target.matches('[data-combo-hole]')) {
-      const selected = collectComboSources();
-      renderComboSourceRows(document.getElementById('teeCourseSelect').value, selected);
-      syncComboTotals();
+      const idx = e.target.dataset.comboHole;
+      preserveSetupScrollDuring(() => {
+        const selected = collectComboSources();
+        renderComboSourceRows(document.getElementById('teeCourseSelect').value, selected);
+        syncComboTotals();
+      }, `[data-combo-hole="${idx}"]`);
     }
   });
   document.getElementById('loadTemplate18Btn').addEventListener('click', () => { renderHoleRows(buildTeeHoleRows(document.getElementById('teeCourseSelect').value)); toast('18-hole template loaded.'); });
@@ -8521,7 +8530,7 @@ function installHandlers() {
   document.getElementById('editActiveMatchBtn').addEventListener('click', () => {
     const active = getActiveMatch();
     if (!active) return toast('No active match to edit.');
-    if (matchHasStarted(active) && !confirm('Editing may affect scoring. Continue?')) return;
+    if (matchHasStarted(active) && !confirm('Changing match setup after scoring has started may affect scores, handicaps, settlements, and reports. Continue?')) return;
     loadMatchEditor(active.id);
     renderMatchSetupState();
     activateTab('setup');
@@ -8540,21 +8549,21 @@ function installHandlers() {
   if (newMatchCancelBtn) newMatchCancelBtn.addEventListener('click', () => closeNewMatchConflictDialog({ disarmFinish: true }));
 
   document.getElementById('matchCourseSelect').addEventListener('change', e => preserveSetupScrollDuring(() => { uiState.referenceTeeManual = false; populateMatchTees(e.target.value); const currentSelections = getCurrentMatchEditorSelections(); const defaultTeeId = getDefaultMatchTeeId(e.target.value); const normalizedSelections = currentSelections.map(row => ({ ...row, teeId: defaultTeeId })); syncMatchPlayerDraft(normalizedSelections); normalizeDraftTeeAssignments({ courseId: e.target.value, forceDefault: true }); syncReferenceTeeUi({ courseId: e.target.value, selections: uiState.matchPlayerDraft, forceAuto: true }); populateMatchPlayerPicker(uiState.matchPlayerDraft); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); renderTodaysMatchSummary(); }, '#matchCourseSelect'));
-  document.getElementById('holeCountSelect').addEventListener('change', () => { renderNineHoleConfigUi(); renderSetupHandicapPreview(); renderTodaysMatchSummary(); });
-  document.getElementById('nineHoleSegmentSelect').addEventListener('change', () => { renderNineHoleConfigUi(); renderSetupHandicapPreview(); renderTodaysMatchSummary(); });
-  document.getElementById('customNineHoleStartSelect').addEventListener('change', () => { renderSetupHandicapPreview(); renderTodaysMatchSummary(); });
-  document.getElementById('teamCountSelect').addEventListener('change', () => {
+  document.getElementById('holeCountSelect').addEventListener('change', e => preserveSetupScrollDuring(() => { renderNineHoleConfigUi(); renderSetupHandicapPreview(); renderTodaysMatchSummary(); }, '#holeCountSelect'));
+  document.getElementById('nineHoleSegmentSelect').addEventListener('change', e => preserveSetupScrollDuring(() => { renderNineHoleConfigUi(); renderSetupHandicapPreview(); renderTodaysMatchSummary(); }, '#nineHoleSegmentSelect'));
+  document.getElementById('customNineHoleStartSelect').addEventListener('change', e => preserveSetupScrollDuring(() => { renderSetupHandicapPreview(); renderTodaysMatchSummary(); }, '#customNineHoleStartSelect'));
+  document.getElementById('teamCountSelect').addEventListener('change', e => preserveSetupScrollDuring(() => {
     const teamCount = getCurrentSetupTeamCount();
     const teamNames = Array.from(document.querySelectorAll('[data-team-name]')).map(el => el.value);
     renderTeamNameInputs(teamCount, teamNames);
     renderScoringControlConfig();
     refreshMatchPlayerSlots({ preserveSelections: true });
     renderTodaysMatchSummary();
-  });
-  document.getElementById('playersPerTeamSelect').addEventListener('change', () => {
+  }, '#teamCountSelect'));
+  document.getElementById('playersPerTeamSelect').addEventListener('change', e => preserveSetupScrollDuring(() => {
     refreshMatchPlayerSlots({ preserveSelections: true });
     renderTodaysMatchSummary();
-  });
+  }, '#playersPerTeamSelect'));
   document.getElementById('teamCountSelect').addEventListener('input', () => {
     refreshMatchPlayerSlots({ preserveSelections: true });
     renderTodaysMatchSummary();
@@ -8563,9 +8572,9 @@ function installHandlers() {
     refreshMatchPlayerSlots({ preserveSelections: true });
     renderTodaysMatchSummary();
   });
-  document.getElementById('scoreEntryModeSelect').addEventListener('change', () => { renderScoringControlConfig(); renderTodaysMatchSummary(); });
+  document.getElementById('scoreEntryModeSelect').addEventListener('change', e => preserveSetupScrollDuring(() => { renderScoringControlConfig(); renderTodaysMatchSummary(); }, '#scoreEntryModeSelect'));
   document.getElementById('matchTeeSelect').addEventListener('change', e => preserveSetupScrollDuring(() => { uiState.referenceTeeManual = true; uiState.referenceTeeAutoId = e.target.value || uiState.referenceTeeAutoId; const draft = normalizeDraftTeeAssignments({ forceDefault: false }).map(row => ({ ...row, teeId: row.teeId || e.target.value || '' })); syncMatchPlayerDraft(draft); normalizeDraftTeeAssignments({ forceDefault: false }); syncReferenceTeeUi({ selections: uiState.matchPlayerDraft, forceAuto: false }); populateMatchPlayerPicker(uiState.matchPlayerDraft); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); renderTodaysMatchSummary(); }, '#matchTeeSelect'));
-  document.getElementById('teamNamesGrid').addEventListener('input', () => { const currentSelections = getCurrentMatchEditorSelections(); renderScoringControlConfig(); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); renderTodaysMatchSummary(); });
+  document.getElementById('teamNamesGrid').addEventListener('input', e => preserveSetupScrollDuring(() => { const currentSelections = getCurrentMatchEditorSelections(); renderScoringControlConfig(); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); renderTodaysMatchSummary(); }, e.target?.matches('[data-team-name]') ? `[data-team-name="${e.target.dataset.teamName}"]` : '#teamNamesGrid'));
   const matchPlayersPickerEl = document.getElementById('matchPlayersPicker');
   const handlePlayerPickerOpen = e => {
     const trigger = e.target.closest('[data-open-player-sheet]');
@@ -8585,11 +8594,11 @@ function installHandlers() {
   });
   const handleMatchPlayersPickerSelectionChange = e => {
     if (e.target.matches('[data-player-select-slot]')) {
-      assignPlayerToSlot(Number(e.target.dataset.playerSelectSlot), e.target.value || '');
+      preserveSetupScrollDuring(() => assignPlayerToSlot(Number(e.target.dataset.playerSelectSlot), e.target.value || ''), `#matchPlayersPicker [data-assignment-slot="${Number(e.target.dataset.playerSelectSlot)}"]`);
       return;
     }
     if (e.target.matches('[data-player-tee-slot]')) {
-      updateMatchPlayerTee(Number(e.target.dataset.playerTeeSlot), e.target.value || '');
+      preserveSetupScrollDuring(() => updateMatchPlayerTee(Number(e.target.dataset.playerTeeSlot), e.target.value || ''), `#matchPlayersPicker [data-assignment-slot="${Number(e.target.dataset.playerTeeSlot)}"]`);
     }
   };
   document.getElementById('matchPlayersPicker').addEventListener('change', handleMatchPlayersPickerSelectionChange);
@@ -8603,12 +8612,12 @@ function installHandlers() {
   document.getElementById('playerSearchResults').addEventListener('click', e => {
     const selectBtn = e.target.closest('[data-select-player-slot]');
     if (selectBtn) {
-      assignPlayerToSlot(Number(selectBtn.dataset.selectPlayerSlot), selectBtn.dataset.playerId || '');
+      preserveSetupScrollDuring(() => assignPlayerToSlot(Number(selectBtn.dataset.selectPlayerSlot), selectBtn.dataset.playerId || ''), `#matchPlayersPicker [data-assignment-slot="${Number(selectBtn.dataset.selectPlayerSlot)}"]`);
       return;
     }
     const clearBtn = e.target.closest('[data-clear-player-slot]');
     if (clearBtn) {
-      assignPlayerToSlot(Number(clearBtn.dataset.clearPlayerSlot), '');
+      preserveSetupScrollDuring(() => assignPlayerToSlot(Number(clearBtn.dataset.clearPlayerSlot), ''), `#matchPlayersPicker [data-assignment-slot="${Number(clearBtn.dataset.clearPlayerSlot)}"]`);
     }
   });
   document.getElementById('closePlayerSearchSheet').addEventListener('click', closePlayerSearchSheet);

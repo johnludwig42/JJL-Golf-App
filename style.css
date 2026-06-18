@@ -2729,18 +2729,29 @@ body.printing-scorecard .nine-point-scorecard-table td:nth-child(2){
 }
 
 
-/* v28.15 desktop course grid */
+/* v29.2.2 desktop course grid alignment */
 @media (min-width: 1024px){
   #coursesList{
-    display:flex;
-    flex-wrap:wrap;
-    align-items:flex-start;
-    gap:16px;
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(520px, 520px));
+    justify-content:start;
+    align-items:start;
+    justify-items:stretch;
+    gap:16px 20px;
   }
   #coursesList .course-card{
-    width:460px;
-    flex:0 0 460px;
-    max-width:460px;
+    width:520px;
+    max-width:520px;
+    min-width:0;
+  }
+  #coursesList .course-card-header{
+    align-items:flex-start;
+  }
+  #coursesList .course-card .course-expand-btn{
+    min-width:0;
+  }
+  #coursesList .course-card .item-title{
+    overflow-wrap:anywhere;
   }
 }
 

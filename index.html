@@ -322,7 +322,7 @@
             </div>
             <details class="setup-advanced-details top-gap">
               <summary>Shared Match Storage</summary>
-              <div class="tiny top-gap">v29.2.1 keeps shared match setup clean while preserving setup scroll position after player and tee assignments.</div>
+              <div class="tiny top-gap">v29.2.2 restores setup stability, host editing, combo tee display, and desktop course alignment.</div>
               <label class="inline-check top-gap"><input id="sharedMatchEnabled" name="sharedMatchEnabled" type="checkbox" /><span>Create as shared match (Supabase)</span></label>
               <div id="sharedMatchHint" class="tiny top-gap">Shared matches are unavailable until supabase-config.js is filled in.</div>
             </details>
@@ -640,10 +640,11 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
-          <li>v29.2.1 simplifies Game Setup so the tab begins with Create New Match or Join a Match.</li>
-          <li>v29.2.1 removes redundant setup/start buttons and duplicate create-match actions.</li>
-          <li>v29.2.1 preserves setup scroll position after player and tee assignment selections.</li>
-          <li>App version: <strong id="appVersionLabel">v29.2.1</strong></li>
+          <li>v29.2.2 improves Game Setup scroll stability after player, tee, and team selections.</li>
+          <li>v29.2.2 restores host ability to edit existing match setup, with warning after scoring has started.</li>
+          <li>v29.2.2 restores combo tee hole-specific source tee display in Scoring Input.</li>
+          <li>v29.2.2 standardizes desktop Saved Courses &amp; Tees grid alignment.</li>
+          <li>App version: <strong id="appVersionLabel">v29.2.2</strong></li>
         </ul>
       </div>
     </section>
@@ -663,7 +664,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v29.2.1</span>
+    <span id="appVersionFooter">v29.2.2</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>

@@ -2909,7 +2909,7 @@ main,
   }
 }
 
-/* v29.1 Game Setup workflow refinement */
+/* Game Setup workflow refinement */
 .setup-choice-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

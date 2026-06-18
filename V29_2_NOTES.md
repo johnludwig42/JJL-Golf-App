@@ -1,8 +1,4 @@
-# The Dye Ledger
-
-Current version: **v29.2**
-
-## v29.2 Build Notes
+# v29.2 Build Notes
 
 - Improved Match Setup workflow by removing the redundant Start Setup step and immediately revealing Match Setup after Create New Match is selected.
 - Added automatic scrolling to the next incomplete player section during player setup.

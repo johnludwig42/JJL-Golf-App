@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v29.1';
+const APP_VERSION = 'v29.2';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -3589,9 +3589,9 @@ function buildExportStatTrackingSummary(match, metrics) {
         <td>${totals.greens} / ${totals.greenOpps}</td>
         <td>${totals.putts}</td>
         <td>${avgPutts}</td>
-        <td>${totals.penaltyStrokes}</td>
         <td>${totals.upAndDowns}</td>
         <td>${totals.sandies}</td>
+        <td>${totals.penaltyStrokes}</td>
       </tr>`;
   }).join('');
   if (!rows) return '';
@@ -3600,7 +3600,7 @@ function buildExportStatTrackingSummary(match, metrics) {
       <div class="fit-box">
         <table class="export-table export-stat-summary-table">
           <thead>
-            <tr><th>Player</th><th>Fairways</th><th>GIR</th><th>Total Putts</th><th>Avg Putts</th><th>Penalty</th><th>Up & Downs</th><th>Sandies</th></tr>
+            <tr><th>Player</th><th>Fairways</th><th>GIR</th><th>Total Putts</th><th>Avg Putts</th><th>Up & Downs</th><th>Sandies</th><th>Penalty</th></tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
@@ -3619,26 +3619,24 @@ function buildPlayerHoleStatSummaryTable(match, metrics, playerMetric, completed
     const hole = getPlayerHole(match, playerMetric, holeIdx, metrics?.tee) || metrics?.tee?.holes?.[holeIdx] || null;
     const stat = getPlayerStatEntry(playerRef, holeIdx);
     const par = Number(hole?.par) || Number(scoreObj?.par) || 0;
-    const strokes = holeStrokeAllowanceForPlayer(hole?.strokeIndex, playerMetric.playHdcp, metrics?.lowPlaying);
-    const net = gross - strokes;
     const fairwayEligible = par === 4 || par === 5;
-    const fairwayText = fairwayEligible ? (stat.fairway ? 'Yes' : 'No') : '—';
+    const mark = (value) => value ? '✓' : '';
     return `
       <tr>
         <td>${escapeHtml(hole?.holeNumber || holeIdx + 1)}</td>
-        <td>${gross}</td>
-        <td>${net}</td>
+        <td>${fairwayEligible ? mark(stat.fairway) : '—'}</td>
+        <td>${mark(stat.green)}</td>
         <td>${Number.isFinite(Number(stat.putts)) ? Number(stat.putts) : '—'}</td>
+        <td>${mark(stat.upAndDown)}</td>
+        <td>${mark(stat.sandy)}</td>
         <td>${Number.isFinite(Number(stat.penaltyStrokes)) ? Number(stat.penaltyStrokes) : 0}</td>
-        <td>${fairwayText}</td>
-        <td>${stat.green ? 'Yes' : 'No'}</td>
       </tr>`;
   }).filter(Boolean).join('');
   if (!rows) return '<div class="tiny top-gap">No completed stat holes available.</div>';
   return `
     <div class="player-hole-stat-scroll top-gap">
       <table class="player-hole-stat-table">
-        <thead><tr><th>Hole</th><th>Score</th><th>Net</th><th>Putts</th><th>Penalty</th><th>Fairway</th><th>GIR</th></tr></thead>
+        <thead><tr><th>Hole</th><th>FW</th><th>GIR</th><th>Putts</th><th>U&amp;D</th><th>Sandy</th><th>Pen</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
@@ -3659,9 +3657,9 @@ function buildStatTrackingSummary(match, metrics) {
         <div><span>Fairways hit</span><strong>${totals.fairwaysHit} / ${totals.fairwayOpps}</strong></div>
         <div><span>Greens in regulation</span><strong>${totals.greens}</strong></div>
         <div><span>Total putts</span><strong>${totals.putts}</strong></div>
-        <div><span>Penalty strokes</span><strong>${totals.penaltyStrokes}</strong></div>
         <div><span>Up and downs</span><strong>${totals.upAndDowns}</strong></div>
         <div><span>Sandies</span><strong>${totals.sandies}</strong></div>
+        <div><span>Penalty strokes</span><strong>${totals.penaltyStrokes}</strong></div>
       </div>
       <details class="player-hole-stat-details top-gap">
         <summary>Hole-by-hole stats</summary>
@@ -7112,7 +7110,7 @@ function renderScoringControlConfig(existingMatch = null) {
   }
   wrap.innerHTML = `
     <div class="section-label">Assigned player scoring</div>
-    <div class="tiny top-gap">v29.1 foundation: create a shared match, invite devices by Match Code, then assign which players each device may edit after devices join.</div>`;
+    <div class="tiny top-gap">v29.2 setup workflow: create a shared match, invite devices by Match Code, then assign which players each device may edit after devices join.</div>`;
 }
 function collectTeamScorerAssignments(teamCount, teamNames, existing = []) {
   const fallback = buildTeamScorerAssignments(teamCount, teamNames, existing);
@@ -7246,6 +7244,50 @@ function buildSetupSlotSelections(selected = []) {
     };
   }).slice(0, Math.max(1, teamCount * playersPerTeam));
 }
+
+function getNextIncompletePlayerSetupSlot(completedSlot = -1) {
+  const rows = Array.from(document.querySelectorAll('#matchPlayersPicker [data-assignment-slot]'));
+  if (!rows.length) return null;
+  const start = Math.max(0, Number(completedSlot) + 1 || 0);
+  const isIncomplete = (row) => {
+    if (!row) return false;
+    const slot = Number(row.dataset.assignmentSlot);
+    const playerInput = document.querySelector(`[data-player-slot="${slot}"]`);
+    const teeSelect = document.querySelector(`[data-player-tee-slot="${slot}"]`);
+    if (!playerInput || !playerInput.value) return true;
+    if (teeSelect && !teeSelect.value) return true;
+    return false;
+  };
+  for (const row of rows) {
+    const slot = Number(row.dataset.assignmentSlot);
+    if (Number.isFinite(slot) && slot >= start && isIncomplete(row)) return slot;
+  }
+  return null;
+}
+function focusPlayerSetupSlot(slot) {
+  const row = document.querySelector(`#matchPlayersPicker [data-assignment-slot="${slot}"]`);
+  if (!row) return false;
+  const target = row.querySelector('[data-open-player-sheet], [data-player-tee-slot], input, select, button');
+  try {
+    row.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
+    setTimeout(() => {
+      try { target?.focus?.({ preventScroll: true }); } catch (_) { try { target?.focus?.(); } catch (__) {} }
+    }, 260);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+function scheduleAdvanceToNextIncompletePlayerSetupSlot(completedSlot = -1) {
+  const activeWrap = document.getElementById('matchSetupFormWrap');
+  if (!activeWrap || activeWrap.classList.contains('hidden')) return;
+  window.setTimeout(() => {
+    const nextSlot = getNextIncompletePlayerSetupSlot(completedSlot);
+    if (nextSlot === null || nextSlot === undefined) return;
+    focusPlayerSetupSlot(nextSlot);
+  }, 120);
+}
+
 function populateMatchPlayerPicker(selected = []) {
   const container = document.getElementById('matchPlayersPicker');
   const summary = document.getElementById('assignmentSummary');
@@ -7470,6 +7512,7 @@ function updateMatchPlayerTee(slot, teeId = '') {
   document.querySelector(`[data-player-tee-slot="${normalizedSlot}"]`)?.closest('.picker-row')?.classList.remove('picker-row--error');
   renderGamesPicker(collectSelectedGames());
   renderSetupHandicapPreview();
+  if (row.playerId && row.teeId) scheduleAdvanceToNextIncompletePlayerSetupSlot(normalizedSlot);
 }
 
 function openPlayerSearchSheet(slot) {
@@ -7553,6 +7596,7 @@ function assignPlayerToSlot(slot, playerId = '') {
   renderSetupHandicapPreview();
   clearMatchTeeErrors();
   closePlayerSearchSheet();
+  if (playerId) scheduleAdvanceToNextIncompletePlayerSetupSlot(Number(slot));
 }
 function refreshMatchPlayerSlots(options = {}) {
   const preserveSelections = options.preserveSelections !== false;
@@ -8013,7 +8057,7 @@ function renderMatchSetupState() {
   if (editingMatchId || (!active && setupWorkflowMode === 'create')) setupWorkflowMode = 'create';
   const showJoin = setupWorkflowMode === 'join' && !(active && !hostCanEdit);
   const showForm = hostCanEdit && (setupWorkflowMode === 'create' || editingMatchId || (active && !started));
-  if (entry) entry.classList.toggle('hidden', !!editingMatchId);
+  if (entry) entry.classList.toggle('hidden', !!editingMatchId || showForm || (active?.storageMode === 'shared' && !hostCanEdit));
   if (joinPanel) joinPanel.classList.toggle('hidden', !showJoin);
   if (active?.storageMode === 'shared' && !hostCanEdit) {
     wrap.classList.add('hidden');

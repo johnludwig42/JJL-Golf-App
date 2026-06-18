@@ -1,8 +1,4 @@
-# The Dye Ledger
-
-Current version: **v29.2.1**
-
-## v29.2.1 Build Notes
+# v29.2.1 Build Notes
 
 - Simplified Game Setup entry so the tab begins with only Create New Match and Join a Match.
 - Removed redundant Game Setup / Start Setup buttons and duplicate Create Match actions.

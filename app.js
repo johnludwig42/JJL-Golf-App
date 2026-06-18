@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v29.2';
+const APP_VERSION = 'v29.2.1';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -7110,7 +7110,7 @@ function renderScoringControlConfig(existingMatch = null) {
   }
   wrap.innerHTML = `
     <div class="section-label">Assigned player scoring</div>
-    <div class="tiny top-gap">v29.2 setup workflow: create a shared match, invite devices by Match Code, then assign which players each device may edit after devices join.</div>`;
+    <div class="tiny top-gap">v29.2.1 setup workflow: choose Create New Match or Join a Match, then continue without duplicate setup prompts or scroll jumps.</div>`;
 }
 function collectTeamScorerAssignments(teamCount, teamNames, existing = []) {
   const fallback = buildTeamScorerAssignments(teamCount, teamNames, existing);
@@ -7243,6 +7243,41 @@ function buildSetupSlotSelections(selected = []) {
       teeId: String(row.teeId || ''),
     };
   }).slice(0, Math.max(1, teamCount * playersPerTeam));
+}
+
+
+function captureSetupScrollAnchor(selector = null) {
+  const active = document.activeElement;
+  const target = selector ? document.querySelector(selector) : null;
+  return {
+    scrollY: window.scrollY || 0,
+    selector,
+    anchorTop: target ? target.getBoundingClientRect().top + (window.scrollY || 0) : null,
+    activeId: active?.id || '',
+  };
+}
+function restoreSetupScrollAnchor(anchor = null) {
+  if (!anchor) return;
+  requestAnimationFrame(() => {
+    try {
+      const target = anchor.selector ? document.querySelector(anchor.selector) : null;
+      if (target && Number.isFinite(Number(anchor.anchorTop))) {
+        const nextTop = target.getBoundingClientRect().top + (window.scrollY || 0);
+        const delta = nextTop - Number(anchor.anchorTop);
+        window.scrollTo({ top: Math.max(0, (window.scrollY || 0) + delta), behavior: 'auto' });
+      } else {
+        window.scrollTo({ top: Math.max(0, Number(anchor.scrollY) || 0), behavior: 'auto' });
+      }
+    } catch (_) {
+      try { window.scrollTo({ top: Math.max(0, Number(anchor.scrollY) || 0), behavior: 'auto' }); } catch (__) {}
+    }
+  });
+}
+function preserveSetupScrollDuring(callback, selector = null) {
+  const anchor = captureSetupScrollAnchor(selector);
+  const result = callback?.();
+  restoreSetupScrollAnchor(anchor);
+  return result;
 }
 
 function getNextIncompletePlayerSetupSlot(completedSlot = -1) {
@@ -7496,6 +7531,7 @@ function refreshMatchSetupUi() {
 }
 function updateMatchPlayerTee(slot, teeId = '') {
   const normalizedSlot = Number(slot);
+  const scrollAnchor = captureSetupScrollAnchor(Number.isFinite(normalizedSlot) ? `#matchPlayersPicker [data-assignment-slot="${normalizedSlot}"]` : null);
   if (!Number.isFinite(normalizedSlot) || normalizedSlot < 0) return;
   const fallbackTeam = Number(document.querySelector(`[data-player-slot="${normalizedSlot}"]`)?.dataset.slotTeam || document.querySelector(`[data-open-player-sheet="${normalizedSlot}"]`)?.dataset.slotTeam || 1) || 1;
   const draft = syncMatchPlayerDraft(getCurrentMatchEditorSelectionsSnapshot());
@@ -7512,7 +7548,7 @@ function updateMatchPlayerTee(slot, teeId = '') {
   document.querySelector(`[data-player-tee-slot="${normalizedSlot}"]`)?.closest('.picker-row')?.classList.remove('picker-row--error');
   renderGamesPicker(collectSelectedGames());
   renderSetupHandicapPreview();
-  if (row.playerId && row.teeId) scheduleAdvanceToNextIncompletePlayerSetupSlot(normalizedSlot);
+  restoreSetupScrollAnchor(scrollAnchor);
 }
 
 function openPlayerSearchSheet(slot) {
@@ -7581,6 +7617,7 @@ function renderPlayerSearchResults(slot, query = '') {
   results.innerHTML = `${clearHtml}${matchHtml}`;
 }
 function assignPlayerToSlot(slot, playerId = '') {
+  const scrollAnchor = captureSetupScrollAnchor(`#matchPlayersPicker [data-assignment-slot="${Number(slot)}"]`);
   const draft = getMatchPlayerDraft();
   const playersPerTeam = Math.max(1, Number(document.getElementById('playersPerTeamSelect')?.value || 1));
   const fallbackTeam = Number(document.querySelector(`[data-player-slot="${slot}"]`)?.dataset.slotTeam || document.querySelector(`[data-open-player-sheet="${slot}"]`)?.dataset.slotTeam || (Math.floor(Number(slot) / playersPerTeam) + 1)) || 1;
@@ -7596,7 +7633,7 @@ function assignPlayerToSlot(slot, playerId = '') {
   renderSetupHandicapPreview();
   clearMatchTeeErrors();
   closePlayerSearchSheet();
-  if (playerId) scheduleAdvanceToNextIncompletePlayerSetupSlot(Number(slot));
+  restoreSetupScrollAnchor(scrollAnchor);
 }
 function refreshMatchPlayerSlots(options = {}) {
   const preserveSelections = options.preserveSelections !== false;
@@ -8057,7 +8094,9 @@ function renderMatchSetupState() {
   if (editingMatchId || (!active && setupWorkflowMode === 'create')) setupWorkflowMode = 'create';
   const showJoin = setupWorkflowMode === 'join' && !(active && !hostCanEdit);
   const showForm = hostCanEdit && (setupWorkflowMode === 'create' || editingMatchId || (active && !started));
-  if (entry) entry.classList.toggle('hidden', !!editingMatchId || showForm || (active?.storageMode === 'shared' && !hostCanEdit));
+  const choiceGrid = document.getElementById('setupChoiceGrid');
+  if (entry) entry.classList.toggle('hidden', showForm || showJoin || (active?.storageMode === 'shared' && !hostCanEdit));
+  if (choiceGrid) choiceGrid.classList.toggle('hidden', !!active || setupWorkflowMode !== 'landing');
   if (joinPanel) joinPanel.classList.toggle('hidden', !showJoin);
   if (active?.storageMode === 'shared' && !hostCanEdit) {
     wrap.classList.add('hidden');
@@ -8500,7 +8539,7 @@ function installHandlers() {
   const newMatchCancelBtn = document.getElementById('newMatchCancelBtn');
   if (newMatchCancelBtn) newMatchCancelBtn.addEventListener('click', () => closeNewMatchConflictDialog({ disarmFinish: true }));
 
-  document.getElementById('matchCourseSelect').addEventListener('change', e => { uiState.referenceTeeManual = false; populateMatchTees(e.target.value); const currentSelections = getCurrentMatchEditorSelections(); const defaultTeeId = getDefaultMatchTeeId(e.target.value); const normalizedSelections = currentSelections.map(row => ({ ...row, teeId: defaultTeeId })); syncMatchPlayerDraft(normalizedSelections); normalizeDraftTeeAssignments({ courseId: e.target.value, forceDefault: true }); syncReferenceTeeUi({ courseId: e.target.value, selections: uiState.matchPlayerDraft, forceAuto: true }); populateMatchPlayerPicker(uiState.matchPlayerDraft); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); renderTodaysMatchSummary(); });
+  document.getElementById('matchCourseSelect').addEventListener('change', e => preserveSetupScrollDuring(() => { uiState.referenceTeeManual = false; populateMatchTees(e.target.value); const currentSelections = getCurrentMatchEditorSelections(); const defaultTeeId = getDefaultMatchTeeId(e.target.value); const normalizedSelections = currentSelections.map(row => ({ ...row, teeId: defaultTeeId })); syncMatchPlayerDraft(normalizedSelections); normalizeDraftTeeAssignments({ courseId: e.target.value, forceDefault: true }); syncReferenceTeeUi({ courseId: e.target.value, selections: uiState.matchPlayerDraft, forceAuto: true }); populateMatchPlayerPicker(uiState.matchPlayerDraft); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); renderTodaysMatchSummary(); }, '#matchCourseSelect'));
   document.getElementById('holeCountSelect').addEventListener('change', () => { renderNineHoleConfigUi(); renderSetupHandicapPreview(); renderTodaysMatchSummary(); });
   document.getElementById('nineHoleSegmentSelect').addEventListener('change', () => { renderNineHoleConfigUi(); renderSetupHandicapPreview(); renderTodaysMatchSummary(); });
   document.getElementById('customNineHoleStartSelect').addEventListener('change', () => { renderSetupHandicapPreview(); renderTodaysMatchSummary(); });
@@ -8525,7 +8564,7 @@ function installHandlers() {
     renderTodaysMatchSummary();
   });
   document.getElementById('scoreEntryModeSelect').addEventListener('change', () => { renderScoringControlConfig(); renderTodaysMatchSummary(); });
-  document.getElementById('matchTeeSelect').addEventListener('change', e => { uiState.referenceTeeManual = true; uiState.referenceTeeAutoId = e.target.value || uiState.referenceTeeAutoId; const draft = normalizeDraftTeeAssignments({ forceDefault: false }).map(row => ({ ...row, teeId: row.teeId || e.target.value || '' })); syncMatchPlayerDraft(draft); normalizeDraftTeeAssignments({ forceDefault: false }); syncReferenceTeeUi({ selections: uiState.matchPlayerDraft, forceAuto: false }); populateMatchPlayerPicker(uiState.matchPlayerDraft); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); renderTodaysMatchSummary(); });
+  document.getElementById('matchTeeSelect').addEventListener('change', e => preserveSetupScrollDuring(() => { uiState.referenceTeeManual = true; uiState.referenceTeeAutoId = e.target.value || uiState.referenceTeeAutoId; const draft = normalizeDraftTeeAssignments({ forceDefault: false }).map(row => ({ ...row, teeId: row.teeId || e.target.value || '' })); syncMatchPlayerDraft(draft); normalizeDraftTeeAssignments({ forceDefault: false }); syncReferenceTeeUi({ selections: uiState.matchPlayerDraft, forceAuto: false }); populateMatchPlayerPicker(uiState.matchPlayerDraft); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); renderTodaysMatchSummary(); }, '#matchTeeSelect'));
   document.getElementById('teamNamesGrid').addEventListener('input', () => { const currentSelections = getCurrentMatchEditorSelections(); renderScoringControlConfig(); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); renderTodaysMatchSummary(); });
   const matchPlayersPickerEl = document.getElementById('matchPlayersPicker');
   const handlePlayerPickerOpen = e => {

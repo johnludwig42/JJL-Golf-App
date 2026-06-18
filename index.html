@@ -159,32 +159,22 @@
 
     
     <section id="setup" class="panel">
-      <div class="card tight-card">
+      <div id="setupEntryCard" class="card tight-card setup-entry-card">
         <div class="item-header compact-item-header">
           <div>
             <h2>Game setup</h2>
-            <div id="setupLockMsg" class="tiny">Create a new match setup, or edit the active match.</div>
+            <div id="setupLockMsg" class="tiny">Create a new match as host, or join a match created by another host.</div>
           </div>
           <div class="actions compact-actions setup-match-actions">
-            <button id="newMatchBtn" type="button" class="secondary setup-action-btn">Create New Match</button>
-            <button id="editActiveMatchBtn" type="button" class="secondary setup-action-btn">Edit Match</button>
-            <button id="topCreateMatchBtn" type="submit" form="matchForm" class="secondary setup-action-btn">Create Match</button>
+            <button id="newMatchBtn" type="button" class="secondary setup-action-btn hidden">Create New Match</button>
+            <button id="editActiveMatchBtn" type="button" class="secondary setup-action-btn hidden">Edit Match</button>
+            <button id="topCreateMatchBtn" type="submit" form="matchForm" class="secondary setup-action-btn hidden">Create Match</button>
             <button id="topUpdateMatchBtn" type="submit" form="matchForm" class="secondary setup-action-btn hidden">Update Match</button>
             <button id="setupFinishRoundBtn" type="button" class="secondary setup-action-btn hidden">Finish Round</button>
             <button id="setupConfirmFinishRoundBtn" type="button" class="secondary setup-action-btn hidden">Confirm Round</button>
           </div>
         </div>
-        <div id="topUpdateMatchNote" class="tiny hidden top-gap">After making changes, tap <strong>Update Match</strong> to update the match setup.</div>
-      </div>
-
-      <div id="setupEntryCard" class="card tight-card setup-entry-card">
-        <div class="item-header compact-item-header">
-          <div>
-            <h2>Start setup</h2>
-            <div class="tiny">Create a match as host, or join a match created by another host.</div>
-          </div>
-        </div>
-        <div class="setup-choice-grid top-gap">
+        <div id="setupChoiceGrid" class="setup-choice-grid top-gap">
           <button id="setupCreateMatchChoiceBtn" type="button" class="setup-choice-btn">
             <strong>Create New Match</strong>
             <span>You are the host and can edit match setup.</span>
@@ -194,6 +184,7 @@
             <span>Enter a code from the host and score assigned players.</span>
           </button>
         </div>
+        <div id="topUpdateMatchNote" class="tiny hidden top-gap">After making changes, tap <strong>Update Match</strong> to update the match setup.</div>
       </div>
 
       <div id="setupJoinPanel" class="card tight-card hidden">
@@ -331,7 +322,7 @@
             </div>
             <details class="setup-advanced-details top-gap">
               <summary>Shared Match Storage</summary>
-              <div class="tiny top-gap">v29.2 keeps shared match storage available while streamlining setup and stat review.</div>
+              <div class="tiny top-gap">v29.2.1 keeps shared match setup clean while preserving setup scroll position after player and tee assignments.</div>
               <label class="inline-check top-gap"><input id="sharedMatchEnabled" name="sharedMatchEnabled" type="checkbox" /><span>Create as shared match (Supabase)</span></label>
               <div id="sharedMatchHint" class="tiny top-gap">Shared matches are unavailable until supabase-config.js is filled in.</div>
             </details>
@@ -649,11 +640,10 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
-          <li>v29.2 removes the redundant Start Setup step after Create New Match and immediately reveals Match Setup.</li>
-          <li>v29.2 adds automatic scrolling to the next incomplete player section during player setup.</li>
-          <li>v29.2 reorders Player Stat Summary display to Fairways → GIR → Putts → Up &amp; Downs → Sandies → Penalty Strokes.</li>
-          <li>v29.2 expands hole-by-hole stat summaries to include enabled stat categories with horizontal scrolling support when necessary.</li>
-          <li>App version: <strong id="appVersionLabel">v29.2</strong></li>
+          <li>v29.2.1 simplifies Game Setup so the tab begins with Create New Match or Join a Match.</li>
+          <li>v29.2.1 removes redundant setup/start buttons and duplicate create-match actions.</li>
+          <li>v29.2.1 preserves setup scroll position after player and tee assignment selections.</li>
+          <li>App version: <strong id="appVersionLabel">v29.2.1</strong></li>
         </ul>
       </div>
     </section>
@@ -673,7 +663,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v29.2</span>
+    <span id="appVersionFooter">v29.2.1</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>

@@ -1,4 +1,4 @@
-# The Dye Ledger v30.0.4 – Multi-Round Session Foundation
+# The Dye Ledger v30.1 – Multi-Round Session Foundation
 
 ## Release Theme
 Keep the group together.
@@ -12,7 +12,7 @@ Keep the group together.
   - Start Completely New Match
 - Added a Start Another Round flow that copies forward group setup while creating a clean new round.
 - Added a lightweight Session Summary card in Settings / More.
-- Updated visible version references to v30.0.4.
+- Updated visible version references to v30.1.
 
 ## Copy Forward Behavior
 The Start Another Round workflow carries forward:

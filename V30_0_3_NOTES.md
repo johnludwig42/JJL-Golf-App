@@ -1,4 +1,4 @@
-# The Dye Ledger v30.0.4 – Shared Scoring Polish & Setup Summary Fix
+# The Dye Ledger v30.1 – Shared Scoring Polish & Setup Summary Fix
 
 ## Objective
 

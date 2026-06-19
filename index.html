@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=29.2.5" />
+  <link rel="manifest" href="manifest.json?v=30.1" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
   <link rel="shortcut icon" href="./favicon-32x32.png" />
@@ -30,17 +30,22 @@
 
   
   <nav class="tabs tabs-6 compact-tabs top-tabs icon-tabs">
-    <button class="tab active" data-tab="players"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 64 64"><g fill="currentColor"><circle cx="24" cy="22" r="10"/><path d="M9 49c0-9 7-16 16-16s16 7 16 16v3H9z"/><circle cx="43" cy="25" r="8" opacity=".88"/><path d="M33 52c0-7 6-13 13-13s13 6 13 13v1H33z" opacity=".88"/></g></svg></span><span class="tab-label">Players</span></button>
-    <button class="tab" data-tab="courses"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 64 64"><ellipse cx="32" cy="42" rx="22" ry="12" fill="currentColor" opacity=".25"/><ellipse cx="32" cy="42" rx="14" ry="7" fill="currentColor" opacity=".45"/><circle cx="44" cy="43" r="4" fill="currentColor" opacity=".15"/><path d="M24 18v22" stroke="currentColor" stroke-width="4" stroke-linecap="round" fill="none"/><path d="M26 18c12 1 18 7 18 12s-6 10-18 11z" fill="currentColor"/></svg></span><span class="tab-label">Courses</span></button>
-    <button class="tab" data-tab="setup"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 64 64"><rect x="13" y="11" width="30" height="40" rx="4" fill="none" stroke="currentColor" stroke-width="4"/><path d="M20 21h16M20 30h14M20 39h10" stroke="currentColor" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="16" cy="21" r="2.5" fill="currentColor"/><circle cx="16" cy="30" r="2.5" fill="currentColor"/><circle cx="16" cy="39" r="2.5" fill="currentColor"/><path d="M40 48 53 30" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none" opacity=".7"/><path d="M37 53l6-14 10 4-5 14z" fill="currentColor" opacity=".85"/></svg></span><span class="tab-label">Game Setup</span></button>
-    <button class="tab" data-tab="score"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 64 64"><rect x="10" y="11" width="30" height="40" rx="4" fill="none" stroke="currentColor" stroke-width="4"/><path d="M18 11v40M26 11v40M34 11v40M10 21h30M10 31h30M10 41h30" stroke="currentColor" stroke-width="3" fill="none"/><path d="M39 48 52 30" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none" opacity=".7"/><path d="M36 53l6-14 10 4-5 14z" fill="currentColor" opacity=".85"/></svg></span><span class="tab-label">Scoring Input</span></button>
-    <button class="tab" data-tab="leaderboard"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 64 64"><rect x="8" y="16" width="48" height="34" rx="5" fill="currentColor" opacity=".95"/><path d="M16 26h14M16 34h14M16 42h14" stroke="white" stroke-width="4" stroke-linecap="round" fill="none" opacity=".9"/><g fill="white"><circle cx="42" cy="27" r="3"/><circle cx="50" cy="27" r="3"/><circle cx="42" cy="35" r="3"/><circle cx="50" cy="35" r="3"/><circle cx="42" cy="43" r="3"/><circle cx="50" cy="43" r="3"/></g><path d="M28 8h8v8h6l-10 10-10-10h6z" fill="currentColor" opacity=".65"/></svg></span><span class="tab-label">Scoreboard</span></button>
-    <button class="tab" data-tab="settings"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="8" fill="none" stroke="currentColor" stroke-width="4"/><path d="M32 12v7M32 45v7M52 32h-7M19 32h-7M45.5 18.5l-5 5M23.6 40.5l-5 5M45.5 45.5l-5-5M23.6 23.6l-5-5" stroke="currentColor" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="32" cy="32" r="18" fill="none" stroke="currentColor" stroke-width="5" opacity=".55"/></svg></span><span class="tab-label">More</span></button>
+    <button class="tab active" data-tab="setup"><span class="tab-icon-svg" aria-hidden="true">🏌️</span><span class="tab-label">Match</span></button>
+    <button class="tab" data-tab="score"><span class="tab-icon-svg" aria-hidden="true">⛳</span><span class="tab-label">Play</span></button>
+    <button class="tab" data-tab="leaderboard"><span class="tab-icon-svg" aria-hidden="true">🏆</span><span class="tab-label">Scores</span></button>
+    <button class="tab" data-tab="courses"><span class="tab-icon-svg" aria-hidden="true">📚</span><span class="tab-label">Library</span></button>
+    <button class="tab" data-tab="insights"><span class="tab-icon-svg" aria-hidden="true">📈</span><span class="tab-label">Insights</span></button>
+    <button class="tab" data-tab="settings"><span class="tab-icon-svg" aria-hidden="true">⚙️</span><span class="tab-label">More</span></button>
   </nav>
 
 
   <main>
-    <section id="players" class="panel active">
+    <section id="setup" class="panel active">
+      <div class="card tight-card">
+        <h2>Match</h2>
+        <div class="tiny">Prepare today's round: players, teams, course, games, and shared-match scoring.</div>
+      </div>
+
       <div class="card tight-card">
         <h2 id="playerFormTitle">Add player</h2>
         <form id="playerForm" class="grid two compact-grid">
@@ -63,102 +68,7 @@
         <h2>Saved players</h2>
         <div id="playersList" class="list"></div>
       </div>
-    </section>
 
-    
-    <section id="courses" class="panel">
-      <div class="card tight-card">
-        <div class="item-header compact-item-header">
-          <div>
-            <h2>Saved courses &amp; tees</h2>
-            <div class="tiny">Search courses, download cloud updates, or publish local course changes when ready.</div>
-          </div>
-          <div class="course-library-actions">
-            <button id="refreshCloudCoursesBtn" type="button" class="secondary" title="Download new or updated courses from the cloud to this device.">Download Cloud Courses</button>
-            <button id="syncLocalCoursesBtn" type="button" class="secondary" title="Upload your local course additions and edits to the cloud.">Publish Local Changes</button>
-            <label class="compact-search course-search-inline">
-              <span class="sr-only">Search courses</span>
-              <input id="coursesSearchInput" type="search" placeholder="Search courses" autocomplete="off" />
-            </label>
-          </div>
-        </div>
-        <div id="cloudCoursesStatus" class="course-library-status tiny top-gap is-not-configured">Supabase course library not configured. Manual course entry remains available.</div>
-        <div id="localCourseSyncResultCourses" class="result compact-result top-gap hidden"></div>
-        <div id="coursesList" class="list top-gap"></div>
-      </div>
-
-      <div class="card tight-card">
-        <h2 id="courseFormTitle">Add course</h2>
-        <form id="courseForm" class="grid two compact-grid">
-          <label><span>Course name</span><input name="name" required /></label>
-          <label><span>City</span><input name="city" /></label>
-          <label><span>State</span><input name="state" /></label>
-          <label><span>Country</span><input name="country" value="United States of America" /></label>
-          <div class="actions span-2">
-            <button id="courseSubmitBtn" type="submit">Save Course</button>
-            <button id="cancelCourseEditBtn" type="button" class="secondary hidden">Cancel</button>
-          </div>
-        </form>
-      </div>
-
-      <div class="card tight-card">
-        <h2 id="teeFormTitle">Add tee</h2>
-        <form id="teeForm" class="grid two compact-grid">
-          <label>
-            <span>Course</span>
-            <select name="courseId" id="teeCourseSelect" required></select>
-          </label>
-          <div class="span-2 tiny" id="teeStrokeHint">No course-wide stroke index template yet. Save one tee with stroke indexes to reuse them across all tees.</div>
-          <label><span>Tee name</span><input name="teeName" required placeholder="Blue" /></label>
-          <label>
-            <span>Gender</span>
-            <select name="gender"><option value="M">Men</option><option value="F">Women</option></select>
-          </label>
-          <label><span>Total yardage</span><input name="length" type="number" step="1" placeholder="Auto if blank" /></label>
-          <label><span>Total par</span><input name="par" type="number" min="20" max="90" placeholder="Auto if blank" /></label>
-          <label><span>Course rating</span><input name="rating" type="number" step="0.1" required /></label>
-          <label><span>Slope</span><input name="slope" type="number" min="55" max="155" required /></label>
-          <label class="mini-check combo-toggle"><input id="teeIsCombo" name="isCombo" type="checkbox" /> Combo tee</label>
-          <label>
-            <span>Copy from saved tee</span>
-            <select id="copyTeeSourceSelect">
-              <option value="">Copy from saved tee</option>
-            </select>
-          </label>
-          <div id="comboTeeBuilderWrap" class="span-2 hidden">
-            <div class="tiny">Choose the source tee for each hole. The yardage, par, and stroke index will be inherited automatically.</div>
-            <div id="comboHoleSourceWrap"></div>
-          </div>
-          <div class="span-2 hole-tools actions wrap compact-actions">
-            <button id="loadTemplate18Btn" type="button" class="secondary">Load 18-hole template</button>
-            <button id="recalcTotalsBtn" type="button" class="secondary">Use hole totals</button>
-          </div>
-          <div id="standardHoleRowsWrap" class="span-2">
-            <div class="hole-grid-wrap">
-              <table class="hole-grid hole-grid-course">
-                <thead>
-                  <tr>
-                    <th>Hole</th>
-                    <th>Yds</th>
-                    <th>Par</th>
-                    <th>SI</th>
-                  </tr>
-                </thead>
-                <tbody id="holesTableBody"></tbody>
-              </table>
-            </div>
-          </div>
-          <div class="actions span-2">
-            <button id="teeSubmitBtn" type="submit">Save Tee</button>
-            <button id="cancelTeeEditBtn" type="button" class="secondary hidden">Cancel</button>
-          </div>
-        </form>
-      </div>
-    </section>
-
-
-    
-    <section id="setup" class="panel">
       <div id="setupEntryCard" class="card tight-card setup-entry-card">
         <div class="item-header compact-item-header">
           <div>
@@ -407,7 +317,6 @@
       </div>
     </section>
 
-
     <section id="leaderboard" class="panel">
       <div id="leaderboardWrap" class="hidden">
         <div id="printRoundMeta" class="print-round-meta hidden"></div>
@@ -560,20 +469,101 @@
       </div>
     </section>
 
-    <section id="settings" class="panel">
+    <section id="courses" class="panel">
       <div class="card tight-card">
-        <h2>Session Summary</h2>
-        <div id="sessionSummary" class="top-gap"><div class="tiny">No active session.</div></div>
+        <h2>Library</h2>
+        <div class="tiny">Your golf archive: courses, saved matches, sessions, and future memories and AI recaps.</div>
       </div>
 
-      <details class="card tight-card scoreboard-card scoreboard-collapsible" open>
-        <summary><h2>Saved matches / history</h2></summary>
-        <div class="tiny top-gap">Completed and historical saved matches live here. Active matches can still be resumed from Game Setup.</div>
-        <div id="matchesList" class="list top-gap"></div>
-      </details>
+      <div class="card tight-card">
+        <div class="item-header compact-item-header">
+          <div>
+            <h2>Saved courses &amp; tees</h2>
+            <div class="tiny">Search courses, download cloud updates, or publish local course changes when ready.</div>
+          </div>
+          <div class="course-library-actions">
+            <button id="refreshCloudCoursesBtn" type="button" class="secondary" title="Download new or updated courses from the cloud to this device.">Download Cloud Courses</button>
+            <button id="syncLocalCoursesBtn" type="button" class="secondary" title="Upload your local course additions and edits to the cloud.">Publish Local Changes</button>
+            <label class="compact-search course-search-inline">
+              <span class="sr-only">Search courses</span>
+              <input id="coursesSearchInput" type="search" placeholder="Search courses" autocomplete="off" />
+            </label>
+          </div>
+        </div>
+        <div id="cloudCoursesStatus" class="course-library-status tiny top-gap is-not-configured">Supabase course library not configured. Manual course entry remains available.</div>
+        <div id="localCourseSyncResultCourses" class="result compact-result top-gap hidden"></div>
+        <div id="coursesList" class="list top-gap"></div>
+      </div>
 
       <div class="card tight-card">
-        <h2>Course Library</h2>
+        <h2 id="courseFormTitle">Add course</h2>
+        <form id="courseForm" class="grid two compact-grid">
+          <label><span>Course name</span><input name="name" required /></label>
+          <label><span>City</span><input name="city" /></label>
+          <label><span>State</span><input name="state" /></label>
+          <label><span>Country</span><input name="country" value="United States of America" /></label>
+          <div class="actions span-2">
+            <button id="courseSubmitBtn" type="submit">Save Course</button>
+            <button id="cancelCourseEditBtn" type="button" class="secondary hidden">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card tight-card">
+        <h2 id="teeFormTitle">Add tee</h2>
+        <form id="teeForm" class="grid two compact-grid">
+          <label>
+            <span>Course</span>
+            <select name="courseId" id="teeCourseSelect" required></select>
+          </label>
+          <div class="span-2 tiny" id="teeStrokeHint">No course-wide stroke index template yet. Save one tee with stroke indexes to reuse them across all tees.</div>
+          <label><span>Tee name</span><input name="teeName" required placeholder="Blue" /></label>
+          <label>
+            <span>Gender</span>
+            <select name="gender"><option value="M">Men</option><option value="F">Women</option></select>
+          </label>
+          <label><span>Total yardage</span><input name="length" type="number" step="1" placeholder="Auto if blank" /></label>
+          <label><span>Total par</span><input name="par" type="number" min="20" max="90" placeholder="Auto if blank" /></label>
+          <label><span>Course rating</span><input name="rating" type="number" step="0.1" required /></label>
+          <label><span>Slope</span><input name="slope" type="number" min="55" max="155" required /></label>
+          <label class="mini-check combo-toggle"><input id="teeIsCombo" name="isCombo" type="checkbox" /> Combo tee</label>
+          <label>
+            <span>Copy from saved tee</span>
+            <select id="copyTeeSourceSelect">
+              <option value="">Copy from saved tee</option>
+            </select>
+          </label>
+          <div id="comboTeeBuilderWrap" class="span-2 hidden">
+            <div class="tiny">Choose the source tee for each hole. The yardage, par, and stroke index will be inherited automatically.</div>
+            <div id="comboHoleSourceWrap"></div>
+          </div>
+          <div class="span-2 hole-tools actions wrap compact-actions">
+            <button id="loadTemplate18Btn" type="button" class="secondary">Load 18-hole template</button>
+            <button id="recalcTotalsBtn" type="button" class="secondary">Use hole totals</button>
+          </div>
+          <div id="standardHoleRowsWrap" class="span-2">
+            <div class="hole-grid-wrap">
+              <table class="hole-grid hole-grid-course">
+                <thead>
+                  <tr>
+                    <th>Hole</th>
+                    <th>Yds</th>
+                    <th>Par</th>
+                    <th>SI</th>
+                  </tr>
+                </thead>
+                <tbody id="holesTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="actions span-2">
+            <button id="teeSubmitBtn" type="submit">Save Tee</button>
+            <button id="cancelTeeEditBtn" type="button" class="secondary hidden">Cancel</button>
+          </div>
+        </form>
+      </div>
+      <div class="card tight-card">
+        <h2>Import Scorecard</h2>
         <div class="tiny top-gap" id="cloudCoursesStatusMore">Course cloud status will appear here. Download cloud courses to this device, or publish local course changes when ready.</div>
         <div id="cloudCourseSyncActions" class="actions wrap top-gap hidden">
           <button id="refreshCloudCoursesMoreBtn" type="button" class="secondary" title="Download new or updated courses from the cloud to this device.">Download Cloud Courses</button>
@@ -594,6 +584,48 @@
         <div id="scorecardImportStatus" class="tiny top-gap">Add one or more scorecard photos/files. AI extraction requires the scorecard-import service to be configured.</div>
         <div id="scorecardImportReview" class="top-gap hidden"></div>
       </div>
+
+      <div class="card tight-card">
+        <h2>Session Summary</h2>
+        <div id="sessionSummary" class="top-gap"><div class="tiny">No active session.</div></div>
+      </div>
+
+      <details class="card tight-card scoreboard-card scoreboard-collapsible" open>
+        <summary><h2>Saved Matches / History</h2></summary>
+        <div class="tiny top-gap">Completed and historical saved matches live here. Active matches can still be resumed from Game Setup.</div>
+        <div id="matchesList" class="list top-gap"></div>
+      </details>
+
+      <div class="card tight-card">
+        <h2>Memories &amp; AI Recaps</h2>
+        <div class="tiny">Coming soon: round memories, AI recaps, and trip/session storytelling will live here.</div>
+      </div>
+
+    </section>
+
+    <section id="insights" class="panel">
+      <div class="card tight-card">
+        <h2>Insights</h2>
+        <div class="tiny">Coming Soon</div>
+        <div class="top-gap">Future insights will help you learn from your golf history.</div>
+        <ul class="tiny top-gap">
+          <li>Player trends and scoring averages</li>
+          <li>Course and hole performance</li>
+          <li>Stat reports and historical comparisons</li>
+          <li>Betting history and partner trends</li>
+        </ul>
+      </div>
+
+    </section>
+
+    <section id="settings" class="panel">
+      <div class="card tight-card">
+        <h2>More</h2>
+        <div class="tiny">Administration, utilities, settings, and diagnostics.</div>
+      </div>
+
+
+
 
       <div class="card tight-card">
         <h2>Handicap calculator</h2>
@@ -634,10 +666,10 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
-          <li>v30.0.4 improves shared-match scoring with clearer host/joined roles, participant status, assignments, and Sync Now actions.</li>
-          <li>v30.0.4 keeps assigned-player scoring obvious: joined devices see who they can score and locked players remain read-only.</li>
-          <li>v30.0.4 preserves local-first sessions, saved matches, and existing scoring calculations.</li>
-          <li>App version: <strong id="appVersionLabel">v30.0.4</strong></li>
+          <li>v30.1 improves shared-match scoring with clearer host/joined roles, participant status, assignments, and Sync Now actions.</li>
+          <li>v30.1 keeps assigned-player scoring obvious: joined devices see who they can score and locked players remain read-only.</li>
+          <li>v30.1 preserves local-first sessions, saved matches, and existing scoring calculations.</li>
+          <li>App version: <strong id="appVersionLabel">v30.1</strong></li>
         </ul>
       </div>
     </section>
@@ -657,7 +689,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.0.4</span>
+    <span id="appVersionFooter">v30.1</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>

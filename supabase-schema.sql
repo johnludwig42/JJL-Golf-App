@@ -292,3 +292,20 @@ create policy match_notes_all_authenticated on public.match_notes for all to aut
 -- alter table public.matches alter column scoring_access_mode set default 'single_device';
 -- v29.0 stores local-first shared scoring device metadata inside matches.course_snapshot->'sharedMatchMeta'
 -- and per-player assignment metadata inside match_players.handicap_snapshot->'assignedDeviceId' to avoid a disruptive schema expansion.
+
+-- v30.1 Course lifecycle management: allow cloud course deletion from the login-free PWA.
+-- Course tables already use ON DELETE CASCADE, but the app deletes holes/tees/course explicitly
+-- for clear progress messages and to avoid orphan records if cascade behavior differs.
+drop policy if exists courses_delete_anon on public.courses;
+create policy courses_delete_anon on public.courses for delete to anon using (true);
+drop policy if exists course_tees_delete_anon on public.course_tees;
+create policy course_tees_delete_anon on public.course_tees for delete to anon using (true);
+drop policy if exists course_holes_delete_anon on public.course_holes;
+create policy course_holes_delete_anon on public.course_holes for delete to anon using (true);
+
+drop policy if exists courses_delete_authenticated on public.courses;
+create policy courses_delete_authenticated on public.courses for delete to authenticated using (true);
+drop policy if exists course_tees_delete_authenticated on public.course_tees;
+create policy course_tees_delete_authenticated on public.course_tees for delete to authenticated using (true);
+drop policy if exists course_holes_delete_authenticated on public.course_holes;
+create policy course_holes_delete_authenticated on public.course_holes for delete to authenticated using (true);

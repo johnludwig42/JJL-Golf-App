@@ -1,4 +1,4 @@
-# The Dye Ledger v30.0.4 – Shared Score Sync Reliability & Clean Scoring Input
+# The Dye Ledger v30.1 – Shared Score Sync Reliability & Clean Scoring Input
 
 ## Release Theme
 Score cleanly. Sync quietly.
@@ -17,7 +17,7 @@ v30.0.1 still used a whole-match shared upload path that deleted and reinserted 
 - Added Show Other Scores and Show Other Stats toggles for joined-device assigned scoring.
 
 ## Supabase
-No Supabase schema changes were made. v30.0.4 reuses existing shared match tables and changes client-side sync behavior from destructive replacement to entry-level upsert/merge.
+No Supabase schema changes were made. v30.1 reuses existing shared match tables and changes client-side sync behavior from destructive replacement to entry-level upsert/merge.
 
 ## Guardrails Preserved
 - No scoring engine changes.

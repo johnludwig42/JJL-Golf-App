@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.0.4';
+const APP_VERSION = 'v30.1';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -5978,7 +5978,9 @@ function renderCourses() {
         </button>
         <div class="actions wrap compact-actions">
           <button class="secondary" data-edit-course="${c.id}">Edit course</button>
-          <button class="secondary" data-delete-course="${c.id}">Delete</button>
+          <button class="secondary" data-delete-course-local="${c.id}">Delete Local</button>
+          <button class="secondary" data-delete-course-cloud="${c.id}" ${c.cloudCourseId ? '' : 'disabled title="Publish this course before cloud deletion is available."'}>Delete Cloud</button>
+          <button class="secondary" data-delete-course-all="${c.id}" ${c.cloudCourseId ? '' : 'disabled title="Publish this course before cloud deletion is available."'}>Delete Local + Cloud</button>
           <button class="secondary" data-new-tee="${c.id}">Add tee</button>
         </div>
       </div>
@@ -6000,6 +6002,106 @@ function renderCourses() {
   }).join('');
 }
 
+
+
+function getCourseCloudId(course) {
+  return String(course?.cloudCourseId || (course?.source === 'supabase' ? course?.id : '') || '').trim();
+}
+function clearCourseCloudIds(course) {
+  if (!course) return;
+  course.cloudCourseId = '';
+  course.cloudSyncState = 'local-only';
+  course.cloudSyncError = '';
+  course.source = course.source === 'supabase' ? 'local' : course.source;
+  (course.tees || []).forEach(tee => {
+    tee.cloudTeeId = '';
+    tee.source = tee.source === 'supabase' ? 'local' : tee.source;
+  });
+}
+function removeLocalCourse(courseId) {
+  const before = state.courses.length;
+  state.courses = state.courses.filter(c => String(c.id) !== String(courseId));
+  if (editingCourseId === courseId) loadCourseEditor(null);
+  if (editingTeeCourseId === courseId) loadTeeEditor(null, null);
+  normalizeState();
+  persist();
+  return before !== state.courses.length;
+}
+async function deleteCloudCourseById(course, { clearLocalCloudIds = false } = {}) {
+  const cloudCourseId = getCourseCloudId(course);
+  if (!cloudCourseId) throw new Error('This course does not have a cloud course ID yet.');
+  if (!hasSupabaseConfig()) throw new Error('Supabase is not configured.');
+  if (uiState.cloudCoursesLoading) throw new Error('Course library is already syncing.');
+  uiState.cloudCoursesLoading = true;
+  uiState.cloudCoursesStatus = 'Deleting course…';
+  renderCourses();
+  try {
+    const client = await ensureSupabaseClient({ anonymousAuth: false });
+    if (!client) throw new Error('Supabase client unavailable.');
+    uiState.cloudCoursesStatus = 'Removing holes…';
+    renderCourses();
+    const { error: holeError } = await client.from('course_holes').delete().eq('course_id', cloudCourseId);
+    if (holeError) throw holeError;
+    uiState.cloudCoursesStatus = 'Removing tees…';
+    renderCourses();
+    const { error: teeError } = await client.from('course_tees').delete().eq('course_id', cloudCourseId);
+    if (teeError) throw teeError;
+    uiState.cloudCoursesStatus = 'Removing course…';
+    renderCourses();
+    const { error: courseError } = await client.from('courses').delete().eq('id', cloudCourseId);
+    if (courseError) throw courseError;
+    if (clearLocalCloudIds) clearCourseCloudIds(course);
+    uiState.cloudCoursesStatus = 'Cloud course deleted. Local course preserved on this device.';
+    return true;
+  } catch (err) {
+    uiState.cloudCoursesStatus = 'Unable to delete the cloud copy.';
+    throw err;
+  } finally {
+    uiState.cloudCoursesLoading = false;
+    renderCourses();
+  }
+}
+async function handleDeleteLocalCourse(courseId) {
+  const course = getCourse(courseId);
+  if (!course) return;
+  const ok = window.confirm(`Delete Local Course?\n\nThis removes ${course.name || 'this course'} from this device only. The cloud copy is preserved.\n\nDelete?`);
+  if (!ok) return;
+  removeLocalCourse(courseId);
+  toast('Local course deleted.');
+}
+async function handleDeleteCloudCourse(courseId) {
+  const course = getCourse(courseId);
+  if (!course) return;
+  if (!getCourseCloudId(course)) return toast('This course does not have a cloud copy to delete.');
+  const ok = window.confirm(`Delete Cloud Course?\n\nThis permanently removes ${course.name || 'this course'} from the shared cloud library, including its tees and holes. This action cannot be undone.\n\nDelete?`);
+  if (!ok) return;
+  try {
+    await deleteCloudCourseById(course, { clearLocalCloudIds: true });
+    persist();
+    renderAll();
+    toast('Cloud course deleted. Local copy preserved.');
+  } catch (err) {
+    console.warn('Cloud course delete failed:', err);
+    renderAll();
+    toast('Unable to delete the cloud copy. Local course was not removed.');
+  }
+}
+async function handleDeleteCourseEverywhere(courseId) {
+  const course = getCourse(courseId);
+  if (!course) return;
+  if (!getCourseCloudId(course)) return toast('This course does not have a cloud copy to delete.');
+  const ok = window.confirm(`Delete Course Everywhere?\n\nThis permanently removes ${course.name || 'this course'} from:\n\n• This device\n• The shared cloud library\n\nThis action cannot be undone.\n\nDelete Everywhere?`);
+  if (!ok) return;
+  try {
+    await deleteCloudCourseById(course, { clearLocalCloudIds: false });
+    removeLocalCourse(courseId);
+    toast('Course deleted locally and from the cloud.');
+  } catch (err) {
+    console.warn('Delete everywhere failed:', err);
+    renderAll();
+    toast('Unable to delete the cloud copy. The local course was not removed.');
+  }
+}
 
 function renderMatches() {
   const el = document.getElementById('matchesList');
@@ -9295,9 +9397,15 @@ function installHandlers() {
       renderCourses();
       return;
     }
-    const editCourse = e.target.dataset.editCourse; const deleteCourse = e.target.dataset.deleteCourse; const newTee = e.target.dataset.newTee; const editTee = e.target.dataset.editTee; const copyTee = e.target.dataset.copyTee; const deleteTee = e.target.dataset.deleteTee;
+    const editCourse = e.target.dataset.editCourse;
+    const deleteLocalCourse = e.target.dataset.deleteCourseLocal;
+    const deleteCloudCourse = e.target.dataset.deleteCourseCloud;
+    const deleteCourseAll = e.target.dataset.deleteCourseAll;
+    const newTee = e.target.dataset.newTee; const editTee = e.target.dataset.editTee; const copyTee = e.target.dataset.copyTee; const deleteTee = e.target.dataset.deleteTee;
     if (editCourse) loadCourseEditor(editCourse);
-    if (deleteCourse && confirm('Delete this course and all tees?')) { state.courses = state.courses.filter(c => c.id !== deleteCourse); state.matches = state.matches.filter(m => m.courseId !== deleteCourse); if (state.activeMatchId && !getActiveMatch()) state.activeMatchId = null; persist(); }
+    if (deleteLocalCourse) { handleDeleteLocalCourse(deleteLocalCourse); return; }
+    if (deleteCloudCourse) { handleDeleteCloudCourse(deleteCloudCourse); return; }
+    if (deleteCourseAll) { handleDeleteCourseEverywhere(deleteCourseAll); return; }
     if (newTee) loadTeeEditor(newTee, null);
     if (editTee) { const [courseId, teeId] = editTee.split('|'); loadTeeEditor(courseId, teeId); }
     if (copyTee) {

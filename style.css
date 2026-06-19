@@ -3224,7 +3224,7 @@ main,
   }
 }
 
-/* v30.0.4: keep shared-match scoring status compact on Scoring Input */
+/* v30.1: keep shared-match scoring status compact on Scoring Input */
 .shared-score-compact-card {
   padding: 10px 12px;
   box-shadow: none;
@@ -3261,7 +3261,7 @@ main,
 }
 
 
-/* v30.0.4: move shared sync status inline with Scoring input title */
+/* v30.1: move shared sync status inline with Scoring input title */
 .score-title-row {
   display: flex;
   align-items: center;
@@ -3291,7 +3291,7 @@ main,
   .shared-title-sync-pill { font-size: .72rem; padding: 3px 7px; }
 }
 
-/* v30.0.4: position secondary shared scoring controls below Save Hole */
+/* v30.1: position secondary shared scoring controls below Save Hole */
 .shared-secondary-controls-card {
   padding: 10px 12px;
   box-shadow: none;
@@ -3332,4 +3332,13 @@ main,
   .shared-disclosure-toggle {
     min-height: 40px;
   }
+}
+
+/* v30.1: emoji lifecycle navigation icons */
+.icon-tabs .tab-icon-svg{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  font-size:22px;
+  line-height:1;
 }

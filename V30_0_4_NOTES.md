@@ -1,4 +1,4 @@
-# The Dye Ledger v30.0.4 – Scoring Input Secondary Controls Repositioning
+# The Dye Ledger v30.1 – Scoring Input Secondary Controls Repositioning
 
 ## Release Theme
 Score first. Explore second.

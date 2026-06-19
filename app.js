@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.3';
+const APP_VERSION = 'v30.3.1';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -33,6 +33,7 @@ const SHARED_SCORE_REFRESH_MS = 30000;
 let sharedScoreRefreshTimer = null;
 const SHARED_DEVICE_ID_KEY = 'the-dye-ledger-shared-device-id';
 let sharedParticipantRefreshTimer = null;
+let sharedParticipantPanelRefreshPending = false;
 let pendingScoreCommitFocus = null;
 let scoreAutoAdvanceGeneration = 0;
 const scoreInputSessionState = new Map();
@@ -9172,7 +9173,22 @@ function renderSetupSharedAdminPanel() {
   const isHost = isCurrentDeviceMatchHost(match);
   const mode = normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device');
   const code = normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || '');
-  const devices = normalizeSharedDeviceList((Array.isArray(match.sharedDevices) && match.sharedDevices.length ? match.sharedDevices : [{ id: getSharedDeviceId(), name: isHost ? 'Host Device' : 'This Device' }]), match);
+  let devices = normalizeSharedDeviceList((Array.isArray(match.sharedDevices) && match.sharedDevices.length ? match.sharedDevices : [{ id: getSharedDeviceId(), name: isHost ? 'Host Device' : 'This Device' }]), match);
+  if (match.sharedMatchId && hasSupabaseConfig() && isHost && !sharedParticipantPanelRefreshPending) {
+    sharedParticipantPanelRefreshPending = true;
+    fetchSharedParticipantDevices(match.sharedMatchId, match)
+      .then(incoming => {
+        sharedParticipantPanelRefreshPending = false;
+        if (mergeSharedDevices(match, incoming || [])) {
+          persist({ skipRender: true });
+          renderAll();
+        }
+      })
+      .catch(err => {
+        sharedParticipantPanelRefreshPending = false;
+        console.warn('Shared participant panel refresh failed.', err);
+      });
+  }
   const sync = getSharedSyncStatus(match);
   const lastSync = formatSharedLastSync(match);
   const currentRoundStatus = match.completedAt ? 'Round complete' : 'In progress';
@@ -9295,14 +9311,24 @@ function renderMatchSetupState() {
 
 function loadPlayerEditor(playerId = null) {
   const form = document.getElementById('playerForm');
+  if (!form) return;
   editingPlayerId = playerId;
-  document.getElementById('cancelPlayerEditBtn').classList.toggle('hidden', !playerId);
-  document.getElementById('playerFormTitle').textContent = playerId ? 'Edit player' : 'Add player';
-  document.getElementById('playerSubmitBtn').textContent = playerId ? 'Update Player' : 'Save Player';
+  document.getElementById('cancelPlayerEditBtn')?.classList.toggle('hidden', !playerId);
+  const title = document.getElementById('playerFormTitle');
+  const submit = document.getElementById('playerSubmitBtn');
+  if (title) title.textContent = playerId ? 'Edit player' : 'Add player';
+  if (submit) submit.textContent = playerId ? 'Update Player' : 'Save Player';
   if (!playerId) { form.reset(); return; }
   const player = getPlayer(playerId); if (!player) return;
+  activateTab('courses');
   form.name.value = player.name; form.index.value = player.index;
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  requestAnimationFrame(() => {
+    const chrome = document.querySelector('.app-chrome');
+    const offset = (chrome?.getBoundingClientRect?.().height || 0) + 12;
+    const y = form.getBoundingClientRect().top + window.scrollY - offset;
+    window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+    form.querySelector('[name="name"]')?.focus?.({ preventScroll: true });
+  });
 }
 function loadCourseEditor(courseId = null) {
   const form = document.getElementById('courseForm');
@@ -9319,6 +9345,8 @@ function activateTab(tabId) {
   document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tabId));
   document.querySelectorAll('.panel').forEach(el => el.classList.toggle('active', el.id === tabId));
   syncFinishRoundUi(getActiveMatch());
+  if (tabId === 'setup') refreshActiveSharedParticipants({ silent: true });
+  if (tabId === 'courses') renderPlayers();
 }
 
 function loadTeeEditor(courseId = null, teeId = null) {
@@ -9534,11 +9562,10 @@ function applySmartPuttsAdjustmentFromCheckbox(checkbox) {
 
 function installHandlers() {
   document.querySelectorAll('.tab').forEach(btn => btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.panel').forEach(el => el.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById(btn.dataset.tab).classList.add('active');
-    if (['courses','setup'].includes(btn.dataset.tab)) refreshCourseLibraryFromCloud({ silent: true });
+    const tabId = btn.dataset.tab;
+    activateTab(tabId);
+    if (['courses','setup'].includes(tabId)) refreshCourseLibraryFromCloud({ silent: true });
+    if (tabId === 'setup') refreshActiveSharedParticipants({ silent: true });
   }));
 
   document.getElementById('playerForm').addEventListener('submit', e => {
@@ -10181,6 +10208,13 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       const match = getActiveMatch();
       if (!match?.sharedMatchId) return toast('No shared match is active.');
       await flushSharedMatchSync(match.id, { silent: false });
+      if (isCurrentDeviceMatchHost(match)) {
+        const incoming = await fetchSharedParticipantDevices(match.sharedMatchId, match).catch(err => {
+          console.warn('Could not refresh participant devices.', err);
+          return [];
+        });
+        if (mergeSharedDevices(match, incoming || [])) persist({ skipRender: true });
+      }
       await refreshActiveSharedParticipants({ silent: true });
       await refreshActiveSharedScores({ silent: true });
       renderAll();

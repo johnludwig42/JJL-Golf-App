@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.0.1';
+const APP_VERSION = 'v30.0.2';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -29,6 +29,8 @@ const sharedMatchSyncInflight = new Map();
 const sharedMatchSyncDirty = new Map();
 const SHARED_MATCH_SYNC_DEBOUNCE_MS = 200;
 const SHARED_PARTICIPANT_REFRESH_MS = 5000;
+const SHARED_SCORE_REFRESH_MS = 30000;
+let sharedScoreRefreshTimer = null;
 const SHARED_DEVICE_ID_KEY = 'the-dye-ledger-shared-device-id';
 let sharedParticipantRefreshTimer = null;
 let pendingScoreCommitFocus = null;
@@ -201,6 +203,36 @@ function canCurrentDeviceEditPlayer(match, playerId) {
   const assigned = getAssignedDeviceForPlayer(match, playerId);
   if (!assigned) return false;
   return String(assigned) === String(currentDeviceId);
+}
+
+function getSharedLocallyOwnedPlayerIds(match) {
+  if (!match || match.storageMode !== 'shared') return new Set((match?.players || []).map(mp => mp.playerId));
+  const currentDeviceId = getSharedDeviceId();
+  if (!isAssignedPlayersMode(match)) return new Set((match.players || []).map(mp => mp.playerId));
+  const assignments = match.sharedPlayerAssignments && typeof match.sharedPlayerAssignments === 'object' ? match.sharedPlayerAssignments : {};
+  const hasAssignments = Object.values(assignments).some(Boolean);
+  if (!hasAssignments) return isCurrentDeviceMatchHost(match) ? new Set((match.players || []).map(mp => mp.playerId)) : new Set();
+  return new Set((match.players || [])
+    .filter(mp => String(assignments[mp.playerId] || '') === String(currentDeviceId))
+    .map(mp => mp.playerId));
+}
+function shouldUploadSharedPlayerEntry(match, playerId) {
+  if (!match || match.storageMode !== 'shared') return true;
+  if (!isAssignedPlayersMode(match)) return true;
+  return getSharedLocallyOwnedPlayerIds(match).has(playerId);
+}
+function shouldAcceptRemoteSharedPlayerEntry(match, playerId) {
+  if (!match || match.storageMode !== 'shared') return true;
+  if (!isAssignedPlayersMode(match)) return true;
+  const owned = getSharedLocallyOwnedPlayerIds(match);
+  return !owned.has(playerId);
+}
+function getVisibleScoringPlayers(match, metricPlayers = [], { stats = false } = {}) {
+  if (!match || match.storageMode !== 'shared' || !isAssignedPlayersMode(match) || isCurrentDeviceMatchHost(match)) return metricPlayers;
+  const owned = getSharedLocallyOwnedPlayerIds(match);
+  const showOtherScores = !!match.sharedShowOtherScores;
+  const showOtherStats = !!match.sharedShowOtherStats;
+  return metricPlayers.filter(p => owned.has(p.playerId) || (stats ? showOtherStats : showOtherScores));
 }
 
 function isCurrentDeviceMatchHost(match) {
@@ -4812,6 +4844,7 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
   };
   const scoreEntries = [];
   match.players.forEach((mp, idx) => {
+    if (!shouldUploadSharedPlayerEntry(match, mp.playerId)) return;
     const matchPlayerId = `${match.sharedMatchId || match.id}:player:${mp.playerId}`;
     const teamId = `${match.sharedMatchId || match.id}:team:${Number(mp.team) || 1}`;
     const holeCount = getRequestedHoleCount(match);
@@ -4870,18 +4903,18 @@ async function uploadSharedMatch(match) {
     response = await client.from('match_memberships').upsert(payload.membership, { onConflict: 'id' });
     if (response.error) throw response.error;
   }
-  response = await client.from('match_teams').delete().eq('match_id', payload.matchRow.id);
-  if (response.error) throw response.error;
-  response = await client.from('match_teams').insert(payload.teams);
-  if (response.error) throw response.error;
-  response = await client.from('match_players').delete().eq('match_id', payload.matchRow.id);
-  if (response.error) throw response.error;
-  response = await client.from('match_players').insert(payload.players);
-  if (response.error) throw response.error;
-  response = await client.from('score_entries').delete().eq('match_id', payload.matchRow.id);
-  if (response.error) throw response.error;
-  response = await client.from('score_entries').insert(payload.scoreEntries);
-  if (response.error) throw response.error;
+  if (payload.teams.length) {
+    response = await client.from('match_teams').upsert(payload.teams, { onConflict: 'id' });
+    if (response.error) throw response.error;
+  }
+  if (payload.players.length) {
+    response = await client.from('match_players').upsert(payload.players, { onConflict: 'id' });
+    if (response.error) throw response.error;
+  }
+  if (payload.scoreEntries.length) {
+    response = await client.from('score_entries').upsert(payload.scoreEntries, { onConflict: 'id' });
+    if (response.error) throw response.error;
+  }
   response = await client.from('match_notes').upsert(payload.notesRow, { onConflict: 'match_id' });
   if (response.error) throw response.error;
   match.storageMode = 'shared';
@@ -5032,6 +5065,87 @@ function hydrateMatchFromCloudBundle(bundle) {
   if (notes?.body && !state.notes) state.notes = String(notes.body);
   return hydrated;
 }
+
+function mergeRemoteScoreEntriesIntoMatch(match, scoreEntries = []) {
+  if (!match || !Array.isArray(scoreEntries) || !scoreEntries.length) return false;
+  let changed = false;
+  const byPlayerId = new Map((match.players || []).map(mp => [String(mp.playerId), mp]));
+  (scoreEntries || []).forEach(entry => {
+    const playerId = String(entry?.player_id || '').trim();
+    const holeNumber = Number(entry?.hole_number || 0);
+    if (!playerId || !holeNumber) return;
+    if (!shouldAcceptRemoteSharedPlayerEntry(match, playerId)) return;
+    const mp = byPlayerId.get(playerId);
+    if (!mp) return;
+    const idx = holeNumber - 1;
+    if (!mp.scores || !Array.isArray(mp.scores)) mp.scores = buildEmptyScores(getRequestedHoleCount(match));
+    if (!mp.scores[idx]) mp.scores[idx] = { holeNumber, gross: null };
+    const nextGross = Number.isFinite(Number(entry.gross)) ? Math.round(Number(entry.gross)) : null;
+    if ((mp.scores[idx].gross ?? null) !== nextGross) {
+      mp.scores[idx].gross = nextGross;
+      changed = true;
+    }
+    if (!Array.isArray(mp.stats) || !mp.stats.length) mp.stats = buildEmptyStats(getRequestedHoleCount(match));
+    const before = JSON.stringify(normalizeHoleStat(mp.stats[idx] || {}, idx));
+    const nextStat = normalizeHoleStat({
+      holeNumber,
+      fairway: !!entry.fairway,
+      green: !!entry.green,
+      putts: Number.isFinite(Number(entry.putts)) ? Number(entry.putts) : null,
+      penaltyStrokes: Number.isFinite(Number(entry.penalty_strokes ?? entry.penaltyStrokes)) ? Number(entry.penalty_strokes ?? entry.penaltyStrokes) : 0,
+      upAndDown: !!entry.up_and_down,
+      sandy: !!entry.sandy,
+    }, idx);
+    if (JSON.stringify(nextStat) !== before) {
+      mp.stats[idx] = nextStat;
+      changed = true;
+    }
+  });
+  if (changed) {
+    const progress = computeMatchProgress(match);
+    match.lastTouchedHole = progress.lastTouchedHole;
+    match.lastFullyCompletedHole = progress.lastFullyCompletedHole;
+  }
+  return changed;
+}
+async function pullSharedScoreEntries(match, { silent = true, render = true } = {}) {
+  if (!match || match.storageMode !== 'shared' || !match.sharedMatchId || !hasSupabaseConfig()) return false;
+  try {
+    const client = await ensureSupabaseClient();
+    if (!client) return false;
+    const { data, error } = await client.from('score_entries').select('*').eq('match_id', match.sharedMatchId).eq('entry_status', 'active').order('hole_number');
+    if (error) throw error;
+    const changed = mergeRemoteScoreEntriesIntoMatch(match, data || []);
+    if (changed) {
+      match.cloudSyncState = 'cloud-synced';
+      match.lastCloudSyncAt = new Date().toISOString();
+      persist({ skipRender: true });
+      if (render) renderAll();
+      if (!silent) toast('Shared scores updated.');
+    }
+    return changed;
+  } catch (err) {
+    console.warn('Shared score pull failed.', err);
+    if (!silent) toast('Could not refresh shared scores. Local scoring is still saved.');
+    return false;
+  }
+}
+async function refreshActiveSharedScores({ silent = true, render = true } = {}) {
+  const match = getActiveMatch();
+  if (!match || match.storageMode !== 'shared') return false;
+  return pullSharedScoreEntries(match, { silent, render });
+}
+function startSharedScoreRefresh() {
+  if (sharedScoreRefreshTimer) return;
+  sharedScoreRefreshTimer = window.setInterval(() => {
+    if (document.visibilityState === 'hidden') return;
+    const match = getActiveMatch();
+    if (!match || match.storageMode !== 'shared' || match.status === 'complete') return;
+    const activePanel = document.querySelector('.panel.active')?.id || '';
+    if (activePanel !== 'score' && activePanel !== 'leaderboard') return;
+    refreshActiveSharedScores({ silent: true, render: true });
+  }, SHARED_SCORE_REFRESH_MS);
+}
 function setLastOpenedSharedMatch(matchOrId = null) {
   const match = typeof matchOrId === 'string' ? getMatch(matchOrId) : matchOrId;
   const sharedId = match?.sharedMatchId || match?.sharedMatchRef || (typeof matchOrId === 'string' ? String(matchOrId || '').trim() : '');
@@ -5155,6 +5269,8 @@ async function flushSharedMatchSync(matchId, { silent = true } = {}) {
         await mergeCloudSharedMetadata(match, { includeAssignments: true });
       }
       await uploadSharedMatch(match);
+      await pullSharedScoreEntries(match, { silent: true, render: false });
+      await mergeCloudSharedMetadata(match, { includeAssignments: !isCurrentDeviceMatchHost(match) });
       setLastOpenedSharedMatch(match);
       persist({ skipRender: true });
       if (!silent) toast('Shared match synced.');
@@ -5215,8 +5331,8 @@ document.addEventListener('visibilitychange', () => {
   scheduleSharedMatchSync(active, { immediate: true, silent: true });
 });
 
-window.addEventListener('online', () => { refreshActiveSharedParticipants({ silent: true }); });
-window.addEventListener('focus', () => { refreshActiveSharedParticipants({ silent: true }); });
+window.addEventListener('online', () => { refreshActiveSharedParticipants({ silent: true }); refreshActiveSharedScores({ silent: true }); });
+window.addEventListener('focus', () => { refreshActiveSharedParticipants({ silent: true }); refreshActiveSharedScores({ silent: true }); });
 
 function getCourseLibraryStatusMessage() {
   if (uiState.cloudCoursesLoading) return 'Loading cloud course library… manual setup remains available.';
@@ -5755,6 +5871,7 @@ function renderAll() {
   syncNewMatchConflictUi();
   updateCloudConfigUi();
   startSharedParticipantRefresh();
+startSharedScoreRefresh();
   renderScorecardImportReview();
   updateScorecardImportStatus();
   scheduleTeamPayoutSplitPaneSync();
@@ -6812,7 +6929,7 @@ function renderStatTrackingEntry(match, hole, metrics) {
     return;
   }
   const isFairwayHole = Number(hole?.par) === 4 || Number(hole?.par) === 5;
-  const statPlayers = (metrics?.players || []).filter(p => isPlayerStatTrackingEnabled(match, p.playerId));
+  const statPlayers = getVisibleScoringPlayers(match, (metrics?.players || []), { stats: true }).filter(p => isPlayerStatTrackingEnabled(match, p.playerId));
   wrap.classList.remove('hidden');
   if (!statPlayers.length) {
     wrap.innerHTML = '<div class="card inset-card stat-entry-card"><div class="section-label">Stat tracking</div><div class="tiny top-gap">No players were selected for stat tracking.</div></div>';
@@ -6930,7 +7047,8 @@ function renderScoreGrid(match, tee, metrics, scoringHoles = null) {
   }
   const holes = scoringHoles || getSelectedScoringHoles(match, tee);
   const hole = holes[currentHole - 1];
-  body.innerHTML = metrics.players.map(p => {
+  const visiblePlayers = getVisibleScoringPlayers(match, metrics.players || [], { stats: false });
+  body.innerHTML = visiblePlayers.map(p => {
     const score = p.scores[currentHole - 1];
     const playerHole = getPlayerHole(match, p, currentHole - 1, tee) || hole;
     const strokes = holeStrokeAllowanceForPlayer(playerHole?.strokeIndex, p.playHdcp, metrics.lowPlaying);
@@ -7707,33 +7825,19 @@ function renderScoreAccessCard(match) {
     card.innerHTML = '';
     return;
   }
-  ensureSharedDeviceRegistered(match);
-  const isHost = isCurrentDeviceMatchHost(match);
-  const code = normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || '');
-  const mode = normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device');
   const sync = getSharedSyncStatus(match);
-  const lastSync = formatSharedLastSync(match);
-  const assignmentSummary = getSharedAssignmentSummary(match);
+  const indicator = sync.tone === 'good' ? '🟢' : sync.tone === 'warning' ? '🟡' : sync.tone === 'working' ? '🟡' : '🔴';
+  const isAssigned = isAssignedPlayersMode(match);
+  const showToggles = isAssigned && !isCurrentDeviceMatchHost(match);
   card.classList.remove('hidden');
+  card.classList.add('shared-score-compact-card');
   card.innerHTML = `
-    <div class="item-header compact-item-header">
-      <div>
-        <div class="section-label">Shared Match</div>
-        <div class="tiny">Code: <strong>${escapeHtml(code || '—')}</strong> · Role: ${isHost ? 'Host' : 'Joined Device'}</div>
-      </div>
-      <div class="actions wrap compact-actions">
-        <button type="button" class="secondary" data-copy-shared-code="${escapeHtml(code)}">Share Code</button>
-        <button type="button" class="secondary" id="syncSharedMatchNowBtn">Sync Now</button>
-      </div>
-    </div>
-    <div class="shared-status-grid top-gap shared-match-status-${escapeHtml(sync.tone)}">
-      <div><div class="tiny">Connection</div><strong>${escapeHtml(getSharedOnlineLabel())}</strong></div>
-      <div><div class="tiny">Status</div><strong>${escapeHtml(sync.label)}</strong></div>
-      <div><div class="tiny">Last synced</div><strong>${escapeHtml(lastSync)}</strong></div>
-      <div><div class="tiny">Scoring</div><strong>${escapeHtml(assignmentSummary)}</strong></div>
-    </div>
-    <div id="scoreAccessHint" class="tiny top-gap">${escapeHtml(sync.detail)} ${escapeHtml(getScoreAccessHint(match))}</div>`;
+    <div class="shared-score-compact-row">
+      <span class="shared-score-pill" title="${escapeHtml(sync.detail)}">${indicator} ${escapeHtml(sync.label.replace('All changes synced', 'Synced').replace('Offline — changes will sync later', 'Offline — saved locally'))}</span>
+      ${showToggles ? `<label class="mini-check inline"><input type="checkbox" id="showOtherScoresToggle" ${match.sharedShowOtherScores ? 'checked' : ''} /><span>Show Other Scores</span></label><label class="mini-check inline"><input type="checkbox" id="showOtherStatsToggle" ${match.sharedShowOtherStats ? 'checked' : ''} /><span>Show Other Stats</span></label>` : ''}
+    </div>`;
 }
+
 
 function renderNineHoleConfigUi() {
   const holeCount = Number(document.getElementById('holeCountSelect')?.value || 18) === 9 ? 9 : 18;
@@ -9582,6 +9686,16 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
     }
   });
+  document.getElementById('score').addEventListener('change', e => {
+    if (e.target && (e.target.id === 'showOtherScoresToggle' || e.target.id === 'showOtherStatsToggle')) {
+      const match = getActiveMatch();
+      if (!match) return;
+      match.sharedShowOtherScores = !!document.getElementById('showOtherScoresToggle')?.checked;
+      match.sharedShowOtherStats = !!document.getElementById('showOtherStatsToggle')?.checked;
+      persist({ skipRender: true });
+      renderAll();
+    }
+  });
   document.getElementById('setupCreateMatchChoiceBtn')?.addEventListener('click', () => {
     setupWorkflowMode = 'create';
     handleNewMatchRequest();
@@ -9629,6 +9743,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       if (!match?.sharedMatchId) return toast('No shared match is active.');
       await flushSharedMatchSync(match.id, { silent: false });
       await refreshActiveSharedParticipants({ silent: true });
+      await refreshActiveSharedScores({ silent: true });
       renderAll();
       return;
     }
@@ -9645,6 +9760,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     match.sharedPlayerAssignments[e.target.dataset.sharedPlayerAssignment] = e.target.value;
     persist({ skipRender: true });
     scheduleSharedMatchSync(match, { immediate: true, silent: true });
+    refreshActiveSharedScores({ silent: true, render: false });
     renderAll();
   });
 
@@ -9805,6 +9921,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
     persist();
     scheduleSharedMatchSync(match, { immediate: true, silent: true });
+    if (match.storageMode === 'shared') refreshActiveSharedScores({ silent: true, render: false });
     if (!silent) toast(`Hole ${savedHole} saved.`);
     if (!wasCompleteBeforeSave && completedHoles(match) >= maxHole) {
       showRoundCompletePrompt(match);
@@ -9909,6 +10026,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       if (!match?.sharedMatchId) return toast('No shared match is active.');
       await flushSharedMatchSync(match.id, { silent: false });
       await refreshActiveSharedParticipants({ silent: true });
+      await refreshActiveSharedScores({ silent: true });
       renderCurrentMatch();
     }
   });

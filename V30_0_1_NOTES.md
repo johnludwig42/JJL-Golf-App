@@ -1,4 +1,4 @@
-# The Dye Ledger v30.0.1 – Shared Match Assignment Reliability Fix
+# The Dye Ledger v30.0.2 – Shared Match Assignment Reliability Fix
 
 Focused reliability release for shared-match player assignments.
 
@@ -17,7 +17,7 @@ In v30.0, assignment targets were rendered from local `sharedDevices` metadata. 
 
 ## Supabase
 
-No schema changes were made. v30.0.1 reuses existing tables and stores device identity metadata in the existing `match_memberships.device_label` text field.
+No schema changes were made. v30.0.2 reuses existing tables and stores device identity metadata in the existing `match_memberships.device_label` text field.
 
 ## Guardrails
 

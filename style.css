@@ -3223,3 +3223,39 @@ main,
     grid-template-columns: 1fr;
   }
 }
+
+/* v30.0.2: keep shared-match scoring status compact on Scoring Input */
+.shared-score-compact-card {
+  padding: 10px 12px;
+  box-shadow: none;
+}
+.shared-score-compact-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.shared-score-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .86rem;
+  font-weight: 750;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.mini-check.inline {
+  margin: 0;
+  font-size: .84rem;
+  min-height: 32px;
+}
+@media (max-width: 640px) {
+  .shared-score-compact-row {
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+  .shared-score-pill {
+    width: 100%;
+  }
+}

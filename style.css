@@ -3224,7 +3224,7 @@ main,
   }
 }
 
-/* v30.0.3: keep shared-match scoring status compact on Scoring Input */
+/* v30.0.4: keep shared-match scoring status compact on Scoring Input */
 .shared-score-compact-card {
   padding: 10px 12px;
   box-shadow: none;
@@ -3261,7 +3261,7 @@ main,
 }
 
 
-/* v30.0.3: move shared sync status inline with Scoring input title */
+/* v30.0.4: move shared sync status inline with Scoring input title */
 .score-title-row {
   display: flex;
   align-items: center;
@@ -3289,4 +3289,47 @@ main,
 @media (max-width: 640px) {
   .score-title-row { gap: 8px; }
   .shared-title-sync-pill { font-size: .72rem; padding: 3px 7px; }
+}
+
+/* v30.0.4: position secondary shared scoring controls below Save Hole */
+.shared-secondary-controls-card {
+  padding: 10px 12px;
+  box-shadow: none;
+  background: var(--panel-muted);
+}
+.shared-secondary-helper {
+  margin-bottom: 6px;
+}
+.shared-secondary-toggle-list {
+  display: grid;
+  gap: 6px;
+}
+.shared-disclosure-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--muted);
+  font-weight: 750;
+  cursor: pointer;
+}
+.shared-disclosure-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.shared-disclosure-toggle span {
+  line-height: 1.2;
+}
+@media (max-width: 640px) {
+  .shared-secondary-controls-card {
+    padding: 9px 10px;
+  }
+  .shared-disclosure-toggle {
+    min-height: 40px;
+  }
 }

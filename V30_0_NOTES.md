@@ -1,4 +1,4 @@
-# The Dye Ledger v30.0.3 – Shared Match Scoring Completion
+# The Dye Ledger v30.0.4 – Shared Match Scoring Completion
 
 Release theme: One shared match. Multiple devices. Zero confusion.
 

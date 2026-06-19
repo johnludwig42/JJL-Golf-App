@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.0.3';
+const APP_VERSION = 'v30.0.4';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -7856,15 +7856,21 @@ function renderScoreAccessCard(match) {
   const showOtherScores = shouldShowOtherSharedPlayers(match, { stats: false });
   const showOtherStats = shouldShowOtherSharedPlayers(match, { stats: true });
   const helper = isCurrentDeviceMatchHost(match)
-    ? 'Host view: turn these off to focus only on the players assigned to this host device.'
-    : 'Assigned-player view: turn these on to view the other team read-only.';
+    ? 'Optional: show or hide players outside this host device’s scoring focus.'
+    : 'Optional: peek at the other team read-only after saving your hole.';
   card.classList.remove('hidden');
-  card.classList.add('shared-score-compact-card');
+  card.classList.add('shared-score-compact-card', 'shared-secondary-controls-card');
   card.innerHTML = `
-    <div class="shared-score-compact-row">
-      <span class="tiny">${escapeHtml(helper)}</span>
-      <label class="mini-check inline"><input type="checkbox" id="showOtherScoresToggle" ${showOtherScores ? 'checked' : ''} /><span>Show Other Scores</span></label>
-      <label class="mini-check inline"><input type="checkbox" id="showOtherStatsToggle" ${showOtherStats ? 'checked' : ''} /><span>Show Other Stats</span></label>
+    <div class="tiny shared-secondary-helper">${escapeHtml(helper)}</div>
+    <div class="shared-secondary-toggle-list">
+      <label class="shared-disclosure-toggle">
+        <input type="checkbox" id="showOtherScoresToggle" ${showOtherScores ? 'checked' : ''} />
+        <span>${showOtherScores ? '▲ Hide Other Scores' : '▼ Show Other Scores'}</span>
+      </label>
+      <label class="shared-disclosure-toggle">
+        <input type="checkbox" id="showOtherStatsToggle" ${showOtherStats ? 'checked' : ''} />
+        <span>${showOtherStats ? '▲ Hide Other Stats' : '▼ Show Other Stats'}</span>
+      </label>
     </div>`;
 }
 

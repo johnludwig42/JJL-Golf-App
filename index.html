@@ -381,28 +381,6 @@
             <button id="nextHoleBtn" type="button" class="secondary">Next ▶</button>
           </div>
           <div id="holeSummary" class="tiny top-gap"></div>
-          <div id="scoreAccessCard" class="card inset-card top-gap hidden">
-            <div class="item-header compact-item-header">
-              <div>
-                <div class="section-label">Scoring access</div>
-                <div id="scoreAccessMeta" class="tiny">Role-based permissions preview for this event.</div>
-              </div>
-            </div>
-            <div class="grid two compact-grid top-gap">
-              <label><span>Current role</span>
-                <select id="scoreAccessRoleSelect">
-                  <option value="event_admin">Event Admin</option>
-                  <option value="official_scorer">Official Scorer</option>
-                  <option value="team_scorer">Team Scorer</option>
-                  <option value="viewer">Viewer</option>
-                </select>
-              </label>
-              <label id="scoreAccessTeamWrap" class="hidden"><span>Scoring team</span>
-                <select id="scoreAccessTeamSelect"></select>
-              </label>
-            </div>
-            <div id="scoreAccessHint" class="tiny top-gap"></div>
-          </div>
           <div id="greeniesEntryWrap" class="top-gap hidden"></div>
           <div class="score-grid-wrap top-gap">
             <table class="score-grid">
@@ -423,6 +401,7 @@
             <button id="saveScoresBtn" type="button">Save Hole Scores</button>
             <div class="tiny">Next automatically saves the current hole.</div>
           </div>
+          <div id="scoreAccessCard" class="card inset-card top-gap hidden" aria-label="Other scores and stats visibility controls"></div>
           <div id="holeJumpTiles" class="hole-jump-tiles top-gap hidden" aria-hidden="true"></div>
         </div>
       </div>
@@ -655,10 +634,10 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
-          <li>v30.0.3 improves shared-match scoring with clearer host/joined roles, participant status, assignments, and Sync Now actions.</li>
-          <li>v30.0.3 keeps assigned-player scoring obvious: joined devices see who they can score and locked players remain read-only.</li>
-          <li>v30.0.3 preserves local-first sessions, saved matches, and existing scoring calculations.</li>
-          <li>App version: <strong id="appVersionLabel">v30.0.3</strong></li>
+          <li>v30.0.4 improves shared-match scoring with clearer host/joined roles, participant status, assignments, and Sync Now actions.</li>
+          <li>v30.0.4 keeps assigned-player scoring obvious: joined devices see who they can score and locked players remain read-only.</li>
+          <li>v30.0.4 preserves local-first sessions, saved matches, and existing scoring calculations.</li>
+          <li>App version: <strong id="appVersionLabel">v30.0.4</strong></li>
         </ul>
       </div>
     </section>
@@ -678,7 +657,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.0.3</span>
+    <span id="appVersionFooter">v30.0.4</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>

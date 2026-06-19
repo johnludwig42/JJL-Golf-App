@@ -3224,7 +3224,7 @@ main,
   }
 }
 
-/* v30.1: keep shared-match scoring status compact on Scoring Input */
+/* v30.1.1: keep shared-match scoring status compact on Scoring Input */
 .shared-score-compact-card {
   padding: 10px 12px;
   box-shadow: none;
@@ -3261,7 +3261,7 @@ main,
 }
 
 
-/* v30.1: move shared sync status inline with Scoring input title */
+/* v30.1.1: move shared sync status inline with Scoring input title */
 .score-title-row {
   display: flex;
   align-items: center;
@@ -3291,7 +3291,7 @@ main,
   .shared-title-sync-pill { font-size: .72rem; padding: 3px 7px; }
 }
 
-/* v30.1: position secondary shared scoring controls below Save Hole */
+/* v30.1.1: position secondary shared scoring controls below Save Hole */
 .shared-secondary-controls-card {
   padding: 10px 12px;
   box-shadow: none;
@@ -3334,11 +3334,39 @@ main,
   }
 }
 
-/* v30.1: emoji lifecycle navigation icons */
+/* v30.1.1: emoji lifecycle navigation icons */
 .icon-tabs .tab-icon-svg{
   display:inline-flex;
   align-items:center;
   justify-content:center;
   font-size:22px;
   line-height:1;
+}
+
+
+/* v30.1.1: Library recency/search and lightweight memory capture */
+.course-list-heading {
+  margin: 12px 0 8px;
+}
+.memory-quick-capture {
+  text-align: left;
+}
+.memory-quick-divider {
+  height: 1px;
+  background: rgba(148, 163, 184, 0.28);
+  margin: 12px 0;
+}
+.memory-add-btn {
+  width: 100%;
+  justify-content: center;
+  min-height: 44px;
+}
+.memory-quick-hint {
+  text-align: center;
+  margin-top: 6px;
+}
+.memory-sheet textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
 }

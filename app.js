@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.1';
+const APP_VERSION = 'v30.1.1';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -670,6 +670,7 @@ const uiState = {
   teamPayoutMobileWindowByMatch: {},
   teamPayoutMobileOpenHeaderKey: '',
   grossGameDetailOpenByMatch: {},
+  memoryDraftCategory: 'General',
 };
 let pendingNextRoundSessionContext = null;
 
@@ -718,6 +719,45 @@ function getPlayerByLookupLabel(label = '', candidates = null) {
 }
 function getCourseSearchValue() {
   return String(uiState.courseSearch || document.getElementById('coursesSearchInput')?.value || '').trim().toLowerCase();
+}
+
+function getCourseLastPlayedAt(course) {
+  if (!course) return '';
+  const direct = String(course.lastPlayedAt || course.lastUsedAt || '').trim();
+  const fromMatches = state.matches
+    .filter(m => String(m.courseId || '') === String(course.id || '') && (m.date || m.createdAt || m.completedAt))
+    .map(m => String(m.date || m.completedAt || m.createdAt || '').slice(0, 10))
+    .sort((a, b) => b.localeCompare(a))[0] || '';
+  return direct || fromMatches || '';
+}
+function formatRelativeCourseDate(value = '') {
+  const iso = String(value || '').slice(0, 10);
+  if (!iso) return '';
+  try {
+    const today = new Date(todayIso() + 'T00:00:00');
+    const day = new Date(iso + 'T00:00:00');
+    const diff = Math.round((today - day) / 86400000);
+    if (diff <= 0) return 'Today';
+    if (diff === 1) return 'Yesterday';
+    if (diff < 7) return `${diff} days ago`;
+    if (diff < 14) return '1 week ago';
+    if (diff < 45) return `${Math.round(diff / 7)} weeks ago`;
+    return iso;
+  } catch { return iso; }
+}
+function getRecentCourses(limit = 3) {
+  return state.courses
+    .map(course => ({ course, lastPlayedAt: getCourseLastPlayedAt(course) }))
+    .filter(row => row.lastPlayedAt)
+    .sort((a, b) => b.lastPlayedAt.localeCompare(a.lastPlayedAt) || String(a.course.name || '').localeCompare(String(b.course.name || '')))
+    .slice(0, limit)
+    .map(row => row.course);
+}
+function markCourseRecentlyUsed(courseId, dateValue = todayIso()) {
+  const course = getCourse(courseId);
+  if (!course) return;
+  const next = String(dateValue || todayIso()).slice(0, 10);
+  if (!course.lastPlayedAt || String(course.lastPlayedAt).slice(0, 10) < next) course.lastPlayedAt = next;
 }
 function setCourseExpanded(courseId, expanded) {
   if (!courseId) return;
@@ -2716,6 +2756,7 @@ function normalizeMatch(match) {
   match.notes = typeof match.notes === 'string' ? match.notes : '';
   match.roundRecapNotes = mergeRoundNoteText(match.roundRecapNotes, match.notes);
   match.notes = match.roundRecapNotes;
+  match.memories = Array.isArray(match.memories) ? match.memories.map(normalizeRoundMemory).filter(Boolean) : [];
   const progress = computeMatchProgress(match);
   match.lastTouchedHole = Number(match.lastTouchedHole) || progress.lastTouchedHole;
   match.lastFullyCompletedHole = Number(match.lastFullyCompletedHole) || progress.lastFullyCompletedHole;
@@ -2738,6 +2779,7 @@ function normalizeState() {
     c.city = c.city || '';
     c.state = c.state || '';
     c.country = c.country || 'United States of America';
+    c.lastPlayedAt = String(c.lastPlayedAt || c.lastUsedAt || '').slice(0, 10);
     c.strokeIndexes = getCourseStrokeTemplate(c);
     c.tees = Array.isArray(c.tees) ? c.tees : [];
     c.tees.forEach(t => normalizeTee(t, c.name));
@@ -5921,6 +5963,83 @@ function strokeIndexSummary(holes, course) {
   if (filled.length) return `${filled.length} hole indexes saved`;
   return getCourseStrokeTemplate(course) ? 'Using course default stroke indexes' : 'No stroke indexes yet';
 }
+
+function normalizeRoundMemory(memory = {}) {
+  const text = String(memory.text || memory.memory || '').trim();
+  if (!text) return null;
+  const categories = ['General', 'Key Moment', 'Best Shot', 'Betting Drama'];
+  const rawCategory = String(memory.category || 'General').trim();
+  const category = categories.includes(rawCategory) ? rawCategory : 'General';
+  return {
+    id: String(memory.id || uid()),
+    text,
+    category,
+    holeNumber: Math.max(1, Math.min(18, Number(memory.holeNumber || memory.hole || currentHole) || currentHole || 1)),
+    createdAt: memory.createdAt || new Date().toISOString(),
+    source: memory.source || 'local',
+  };
+}
+function openAddMemoryModal() {
+  const match = getActiveMatch();
+  if (!match) return toast('Create or load a match first.');
+  const backdrop = document.getElementById('addMemoryDialog');
+  const text = document.getElementById('memoryTextInput');
+  const category = document.getElementById('memoryCategorySelect');
+  const hole = document.getElementById('memoryHoleSelect');
+  if (!backdrop || !text || !category || !hole) return;
+  const maxHole = getPlayableHoleCount(match, getTee(match.courseId, match.teeId)) || 18;
+  hole.innerHTML = Array.from({ length: maxHole }, (_, idx) => `<option value="${idx + 1}">Hole ${idx + 1}</option>`).join('');
+  hole.value = String(Math.min(maxHole, Math.max(1, currentHole || 1)));
+  category.value = 'General';
+  text.value = '';
+  backdrop.classList.remove('hidden');
+  backdrop.setAttribute('aria-hidden', 'false');
+  window.setTimeout(() => text.focus(), 50);
+}
+function closeAddMemoryModal() {
+  const backdrop = document.getElementById('addMemoryDialog');
+  const text = document.getElementById('memoryTextInput');
+  if (backdrop) {
+    backdrop.classList.add('hidden');
+    backdrop.setAttribute('aria-hidden', 'true');
+  }
+  if (text) text.value = '';
+}
+function saveMemoryFromModal() {
+  const match = getActiveMatch();
+  if (!match) return closeAddMemoryModal();
+  const text = String(document.getElementById('memoryTextInput')?.value || '').trim();
+  if (!text) return toast('Add a memory first.');
+  const entry = normalizeRoundMemory({
+    text,
+    category: document.getElementById('memoryCategorySelect')?.value || 'General',
+    holeNumber: Number(document.getElementById('memoryHoleSelect')?.value || currentHole) || currentHole,
+    createdAt: new Date().toISOString(),
+    source: 'local',
+  });
+  if (!entry) return toast('Add a memory first.');
+  match.memories = Array.isArray(match.memories) ? match.memories : [];
+  match.memories.push(entry);
+  persist({ skipRender: true });
+  closeAddMemoryModal();
+  toast('Memory saved.');
+}
+function renderMemoryQuickCapture(match) {
+  const wrap = document.getElementById('memoryQuickCaptureWrap');
+  if (!wrap) return;
+  if (!match) {
+    wrap.classList.add('hidden');
+    wrap.innerHTML = '';
+    return;
+  }
+  const count = Array.isArray(match.memories) ? match.memories.length : 0;
+  wrap.classList.remove('hidden');
+  wrap.innerHTML = `
+    <div class="memory-quick-divider" aria-hidden="true"></div>
+    <button id="addMemoryBtn" type="button" class="secondary memory-add-btn">📝 Add Memory</button>
+    <div class="tiny memory-quick-hint">Capture a quick moment for the recap.${count ? ` ${count} saved.` : ''}</div>`;
+}
+
 function renderCourses() {
   const el = document.getElementById('coursesList');
   const cloudStatus = document.getElementById('cloudCoursesStatus');
@@ -5948,23 +6067,29 @@ function renderCourses() {
     cloudCourseSyncUnavailable.textContent = hasSupabaseConfig() ? 'Cloud sync unavailable. Local courses are still available.' : 'Cloud sync unavailable. Local courses are still available.';
   }
   const query = getCourseSearchValue();
-  const courses = state.courses.filter(c => {
+  const matchesQuery = course => {
     if (!query) return true;
-    const location = [c.city, c.state, c.country].filter(Boolean).join(' ').toLowerCase();
-    const teeText = (Array.isArray(c.tees) ? c.tees : []).map(t => [t.teeName, t.gender === 'F' ? 'women' : 'men', t.isCombo ? 'combo' : ''].join(' ')).join(' ').toLowerCase();
-    return `${String(c.name || '').toLowerCase()} ${location} ${teeText}`.includes(query);
-  });
+    const location = [course.city, course.state, course.country].filter(Boolean).join(' ').toLowerCase();
+    const teeText = (Array.isArray(course.tees) ? course.tees : []).map(t => [t.teeName, t.gender === 'F' ? 'women' : 'men', t.isCombo ? 'combo' : ''].join(' ')).join(' ').toLowerCase();
+    return `${String(course.name || '').toLowerCase()} ${location} ${teeText}`.includes(query);
+  };
+  const visibleCourses = query ? state.courses.filter(matchesQuery) : getRecentCourses(3);
   if (!state.courses.length) {
-    el.innerHTML = '<div class="tiny">No courses saved yet.</div>';
+    el.innerHTML = '<div class="tiny">No courses saved yet. Add a course or import a scorecard to build your Library.</div>';
     return;
   }
-  if (!courses.length) {
-    el.innerHTML = '<div class="tiny">No courses match your search.</div>';
+  if (!visibleCourses.length) {
+    el.innerHTML = query
+      ? '<div class="tiny">No courses match your search.</div>'
+      : '<div class="tiny">No recently used courses yet. Search courses below to choose one for today’s round.</div>';
     return;
   }
-  el.innerHTML = courses.map(c => {
+  const heading = query ? `Search Results (${visibleCourses.length})` : 'Recently Used Courses';
+  el.innerHTML = `<div class="section-label course-list-heading">${escapeHtml(heading)}</div>` + visibleCourses.map(c => {
     const expanded = query ? true : uiState.expandedCourses.has(c.id);
     const sortedTees = getSortedTeesByYardage(c);
+    const lastPlayedAt = getCourseLastPlayedAt(c);
+    const recentText = lastPlayedAt ? `Last Played: ${formatRelativeCourseDate(lastPlayedAt)}` : 'Search result';
     return `
     <div class="item compact-item course-card ${expanded ? 'expanded' : 'collapsed'}">
       <div class="item-header compact-item-header course-card-header">
@@ -5973,7 +6098,7 @@ function renderCourses() {
           <span>
             <span class="item-title">${escapeHtml(c.name)}</span>
             <span class="muted course-meta-line">${escapeHtml([c.city, c.state].filter(Boolean).join(', ') || c.country || 'Course')}</span>
-            <span class="tiny course-meta-line">${sortedTees.length} tee${sortedTees.length === 1 ? '' : 's'}</span>
+            <span class="tiny course-meta-line">${escapeHtml(recentText)} · ${sortedTees.length} tee${sortedTees.length === 1 ? '' : 's'}</span>
           </span>
         </button>
         <div class="actions wrap compact-actions">
@@ -6001,7 +6126,6 @@ function renderCourses() {
     </div>`;
   }).join('');
 }
-
 
 
 function getCourseCloudId(course) {
@@ -6842,6 +6966,7 @@ function renderCurrentMatch() {
     emptyEl.classList.remove('hidden');
     wrapEl.classList.add('hidden');
     const tileWrap = document.getElementById('holeJumpTiles'); if (tileWrap) tileWrap.innerHTML = '';
+    renderMemoryQuickCapture(null);
     return;
   }
   const course = getCourse(match.courseId);
@@ -6877,6 +7002,7 @@ function renderCurrentMatch() {
     }
   }
   renderScoreAccessCard(match);
+  renderMemoryQuickCapture(match);
   renderScoreGrid(match, tee, metrics, scoringHoles);
   renderStatTrackingEntry(match, hole, metrics);
   renderGreeniesEntry(match, hole);
@@ -10007,6 +10133,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
     normalizeMatch(match);
     if (!match.courseId) return toast('Select a course.');
+    markCourseRecentlyUsed(match.courseId, match.date || todayIso());
     if (!match.players.every(p => p.teeId)) { markMissingTeeRows(); return toast('Each player needs a tee.'); }
     clearMatchTeeErrors();
     if (sharedMatchEnabled) {
@@ -10160,7 +10287,11 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   });
   document.getElementById('scoreboardShareRoundBtn').addEventListener('click', () => { openPrintScorecard(); });
   document.getElementById('saveScoresBtn').addEventListener('click', () => { saveCurrentHole(); });
+  document.getElementById('addMemorySaveBtn')?.addEventListener('click', saveMemoryFromModal);
+  document.getElementById('addMemoryCancelBtn')?.addEventListener('click', closeAddMemoryModal);
+  document.getElementById('addMemoryDialog')?.addEventListener('click', e => { if (e.target?.id === 'addMemoryDialog') closeAddMemoryModal(); });
   document.getElementById('score')?.addEventListener('click', async e => {
+    if (e.target.closest('#addMemoryBtn')) { openAddMemoryModal(); return; }
     if (e.target.closest('[data-score-locked="1"], .score-row-readonly')) {
       const match = getActiveMatch();
       if (match?.storageMode === 'shared' && isAssignedPlayersMode(match)) toast('You can only score your assigned players.');

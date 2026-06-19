@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=30.1" />
+  <link rel="manifest" href="manifest.json?v=30.1.1" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
   <link rel="shortcut icon" href="./favicon-32x32.png" />
@@ -312,6 +312,7 @@
             <div class="tiny">Next automatically saves the current hole.</div>
           </div>
           <div id="scoreAccessCard" class="card inset-card top-gap hidden" aria-label="Other scores and stats visibility controls"></div>
+          <div id="memoryQuickCaptureWrap" class="memory-quick-capture top-gap hidden"></div>
           <div id="holeJumpTiles" class="hole-jump-tiles top-gap hidden" aria-hidden="true"></div>
         </div>
       </div>
@@ -478,15 +479,15 @@
       <div class="card tight-card">
         <div class="item-header compact-item-header">
           <div>
-            <h2>Saved courses &amp; tees</h2>
-            <div class="tiny">Search courses, download cloud updates, or publish local course changes when ready.</div>
+            <h2>Courses</h2>
+            <div class="tiny">Choose a recent course or search your full course library.</div>
           </div>
           <div class="course-library-actions">
             <button id="refreshCloudCoursesBtn" type="button" class="secondary" title="Download new or updated courses from the cloud to this device.">Download Cloud Courses</button>
             <button id="syncLocalCoursesBtn" type="button" class="secondary" title="Upload your local course additions and edits to the cloud.">Publish Local Changes</button>
             <label class="compact-search course-search-inline">
               <span class="sr-only">Search courses</span>
-              <input id="coursesSearchInput" type="search" placeholder="Search courses" autocomplete="off" />
+              <input id="coursesSearchInput" type="search" placeholder="🔍 Search courses" autocomplete="off" />
             </label>
           </div>
         </div>
@@ -666,10 +667,10 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
-          <li>v30.1 improves shared-match scoring with clearer host/joined roles, participant status, assignments, and Sync Now actions.</li>
-          <li>v30.1 keeps assigned-player scoring obvious: joined devices see who they can score and locked players remain read-only.</li>
-          <li>v30.1 preserves local-first sessions, saved matches, and existing scoring calculations.</li>
-          <li>App version: <strong id="appVersionLabel">v30.1</strong></li>
+          <li>v30.1.1 improves shared-match scoring with clearer host/joined roles, participant status, assignments, and Sync Now actions.</li>
+          <li>v30.1.1 keeps assigned-player scoring obvious: joined devices see who they can score and locked players remain read-only.</li>
+          <li>v30.1.1 preserves local-first sessions, saved matches, and existing scoring calculations.</li>
+          <li>App version: <strong id="appVersionLabel">v30.1.1</strong></li>
         </ul>
       </div>
     </section>
@@ -689,7 +690,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.1</span>
+    <span id="appVersionFooter">v30.1.1</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>
@@ -722,6 +723,34 @@
     </div>
   </div>
 
+
+
+  <div id="addMemoryDialog" class="sheet-backdrop hidden" aria-hidden="true">
+    <div class="sheet-card memory-sheet" role="dialog" aria-modal="true" aria-labelledby="addMemoryTitle">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-header">
+        <div>
+          <div class="tiny">Round memory</div>
+          <h3 id="addMemoryTitle">Add Memory</h3>
+          <div class="tiny">Capture a quick moment without interrupting scoring.</div>
+        </div>
+      </div>
+      <label class="top-gap"><span>Memory</span><textarea id="memoryTextInput" rows="4" placeholder="What happened?"></textarea></label>
+      <div class="grid two compact-grid top-gap">
+        <label><span>Category</span><select id="memoryCategorySelect">
+          <option>General</option>
+          <option>Key Moment</option>
+          <option>Best Shot</option>
+          <option>Betting Drama</option>
+        </select></label>
+        <label><span>Hole</span><select id="memoryHoleSelect"></select></label>
+      </div>
+      <div class="actions wrap top-gap">
+        <button id="addMemorySaveBtn" type="button">Save Memory</button>
+        <button id="addMemoryCancelBtn" type="button" class="secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
 
   <div id="newMatchConflictDialog" class="sheet-backdrop hidden" aria-hidden="true">
     <div class="sheet-card new-match-sheet" role="dialog" aria-modal="true" aria-labelledby="newMatchConflictTitle">

@@ -3370,3 +3370,79 @@ main,
   box-sizing: border-box;
   resize: vertical;
 }
+
+/* v30.1.2: Header and navigation density optimization */
+.app-header.compact-header {
+  align-items: center;
+  padding: calc(10px + env(safe-area-inset-top)) 12px 5px;
+}
+.app-header.compact-header .brand-wrap {
+  align-items: center;
+  gap: 10px;
+}
+.app-header.compact-header .brand-wrap > div:not(.brand-mark) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 44px;
+}
+.app-header.compact-header h1 {
+  line-height: 1.05;
+}
+.app-header.compact-header .sub {
+  margin-top: 2px;
+}
+.top-tabs.icon-tabs {
+  gap: 5px;
+  padding: 0 12px 6px;
+}
+.top-tabs.icon-tabs .tab {
+  min-height: 56px;
+  padding: 5px 3px 6px;
+  gap: 2px;
+  border-radius: 12px;
+}
+.top-tabs.icon-tabs .tab-icon-svg {
+  width: 24px;
+  height: 24px;
+  font-size: 21px;
+  line-height: 1;
+}
+.top-tabs.icon-tabs .tab-label {
+  font-size: 10.5px;
+  line-height: 1;
+}
+@media (max-width: 760px) {
+  .app-header.compact-header {
+    padding-bottom: 4px;
+  }
+  .app-header.compact-header .brand-wrap {
+    align-items: center;
+  }
+  .top-tabs.icon-tabs {
+    gap: 4px;
+    padding-bottom: 5px;
+  }
+  .top-tabs.icon-tabs .tab {
+    min-height: 54px;
+    padding: 5px 2px 5px;
+    gap: 1px;
+  }
+  .top-tabs.icon-tabs .tab-icon-svg {
+    width: 23px;
+    height: 23px;
+    font-size: 20px;
+  }
+  .top-tabs.icon-tabs .tab-label {
+    font-size: 10px;
+  }
+}
+@media (max-width: 380px) {
+  .top-tabs.icon-tabs {
+    gap: 3px;
+  }
+  .top-tabs.icon-tabs .tab-label {
+    font-size: 9.5px;
+    letter-spacing: 0;
+  }
+}

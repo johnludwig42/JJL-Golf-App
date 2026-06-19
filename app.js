@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.1.1';
+const APP_VERSION = 'v30.1.2';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);

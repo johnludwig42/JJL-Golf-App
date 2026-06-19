@@ -3447,7 +3447,7 @@ main,
   }
 }
 
-/* v30.1.4: scoring header, memories, and stat summary polish */
+/* v30.1.5: scoring header, memories, and stat summary polish */
 #scoreEntryWrap.top-gap { margin-top: 6px; }
 #score .score-hole-nav { margin-bottom: 4px; }
 #score #holeSummary { margin-top: 4px; text-align: center; }
@@ -3519,7 +3519,7 @@ main,
 }
 
 
-/* v30.1.4: sticky app chrome and storytelling polish */
+/* v30.1.5: sticky app chrome and storytelling polish */
 .app-chrome{
   position: sticky;
   top: 0;
@@ -3560,4 +3560,32 @@ main,
 @media (max-width:760px){
   .app-chrome + main{padding-top:6px;}
   .round-recap-preview{font-size:15px;line-height:1.65;}
+}
+
+
+/* v30.1.5: AI recap input transparency */
+.round-recap-input-preview{
+  border:1px solid rgba(12,55,33,.10);
+  border-radius:14px;
+  background:#f8fbf9;
+  padding:10px 12px;
+  display:grid;
+  gap:8px;
+}
+.recap-input-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  color:var(--text);
+  font-size:13px;
+}
+.recap-input-row span{color:var(--muted);font-weight:700;}
+.recap-input-row-stack{display:block;}
+.recap-input-row-stack strong{display:block;margin-bottom:4px;}
+.recap-input-row-stack ul{margin:6px 0 0 18px;padding:0;display:grid;gap:4px;color:var(--text);}
+.recap-input-row-stack li{line-height:1.32;}
+@media (max-width:760px){
+  .recap-input-row{font-size:12.5px;}
+  .round-recap-input-preview{padding:9px 10px;}
 }

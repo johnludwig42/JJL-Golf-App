@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.1.4';
+const APP_VERSION = 'v30.1.5';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -1446,6 +1446,23 @@ function buildRoundRecapStatus(match) {
   const generatedText = generatedAt && !Number.isNaN(generatedAt.getTime()) ? `Generated ${generatedAt.toLocaleString()}.` : '';
   return status || generatedText || '';
 }
+function buildRecapInputTransparency(match) {
+  const memories = getRoundMemories(match);
+  const notes = String(match?.roundRecapNotes || '').trim();
+  const previewMemories = memories.slice(0, 5);
+  return `
+    <div class="round-recap-input-preview" aria-label="AI recap inputs preview">
+      <div class="recap-input-row">
+        <strong>Round Notes Included</strong>
+        <span>${notes ? `${notes.length} characters` : 'None yet'}</span>
+      </div>
+      <div class="recap-input-row recap-input-row-stack">
+        <strong>Memories Included in Recap (${memories.length})</strong>
+        ${previewMemories.length ? `<ul>${previewMemories.map(m => `<li>${escapeHtml(m.holeNumber ? `Hole ${m.holeNumber}: ` : '')}${escapeHtml(m.category && m.category !== 'General' ? `[${m.category}] ` : '')}${escapeHtml(m.text)}</li>`).join('')}</ul>` : '<div class="tiny">No memories saved yet. Use Add Memory on the Play tab to add moments for the recap.</div>'}
+        ${memories.length > previewMemories.length ? `<div class="tiny">+ ${memories.length - previewMemories.length} more memor${memories.length - previewMemories.length === 1 ? 'y' : 'ies'} included.</div>` : ''}
+      </div>
+    </div>`;
+}
 function buildRoundRecapControls(match) {
   if (!match) return '';
   const recap = getStoredRoundRecap(match);
@@ -1472,6 +1489,7 @@ function buildRoundRecapControls(match) {
         <div class="tiny">Free-form host journal for context, storylines, course conditions, and details the AI should understand. Memories captured on the Play tab are also included.</div>
         <textarea id="roundRecapNotesBox" rows="7" placeholder="Add host notes for the AI recap. Example: Wind picked up on the back nine, Mike got hot late, and the press on 16 changed the match.">${escapeHtml(match.roundRecapNotes || '')}</textarea>
       </div>
+      ${buildRecapInputTransparency(match)}
       <div class="actions wrap compact-actions">
         <button id="generateRoundRecapBtn" type="button" class="secondary" ${disabled ? 'disabled' : ''}>${recap ? 'Regenerate' : 'Generate AI Recap'}</button>
         ${recap ? `<button id="editRoundRecapBtn" type="button" class="secondary">${editing ? 'Stop Editing' : 'Edit'}</button>` : ''}

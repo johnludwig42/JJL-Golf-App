@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.1.5';
+const APP_VERSION = 'v30.2';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -10721,3 +10721,6 @@ if (hasSupabaseConfig()) {
   window.setTimeout(() => refreshCourseLibraryFromCloud({ silent: true, force: true }), 250);
 }
 resumeActiveSharedMatchOnStartup();
+
+
+/* v30.2 placeholders: Shared Memories, Round Story, editable story workflow, <=350 words target */

@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=30.1.2" />
+  <link rel="manifest" href="manifest.json?v=30.1.3" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
   <link rel="shortcut icon" href="./favicon-32x32.png" />
@@ -339,7 +339,6 @@
               <button id="scoreboardShareRoundBtn" type="button" class="primary share-match-btn">Share Match</button>
             </div>
           </div>
-          <div id="roundRecapControls" class="top-gap"></div>
           <div class="scoreboard-round-actions no-print">
             <div id="scoreboardRoundState" class="tiny">Round is live.</div>
             <div class="actions wrap compact-actions">
@@ -453,14 +452,19 @@
           <div id="statTrackingSummary" class="top-gap"></div>
         </div>
 
-        <div id="notesCard" class="card tight-card scoreboard-card print-section-notes">
-          <h2>Notes</h2>
-          <label><span>Round / app notes</span><textarea id="notesBox" rows="6" placeholder="Add any free-form notes here."></textarea></label>
-        </div>
-
         <div id="ninePointScorecardCard" class="card tight-card scoreboard-card print-section-nine-point hidden">
           <h2>9-Point game scorecard</h2>
           <div id="ninePointScorecard" class="top-gap"></div>
+        </div>
+
+        <div id="roundStoryCard" class="card tight-card scoreboard-card print-section-notes">
+          <h2>Round Notes, Memories &amp; Recap</h2>
+          <div class="tiny">Competition first, storytelling second. These notes and memories help generate the AI recap.</div>
+          <div class="round-story-section top-gap">
+            <h3>Memories (<span id="roundMemoriesCount">0</span>)</h3>
+            <div id="roundMemoriesPanel" class="top-gap"></div>
+          </div>
+          <div id="roundRecapControls" class="top-gap"></div>
         </div>
 
       </div>
@@ -667,10 +671,10 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
-          <li>v30.1.2 tightens the top navigation tabs while keeping icon-over-label presentation and comfortable tap targets.</li>
-          <li>v30.1.2 vertically aligns the header icon and title for a cleaner, more balanced app header.</li>
-          <li>v30.1.2 preserves all scoring, sync, Library, Insights, memory, and saved-match behavior.</li>
-          <li>App version: <strong id="appVersionLabel">v30.1.2</strong></li>
+          <li>v30.1.3 tightens the Play scoring header and centers Par / SI / yards / tee plus match status.</li>
+          <li>v30.1.3 displays saved Memories in Scores and includes them with Round Notes for AI Recap context.</li>
+          <li>v30.1.3 adds host Greenie confirmation behavior, host score authority messaging, and restored horizontal stat scrolling.</li>
+          <li>App version: <strong id="appVersionLabel">v30.1.3</strong></li>
         </ul>
       </div>
     </section>
@@ -690,7 +694,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.1.2</span>
+    <span id="appVersionFooter">v30.1.3</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>

@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.1.2';
+const APP_VERSION = 'v30.1.3';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -218,16 +218,34 @@ function getSharedLocallyOwnedPlayerIds(match) {
     .filter(mp => String(assignments[mp.playerId] || '') === String(currentDeviceId))
     .map(mp => mp.playerId));
 }
+function getSharedHostOverrideKeys(match) {
+  const raw = match?.sharedHostScoreOverrides;
+  if (!raw || typeof raw !== 'object') return new Set();
+  return new Set(Object.keys(raw).filter(key => raw[key]));
+}
+function getSharedPlayerHoleKey(playerId, holeNumber) {
+  return `${String(playerId || '')}:${Number(holeNumber) || 0}`;
+}
 function shouldUploadSharedPlayerEntry(match, playerId) {
   if (!match || match.storageMode !== 'shared') return true;
   if (!isAssignedPlayersMode(match)) return true;
   return getSharedLocallyOwnedPlayerIds(match).has(playerId);
+}
+function shouldUploadSharedPlayerHoleEntry(match, playerId, holeNumber) {
+  if (shouldUploadSharedPlayerEntry(match, playerId)) return true;
+  if (isCurrentDeviceMatchHost(match)) return getSharedHostOverrideKeys(match).has(getSharedPlayerHoleKey(playerId, holeNumber));
+  return false;
 }
 function shouldAcceptRemoteSharedPlayerEntry(match, playerId) {
   if (!match || match.storageMode !== 'shared') return true;
   if (!isAssignedPlayersMode(match)) return true;
   const owned = getSharedLocallyOwnedPlayerIds(match);
   return !owned.has(playerId);
+}
+function shouldAcceptRemoteSharedPlayerHoleEntry(match, playerId, holeNumber) {
+  if (!shouldAcceptRemoteSharedPlayerEntry(match, playerId)) return false;
+  if (isCurrentDeviceMatchHost(match) && getSharedHostOverrideKeys(match).has(getSharedPlayerHoleKey(playerId, holeNumber))) return false;
+  return true;
 }
 function shouldShowOtherSharedPlayers(match, { stats = false } = {}) {
   if (!match || match.storageMode !== 'shared' || !isAssignedPlayersMode(match)) return true;
@@ -1427,7 +1445,8 @@ function buildRoundRecapControls(match) {
   const online = navigator.onLine !== false;
   const configured = !!getRoundRecapUrl();
   const disabled = !online || !configured;
-  const reason = !configured ? 'Configure Supabase to enable AI round recaps.' : (!online ? 'Round Recap requires an internet connection.' : 'Optional AI recap. Saved locally with this match after generation.');
+  const memoryCount = getRoundMemories(match).length;
+  const reason = !configured ? 'Configure Supabase to enable AI round recaps.' : (!online ? 'Round Recap requires an internet connection.' : `AI recap uses Round Notes plus ${memoryCount} saved memor${memoryCount === 1 ? 'y' : 'ies'}.`);
   return `
     <div class="round-recap-control-card no-print">
       <div>
@@ -1436,22 +1455,8 @@ function buildRoundRecapControls(match) {
       </div>
       <div class="round-recap-notes-field">
         <label for="roundRecapNotesBox">Round Notes</label>
-        <div class="tiny">Capture memorable moments, betting drama, course conditions, and highlights. These notes help generate your AI Round Recap. Type or dictate notes using your phone's keyboard microphone.</div>
-        <div class="actions wrap top-gap round-notes-prompt-buttons" id="roundNotesPromptButtons">
-          <button type="button" class="secondary round-note-prompt-btn" data-round-note-prompt="Key Moments:">Key Moments</button>
-          <button type="button" class="secondary round-note-prompt-btn" data-round-note-prompt="Best Shots:">Best Shots</button>
-          <button type="button" class="secondary round-note-prompt-btn" data-round-note-prompt="Betting Drama:">Betting Drama</button>
-          
-          
-          <button type="button" class="secondary round-note-prompt-btn" data-round-note-prompt="Turning Points:">Turning Points</button>
-        </div>
-        <textarea id="roundRecapNotesBox" rows="8" placeholder="Examples:
-• Mike won the Nassau on 18.
-• John chipped in for eagle on 9.
-• Wind made the back nine extremely difficult.
-• Closest match of the trip so far.
-• Best moment of the trip so far.
-• Funniest event of the day.">${escapeHtml(match.roundRecapNotes || '')}</textarea>
+        <div class="tiny">Free-form host journal for context, storylines, course conditions, and details the AI should understand. Memories captured on the Play tab are also included.</div>
+        <textarea id="roundRecapNotesBox" rows="7" placeholder="Add host notes for the AI recap. Example: Wind picked up on the back nine, Mike got hot late, and the press on 16 changed the match.">${escapeHtml(match.roundRecapNotes || '')}</textarea>
       </div>
       <div class="actions wrap compact-actions">
         <button id="generateRoundRecapBtn" type="button" class="secondary" ${disabled ? 'disabled' : ''}>${recap ? 'Regenerate Round Recap' : 'Generate Round Recap'}</button>
@@ -1612,6 +1617,7 @@ function buildRoundRecapPayload(match, metrics) {
     holeCount: getPlayableHoleCount(match, metrics?.tee),
     status: match?.status || 'active',
     roundNotes: String(match?.roundRecapNotes || '').trim(),
+    memories: getRoundMemories(match).map(m => ({ text: m.text, category: m.category, holeNumber: m.holeNumber, createdAt: m.createdAt })),
     players: playerSummaries,
     games: summarizeSelectedGamesForRecap(match, metrics),
     finalSettlement,
@@ -1635,6 +1641,7 @@ async function generateRoundRecapForActiveMatch() {
   }
   match.roundRecapStatus = 'Generating Round Recap…';
   persist({ skipRender: true });
+  renderRoundMemoriesPanel(match);
   renderRoundRecapControlPanel(match);
   try {
     const response = await fetch(url, {
@@ -2726,6 +2733,8 @@ function normalizeMatch(match) {
   }));
   normalizeStatTrackingParticipants(match);
   match.greeniesWinners = match.greeniesWinners && typeof match.greeniesWinners === 'object' ? match.greeniesWinners : {};
+  match.greeniesSuggestions = match.greeniesSuggestions && typeof match.greeniesSuggestions === 'object' ? match.greeniesSuggestions : {};
+  match.sharedHostScoreOverrides = match.sharedHostScoreOverrides && typeof match.sharedHostScoreOverrides === 'object' ? match.sharedHostScoreOverrides : {};
   match.matchStatusGame = match.matchStatusGame || getDefaultFeaturedGameKey(match.selectedGames || []);
   match.momentumGame = match.momentumGame || match.matchStatusGame || getDefaultFeaturedGameKey(match.selectedGames || []);
   match.storageMode = match.storageMode === 'shared' ? 'shared' : 'local';
@@ -4011,6 +4020,7 @@ function renderLeaderboard() {
   const activePrintView = (match.printView === 'scorecard') ? 'scorecard' : 'summary';
   syncScoreboardPrintControls(activePrintView);
   applyScoreboardPrintView(activePrintView);
+  renderRoundMemoriesPanel(match);
   renderRoundRecapControlPanel(match);
 
   const statusOptions = getMatchStatusOptions(match);
@@ -4732,6 +4742,7 @@ function buildSelectedGamesForCloud(match) {
   const greeniesCfg = games.find(g => g.key === 'greenies');
   if (greeniesCfg) {
     greeniesCfg.winnersByHole = { ...(match?.greeniesWinners || {}) };
+    greeniesCfg.suggestionsByHole = { ...(match?.greeniesSuggestions || {}) };
   }
   return games;
 }
@@ -4739,6 +4750,11 @@ function extractGreeniesWinnersFromSelectedGames(selectedGames) {
   const greeniesCfg = (selectedGames || []).find(g => g.key === 'greenies');
   const winners = greeniesCfg?.winnersByHole;
   return winners && typeof winners === 'object' ? { ...winners } : {};
+}
+function extractGreeniesSuggestionsFromSelectedGames(selectedGames) {
+  const greeniesCfg = (selectedGames || []).find(g => g.key === 'greenies');
+  const suggestions = greeniesCfg?.suggestionsByHole;
+  return suggestions && typeof suggestions === 'object' ? { ...suggestions } : {};
 }
 function applyCurrentHoleDomToMatch(match) {
   if (!match) return false;
@@ -4789,14 +4805,28 @@ function applyCurrentHoleDomToMatch(match) {
   }
   const selectedWinner = document.querySelector('[data-greenies-winner]:checked')?.dataset.greeniesWinner || '';
   const existingWinner = match.greeniesWinners?.[String(actualHoleNumber)] || '';
+  const existingSuggestion = match.greeniesSuggestions?.[String(actualHoleNumber)] || '';
+  const isHostDevice = isCurrentDeviceMatchHost(match);
   if (selectedWinner) {
-    if (!match.greeniesWinners) match.greeniesWinners = {};
-    if (existingWinner !== selectedWinner) {
-      match.greeniesWinners[String(actualHoleNumber)] = selectedWinner;
-      mutated = true;
+    if (isHostDevice) {
+      if (!match.greeniesWinners) match.greeniesWinners = {};
+      if (existingWinner !== selectedWinner) {
+        match.greeniesWinners[String(actualHoleNumber)] = selectedWinner;
+        if (match.greeniesSuggestions) delete match.greeniesSuggestions[String(actualHoleNumber)];
+        mutated = true;
+      }
+    } else {
+      if (!match.greeniesSuggestions) match.greeniesSuggestions = {};
+      if (existingSuggestion !== selectedWinner) {
+        match.greeniesSuggestions[String(actualHoleNumber)] = selectedWinner;
+        mutated = true;
+      }
     }
-  } else if (existingWinner) {
+  } else if (isHostDevice && existingWinner) {
     delete match.greeniesWinners[String(actualHoleNumber)];
+    mutated = true;
+  } else if (!isHostDevice && existingSuggestion) {
+    delete match.greeniesSuggestions[String(actualHoleNumber)];
     mutated = true;
   }
   const progress = computeMatchProgress(match);
@@ -4811,8 +4841,13 @@ function applyCurrentHoleDomToMatch(match) {
   const greeniesCfg = getGreeniesCfg(match);
   if (greeniesCfg) {
     const nextWinners = { ...(match.greeniesWinners || {}) };
+    const nextSuggestions = { ...(match.greeniesSuggestions || {}) };
     if (JSON.stringify(greeniesCfg.winnersByHole || {}) !== JSON.stringify(nextWinners)) {
       greeniesCfg.winnersByHole = nextWinners;
+      mutated = true;
+    }
+    if (JSON.stringify(greeniesCfg.suggestionsByHole || {}) !== JSON.stringify(nextSuggestions)) {
+      greeniesCfg.suggestionsByHole = nextSuggestions;
       mutated = true;
     }
   }
@@ -4902,12 +4937,12 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
   };
   const scoreEntries = [];
   match.players.forEach((mp, idx) => {
-    if (!shouldUploadSharedPlayerEntry(match, mp.playerId)) return;
     const matchPlayerId = `${match.sharedMatchId || match.id}:player:${mp.playerId}`;
     const teamId = `${match.sharedMatchId || match.id}:team:${Number(mp.team) || 1}`;
     const holeCount = getRequestedHoleCount(match);
     for (let holeIdx = 0; holeIdx < holeCount; holeIdx += 1) {
       const holeNumber = holeIdx + 1;
+      if (!shouldUploadSharedPlayerHoleEntry(match, mp.playerId, holeNumber)) continue;
       const gross = Number(mp?.scores?.[holeIdx]?.gross);
       const stat = normalizeHoleStat(mp?.stats?.[holeIdx] || {}, holeIdx);
       scoreEntries.push({
@@ -5106,6 +5141,7 @@ function hydrateMatchFromCloudBundle(bundle) {
       }),
     })),
     greeniesWinners: extractGreeniesWinnersFromSelectedGames(matchRow?.selected_games || []),
+    greeniesSuggestions: extractGreeniesSuggestionsFromSelectedGames(matchRow?.selected_games || []),
     matchStatusGame: matchRow?.match_status_game || getDefaultFeaturedGameKey(matchRow?.selected_games || []),
     momentumGame: matchRow?.momentum_game || matchRow?.match_status_game || getDefaultFeaturedGameKey(matchRow?.selected_games || []),
     momentumPerspective: Number(matchRow?.momentum_perspective || 1) === 2 ? 2 : 1,
@@ -5132,7 +5168,7 @@ function mergeRemoteScoreEntriesIntoMatch(match, scoreEntries = []) {
     const playerId = String(entry?.player_id || '').trim();
     const holeNumber = Number(entry?.hole_number || 0);
     if (!playerId || !holeNumber) return;
-    if (!shouldAcceptRemoteSharedPlayerEntry(match, playerId)) return;
+    if (!shouldAcceptRemoteSharedPlayerHoleEntry(match, playerId, holeNumber)) return;
     const mp = byPlayerId.get(playerId);
     if (!mp) return;
     const idx = holeNumber - 1;
@@ -5978,6 +6014,40 @@ function normalizeRoundMemory(memory = {}) {
     createdAt: memory.createdAt || new Date().toISOString(),
     source: memory.source || 'local',
   };
+}
+
+function getRoundMemories(match) {
+  return (Array.isArray(match?.memories) ? match.memories : [])
+    .map(normalizeRoundMemory)
+    .filter(Boolean)
+    .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+}
+function formatMemoryMeta(memory) {
+  const parts = [];
+  if (memory.category && memory.category !== 'General') parts.push(memory.category);
+  if (memory.holeNumber) parts.push(`Hole ${memory.holeNumber}`);
+  const dt = memory.createdAt ? new Date(memory.createdAt) : null;
+  if (dt && !Number.isNaN(dt.getTime())) parts.push(dt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
+  return parts.join(' · ');
+}
+function buildMemoriesDisplay(match) {
+  const memories = getRoundMemories(match);
+  if (!memories.length) {
+    return `<div class="memory-feed-empty tiny">No memories saved yet. Use Add Memory on the Play tab to capture a quick moment.</div>`;
+  }
+  return `<div class="memory-feed-list">${memories.map(memory => `
+    <div class="memory-feed-item">
+      <div class="memory-feed-text">${escapeHtml(memory.text)}</div>
+      <div class="memory-feed-meta tiny">${escapeHtml(formatMemoryMeta(memory))}</div>
+    </div>`).join('')}</div>`;
+}
+function renderRoundMemoriesPanel(match = getActiveMatch()) {
+  const panel = document.getElementById('roundMemoriesPanel');
+  const count = document.getElementById('roundMemoriesCount');
+  if (!panel) return;
+  const memories = getRoundMemories(match);
+  if (count) count.textContent = String(memories.length || 0);
+  panel.innerHTML = match ? buildMemoriesDisplay(match) : '<div class="tiny">Create or load a match to see memories.</div>';
 }
 function openAddMemoryModal() {
   const match = getActiveMatch();
@@ -6995,8 +7065,11 @@ function renderCurrentMatch() {
   const holeSummaryEl = document.getElementById('holeSummary');
   if (holeSummaryEl) {
     if (hole) {
-      const holeMeta = `Hole ${hole.holeNumber} · Par ${hole.par || '-'} · SI ${hole.strokeIndex || '-'} · ${teeYardages || `${hole.yardage ? formatYardageValue(hole.yardage) : '-'} yds`} · ${teamText}`;
-      holeSummaryEl.innerHTML = `<div class="score-hole-meta">${escapeHtml(holeMeta)}</div>${liveStatusLine ? `<div class="score-live-status">${escapeHtml(liveStatusLine)}</div>` : ''}`;
+      const primaryTeeName = getHoleTeeNameForDisplay(match.courseId, tee, currentHole - 1) || tee?.teeName || 'Tee';
+      const primaryYards = hole.yardage ? `${formatYardageValue(hole.yardage)} yds` : (teeYardages || '— yds');
+      const holeMeta = `Par ${hole.par || '-'} · SI ${hole.strokeIndex || '-'} · ${primaryYards} · ${primaryTeeName}`;
+      const statusLine = liveStatusLine || teamText;
+      holeSummaryEl.innerHTML = `<div class="score-hole-meta">${escapeHtml(holeMeta)}</div>${statusLine ? `<div class="score-live-status">${escapeHtml(statusLine)}</div>` : ''}`;
     } else {
       holeSummaryEl.innerHTML = '';
     }
@@ -7257,8 +7330,13 @@ function renderGreeniesEntry(match, hole) {
     return player && mp ? { player, team: mp.team } : null;
   }).filter(Boolean);
   const winnerId = match.greeniesWinners?.[String(hole.holeNumber)] || '';
+  const suggestionId = match.greeniesSuggestions?.[String(hole.holeNumber)] || '';
+  const isHost = isCurrentDeviceMatchHost(match);
+  const currentPick = isHost ? winnerId : (suggestionId || winnerId);
+  const suggestionText = suggestionId && !winnerId ? `<div class="greenies-suggestion tiny top-gap">Suggested Greenie: ${escapeHtml(getPlayer(suggestionId)?.name || 'Unknown')} · Host confirmation required.</div>` : '';
+  const helper = isHost ? 'Host selection is official and used in settlement.' : 'Suggest the closest-to-the-pin winner. Host confirmation is required for settlement.';
   wrap.classList.remove('hidden');
-  wrap.innerHTML = `<div class="card inset-card game-config-card greenies-card"><div class="section-label">Greenies · Hole ${hole.holeNumber}</div><div class="greenies-list top-gap">${eligible.map(row => `<label class="mini-check greenies-check ${canEditGreenies(match, row.team, row.player?.id) ? '' : 'is-readonly'}"><input type="checkbox" data-greenies-winner="${row.player.id}" ${winnerId === row.player.id ? 'checked' : ''} ${canEditGreenies(match, row.team, row.player?.id) ? '' : 'disabled'} /><span>${escapeHtml(row.player.name)}</span></label>`).join('') || '<div class="tiny">No greenies participants selected for this match.</div>'}</div><div class="tiny top-gap">Select the closest-to-the-pin winner for this par 3. Payout runs only against selected greenies participants.</div></div>`;
+  wrap.innerHTML = `<div class="card inset-card game-config-card greenies-card"><div class="section-label">Greenies · Hole ${hole.holeNumber}</div><div class="greenies-list top-gap">${eligible.map(row => `<label class="mini-check greenies-check ${canEditGreenies(match, row.team, row.player?.id) || !isHost ? '' : 'is-readonly'}"><input type="checkbox" data-greenies-winner="${row.player.id}" ${currentPick === row.player.id ? 'checked' : ''} ${canEditGreenies(match, row.team, row.player?.id) || !isHost ? '' : 'disabled'} /><span>${escapeHtml(row.player.name)}</span></label>`).join('') || '<div class="tiny">No greenies participants selected for this match.</div>'}</div>${suggestionText}<div class="tiny top-gap">${escapeHtml(helper)}</div></div>`;
 }
 function renderHoleJumpTiles(match) {
   const wrap = document.getElementById('holeJumpTiles');
@@ -10188,7 +10266,23 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const holeMeta = scoringHoles[currentHole - 1] || null;
     const actualHoleNumber = holeMeta?.holeNumber || currentHole;
     const wasCompleteBeforeSave = match.status === 'complete';
+    const hostOverridePlayers = [];
+    if (match.storageMode === 'shared' && isAssignedPlayersMode(match) && isCurrentDeviceMatchHost(match)) {
+      const owned = getSharedLocallyOwnedPlayerIds(match);
+      document.querySelectorAll('[data-score-player]').forEach(input => {
+        const playerId = input.dataset.scorePlayer;
+        if (!playerId || owned.has(playerId)) return;
+        const mp = (match.players || []).find(row => row.playerId === playerId);
+        const prior = mp?.scores?.[currentHole - 1]?.gross ?? null;
+        const next = String(input.value || '').trim() === '' ? null : (Number.isFinite(Number(input.value)) ? Math.round(Number(input.value)) : null);
+        if (prior !== next) hostOverridePlayers.push(playerId);
+      });
+    }
     const mutated = applyCurrentHoleDomToMatch(match);
+    if (hostOverridePlayers.length) {
+      match.sharedHostScoreOverrides = match.sharedHostScoreOverrides && typeof match.sharedHostScoreOverrides === 'object' ? match.sharedHostScoreOverrides : {};
+      hostOverridePlayers.forEach(playerId => { match.sharedHostScoreOverrides[getSharedPlayerHoleKey(playerId, actualHoleNumber)] = new Date().toISOString(); });
+    }
     if (wasCompleteBeforeSave && mutated) markRoundReopenedForEditing(match);
     const savedHole = actualHoleNumber;
     const maxHole = getPlayableHoleCount(match, getTee(match.courseId, match.teeId));
@@ -10202,7 +10296,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     persist();
     scheduleSharedMatchSync(match, { immediate: true, silent: true });
     if (match.storageMode === 'shared') refreshActiveSharedScores({ silent: true, render: false });
-    if (!silent) toast(`Hole ${savedHole} saved.`);
+    if (!silent) toast(hostOverridePlayers && hostOverridePlayers.length ? `Host updated Hole ${savedHole} score.` : `Hole ${savedHole} saved.`);
     if (!wasCompleteBeforeSave && completedHoles(match) >= maxHole) {
       showRoundCompletePrompt(match);
     }

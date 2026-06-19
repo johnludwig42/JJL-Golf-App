@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=30.1.3" />
+  <link rel="manifest" href="manifest.json?v=30.1.4" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
   <link rel="shortcut icon" href="./favicon-32x32.png" />
@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header class="app-header compact-header">
+  <div class="app-chrome"><header class="app-header compact-header">
     <div class="brand-wrap">
       <div class="brand-mark" aria-hidden="true">
         <img src="./icon-192-v4.png" alt="The Dye Ledger" onerror="this.onerror=null;this.src='./apple-touch-icon.png';" />
@@ -37,6 +37,7 @@
     <button class="tab" data-tab="insights"><span class="tab-icon-svg" aria-hidden="true">📈</span><span class="tab-label">Insights</span></button>
     <button class="tab" data-tab="settings"><span class="tab-icon-svg" aria-hidden="true">⚙️</span><span class="tab-label">More</span></button>
   </nav>
+  </div>
 
 
   <main>
@@ -480,6 +481,13 @@
         <div class="tiny">Your golf archive: courses, saved matches, sessions, and future memories and AI recaps.</div>
       </div>
 
+      <details class="card tight-card scoreboard-card scoreboard-collapsible" open>
+        <summary><h2>Continue Playing &amp; Saved Matches</h2></summary>
+        <div class="tiny top-gap">Resume an in-progress round or revisit a completed round.</div>
+        <div id="matchesList" class="list top-gap"></div>
+      </details>
+
+
       <div class="card tight-card">
         <div class="item-header compact-item-header">
           <div>
@@ -568,7 +576,11 @@
         </form>
       </div>
       <div class="card tight-card">
-        <h2>Import Scorecard</h2>
+        <h2>Course Actions</h2>
+        <div class="actions wrap top-gap">
+          <button id="importScorecardShortcutBtn" type="button" class="secondary">📷 Import Scorecard</button>
+          <button id="addCourseShortcutBtn" type="button" class="secondary">➕ Add Course</button>
+        </div>
         <div class="tiny top-gap" id="cloudCoursesStatusMore">Course cloud status will appear here. Download cloud courses to this device, or publish local course changes when ready.</div>
         <div id="cloudCourseSyncActions" class="actions wrap top-gap hidden">
           <button id="refreshCloudCoursesMoreBtn" type="button" class="secondary" title="Download new or updated courses from the cloud to this device.">Download Cloud Courses</button>
@@ -594,12 +606,6 @@
         <h2>Session Summary</h2>
         <div id="sessionSummary" class="top-gap"><div class="tiny">No active session.</div></div>
       </div>
-
-      <details class="card tight-card scoreboard-card scoreboard-collapsible" open>
-        <summary><h2>Saved Matches / History</h2></summary>
-        <div class="tiny top-gap">Completed and historical saved matches live here. Active matches can still be resumed from Game Setup.</div>
-        <div id="matchesList" class="list top-gap"></div>
-      </details>
 
       <div class="card tight-card">
         <h2>Memories &amp; AI Recaps</h2>
@@ -671,10 +677,10 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
-          <li>v30.1.3 tightens the Play scoring header and centers Par / SI / yards / tee plus match status.</li>
-          <li>v30.1.3 displays saved Memories in Scores and includes them with Round Notes for AI Recap context.</li>
-          <li>v30.1.3 adds host Greenie confirmation behavior, host score authority messaging, and restored horizontal stat scrolling.</li>
-          <li>App version: <strong id="appVersionLabel">v30.1.3</strong></li>
+          <li>v30.1.4 keeps the header and six-tab navigation visible while content scrolls.</li>
+          <li>v30.1.4 reorganizes Library around Continue Playing, Saved Matches, recent courses, course actions, and search.</li>
+          <li>v30.1.4 improves AI Recap storytelling with notes/memories context, edit/accept workflow, readability, and restored stat scrolling.</li>
+          <li>App version: <strong id="appVersionLabel">v30.1.4</strong></li>
         </ul>
       </div>
     </section>
@@ -694,7 +700,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.1.3</span>
+    <span id="appVersionFooter">v30.1.4</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>

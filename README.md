@@ -15,10 +15,10 @@ v29.2.6
 • Refined iPhone Game Setup entry cards to use aligned, visually identical Create New Match and Join a Match actions.
 
 
-## v30.1.3.1 – Game Setup Cancel Path
+## v30.1.4.1 – Game Setup Cancel Path
 
-v30.1.3.1 adds a clear Cancel path from Game Setup. New match setup can be cancelled back to the Create New Match / Join a Match choice menu, and existing match setup edits can be cancelled back to the active match without applying unsaved setup changes.
+v30.1.4.1 adds a clear Cancel path from Game Setup. New match setup can be cancelled back to the Create New Match / Join a Match choice menu, and existing match setup edits can be cancelled back to the active match without applying unsaved setup changes.
 
-## v30.1.3.1 – Multi-Round Session Foundation
+## v30.1.4.1 – Multi-Round Session Foundation
 
-v30.1.3.1 adds a local-first multi-round session foundation. After completing a round, users can view the Match Summary, start another round with the same group, or start a completely new match. Starting another round carries forward the group setup but resets scores, stats, notes, course, tees, games, and results.
+v30.1.4.1 adds a local-first multi-round session foundation. After completing a round, users can view the Match Summary, start another round with the same group, or start a completely new match. Starting another round carries forward the group setup but resets scores, stats, notes, course, tees, games, and results.

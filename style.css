@@ -3447,7 +3447,7 @@ main,
   }
 }
 
-/* v30.1.3: scoring header, memories, and stat summary polish */
+/* v30.1.4: scoring header, memories, and stat summary polish */
 #scoreEntryWrap.top-gap { margin-top: 6px; }
 #score .score-hole-nav { margin-bottom: 4px; }
 #score #holeSummary { margin-top: 4px; text-align: center; }
@@ -3516,4 +3516,48 @@ main,
   #score .score-hole-nav { padding: 6px; border-radius: 12px; }
   #score #holeSummary .score-hole-meta { font-size: 13px; }
   #score #holeSummary .score-live-status { font-size: 12px; }
+}
+
+
+/* v30.1.4: sticky app chrome and storytelling polish */
+.app-chrome{
+  position: sticky;
+  top: 0;
+  z-index: 80;
+  background: linear-gradient(to bottom, var(--bg) 92%, rgba(243,246,244,.96));
+  box-shadow: 0 6px 16px rgba(0,0,0,.05);
+}
+.app-chrome .app-header{position:static;}
+.app-chrome .top-tabs{position:static;top:auto;box-shadow:none;background:transparent;}
+.app-chrome + main{padding-top:8px;}
+.round-recap-preview{
+  font-size:15px;
+  line-height:1.62;
+  color:var(--text);
+}
+.round-recap-preview p{margin:0 0 0.85em;}
+.round-recap-edit-box{min-height:220px;line-height:1.55;font-size:15px;resize:vertical;}
+.library-section-heading{margin-top:2px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);}
+.player-hole-stat-details{max-width:100%;overflow:visible;}
+.player-hole-stat-scroll{
+  display:block;
+  max-width:100%;
+  width:100%;
+  overflow-x:auto !important;
+  overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-x;
+}
+.player-hole-stat-table{
+  width:max-content !important;
+  min-width:720px !important;
+  table-layout:auto;
+}
+.player-hole-stat-table th,
+.player-hole-stat-table td{
+  white-space:nowrap !important;
+}
+@media (max-width:760px){
+  .app-chrome + main{padding-top:6px;}
+  .round-recap-preview{font-size:15px;line-height:1.65;}
 }

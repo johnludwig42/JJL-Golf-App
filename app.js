@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.1.3';
+const APP_VERSION = 'v30.1.4';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -689,6 +689,7 @@ const uiState = {
   teamPayoutMobileOpenHeaderKey: '',
   grossGameDetailOpenByMatch: {},
   memoryDraftCategory: 'General',
+  roundRecapEditing: false,
 };
 let pendingNextRoundSessionContext = null;
 
@@ -1400,7 +1401,13 @@ function buildExportMomentum(match, metrics) {
 
 
 function getStoredRoundRecap(match) {
-  return String(match?.roundRecap || '').trim();
+  return String(match?.roundRecapFinal || match?.roundRecapGenerated || match?.roundRecap || '').trim();
+}
+function getDraftRoundRecap(match) {
+  return String(match?.roundRecapGenerated || match?.roundRecap || '').trim();
+}
+function getFinalRoundRecap(match) {
+  return String(match?.roundRecapFinal || '').trim();
 }
 
 function splitRoundRecapParagraphs(text) {
@@ -1442,16 +1449,23 @@ function buildRoundRecapStatus(match) {
 function buildRoundRecapControls(match) {
   if (!match) return '';
   const recap = getStoredRoundRecap(match);
+  const finalRecap = getFinalRoundRecap(match);
+  const draftRecap = getDraftRoundRecap(match);
   const online = navigator.onLine !== false;
   const configured = !!getRoundRecapUrl();
   const disabled = !online || !configured;
   const memoryCount = getRoundMemories(match).length;
   const reason = !configured ? 'Configure Supabase to enable AI round recaps.' : (!online ? 'Round Recap requires an internet connection.' : `AI recap uses Round Notes plus ${memoryCount} saved memor${memoryCount === 1 ? 'y' : 'ies'}.`);
+  const editing = !!uiState.roundRecapEditing && !!recap;
+  const recapStatus = finalRecap ? 'Accepted recap ready for Match Summary and PDF.' : (draftRecap ? 'Draft recap ready for host review.' : (buildRoundRecapStatus(match) || reason));
+  const recapPreview = recap ? (editing
+    ? `<textarea id="roundRecapEditBox" class="round-recap-edit-box" rows="10">${escapeHtml(recap)}</textarea>`
+    : `<div class="round-recap-preview">${formatRoundRecapHtml(recap)}</div>`) : '';
   return `
     <div class="round-recap-control-card no-print">
       <div>
         <div class="section-label">The Dye Ledger Round Recap</div>
-        <div class="tiny">${escapeHtml(buildRoundRecapStatus(match) || reason)}</div>
+        <div class="tiny">${escapeHtml(recapStatus)}</div>
       </div>
       <div class="round-recap-notes-field">
         <label for="roundRecapNotesBox">Round Notes</label>
@@ -1459,10 +1473,12 @@ function buildRoundRecapControls(match) {
         <textarea id="roundRecapNotesBox" rows="7" placeholder="Add host notes for the AI recap. Example: Wind picked up on the back nine, Mike got hot late, and the press on 16 changed the match.">${escapeHtml(match.roundRecapNotes || '')}</textarea>
       </div>
       <div class="actions wrap compact-actions">
-        <button id="generateRoundRecapBtn" type="button" class="secondary" ${disabled ? 'disabled' : ''}>${recap ? 'Regenerate Round Recap' : 'Generate Round Recap'}</button>
+        <button id="generateRoundRecapBtn" type="button" class="secondary" ${disabled ? 'disabled' : ''}>${recap ? 'Regenerate' : 'Generate AI Recap'}</button>
+        ${recap ? `<button id="editRoundRecapBtn" type="button" class="secondary">${editing ? 'Stop Editing' : 'Edit'}</button>` : ''}
+        ${recap ? '<button id="acceptRoundRecapBtn" type="button">Accept</button>' : ''}
         ${recap ? '<button id="clearRoundRecapBtn" type="button" class="secondary">Clear Recap</button>' : ''}
       </div>
-      ${recap ? `<div class="round-recap-preview tiny">${formatRoundRecapHtml(recap)}</div>` : ''}
+      ${recapPreview}
     </div>`;
 }
 function summarizeSelectedGamesForRecap(match, metrics) {
@@ -1618,6 +1634,7 @@ function buildRoundRecapPayload(match, metrics) {
     status: match?.status || 'active',
     roundNotes: String(match?.roundRecapNotes || '').trim(),
     memories: getRoundMemories(match).map(m => ({ text: m.text, category: m.category, holeNumber: m.holeNumber, createdAt: m.createdAt })),
+    recapInstructions: 'Use Round Notes and Memories when relevant. Do not fabricate events. Do not assume details not provided. Memories should supplement scoring information and statistics.',
     players: playerSummaries,
     games: summarizeSelectedGamesForRecap(match, metrics),
     finalSettlement,
@@ -1653,9 +1670,10 @@ async function generateRoundRecapForActiveMatch() {
     if (!response.ok || data?.success === false) throw new Error(data?.error || `Round Recap failed (${response.status}).`);
     const recap = String(data?.recap || data?.text || '').trim();
     if (!recap) throw new Error('Round Recap returned no text.');
-    match.roundRecap = recap;
+    match.roundRecapGenerated = recap;
+    if (!String(match.roundRecapFinal || '').trim()) match.roundRecap = recap;
     match.roundRecapGeneratedAt = new Date().toISOString();
-    match.roundRecapStatus = 'Round Recap generated and saved locally with this match.';
+    match.roundRecapStatus = String(match.roundRecapFinal || '').trim() ? 'New draft recap generated. Accepted recap preserved.' : 'Draft recap generated. Review, edit, or accept it.';
     persist({ skipRender: true });
     renderLeaderboard();
     toast('Round Recap generated.');
@@ -1667,12 +1685,30 @@ async function generateRoundRecapForActiveMatch() {
     toast('Round Recap unavailable. Match Summary still works normally.');
   }
 }
+
+function acceptRoundRecapForActiveMatch() {
+  const match = getActiveMatch();
+  if (!match) return;
+  const editBox = document.getElementById('roundRecapEditBox');
+  const text = String(editBox?.value || getStoredRoundRecap(match) || '').trim();
+  if (!text) return toast('No recap text to accept.');
+  match.roundRecapFinal = text;
+  match.roundRecap = text;
+  match.roundRecapStatus = 'Accepted recap saved for Match Summary and PDF.';
+  uiState.roundRecapEditing = false;
+  persist({ skipRender: true });
+  renderLeaderboard();
+  toast('Recap accepted.');
+}
 function clearRoundRecapForActiveMatch() {
   const match = getActiveMatch();
   if (!match) return;
   match.roundRecap = '';
+  match.roundRecapGenerated = '';
+  match.roundRecapFinal = '';
   match.roundRecapGeneratedAt = null;
   match.roundRecapStatus = 'Round Recap cleared.';
+  uiState.roundRecapEditing = false;
   persist({ skipRender: true });
   renderLeaderboard();
 }
@@ -2760,6 +2796,8 @@ function normalizeMatch(match) {
     match.players.forEach(mp => { if (!match.sharedPlayerAssignments[mp.playerId]) match.sharedPlayerAssignments[mp.playerId] = match.sharedHostDeviceId || localDeviceId; });
   }
   match.roundRecap = typeof match.roundRecap === 'string' ? match.roundRecap : '';
+  match.roundRecapGenerated = typeof match.roundRecapGenerated === 'string' ? match.roundRecapGenerated : match.roundRecap;
+  match.roundRecapFinal = typeof match.roundRecapFinal === 'string' ? match.roundRecapFinal : '';
   match.roundRecapGeneratedAt = match.roundRecapGeneratedAt || null;
   match.roundRecapStatus = typeof match.roundRecapStatus === 'string' ? match.roundRecapStatus : '';
   match.notes = typeof match.notes === 'string' ? match.notes : '';
@@ -6299,11 +6337,15 @@ async function handleDeleteCourseEverywhere(courseId) {
 
 function renderMatches() {
   const el = document.getElementById('matchesList');
+  if (!el) return;
   if (!state.matches.length) {
     el.innerHTML = '<div class="tiny">No matches saved yet.</div>';
     return;
   }
-  el.innerHTML = state.matches.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(match => {
+  const sorted = state.matches.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const inProgress = sorted.filter(m => m.status !== 'complete');
+  const completed = sorted.filter(m => m.status === 'complete');
+  const renderRow = match => {
     const course = getCourse(match.courseId);
     const tee = getTee(match.courseId, match.teeId);
     const metrics = computeMatchMetrics(match);
@@ -6326,9 +6368,12 @@ function renderMatches() {
             <button class="secondary" data-delete-match="${match.id}">Delete</button>
           </div>
         </div>
-      </div>
-    `;
-  }).join('');
+      </div>`;
+  };
+  const sections = [];
+  sections.push(`<div class="section-label library-section-heading">Continue Playing</div>${inProgress.length ? inProgress.map(renderRow).join('') : '<div class="tiny">No in-progress rounds.</div>'}`);
+  sections.push(`<div class="section-label library-section-heading top-gap">Saved Matches</div>${completed.length ? completed.map(renderRow).join('') : '<div class="tiny">No completed matches yet.</div>'}`);
+  el.innerHTML = sections.join('');
 }
 
 
@@ -6490,6 +6535,8 @@ function buildNextRoundDraft(prior) {
   draft.notes = '';
   draft.roundRecapNotes = '';
   draft.roundRecap = '';
+  draft.roundRecapGenerated = '';
+  draft.roundRecapFinal = '';
   draft.completedAt = null;
   draft.status = 'active';
   return draft;
@@ -9511,6 +9558,8 @@ function installHandlers() {
   });
   if (analyzeScorecardImportBtn) analyzeScorecardImportBtn.addEventListener('click', analyzeSelectedScorecardImportFiles);
   if (clearScorecardImportBtn) clearScorecardImportBtn.addEventListener('click', clearScorecardImportFiles);
+  document.getElementById('importScorecardShortcutBtn')?.addEventListener('click', () => { document.getElementById('importScorecardBtn')?.click(); });
+  document.getElementById('addCourseShortcutBtn')?.addEventListener('click', () => { document.getElementById('courseFormTitle')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); document.querySelector('#courseForm input[name="name"]')?.focus(); });
   const scorecardImportSelection = document.getElementById('scorecardImportSelection');
   if (scorecardImportSelection) scorecardImportSelection.addEventListener('click', e => {
     const btn = e.target.closest('[data-remove-scorecard-file]');
@@ -10192,7 +10241,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       cloudSyncState: existing?.cloudSyncState || (sharedMatchEnabled ? 'pending' : 'local-only'),
       lastCloudSyncAt: existing?.lastCloudSyncAt || null,
       notes: mergeRoundNoteText(existing?.roundRecapNotes, existing?.notes || state.notes || ''),
-      roundRecap: existing?.roundRecap || '',
+      roundRecap: existing?.roundRecapFinal || existing?.roundRecapGenerated || existing?.roundRecap || '',
+      roundRecapGenerated: existing?.roundRecapGenerated || existing?.roundRecap || '',
+      roundRecapFinal: existing?.roundRecapFinal || '',
       roundRecapGeneratedAt: existing?.roundRecapGeneratedAt || null,
       roundRecapStatus: existing?.roundRecapStatus || '',
       roundRecapNotes: mergeRoundNoteText(existing?.roundRecapNotes, existing?.notes || state.notes || ''),
@@ -10363,6 +10414,15 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
     if (e.target.closest('#generateRoundRecapBtn')) {
       generateRoundRecapForActiveMatch();
+      return;
+    }
+    if (e.target.closest('#editRoundRecapBtn')) {
+      uiState.roundRecapEditing = !uiState.roundRecapEditing;
+      renderRoundRecapControlPanel(getActiveMatch());
+      return;
+    }
+    if (e.target.closest('#acceptRoundRecapBtn')) {
+      acceptRoundRecapForActiveMatch();
       return;
     }
     if (e.target.closest('#clearRoundRecapBtn')) {

@@ -4,14 +4,16 @@ A compact match-and-games ledger for golf groups.
 
 ## Current Version
 
-v29.2.5
+v29.2.6.1
 
-## v29.2.5 Build Notes
+## v29.2.6.1 Build Notes
 
-• Imported scorecard courses now remain local until explicitly synchronized to the cloud using Sync Course Library.
+• Completed the terminology correction release for Course Library cloud actions.
 
-• Added duplicate cloud course detection and improved sync error messaging.
+• Verified visible cloud course actions use Download Cloud Courses and Publish Local Changes.
 
-• Improved sync completion reporting with more actionable messages.
+• Refined the Game Setup entry cards so Create New Match and Join a Match use identical card geometry, fixed icon columns, matching typography, and equal visual weight on iPhone.
 
-• Standardized desktop Saved Courses layout using a consistent left-aligned grid.
+• Updated app, service worker, manifest, footer, and visible version references to v29.2.6.1.
+
+• No scoring, handicap, Nassau, Match Summary, Supabase schema, synchronization behavior, localStorage structure, or data migration changes were made.

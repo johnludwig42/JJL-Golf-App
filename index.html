@@ -71,11 +71,11 @@
         <div class="item-header compact-item-header">
           <div>
             <h2>Saved courses &amp; tees</h2>
-            <div class="tiny">Search courses, then expand a course to view or edit its tees.</div>
+            <div class="tiny">Search courses, download cloud updates, or publish local course changes when ready.</div>
           </div>
           <div class="course-library-actions">
-            <button id="refreshCloudCoursesBtn" type="button" class="secondary">Refresh Cloud Courses</button>
-            <button id="syncLocalCoursesBtn" type="button" class="secondary">Sync Course Library</button>
+            <button id="refreshCloudCoursesBtn" type="button" class="secondary" title="Download new or updated courses from the cloud to this device.">Download Cloud Courses</button>
+            <button id="syncLocalCoursesBtn" type="button" class="secondary" title="Upload your local course additions and edits to the cloud.">Publish Local Changes</button>
             <label class="compact-search course-search-inline">
               <span class="sr-only">Search courses</span>
               <input id="coursesSearchInput" type="search" placeholder="Search courses" autocomplete="off" />
@@ -176,12 +176,12 @@
         </div>
         <div id="setupChoiceGrid" class="setup-choice-grid top-gap">
           <button id="setupCreateMatchChoiceBtn" type="button" class="setup-choice-btn">
-            <strong>Create New Match</strong>
-            <span>You are the host and can edit match setup.</span>
+            <strong><span class="setup-choice-icon" aria-hidden="true">➕</span><span>Create New Match</span></strong>
+            <span>Start a new round as host.</span>
           </button>
           <button id="setupJoinMatchChoiceBtn" type="button" class="setup-choice-btn">
-            <strong>Join a Match</strong>
-            <span>Enter a code from the host and score assigned players.</span>
+            <strong><span class="setup-choice-icon" aria-hidden="true">🔗</span><span>Join a Match</span></strong>
+            <span>Enter a code from another host.</span>
           </button>
         </div>
         <div id="topUpdateMatchNote" class="tiny hidden top-gap">After making changes, tap <strong>Update Match</strong> to update the match setup.</div>
@@ -322,7 +322,7 @@
             </div>
             <details class="setup-advanced-details top-gap">
               <summary>Shared Match Storage</summary>
-              <div class="tiny top-gap">v29.2.5 restores setup stability, host editing, combo tee display, and desktop course alignment.</div>
+              <div class="tiny top-gap">Shared matches remain local-first. Course publishing is intentionally separate from scorecard import review.</div>
               <label class="inline-check top-gap"><input id="sharedMatchEnabled" name="sharedMatchEnabled" type="checkbox" /><span>Create as shared match (Supabase)</span></label>
               <div id="sharedMatchHint" class="tiny top-gap">Shared matches are unavailable until supabase-config.js is filled in.</div>
             </details>
@@ -580,10 +580,10 @@
 
       <div class="card tight-card">
         <h2>Course Library</h2>
-        <div class="tiny top-gap" id="cloudCoursesStatusMore">Cloud course library status will appear here.</div>
+        <div class="tiny top-gap" id="cloudCoursesStatusMore">Course cloud status will appear here. Download cloud courses to this device, or publish local course changes when ready.</div>
         <div id="cloudCourseSyncActions" class="actions wrap top-gap hidden">
-          <button id="refreshCloudCoursesMoreBtn" type="button" class="secondary">Refresh Cloud Courses</button>
-          <button id="syncLocalCoursesMoreBtn" type="button" class="secondary">Sync Course Library</button>
+          <button id="refreshCloudCoursesMoreBtn" type="button" class="secondary" title="Download new or updated courses from the cloud to this device.">Download Cloud Courses</button>
+          <button id="syncLocalCoursesMoreBtn" type="button" class="secondary" title="Upload your local course additions and edits to the cloud.">Publish Local Changes</button>
         </div>
         <div id="cloudCourseSyncUnavailable" class="tiny top-gap hidden">Cloud sync unavailable. Local courses are still available.</div>
         <div id="localCourseSyncResult" class="result compact-result top-gap hidden"></div>
@@ -640,11 +640,10 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
-          <li>v29.2.5 restores host ability to reopen and edit current match setup.</li>
-          <li>v29.2.5 simplifies and left-aligns Create New Match and Join a Match entry cards.</li>
-          <li>v29.2.5 adds a persistent Finish / End Round action to the Scoreboard tab.</li>
-          <li>v29.2.5 adds early-ending and completed-round confirmation workflows.</li>
-          <li>App version: <strong id="appVersionLabel">v29.2.5</strong></li>
+          <li>v29.2.6.1 adds the ability to delete tees and associated holes during imported course review before saving.</li>
+          <li>v29.2.6.1 renames course cloud actions to Download Cloud Courses and Publish Local Changes for improved clarity.</li>
+          <li>v29.2.6.1 refines iPhone Game Setup entry cards to use aligned, visually identical Create New Match and Join a Match actions.</li>
+          <li>App version: <strong id="appVersionLabel">v29.2.6.1</strong></li>
         </ul>
       </div>
     </section>
@@ -664,7 +663,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v29.2.5</span>
+    <span id="appVersionFooter">v29.2.6.1</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>

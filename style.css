@@ -2729,7 +2729,7 @@ body.printing-scorecard .nine-point-scorecard-table td:nth-child(2){
 }
 
 
-/* v29.2.5 desktop course grid alignment */
+/* v29.2.6.1 desktop course grid alignment */
 @media (min-width: 1024px){
   #coursesList{
     display:grid;
@@ -2922,26 +2922,63 @@ main,
 
 /* Game Setup workflow refinement */
 .setup-choice-grid {
+  width: 100%;
+  max-width: 460px;
   display: grid;
-  grid-template-columns: minmax(280px, 460px);
+  grid-template-columns: 1fr;
+  grid-auto-rows: minmax(96px, 1fr);
   justify-content: start;
-  gap: 10px;
+  align-items: stretch;
+  gap: 12px;
 }
 .setup-choice-btn {
   width: 100%;
-  text-align: left;
-  display: grid;
-  gap: 4px;
-  padding: 14px;
+  height: 100%;
+  min-height: 96px;
+  box-sizing: border-box;
+  text-align: left !important;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 18px;
   border-radius: 14px;
   border: 1px solid var(--line, #d7e0da);
   background: #eef6f1;
   color: inherit;
+  font: inherit;
+  appearance: none;
+  -webkit-appearance: none;
 }
 .setup-choice-btn strong {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 24px;
+  text-align: left;
   font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.2;
 }
-.setup-choice-btn span {
+.setup-choice-icon {
+  display: inline-flex !important;
+  width: 28px !important;
+  min-width: 28px;
+  justify-content: center;
+  align-items: center;
+  text-align: center !important;
+  font-size: 1.05rem !important;
+  line-height: 1;
+}
+.setup-choice-btn > span {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding-left: 38px;
+  text-align: left;
   font-size: 0.82rem;
   color: var(--muted, #6c756f);
   line-height: 1.25;
@@ -2997,7 +3034,7 @@ main,
 .modal-body h3{margin:0;}
 
 
-/* v29.2.5 true left-aligned desktop course grid */
+/* v29.2.6.1 true left-aligned desktop course grid */
 @media (min-width: 900px) {
   #coursesList {
     display: grid !important;
@@ -3038,4 +3075,16 @@ main,
     width: 100% !important;
     max-width: 100% !important;
   }
+}
+
+.import-tee-actions {
+  justify-content: flex-start;
+}
+.danger-lite {
+  color: #8a1f11;
+}
+.danger-lite:hover,
+.danger-lite:focus-visible {
+  border-color: #d9afa8;
+  background: #fff3f1;
 }

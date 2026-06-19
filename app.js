@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.2';
+const APP_VERSION = 'v30.3';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -3909,34 +3909,49 @@ function buildExportStatTrackingSummary(match, metrics) {
 function buildPlayerHoleStatSummaryTable(match, metrics, playerMetric, completedLimit) {
   const playerRef = match.players.find(row => row.playerId === playerMetric.playerId);
   if (!playerRef) return '<div class="tiny top-gap">No hole-by-hole stats available.</div>';
-  const rows = (metrics?.holeResults || []).slice(0, completedLimit).map((holeResult, holeIdx) => {
-    if (!holeResult?.completed) return '';
+  const statRows = (metrics?.holeResults || []).slice(0, completedLimit).map((holeResult, holeIdx) => {
+    if (!holeResult?.completed) return null;
     const scoreObj = holeResult?.playerScores?.find(ps => ps.playerId === playerMetric.playerId);
     const gross = Number(scoreObj?.gross);
-    if (!Number.isFinite(gross) || gross <= 0) return '';
+    if (!Number.isFinite(gross) || gross <= 0) return null;
     const hole = getPlayerHole(match, playerMetric, holeIdx, metrics?.tee) || metrics?.tee?.holes?.[holeIdx] || null;
     const stat = getPlayerStatEntry(playerRef, holeIdx);
     const par = Number(hole?.par) || Number(scoreObj?.par) || 0;
     const fairwayEligible = par === 4 || par === 5;
     const mark = (value) => value ? '✓' : '';
-    return `
-      <tr>
-        <td>${escapeHtml(hole?.holeNumber || holeIdx + 1)}</td>
-        <td>${fairwayEligible ? mark(stat.fairway) : '—'}</td>
-        <td>${mark(stat.green)}</td>
-        <td>${Number.isFinite(Number(stat.putts)) ? Number(stat.putts) : '—'}</td>
-        <td>${mark(stat.upAndDown)}</td>
-        <td>${mark(stat.sandy)}</td>
-        <td>${Number.isFinite(Number(stat.penaltyStrokes)) ? Number(stat.penaltyStrokes) : 0}</td>
-      </tr>`;
-  }).filter(Boolean).join('');
-  if (!rows) return '<div class="tiny top-gap">No completed stat holes available.</div>';
+    return {
+      hole: escapeHtml(hole?.holeNumber || holeIdx + 1),
+      fw: fairwayEligible ? mark(stat.fairway) : '—',
+      gir: mark(stat.green),
+      putts: Number.isFinite(Number(stat.putts)) ? Number(stat.putts) : '—',
+      upDown: mark(stat.upAndDown),
+      sandy: mark(stat.sandy),
+      pen: Number.isFinite(Number(stat.penaltyStrokes)) ? Number(stat.penaltyStrokes) : 0
+    };
+  }).filter(Boolean);
+  if (!statRows.length) return '<div class="tiny top-gap">No completed stat holes available.</div>';
+  const holeRows = statRows.map(row => `<tr><td>${row.hole}</td></tr>`).join('');
+  const valueRows = statRows.map(row => `
+    <tr>
+      <td>${row.fw}</td>
+      <td>${row.gir}</td>
+      <td>${row.putts}</td>
+      <td>${row.upDown}</td>
+      <td>${row.sandy}</td>
+      <td>${row.pen}</td>
+    </tr>`).join('');
   return `
-    <div class="player-hole-stat-scroll top-gap">
-      <table class="player-hole-stat-table">
-        <thead><tr><th>Hole</th><th>FW</th><th>GIR</th><th>Putts</th><th>U&amp;D</th><th>Sandy</th><th>Pen</th></tr></thead>
-        <tbody>${rows}</tbody>
+    <div class="player-hole-stat-grid top-gap">
+      <table class="player-hole-stat-table player-hole-stat-fixed" aria-hidden="false">
+        <thead><tr><th>Hole</th></tr></thead>
+        <tbody>${holeRows}</tbody>
       </table>
+      <div class="player-hole-stat-scroll" tabindex="0" aria-label="Scrollable hole-by-hole player statistics">
+        <table class="player-hole-stat-table player-hole-stat-values">
+          <thead><tr><th>FW</th><th>GIR</th><th>Putts</th><th>U&amp;D</th><th>Sandy</th><th>Pen</th></tr></thead>
+          <tbody>${valueRows}</tbody>
+        </table>
+      </div>
     </div>`;
 }
 
@@ -10706,7 +10721,26 @@ function installViewportStabilityGuards() {
 }
 
 
+function updateAppChromeHeight() {
+  const chrome = document.querySelector('.app-chrome');
+  if (!chrome) return;
+  const height = Math.ceil(chrome.getBoundingClientRect().height || 0);
+  if (height > 0) document.documentElement.style.setProperty('--app-chrome-height', `${height}px`);
+}
+
+function installAppChromeHeightSync() {
+  updateAppChromeHeight();
+  window.addEventListener('load', updateAppChromeHeight, { passive: true });
+  window.addEventListener('resize', updateAppChromeHeight, { passive: true });
+  window.addEventListener('orientationchange', () => window.setTimeout(updateAppChromeHeight, 120), { passive: true });
+  if ('ResizeObserver' in window) {
+    const chrome = document.querySelector('.app-chrome');
+    if (chrome) new ResizeObserver(updateAppChromeHeight).observe(chrome);
+  }
+}
+
 installViewportStabilityGuards();
+installAppChromeHeightSync();
 
 installHandlers();
 renderHoleRows();

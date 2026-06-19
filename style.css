@@ -3589,3 +3589,94 @@ main,
   .recap-input-row{font-size:12.5px;}
   .round-recap-input-preview{padding:9px 10px;}
 }
+
+/* v30.3: app-level fixed chrome and robust player hole-stat grid */
+body{
+  padding-top:var(--app-chrome-height, 128px);
+}
+.app-chrome{
+  position:fixed !important;
+  top:0;
+  left:0;
+  right:0;
+  z-index:500;
+  max-width:100%;
+  background:linear-gradient(to bottom, var(--bg) 94%, rgba(243,246,244,.96));
+  box-shadow:0 6px 16px rgba(0,0,0,.06);
+  transform:none !important;
+  will-change:auto;
+}
+.app-chrome + main{padding-top:6px !important;}
+body.sheet-open .app-chrome{z-index:80;}
+.player-hole-stat-grid{
+  display:grid;
+  grid-template-columns:minmax(54px,64px) minmax(0,1fr);
+  width:100%;
+  max-width:100%;
+  overflow:hidden;
+  border:1px solid var(--border);
+  border-radius:14px;
+  background:#fff;
+}
+.player-hole-stat-grid .player-hole-stat-table{
+  border-collapse:collapse;
+  font-size:12px;
+  margin:0;
+}
+.player-hole-stat-fixed{
+  width:100% !important;
+  min-width:0 !important;
+  table-layout:fixed;
+  background:#fff;
+  box-shadow:1px 0 0 rgba(12,55,33,.10);
+  z-index:2;
+}
+.player-hole-stat-values{
+  width:max-content !important;
+  min-width:520px !important;
+  table-layout:fixed;
+}
+.player-hole-stat-values th,
+.player-hole-stat-values td{
+  min-width:82px;
+}
+.player-hole-stat-grid th,
+.player-hole-stat-grid td{
+  height:42px;
+  padding:8px 9px;
+  border-bottom:1px solid rgba(12,55,33,.08);
+  text-align:center;
+  white-space:nowrap !important;
+  vertical-align:middle;
+}
+.player-hole-stat-grid thead th{
+  background:#f7faf8;
+  color:var(--muted);
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+.player-hole-stat-fixed th,
+.player-hole-stat-fixed td{
+  text-align:left;
+  font-weight:800;
+}
+.player-hole-stat-grid tbody tr:last-child td{border-bottom:0;}
+.player-hole-stat-grid .player-hole-stat-scroll{
+  min-width:0;
+  width:100%;
+  max-width:100%;
+  overflow-x:auto !important;
+  overflow-y:hidden !important;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-x;
+  overscroll-behavior-x:contain;
+  border:0;
+  border-radius:0;
+  background:#fff;
+}
+@media(max-width:520px){
+  .player-hole-stat-grid{grid-template-columns:54px minmax(0,1fr);}
+  .player-hole-stat-values{min-width:500px !important;}
+  .player-hole-stat-values th,.player-hole-stat-values td{min-width:78px;}
+}

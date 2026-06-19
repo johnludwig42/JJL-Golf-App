@@ -2729,7 +2729,7 @@ body.printing-scorecard .nine-point-scorecard-table td:nth-child(2){
 }
 
 
-/* v29.2.6.1 desktop course grid alignment */
+/* v29.3 desktop course grid alignment */
 @media (min-width: 1024px){
   #coursesList{
     display:grid;
@@ -3034,7 +3034,7 @@ main,
 .modal-body h3{margin:0;}
 
 
-/* v29.2.6.1 true left-aligned desktop course grid */
+/* v29.3 true left-aligned desktop course grid */
 @media (min-width: 900px) {
   #coursesList {
     display: grid !important;
@@ -3087,4 +3087,45 @@ main,
 .danger-lite:focus-visible {
   border-color: #d9afa8;
   background: #fff3f1;
+}
+
+
+/* v29.3 local multi-round session foundation */
+.post-round-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.post-round-actions button {
+  width: 100%;
+  min-height: 48px;
+  text-align: left;
+}
+.session-round-list {
+  display: grid;
+  gap: 8px;
+}
+.session-round-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--line, #d7e0da);
+  border-radius: 12px;
+  background: #fff;
+}
+.session-round-row span {
+  text-align: right;
+  color: var(--muted, #66736c);
+}
+@media (max-width: 520px) {
+  .session-round-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .session-round-row span {
+    text-align: left;
+  }
 }

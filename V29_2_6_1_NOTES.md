@@ -1,4 +1,4 @@
-# v29.2.6.1 Build Notes
+# v29.3 Build Notes
 
 ## Release Theme
 
@@ -24,7 +24,7 @@ Polish. Consistency. Trust.
 
 • Fixed the likely root cause of the iPhone visual mismatch by giving both cards identical layout rules and a fixed-width icon column.
 
-• Updated version references to v29.2.6.1.
+• Updated version references to v29.3.
 
 ## Guardrails Preserved
 

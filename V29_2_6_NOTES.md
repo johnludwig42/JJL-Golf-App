@@ -1,5 +1,7 @@
-# v29.2.6 Notes
+# v29.3 Build Notes
 
-This package has been advanced to v29.2.6.1.
+• Added the ability to delete tees and associated holes during imported course review before saving.
 
-See V29_2_6_1_NOTES.md for the current correction-release notes.
+• Renamed cloud actions to Download Cloud Courses and Publish Local Changes for improved clarity.
+
+• Refined iPhone Game Setup entry cards to use aligned, visually identical Create New Match and Join a Match actions.

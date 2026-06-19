@@ -572,6 +572,11 @@
     </section>
 
     <section id="settings" class="panel">
+      <div class="card tight-card">
+        <h2>Session Summary</h2>
+        <div id="sessionSummary" class="top-gap"><div class="tiny">No active session.</div></div>
+      </div>
+
       <details class="card tight-card scoreboard-card scoreboard-collapsible" open>
         <summary><h2>Saved matches / history</h2></summary>
         <div class="tiny top-gap">Completed and historical saved matches live here. Active matches can still be resumed from Game Setup.</div>
@@ -640,10 +645,10 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
-          <li>v29.2.6.1 adds the ability to delete tees and associated holes during imported course review before saving.</li>
-          <li>v29.2.6.1 renames course cloud actions to Download Cloud Courses and Publish Local Changes for improved clarity.</li>
-          <li>v29.2.6.1 refines iPhone Game Setup entry cards to use aligned, visually identical Create New Match and Join a Match actions.</li>
-          <li>App version: <strong id="appVersionLabel">v29.2.6.1</strong></li>
+          <li>v29.3 introduces local multi-round sessions so a completed group can immediately start another round.</li>
+          <li>v29.3 carries forward players, teams, stat preferences, and shared-match scoring assignments while resetting scores, stats, notes, course, tees, and games.</li>
+          <li>v29.3 keeps session data local and backward-compatible with existing saved matches.</li>
+          <li>App version: <strong id="appVersionLabel">v29.3</strong></li>
         </ul>
       </div>
     </section>
@@ -663,7 +668,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v29.2.6.1</span>
+    <span id="appVersionFooter">v29.3</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>
@@ -677,6 +682,20 @@
         <div class="actions wrap top-gap">
           <button id="roundEndPrimaryBtn" type="button">Finish Round</button>
           <button id="roundEndSecondaryBtn" type="button" class="secondary">Review Final Hole</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="postRoundActionsPrompt" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="postRoundActionsTitle">
+      <div class="modal-body">
+        <h3 id="postRoundActionsTitle">Round Complete ✓</h3>
+        <div id="postRoundActionsText" class="tiny top-gap">What would you like to do?</div>
+        <div class="post-round-actions top-gap">
+          <button id="postRoundViewSummaryBtn" type="button">📊 View Match Summary</button>
+          <button id="postRoundAnotherRoundBtn" type="button" class="secondary">🏌️ Play Another Round with This Group</button>
+          <button id="postRoundNewMatchBtn" type="button" class="secondary">➕ Start Completely New Match</button>
         </div>
       </div>
     </div>

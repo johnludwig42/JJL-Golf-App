@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v29.2.6.1';
+const APP_VERSION = 'v29.3';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -497,6 +497,8 @@ const uiState = {
   teamPayoutMobileOpenHeaderKey: '',
   grossGameDetailOpenByMatch: {},
 };
+let pendingNextRoundSessionContext = null;
+
 
 const state = loadState();
 normalizeState();
@@ -2439,7 +2441,13 @@ function createEmptyMatch(overrides = {}) {
     sharedMatchCode: '',
     sharedHostDeviceId: '',
     sharedDevices: [],
-    sharedPlayerAssignments: {}
+    sharedPlayerAssignments: {},
+    sessionId: overrides.sessionId || overrides.id || uid(),
+    sessionName: overrides.sessionName || 'Session',
+    sessionCreatedAt: overrides.sessionCreatedAt || new Date().toISOString(),
+    roundNumber: Number(overrides.roundNumber) || 1,
+    previousRoundId: overrides.previousRoundId || '',
+    startedFromPriorRoundId: overrides.startedFromPriorRoundId || ''
   };
   normalizeMatch(empty);
   return empty;
@@ -2516,6 +2524,12 @@ function normalizeMatch(match) {
   match.sharedHostDeviceId = match.sharedHostDeviceId || '';
   match.sharedDevices = Array.isArray(match.sharedDevices) ? match.sharedDevices : [];
   match.sharedPlayerAssignments = match.sharedPlayerAssignments && typeof match.sharedPlayerAssignments === 'object' ? match.sharedPlayerAssignments : {};
+  match.sessionId = String(match.sessionId || match.id || uid());
+  match.sessionName = String(match.sessionName || 'Session');
+  match.sessionCreatedAt = match.sessionCreatedAt || match.date || todayIso();
+  match.roundNumber = Math.max(1, Number(match.roundNumber) || 1);
+  match.previousRoundId = String(match.previousRoundId || '');
+  match.startedFromPriorRoundId = String(match.startedFromPriorRoundId || '');
   if (match.storageMode === 'shared') ensureSharedDeviceRegistered(match, match.sharedHostDeviceId ? '' : 'Host Device');
   if (match.scoringAccessMode === 'assigned_players') {
     const localDeviceId = getSharedDeviceId();
@@ -5530,6 +5544,7 @@ function renderAll() {
   renderPlayers();
   renderCourses();
   renderMatches();
+  renderSessionSummary();
   renderCurrentMatch();
   renderLeaderboard();
   renderMatchSetupState();
@@ -5781,6 +5796,157 @@ function createBlankSetupDraft() {
   });
 }
 
+
+function getSessionRounds(sessionId = '') {
+  const id = String(sessionId || '').trim();
+  if (!id) return [];
+  return state.matches
+    .filter(match => String(match.sessionId || match.id || '') === id)
+    .sort((a, b) => (Number(a.roundNumber) || 1) - (Number(b.roundNumber) || 1) || String(a.date || '').localeCompare(String(b.date || '')));
+}
+
+function getSessionRoundLabel(match) {
+  if (!match) return '';
+  const rounds = getSessionRounds(match.sessionId || match.id);
+  const total = Math.max(rounds.length || 1, Number(match.roundNumber) || 1);
+  return `Session · Round ${Number(match.roundNumber) || 1} of ${total}`;
+}
+
+function buildNextRoundDraft(prior) {
+  if (!prior) return createBlankSetupDraft();
+  const sessionId = String(prior.sessionId || prior.id || uid());
+  const rounds = getSessionRounds(sessionId);
+  const nextRoundNumber = Math.max(1, ...rounds.map(r => Number(r.roundNumber) || 1)) + 1;
+  const cleanPlayers = (Array.isArray(prior.players) ? prior.players : []).map((p, idx) => ({
+    playerId: p.playerId,
+    team: Number(p.team) || 1,
+    slot: Number.isFinite(Number(p.slot)) ? Number(p.slot) : idx,
+    teeId: '',
+    scores: buildEmptyScores(18),
+    stats: buildEmptyStats(18)
+  }));
+  const draft = createEmptyMatch({
+    id: uid(),
+    date: todayIso(),
+    name: `Round ${nextRoundNumber}`,
+    courseId: '',
+    teeId: '',
+    allowance: prior.allowance || 100,
+    holeCount: getRequestedHoleCount(prior) || 18,
+    nineHoleSegment: prior.nineHoleSegment || 'front',
+    customStartHole: Number(prior.customStartHole) || 1,
+    teamCount: Number(prior.teamCount) || 1,
+    playersPerTeam: Number(prior.playersPerTeam) || Math.max(1, cleanPlayers.length),
+    teamNames: Array.isArray(prior.teamNames) ? clonePlain(prior.teamNames) : [],
+    scoringAccessMode: normalizeScoringAccessMode(prior.scoringAccessMode || prior.scoreEntryMode || 'single_device'),
+    scoreEntryMode: getLegacyScoreEntryMode(prior.scoringAccessMode || prior.scoreEntryMode || 'single_device'),
+    officialScorerName: prior.officialScorerName || 'Official scorer',
+    statTrackingEnabled: !!prior.statTrackingEnabled,
+    statTrackingPlayerIds: Array.isArray(prior.statTrackingPlayerIds) ? clonePlain(prior.statTrackingPlayerIds) : null,
+    selectedGames: [],
+    players: cleanPlayers,
+    storageMode: prior.storageMode === 'shared' ? 'shared' : 'local',
+    sharedHostDeviceId: prior.sharedHostDeviceId || '',
+    sharedDevices: Array.isArray(prior.sharedDevices) ? clonePlain(prior.sharedDevices) : [],
+    sharedPlayerAssignments: prior.sharedPlayerAssignments && typeof prior.sharedPlayerAssignments === 'object' ? clonePlain(prior.sharedPlayerAssignments) : {},
+    sharedMatchCode: prior.sharedMatchCode || '',
+    sessionId,
+    sessionName: prior.sessionName || 'Session',
+    sessionCreatedAt: prior.sessionCreatedAt || prior.date || todayIso(),
+    roundNumber: nextRoundNumber,
+    previousRoundId: prior.id,
+    startedFromPriorRoundId: prior.id
+  });
+  draft.courseId = '';
+  draft.teeId = '';
+  draft.selectedGames = [];
+  draft.players = cleanPlayers;
+  draft.greeniesWinners = {};
+  draft.notes = '';
+  draft.roundRecapNotes = '';
+  draft.roundRecap = '';
+  draft.completedAt = null;
+  draft.status = 'active';
+  return draft;
+}
+
+function showPostRoundActions(match = getActiveMatch()) {
+  const modal = document.getElementById('postRoundActionsPrompt');
+  if (!modal || !match) return;
+  const title = document.getElementById('postRoundActionsTitle');
+  const text = document.getElementById('postRoundActionsText');
+  if (title) title.textContent = 'Round Complete ✓';
+  if (text) text.textContent = `${completedHoles(match)} holes completed. What would you like to do?`;
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+function hidePostRoundActions() {
+  const modal = document.getElementById('postRoundActionsPrompt');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+function startAnotherRoundWithSameGroup() {
+  const prior = getActiveMatch();
+  if (!prior) return toast('No completed round is loaded.');
+  hidePostRoundActions();
+  const draft = buildNextRoundDraft(prior);
+  pendingNextRoundSessionContext = {
+    sessionId: draft.sessionId,
+    sessionName: draft.sessionName,
+    sessionCreatedAt: draft.sessionCreatedAt,
+    roundNumber: draft.roundNumber,
+    previousRoundId: prior.id,
+    startedFromPriorRoundId: prior.id,
+    sharedMatchCode: prior.sharedMatchCode || '',
+    sharedHostDeviceId: prior.sharedHostDeviceId || '',
+    sharedDevices: Array.isArray(prior.sharedDevices) ? clonePlain(prior.sharedDevices) : [],
+    sharedPlayerAssignments: prior.sharedPlayerAssignments && typeof prior.sharedPlayerAssignments === 'object' ? clonePlain(prior.sharedPlayerAssignments) : {},
+    storageMode: prior.storageMode === 'shared' ? 'shared' : 'local'
+  };
+  state.activeMatchId = null;
+  setupWorkflowMode = 'create';
+  editingMatchId = null;
+  currentHole = 1;
+  finishConfirmArmed = false;
+  state.notes = '';
+  roundCompletePromptShownForMatchId = null;
+  resetMatchSetupFormDomToBlank();
+  loadMatchEditor(null, draft);
+  const title = document.getElementById('matchFormTitle');
+  if (title) title.textContent = 'Start Another Round';
+  renderMatchSetupState();
+  activateTab('setup');
+  toast('Same group copied forward. Select course, tees, and games for the new round.');
+}
+
+function renderSessionSummary() {
+  const el = document.getElementById('sessionSummary');
+  if (!el) return;
+  const active = getActiveMatch();
+  if (!active) {
+    el.innerHTML = '<div class="tiny">No active session.</div>';
+    return;
+  }
+  const rounds = getSessionRounds(active.sessionId || active.id);
+  el.innerHTML = `
+    <div class="item-header compact-item-header">
+      <div>
+        <div class="section-label">Session</div>
+        <div class="tiny">${rounds.length} round${rounds.length === 1 ? '' : 's'} · ${escapeHtml(active.sessionName || 'Session')}</div>
+      </div>
+    </div>
+    <div class="session-round-list top-gap">
+      ${rounds.map(round => {
+        const course = getCourse(round.courseId);
+        const status = round.status === 'complete' ? 'Complete' : (state.activeMatchId === round.id ? 'In Progress' : 'Saved');
+        return `<div class="session-round-row"><strong>Round ${Number(round.roundNumber) || 1}</strong><span>${escapeHtml(course?.name || 'Course not selected')} – ${escapeHtml(status)}</span></div>`;
+      }).join('')}
+    </div>`;
+}
+
 function clonePlain(value) {
   try {
     return JSON.parse(JSON.stringify(value));
@@ -5829,6 +5995,7 @@ function resetMatchSetupFormDomToBlank() {
 }
 
 function startCleanNewMatchSetup() {
+  pendingNextRoundSessionContext = null;
   const snapshot = {
     activeMatchId: state.activeMatchId,
     lastOpenedSharedMatchId: state.lastOpenedSharedMatchId,
@@ -5853,6 +6020,7 @@ function startCleanNewMatchSetup() {
 
     state.activeMatchId = null;
     state.lastOpenedSharedMatchId = null;
+    setupWorkflowMode = 'create';
     editingMatchId = null;
     currentHole = 1;
     pendingScoreCommitFocus = null;
@@ -6212,6 +6380,7 @@ function completeActiveRound() {
     renderCurrentMatch();
     renderLeaderboard();
     renderMatchSetupState();
+    showPostRoundActions(match);
     toast(wasReopened
       ? 'Saved round updated. Existing match record overwritten.'
       : 'Round finished and saved.');
@@ -6248,7 +6417,7 @@ function renderCurrentMatch() {
   const reopenedNote = match.previousCompletedAt
     ? ' · Reopened from completed round (Finish Round will overwrite the saved round)'
     : '';
-  metaEl.textContent = `${match.date} · ${match.name || 'Round'} · ${course?.name || ''} · ${getHoleSegmentLabel(match, tee)} · ${metrics?.completed || 0}/${holeCount} holes completed${match.storageMode === 'shared' ? ` · Shared ID ${match.sharedMatchRef || match.sharedMatchId || match.id}` : ''}${reopenedNote}`;
+  metaEl.textContent = `${getSessionRoundLabel(match)} · ${match.date} · ${match.name || 'Round'} · ${course?.name || ''} · ${getHoleSegmentLabel(match, tee)} · ${metrics?.completed || 0}/${holeCount} holes completed${match.storageMode === 'shared' ? ` · Shared ID ${match.sharedMatchRef || match.sharedMatchId || match.id}` : ''}${reopenedNote}`;
   emptyEl.classList.add('hidden');
   wrapEl.classList.remove('hidden');
   currentHole = Math.min(holeCount, Math.max(1, currentHole));
@@ -8438,8 +8607,9 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
   if (topUpdateBtn) topUpdateBtn.classList.add('hidden');
   if (topCreateBtn) topCreateBtn.classList.remove('hidden');
   if (topUpdateNote) topUpdateNote.classList.toggle('hidden', !matchId);
-  document.getElementById('matchFormTitle').textContent = matchId ? 'Edit match setup' : 'Match setup';
-  const setupActionLabel = matchId ? 'Update Match' : 'Create Match';
+  const isNextRoundDraft = !matchId && draftMatch && Number(draftMatch.roundNumber) > 1;
+  document.getElementById('matchFormTitle').textContent = matchId ? 'Edit match setup' : (isNextRoundDraft ? 'Start Another Round' : 'Match setup');
+  const setupActionLabel = matchId ? 'Update Match' : (isNextRoundDraft ? 'Begin Round' : 'Create Match');
   document.getElementById('matchSubmitBtn').textContent = setupActionLabel;
   if (topCreateBtn) topCreateBtn.textContent = setupActionLabel;
   if (topUpdateBtn) topUpdateBtn.textContent = 'Update Match';
@@ -8458,17 +8628,17 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
     document.getElementById('teamCountSelect').value = String(draft.teamCount || 1);
     document.getElementById('playersPerTeamSelect').value = String(draft.playersPerTeam || 1);
     document.getElementById('scoreEntryModeSelect').value = draft.scoringAccessMode || 'single_device';
-    const sharedMatchToggle = document.getElementById('sharedMatchEnabled'); if (sharedMatchToggle) sharedMatchToggle.checked = false;
+    const sharedMatchToggle = document.getElementById('sharedMatchEnabled'); if (sharedMatchToggle) sharedMatchToggle.checked = draft.storageMode === 'shared';
     document.getElementById('officialScorerNameInput').value = draft.officialScorerName || 'Official scorer';
-    const statToggle = document.getElementById('enableStatTrackingInput'); if (statToggle) statToggle.checked = false;
-    renderStatTrackingPlayerSelector([]);
+    const statToggle = document.getElementById('enableStatTrackingInput'); if (statToggle) statToggle.checked = !!draft.statTrackingEnabled;
     populateMatchCourseSelects(draft.courseId || '', draft.teeId || '');
     renderTeamNameInputs(draft.teamCount || 1, draft.teamNames || []);
     renderScoringControlConfig(draft);
-    uiState.matchPlayerDraft = [];
+    uiState.matchPlayerDraft = Array.isArray(draft.players) ? draft.players.map((p, idx) => ({ ...p, slot: Number.isFinite(Number(p.slot)) ? Number(p.slot) : idx, teeId: p.teeId || '' })) : [];
     uiState.referenceTeeManual = false;
     uiState.referenceTeeAutoId = '';
     populateMatchPlayerPicker(uiState.matchPlayerDraft);
+    renderStatTrackingPlayerSelector(Array.isArray(draft.statTrackingPlayerIds) ? draft.statTrackingPlayerIds : null);
     renderGamesPicker(draft.selectedGames || []);
     renderSetupHandicapPreview();
     renderTodaysMatchSummary();
@@ -9283,6 +9453,18 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       roundRecapStatus: existing?.roundRecapStatus || '',
       roundRecapNotes: mergeRoundNoteText(existing?.roundRecapNotes, existing?.notes || state.notes || ''),
     };
+    if (!editingMatchId && pendingNextRoundSessionContext) {
+      match.sessionId = pendingNextRoundSessionContext.sessionId;
+      match.sessionName = pendingNextRoundSessionContext.sessionName || 'Session';
+      match.sessionCreatedAt = pendingNextRoundSessionContext.sessionCreatedAt || todayIso();
+      match.roundNumber = Number(pendingNextRoundSessionContext.roundNumber) || 1;
+      match.previousRoundId = pendingNextRoundSessionContext.previousRoundId || '';
+      match.startedFromPriorRoundId = pendingNextRoundSessionContext.startedFromPriorRoundId || '';
+      match.sharedDevices = pendingNextRoundSessionContext.sharedDevices || match.sharedDevices || [];
+      match.sharedPlayerAssignments = pendingNextRoundSessionContext.sharedPlayerAssignments || match.sharedPlayerAssignments || {};
+      match.sharedHostDeviceId = pendingNextRoundSessionContext.sharedHostDeviceId || match.sharedHostDeviceId || '';
+      if (pendingNextRoundSessionContext.storageMode === 'shared') match.storageMode = 'shared';
+    }
     normalizeMatch(match);
     if (!match.courseId) return toast('Select a course.');
     if (!match.players.every(p => p.teeId)) { markMissingTeeRows(); return toast('Each player needs a tee.'); }
@@ -9307,6 +9489,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       }
     }
     if (editingMatchId) state.matches = state.matches.map(m => m.id === editingMatchId ? match : m); else state.matches.push(match);
+    pendingNextRoundSessionContext = null;
     state.activeMatchId = match.id;
     if (match.storageMode === 'shared') setLastOpenedSharedMatch(match);
     currentHole = Math.min(getRequestedHoleCount(match), Math.max(1, completedHoles(match) || 1));
@@ -9317,7 +9500,13 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     toast(editingMatchId ? 'Match setup saved.' : (sharedMatchEnabled ? 'Shared match setup saved.' : 'Match setup saved.'));
     } catch (err) { console.error(err); toast('Could not finalize match setup. Please try again.'); }
   });
-  document.getElementById('cancelMatchEditBtn').addEventListener('click', () => { loadMatchEditor(null); renderMatchSetupState(); });
+  document.getElementById('cancelMatchEditBtn').addEventListener('click', () => { pendingNextRoundSessionContext = null; loadMatchEditor(null); renderMatchSetupState(); });
+  const postRoundSummaryBtn = document.getElementById('postRoundViewSummaryBtn');
+  if (postRoundSummaryBtn) postRoundSummaryBtn.addEventListener('click', () => { hidePostRoundActions(); activateTab('leaderboard'); });
+  const postRoundAnotherBtn = document.getElementById('postRoundAnotherRoundBtn');
+  if (postRoundAnotherBtn) postRoundAnotherBtn.addEventListener('click', startAnotherRoundWithSameGroup);
+  const postRoundNewBtn = document.getElementById('postRoundNewMatchBtn');
+  if (postRoundNewBtn) postRoundNewBtn.addEventListener('click', () => { hidePostRoundActions(); startCleanNewMatchSetup(); });
   function saveCurrentHole({ advance = false, targetHole = null, silent = false } = {}) {
     const match = getActiveMatch(); if (!match) return false;
     if (getScoreAccessState(match).role === 'viewer') { if (!silent) toast('Viewer mode is read-only.'); return false; }

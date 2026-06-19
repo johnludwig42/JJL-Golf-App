@@ -2729,7 +2729,7 @@ body.printing-scorecard .nine-point-scorecard-table td:nth-child(2){
 }
 
 
-/* v29.3.1 desktop course grid alignment */
+/* v29.3.2 desktop course grid alignment */
 @media (min-width: 1024px){
   #coursesList{
     display:grid;
@@ -3034,7 +3034,7 @@ main,
 .modal-body h3{margin:0;}
 
 
-/* v29.3.1 true left-aligned desktop course grid */
+/* v29.3.2 true left-aligned desktop course grid */
 @media (min-width: 900px) {
   #coursesList {
     display: grid !important;
@@ -3090,7 +3090,7 @@ main,
 }
 
 
-/* v29.3.1 local multi-round session foundation */
+/* v29.3.2 local multi-round session foundation */
 .post-round-actions {
   display: grid;
   grid-template-columns: 1fr;
@@ -3131,7 +3131,7 @@ main,
 }
 
 
-/* v29.3.1 persistent completed-round next-step actions */
+/* v29.3.2 persistent completed-round next-step actions */
 .post-round-inline {
   margin-top: 14px;
   padding: 14px;
@@ -3150,4 +3150,76 @@ main,
   min-height: 48px;
   text-align: left;
   justify-content: flex-start;
+}
+
+/* v29.3.2 Game Setup Cancel Path */
+.setup-cancel-btn {
+  min-width: 120px;
+}
+.preview-card-actions {
+  align-items: center;
+}
+@media (max-width: 560px) {
+  .preview-card-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .preview-card-actions .setup-action-btn,
+  .preview-card-actions .setup-cancel-btn {
+    width: 100%;
+  }
+}
+
+/* v30.0 shared match scoring completion */
+.shared-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+}
+.shared-status-grid > div,
+.shared-device-row,
+.shared-assignment-row {
+  border: 1px solid rgba(22, 101, 52, 0.14);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.62);
+}
+.shared-device-list,
+.shared-assignment-list {
+  display: grid;
+  gap: 8px;
+}
+.shared-device-row,
+.shared-assignment-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, auto);
+  align-items: center;
+  gap: 10px;
+}
+.shared-match-status-good {
+  border-color: rgba(22, 163, 74, 0.28);
+}
+.shared-match-status-warning {
+  border-color: rgba(202, 138, 4, 0.32);
+}
+.shared-match-status-working {
+  border-color: rgba(37, 99, 235, 0.28);
+}
+.shared-match-details summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.score-row-readonly {
+  opacity: 0.72;
+}
+.score-row-readonly .score-input {
+  cursor: not-allowed;
+}
+@media (max-width: 640px) {
+  .shared-status-grid,
+  .shared-device-row,
+  .shared-assignment-row {
+    grid-template-columns: 1fr;
+  }
 }

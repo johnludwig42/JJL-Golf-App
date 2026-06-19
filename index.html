@@ -170,6 +170,7 @@
             <button id="editActiveMatchBtn" type="button" class="secondary setup-action-btn hidden">Edit Match</button>
             <button id="topCreateMatchBtn" type="submit" form="matchForm" class="secondary setup-action-btn hidden">Create Match</button>
             <button id="topUpdateMatchBtn" type="submit" form="matchForm" class="secondary setup-action-btn hidden">Update Match</button>
+            <button id="topCancelMatchSetupBtn" type="button" class="secondary setup-action-btn setup-cancel-btn hidden">Cancel</button>
             <button id="setupFinishRoundBtn" type="button" class="secondary setup-action-btn hidden">Finish Round</button>
             <button id="setupConfirmFinishRoundBtn" type="button" class="secondary setup-action-btn hidden">Confirm Round</button>
           </div>
@@ -353,7 +354,7 @@
             <div id="setupHandicapPreview" class="top-gap"></div>
             <div class="actions top-gap preview-card-actions">
               <button id="matchSubmitBtn" type="submit" form="matchForm" class="setup-action-btn">Create Match</button>
-              <button id="cancelMatchEditBtn" type="button" class="secondary hidden">Cancel</button>
+              <button id="cancelMatchEditBtn" type="button" class="secondary setup-cancel-btn hidden">Cancel</button>
             </div>
           </div>
         </form>
@@ -654,10 +655,10 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
-          <li>v29.3.1 introduces local multi-round sessions so a completed group can immediately start another round.</li>
-          <li>v29.3.1 carries forward players, teams, stat preferences, and shared-match scoring assignments while resetting scores, stats, notes, course, tees, and games.</li>
-          <li>v29.3.1 keeps session data local and backward-compatible with existing saved matches.</li>
-          <li>App version: <strong id="appVersionLabel">v29.3.1</strong></li>
+          <li>v30.0 improves shared-match scoring with clearer host/joined roles, participant status, assignments, and Sync Now actions.</li>
+          <li>v30.0 keeps assigned-player scoring obvious: joined devices see who they can score and locked players remain read-only.</li>
+          <li>v30.0 preserves local-first sessions, saved matches, and existing scoring calculations.</li>
+          <li>App version: <strong id="appVersionLabel">v30.0</strong></li>
         </ul>
       </div>
     </section>
@@ -677,7 +678,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v29.3.1</span>
+    <span id="appVersionFooter">v30.0</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>

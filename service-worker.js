@@ -1,11 +1,11 @@
-const CACHE_NAME = 'the-dye-ledger-v29.3.1';
+const CACHE_NAME = 'the-dye-ledger-v30.0';
 const ASSETS = [
   './',
   './index.html',
   './style.css',
   './app.js',
   './supabase-config.js',
-  './manifest.json?v=29.2.5',
+  './manifest.json?v=30.0',
   './apple-touch-icon.png',
   './favicon-32x32.png',
   './favicon-16x16.png',

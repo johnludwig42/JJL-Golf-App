@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v29.3';
+const APP_VERSION = 'v29.3.1.1';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -6256,6 +6256,8 @@ function syncFinishRoundUi(match = getActiveMatch()) {
   const setupFinishBtn = document.getElementById('setupFinishRoundBtn');
   const setupConfirmBtn = document.getElementById('setupConfirmFinishRoundBtn');
   const scoreboardRoundState = document.getElementById('scoreboardRoundState');
+  const postRoundInline = document.getElementById('postRoundActionsInline');
+  const postRoundInlineText = document.getElementById('postRoundActionsInlineText');
   const isComplete = !!match && match.status === 'complete';
   const hasMatch = !!match;
   const reopenedEdit = !!match?.previousCompletedAt;
@@ -6273,10 +6275,12 @@ function syncFinishRoundUi(match = getActiveMatch()) {
   show(scoreboardConfirmBtn, false);
   show(setupFinishBtn, false);
   show(setupConfirmBtn, false);
+  show(postRoundInline, hasMatch && isComplete);
   if (scoreboardFinishBtn) scoreboardFinishBtn.textContent = reopenedEdit ? 'Save / End Round' : 'Finish / End Round';
+  if (postRoundInlineText && hasMatch && isComplete) postRoundInlineText.textContent = `${completedHoles(match)} holes completed. What would you like to do next?`;
   if (scoreboardRoundState) {
     if (!hasMatch) scoreboardRoundState.textContent = 'No active round.';
-    else if (isComplete) scoreboardRoundState.textContent = 'Round complete.';
+    else if (isComplete) scoreboardRoundState.textContent = 'Round complete. Next-step options are available below.';
     else if (reopenedEdit) scoreboardRoundState.textContent = 'Editing previously completed round. Finish / End Round will overwrite the saved round.';
     else scoreboardRoundState.textContent = `${completedHoles(match)}/${getRequestedHoleCount(match)} holes completed.`;
   }
@@ -9507,6 +9511,12 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   if (postRoundAnotherBtn) postRoundAnotherBtn.addEventListener('click', startAnotherRoundWithSameGroup);
   const postRoundNewBtn = document.getElementById('postRoundNewMatchBtn');
   if (postRoundNewBtn) postRoundNewBtn.addEventListener('click', () => { hidePostRoundActions(); startCleanNewMatchSetup(); });
+  const postRoundInlineSummaryBtn = document.getElementById('postRoundInlineViewSummaryBtn');
+  if (postRoundInlineSummaryBtn) postRoundInlineSummaryBtn.addEventListener('click', () => { hidePostRoundActions(); activateTab('leaderboard'); });
+  const postRoundInlineAnotherBtn = document.getElementById('postRoundInlineAnotherRoundBtn');
+  if (postRoundInlineAnotherBtn) postRoundInlineAnotherBtn.addEventListener('click', startAnotherRoundWithSameGroup);
+  const postRoundInlineNewBtn = document.getElementById('postRoundInlineNewMatchBtn');
+  if (postRoundInlineNewBtn) postRoundInlineNewBtn.addEventListener('click', () => { hidePostRoundActions(); startCleanNewMatchSetup(); });
   function saveCurrentHole({ advance = false, targetHole = null, silent = false } = {}) {
     const match = getActiveMatch(); if (!match) return false;
     if (getScoreAccessState(match).role === 'viewer') { if (!silent) toast('Viewer mode is read-only.'); return false; }

@@ -2729,7 +2729,7 @@ body.printing-scorecard .nine-point-scorecard-table td:nth-child(2){
 }
 
 
-/* v29.3 desktop course grid alignment */
+/* v29.3.1 desktop course grid alignment */
 @media (min-width: 1024px){
   #coursesList{
     display:grid;
@@ -3034,7 +3034,7 @@ main,
 .modal-body h3{margin:0;}
 
 
-/* v29.3 true left-aligned desktop course grid */
+/* v29.3.1 true left-aligned desktop course grid */
 @media (min-width: 900px) {
   #coursesList {
     display: grid !important;
@@ -3090,7 +3090,7 @@ main,
 }
 
 
-/* v29.3 local multi-round session foundation */
+/* v29.3.1 local multi-round session foundation */
 .post-round-actions {
   display: grid;
   grid-template-columns: 1fr;
@@ -3128,4 +3128,26 @@ main,
   .session-round-row span {
     text-align: left;
   }
+}
+
+
+/* v29.3.1 persistent completed-round next-step actions */
+.post-round-inline {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel-soft);
+}
+
+.post-round-inline .post-round-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.post-round-inline .post-round-actions button {
+  width: 100%;
+  min-height: 48px;
+  text-align: left;
+  justify-content: flex-start;
 }

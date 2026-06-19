@@ -457,6 +457,15 @@
               <button id="scoreboardConfirmFinishRoundBtn" type="button" class="secondary hidden">Confirm Finish</button>
             </div>
           </div>
+          <div id="postRoundActionsInline" class="post-round-inline no-print hidden" aria-hidden="true">
+            <div class="section-label">Round Complete ✓</div>
+            <div id="postRoundActionsInlineText" class="tiny top-gap">What would you like to do next?</div>
+            <div class="post-round-actions top-gap">
+              <button id="postRoundInlineViewSummaryBtn" type="button">📊 View Match Summary</button>
+              <button id="postRoundInlineAnotherRoundBtn" type="button" class="secondary">🏌️ Play Another Round with This Group</button>
+              <button id="postRoundInlineNewMatchBtn" type="button" class="secondary">➕ Start Completely New Match</button>
+            </div>
+          </div>
         </div>
         <div class="card tight-card scoreboard-card print-section-match-status">
           <div class="item-header compact-item-header">
@@ -645,10 +654,10 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
-          <li>v29.3 introduces local multi-round sessions so a completed group can immediately start another round.</li>
-          <li>v29.3 carries forward players, teams, stat preferences, and shared-match scoring assignments while resetting scores, stats, notes, course, tees, and games.</li>
-          <li>v29.3 keeps session data local and backward-compatible with existing saved matches.</li>
-          <li>App version: <strong id="appVersionLabel">v29.3</strong></li>
+          <li>v29.3.1 introduces local multi-round sessions so a completed group can immediately start another round.</li>
+          <li>v29.3.1 carries forward players, teams, stat preferences, and shared-match scoring assignments while resetting scores, stats, notes, course, tees, and games.</li>
+          <li>v29.3.1 keeps session data local and backward-compatible with existing saved matches.</li>
+          <li>App version: <strong id="appVersionLabel">v29.3.1</strong></li>
         </ul>
       </div>
     </section>
@@ -668,7 +677,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v29.3</span>
+    <span id="appVersionFooter">v29.3.1</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>

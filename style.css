@@ -3224,7 +3224,7 @@ main,
   }
 }
 
-/* v30.0.2: keep shared-match scoring status compact on Scoring Input */
+/* v30.0.3: keep shared-match scoring status compact on Scoring Input */
 .shared-score-compact-card {
   padding: 10px 12px;
   box-shadow: none;
@@ -3258,4 +3258,35 @@ main,
   .shared-score-pill {
     width: 100%;
   }
+}
+
+
+/* v30.0.3: move shared sync status inline with Scoring input title */
+.score-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.score-title-sync {
+  display: inline-flex;
+  align-items: center;
+}
+.shared-title-sync-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel-muted);
+  color: var(--muted);
+  font-size: .76rem;
+  font-weight: 750;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .score-title-row { gap: 8px; }
+  .shared-title-sync-pill { font-size: .72rem; padding: 3px 7px; }
 }

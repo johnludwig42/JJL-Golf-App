@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.0.2';
+const APP_VERSION = 'v30.0.3';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -60,7 +60,9 @@ const SCORE_ACCESS_ROLE_LABELS = {
   viewer: 'Viewer',
 };
 function getGameLabel(key) {
-  return GAME_LABELS[key] || key;
+  const resolvedKey = typeof key === 'object' && key !== null ? key.key : key;
+  const label = GAME_LABELS[resolvedKey] || resolvedKey;
+  return String(label || '').trim();
 }
 function normalizeScoringAccessMode(value = 'team_codes') {
   return LEGACY_SCORE_ENTRY_MODE_MAP[String(value || '').trim()] || 'team_codes';
@@ -227,12 +229,26 @@ function shouldAcceptRemoteSharedPlayerEntry(match, playerId) {
   const owned = getSharedLocallyOwnedPlayerIds(match);
   return !owned.has(playerId);
 }
-function getVisibleScoringPlayers(match, metricPlayers = [], { stats = false } = {}) {
-  if (!match || match.storageMode !== 'shared' || !isAssignedPlayersMode(match) || isCurrentDeviceMatchHost(match)) return metricPlayers;
+function shouldShowOtherSharedPlayers(match, { stats = false } = {}) {
+  if (!match || match.storageMode !== 'shared' || !isAssignedPlayersMode(match)) return true;
+  const key = stats ? 'sharedShowOtherStats' : 'sharedShowOtherScores';
+  // Hosts default to the full-card view unless they intentionally turn the toggle off.
+  // Joined devices default to assigned-player focus unless they intentionally turn the toggle on.
+  if (Object.prototype.hasOwnProperty.call(match, key)) return !!match[key];
+  return isCurrentDeviceMatchHost(match);
+}
+function hasSharedAssignedPlayerFocus(match) {
+  if (!match || match.storageMode !== 'shared' || !isAssignedPlayersMode(match)) return false;
   const owned = getSharedLocallyOwnedPlayerIds(match);
-  const showOtherScores = !!match.sharedShowOtherScores;
-  const showOtherStats = !!match.sharedShowOtherStats;
-  return metricPlayers.filter(p => owned.has(p.playerId) || (stats ? showOtherStats : showOtherScores));
+  const total = Array.isArray(match.players) ? match.players.length : 0;
+  return owned.size > 0 && owned.size < total;
+}
+function getVisibleScoringPlayers(match, metricPlayers = [], { stats = false } = {}) {
+  if (!match || match.storageMode !== 'shared' || !isAssignedPlayersMode(match)) return metricPlayers;
+  const owned = getSharedLocallyOwnedPlayerIds(match);
+  if (!owned.size) return isCurrentDeviceMatchHost(match) ? metricPlayers : [];
+  const showOther = shouldShowOtherSharedPlayers(match, { stats });
+  return metricPlayers.filter(p => owned.has(p.playerId) || showOther);
 }
 
 function isCurrentDeviceMatchHost(match) {
@@ -7819,6 +7835,8 @@ function collectTeamScorerAssignments(teamCount, teamNames, existing = []) {
 
 function renderScoreAccessCard(match) {
   const card = document.getElementById('scoreAccessCard');
+  const titleSync = document.getElementById('scoringTitleSync');
+  if (titleSync) titleSync.innerHTML = '';
   if (!card) return;
   if (!match || match.storageMode !== 'shared') {
     card.classList.add('hidden');
@@ -7827,16 +7845,29 @@ function renderScoreAccessCard(match) {
   }
   const sync = getSharedSyncStatus(match);
   const indicator = sync.tone === 'good' ? '🟢' : sync.tone === 'warning' ? '🟡' : sync.tone === 'working' ? '🟡' : '🔴';
-  const isAssigned = isAssignedPlayersMode(match);
-  const showToggles = isAssigned && !isCurrentDeviceMatchHost(match);
+  const shortLabel = sync.label.replace('All changes synced', 'Synced').replace('Offline — changes will sync later', 'Offline — saved locally');
+  if (titleSync) titleSync.innerHTML = `<span class="shared-title-sync-pill" title="${escapeHtml(sync.detail)}">${indicator} ${escapeHtml(shortLabel)}</span>`;
+  const showToggles = isAssignedPlayersMode(match) && hasSharedAssignedPlayerFocus(match);
+  if (!showToggles) {
+    card.classList.add('hidden');
+    card.innerHTML = '';
+    return;
+  }
+  const showOtherScores = shouldShowOtherSharedPlayers(match, { stats: false });
+  const showOtherStats = shouldShowOtherSharedPlayers(match, { stats: true });
+  const helper = isCurrentDeviceMatchHost(match)
+    ? 'Host view: turn these off to focus only on the players assigned to this host device.'
+    : 'Assigned-player view: turn these on to view the other team read-only.';
   card.classList.remove('hidden');
   card.classList.add('shared-score-compact-card');
   card.innerHTML = `
     <div class="shared-score-compact-row">
-      <span class="shared-score-pill" title="${escapeHtml(sync.detail)}">${indicator} ${escapeHtml(sync.label.replace('All changes synced', 'Synced').replace('Offline — changes will sync later', 'Offline — saved locally'))}</span>
-      ${showToggles ? `<label class="mini-check inline"><input type="checkbox" id="showOtherScoresToggle" ${match.sharedShowOtherScores ? 'checked' : ''} /><span>Show Other Scores</span></label><label class="mini-check inline"><input type="checkbox" id="showOtherStatsToggle" ${match.sharedShowOtherStats ? 'checked' : ''} /><span>Show Other Stats</span></label>` : ''}
+      <span class="tiny">${escapeHtml(helper)}</span>
+      <label class="mini-check inline"><input type="checkbox" id="showOtherScoresToggle" ${showOtherScores ? 'checked' : ''} /><span>Show Other Scores</span></label>
+      <label class="mini-check inline"><input type="checkbox" id="showOtherStatsToggle" ${showOtherStats ? 'checked' : ''} /><span>Show Other Stats</span></label>
     </div>`;
 }
+
 
 
 function renderNineHoleConfigUi() {
@@ -9343,7 +9374,15 @@ function installHandlers() {
   });
   document.getElementById('scoreEntryModeSelect').addEventListener('change', e => preserveSetupScrollDuring(() => { renderScoringControlConfig(); renderTodaysMatchSummary(); }, '#scoreEntryModeSelect'));
   document.getElementById('matchTeeSelect').addEventListener('change', e => preserveSetupScrollDuring(() => { uiState.referenceTeeManual = true; uiState.referenceTeeAutoId = e.target.value || uiState.referenceTeeAutoId; const draft = normalizeDraftTeeAssignments({ forceDefault: false }).map(row => ({ ...row, teeId: row.teeId || e.target.value || '' })); syncMatchPlayerDraft(draft); normalizeDraftTeeAssignments({ forceDefault: false }); syncReferenceTeeUi({ selections: uiState.matchPlayerDraft, forceAuto: false }); populateMatchPlayerPicker(uiState.matchPlayerDraft); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); renderTodaysMatchSummary(); }, '#matchTeeSelect'));
-  document.getElementById('teamNamesGrid').addEventListener('input', e => preserveSetupScrollDuring(() => { const currentSelections = getCurrentMatchEditorSelections(); renderScoringControlConfig(); populateMatchPlayerPicker(currentSelections); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); renderTodaysMatchSummary(); }, e.target?.matches('[data-team-name]') ? `[data-team-name="${e.target.dataset.teamName}"]` : '#teamNamesGrid'));
+  document.getElementById('teamNamesGrid').addEventListener('input', e => {
+    // Keep team-name typing stable on mobile. Rebuilding the setup controls on every
+    // keystroke can replace focused inputs and collapse the iPhone keyboard.
+    if (e.target?.matches('[data-team-name]')) {
+      renderTodaysMatchSummary();
+      return;
+    }
+    preserveSetupScrollDuring(() => { renderTodaysMatchSummary(); }, '#teamNamesGrid');
+  });
   const matchPlayersPickerEl = document.getElementById('matchPlayersPicker');
   const handlePlayerPickerOpen = e => {
     const trigger = e.target.closest('[data-open-player-sheet]');

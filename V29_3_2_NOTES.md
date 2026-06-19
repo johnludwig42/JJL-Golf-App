@@ -1,4 +1,4 @@
-# The Dye Ledger v30.0.2 Notes
+# The Dye Ledger v30.0.3 Notes
 
 ## Release Theme
 Always provide an escape hatch.
@@ -9,7 +9,7 @@ Always provide an escape hatch.
 - Added a top setup Cancel action beside the Create Match / Update Match controls.
 - Cancel from a new setup returns to the Create New Match / Join a Match choice menu without creating a match.
 - Cancel from an existing setup edit discards unsaved form edits and returns to the active match experience.
-- Updated version references and cache metadata to v30.0.2.
+- Updated version references and cache metadata to v30.0.3.
 
 ## Guardrails Confirmed
 - No scoring engine changes.

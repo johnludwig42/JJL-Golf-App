@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=30.3.2" />
+  <link rel="manifest" href="manifest.json?v=30.3.3" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
   <link rel="shortcut icon" href="./favicon-32x32.png" />
@@ -331,7 +331,8 @@
             <div class="post-round-actions top-gap">
               <button id="postRoundInlineViewSummaryBtn" type="button">📊 View Match Summary</button>
               <button id="postRoundInlineAnotherRoundBtn" type="button" class="secondary">🏌️ Play Another Round with This Group</button>
-              <button id="postRoundInlineNewMatchBtn" type="button" class="secondary">➕ Start Completely New Match</button>
+              <button id="postRoundInlineNewMatchBtn" type="button" class="secondary">➕ Create New Match</button>
+              <button id="postRoundInlineJoinMatchBtn" type="button" class="secondary">🔗 Join New Match</button>
             </div>
           </div>
         </div>
@@ -679,10 +680,10 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
-          <li>v30.3.2 restores reliable joined-device assignment targets for Shared Matches.</li>
-          <li>v30.3.2 adds a joined-device waiting state with Check Assignment before host assignment.</li>
-          <li>v30.3.2 keeps scoring, player, memory, AI Round Story, session, and Supabase schema behavior unchanged.</li>
-          <li>App version: <strong id="appVersionLabel">v30.3.2</strong></li>
+          <li>v30.3.3 improves shared-match connection responsiveness during join and assignment.</li>
+          <li>v30.3.3 adds Join New Match to post-round options.</li>
+          <li>v30.3.3 fixes app-level persistent navigation on long Play tab scrolling.</li>
+          <li>App version: <strong id="appVersionLabel">v30.3.3</strong></li>
         </ul>
       </div>
     </section>
@@ -702,7 +703,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.3.2</span>
+    <span id="appVersionFooter">v30.3.3</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>
@@ -729,7 +730,8 @@
         <div class="post-round-actions top-gap">
           <button id="postRoundViewSummaryBtn" type="button">📊 View Match Summary</button>
           <button id="postRoundAnotherRoundBtn" type="button" class="secondary">🏌️ Play Another Round with This Group</button>
-          <button id="postRoundNewMatchBtn" type="button" class="secondary">➕ Start Completely New Match</button>
+          <button id="postRoundNewMatchBtn" type="button" class="secondary">➕ Create New Match</button>
+          <button id="postRoundJoinMatchBtn" type="button" class="secondary">🔗 Join New Match</button>
         </div>
       </div>
     </div>

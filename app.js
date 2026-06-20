@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.3.2';
+const APP_VERSION = 'v30.3.3';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -28,11 +28,15 @@ const sharedMatchSyncTimers = new Map();
 const sharedMatchSyncInflight = new Map();
 const sharedMatchSyncDirty = new Map();
 const SHARED_MATCH_SYNC_DEBOUNCE_MS = 200;
-const SHARED_PARTICIPANT_REFRESH_MS = 5000;
+const SHARED_PARTICIPANT_REFRESH_MS = 30000;
+const SHARED_CONNECTION_FAST_REFRESH_MS = 3000;
+const SHARED_CONNECTION_FAST_REFRESH_DURATION_MS = 60000;
 const SHARED_SCORE_REFRESH_MS = 30000;
 let sharedScoreRefreshTimer = null;
 const SHARED_DEVICE_ID_KEY = 'the-dye-ledger-shared-device-id';
 let sharedParticipantRefreshTimer = null;
+let sharedConnectionFastRefreshTimer = null;
+let sharedConnectionFastRefreshUntil = 0;
 let sharedParticipantPanelRefreshPending = false;
 let pendingScoreCommitFocus = null;
 let scoreAutoAdvanceGeneration = 0;
@@ -5405,6 +5409,43 @@ function startSharedParticipantRefresh() {
   }, SHARED_PARTICIPANT_REFRESH_MS);
 }
 
+function shouldRunSharedConnectionFastRefresh(match = getActiveMatch()) {
+  if (!match || match.storageMode !== 'shared' || match.status === 'complete') return false;
+  const activePanel = document.querySelector('.panel.active')?.id || '';
+  if (activePanel === 'setup') return true;
+  if (!isCurrentDeviceMatchHost(match) && getSharedAssignmentSummary(match) === 'Waiting for host assignment.') return true;
+  return false;
+}
+
+function stopSharedConnectionFastRefresh() {
+  if (sharedConnectionFastRefreshTimer) window.clearInterval(sharedConnectionFastRefreshTimer);
+  sharedConnectionFastRefreshTimer = null;
+  sharedConnectionFastRefreshUntil = 0;
+}
+
+function startSharedConnectionFastRefresh({ reason = 'shared-connection', durationMs = SHARED_CONNECTION_FAST_REFRESH_DURATION_MS } = {}) {
+  const match = getActiveMatch();
+  if (!match || match.storageMode !== 'shared') return;
+  sharedConnectionFastRefreshUntil = Math.max(sharedConnectionFastRefreshUntil || 0, Date.now() + durationMs);
+  const tick = async () => {
+    const active = getActiveMatch();
+    if (!active || active.storageMode !== 'shared' || document.visibilityState === 'hidden' || Date.now() > sharedConnectionFastRefreshUntil || !shouldRunSharedConnectionFastRefresh(active)) {
+      stopSharedConnectionFastRefresh();
+      return;
+    }
+    try {
+      await refreshActiveSharedParticipants({ silent: true });
+      await refreshActiveSharedScores({ silent: true, render: false });
+      renderAll();
+    } catch (err) {
+      console.warn('Shared connection fast refresh failed.', err);
+    }
+  };
+  tick();
+  if (sharedConnectionFastRefreshTimer) return;
+  sharedConnectionFastRefreshTimer = window.setInterval(tick, SHARED_CONNECTION_FAST_REFRESH_MS);
+}
+
 function upsertLocalMatch(match) {
   normalizeMatch(match);
   const existingIdx = state.matches.findIndex(m => m.id === match.id);
@@ -5442,7 +5483,10 @@ async function loadSharedMatchFromCloud(matchId, { activate = true, silent = fal
   }
   persist({ skipRender: true });
   renderAll();
-  if (hydrated.storageMode === 'shared') scheduleSharedMatchSync(hydrated, { immediate: true, silent: true });
+  if (hydrated.storageMode === 'shared') {
+    scheduleSharedMatchSync(hydrated, { immediate: true, silent: true });
+    startSharedConnectionFastRefresh({ reason: 'join-match' });
+  }
   if (!silent) toast('Shared match loaded from Supabase.');
   return hydrated;
 }
@@ -5516,6 +5560,9 @@ function scheduleSharedMatchSync(matchOrId, { immediate = false, silent = true }
   }, delay);
   sharedMatchSyncTimers.set(matchId, timer);
 }
+
+window.addEventListener('resize', updateAppChromeOffset);
+window.addEventListener('orientationchange', () => window.setTimeout(updateAppChromeOffset, 120));
 
 window.addEventListener('pagehide', () => {
   const active = getActiveMatch();
@@ -6053,7 +6100,15 @@ function updateCloudConfigUi() {
   if (loadBtn) loadBtn.disabled = !configured;
   if (refreshBtn) refreshBtn.disabled = !configured;
 }
+function updateAppChromeOffset() {
+  const chrome = document.querySelector('.app-chrome');
+  if (!chrome) return;
+  const height = Math.ceil(chrome.getBoundingClientRect().height || 0);
+  document.documentElement.style.setProperty('--app-chrome-height', `${height}px`);
+}
+
 function renderAll() {
+  updateAppChromeOffset();
   renderPlayers();
   renderCourses();
   renderMatches();
@@ -6807,6 +6862,29 @@ function startCleanNewMatchSetup() {
   } finally {
     cleanNewMatchSetupInProgress = false;
   }
+}
+
+function startJoinNewMatchSetup({ message = 'Enter the new shared match code.' } = {}) {
+  hidePostRoundActions();
+  const priorId = state.activeMatchId;
+  if (priorId) {
+    const prior = getMatch(priorId);
+    if (prior) {
+      try { normalizeMatch(prior); } catch {}
+    }
+  }
+  state.activeMatchId = null;
+  setupWorkflowMode = 'join';
+  editingMatchId = null;
+  currentHole = 1;
+  finishConfirmArmed = false;
+  roundCompletePromptShownForMatchId = null;
+  persist({ skipRender: true });
+  renderAll();
+  renderMatchSetupState();
+  activateTab('setup');
+  window.setTimeout(() => document.getElementById('setupJoinMatchCodeInput')?.focus(), 50);
+  toast(message);
 }
 
 function resetToBlankMatchSetup() {
@@ -9391,8 +9469,12 @@ function loadCourseEditor(courseId = null) {
 function activateTab(tabId) {
   document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tabId));
   document.querySelectorAll('.panel').forEach(el => el.classList.toggle('active', el.id === tabId));
+  updateAppChromeOffset();
   syncFinishRoundUi(getActiveMatch());
-  if (tabId === 'setup') refreshActiveSharedParticipants({ silent: true });
+  if (tabId === 'setup') {
+    refreshActiveSharedParticipants({ silent: true });
+    startSharedConnectionFastRefresh({ reason: 'match-tab-opened' });
+  }
   if (tabId === 'courses') renderPlayers();
 }
 
@@ -9612,7 +9694,10 @@ function installHandlers() {
     const tabId = btn.dataset.tab;
     activateTab(tabId);
     if (['courses','setup'].includes(tabId)) refreshCourseLibraryFromCloud({ silent: true });
-    if (tabId === 'setup') refreshActiveSharedParticipants({ silent: true });
+    if (tabId === 'setup') {
+    refreshActiveSharedParticipants({ silent: true });
+    startSharedConnectionFastRefresh({ reason: 'match-tab-opened' });
+  }
   }));
 
   document.getElementById('playerForm').addEventListener('submit', e => {
@@ -10237,6 +10322,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       }
       renderAll();
       showSharedJoinConfirmation(joined);
+      startSharedConnectionFastRefresh({ reason: 'joined-device-waiting-assignment' });
       activateTab('score');
     } catch (err) {
       console.error(err);
@@ -10265,6 +10351,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       }
       await refreshActiveSharedParticipants({ silent: true });
       await refreshActiveSharedScores({ silent: true });
+      startSharedConnectionFastRefresh({ reason: 'sync-now' });
       renderAll();
       return;
     }
@@ -10283,6 +10370,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       await refreshActiveSharedParticipants({ silent: true });
       await refreshActiveSharedScores({ silent: true, render: false });
       persist({ skipRender: true });
+      startSharedConnectionFastRefresh({ reason: 'check-assignment' });
       renderAll();
       const summary = getSharedAssignmentSummary(match);
       toast(summary === 'Waiting for host assignment.' ? 'Still waiting for host assignment.' : summary);
@@ -10300,6 +10388,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     match.sharedPlayerAssignments[e.target.dataset.sharedPlayerAssignment] = e.target.value;
     persist({ skipRender: true });
     scheduleSharedMatchSync(match, { immediate: true, silent: true });
+    startSharedConnectionFastRefresh({ reason: 'assignment-save' });
     refreshActiveSharedScores({ silent: true, render: false });
     renderAll();
   });
@@ -10421,7 +10510,10 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (editingMatchId) state.matches = state.matches.map(m => m.id === editingMatchId ? match : m); else state.matches.push(match);
     pendingNextRoundSessionContext = null;
     state.activeMatchId = match.id;
-    if (match.storageMode === 'shared') setLastOpenedSharedMatch(match);
+    if (match.storageMode === 'shared') {
+      setLastOpenedSharedMatch(match);
+      startSharedConnectionFastRefresh({ reason: 'host-created-shared-match' });
+    }
     currentHole = Math.min(getRequestedHoleCount(match), Math.max(1, completedHoles(match) || 1));
     persist({ skipRender: true });
     loadMatchEditor(null);
@@ -10438,12 +10530,16 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   if (postRoundAnotherBtn) postRoundAnotherBtn.addEventListener('click', startAnotherRoundWithSameGroup);
   const postRoundNewBtn = document.getElementById('postRoundNewMatchBtn');
   if (postRoundNewBtn) postRoundNewBtn.addEventListener('click', () => { hidePostRoundActions(); startCleanNewMatchSetup(); });
+  const postRoundJoinBtn = document.getElementById('postRoundJoinMatchBtn');
+  if (postRoundJoinBtn) postRoundJoinBtn.addEventListener('click', () => startJoinNewMatchSetup());
   const postRoundInlineSummaryBtn = document.getElementById('postRoundInlineViewSummaryBtn');
   if (postRoundInlineSummaryBtn) postRoundInlineSummaryBtn.addEventListener('click', () => { hidePostRoundActions(); activateTab('leaderboard'); });
   const postRoundInlineAnotherBtn = document.getElementById('postRoundInlineAnotherRoundBtn');
   if (postRoundInlineAnotherBtn) postRoundInlineAnotherBtn.addEventListener('click', startAnotherRoundWithSameGroup);
   const postRoundInlineNewBtn = document.getElementById('postRoundInlineNewMatchBtn');
   if (postRoundInlineNewBtn) postRoundInlineNewBtn.addEventListener('click', () => { hidePostRoundActions(); startCleanNewMatchSetup(); });
+  const postRoundInlineJoinBtn = document.getElementById('postRoundInlineJoinMatchBtn');
+  if (postRoundInlineJoinBtn) postRoundInlineJoinBtn.addEventListener('click', () => startJoinNewMatchSetup());
   function saveCurrentHole({ advance = false, targetHole = null, silent = false } = {}) {
     const match = getActiveMatch(); if (!match) return false;
     if (getScoreAccessState(match).role === 'viewer') { if (!silent) toast('Viewer mode is read-only.'); return false; }
@@ -10681,6 +10777,7 @@ function updateVersionUi() {
       const joined = await loadSharedMatchFromCloud(matchId, { activate: true, silent: false });
       setupWorkflowMode = 'join';
       showSharedJoinConfirmation(joined);
+      startSharedConnectionFastRefresh({ reason: 'joined-device-waiting-assignment' });
       activateTab('score');
     } catch (err) {
       console.error(err);

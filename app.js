@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.3.6';
+const APP_VERSION = 'v30.3.7';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -5403,6 +5403,29 @@ async function fetchSharedParticipantDevices(matchId, match = null) {
   const meta = await fetchSharedMatchMetadata(matchId, match);
   return meta.devices || [];
 }
+
+async function refreshSharedDevicesForAssignment(match) {
+  if (!match || match.storageMode !== 'shared') return getSharedAssignmentDevices(match);
+  ensureSharedDeviceRegistered(match, isCurrentDeviceMatchHost(match) ? 'Host Device' : 'Joined Device');
+  if (!match.sharedMatchId || !hasSupabaseConfig()) {
+    match.sharedDevices = normalizeSharedDeviceList(match.sharedDevices || [], match);
+    match.sharedDevicesHydratedForAssignmentAt = new Date().toISOString();
+    return getSharedAssignmentDevices(match);
+  }
+  const meta = await fetchSharedMatchMetadata(match.sharedMatchId, match);
+  const mergedDevices = normalizeSharedDeviceList([...(match.sharedDevices || []), ...(meta.devices || [])], match);
+  match.sharedDevices = mergedDevices;
+  match.sharedDevicesHydratedForAssignmentAt = new Date().toISOString();
+  if (meta.playerAssignments && typeof meta.playerAssignments === 'object' && !isCurrentDeviceMatchHost(match)) {
+    match.sharedPlayerAssignments = { ...(match.sharedPlayerAssignments || {}), ...meta.playerAssignments };
+  }
+  if (Array.isArray(meta.memories) && meta.memories.length) {
+    mergeRoundMemories(match, meta.memories, { source: 'shared' });
+  }
+  console.debug('[SharedParticipants]', { fetchedDevices: meta.devices || [], mergedDevices, hydratedAt: match.sharedDevicesHydratedForAssignmentAt });
+  console.debug('[AssignmentOptions]', { options: mergedDevices.map(d => ({ id: d.id, name: d.name })), ready: mergedDevices.some(d => String(d.id) !== String(match.sharedHostDeviceId || '')) });
+  return mergedDevices;
+}
 async function mergeCloudSharedMetadata(match, { includeAssignments = false, includeMemories = true } = {}) {
   if (!match || match.storageMode !== 'shared' || !match.sharedMatchId || !hasSupabaseConfig()) return false;
   const meta = await fetchSharedMatchMetadata(match.sharedMatchId, match);
@@ -5486,7 +5509,18 @@ async function refreshActiveSharedParticipants({ silent = true } = {}) {
   const match = getActiveMatch();
   if (!match || match.storageMode !== 'shared' || !match.sharedMatchId || !hasSupabaseConfig()) return false;
   try {
-    const changed = await mergeCloudSharedMetadata(match, { includeAssignments: !isCurrentDeviceMatchHost(match), includeMemories: true });
+    const beforeDevices = JSON.stringify(getSharedAssignmentDevices(match));
+    const beforeAssignments = JSON.stringify(match.sharedPlayerAssignments || {});
+    const beforeMemories = JSON.stringify(getRoundMemories(match));
+    await refreshSharedDevicesForAssignment(match);
+    if (!isCurrentDeviceMatchHost(match)) {
+      await mergeCloudSharedMetadata(match, { includeAssignments: true, includeMemories: true });
+    } else {
+      await mergeCloudSharedMetadata(match, { includeAssignments: false, includeMemories: true });
+    }
+    const changed = beforeDevices !== JSON.stringify(getSharedAssignmentDevices(match))
+      || beforeAssignments !== JSON.stringify(match.sharedPlayerAssignments || {})
+      || beforeMemories !== JSON.stringify(getRoundMemories(match));
     if (changed) {
       persist({ skipRender: true });
       renderAll();
@@ -6413,6 +6447,18 @@ function saveMemoryFromModal() {
   match.memories = Array.isArray(match.memories) ? match.memories : [];
   match.memories.push(entry);
   persist({ skipRender: true });
+  if (match.storageMode === 'shared') {
+    console.debug('[SharedMemories]', { action: 'local-memory-created', memory: entry, memoryCount: match.memories.length });
+    publishSharedMemories(match)
+      .then(published => {
+        console.debug('[SharedMemories]', { action: 'publish-complete', published, memoryCount: getRoundMemories(match).length });
+        if (published) persist({ skipRender: true });
+      })
+      .catch(err => {
+        console.warn('[SharedMemories] publish failed.', err);
+        scheduleSharedMatchSync(match, { immediate: true, silent: true });
+      });
+  }
   closeAddMemoryModal();
   toast('Memory saved.');
 }
@@ -7454,10 +7500,10 @@ function renderCurrentMatch() {
   renderScoreAccessCard(match);
   renderMemoryQuickCapture(match);
   renderScoreGrid(match, tee, metrics, scoringHoles);
-  wireLiveScoreInputs();
   renderStatTrackingEntry(match, hole, metrics);
   renderGreeniesEntry(match, hole);
   renderHoleJumpTiles(match);
+  initializePlayInputs();
   const saveBtn = document.getElementById('saveScoresBtn');
   if (saveBtn) saveBtn.disabled = getScoreAccessState(match).role === 'viewer';
   applyPendingScoreCommitFocus();
@@ -7870,6 +7916,20 @@ function wireLiveScoreInputs() {
     input.addEventListener('input', () => handleLiveScoreInputEvent(input));
     input.addEventListener('keydown', handleLiveScoreInputKeydown);
     input.addEventListener('blur', () => handleLiveScoreInputBlur(input));
+  });
+}
+
+function initializePlayInputs() {
+  requestAnimationFrame(() => {
+    wireLiveScoreInputs();
+    const inputs = getEditableScoreInputs();
+    console.debug('[PlayInputInit]', {
+      inputCount: inputs.length,
+      firstExists: !!inputs[0],
+      firstDisabled: inputs[0] ? !!inputs[0].disabled : null,
+      firstFocusable: inputs[0] ? inputs[0].tabIndex !== -1 : false,
+      activeHole: currentHole,
+    });
   });
 }
 
@@ -9484,10 +9544,12 @@ function renderSetupSharedAdminPanel() {
   let devices = normalizeSharedDeviceList((Array.isArray(match.sharedDevices) && match.sharedDevices.length ? match.sharedDevices : [{ id: getSharedDeviceId(), name: isHost ? 'Host Device' : 'This Device' }]), match);
   if (match.sharedMatchId && hasSupabaseConfig() && isHost && !sharedParticipantPanelRefreshPending) {
     sharedParticipantPanelRefreshPending = true;
-    fetchSharedParticipantDevices(match.sharedMatchId, match)
-      .then(incoming => {
+    refreshSharedDevicesForAssignment(match)
+      .then(finalDevices => {
         sharedParticipantPanelRefreshPending = false;
-        if (mergeSharedDevices(match, incoming || [])) {
+        const before = JSON.stringify(devices || []);
+        devices = normalizeSharedDeviceList(finalDevices || [], match);
+        if (before !== JSON.stringify(devices)) {
           persist({ skipRender: true });
           renderAll();
         }
@@ -9549,7 +9611,14 @@ function renderSetupSharedAdminPanel() {
     </div>
     <details class="top-gap shared-match-details" open>
       <summary>Participants (${devices.length})</summary>
-      <div class="tiny top-gap">${devices.length <= 1 && isHost ? (sharedParticipantPanelRefreshPending ? 'Checking for joined devices…' : 'No other devices have joined yet. Share the match code to allow another scorer to join.') : (isHost && isAssignedPlayersMode(match) && devices.some(d => d.id !== match.sharedHostDeviceId && !getAssignedPlayerNamesForDevice(match, d.id).length) ? 'Joined Device 1 is ready for assignment.' : 'Joined devices are available as assignment targets.')}</div>
+      <div class="tiny top-gap">${(() => {
+        const hydrated = !!match.sharedDevicesHydratedForAssignmentAt || !hasSupabaseConfig();
+        const joinedAssignable = devices.some(d => String(d.id) !== String(match.sharedHostDeviceId || '') && isValidSharedAssignmentDeviceId(match, d.id));
+        if (devices.length <= 1 && isHost) return sharedParticipantPanelRefreshPending || !hydrated ? 'Checking for joined devices…' : 'No other devices have joined yet. Share the match code to allow another scorer to join.';
+        if (isHost && isAssignedPlayersMode(match) && (!hydrated || sharedParticipantPanelRefreshPending)) return 'Checking assignment-ready devices…';
+        if (isHost && isAssignedPlayersMode(match) && joinedAssignable) return 'Joined Device 1 is ready for assignment.';
+        return 'Joined devices are available as assignment targets.';
+      })()}</div>
       <div class="shared-device-list top-gap">${assignmentRows}</div>
     </details>
     ${isAssignedPlayersMode(match) ? `<div class="top-gap" id="sharedAssignmentManager">
@@ -9664,7 +9733,6 @@ function activateTab(tabId) {
     const match = getActiveMatch();
     if (ensurePlayInputState(match)) persist({ skipRender: true });
     renderCurrentMatch();
-    requestAnimationFrame(() => wireLiveScoreInputs());
   }
   if (tabId === 'courses') renderPlayers();
 }

@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.3.3';
+const APP_VERSION = 'v30.3.4';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -183,7 +183,7 @@ async function upsertSharedMembershipForCurrentDevice(match, { role = null } = {
   const now = new Date().toISOString();
   const memberRole = role || (isCurrentDeviceMatchHost(match) ? 'organizer' : 'team_scorer');
   const membership = {
-    id: `${match.sharedMatchId}:member:${user.id}`,
+    id: `${match.sharedMatchId}:member:${user.id}:${getSharedDeviceId()}`,
     match_id: match.sharedMatchId,
     user_id: user.id,
     role: memberRole === 'organizer' ? 'organizer' : 'team_scorer',
@@ -196,6 +196,32 @@ async function upsertSharedMembershipForCurrentDevice(match, { role = null } = {
   };
   const { error } = await client.from('match_memberships').upsert(membership, { onConflict: 'id' });
   if (error) throw error;
+  return true;
+}
+async function publishCurrentSharedDeviceToCloudMetadata(match) {
+  if (!match || match.storageMode !== 'shared' || !match.sharedMatchId || !hasSupabaseConfig()) return false;
+  const client = await ensureSupabaseClient();
+  if (!client) return false;
+  ensureSharedDeviceRegistered(match, isCurrentDeviceMatchHost(match) ? 'Host Device' : 'Joined Device');
+  const { data: matchRow, error: readError } = await client.from('matches').select('id,course_snapshot').eq('id', match.sharedMatchId).maybeSingle();
+  if (readError) throw readError;
+  const snapshot = matchRow?.course_snapshot && typeof matchRow.course_snapshot === 'object' ? matchRow.course_snapshot : {};
+  const existingMeta = snapshot.sharedMatchMeta && typeof snapshot.sharedMatchMeta === 'object' ? snapshot.sharedMatchMeta : {};
+  const devices = normalizeSharedDeviceList([...(Array.isArray(existingMeta.devices) ? existingMeta.devices : []), ...(match.sharedDevices || [])], match);
+  const nextSnapshot = {
+    ...snapshot,
+    sharedMatchMeta: {
+      ...existingMeta,
+      scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || existingMeta.scoringAccessMode || 'single_device'),
+      matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || existingMeta.matchCode || ''),
+      hostDeviceId: match.sharedHostDeviceId || existingMeta.hostDeviceId || '',
+      devices,
+      playerAssignments: existingMeta.playerAssignments && typeof existingMeta.playerAssignments === 'object' ? existingMeta.playerAssignments : (match.sharedPlayerAssignments || {}),
+    },
+  };
+  const { error: updateError } = await client.from('matches').update({ course_snapshot: nextSnapshot, updated_at: new Date().toISOString() }).eq('id', match.sharedMatchId);
+  if (updateError) throw updateError;
+  mergeSharedDevices(match, devices);
   return true;
 }
 function mergeSharedDevices(match, incomingDevices = []) {
@@ -5074,7 +5100,7 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
     updated_by: organizerUserId,
   };
   const membership = organizerUserId ? {
-    id: `${match.sharedMatchId || match.id}:member:${organizerUserId}`,
+    id: `${match.sharedMatchId || match.id}:member:${organizerUserId}:${getSharedDeviceId()}`,
     match_id: match.sharedMatchId || match.id,
     user_id: organizerUserId,
     role: isCurrentDeviceMatchHost(match) ? 'organizer' : 'team_scorer',
@@ -5470,6 +5496,7 @@ async function loadSharedMatchFromCloud(matchId, { activate = true, silent = fal
     ensureSharedDeviceRegistered(hydrated, isCurrentDeviceMatchHost(hydrated) ? 'Host Device' : 'Joined Device');
     try {
       await upsertSharedMembershipForCurrentDevice(hydrated);
+      await publishCurrentSharedDeviceToCloudMetadata(hydrated).catch(err => console.warn('Could not publish shared-device metadata.', err));
       await mergeCloudSharedMetadata(hydrated, { includeAssignments: !isCurrentDeviceMatchHost(hydrated) });
     } catch (err) {
       console.warn('Could not register this device with the shared match.', err);
@@ -7573,7 +7600,7 @@ function renderScoreGrid(match, tee, metrics, scoringHoles = null) {
   const hole = holes[currentHole - 1];
   const visiblePlayers = getVisibleScoringPlayers(match, metrics.players || [], { stats: false });
   if (!visiblePlayers.length && isJoinedDeviceWaitingForAssignment(match)) {
-    body.innerHTML = `<tr><td colspan="5"><div class="joined-assignment-waiting"><strong>Joined Match</strong><div class="tiny top-gap">Waiting for host assignment.</div><button type="button" class="secondary top-gap" data-check-shared-assignment="1">Check Assignment</button></div></td></tr>`;
+    body.innerHTML = `<tr><td colspan="5"><div class="joined-assignment-waiting"><strong>Joined Match</strong><div class="tiny top-gap">Waiting for host assignment.</div><div class="tiny">Ask the host to assign players to this device. Checking for assignment…</div><button type="button" class="secondary top-gap" data-check-shared-assignment="1">Check Assignment</button></div></td></tr>`;
     return;
   }
   body.innerHTML = visiblePlayers.map(p => {
@@ -7587,7 +7614,7 @@ function renderScoreGrid(match, tee, metrics, scoringHoles = null) {
       <tr class="${canEdit ? '' : 'score-row-readonly'}">
         <td>${escapeHtml(p.player.name)}<div class="tiny">${escapeHtml(getHoleTeeNameForDisplay(match.courseId, p.tee || tee, currentHole - 1) || p.tee?.teeName || tee?.teeName || 'Tee')}${canEdit ? '' : ' · locked'}</div></td>
         <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
-        <td><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="next" min="1" max="15" data-score-player="${p.playerId}" data-score-locked="${canEdit ? '0' : '1'}" title="${canEdit ? 'Enter score' : 'You can only score your assigned players.'}" value="${gross}" ${canEdit ? '' : 'disabled'} /></td>
+        <td><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="next" autocomplete="off" min="1" max="15" data-score-player="${p.playerId}" data-score-locked="${canEdit ? '0' : '1'}" title="${canEdit ? 'Enter score' : 'You can only score your assigned players.'}" value="${gross}" ${canEdit ? '' : 'disabled'} /></td>
         <td>${strokes}</td>
         <td>${net}</td>
       </tr>
@@ -9364,7 +9391,7 @@ function renderSetupSharedAdminPanel() {
     </div>
     <details class="top-gap shared-match-details" open>
       <summary>Participants (${devices.length})</summary>
-      <div class="tiny top-gap">${devices.length <= 1 && isHost ? (sharedParticipantPanelRefreshPending ? 'Device joined. Synchronizing…' : 'No other devices have joined yet. Share the match code to allow another scorer to join.') : 'Joined devices are available as assignment targets.'}</div>
+      <div class="tiny top-gap">${devices.length <= 1 && isHost ? (sharedParticipantPanelRefreshPending ? 'Checking for joined devices…' : 'No other devices have joined yet. Share the match code to allow another scorer to join.') : (isHost && isAssignedPlayersMode(match) && devices.some(d => d.id !== match.sharedHostDeviceId && !getAssignedPlayerNamesForDevice(match, d.id).length) ? 'Joined Device 1 is ready for assignment.' : 'Joined devices are available as assignment targets.')}</div>
       <div class="shared-device-list top-gap">${assignmentRows}</div>
     </details>
     ${isAssignedPlayersMode(match) ? `<div class="top-gap" id="sharedAssignmentManager">
@@ -10020,8 +10047,10 @@ function installHandlers() {
   }
   document.addEventListener('focusin', e => {
     if (e.target.closest('#score') && e.target.matches('input, select, textarea')) {
+      if (e.target.matches('[data-score-player]')) return;
       setTimeout(() => {
-        try { e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
+        if (document.activeElement !== e.target) return;
+        try { e.target.scrollIntoView({ block: 'nearest', behavior: 'auto' }); } catch (_) {}
       }, 180);
     }
   });
@@ -10317,6 +10346,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       if (joined) {
         joined.activeScoreRole = 'assigned_player_scorer';
         ensureSharedDeviceRegistered(joined, getSharedDeviceName(joined));
+        await publishCurrentSharedDeviceToCloudMetadata(joined).catch(err => console.warn('Could not publish joined-device metadata.', err));
         persist({ skipRender: true });
         scheduleSharedMatchSync(joined, { immediate: true, silent: true });
       }
@@ -10341,6 +10371,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       const match = getActiveMatch();
       if (!match?.sharedMatchId) return toast('No shared match is active.');
       await upsertSharedMembershipForCurrentDevice(match).catch(err => console.warn('Could not update shared membership before sync.', err));
+      await publishCurrentSharedDeviceToCloudMetadata(match).catch(err => console.warn('Could not publish current device metadata before sync.', err));
       await flushSharedMatchSync(match.id, { silent: false });
       if (isCurrentDeviceMatchHost(match)) {
         const incoming = await fetchSharedParticipantDevices(match.sharedMatchId, match).catch(err => {
@@ -10356,6 +10387,17 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       return;
     }
     if (e.target.closest('[data-focus-shared-assignments]')) {
+      const match = getActiveMatch();
+      if (match?.sharedMatchId && isCurrentDeviceMatchHost(match)) {
+        try {
+          await upsertSharedMembershipForCurrentDevice(match);
+          await mergeCloudSharedMetadata(match, { includeAssignments: false });
+          persist({ skipRender: true });
+          renderAll();
+        } catch (err) {
+          console.warn('Could not refresh devices before opening assignments.', err);
+        }
+      }
       document.getElementById('sharedAssignmentManager')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       return;
     }
@@ -10366,6 +10408,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (!match?.sharedMatchId) return toast('No shared match is active.');
     try {
       await upsertSharedMembershipForCurrentDevice(match).catch(err => console.warn('Could not update joined-device membership.', err));
+      await publishCurrentSharedDeviceToCloudMetadata(match).catch(err => console.warn('Could not publish joined-device metadata.', err));
       await mergeCloudSharedMetadata(match, { includeAssignments: true });
       await refreshActiveSharedParticipants({ silent: true });
       await refreshActiveSharedScores({ silent: true, render: false });
@@ -10889,7 +10932,7 @@ function resetHorizontalViewportPosition() {
   const body = document.body;
   if (root && root.scrollLeft) root.scrollLeft = 0;
   if (body && body.scrollLeft) body.scrollLeft = 0;
-  if (window.scrollX) window.scrollTo(0, window.scrollY || 0);
+  if (window.scrollX && !document.activeElement?.matches?.('#score [data-score-player]')) window.scrollTo(0, window.scrollY || 0);
 }
 
 function installViewportStabilityGuards() {
@@ -10904,7 +10947,7 @@ function installViewportStabilityGuards() {
   document.addEventListener('focusin', (event) => {
     const target = event.target;
     if (!target || !target.closest) return;
-    if (target.closest('#score')) resetSoon();
+    if (target.closest('#score') && !target.matches?.('[data-score-player]')) resetSoon();
   });
   document.addEventListener('input', (event) => {
     const target = event.target;

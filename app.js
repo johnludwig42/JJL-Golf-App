@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.3.7';
+const APP_VERSION = 'v30.3.8';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -34,6 +34,7 @@ const SHARED_CONNECTION_FAST_REFRESH_DURATION_MS = 60000;
 const SHARED_SCORE_REFRESH_MS = 30000;
 let sharedScoreRefreshTimer = null;
 const SHARED_DEVICE_ID_KEY = 'the-dye-ledger-shared-device-id';
+const SHARED_DEVICE_NAME_KEY = 'dyeLedgerSharedDeviceName';
 let sharedParticipantRefreshTimer = null;
 let sharedConnectionFastRefreshTimer = null;
 let sharedConnectionFastRefreshUntil = 0;
@@ -102,13 +103,35 @@ function getSharedDeviceId() {
   }
   return id;
 }
+function getStoredSharedDeviceName() {
+  try { return String(localStorage.getItem(SHARED_DEVICE_NAME_KEY) || '').trim(); } catch { return ''; }
+}
+function setStoredSharedDeviceName(name = '') {
+  const normalized = String(name || '').trim().slice(0, 40);
+  if (!normalized) return '';
+  try { localStorage.setItem(SHARED_DEVICE_NAME_KEY, normalized); } catch {}
+  return normalized;
+}
+function getPreferredSharedDeviceName(fallback = 'Joined Device') {
+  return getStoredSharedDeviceName() || fallback || 'Joined Device';
+}
+function makeSharedDeviceDisplayName(device = {}, match = null, index = 0) {
+  const id = String(device?.id || device?.deviceId || device?.sharedDeviceId || '').trim();
+  const hostId = String(match?.sharedHostDeviceId || '').trim();
+  if (hostId && id && id === hostId) return String(device?.name || device?.deviceName || 'Host Device').trim() || 'Host Device';
+  const raw = String(device?.name || device?.deviceName || device?.label || '').trim();
+  if (raw && raw !== 'Device' && raw !== 'This Device') return raw;
+  const suffix = id ? id.replace(/[^a-zA-Z0-9]/g, '').slice(-4).toUpperCase() : String(index + 1);
+  return suffix ? `Joined Device ${suffix}` : 'Joined Device';
+}
 function getSharedDeviceName(match = null, deviceId = null) {
   const id = deviceId || getSharedDeviceId();
   const devices = Array.isArray(match?.sharedDevices) ? match.sharedDevices : [];
-  const existing = devices.find(d => d.id === id);
+  const existing = devices.find(d => String(d.id) === String(id));
   if (existing?.name) return existing.name;
   if (match?.sharedHostDeviceId === id) return 'Host Device';
-  return 'This Device';
+  if (String(id) === String(getSharedDeviceId())) return getPreferredSharedDeviceName('Joined Device');
+  return makeSharedDeviceDisplayName({ id }, match);
 }
 function normalizeMatchCode(value = '') {
   return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 16);
@@ -146,10 +169,10 @@ function normalizeSharedDeviceList(devices = [], match = null) {
   if (hostId && !map.has(hostId)) {
     map.set(hostId, { id: hostId, name: 'Host Device', joinedAt: match?.createdAt || new Date().toISOString(), lastSeenAt: match?.lastCloudSyncAt || new Date().toISOString() });
   }
-  return Array.from(map.values()).map((device, idx) => ({
-    ...device,
-    name: device.id === hostId ? (device.name && device.name !== 'Joined Device' ? device.name : 'Host Device') : (device.name && device.name !== 'Device' ? device.name : `Joined Device ${idx}`),
-  }));
+  return Array.from(map.values()).map((device, idx) => {
+    const displayName = makeSharedDeviceDisplayName(device, match, idx);
+    return { ...device, name: displayName, deviceName: displayName };
+  });
 }
 function getSharedMembershipDeviceRecord(row = {}, match = null) {
   const raw = String(row?.device_label || '').trim();
@@ -169,7 +192,7 @@ function getSharedMembershipDeviceRecord(row = {}, match = null) {
 }
 function getSharedDeviceLabelPayload(match = null) {
   const id = getSharedDeviceId();
-  const label = getSharedDeviceName(match, id) || getDefaultSharedDeviceLabel(match, id);
+  const label = match?.sharedHostDeviceId && String(match.sharedHostDeviceId) !== String(id) ? getPreferredSharedDeviceName(getSharedDeviceName(match, id) || 'Joined Device') : (getSharedDeviceName(match, id) || getDefaultSharedDeviceLabel(match, id));
   return JSON.stringify({ sharedDeviceId: id, deviceName: label, userAgent: navigator.userAgent.slice(0, 120) });
 }
 
@@ -241,7 +264,7 @@ function ensureSharedDeviceRegistered(match, preferredName = '') {
   const now = new Date().toISOString();
   match.sharedDevices = normalizeSharedDeviceList(match.sharedDevices || [], match);
   const existing = match.sharedDevices.find(d => String(d.id) === String(id));
-  const fallbackName = preferredName || getDefaultSharedDeviceLabel(match, id);
+  const fallbackName = preferredName || (match.sharedHostDeviceId && String(match.sharedHostDeviceId) !== String(id) ? getPreferredSharedDeviceName('Joined Device') : getDefaultSharedDeviceLabel(match, id));
   if (!existing) {
     match.sharedDevices.push({ id, name: fallbackName, joinedAt: now, lastSeenAt: now });
   } else {
@@ -7088,7 +7111,11 @@ function startJoinNewMatchSetup({ message = 'Enter the new shared match code.' }
   renderAll();
   renderMatchSetupState();
   activateTab('setup');
-  window.setTimeout(() => document.getElementById('setupJoinMatchCodeInput')?.focus(), 50);
+  window.setTimeout(() => {
+    const nameInput = document.getElementById('setupJoinDeviceNameInput');
+    if (nameInput && !nameInput.value) nameInput.value = getPreferredSharedDeviceName('');
+    (nameInput || document.getElementById('setupJoinMatchCodeInput'))?.focus();
+  }, 50);
   toast(message);
 }
 
@@ -9607,16 +9634,19 @@ function renderSetupSharedAdminPanel() {
         <button type="button" class="secondary" data-copy-shared-code="${escapeHtml(code)}">Share Code</button>
         <button type="button" class="secondary" id="setupSyncSharedMatchNowBtn">Sync Now</button>
         ${isHost && isAssignedPlayersMode(match) ? '<button type="button" class="secondary" data-focus-shared-assignments="1">Manage Assignments</button>' : ''}
+        ${isHost ? '<button type="button" data-start-shared-scoring="1">Start Scoring</button>' : ''}
       </div>
     </div>
     <details class="top-gap shared-match-details" open>
       <summary>Participants (${devices.length})</summary>
       <div class="tiny top-gap">${(() => {
         const hydrated = !!match.sharedDevicesHydratedForAssignmentAt || !hasSupabaseConfig();
-        const joinedAssignable = devices.some(d => String(d.id) !== String(match.sharedHostDeviceId || '') && isValidSharedAssignmentDeviceId(match, d.id));
-        if (devices.length <= 1 && isHost) return sharedParticipantPanelRefreshPending || !hydrated ? 'Checking for joined devices…' : 'No other devices have joined yet. Share the match code to allow another scorer to join.';
-        if (isHost && isAssignedPlayersMode(match) && (!hydrated || sharedParticipantPanelRefreshPending)) return 'Checking assignment-ready devices…';
-        if (isHost && isAssignedPlayersMode(match) && joinedAssignable) return 'Joined Device 1 is ready for assignment.';
+        const joinedDevices = devices.filter(d => String(d.id) !== String(match.sharedHostDeviceId || ''));
+        const joinedAssignable = joinedDevices.some(d => isValidSharedAssignmentDeviceId(match, d.id));
+        if (devices.length <= 1 && isHost) return sharedParticipantPanelRefreshPending || !hydrated ? 'Waiting for joined devices…' : 'Waiting for joined devices… Share the match code to allow another scorer to join.';
+        if (isHost && isAssignedPlayersMode(match) && (!hydrated || sharedParticipantPanelRefreshPending)) return 'Joined device detected. Preparing assignment options…';
+        if (isHost && isAssignedPlayersMode(match) && joinedAssignable) return 'Ready for assignment.';
+        if (isHost && isAssignedPlayersMode(match)) return 'Joined device detected. Preparing assignment options…';
         return 'Joined devices are available as assignment targets.';
       })()}</div>
       <div class="shared-device-list top-gap">${assignmentRows}</div>
@@ -9651,7 +9681,11 @@ function renderMatchSetupState() {
 
   if (entry) entry.classList.toggle('hidden', showForm || showJoin || (active?.storageMode === 'shared' && !hostCanEdit && !showCurrentMatchPanel));
   if (choiceGrid) choiceGrid.classList.toggle('hidden', !!active || setupWorkflowMode !== 'landing');
-  if (joinPanel) joinPanel.classList.toggle('hidden', !showJoin);
+  if (joinPanel) {
+    joinPanel.classList.toggle('hidden', !showJoin);
+    const deviceNameInput = document.getElementById('setupJoinDeviceNameInput');
+    if (showJoin && deviceNameInput && !deviceNameInput.value) deviceNameInput.value = getPreferredSharedDeviceName('');
+  }
 
   if (entryTitle) entryTitle.textContent = active && !showForm ? 'Current Match' : 'Game setup';
 
@@ -10562,14 +10596,18 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('setupJoinMatchChoiceBtn')?.addEventListener('click', () => {
     setupWorkflowMode = 'join';
     renderMatchSetupState();
-    document.getElementById('setupJoinMatchCodeInput')?.focus();
+    const nameInput = document.getElementById('setupJoinDeviceNameInput');
+    if (nameInput && !nameInput.value) nameInput.value = getPreferredSharedDeviceName('');
+    (nameInput || document.getElementById('setupJoinMatchCodeInput'))?.focus();
   });
   document.getElementById('setupJoinCancelBtn')?.addEventListener('click', () => {
     setupWorkflowMode = 'landing';
     renderMatchSetupState();
   });
   document.getElementById('setupJoinMatchBtn')?.addEventListener('click', async () => {
+    const nameInput = document.getElementById('setupJoinDeviceNameInput');
     const input = document.getElementById('setupJoinMatchCodeInput');
+    const deviceName = setStoredSharedDeviceName(String(nameInput?.value || '').trim() || 'Joined Device');
     const matchId = normalizeMatchCode(input?.value || '');
     if (!matchId) return toast('Enter a shared match code.');
     try {
@@ -10577,7 +10615,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       setupWorkflowMode = 'join';
       if (joined) {
         joined.activeScoreRole = 'assigned_player_scorer';
-        ensureSharedDeviceRegistered(joined, getSharedDeviceName(joined));
+        ensureSharedDeviceRegistered(joined, deviceName || getPreferredSharedDeviceName('Joined Device'));
+        await upsertSharedMembershipForCurrentDevice(joined).catch(err => console.warn('Could not update joined-device membership.', err));
         await publishCurrentSharedDeviceToCloudMetadata(joined).catch(err => console.warn('Could not publish joined-device metadata.', err));
         persist({ skipRender: true });
         scheduleSharedMatchSync(joined, { immediate: true, silent: true });
@@ -10597,6 +10636,12 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       const code = copyBtn.dataset.copySharedCode || '';
       const copied = await copyTextToClipboard(code);
       toast(copied ? 'Match code copied.' : (code || 'No match code.'));
+      return;
+    }
+    if (e.target.closest('[data-start-shared-scoring]')) {
+      const match = getActiveMatch();
+      if (!match) return;
+      activateTab('score');
       return;
     }
     if (e.target.closest('#setupSyncSharedMatchNowBtn')) {
@@ -10790,8 +10835,14 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     persist({ skipRender: true });
     loadMatchEditor(null);
     renderAll();
-    activateTab('score');
-    toast(editingMatchId ? 'Match setup saved.' : (sharedMatchEnabled ? 'Shared match setup saved.' : 'Match setup saved.'));
+    if (match.storageMode === 'shared') {
+      setupWorkflowMode = 'landing';
+      activateTab('setup');
+      renderMatchSetupState();
+    } else {
+      activateTab('score');
+    }
+    toast(editingMatchId ? 'Match setup saved.' : (sharedMatchEnabled ? 'Shared match setup saved. Assign devices, then tap Start Scoring.' : 'Match setup saved.'));
     } catch (err) { console.error(err); toast('Could not finalize match setup. Please try again.'); }
   });
   document.getElementById('cancelMatchEditBtn').addEventListener('click', cancelMatchSetupChanges);

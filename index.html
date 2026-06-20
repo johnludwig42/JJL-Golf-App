@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=30.3.9" />
+  <link rel="manifest" href="manifest.json?v=30.3.12" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
   <link rel="shortcut icon" href="./favicon-32x32.png" />
@@ -685,8 +685,13 @@
           <li>v30.3.8 keeps Shared Match hosts on the Match tab for device assignment before scoring.</li>
           <li>v30.3.8 adds joined-device names so hosts can identify carts/devices in participant lists and assignment dropdowns.</li>
           <li>v30.3.8 adds a Start Scoring action after Shared Match setup while preserving scoring behavior.</li>
-          <li>v30.3.11 makes joined devices assignable almost immediately, fixes the score keypad needing a warm-up tap, keeps the header tabs pinned while scoring, and stops joined-device memories from being overwritten.</li>
-          <li>App version: <strong id="appVersionLabel">v30.3.11</strong></li>
+          <li>v30.3.12 adds visible build/cache diagnostics and restores normal desktop mouse-wheel scrolling while preserving sticky navigation.</li>
+          <li>App version: <strong id="appVersionLabel">v30.3.12</strong></li>
+          <li>Build: <strong id="appBuildTimestamp">loading…</strong></li>
+          <li>Build label: <span id="appBuildLabel">loading…</span></li>
+          <li>URL: <span id="appCurrentUrl" class="break-word">loading…</span></li>
+          <li>Service Worker: <span id="appServiceWorkerStatus">checking…</span></li>
+          <li class="tiny" id="appCacheGuidance">If this version looks stale, force refresh or clear site data.</li>
         </ul>
       </div>
     </section>
@@ -706,7 +711,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.3.11</span>
+    <span id="appVersionFooter">v30.3.12</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>

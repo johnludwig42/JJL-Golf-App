@@ -3813,7 +3813,7 @@ body.keyboard-open .app-chrome{
   main{position:static !important;overflow:visible !important;padding:0 !important;}
 }
 
-/* v30.3.11 Shared Match Participant Assignment Diagnostics */
+/* v30.3.12 Shared Match Participant Assignment Diagnostics */
 .shared-assignment-diagnostics {
   border: 1px dashed rgba(120, 120, 120, 0.45);
   border-radius: 12px;
@@ -3849,4 +3849,78 @@ body.keyboard-open .app-chrome{
   padding: 4px 6px;
   text-align: left;
   vertical-align: top;
+}
+
+/* v30.3.12: desktop mouse-wheel scroll fix and build-info display.
+   Keep normal document scrolling so wheel/trackpad events target the page.
+   Preserve the sticky chrome model used for iPhone/PWA scoring. */
+html,
+body {
+  height: auto !important;
+  min-height: 100% !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: auto !important;
+}
+body {
+  padding-top: 0 !important;
+  min-height: 100dvh;
+}
+.app-chrome {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 1200 !important;
+  pointer-events: auto;
+}
+.app-chrome .app-header,
+.app-chrome .top-tabs {
+  position: static !important;
+  top: auto !important;
+}
+main {
+  position: static !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  height: auto !important;
+  min-height: auto !important;
+  overflow: visible !important;
+  -webkit-overflow-scrolling: auto;
+  overscroll-behavior: auto !important;
+  touch-action: pan-y;
+}
+.app-chrome + main {
+  padding-top: 8px !important;
+}
+body.keyboard-open .app-chrome {
+  position: sticky !important;
+  top: 0 !important;
+}
+.break-word {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.app-footer-version {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+#appVersionFooterBuild {
+  opacity: .72;
+}
+@media print {
+  html,
+  body {
+    overflow: visible !important;
+    height: auto !important;
+  }
+  .app-chrome {
+    position: static !important;
+    box-shadow: none !important;
+  }
+  main {
+    position: static !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
 }

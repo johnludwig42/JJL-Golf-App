@@ -1,5 +1,7 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.3.11';
+const APP_VERSION = 'v30.3.12';
+const BUILD_TIMESTAMP = '2026-06-20 23:52 UTC';
+const BUILD_LABEL = 'Version Visibility and Desktop Mouse Scroll Fix';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -11588,6 +11590,94 @@ document.getElementById('leaderboard').addEventListener('change', e => {
 }
 
 
+
+function getBuildInfoSnapshot() {
+  const swSupported = 'serviceWorker' in navigator;
+  const controller = swSupported ? navigator.serviceWorker.controller : null;
+  return {
+    appVersion: APP_VERSION,
+    buildTimestamp: BUILD_TIMESTAMP,
+    buildLabel: BUILD_LABEL,
+    url: window.location.href,
+    userAgent: navigator.userAgent,
+    serviceWorkerSupported: swSupported,
+    serviceWorkerControlled: !!controller,
+    serviceWorkerControllerScriptURL: controller?.scriptURL || null,
+    cacheKeys: 'pending'
+  };
+}
+
+async function getDyeLedgerBuildInfo() {
+  const info = getBuildInfoSnapshot();
+  if (!('caches' in window)) {
+    info.cacheKeys = 'Cache API unavailable';
+    return info;
+  }
+  try {
+    info.cacheKeys = await caches.keys();
+  } catch (err) {
+    info.cacheKeys = `Could not read cache keys: ${err?.message || err}`;
+  }
+  return info;
+}
+
+function getDyeLedgerScrollInfo() {
+  const html = document.documentElement;
+  const body = document.body;
+  const main = document.querySelector('main');
+  const chrome = document.querySelector('.app-chrome');
+  const htmlStyle = html ? getComputedStyle(html) : null;
+  const bodyStyle = body ? getComputedStyle(body) : null;
+  const mainStyle = main ? getComputedStyle(main) : null;
+  const chromeStyle = chrome ? getComputedStyle(chrome) : null;
+  return {
+    scrollY: window.scrollY,
+    documentScrollHeight: Math.max(html?.scrollHeight || 0, body?.scrollHeight || 0),
+    viewportHeight: window.innerHeight,
+    bodyOverflow: bodyStyle ? `${bodyStyle.overflowX} / ${bodyStyle.overflowY}` : null,
+    htmlOverflow: htmlStyle ? `${htmlStyle.overflowX} / ${htmlStyle.overflowY}` : null,
+    mainOverflow: mainStyle ? `${mainStyle.overflowX} / ${mainStyle.overflowY}` : null,
+    mainClientHeight: main?.clientHeight || null,
+    mainScrollHeight: main?.scrollHeight || null,
+    activeElement: document.activeElement ? `${document.activeElement.tagName.toLowerCase()}#${document.activeElement.id || ''}.${document.activeElement.className || ''}` : null,
+    appChromePosition: chromeStyle?.position || null,
+    appChromeHeight: chrome ? Math.ceil(chrome.getBoundingClientRect().height || 0) : null
+  };
+}
+
+function logDyeLedgerBuildInfo() {
+  const info = getBuildInfoSnapshot();
+  console.log('[BuildInfo] The Dye Ledger');
+  console.log('[BuildInfo] Version:', info.appVersion);
+  console.log('[BuildInfo] Build:', info.buildTimestamp);
+  console.log('[BuildInfo] URL:', info.url);
+  console.log('[BuildInfo] Service Worker controller:', info.serviceWorkerControlled ? 'yes' : 'no');
+}
+
+window.getDyeLedgerBuildInfo = getDyeLedgerBuildInfo;
+window.getDyeLedgerScrollInfo = getDyeLedgerScrollInfo;
+
+function renderBuildInfoUi() {
+  const values = {
+    appBuildTimestamp: BUILD_TIMESTAMP,
+    appBuildLabel: BUILD_LABEL,
+    appCurrentUrl: window.location.href,
+    appServiceWorkerStatus: ('serviceWorker' in navigator)
+      ? (navigator.serviceWorker.controller ? 'active / controlled' : 'supported / not controlling this page yet')
+      : 'unavailable',
+    appCacheGuidance: ('serviceWorker' in navigator)
+      ? 'If this version looks stale, force refresh or clear site data.'
+      : 'Service worker unavailable in this browser.',
+    appVersionFooterBuild: BUILD_TIMESTAMP
+  };
+  Object.entries(values).forEach(([id, value]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  });
+  const footerBuild = document.getElementById('appVersionFooterBuild');
+  if (footerBuild) footerBuild.title = `${BUILD_LABEL} · ${BUILD_TIMESTAMP} · ${window.location.href}`;
+}
+
 let swRegistration = null;
 let appUpdateBannerVisible = false;
 let hasReloadedForServiceWorker = false;
@@ -11626,6 +11716,7 @@ function updateVersionUi() {
   if (versionEl) versionEl.textContent = APP_VERSION;
   const footerVersionEl = document.getElementById('appVersionFooter');
   if (footerVersionEl) footerVersionEl.textContent = APP_VERSION;
+  renderBuildInfoUi();
 }
 
 async function resumeActiveSharedMatchOnStartup() {
@@ -11703,6 +11794,7 @@ function registerServiceWorker() {
   });
 }
 
+logDyeLedgerBuildInfo();
 registerServiceWorker();
 
 

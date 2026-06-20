@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.3.5';
+const APP_VERSION = 'v30.3.6';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -219,6 +219,8 @@ async function publishCurrentSharedDeviceToCloudMetadata(match) {
       playerAssignments: isCurrentDeviceMatchHost(match)
         ? { ...((match.sharedPlayerAssignments && typeof match.sharedPlayerAssignments === 'object') ? match.sharedPlayerAssignments : {}) }
         : (existingMeta.playerAssignments && typeof existingMeta.playerAssignments === 'object' ? existingMeta.playerAssignments : (match.sharedPlayerAssignments || {})),
+      memories: mergeRoundMemoryLists(existingMeta.memories || [], match.memories || []),
+      memoriesUpdatedAt: existingMeta.memoriesUpdatedAt || null,
     },
   };
   const { error: updateError } = await client.from('matches').update({ course_snapshot: nextSnapshot, updated_at: new Date().toISOString() }).eq('id', match.sharedMatchId);
@@ -5045,7 +5047,7 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
     status: match.status || 'active',
     course_id: match.courseId || '',
     reference_tee_id: match.teeId || '',
-    course_snapshot: { ...courseSnapshot, sharedMatchMeta: { scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device'), matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || ''), hostDeviceId: match.sharedHostDeviceId || getSharedDeviceId(), devices: Array.isArray(match.sharedDevices) ? match.sharedDevices : [], playerAssignments: match.sharedPlayerAssignments || {} } },
+    course_snapshot: { ...courseSnapshot, sharedMatchMeta: { scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device'), matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || ''), hostDeviceId: match.sharedHostDeviceId || getSharedDeviceId(), devices: Array.isArray(match.sharedDevices) ? match.sharedDevices : [], playerAssignments: match.sharedPlayerAssignments || {}, memories: getRoundMemories(match), memoriesUpdatedAt: new Date().toISOString() } },
     format: match.format || 'teams',
     allowance: Number(match.allowance) || 100,
     hole_count: getRequestedHoleCount(match),
@@ -5242,6 +5244,7 @@ function hydrateMatchFromCloudBundle(bundle) {
     sharedHostDeviceId: sharedMeta.hostDeviceId || '',
     sharedDevices: normalizeSharedDeviceList([...(Array.isArray(sharedMeta.devices) ? sharedMeta.devices : []), ...(memberships || []).map(row => getSharedMembershipDeviceRecord(row)).filter(Boolean)], { sharedHostDeviceId: sharedMeta.hostDeviceId || '' }),
     sharedPlayerAssignments: sharedMeta.playerAssignments && typeof sharedMeta.playerAssignments === 'object' ? sharedMeta.playerAssignments : {},
+    memories: Array.isArray(sharedMeta.memories) ? sharedMeta.memories.map(m => normalizeRoundMemory(m)).filter(Boolean) : [],
     notes: String(notes?.body || ''),
     roundRecapNotes: String(notes?.body || ''),
     selectedGames: normalizeSelectedGamesOrder(matchRow?.selected_games || []),
@@ -5379,7 +5382,7 @@ function setLastOpenedSharedMatch(matchOrId = null) {
 
 async function fetchSharedMatchMetadata(matchId, match = null) {
   const client = await ensureSupabaseClient();
-  if (!client) return { devices: [], playerAssignments: null };
+  if (!client) return { devices: [], playerAssignments: null, memories: [] };
   const [{ data: matchRow, error: matchError }, { data: memberships, error: membershipsError }] = await Promise.all([
     client.from('matches').select('id,course_snapshot,updated_at').eq('id', matchId).maybeSingle(),
     client.from('match_memberships').select('*').eq('match_id', matchId).eq('status', 'active').order('joined_at'),
@@ -5393,13 +5396,14 @@ async function fetchSharedMatchMetadata(matchId, match = null) {
       ...((memberships || []).map(row => getSharedMembershipDeviceRecord(row, match)).filter(Boolean)),
     ], match || { sharedHostDeviceId: meta.hostDeviceId || '' }),
     playerAssignments: meta.playerAssignments && typeof meta.playerAssignments === 'object' ? meta.playerAssignments : null,
+    memories: Array.isArray(meta.memories) ? meta.memories : [],
   };
 }
 async function fetchSharedParticipantDevices(matchId, match = null) {
   const meta = await fetchSharedMatchMetadata(matchId, match);
   return meta.devices || [];
 }
-async function mergeCloudSharedMetadata(match, { includeAssignments = false } = {}) {
+async function mergeCloudSharedMetadata(match, { includeAssignments = false, includeMemories = true } = {}) {
   if (!match || match.storageMode !== 'shared' || !match.sharedMatchId || !hasSupabaseConfig()) return false;
   const meta = await fetchSharedMatchMetadata(match.sharedMatchId, match);
   let changed = mergeSharedDevices(match, meta.devices || []);
@@ -5407,6 +5411,9 @@ async function mergeCloudSharedMetadata(match, { includeAssignments = false } = 
     const before = JSON.stringify(match.sharedPlayerAssignments || {});
     match.sharedPlayerAssignments = { ...(match.sharedPlayerAssignments || {}), ...meta.playerAssignments };
     if (JSON.stringify(match.sharedPlayerAssignments || {}) !== before) changed = true;
+  }
+  if (includeMemories && Array.isArray(meta.memories) && meta.memories.length) {
+    changed = mergeRoundMemories(match, meta.memories, { source: 'shared' }) || changed;
   }
   return changed;
 }
@@ -5442,6 +5449,8 @@ async function publishSharedPlayerAssignments(match) {
       devices,
       playerAssignments: assignments,
       playerAssignmentsUpdatedAt: new Date().toISOString(),
+      memories: mergeRoundMemoryLists(existingMeta.memories || [], match.memories || []),
+      memoriesUpdatedAt: existingMeta.memoriesUpdatedAt || null,
     },
   };
   const { error: updateError } = await client.from('matches').update({ course_snapshot: nextSnapshot, updated_at: new Date().toISOString() }).eq('id', match.sharedMatchId);
@@ -5477,7 +5486,7 @@ async function refreshActiveSharedParticipants({ silent = true } = {}) {
   const match = getActiveMatch();
   if (!match || match.storageMode !== 'shared' || !match.sharedMatchId || !hasSupabaseConfig()) return false;
   try {
-    const changed = await mergeCloudSharedMetadata(match, { includeAssignments: !isCurrentDeviceMatchHost(match) });
+    const changed = await mergeCloudSharedMetadata(match, { includeAssignments: !isCurrentDeviceMatchHost(match), includeMemories: true });
     if (changed) {
       persist({ skipRender: true });
       renderAll();
@@ -5604,7 +5613,9 @@ async function flushSharedMatchSync(matchId, { silent = true } = {}) {
   const task = (async () => {
     try {
       if (!isCurrentDeviceMatchHost(match)) {
-        await mergeCloudSharedMetadata(match, { includeAssignments: true });
+        await mergeCloudSharedMetadata(match, { includeAssignments: true, includeMemories: true });
+      } else {
+        await mergeCloudSharedMetadata(match, { includeAssignments: false, includeMemories: true });
       }
       await uploadSharedMatch(match);
       await pullSharedScoreEntries(match, { silent: true, render: false });
@@ -6261,12 +6272,19 @@ function normalizeRoundMemory(memory = {}) {
   const categories = ['General', 'Key Moment', 'Best Shot', 'Betting Drama'];
   const rawCategory = String(memory.category || 'General').trim();
   const category = categories.includes(rawCategory) ? rawCategory : 'General';
+  const id = String(memory.memoryId || memory.id || uid());
+  const timestamp = memory.timestamp || memory.createdAt || new Date().toISOString();
   return {
-    id: String(memory.id || uid()),
+    id,
+    memoryId: id,
     text,
     category,
     holeNumber: Math.max(1, Math.min(18, Number(memory.holeNumber || memory.hole || currentHole) || currentHole || 1)),
-    createdAt: memory.createdAt || new Date().toISOString(),
+    timestamp,
+    createdAt: memory.createdAt || timestamp,
+    createdByDeviceId: memory.createdByDeviceId || memory.deviceId || getSharedDeviceId(),
+    createdByPlayerId: memory.createdByPlayerId || memory.playerId || '',
+    createdByName: memory.createdByName || memory.playerName || memory.author || '',
     source: memory.source || 'local',
   };
 }
@@ -6276,6 +6294,55 @@ function getRoundMemories(match) {
     .map(normalizeRoundMemory)
     .filter(Boolean)
     .sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+}
+
+function mergeRoundMemoryLists(existing = [], incoming = []) {
+  const map = new Map();
+  [...(Array.isArray(existing) ? existing : []), ...(Array.isArray(incoming) ? incoming : [])]
+    .map(normalizeRoundMemory)
+    .filter(Boolean)
+    .forEach(memory => {
+      const key = String(memory.memoryId || memory.id || '').trim();
+      if (!key) return;
+      map.set(key, { ...(map.get(key) || {}), ...memory, id: key, memoryId: key });
+    });
+  return Array.from(map.values()).sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+}
+
+function mergeRoundMemories(match, incoming = [], { source = 'shared' } = {}) {
+  if (!match) return false;
+  const before = JSON.stringify(getRoundMemories(match));
+  const stamped = (Array.isArray(incoming) ? incoming : []).map(memory => ({ ...memory, source: memory?.source || source }));
+  match.memories = mergeRoundMemoryLists(match.memories || [], stamped);
+  return JSON.stringify(getRoundMemories(match)) !== before;
+}
+
+async function publishSharedMemories(match) {
+  if (!match || match.storageMode !== 'shared' || !match.sharedMatchId || !hasSupabaseConfig()) return false;
+  const client = await ensureSupabaseClient();
+  if (!client) return false;
+  const { data: matchRow, error: readError } = await client.from('matches').select('id,course_snapshot').eq('id', match.sharedMatchId).maybeSingle();
+  if (readError) throw readError;
+  const snapshot = matchRow?.course_snapshot && typeof matchRow.course_snapshot === 'object' ? matchRow.course_snapshot : {};
+  const existingMeta = snapshot.sharedMatchMeta && typeof snapshot.sharedMatchMeta === 'object' ? snapshot.sharedMatchMeta : {};
+  const memories = mergeRoundMemoryLists(existingMeta.memories || [], match.memories || []);
+  match.memories = memories;
+  const nextSnapshot = {
+    ...snapshot,
+    sharedMatchMeta: {
+      ...existingMeta,
+      scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || existingMeta.scoringAccessMode || 'single_device'),
+      matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || existingMeta.matchCode || ''),
+      hostDeviceId: match.sharedHostDeviceId || existingMeta.hostDeviceId || getSharedDeviceId(),
+      devices: normalizeSharedDeviceList([...(Array.isArray(existingMeta.devices) ? existingMeta.devices : []), ...(match.sharedDevices || [])], match),
+      playerAssignments: existingMeta.playerAssignments && typeof existingMeta.playerAssignments === 'object' ? existingMeta.playerAssignments : (match.sharedPlayerAssignments || {}),
+      memories,
+      memoriesUpdatedAt: new Date().toISOString(),
+    },
+  };
+  const { error: updateError } = await client.from('matches').update({ course_snapshot: nextSnapshot, updated_at: new Date().toISOString() }).eq('id', match.sharedMatchId);
+  if (updateError) throw updateError;
+  return true;
 }
 function formatMemoryMeta(memory) {
   const parts = [];
@@ -7311,6 +7378,28 @@ function completeActiveRound() {
   }
 }
 
+function ensurePlayInputState(match) {
+  if (!match) return false;
+  let changed = false;
+  const holeCount = getRequestedHoleCount(match);
+  (match.players || []).forEach((mp, idx) => {
+    if (!Array.isArray(mp.scores) || mp.scores.length < holeCount) {
+      const existing = Array.isArray(mp.scores) ? mp.scores : [];
+      mp.scores = Array.from({ length: holeCount }, (_, i) => existing[i] || { holeNumber: i + 1, gross: null });
+      changed = true;
+    }
+    if (!Array.isArray(mp.stats) || mp.stats.length < holeCount) {
+      const existing = Array.isArray(mp.stats) ? mp.stats : [];
+      mp.stats = Array.from({ length: holeCount }, (_, i) => normalizeHoleStat(existing[i] || {}, i));
+      changed = true;
+    }
+    if (!Number.isFinite(Number(mp.slot))) { mp.slot = idx; changed = true; }
+  });
+  currentHole = Math.min(Math.max(1, Number(currentHole) || 1), Math.max(1, holeCount));
+  if (changed) console.debug?.('[PlayInputInit]', { players: match.players?.length || 0, holeCount, currentHole });
+  return changed;
+}
+
 function renderCurrentMatch() {
   const match = getActiveMatch();
   const metaEl = document.getElementById('currentMatchMeta');
@@ -7328,6 +7417,7 @@ function renderCurrentMatch() {
   }
   const course = getCourse(match.courseId);
   const tee = getTee(match.courseId, match.teeId);
+  if (ensurePlayInputState(match)) persist({ skipRender: true });
   const metrics = computeMatchMetrics(match);
   const holeCount = getPlayableHoleCount(match, tee);
   const scoringHoles = getSelectedScoringHoles(match, tee);
@@ -7364,6 +7454,7 @@ function renderCurrentMatch() {
   renderScoreAccessCard(match);
   renderMemoryQuickCapture(match);
   renderScoreGrid(match, tee, metrics, scoringHoles);
+  wireLiveScoreInputs();
   renderStatTrackingEntry(match, hole, metrics);
   renderGreeniesEntry(match, hole);
   renderHoleJumpTiles(match);
@@ -9568,6 +9659,12 @@ function activateTab(tabId) {
   if (tabId === 'setup') {
     refreshActiveSharedParticipants({ silent: true });
     startSharedConnectionFastRefresh({ reason: 'match-tab-opened' });
+  }
+  if (tabId === 'score') {
+    const match = getActiveMatch();
+    if (ensurePlayInputState(match)) persist({ skipRender: true });
+    renderCurrentMatch();
+    requestAnimationFrame(() => wireLiveScoreInputs());
   }
   if (tabId === 'courses') renderPlayers();
 }

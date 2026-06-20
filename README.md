@@ -1,31 +1,5 @@
-# The Dye Ledger
+# The Dye Ledger v30.3.6
 
-A compact match-and-games ledger for golf groups.
+Focused reliability release for shared assignment readiness, Play score input initialization, sticky header/tab navigation, and Shared Memories synchronization.
 
-## Current Version
-
-v29.2.6
-
-## v29.2.6 Build Notes
-
-• Added the ability to delete tees and associated holes during imported course review before saving.
-
-• Renamed cloud actions to Download Cloud Courses and Publish Local Changes for improved clarity.
-
-• Refined iPhone Game Setup entry cards to use aligned, visually identical Create New Match and Join a Match actions.
-
-
-## v30.3.5 – Game Setup Cancel Path
-
-v30.3.5 adds a clear Cancel path from Game Setup. New match setup can be cancelled back to the Create New Match / Join a Match choice menu, and existing match setup edits can be cancelled back to the active match without applying unsaved setup changes.
-
-## v30.3.5 – Multi-Round Session Foundation
-
-v30.3.5 adds a local-first multi-round session foundation. After completing a round, users can view the Match Summary, start another round with the same group, or start a completely new match. Starting another round carries forward the group setup but resets scores, stats, notes, course, tees, games, and results.
-
-
-## v30.3.5
-
-- Shared match connection speed polish with temporary fast-refresh during join/assignment.
-- Join New Match post-round option.
-- App-level persistent header and tabs fix.
+See `BUILD_NOTES_v30.3.6.md` for the current release notes.

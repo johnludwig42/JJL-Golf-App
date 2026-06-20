@@ -1,7 +1,7 @@
 {
   "name": "The Dye Ledger",
   "short_name": "Dye Ledger",
-  "start_url": "./?v=30.3.5",
+  "start_url": "./?v=30.3.6",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f3f6f4",
@@ -23,5 +23,5 @@
       "type": "image/png"
     }
   ],
-  "version": "v30.3.5"
+  "version": "v30.3.6"
 }

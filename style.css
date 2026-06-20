@@ -3707,3 +3707,43 @@ body{
   .app-chrome{position: static !important; box-shadow:none !important;}
   main{padding-top:0 !important;}
 }
+
+/* v30.3.6: fixed native-style app shell for persistent header/tabs */
+html, body{
+  height:100%;
+  min-height:100%;
+  overflow-x:hidden;
+}
+body{
+  min-height:100dvh;
+  padding-top:var(--app-chrome-height);
+}
+.app-chrome{
+  position:fixed !important;
+  top:0;
+  left:0;
+  right:0;
+  z-index:200;
+  background:linear-gradient(to bottom, var(--bg) 94%, rgba(243,246,244,.98));
+  box-shadow:0 6px 16px rgba(0,0,0,.07);
+  transform:none !important;
+}
+.app-chrome .app-header,
+.app-chrome .top-tabs{
+  position:static !important;
+  top:auto !important;
+}
+.app-chrome + main{
+  padding-top:8px;
+}
+body.keyboard-open .app-chrome{
+  position:fixed !important;
+  top:0;
+}
+@media (max-width:640px){
+  .app-chrome .top-tabs{
+    position:static !important;
+    box-shadow:none;
+    background:transparent;
+  }
+}

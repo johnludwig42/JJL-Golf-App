@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.3.8';
+const APP_VERSION = 'v30.3.9';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -39,6 +39,7 @@ let sharedParticipantRefreshTimer = null;
 let sharedConnectionFastRefreshTimer = null;
 let sharedConnectionFastRefreshUntil = 0;
 let sharedParticipantPanelRefreshPending = false;
+let sharedAssignmentDropdownRefreshPending = false;
 let pendingScoreCommitFocus = null;
 let scoreAutoAdvanceGeneration = 0;
 const scoreInputSessionState = new Map();
@@ -5146,6 +5147,32 @@ async function uploadSharedMatch(match) {
   const user = await getSupabaseUser();
   ensureSharedDeviceRegistered(match, isCurrentDeviceMatchHost(match) ? 'Host Device' : 'Joined Device');
   const payload = buildCloudMatchPayload(match, user?.id || null);
+  // v30.3.9: full-match uploads must not erase shared metadata written by other
+  // devices. Re-read immediately before upsert and union shared JSON fields.
+  try {
+    const { data: liveRow } = await client
+      .from('matches')
+      .select('course_snapshot')
+      .eq('id', payload.matchRow.id)
+      .maybeSingle();
+    const liveMeta = (liveRow?.course_snapshot && typeof liveRow.course_snapshot === 'object' && liveRow.course_snapshot.sharedMatchMeta) || {};
+    const snapshot = payload.matchRow.course_snapshot && typeof payload.matchRow.course_snapshot === 'object' ? payload.matchRow.course_snapshot : {};
+    const meta = snapshot.sharedMatchMeta && typeof snapshot.sharedMatchMeta === 'object' ? snapshot.sharedMatchMeta : {};
+    snapshot.sharedMatchMeta = meta;
+    payload.matchRow.course_snapshot = snapshot;
+    meta.memories = mergeRoundMemoryLists(liveMeta.memories || [], meta.memories || []);
+    match.memories = meta.memories;
+    meta.devices = normalizeSharedDeviceList([
+      ...(Array.isArray(liveMeta.devices) ? liveMeta.devices : []),
+      ...(Array.isArray(meta.devices) ? meta.devices : []),
+    ], match);
+    match.sharedDevices = meta.devices;
+    if (!isCurrentDeviceMatchHost(match) && liveMeta.playerAssignments && typeof liveMeta.playerAssignments === 'object') {
+      meta.playerAssignments = { ...liveMeta.playerAssignments, ...(meta.playerAssignments || {}) };
+    }
+  } catch (mergeErr) {
+    console.warn('Pre-upload shared-metadata merge failed; proceeding with local snapshot.', mergeErr);
+  }
   let response = await client.from('matches').upsert(payload.matchRow, { onConflict: 'id' });
   if (response.error) throw response.error;
   if (payload.membership) {
@@ -5509,6 +5536,13 @@ async function setSharedPlayerAssignment(match, playerId, deviceId) {
   const did = String(deviceId || '').trim();
   if (!pid || !did) return false;
   if (!isValidSharedAssignmentDeviceId(match, did)) {
+    try {
+      await refreshSharedDevicesForAssignment(match);
+    } catch (err) {
+      console.warn('Could not self-heal assignment devices before save.', err);
+    }
+  }
+  if (!isValidSharedAssignmentDeviceId(match, did)) {
     toast('That device is no longer available. Refresh devices and try again.');
     return false;
   }
@@ -5525,6 +5559,28 @@ async function setSharedPlayerAssignment(match, playerId, deviceId) {
     console.error('Shared assignment save failed.', err);
     toast('Unable to save assignment. Please try Sync Now and save again.');
     return false;
+  }
+}
+
+async function refreshSharedAssignmentDevicesOnDemand(event) {
+  const target = event?.target?.closest?.('[data-shared-player-assignment]');
+  if (!target || sharedAssignmentDropdownRefreshPending) return;
+  const match = getActiveMatch();
+  if (!match || !isCurrentDeviceMatchHost(match) || !match.sharedMatchId || !hasSupabaseConfig()) return;
+  sharedAssignmentDropdownRefreshPending = true;
+  try {
+    const before = JSON.stringify(getSharedAssignmentDevices(match));
+    await refreshSharedDevicesForAssignment(match);
+    const after = JSON.stringify(getSharedAssignmentDevices(match));
+    startSharedConnectionFastRefresh({ reason: 'assignment-dropdown-open' });
+    if (before !== after) {
+      persist({ skipRender: true });
+      renderAll();
+    }
+  } catch (err) {
+    console.warn('Could not refresh assignment devices on dropdown open.', err);
+  } finally {
+    sharedAssignmentDropdownRefreshPending = false;
   }
 }
 
@@ -5586,10 +5642,13 @@ function startSharedConnectionFastRefresh({ reason = 'shared-connection', durati
   sharedConnectionFastRefreshUntil = Math.max(sharedConnectionFastRefreshUntil || 0, Date.now() + durationMs);
   const tick = async () => {
     const active = getActiveMatch();
-    if (!active || active.storageMode !== 'shared' || document.visibilityState === 'hidden' || Date.now() > sharedConnectionFastRefreshUntil || !shouldRunSharedConnectionFastRefresh(active)) {
+    if (!active || active.storageMode !== 'shared' || document.visibilityState === 'hidden' || !shouldRunSharedConnectionFastRefresh(active)) {
       stopSharedConnectionFastRefresh();
       return;
     }
+    // v30.3.9: while the host is actively in Shared Match setup/assignment, keep
+    // the fast refresh window alive instead of letting it expire after 60 seconds.
+    sharedConnectionFastRefreshUntil = Math.max(sharedConnectionFastRefreshUntil || 0, Date.now() + durationMs);
     try {
       await refreshActiveSharedParticipants({ silent: true });
       await refreshActiveSharedScores({ silent: true, render: false });
@@ -10700,6 +10759,11 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
 
+  const setupSharedAdminPanel = document.getElementById('setupSharedAdminPanel');
+  ['focusin', 'pointerdown', 'touchstart'].forEach(eventName => {
+    setupSharedAdminPanel?.addEventListener(eventName, refreshSharedAssignmentDevicesOnDemand, { passive: true });
+  });
+
   document.getElementById('setupSharedAdminPanel')?.addEventListener('change', async e => {
     if (!e.target.matches('[data-shared-player-assignment]')) return;
     const match = getActiveMatch();
@@ -11203,18 +11267,19 @@ registerServiceWorker();
 
 
 function resetHorizontalViewportPosition() {
-  // v28.21.1: iPhone Safari can horizontally reposition the page when focusing
-  // score inputs if any descendant has internal overflow. Keep page-level scroll
-  // locked at the left edge while preserving intended internal stat-matrix scrolling.
+  // v30.3.9: keep only horizontal clamping. Do not call window.scrollTo for
+  // vertical position; iOS Safari must be allowed to scroll focused score inputs
+  // into view naturally when the keyboard opens.
+  if (document.activeElement?.matches?.('#score [data-score-player]')) return;
   const root = document.documentElement;
   const body = document.body;
   if (root && root.scrollLeft) root.scrollLeft = 0;
   if (body && body.scrollLeft) body.scrollLeft = 0;
-  if (window.scrollX && !document.activeElement?.matches?.('#score [data-score-player]')) window.scrollTo(0, window.scrollY || 0);
 }
 
 function installViewportStabilityGuards() {
   const resetSoon = () => {
+    if (document.activeElement?.matches?.('#score [data-score-player]')) return;
     resetHorizontalViewportPosition();
     window.requestAnimationFrame(resetHorizontalViewportPosition);
     window.setTimeout(resetHorizontalViewportPosition, 60);
@@ -11224,15 +11289,16 @@ function installViewportStabilityGuards() {
   window.addEventListener('orientationchange', resetSoon, { passive: true });
   document.addEventListener('focusin', (event) => {
     const target = event.target;
-    if (!target || !target.closest) return;
-    if (target.closest('#score') && !target.matches?.('[data-score-player]')) resetSoon();
+    if (!target || !target.closest || target.matches?.('[data-score-player]')) return;
+    if (target.closest('#score')) resetSoon();
   });
   document.addEventListener('input', (event) => {
     const target = event.target;
-    if (!target || !target.closest) return;
+    if (!target || !target.closest || target.matches?.('[data-score-player]')) return;
     if (target.closest('#score')) resetSoon();
   }, { passive: true });
   document.addEventListener('scroll', () => {
+    if (document.activeElement?.matches?.('#score [data-score-player]')) return;
     if (document.documentElement.scrollLeft || document.body.scrollLeft) {
       resetHorizontalViewportPosition();
     }

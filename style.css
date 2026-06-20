@@ -3812,3 +3812,41 @@ body.keyboard-open .app-chrome{
   .app-chrome{position:static !important;box-shadow:none !important;}
   main{position:static !important;overflow:visible !important;padding:0 !important;}
 }
+
+/* v30.3.11 Shared Match Participant Assignment Diagnostics */
+.shared-assignment-diagnostics {
+  border: 1px dashed rgba(120, 120, 120, 0.45);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.72);
+}
+.shared-assignment-diagnostics summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.diag-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px;
+}
+.diag-json {
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.06);
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+.mini-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.mini-table th,
+.mini-table td {
+  border-bottom: 1px solid rgba(120, 120, 120, 0.25);
+  padding: 4px 6px;
+  text-align: left;
+  vertical-align: top;
+}

@@ -882,7 +882,7 @@ body.keyboard-open .top-tabs{
 .score-grid td:nth-child(4),
 .score-grid td:nth-child(5){ text-align:center; }
 .score-grid td:nth-child(3){ text-align:center; }
-#score .score-hole-nav{position:sticky;top:calc(env(safe-area-inset-top,0px) + 8px);z-index:12;background:rgba(244,248,246,.96);backdrop-filter:blur(8px);padding:8px;border-radius:14px;border:1px solid rgba(11,93,59,.12)}
+#score .score-hole-nav{position:sticky;top:calc(var(--app-chrome-height, 0px) + 8px);z-index:12;background:rgba(244,248,246,.96);backdrop-filter:blur(8px);padding:8px;border-radius:14px;border:1px solid rgba(11,93,59,.12)}
 #score .score-grid-wrap{border-radius:16px;box-shadow:0 10px 24px rgba(0,0,0,.05)}
 #leaderboard .scoreboard-card{border-radius:16px;box-shadow:0 10px 24px rgba(0,0,0,.05)}
 #leaderboard .match-status-value,#leaderboard .game-summary-value{font-size:16px;line-height:1.25;font-weight:800}
@@ -3748,18 +3748,26 @@ body.keyboard-open .app-chrome{
   }
 }
 
-/* v30.3.9: sticky app chrome with normal document scroll for iOS keyboard reliability. */
+/* v30.3.8: single STICKY app shell. Replaces the v30.3.7 fixed shell, which broke
+   iOS Safari: position:fixed anchors to the layout viewport, so (a) the soft keyboard
+   pushed the chrome off-screen and the 6 tabs vanished mid-scoring [Defect 3], and
+   (b) focusing a score input inside a fixed scroll container over an overflow:hidden
+   body swallowed the FIRST tap that should raise the keyboard [Defect 2]. Sticky
+   positioning stays in normal flow, keeps header+nav pinned and persistent, and lets
+   the page scroll natively so the keyboard behaves. This block is intentionally last
+   in the cascade and uses targeted overrides to beat the higher-specificity rules
+   left behind by the earlier (now superseded) v30.3 / v30.3.6 chrome blocks. */
 html,
 body{
   height:auto !important;
   min-height:100%;
-  overflow-x:hidden !important;
+  overflow-x:hidden;
   overflow-y:visible !important;
+  overscroll-behavior-y:none;
 }
 body{
   min-height:100dvh;
   padding-top:0 !important;
-  overscroll-behavior-y:auto;
 }
 .app-chrome{
   position:sticky !important;
@@ -3775,8 +3783,8 @@ body{
 .app-chrome .top-tabs{
   position:static !important;
   top:auto !important;
-  box-shadow:none;
 }
+/* main is a normal in-flow block, NOT a fixed/independent scroll container. */
 main{
   position:static !important;
   top:auto !important;
@@ -3785,14 +3793,19 @@ main{
   bottom:auto !important;
   height:auto !important;
   overflow:visible !important;
-  -webkit-overflow-scrolling:touch;
+  -webkit-overflow-scrolling:auto;
   padding:8px 12px calc(64px + env(safe-area-inset-bottom) + var(--keyboard-offset, 0px)) !important;
-  overscroll-behavior-y:auto;
+  overscroll-behavior:auto;
 }
+/* Beats the v30.3 rule `.app-chrome + main{padding-top:6px!important}` (0,1,1). */
+.app-chrome + main{
+  padding-top:8px !important;
+}
+/* Keyboard open: keep the chrome STICKY (never fixed) so it can't detach on iOS.
+   Beats the v30.3.6 rule `body.keyboard-open .app-chrome{position:fixed!important}`. */
 body.keyboard-open .app-chrome{
   position:sticky !important;
   top:0 !important;
-  box-shadow:0 8px 18px rgba(0,0,0,.09);
 }
 @media print{
   html, body{overflow:visible !important;height:auto !important;}

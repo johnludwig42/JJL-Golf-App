@@ -39,7 +39,7 @@ let sharedParticipantRefreshTimer = null;
 let sharedConnectionFastRefreshTimer = null;
 let sharedConnectionFastRefreshUntil = 0;
 let sharedParticipantPanelRefreshPending = false;
-let sharedAssignmentDropdownRefreshPending = false;
+let sharedAssignmentDropdownRefreshAt = 0;
 let pendingScoreCommitFocus = null;
 let scoreAutoAdvanceGeneration = 0;
 const scoreInputSessionState = new Map();
@@ -5147,31 +5147,38 @@ async function uploadSharedMatch(match) {
   const user = await getSupabaseUser();
   ensureSharedDeviceRegistered(match, isCurrentDeviceMatchHost(match) ? 'Host Device' : 'Joined Device');
   const payload = buildCloudMatchPayload(match, user?.id || null);
-  // v30.3.9: full-match uploads must not erase shared metadata written by other
-  // devices. Re-read immediately before upsert and union shared JSON fields.
+  // buildCloudMatchPayload() stamps course_snapshot.sharedMatchMeta.memories from
+  // LOCAL state only. A raw upsert of matchRow therefore clobbers memories (and can
+  // drop devices/assignments) that another device published since our last poll.
+  // The host uploads far more often (200ms debounce while scoring) than it polls
+  // memories (30s), so without this it repeatedly stomps a joined device's freshly
+  // published memory. Re-read the live row and union before writing.
   try {
-    const { data: liveRow } = await client
-      .from('matches')
-      .select('course_snapshot')
-      .eq('id', payload.matchRow.id)
-      .maybeSingle();
-    const liveMeta = (liveRow?.course_snapshot && typeof liveRow.course_snapshot === 'object' && liveRow.course_snapshot.sharedMatchMeta) || {};
-    const snapshot = payload.matchRow.course_snapshot && typeof payload.matchRow.course_snapshot === 'object' ? payload.matchRow.course_snapshot : {};
-    const meta = snapshot.sharedMatchMeta && typeof snapshot.sharedMatchMeta === 'object' ? snapshot.sharedMatchMeta : {};
-    snapshot.sharedMatchMeta = meta;
-    payload.matchRow.course_snapshot = snapshot;
-    meta.memories = mergeRoundMemoryLists(liveMeta.memories || [], meta.memories || []);
-    match.memories = meta.memories;
-    meta.devices = normalizeSharedDeviceList([
-      ...(Array.isArray(liveMeta.devices) ? liveMeta.devices : []),
-      ...(Array.isArray(meta.devices) ? meta.devices : []),
-    ], match);
-    match.sharedDevices = meta.devices;
-    if (!isCurrentDeviceMatchHost(match) && liveMeta.playerAssignments && typeof liveMeta.playerAssignments === 'object') {
-      meta.playerAssignments = { ...liveMeta.playerAssignments, ...(meta.playerAssignments || {}) };
+    const { data: liveRow, error: liveReadError } = await client
+      .from('matches').select('id,course_snapshot').eq('id', payload.matchRow.id).maybeSingle();
+    if (liveReadError) throw liveReadError;
+    const liveSnapshot = liveRow?.course_snapshot && typeof liveRow.course_snapshot === 'object' ? liveRow.course_snapshot : null;
+    const liveMeta = liveSnapshot?.sharedMatchMeta && typeof liveSnapshot.sharedMatchMeta === 'object' ? liveSnapshot.sharedMatchMeta : null;
+    if (liveMeta) {
+      const payloadMeta = payload.matchRow.course_snapshot.sharedMatchMeta;
+      // Memories: union live + local so no device's memory is ever lost.
+      const mergedMemories = mergeRoundMemoryLists(liveMeta.memories || [], payloadMeta.memories || []);
+      payloadMeta.memories = mergedMemories;
+      payloadMeta.memoriesUpdatedAt = new Date().toISOString();
+      match.memories = mergedMemories;
+      // Devices: union so a just-joined device isn't dropped by a host upload.
+      payloadMeta.devices = normalizeSharedDeviceList(
+        [...(Array.isArray(liveMeta.devices) ? liveMeta.devices : []), ...(Array.isArray(payloadMeta.devices) ? payloadMeta.devices : [])],
+        match
+      );
+      // Assignments: the host owns the assignment map. A non-host upload must not
+      // overwrite it, so keep the live copy unless we are the host.
+      if (!isCurrentDeviceMatchHost(match) && liveMeta.playerAssignments && typeof liveMeta.playerAssignments === 'object') {
+        payloadMeta.playerAssignments = liveMeta.playerAssignments;
+      }
     }
-  } catch (mergeErr) {
-    console.warn('Pre-upload shared-metadata merge failed; proceeding with local snapshot.', mergeErr);
+  } catch (err) {
+    console.warn('Could not merge live shared metadata before upload; proceeding with local snapshot.', err);
   }
   let response = await client.from('matches').upsert(payload.matchRow, { onConflict: 'id' });
   if (response.error) throw response.error;
@@ -5536,15 +5543,17 @@ async function setSharedPlayerAssignment(match, playerId, deviceId) {
   const did = String(deviceId || '').trim();
   if (!pid || !did) return false;
   if (!isValidSharedAssignmentDeviceId(match, did)) {
+    // The local device list may simply be stale (the device joined since the last
+    // poll). Pull the live list on demand and re-validate before giving up.
     try {
       await refreshSharedDevicesForAssignment(match);
     } catch (err) {
-      console.warn('Could not self-heal assignment devices before save.', err);
+      console.warn('On-demand device refresh before assignment failed.', err);
     }
-  }
-  if (!isValidSharedAssignmentDeviceId(match, did)) {
-    toast('That device is no longer available. Refresh devices and try again.');
-    return false;
+    if (!isValidSharedAssignmentDeviceId(match, did)) {
+      toast('That device is no longer available. Refresh devices and try again.');
+      return false;
+    }
   }
   match.sharedPlayerAssignments = match.sharedPlayerAssignments && typeof match.sharedPlayerAssignments === 'object' ? match.sharedPlayerAssignments : {};
   match.sharedPlayerAssignments[pid] = did;
@@ -5559,28 +5568,6 @@ async function setSharedPlayerAssignment(match, playerId, deviceId) {
     console.error('Shared assignment save failed.', err);
     toast('Unable to save assignment. Please try Sync Now and save again.');
     return false;
-  }
-}
-
-async function refreshSharedAssignmentDevicesOnDemand(event) {
-  const target = event?.target?.closest?.('[data-shared-player-assignment]');
-  if (!target || sharedAssignmentDropdownRefreshPending) return;
-  const match = getActiveMatch();
-  if (!match || !isCurrentDeviceMatchHost(match) || !match.sharedMatchId || !hasSupabaseConfig()) return;
-  sharedAssignmentDropdownRefreshPending = true;
-  try {
-    const before = JSON.stringify(getSharedAssignmentDevices(match));
-    await refreshSharedDevicesForAssignment(match);
-    const after = JSON.stringify(getSharedAssignmentDevices(match));
-    startSharedConnectionFastRefresh({ reason: 'assignment-dropdown-open' });
-    if (before !== after) {
-      persist({ skipRender: true });
-      renderAll();
-    }
-  } catch (err) {
-    console.warn('Could not refresh assignment devices on dropdown open.', err);
-  } finally {
-    sharedAssignmentDropdownRefreshPending = false;
   }
 }
 
@@ -5642,13 +5629,21 @@ function startSharedConnectionFastRefresh({ reason = 'shared-connection', durati
   sharedConnectionFastRefreshUntil = Math.max(sharedConnectionFastRefreshUntil || 0, Date.now() + durationMs);
   const tick = async () => {
     const active = getActiveMatch();
-    if (!active || active.storageMode !== 'shared' || document.visibilityState === 'hidden' || !shouldRunSharedConnectionFastRefresh(active)) {
+    const stillNeeded = !!active
+      && active.storageMode === 'shared'
+      && document.visibilityState !== 'hidden'
+      && shouldRunSharedConnectionFastRefresh(active);
+    // Keep the fast cadence alive as long as it's still needed (e.g. the host is
+    // sitting on the setup panel waiting to assign a just-joined device). Without
+    // this the poll self-terminated after 60s and fell back to the 30s cadence,
+    // which is exactly when the host tries to assign a newly joined device.
+    if (stillNeeded) {
+      sharedConnectionFastRefreshUntil = Math.max(sharedConnectionFastRefreshUntil || 0, Date.now() + SHARED_CONNECTION_FAST_REFRESH_DURATION_MS);
+    }
+    if (!stillNeeded || Date.now() > sharedConnectionFastRefreshUntil) {
       stopSharedConnectionFastRefresh();
       return;
     }
-    // v30.3.9: while the host is actively in Shared Match setup/assignment, keep
-    // the fast refresh window alive instead of letting it expire after 60 seconds.
-    sharedConnectionFastRefreshUntil = Math.max(sharedConnectionFastRefreshUntil || 0, Date.now() + durationMs);
     try {
       await refreshActiveSharedParticipants({ silent: true });
       await refreshActiveSharedScores({ silent: true, render: false });
@@ -10759,11 +10754,6 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
 
-  const setupSharedAdminPanel = document.getElementById('setupSharedAdminPanel');
-  ['focusin', 'pointerdown', 'touchstart'].forEach(eventName => {
-    setupSharedAdminPanel?.addEventListener(eventName, refreshSharedAssignmentDevicesOnDemand, { passive: true });
-  });
-
   document.getElementById('setupSharedAdminPanel')?.addEventListener('change', async e => {
     if (!e.target.matches('[data-shared-player-assignment]')) return;
     const match = getActiveMatch();
@@ -10773,6 +10763,33 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     await refreshActiveSharedScores({ silent: true, render: false });
     renderAll();
   });
+
+  // Pull the live device list the moment the host interacts with an assignment
+  // dropdown, so a just-joined device is selectable without waiting for a poll.
+  // Debounced, and only re-renders if the available device set actually changed
+  // (re-rendering mid-open would otherwise collapse the native picker).
+  const onDemandAssignmentRefresh = async target => {
+    if (!target?.closest?.('[data-shared-player-assignment]')) return;
+    const match = getActiveMatch();
+    if (!match || !isCurrentDeviceMatchHost(match) || !match.sharedMatchId || !hasSupabaseConfig()) return;
+    const now = Date.now();
+    if (now - sharedAssignmentDropdownRefreshAt < 2000) return;
+    sharedAssignmentDropdownRefreshAt = now;
+    try {
+      const before = JSON.stringify(getSharedAssignmentDevices(match).map(d => String(d.id)).sort());
+      await refreshSharedDevicesForAssignment(match);
+      const after = JSON.stringify(getSharedAssignmentDevices(match).map(d => String(d.id)).sort());
+      if (before !== after) {
+        persist({ skipRender: true });
+        renderAll();
+      }
+    } catch (err) {
+      console.warn('On-demand assignment-dropdown refresh failed.', err);
+    }
+  };
+  document.getElementById('setupSharedAdminPanel')?.addEventListener('focusin', e => { onDemandAssignmentRefresh(e.target); });
+  document.getElementById('setupSharedAdminPanel')?.addEventListener('pointerdown', e => { onDemandAssignmentRefresh(e.target); });
+
 
   document.getElementById('matchForm').addEventListener('submit', async e => {
     e.preventDefault();
@@ -11267,10 +11284,11 @@ registerServiceWorker();
 
 
 function resetHorizontalViewportPosition() {
-  // v30.3.9: keep only horizontal clamping. Do not call window.scrollTo for
-  // vertical position; iOS Safari must be allowed to scroll focused score inputs
-  // into view naturally when the keyboard opens.
-  if (document.activeElement?.matches?.('#score [data-score-player]')) return;
+  // v30.3.8: horizontal drift is now prevented in CSS (html,body{overflow-x:hidden}),
+  // so we only nudge any stray horizontal scroll back to the left edge. We must NOT
+  // call window.scrollTo here: under the old fixed-shell layout the vertical scroll
+  // churn (rAF + timed re-runs) fired on score-input focus and could swallow the
+  // first tap that should raise the iOS keyboard [Defect 2].
   const root = document.documentElement;
   const body = document.body;
   if (root && root.scrollLeft) root.scrollLeft = 0;
@@ -11279,7 +11297,6 @@ function resetHorizontalViewportPosition() {
 
 function installViewportStabilityGuards() {
   const resetSoon = () => {
-    if (document.activeElement?.matches?.('#score [data-score-player]')) return;
     resetHorizontalViewportPosition();
     window.requestAnimationFrame(resetHorizontalViewportPosition);
     window.setTimeout(resetHorizontalViewportPosition, 60);
@@ -11289,16 +11306,15 @@ function installViewportStabilityGuards() {
   window.addEventListener('orientationchange', resetSoon, { passive: true });
   document.addEventListener('focusin', (event) => {
     const target = event.target;
-    if (!target || !target.closest || target.matches?.('[data-score-player]')) return;
-    if (target.closest('#score')) resetSoon();
+    if (!target || !target.closest) return;
+    if (target.closest('#score') && !target.matches?.('[data-score-player]')) resetSoon();
   });
   document.addEventListener('input', (event) => {
     const target = event.target;
-    if (!target || !target.closest || target.matches?.('[data-score-player]')) return;
+    if (!target || !target.closest) return;
     if (target.closest('#score')) resetSoon();
   }, { passive: true });
   document.addEventListener('scroll', () => {
-    if (document.activeElement?.matches?.('#score [data-score-player]')) return;
     if (document.documentElement.scrollLeft || document.body.scrollLeft) {
       resetHorizontalViewportPosition();
     }

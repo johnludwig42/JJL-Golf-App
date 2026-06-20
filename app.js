@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.3.4';
+const APP_VERSION = 'v30.3.5';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -216,7 +216,9 @@ async function publishCurrentSharedDeviceToCloudMetadata(match) {
       matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || existingMeta.matchCode || ''),
       hostDeviceId: match.sharedHostDeviceId || existingMeta.hostDeviceId || '',
       devices,
-      playerAssignments: existingMeta.playerAssignments && typeof existingMeta.playerAssignments === 'object' ? existingMeta.playerAssignments : (match.sharedPlayerAssignments || {}),
+      playerAssignments: isCurrentDeviceMatchHost(match)
+        ? { ...((match.sharedPlayerAssignments && typeof match.sharedPlayerAssignments === 'object') ? match.sharedPlayerAssignments : {}) }
+        : (existingMeta.playerAssignments && typeof existingMeta.playerAssignments === 'object' ? existingMeta.playerAssignments : (match.sharedPlayerAssignments || {})),
     },
   };
   const { error: updateError } = await client.from('matches').update({ course_snapshot: nextSnapshot, updated_at: new Date().toISOString() }).eq('id', match.sharedMatchId);
@@ -5408,6 +5410,69 @@ async function mergeCloudSharedMetadata(match, { includeAssignments = false } = 
   }
   return changed;
 }
+
+function getSharedAssignmentDevices(match) {
+  if (!match) return [];
+  return normalizeSharedDeviceList(Array.isArray(match.sharedDevices) ? match.sharedDevices : [], match);
+}
+function isValidSharedAssignmentDeviceId(match, deviceId) {
+  const id = String(deviceId || '').trim();
+  if (!match || !id) return false;
+  return getSharedAssignmentDevices(match).some(device => String(device.id) === id);
+}
+async function publishSharedPlayerAssignments(match) {
+  if (!match || match.storageMode !== 'shared' || !match.sharedMatchId || !hasSupabaseConfig()) return false;
+  if (!isCurrentDeviceMatchHost(match)) return false;
+  const client = await ensureSupabaseClient();
+  if (!client) return false;
+  const { data: matchRow, error: readError } = await client.from('matches').select('id,course_snapshot').eq('id', match.sharedMatchId).maybeSingle();
+  if (readError) throw readError;
+  const snapshot = matchRow?.course_snapshot && typeof matchRow.course_snapshot === 'object' ? matchRow.course_snapshot : {};
+  const existingMeta = snapshot.sharedMatchMeta && typeof snapshot.sharedMatchMeta === 'object' ? snapshot.sharedMatchMeta : {};
+  const devices = normalizeSharedDeviceList([...(Array.isArray(existingMeta.devices) ? existingMeta.devices : []), ...(match.sharedDevices || [])], match);
+  mergeSharedDevices(match, devices);
+  const assignments = { ...((match.sharedPlayerAssignments && typeof match.sharedPlayerAssignments === 'object') ? match.sharedPlayerAssignments : {}) };
+  const nextSnapshot = {
+    ...snapshot,
+    sharedMatchMeta: {
+      ...existingMeta,
+      scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || existingMeta.scoringAccessMode || 'single_device'),
+      matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || existingMeta.matchCode || ''),
+      hostDeviceId: match.sharedHostDeviceId || existingMeta.hostDeviceId || getSharedDeviceId(),
+      devices,
+      playerAssignments: assignments,
+      playerAssignmentsUpdatedAt: new Date().toISOString(),
+    },
+  };
+  const { error: updateError } = await client.from('matches').update({ course_snapshot: nextSnapshot, updated_at: new Date().toISOString() }).eq('id', match.sharedMatchId);
+  if (updateError) throw updateError;
+  return true;
+}
+async function setSharedPlayerAssignment(match, playerId, deviceId) {
+  if (!match || !isCurrentDeviceMatchHost(match)) return false;
+  const pid = String(playerId || '').trim();
+  const did = String(deviceId || '').trim();
+  if (!pid || !did) return false;
+  if (!isValidSharedAssignmentDeviceId(match, did)) {
+    toast('That device is no longer available. Refresh devices and try again.');
+    return false;
+  }
+  match.sharedPlayerAssignments = match.sharedPlayerAssignments && typeof match.sharedPlayerAssignments === 'object' ? match.sharedPlayerAssignments : {};
+  match.sharedPlayerAssignments[pid] = did;
+  persist({ skipRender: true });
+  try {
+    await publishSharedPlayerAssignments(match);
+    scheduleSharedMatchSync(match, { immediate: true, silent: true });
+    startSharedConnectionFastRefresh({ reason: 'assignment-save' });
+    persist({ skipRender: true });
+    return true;
+  } catch (err) {
+    console.error('Shared assignment save failed.', err);
+    toast('Unable to save assignment. Please try Sync Now and save again.');
+    return false;
+  }
+}
+
 async function refreshActiveSharedParticipants({ silent = true } = {}) {
   const match = getActiveMatch();
   if (!match || match.storageMode !== 'shared' || !match.sharedMatchId || !hasSupabaseConfig()) return false;
@@ -9357,9 +9422,11 @@ function renderSetupSharedAdminPanel() {
   }).join('');
   const assignmentRowsByPlayer = isAssignedPlayersMode(match) ? (match.players || []).map(mp => {
     const player = getPlayer(mp.playerId) || { name: 'Player' };
-    const assigned = getAssignedDeviceForPlayer(match, mp.playerId) || match.sharedHostDeviceId || getSharedDeviceId();
-    const assignedDevice = devices.find(d => d.id === assigned);
-    const options = devices.map(d => `<option value="${escapeHtml(d.id)}" ${d.id === assigned ? 'selected' : ''}>${escapeHtml(d.name || d.id)}</option>`).join('');
+    const savedAssigned = getAssignedDeviceForPlayer(match, mp.playerId);
+    const assigned = savedAssigned && devices.some(d => String(d.id) === String(savedAssigned)) ? savedAssigned : (savedAssigned || match.sharedHostDeviceId || getSharedDeviceId());
+    const assignedDevice = devices.find(d => String(d.id) === String(assigned));
+    const unavailableOption = savedAssigned && !assignedDevice ? `<option value="${escapeHtml(savedAssigned)}" selected>Previously assigned device unavailable</option>` : '';
+    const options = unavailableOption + devices.map(d => `<option value="${escapeHtml(d.id)}" ${String(d.id) === String(assigned) ? 'selected' : ''}>${escapeHtml(d.name || d.id)}</option>`).join('');
     return `<div class="shared-assignment-row">
       <div><strong>${escapeHtml(player.name)}</strong><div class="tiny">${escapeHtml(getTeamLabel(match, mp.team))}</div></div>
       ${isHost ? `<select data-shared-player-assignment="${escapeHtml(mp.playerId)}" aria-label="Assign scorer for ${escapeHtml(player.name)}">${options}</select>` : `<div class="tiny">${escapeHtml(assignedDevice?.name || 'Unassigned')}</div>`}
@@ -10423,16 +10490,13 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
 
-  document.getElementById('setupSharedAdminPanel')?.addEventListener('change', e => {
+  document.getElementById('setupSharedAdminPanel')?.addEventListener('change', async e => {
     if (!e.target.matches('[data-shared-player-assignment]')) return;
     const match = getActiveMatch();
     if (!match || !isCurrentDeviceMatchHost(match)) return;
-    match.sharedPlayerAssignments = match.sharedPlayerAssignments && typeof match.sharedPlayerAssignments === 'object' ? match.sharedPlayerAssignments : {};
-    match.sharedPlayerAssignments[e.target.dataset.sharedPlayerAssignment] = e.target.value;
-    persist({ skipRender: true });
-    scheduleSharedMatchSync(match, { immediate: true, silent: true });
-    startSharedConnectionFastRefresh({ reason: 'assignment-save' });
-    refreshActiveSharedScores({ silent: true, render: false });
+    const ok = await setSharedPlayerAssignment(match, e.target.dataset.sharedPlayerAssignment, e.target.value);
+    if (!ok) return renderAll();
+    await refreshActiveSharedScores({ silent: true, render: false });
     renderAll();
   });
 
@@ -10741,14 +10805,12 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       renderCurrentMatch();
     }
   });
-  document.getElementById('score')?.addEventListener('change', e => {
+  document.getElementById('score')?.addEventListener('change', async e => {
     if (!e.target.matches('[data-shared-player-assignment]')) return;
     const match = getActiveMatch();
-    if (!match) return;
-    match.sharedPlayerAssignments = match.sharedPlayerAssignments && typeof match.sharedPlayerAssignments === 'object' ? match.sharedPlayerAssignments : {};
-    match.sharedPlayerAssignments[e.target.dataset.sharedPlayerAssignment] = e.target.value;
-    persist({ skipRender: true });
-    scheduleSharedMatchSync(match, { immediate: true, silent: true });
+    if (!match || !isCurrentDeviceMatchHost(match)) return;
+    const ok = await setSharedPlayerAssignment(match, e.target.dataset.sharedPlayerAssignment, e.target.value);
+    if (!ok) return renderCurrentMatch();
     renderCurrentMatch();
   });
   document.getElementById('finishRoundBtn').addEventListener('click', armFinishRound);

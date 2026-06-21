@@ -1,6 +1,6 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.3.16';
-const BUILD_TIMESTAMP = '2026-06-21 00:35 UTC';
+const APP_VERSION = 'v30.3.17';
+const BUILD_TIMESTAMP = '2026-06-21 01:05 ET';
 const BUILD_LABEL = 'Reporting Polish, Missing Score UX, Stats Scroll Fix, and Skins Settlement Repair';
 
 function cssEscape(value) {
@@ -1898,18 +1898,37 @@ function buildRoundRecapExport(match) {
     </section>`;
 }
 
+function getPlayerGrossScoreForHole(match, metrics, playerId, holeNumber, selectedHoleIdx = null) {
+  const holeNum = Number(holeNumber);
+  const selectedIdx = Number(selectedHoleIdx);
+  const metricHoleResult = Array.isArray(metrics?.holeResults) && Number.isInteger(selectedIdx)
+    ? metrics.holeResults[selectedIdx]
+    : null;
+  const metricScore = metricHoleResult?.playerScores?.find(ps => String(ps.playerId) === String(playerId));
+  if (metricScore && metricScore.gross !== null && metricScore.gross !== undefined && metricScore.gross !== '') {
+    const gross = Number(metricScore.gross);
+    return Number.isFinite(gross) && gross > 0 ? gross : null;
+  }
+  const matchPlayer = (match?.players || []).find(mp => String(mp.playerId) === String(playerId));
+  if (!matchPlayer || !Array.isArray(matchPlayer.scores)) return null;
+  const byHoleNumber = matchPlayer.scores.find(score => Number(score?.holeNumber) === holeNum);
+  const scoreObj = byHoleNumber || matchPlayer.scores[Math.max(0, holeNum - 1)] || (Number.isInteger(selectedIdx) ? matchPlayer.scores[selectedIdx] : null);
+  const gross = Number(scoreObj?.gross);
+  return Number.isFinite(gross) && gross > 0 ? gross : null;
+}
 function getMissingScoreEntries(match, metrics) {
   const holes = metrics?.tee ? getSelectedScoringHoles(match, metrics.tee) : [];
   const players = Array.isArray(metrics?.players) ? metrics.players : [];
   const missing = [];
   holes.forEach((hole, holeIdx) => {
+    const holeNumber = Number(hole?.holeNumber || holeIdx + 1);
     players.forEach(pm => {
-      const gross = Number(pm?.scores?.[holeIdx]);
-      if (!Number.isFinite(gross) || gross <= 0) {
+      const gross = getPlayerGrossScoreForHole(match, metrics, pm.playerId, holeNumber, holeIdx);
+      if (!Number.isFinite(Number(gross)) || Number(gross) <= 0) {
         missing.push({
           playerId: pm.playerId,
           playerName: pm.player?.name || 'Player',
-          holeNumber: hole?.holeNumber || holeIdx + 1,
+          holeNumber,
           type: 'gross score'
         });
       }
@@ -1919,17 +1938,30 @@ function getMissingScoreEntries(match, metrics) {
 }
 function buildMissingScoreWarning(match, metrics, { exportMode = false } = {}) {
   const missing = getMissingScoreEntries(match, metrics);
-  if (!missing.length) return '';
   const count = missing.length;
+  const complete = count === 0;
+  const title = complete ? 'Round Complete — no missing scores' : `Round Incomplete — ${count} score${count === 1 ? '' : 's'} missing`;
   const items = missing.slice(0, 12).map(row => `<li>${escapeHtml(row.playerName)} — Hole ${escapeHtml(row.holeNumber)} (${escapeHtml(row.type)})</li>`).join('');
   const more = missing.length > 12 ? `<li>+${missing.length - 12} more missing score${missing.length - 12 === 1 ? '' : 's'}</li>` : '';
+  if (exportMode) {
+    if (complete) return '';
+    return `
+      <div class="export-incomplete-warning">
+        <div class="section-label">${escapeHtml(title)}</div>
+        <div class="tiny top-gap">Totals and reports may be provisional until every player has a gross score for every selected hole.</div>
+        <ul class="tight-list top-gap">${items}${more}</ul>
+        <div class="tiny">Report marked provisional because the round is incomplete.</div>
+      </div>`;
+  }
   return `
-    <div class="${exportMode ? 'export-incomplete-warning' : 'incomplete-round-warning card tight-card'}">
-      <div class="section-label">Round Incomplete — ${count} score${count === 1 ? '' : 's'} missing</div>
-      <div class="tiny top-gap">Totals and reports may be provisional until every player has a gross score for every selected hole.</div>
-      <ul class="tight-list top-gap">${items}${more}</ul>
-      ${exportMode ? '<div class="tiny">Report marked provisional because the round is incomplete.</div>' : '<div class="actions wrap compact-actions top-gap"><button type="button" class="secondary" data-jump-missing-score>Jump to Missing Scores</button><button type="button" class="secondary" data-continue-incomplete-report>Continue Anyway</button></div>'}
-    </div>`;
+    <details class="incomplete-round-warning card tight-card ${complete ? 'round-complete-warning' : ''}">
+      <summary class="missing-score-summary"><span>${escapeHtml(title)}</span></summary>
+      ${complete
+        ? '<div class="tiny top-gap">All selected players have gross scores for all selected holes.</div>'
+        : `<div class="tiny top-gap">Totals and reports may be provisional until every player has a gross score for every selected hole.</div>
+           <ul class="tight-list top-gap">${items}${more}</ul>
+           <div class="actions wrap compact-actions top-gap"><button type="button" class="secondary" data-jump-missing-score>Jump to Missing Scores</button><button type="button" class="secondary" data-continue-incomplete-report>Continue Anyway</button></div>`}
+    </details>`;
 }
 function formatAwardWinners(names, value) {
   const list = (Array.isArray(names) ? names : [names]).filter(Boolean);
@@ -1978,7 +2010,7 @@ function buildScorecardSnapshot(match, metrics) {
   if (greenies) rows.push(['🎯 Greenies', greenies]);
   if (biggest.rows.length && biggest.value > 0) rows.push(['💰 Biggest Winner', formatAwardWinners(biggest.rows.map(r => r.name), formatMoneyAccounting(biggest.value))]);
   if (!rows.length) return '';
-  return `<section class="export-section export-section-scorecard-snapshot"><div class="export-section-head"><h2>Scorecard Snapshot</h2></div><div class="snapshot-grid">${rows.map(([label, value]) => `<div class="snapshot-row"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`).join('')}</div></section>`;
+  return `<section class="export-section export-section-scorecard-snapshot"><div class="export-section-head"><h2>Scorecard Snapshot</h2></div><div class="snapshot-grid">${rows.map(([label, value]) => `<div class="snapshot-row"><span>${escapeHtml(label)}:</span><strong>${value}</strong></div>`).join('')}</div></section>`;
 }
 function computePlayerFrontBack(match, metrics, playerMetric) {
   const holes = getSelectedScoringHoles(match, metrics?.tee);
@@ -2012,14 +2044,22 @@ function buildRoundAwards(match, metrics) {
   const putts = getLowRows(stats.map(r => ({ name: r.playerMetric?.player?.name, value: Number(r.totals?.putts || 0) })).filter(r => r.value > 0), 'value');
   if (putts.rows.length) awards.push(['Fewest Putts', formatAwardWinners(putts.rows.map(r => r.name), putts.value)]);
   if (!awards.length) return '';
-  return `<section class="export-section export-section-round-awards"><div class="export-section-head"><h2>Round Awards</h2></div><div class="round-awards-grid">${awards.map(([label, value]) => `<div class="round-award"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`).join('')}</div></section>`;
+  return `<section class="export-section export-section-round-awards"><div class="export-section-head"><h2>Round Awards</h2></div><div class="round-awards-grid">${awards.map(([label, value]) => `<div class="round-award"><span>${escapeHtml(label)}:</span><strong>${value}</strong></div>`).join('')}</div></section>`;
 }
 
+function formatTimestampET(timestamp, { includeDate = true } = {}) {
+  if (!timestamp) return '';
+  const dt = timestamp instanceof Date ? timestamp : new Date(timestamp);
+  if (!dt || Number.isNaN(dt.getTime())) return '';
+  const options = includeDate
+    ? { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }
+    : { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' };
+  return `${new Intl.DateTimeFormat('en-US', options).format(dt)} ET`;
+}
 function buildRoundRecapStatus(match) {
   const status = String(match?.roundRecapStatus || '').trim();
-  const generatedAt = match?.roundRecapGeneratedAt ? new Date(match.roundRecapGeneratedAt) : null;
-  const generatedText = generatedAt && !Number.isNaN(generatedAt.getTime()) ? `Generated ${generatedAt.toLocaleString()}.` : '';
-  return status || generatedText || '';
+  const generatedText = match?.roundRecapGeneratedAt ? formatTimestampET(match.roundRecapGeneratedAt) : '';
+  return status || (generatedText ? `Generated ${generatedText}.` : '');
 }
 function buildRecapInputTransparency(match) {
   const memories = getRoundMemories(match);
@@ -2368,8 +2408,7 @@ function buildSummaryExportBody(match, metrics) {
     </section>` : '';
   return `
     ${exportRoundRecapHtml}
-    ${exportScorecardSnapshotHtml}
-    ${exportRoundAwardsHtml}
+    ${(exportScorecardSnapshotHtml || exportRoundAwardsHtml) ? `<div class="recap-highlights-grid">${exportScorecardSnapshotHtml}${exportRoundAwardsHtml}</div>` : ''}
     ${exportMissingScoreWarningHtml}
 
     <section class="export-section export-section-games-summary${exportRoundRecapHtml ? ' export-section-games-summary-after-recap' : ''}">
@@ -7219,7 +7258,7 @@ function formatMemoryMeta(memory) {
   if (memory.category && memory.category !== 'General') parts.push(memory.category);
   if (memory.holeNumber) parts.push(`Hole ${memory.holeNumber}`);
   const dt = memory.createdAt ? new Date(memory.createdAt) : null;
-  if (dt && !Number.isNaN(dt.getTime())) parts.push(dt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
+  if (dt && !Number.isNaN(dt.getTime())) parts.push(formatTimestampET(dt, { includeDate: false }));
   return parts.join(' · ');
 }
 function buildMemoriesDisplay(match) {

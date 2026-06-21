@@ -3939,6 +3939,16 @@ body.keyboard-open .app-chrome {
   border-radius: 14px;
   margin: 12px 0;
 }
+.recap-highlights-grid {
+  display: grid;
+  gap: 12px;
+}
+@media (min-width: 860px) {
+  .recap-highlights-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
 .snapshot-grid,
 .round-awards-grid {
   display: grid;
@@ -3946,9 +3956,10 @@ body.keyboard-open .app-chrome {
 }
 .snapshot-row,
 .round-award {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px;
   padding: 9px 10px;
   border: 1px solid rgba(12,55,33,.10);
   border-radius: 12px;
@@ -3988,4 +3999,41 @@ html, body {
 main {
   position: static !important;
   overflow: visible !important;
+}
+
+
+/* v30.3.17 recap polish and missing-score diagnostic */
+.incomplete-round-warning { padding: 0; overflow: hidden; }
+.incomplete-round-warning > :not(summary) { margin-left: 14px; margin-right: 14px; }
+.incomplete-round-warning > :last-child { margin-bottom: 14px; }
+.missing-score-summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 12px 14px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.missing-score-summary::-webkit-details-marker { display: none; }
+.missing-score-summary::before { content: '▸'; font-size: 12px; }
+.incomplete-round-warning[open] .missing-score-summary::before { content: '▾'; }
+.round-complete-warning {
+  border-color: rgba(12,55,33,.18);
+  background: #f7faf8;
+  color: var(--ink);
+}
+.player-hole-stat-grid .player-hole-stat-fixed th,
+.player-hole-stat-grid .player-hole-stat-fixed td {
+  text-align: center !important;
+}
+.player-hole-stat-grid .player-hole-stat-values thead th:first-child {
+  background: #f7faf8 !important;
+}
+.snapshot-row strong,
+.round-award strong {
+  text-align: left;
+}
+@media (max-width: 520px) {
+  .snapshot-row, .round-award { grid-template-columns: 1fr; gap: 3px; }
 }

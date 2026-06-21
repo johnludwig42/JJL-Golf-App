@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.3.15';
+const APP_VERSION = 'v30.3.16';
 const BUILD_TIMESTAMP = '2026-06-21 00:35 UTC';
 const BUILD_LABEL = 'Reporting Polish, Missing Score UX, Stats Scroll Fix, and Skins Settlement Repair';
 
@@ -5020,11 +5020,51 @@ async function loadSupabaseCourses({ silent = false } = {}) {
   }
 }
 
+function normalizeCourseIdentityText(value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[’']/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+function getCourseHoleCount(course = {}) {
+  const teeHoleCounts = (Array.isArray(course.tees) ? course.tees : [])
+    .map(tee => Array.isArray(tee.holes) ? tee.holes.length : 0)
+    .filter(Boolean);
+  if (teeHoleCounts.length) return Math.max(...teeHoleCounts);
+  const explicit = Number(course.holeCount ?? course.holes ?? course.num_holes ?? course.number_of_holes);
+  return Number.isFinite(explicit) && explicit > 0 ? explicit : null;
+}
+function buildCourseIdentity(course = {}) {
+  return {
+    name: normalizeCourseIdentityText(course.name),
+    city: normalizeCourseIdentityText(course.city),
+    state: normalizeCourseIdentityText(course.state || course.region),
+    country: normalizeCourseIdentityText(course.country),
+    holeCount: getCourseHoleCount(course),
+  };
+}
 function getCloudCourseMatchKey(course = {}) {
-  return [course.name, course.city, course.state].map(v => String(v || '').trim().toLowerCase()).join('|');
+  const identity = buildCourseIdentity(course);
+  return [identity.name, identity.city, identity.state, identity.country, identity.holeCount || ''].join('|');
 }
 function getCloudCourseNameKey(course = {}) {
-  return String(course?.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  return normalizeCourseIdentityText(course?.name);
+}
+function isSameCourseIdentity(a = {}, b = {}) {
+  const left = buildCourseIdentity(a);
+  const right = buildCourseIdentity(b);
+  if (!left.name || !right.name || left.name !== right.name) return false;
+  const scopedFields = ['city', 'state', 'country'];
+  for (const field of scopedFields) {
+    if (left[field] && right[field] && left[field] !== right[field]) return false;
+  }
+  if (left.holeCount && right.holeCount && left.holeCount !== right.holeCount) return false;
+  return true;
 }
 function makeDuplicateCloudCourseError(course, matches = []) {
   const courseName = String(course?.name || 'Course').trim() || 'Course';
@@ -5054,11 +5094,7 @@ function findMatchingCloudCourseRows(cloudRows = [], course = {}) {
     const byId = (cloudRows || []).filter(row => String(row?.id || '') === courseId);
     if (byId.length) return byId;
   }
-  const targetMatchKey = getCloudCourseMatchKey(course);
-  const exactMatches = (cloudRows || []).filter(row => getCloudCourseMatchKey(row) === targetMatchKey);
-  if (exactMatches.length) return exactMatches;
-  const nameKey = getCloudCourseNameKey(course);
-  return (cloudRows || []).filter(row => getCloudCourseNameKey(row) === nameKey);
+  return (cloudRows || []).filter(row => isSameCourseIdentity(row, course));
 }
 function isSupabaseCourse(course = {}) {
   return String(course?.source || '').toLowerCase() === 'supabase' || !!course?.cloudCourseId || course?.cloudSyncState === 'synced';
@@ -5170,7 +5206,7 @@ async function findCloudCourseRow(client, course) {
     if ((byId || []).length > 1) throw makeDuplicateCloudCourseError(course, byId);
     if ((byId || []).length === 1) return byId[0];
   }
-  const { data, error } = await client.from('courses').select('*').eq('name', name).limit(20);
+  const { data, error } = await client.from('courses').select('*');
   if (error) throw error;
   const matches = findMatchingCloudCourseRows(data || [], course);
   if (matches.length > 1) throw makeDuplicateCloudCourseError(course, matches);
@@ -5251,26 +5287,78 @@ async function flushPendingCourseSync({ silent = true } = {}) {
     await syncCourseToSupabase(course, { silent });
   }
 }
+
+function createCourseSyncDiagnostics() {
+  const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  return {
+    startedAt: new Date().toISOString(),
+    finishedAt: '',
+    totalMs: 0,
+    phases: {
+      localScanMs: 0,
+      cloudLookupMs: 0,
+      duplicateCheckMs: 0,
+      courseWriteMs: 0,
+      teeSyncMs: 0,
+      holeSyncMs: 0,
+      skippedCheckMs: 0,
+      errorHandlingMs: 0,
+      refreshMs: 0,
+    },
+    perCourse: [],
+    _start: now,
+  };
+}
+function courseSyncNow() {
+  return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+}
+function addCourseSyncTiming(target, key, startedAt) {
+  if (!target || !key || !startedAt) return;
+  const elapsed = Math.max(0, courseSyncNow() - startedAt);
+  target[key] = (Number(target[key]) || 0) + elapsed;
+}
+function finishCourseSyncDiagnostics(diagnostics) {
+  if (!diagnostics) return null;
+  diagnostics.finishedAt = new Date().toISOString();
+  diagnostics.totalMs = Math.max(0, courseSyncNow() - (Number(diagnostics._start) || courseSyncNow()));
+  delete diagnostics._start;
+  return diagnostics;
+}
+function formatCourseSyncMs(ms) {
+  const value = Number(ms);
+  if (!Number.isFinite(value) || value <= 0) return 'Not measured';
+  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 1 : 2)}s`;
+  return `${Math.round(value)}ms`;
+}
+
 async function syncCourseLibrary() {
+  const diagnostics = createCourseSyncDiagnostics();
+  const finishSummary = summary => {
+    summary.diagnostics = finishCourseSyncDiagnostics(diagnostics);
+    return summary;
+  };
   if (!hasSupabaseConfig()) {
     uiState.cloudCoursesStatus = 'Cloud sync unavailable. Local courses are still available.';
     renderCourses();
-    const unavailableSummary = { uploaded: 0, updated: 0, current: 0, failed: 0, errors: ['Cloud sync unavailable. Local courses are still available.'] };
+    const unavailableSummary = finishSummary({ uploaded: 0, updated: 0, current: 0, failed: 0, errors: ['Cloud sync unavailable. Local courses are still available.'] });
     renderLocalCourseSyncResult(unavailableSummary);
     toast('Cloud sync unavailable. Local courses are still available.');
     return unavailableSummary;
   }
-  if (uiState.cloudCoursesLoading) return { uploaded: 0, updated: 0, current: 0, failed: 0 };
+  if (uiState.cloudCoursesLoading) return finishSummary({ uploaded: 0, updated: 0, current: 0, failed: 0 });
   uiState.cloudCoursesLoading = true;
   uiState.cloudCoursesStatus = 'Cloud Course Library: Syncing course library...';
   renderCourses();
-  const summary = { uploaded: 0, updated: 0, current: 0, failed: 0, errors: [] };
+  const summary = { uploaded: 0, updated: 0, current: 0, failed: 0, errors: [], diagnostics };
   try {
     const client = await ensureSupabaseClient({ anonymousAuth: false });
     if (!client) throw new Error('Supabase client unavailable.');
+    let phaseStarted = courseSyncNow();
     const { data: cloudRows, error: cloudError } = await client.from('courses').select('*');
+    addCourseSyncTiming(diagnostics.phases, 'cloudLookupMs', phaseStarted);
     if (cloudError) throw cloudError;
     const cloudRowsList = cloudRows || [];
+    phaseStarted = courseSyncNow();
     const cloudByNameKey = new Map();
     cloudRowsList.forEach(row => {
       const key = getCloudCourseNameKey(row);
@@ -5279,29 +5367,56 @@ async function syncCourseLibrary() {
       cloudByNameKey.get(key).push(row);
     });
     const localCourses = state.courses.filter(c => c?.name);
+    addCourseSyncTiming(diagnostics.phases, 'localScanMs', phaseStarted);
     if (!localCourses.length) {
       uiState.cloudCoursesStatus = 'No local courses found to sync.';
       renderCourses();
-      renderLocalCourseSyncResult(summary);
+      const emptySummary = finishSummary(summary);
+      renderLocalCourseSyncResult(emptySummary);
       toast('No local courses found to sync.');
-      return summary;
+      return emptySummary;
     }
     for (const course of localCourses) {
+      const courseTiming = {
+        courseName: String(course?.name || 'Course').trim() || 'Course',
+        totalMs: 0,
+        cloudLookupMs: 0,
+        duplicateCheckMs: 0,
+        courseWriteMs: 0,
+        teeSyncMs: 0,
+        holeSyncMs: 0,
+        status: 'pending',
+      };
+      const courseStarted = courseSyncNow();
+      diagnostics.perCourse.push(courseTiming);
       const nameKey = getCloudCourseNameKey(course);
-      if (!nameKey) continue;
+      if (!nameKey) {
+        courseTiming.status = 'skipped';
+        courseTiming.totalMs = Math.max(0, courseSyncNow() - courseStarted);
+        continue;
+      }
       let existingCourse = null;
       try {
+        phaseStarted = courseSyncNow();
         if (course.cloudCourseId) {
           existingCourse = cloudRowsList.find(row => String(row.id) === String(course.cloudCourseId)) || null;
         }
+        addCourseSyncTiming(diagnostics.phases, 'cloudLookupMs', phaseStarted);
+        addCourseSyncTiming(courseTiming, 'cloudLookupMs', phaseStarted);
         if (!existingCourse) {
+          phaseStarted = courseSyncNow();
           const candidates = findMatchingCloudCourseRows(cloudRowsList, course);
+          addCourseSyncTiming(diagnostics.phases, 'duplicateCheckMs', phaseStarted);
+          addCourseSyncTiming(courseTiming, 'duplicateCheckMs', phaseStarted);
           if (candidates.length > 1) throw makeDuplicateCloudCourseError(course, candidates);
           existingCourse = candidates[0] || null;
         }
         const wasExisting = !!existingCourse;
         const wasPending = course.cloudSyncState === 'pending-sync';
+        phaseStarted = courseSyncNow();
         const savedCourse = await insertOrUpdateCloudCourse(client, course, existingCourse);
+        addCourseSyncTiming(diagnostics.phases, 'courseWriteMs', phaseStarted);
+        addCourseSyncTiming(courseTiming, 'courseWriteMs', phaseStarted);
         const cloudCourseId = String(savedCourse?.id || existingCourse?.id || course.cloudCourseId || '');
         if (!cloudCourseId) throw new Error('Cloud course save did not return a course id.');
         course.cloudCourseId = cloudCourseId;
@@ -5309,39 +5424,63 @@ async function syncCourseLibrary() {
         course.cloudSyncError = '';
 
         let existingTees = [];
+        phaseStarted = courseSyncNow();
         const { data: teeRows, error: teeLoadError } = await client.from('course_tees').select('*').eq('course_id', cloudCourseId);
+        addCourseSyncTiming(diagnostics.phases, 'teeSyncMs', phaseStarted);
+        addCourseSyncTiming(courseTiming, 'teeSyncMs', phaseStarted);
         if (teeLoadError) throw teeLoadError;
         existingTees = teeRows || [];
         for (const tee of (course.tees || [])) {
           if (!tee?.teeName) continue;
+          phaseStarted = courseSyncNow();
           const existingTee = tee.cloudTeeId
             ? existingTees.find(row => String(row.id) === String(tee.cloudTeeId)) || null
             : existingTees.find(row => getCloudTeeMatchKey({ teeName: row.tee_name, gender: row.gender }) === getCloudTeeMatchKey(tee)) || null;
           const savedTee = await insertOrUpdateCloudTee(client, cloudCourseId, tee, existingTee);
+          addCourseSyncTiming(diagnostics.phases, 'teeSyncMs', phaseStarted);
+          addCourseSyncTiming(courseTiming, 'teeSyncMs', phaseStarted);
           const cloudTeeId = String(savedTee?.id || existingTee?.id || tee.cloudTeeId || '');
           if (!cloudTeeId) continue;
           tee.cloudTeeId = cloudTeeId;
           tee.source = 'supabase';
+          phaseStarted = courseSyncNow();
           await insertOrUpdateCloudTeeHoles(client, cloudCourseId, cloudTeeId, tee);
+          addCourseSyncTiming(diagnostics.phases, 'holeSyncMs', phaseStarted);
+          addCourseSyncTiming(courseTiming, 'holeSyncMs', phaseStarted);
         }
         const updatedKey = getCloudCourseNameKey(savedCourse || course);
         if (updatedKey) cloudByNameKey.set(updatedKey, [{ ...(existingCourse || {}), ...(savedCourse || {}) }]);
-        if (!wasExisting) summary.uploaded += 1;
-        else if (wasPending) summary.updated += 1;
-        else summary.current += 1;
+        if (!wasExisting) {
+          summary.uploaded += 1;
+          courseTiming.status = 'uploaded';
+        } else if (wasPending) {
+          summary.updated += 1;
+          courseTiming.status = 'updated';
+        } else {
+          summary.current += 1;
+          courseTiming.status = 'already current';
+        }
       } catch (courseErr) {
+        const errorStarted = courseSyncNow();
         summary.failed += 1;
         markCoursePendingSync(course, courseErr?.message || 'Course sync failed');
         summary.errors.push(formatCourseSyncError(course, courseErr));
+        courseTiming.status = 'requires attention';
+        addCourseSyncTiming(diagnostics.phases, 'errorHandlingMs', errorStarted);
+      } finally {
+        courseTiming.totalMs = Math.max(0, courseSyncNow() - courseStarted);
       }
     }
     persist({ skipRender: true });
+    phaseStarted = courseSyncNow();
     await loadSupabaseCourses({ silent: true });
+    addCourseSyncTiming(diagnostics.phases, 'refreshMs', phaseStarted);
     uiState.cloudCoursesStatus = `Cloud sync complete: ${summary.uploaded} uploaded, ${summary.updated} updated, ${summary.current} already current, ${summary.failed} require attention.`;
+    const finishedSummary = finishSummary(summary);
     renderAll();
-    renderLocalCourseSyncResult(summary);
+    renderLocalCourseSyncResult(finishedSummary);
     toast(`${summary.uploaded} uploaded · ${summary.updated} updated · ${summary.current} current · ${summary.failed} failed`);
-    return summary;
+    return finishedSummary;
   } catch (err) {
     console.warn('Course library sync failed:', err);
     uiState.cloudCoursesStatus = 'Cloud sync unavailable. Local courses are still available.';
@@ -5349,14 +5488,16 @@ async function syncCourseLibrary() {
     summary.error = err;
     summary.failed = summary.failed || 0;
     summary.errors.push(err?.message || 'Cloud sync unavailable. Local courses are still available.');
-    renderLocalCourseSyncResult(summary);
+    const failedSummary = finishSummary(summary);
+    renderLocalCourseSyncResult(failedSummary);
     toast('Cloud sync unavailable. Local courses are still available.');
-    return summary;
+    return failedSummary;
   } finally {
     uiState.cloudCoursesLoading = false;
     renderCourses();
   }
 }
+
 const syncLocalCoursesToCloud = syncCourseLibrary;
 async function refreshCourseLibraryFromCloud({ silent = true, force = false } = {}) {
   const now = Date.now();
@@ -6420,12 +6561,31 @@ function renderLocalCourseSyncResult(summary) {
   const details = detailItems
     ? `<details class="top-gap"><summary>View Details</summary><ul class="tight-list">${detailItems}</ul></details>`
     : '';
-  const html = `<strong>Course Sync Complete</strong><br>${uploaded} courses uploaded<br>${updated} courses updated<br>${current} already current<br>${requiresAttentionLabel}${details}`;
+  const diagnostics = summary.diagnostics || null;
+  const phases = diagnostics?.phases || {};
+  const timingRows = diagnostics ? [
+    ['Total sync time', diagnostics.totalMs],
+    ['Local course scan', phases.localScanMs],
+    ['Cloud course lookup', phases.cloudLookupMs],
+    ['Duplicate checks', phases.duplicateCheckMs],
+    ['Course writes', phases.courseWriteMs],
+    ['Tee sync', phases.teeSyncMs],
+    ['Hole sync', phases.holeSyncMs],
+    ['Cloud refresh', phases.refreshMs],
+  ].map(([label, ms]) => `<li><strong>${escapeHtml(label)}:</strong> ${escapeHtml(formatCourseSyncMs(ms))}</li>`).join('') : '';
+  const perCourseRows = Array.isArray(diagnostics?.perCourse) && diagnostics.perCourse.length
+    ? `<details class="top-gap"><summary>Per-course timing</summary><ul class="tight-list">${diagnostics.perCourse.slice(0, 12).map(item => `<li><strong>${escapeHtml(item.courseName || 'Course')}:</strong> ${escapeHtml(formatCourseSyncMs(item.totalMs))} (${escapeHtml(item.status || 'measured')})${Number(item.teeSyncMs) || Number(item.holeSyncMs) ? `<br><span class="muted">Tees: ${escapeHtml(formatCourseSyncMs(item.teeSyncMs))} · Holes: ${escapeHtml(formatCourseSyncMs(item.holeSyncMs))}</span>` : ''}</li>`).join('')}</ul></details>`
+    : '';
+  const timingDetails = timingRows
+    ? `<details class="top-gap"><summary>View Timing Details</summary><ul class="tight-list">${timingRows}</ul>${perCourseRows}</details>`
+    : '';
+  const html = `<strong>Course Sync Complete</strong><br>${uploaded} courses uploaded<br>${updated} courses updated<br>${current} already current<br>${requiresAttentionLabel}${details}${timingDetails}`;
   targets.forEach(el => {
     el.classList.remove('hidden');
     el.innerHTML = html;
   });
 }
+
 
 
 function getScorecardImportEndpoint() {

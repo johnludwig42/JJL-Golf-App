@@ -3926,7 +3926,7 @@ body.keyboard-open .app-chrome {
 }
 
 
-/* v30.3.15 reporting polish and diagnostics cleanup */
+/* v30.3.16 course duplicate detection and sync timing diagnostics */
 .shared-assignment-diagnostics { margin-top: 10px; }
 .incomplete-round-warning,
 .export-incomplete-warning {

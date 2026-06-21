@@ -7,12 +7,12 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=30.3.14" />
+  <link rel="manifest" href="manifest.json?v=30.3.15" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
   <link rel="shortcut icon" href="./favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="style.css?v=30.3.14" />
+  <link rel="stylesheet" href="style.css?v=30.3.15" />
 </head>
 <body>
   <div class="app-chrome"><header class="app-header compact-header">
@@ -327,6 +327,7 @@
               <button id="scoreboardConfirmFinishRoundBtn" type="button" class="secondary hidden">Confirm Finish</button>
             </div>
           </div>
+          <div id="missingScoreWarning" class="no-print hidden"></div>
           <div id="postRoundActionsInline" class="post-round-inline no-print hidden" aria-hidden="true">
             <div class="section-label">Round Complete ✓</div>
             <div id="postRoundActionsInlineText" class="tiny top-gap">What would you like to do next?</div>
@@ -679,14 +680,16 @@
         </div>
         <div class="tiny top-gap">Join a local-first shared match by code or ID, then synchronize on Save Hole, load, manual refresh, and opportunistic sync.</div>
       </div>
+      <div id="sharedAssignmentDiagnosticsMore" class="card tight-card hidden"></div>
+
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
           <li>v30.3.8 keeps Shared Match hosts on the Match tab for device assignment before scoring.</li>
           <li>v30.3.8 adds joined-device names so hosts can identify carts/devices in participant lists and assignment dropdowns.</li>
           <li>v30.3.8 adds a Start Scoring action after Shared Match setup while preserving scoring behavior.</li>
-          <li>v30.3.14 hardens Shared Match joining, standardizes DYE-###### codes, clarifies participant assignments, and polishes sync/status UX.</li>
-          <li>App version: <strong id="appVersionLabel">v30.3.14</strong></li>
+          <li>v30.3.15 hardens Shared Match joining, standardizes DYE-###### codes, clarifies participant assignments, and polishes sync/status UX.</li>
+          <li>App version: <strong id="appVersionLabel">v30.3.15</strong></li>
           <li>Build: <strong id="appBuildTimestamp">loading…</strong></li>
           <li>Build label: <span id="appBuildLabel">loading…</span></li>
           <li>URL: <span id="appCurrentUrl" class="break-word">loading…</span></li>
@@ -713,7 +716,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.3.14</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
+    <span id="appVersionFooter">v30.3.15</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>
@@ -815,7 +818,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=30.3.14"></script>
-  <script src="app.js?v=30.3.14"></script>
+  <script src="supabase-config.js?v=30.3.15"></script>
+  <script src="app.js?v=30.3.15"></script>
 </body>
 </html>

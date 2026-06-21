@@ -3924,3 +3924,68 @@ body.keyboard-open .app-chrome {
     padding: 0 !important;
   }
 }
+
+
+/* v30.3.15 reporting polish and diagnostics cleanup */
+.shared-assignment-diagnostics { margin-top: 10px; }
+.incomplete-round-warning,
+.export-incomplete-warning {
+  border: 1px solid rgba(180, 83, 9, .28);
+  background: #fff7ed;
+  color: #7c2d12;
+}
+.export-incomplete-warning {
+  padding: 12px 14px;
+  border-radius: 14px;
+  margin: 12px 0;
+}
+.snapshot-grid,
+.round-awards-grid {
+  display: grid;
+  gap: 8px;
+}
+.snapshot-row,
+.round-award {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border: 1px solid rgba(12,55,33,.10);
+  border-radius: 12px;
+  background: #fff;
+}
+.snapshot-row span,
+.round-award span {
+  color: var(--muted);
+  font-weight: 700;
+}
+.snapshot-row strong,
+.round-award strong {
+  text-align: right;
+}
+.player-hole-stat-values th:first-child,
+.player-hole-stat-values td:first-child {
+  position: static !important;
+  left: auto !important;
+  z-index: auto !important;
+  background: inherit !important;
+  text-align: center !important;
+}
+.player-hole-stat-fixed th,
+.player-hole-stat-fixed td {
+  position: static !important;
+  left: auto !important;
+}
+.app-chrome {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 1200 !important;
+}
+html, body {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+main {
+  position: static !important;
+  overflow: visible !important;
+}

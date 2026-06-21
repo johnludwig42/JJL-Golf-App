@@ -1,7 +1,7 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.3.12';
-const BUILD_TIMESTAMP = '2026-06-20 23:52 UTC';
-const BUILD_LABEL = 'Version Visibility and Desktop Mouse Scroll Fix';
+const APP_VERSION = 'v30.3.13';
+const BUILD_TIMESTAMP = '2026-06-20 23:59 UTC';
+const BUILD_LABEL = 'PWA Update Reliability and Version Freshness';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -11594,6 +11594,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
 function getBuildInfoSnapshot() {
   const swSupported = 'serviceWorker' in navigator;
   const controller = swSupported ? navigator.serviceWorker.controller : null;
+  const registration = window.dyeLedgerServiceWorkerRegistration || swRegistration || null;
+  const active = registration?.active || controller || null;
   return {
     appVersion: APP_VERSION,
     buildTimestamp: BUILD_TIMESTAMP,
@@ -11602,7 +11604,10 @@ function getBuildInfoSnapshot() {
     userAgent: navigator.userAgent,
     serviceWorkerSupported: swSupported,
     serviceWorkerControlled: !!controller,
-    serviceWorkerControllerScriptURL: controller?.scriptURL || null,
+    serviceWorkerControllerScriptURL: controller?.scriptURL || active?.scriptURL || null,
+    updateAvailable: !!window.dyeLedgerUpdateAvailable,
+    activeCacheName: `the-dye-ledger-${APP_VERSION}`,
+    activeServiceWorkerState: active?.state || (registration?.waiting ? 'waiting' : 'unknown'),
     cacheKeys: 'pending'
   };
 }
@@ -11663,10 +11668,12 @@ function renderBuildInfoUi() {
     appBuildLabel: BUILD_LABEL,
     appCurrentUrl: window.location.href,
     appServiceWorkerStatus: ('serviceWorker' in navigator)
-      ? (navigator.serviceWorker.controller ? 'active / controlled' : 'supported / not controlling this page yet')
+      ? (window.dyeLedgerUpdateAvailable ? 'waiting / update available' : (navigator.serviceWorker.controller ? 'active / controlled' : 'supported / not controlling this page yet'))
       : 'unavailable',
+    appActiveCacheName: `the-dye-ledger-${APP_VERSION}`,
+    appUpdateAvailableStatus: window.dyeLedgerUpdateAvailable ? 'Yes' : 'No',
     appCacheGuidance: ('serviceWorker' in navigator)
-      ? 'If this version looks stale, force refresh or clear site data.'
+      ? 'If this version looks stale, use Refresh Now, force refresh, or clear site data. iPhone: delete Website Data or reinstall the Home Screen app.'
       : 'Service worker unavailable in this browser.',
     appVersionFooterBuild: BUILD_TIMESTAMP
   };
@@ -11743,6 +11750,8 @@ async function resumeActiveSharedMatchOnStartup() {
 }
 
 function showUpdateBanner() {
+  window.dyeLedgerUpdateAvailable = true;
+  renderBuildInfoUi();
   const banner = document.getElementById('updateBanner');
   if (!banner || appUpdateBannerVisible) return;
   banner.classList.remove('hidden');
@@ -11757,14 +11766,19 @@ function hideUpdateBanner() {
 }
 
 function triggerAppUpdate() {
-  if (!swRegistration?.waiting) return;
-  swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+  if (swRegistration?.waiting) {
+    swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+    return;
+  }
+  window.location.reload();
 }
 
 function hookServiceWorkerRegistration(registration) {
   if (!registration) return;
   swRegistration = registration;
+  window.dyeLedgerServiceWorkerRegistration = registration;
   if (registration.waiting) showUpdateBanner();
+  renderBuildInfoUi();
 
   registration.addEventListener('updatefound', () => {
     const newWorker = registration.installing;
@@ -11773,22 +11787,52 @@ function hookServiceWorkerRegistration(registration) {
       if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
         showUpdateBanner();
       }
+      renderBuildInfoUi();
     });
   });
 }
+
+async function forceDyeLedgerUpdateCheck() {
+  const result = {
+    supported: 'serviceWorker' in navigator,
+    registrationsChecked: 0,
+    updateAvailable: !!window.dyeLedgerUpdateAvailable,
+    serviceWorkerControlled: !!navigator.serviceWorker?.controller,
+    error: null
+  };
+  if (!result.supported) return result;
+  try {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    result.registrationsChecked = registrations.length;
+    for (const reg of registrations) {
+      hookServiceWorkerRegistration(reg);
+      await reg.update();
+      if (reg.waiting) showUpdateBanner();
+    }
+    result.updateAvailable = !!window.dyeLedgerUpdateAvailable;
+    return result;
+  } catch (err) {
+    result.error = err?.message || String(err);
+    return result;
+  }
+}
+
+window.forceDyeLedgerUpdateCheck = forceDyeLedgerUpdateCheck;
 
 function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   window.addEventListener('load', async () => {
     try {
-      const registration = await navigator.serviceWorker.register('./service-worker.js');
+      const registration = await navigator.serviceWorker.register('./service-worker.js?v=30.3.13', { scope: './' });
       hookServiceWorkerRegistration(registration);
+      await forceDyeLedgerUpdateCheck();
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (hasReloadedForServiceWorker) return;
         hasReloadedForServiceWorker = true;
         window.location.reload();
       });
     } catch (error) {
+      console.warn('[BuildInfo] Service worker registration/update check failed:', error);
       // Keep the app fully usable if service worker registration fails.
     }
   });

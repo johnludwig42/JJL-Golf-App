@@ -1,7 +1,7 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.3.19';
-const BUILD_TIMESTAMP = '2026-06-23T18:13:00Z';
-const BUILD_LABEL = 'Scores Tab State Cleanup and Build Date Diagnostics';
+const APP_VERSION = 'v30.3.20';
+const BUILD_TIMESTAMP = '2026-06-23T18:36:30Z';
+const BUILD_LABEL = 'PWA Update Controls and Diagnostics';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -12057,6 +12057,13 @@ document.getElementById('leaderboard').addEventListener('change', e => {
 
   const updateLaterBtn = document.getElementById('updateLaterBtn');
   if (updateLaterBtn) updateLaterBtn.addEventListener('click', () => { hideUpdateBanner(); });
+
+  const pwaCheckBtn = document.getElementById('pwaCheckForUpdatesBtn');
+  if (pwaCheckBtn) pwaCheckBtn.addEventListener('click', checkForPwaUpdates);
+  const pwaRefreshBtn = document.getElementById('pwaRefreshNowBtn');
+  if (pwaRefreshBtn) pwaRefreshBtn.addEventListener('click', refreshPwaNow);
+  const pwaResetBtn = document.getElementById('pwaResetCacheBtn');
+  if (pwaResetBtn) pwaResetBtn.addEventListener('click', resetDyeLedgerAppCache);
 }
 
 
@@ -12132,20 +12139,42 @@ function logDyeLedgerBuildInfo() {
 window.getDyeLedgerBuildInfo = getDyeLedgerBuildInfo;
 window.getDyeLedgerScrollInfo = getDyeLedgerScrollInfo;
 
+function getServiceWorkerDiagnosticSnapshot() {
+  const supported = 'serviceWorker' in navigator;
+  const registration = window.dyeLedgerServiceWorkerRegistration || swRegistration || null;
+  const controller = supported ? navigator.serviceWorker.controller : null;
+  const installing = registration?.installing || null;
+  const waiting = registration?.waiting || null;
+  const active = registration?.active || null;
+  const workerState = installing?.state ? `Installing (${installing.state})`
+    : waiting?.state ? `Waiting (${waiting.state})`
+    : active?.state ? `Active (${active.state})`
+    : controller?.state ? `Controller (${controller.state})`
+    : 'None';
+  return { supported, registration, controller, installing, waiting, active, workerState };
+}
+
 function renderBuildInfoUi() {
+  const sw = getServiceWorkerDiagnosticSnapshot();
+  const cacheName = `the-dye-ledger-${APP_VERSION}`;
+  const pageControl = sw.supported ? (sw.controller ? 'Controlled' : 'Not controlled yet') : 'Unsupported';
+  const updateAvailable = !!(window.dyeLedgerUpdateAvailable || sw.waiting);
   const values = {
     appBuildTimestamp: formatBuildDateET(BUILD_TIMESTAMP),
     appBuildLabel: BUILD_LABEL,
     appCurrentUrl: window.location.href,
-    appServiceWorkerStatus: ('serviceWorker' in navigator)
-      ? (window.dyeLedgerUpdateAvailable ? 'waiting / update available' : (navigator.serviceWorker.controller ? 'active / controlled' : 'supported / not controlling this page yet'))
-      : 'unavailable',
-    appActiveCacheName: `the-dye-ledger-${APP_VERSION}`,
-    appUpdateAvailableStatus: window.dyeLedgerUpdateAvailable ? 'Yes' : 'No',
-    appCacheGuidance: ('serviceWorker' in navigator)
-      ? 'If this version looks stale, use Refresh Now, force refresh, or clear site data. iPhone: delete Website Data or reinstall the Home Screen app.'
-      : 'Service worker unavailable in this browser.',
-    appVersionFooterBuild: formatBuildDateET(BUILD_TIMESTAMP)
+    appServiceWorkerStatus: sw.supported ? 'Supported' : 'Unsupported',
+    appPageControlStatus: pageControl,
+    appWorkerStateStatus: sw.workerState,
+    appActiveCacheName: cacheName,
+    appCacheMatchesStatus: 'Yes',
+    appUpdateAvailableStatus: updateAvailable ? 'Yes' : (pwaUpdateStatusMessage === 'Checking…' ? 'Checking…' : 'No'),
+    appLastUpdateCheck: lastPwaUpdateCheckAt ? formatTimestampET(lastPwaUpdateCheckAt) : 'Not checked yet',
+    appUpdateStatusMessage: pwaUpdateStatusMessage || 'Not checked yet',
+    appVersionFooterBuild: formatBuildDateET(BUILD_TIMESTAMP),
+    appCacheGuidance: sw.supported
+      ? (sw.controller ? 'Use Check for Updates, then Refresh Now if a new build is available. Reset App Cache preserves saved matches and local courses.' : 'This page is not currently controlled by the service worker. Refresh Now or Reset App Cache may be needed.')
+      : 'Service worker unavailable in this browser.'
   };
   Object.entries(values).forEach(([id, value]) => {
     const el = document.getElementById(id);
@@ -12153,11 +12182,31 @@ function renderBuildInfoUi() {
   });
   const footerBuild = document.getElementById('appVersionFooterBuild');
   if (footerBuild) footerBuild.title = `${BUILD_LABEL} · ${formatBuildDateET(BUILD_TIMESTAMP)} · ${window.location.href}`;
+
+  if ('caches' in window) {
+    caches.keys().then(keys => {
+      const appCaches = keys.filter(key => key.includes('the-dye-ledger'));
+      const cacheEl = document.getElementById('appActiveCacheName');
+      if (cacheEl) cacheEl.textContent = appCaches.length ? appCaches.join(', ') : cacheName;
+      const matchEl = document.getElementById('appCacheMatchesStatus');
+      if (matchEl) matchEl.textContent = appCaches.includes(cacheName) ? 'Yes' : (appCaches.length ? 'No' : 'Not cached yet');
+      const warning = document.getElementById('appUpdateWarning');
+      if (warning) {
+        const mismatch = appCaches.length && !appCaches.includes(cacheName);
+        warning.classList.toggle('hidden', !mismatch && !!sw.controller);
+        warning.textContent = mismatch
+          ? 'Warning: App version and cache version do not match. Refresh Now or Reset App Cache may be needed.'
+          : (!sw.controller ? 'This page is not currently controlled by the service worker. Refresh Now may activate the app cache.' : '');
+      }
+    }).catch(() => {});
+  }
 }
 
 let swRegistration = null;
 let appUpdateBannerVisible = false;
 let hasReloadedForServiceWorker = false;
+let lastPwaUpdateCheckAt = null;
+let pwaUpdateStatusMessage = 'Not checked yet';
 
 function updateVersionUi() {
   const loadSharedMatchBtn = document.getElementById('loadSharedMatchBtn');
@@ -12235,12 +12284,69 @@ function hideUpdateBanner() {
   appUpdateBannerVisible = false;
 }
 
-function triggerAppUpdate() {
-  if (swRegistration?.waiting) {
-    swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
-    return;
+async function checkForPwaUpdates() {
+  pwaUpdateStatusMessage = 'Checking…';
+  lastPwaUpdateCheckAt = new Date().toISOString();
+  renderBuildInfoUi();
+  const result = await forceDyeLedgerUpdateCheck();
+  const sw = getServiceWorkerDiagnosticSnapshot();
+  if (!result.supported) {
+    pwaUpdateStatusMessage = 'Service worker not supported in this browser.';
+  } else if (result.error) {
+    pwaUpdateStatusMessage = `Update check failed — ${result.error}`;
+  } else if (sw.waiting || window.dyeLedgerUpdateAvailable) {
+    window.dyeLedgerUpdateAvailable = true;
+    pwaUpdateStatusMessage = 'Update available. Tap Refresh Now.';
+  } else if (!sw.controller) {
+    pwaUpdateStatusMessage = 'Service worker not controlling this page yet. Tap Refresh Now.';
+  } else {
+    pwaUpdateStatusMessage = 'App is up to date.';
+  }
+  renderBuildInfoUi();
+  toast(pwaUpdateStatusMessage);
+}
+
+async function refreshPwaNow() {
+  pwaUpdateStatusMessage = 'Refreshing…';
+  renderBuildInfoUi();
+  try {
+    const registration = await navigator.serviceWorker?.getRegistration?.();
+    if (registration) hookServiceWorkerRegistration(registration);
+    if (registration?.waiting) {
+      registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      setTimeout(() => window.location.reload(), 1200);
+      return;
+    }
+    if (registration) await registration.update();
+  } catch (err) {
+    console.warn('[PWA] Refresh Now update check failed:', err);
   }
   window.location.reload();
+}
+
+async function resetDyeLedgerAppCache() {
+  const ok = window.confirm('Reset downloaded app files and reload?\n\nThis may help if the app is stuck on an old version. Saved matches, local courses, players, and scores will remain on this device.');
+  if (!ok) return;
+  pwaUpdateStatusMessage = 'Resetting app cache…';
+  renderBuildInfoUi();
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter(key => key.includes('the-dye-ledger')).map(key => caches.delete(key)));
+    }
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.filter(reg => reg.scope && reg.scope.startsWith(window.location.origin)).map(reg => reg.unregister()));
+    }
+  } catch (err) {
+    console.warn('[PWA] Reset App Cache failed:', err);
+  }
+  const base = window.location.pathname || './';
+  window.location.href = `${base}?refresh=${Date.now()}`;
+}
+
+function triggerAppUpdate() {
+  refreshPwaNow();
 }
 
 function hookServiceWorkerRegistration(registration) {
@@ -12293,7 +12399,7 @@ function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   window.addEventListener('load', async () => {
     try {
-      const registration = await navigator.serviceWorker.register('./service-worker.js?v=30.3.14', { scope: './' });
+      const registration = await navigator.serviceWorker.register('./service-worker.js?v=30.3.20', { scope: './' });
       hookServiceWorkerRegistration(registration);
       await forceDyeLedgerUpdateCheck();
       navigator.serviceWorker.addEventListener('controllerchange', () => {

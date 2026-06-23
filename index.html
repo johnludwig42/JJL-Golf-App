@@ -7,12 +7,12 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=30.3.19" />
+  <link rel="manifest" href="manifest.json?v=30.3.20" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
   <link rel="shortcut icon" href="./favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="style.css?v=30.3.19" />
+  <link rel="stylesheet" href="style.css?v=30.3.20" />
 </head>
 <body>
   <div class="app-chrome"><header class="app-header compact-header">
@@ -682,21 +682,41 @@
       </div>
       <div id="sharedAssignmentDiagnosticsMore" class="card tight-card hidden"></div>
 
+      <div class="card tight-card app-updates-card">
+        <h2>App Updates</h2>
+        <div class="app-update-summary">
+          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.20</strong></div>
+          <div><span class="muted-label">Build Date</span><strong id="appBuildTimestamp">loading…</strong></div>
+          <div><span class="muted-label">Cache</span><span id="appActiveCacheName" class="break-word">checking…</span></div>
+          <div><span class="muted-label">Update Available</span><strong id="appUpdateAvailableStatus">checking…</strong></div>
+          <div><span class="muted-label">Last Update Check</span><span id="appLastUpdateCheck">Not checked yet</span></div>
+          <div><span class="muted-label">Status</span><span id="appUpdateStatusMessage">Not checked yet</span></div>
+        </div>
+        <div class="actions wrap top-gap app-update-actions">
+          <button id="pwaCheckForUpdatesBtn" type="button" class="secondary">Check for Updates</button>
+          <button id="pwaRefreshNowBtn" type="button">Refresh Now</button>
+          <button id="pwaResetCacheBtn" type="button" class="secondary">Reset App Cache</button>
+        </div>
+        <div class="tiny top-gap" id="appCacheGuidance">If the app looks stale, use Check for Updates first, then Refresh Now. Reset App Cache preserves saved matches and local courses.</div>
+        <div class="tiny warning-text hidden top-gap" id="appUpdateWarning"></div>
+        <details class="top-gap">
+          <summary>Technical diagnostics</summary>
+          <ul class="tight-list top-gap">
+            <li>Service Worker: <span id="appServiceWorkerStatus">checking…</span></li>
+            <li>Page Control: <span id="appPageControlStatus">checking…</span></li>
+            <li>Worker State: <span id="appWorkerStateStatus">checking…</span></li>
+            <li>Cache Matches App: <span id="appCacheMatchesStatus">checking…</span></li>
+            <li>Build label: <span id="appBuildLabel">loading…</span></li>
+            <li>URL: <span id="appCurrentUrl" class="break-word">loading…</span></li>
+          </ul>
+        </details>
+      </div>
+
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
-          <li>v30.3.8 keeps Shared Match hosts on the Match tab for device assignment before scoring.</li>
-          <li>v30.3.8 adds joined-device names so hosts can identify carts/devices in participant lists and assignment dropdowns.</li>
-          <li>v30.3.8 adds a Start Scoring action after Shared Match setup while preserving scoring behavior.</li>
-          <li>v30.3.19 cleans Scores tab state handling, removes stray layout fragments, and labels the footer timestamp as Build Date.</li>
-          <li>App version: <strong id="appVersionLabel">v30.3.19</strong></li>
-          <li>Build: <strong id="appBuildTimestamp">loading…</strong></li>
-          <li>Build label: <span id="appBuildLabel">loading…</span></li>
-          <li>URL: <span id="appCurrentUrl" class="break-word">loading…</span></li>
-          <li>Service Worker: <span id="appServiceWorkerStatus">checking…</span></li>
-          <li>Cache: <span id="appActiveCacheName">checking…</span></li>
-          <li>Update Available: <span id="appUpdateAvailableStatus">checking…</span></li>
-          <li class="tiny" id="appCacheGuidance">If this version looks stale, force refresh or clear site data.</li>
+          <li>v30.3.20 adds More tab App Update controls, service-worker diagnostics, Refresh Now, and Reset App Cache.</li>
+          <li>v30.3.20 labels the footer timestamp as Build Date and ties version/cache diagnostics to the current package.</li>
         </ul>
       </div>
     </section>
@@ -716,7 +736,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.3.19</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
+    <span id="appVersionFooter">v30.3.20</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>
@@ -818,7 +838,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=30.3.19"></script>
-  <script src="app.js?v=30.3.19"></script>
+  <script src="supabase-config.js?v=30.3.20"></script>
+  <script src="app.js?v=30.3.20"></script>
 </body>
 </html>

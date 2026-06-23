@@ -4038,7 +4038,7 @@ main {
   .snapshot-row, .round-award { grid-template-columns: 1fr; gap: 3px; }
 }
 
-/* v30.3.19 Match Summary export and Scores tab polish */
+/* v30.3.20 Match Summary export and Scores tab polish */
 .scoreboard-export-card {
   border: 1px solid rgba(12,55,33,.14);
   box-shadow: 0 8px 24px rgba(15, 23, 42, .06);
@@ -4107,7 +4107,7 @@ main {
 }
 
 
-/* v30.3.19 Scores tab state cleanup and build date diagnostics */
+/* v30.3.20 Scores tab state cleanup and build date diagnostics */
 #missingScoreWarning.hidden,
 #postRoundActionsInline.hidden,
 #scoreboardFinishRoundBtn.hidden,
@@ -4139,4 +4139,39 @@ main {
   .app-footer-version #appVersionFooterBuild {
     font-size: 11px;
   }
+}
+
+/* v30.3.20 PWA update controls and diagnostics */
+.app-updates-card .app-update-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+.app-updates-card .app-update-summary > div {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(15, 64, 43, 0.10);
+}
+.app-updates-card .app-update-summary > div:last-child { border-bottom: 0; }
+.muted-label {
+  color: var(--muted);
+  font-weight: 800;
+}
+.warning-text {
+  color: #8a2d12;
+  background: #fff6ee;
+  border: 1px solid #f1c49e;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.app-update-actions button { min-height: 44px; }
+@media (max-width: 640px) {
+  .app-updates-card .app-update-summary > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .app-update-actions button { width: 100%; }
 }

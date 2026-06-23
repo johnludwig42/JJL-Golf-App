@@ -4037,3 +4037,71 @@ main {
 @media (max-width: 520px) {
   .snapshot-row, .round-award { grid-template-columns: 1fr; gap: 3px; }
 }
+
+/* v30.3.18 Match Summary export and Scores tab polish */
+.scoreboard-export-card {
+  border: 1px solid rgba(12,55,33,.14);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, .06);
+}
+.scoreboard-export-card .compact-item-header {
+  gap: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.scoreboard-export-card h2 { margin-bottom: 4px; }
+.scoreboard-export-card .tiny { line-height: 1.45; }
+#scoreboardPrintViewHint {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 7px 10px;
+  border: 1px solid rgba(12,55,33,.12);
+  border-radius: 999px;
+  background: #f7faf8;
+  color: #30513f;
+}
+.scoreboard-export-card .print-actions {
+  gap: 10px;
+  align-items: end;
+}
+.scoreboard-round-actions {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid rgba(15,23,42,.08);
+  border-radius: 14px;
+  background: #fbfcfd;
+}
+#scoreboardRoundState {
+  font-weight: 700;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.export-provisional-label {
+  display: inline-block;
+  margin: 8px 0 12px;
+  padding: 7px 10px;
+  border: 1px solid rgba(180,83,9,.28);
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #7c2d12;
+  font-weight: 800;
+  font-size: 12px;
+}
+.snapshot-row,
+.round-award {
+  column-gap: 12px !important;
+}
+.snapshot-row .award-label,
+.round-award .award-label {
+  padding-right: 6px;
+  white-space: nowrap;
+}
+.snapshot-row strong,
+.round-award strong {
+  padding-left: 2px;
+}
+@media (max-width:760px){
+  .scoreboard-export-card .compact-item-header { gap: 10px; }
+  .scoreboard-export-card .print-actions > * { width: 100%; }
+  #scoreboardPrintViewHint { border-radius: 12px; }
+  .scoreboard-round-actions .actions > * { min-width: 0; }
+}

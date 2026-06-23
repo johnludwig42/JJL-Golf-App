@@ -1,6 +1,6 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.3.17';
-const BUILD_TIMESTAMP = '2026-06-21 01:05 ET';
+const APP_VERSION = 'v30.3.18';
+const BUILD_TIMESTAMP = '2026-06-21 01:18 ET';
 const BUILD_LABEL = 'Reporting Polish, Missing Score UX, Stats Scroll Fix, and Skins Settlement Repair';
 
 function cssEscape(value) {
@@ -587,7 +587,7 @@ function getSharedSyncStatus(match) {
   return { label: 'Needs attention', detail: 'Shared match status should be checked before continuing.', tone: 'warning', pending };
 }
 function formatSharedLastSync(match) {
-  return match?.lastCloudSyncAt ? new Date(match.lastCloudSyncAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'Not synced yet';
+  return match?.lastCloudSyncAt ? formatTimestampET(match.lastCloudSyncAt, { includeDate: false }) : 'Not synced yet';
 }
 function getAssignedPlayerNamesForParticipant(match, participantId = getCurrentSharedParticipantId(match)) {
   if (!match || match.storageMode !== 'shared') return [];
@@ -1634,7 +1634,7 @@ This round is missing valid course or tee data.`;
   lines.push(`${metrics.course.name} · ${metrics.tee.teeName}`);
   const holeCount = getPlayableHoleCount(match, metrics.tee);
   lines.push(`${getHoleSegmentLabel(match, metrics.tee)} · ${metrics.completed}/${holeCount} holes complete`);
-  if (match.status === 'complete') lines.push(`Completed ${new Date(match.completedAt || Date.now()).toLocaleString()}`);
+  if (match.status === 'complete') lines.push(`Completed ${formatTimestampET(match.completedAt || Date.now())}`);
   lines.push('');
 
   if (metrics.teams.length === 2) {
@@ -1946,11 +1946,8 @@ function buildMissingScoreWarning(match, metrics, { exportMode = false } = {}) {
   if (exportMode) {
     if (complete) return '';
     return `
-      <div class="export-incomplete-warning">
-        <div class="section-label">${escapeHtml(title)}</div>
-        <div class="tiny top-gap">Totals and reports may be provisional until every player has a gross score for every selected hole.</div>
-        <ul class="tight-list top-gap">${items}${more}</ul>
-        <div class="tiny">Report marked provisional because the round is incomplete.</div>
+      <div class="export-provisional-label">
+        Provisional Report — Incomplete Round
       </div>`;
   }
   return `
@@ -2010,7 +2007,7 @@ function buildScorecardSnapshot(match, metrics) {
   if (greenies) rows.push(['🎯 Greenies', greenies]);
   if (biggest.rows.length && biggest.value > 0) rows.push(['💰 Biggest Winner', formatAwardWinners(biggest.rows.map(r => r.name), formatMoneyAccounting(biggest.value))]);
   if (!rows.length) return '';
-  return `<section class="export-section export-section-scorecard-snapshot"><div class="export-section-head"><h2>Scorecard Snapshot</h2></div><div class="snapshot-grid">${rows.map(([label, value]) => `<div class="snapshot-row"><span>${escapeHtml(label)}:</span><strong>${value}</strong></div>`).join('')}</div></section>`;
+  return `<section class="export-section export-section-scorecard-snapshot"><div class="export-section-head"><h2>Scorecard Snapshot</h2></div><div class="snapshot-grid">${rows.map(([label, value]) => `<div class="snapshot-row"><span class="award-label">${escapeHtml(label)}:</span><strong>${value}</strong></div>`).join('')}</div></section>`;
 }
 function computePlayerFrontBack(match, metrics, playerMetric) {
   const holes = getSelectedScoringHoles(match, metrics?.tee);
@@ -2044,7 +2041,7 @@ function buildRoundAwards(match, metrics) {
   const putts = getLowRows(stats.map(r => ({ name: r.playerMetric?.player?.name, value: Number(r.totals?.putts || 0) })).filter(r => r.value > 0), 'value');
   if (putts.rows.length) awards.push(['Fewest Putts', formatAwardWinners(putts.rows.map(r => r.name), putts.value)]);
   if (!awards.length) return '';
-  return `<section class="export-section export-section-round-awards"><div class="export-section-head"><h2>Round Awards</h2></div><div class="round-awards-grid">${awards.map(([label, value]) => `<div class="round-award"><span>${escapeHtml(label)}:</span><strong>${value}</strong></div>`).join('')}</div></section>`;
+  return `<section class="export-section export-section-round-awards"><div class="export-section-head"><h2>Round Awards</h2></div><div class="round-awards-grid">${awards.map(([label, value]) => `<div class="round-award"><span class="award-label">${escapeHtml(label)}:</span><strong>${value}</strong></div>`).join('')}</div></section>`;
 }
 
 function formatTimestampET(timestamp, { includeDate = true } = {}) {
@@ -2392,7 +2389,7 @@ function buildSummaryExportBody(match, metrics) {
   const exportRoundRecapHtml = buildRoundRecapExport(match);
   const exportScorecardSnapshotHtml = buildScorecardSnapshot(match, metrics);
   const exportRoundAwardsHtml = buildRoundAwards(match, metrics);
-  const exportMissingScoreWarningHtml = buildMissingScoreWarning(match, metrics, { exportMode: true });
+  const exportProvisionalLabelHtml = buildMissingScoreWarning(match, metrics, { exportMode: true });
   const showNinePoint = (match.selectedGames || []).some(g => g.key === 'nine_point');
   const exportNinePointScorecardHtml = showNinePoint ? `
     <section class="export-section export-section-nine-point export-section-nine-point-scorecard">
@@ -2409,7 +2406,7 @@ function buildSummaryExportBody(match, metrics) {
   return `
     ${exportRoundRecapHtml}
     ${(exportScorecardSnapshotHtml || exportRoundAwardsHtml) ? `<div class="recap-highlights-grid">${exportScorecardSnapshotHtml}${exportRoundAwardsHtml}</div>` : ''}
-    ${exportMissingScoreWarningHtml}
+    ${exportProvisionalLabelHtml}
 
     <section class="export-section export-section-games-summary${exportRoundRecapHtml ? ' export-section-games-summary-after-recap' : ''}">
       <div class="export-section-head">
@@ -2608,6 +2605,32 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     .export-section-head h2 { margin: 0; font-size: 16px; line-height: 1.15; letter-spacing: -0.01em; }
     .export-section-sub { margin-top: 5px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
     .export-empty { color: var(--muted); font-size: 12px; }
+    .export-provisional-label {
+      display: inline-block;
+      margin: 8px 0 12px;
+      padding: 7px 10px;
+      border: 1px solid rgba(180,83,9,.28);
+      border-radius: 999px;
+      background: #fff7ed;
+      color: #7c2d12;
+      font-weight: 800;
+      font-size: 12px;
+    }
+    .recap-highlights-grid { display: grid; gap: 12px; }
+    @media (min-width: 860px) { .recap-highlights-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } }
+    .snapshot-grid, .round-awards-grid { display: grid; gap: 8px; }
+    .snapshot-row, .round-award {
+      display: grid;
+      grid-template-columns: max-content minmax(0, 1fr);
+      align-items: baseline;
+      gap: 12px;
+      padding: 8px 10px;
+      border: 1px solid rgba(12,55,33,.10);
+      border-radius: 12px;
+      background: #fff;
+    }
+    .snapshot-row .award-label, .round-award .award-label { color: var(--muted); font-weight: 800; padding-right: 6px; white-space: nowrap; }
+    .snapshot-row strong, .round-award strong { text-align: left; padding-left: 2px; }
     .export-note-block {
       font-size: 12px;
       line-height: 1.45;

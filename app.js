@@ -1,7 +1,7 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.3.18';
-const BUILD_TIMESTAMP = '2026-06-21 01:18 ET';
-const BUILD_LABEL = 'Reporting Polish, Missing Score UX, Stats Scroll Fix, and Skins Settlement Repair';
+const APP_VERSION = 'v30.3.19';
+const BUILD_TIMESTAMP = '2026-06-23T18:13:00Z';
+const BUILD_LABEL = 'Scores Tab State Cleanup and Build Date Diagnostics';
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -2052,6 +2052,17 @@ function formatTimestampET(timestamp, { includeDate = true } = {}) {
     ? { timeZone: 'America/New_York', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }
     : { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' };
   return `${new Intl.DateTimeFormat('en-US', options).format(dt)} ET`;
+}
+function formatBuildDateET(timestamp) {
+  const formatted = formatTimestampET(timestamp, { includeDate: true });
+  return formatted ? `Build Date: ${formatted}` : 'Build Date: unavailable';
+}
+function hasActiveRound(match, metrics = null) {
+  if (!match || match.status === 'complete') return false;
+  const players = Array.isArray(metrics?.players) ? metrics.players : (Array.isArray(match.players) ? match.players : []);
+  const tee = metrics?.tee || getCourseById(match.courseId)?.tees?.find(t => t.id === match.teeId) || null;
+  const holes = tee ? getSelectedScoringHoles(match, tee) : [];
+  return players.length > 0 && holes.length > 0 && state.activeMatchId === match.id;
 }
 function buildRoundRecapStatus(match) {
   const status = String(match?.roundRecapStatus || '').trim();
@@ -4671,9 +4682,12 @@ function renderLeaderboard() {
   syncFinishRoundUi(match);
   const missingScoreEl = document.getElementById('missingScoreWarning');
   if (missingScoreEl) {
-    const warning = buildMissingScoreWarning(match, metrics);
+    const activeRound = hasActiveRound(match, metrics);
+    const warning = activeRound ? buildMissingScoreWarning(match, metrics) : '';
     missingScoreEl.innerHTML = warning;
     missingScoreEl.classList.toggle('hidden', !warning);
+    missingScoreEl.style.display = warning ? '' : 'none';
+    missingScoreEl.setAttribute('aria-hidden', warning ? 'false' : 'true');
   }
 
   const sortedPlayers = metrics.players.slice().sort((a, b) => a.leaderboardNetDiff - b.leaderboardNetDiff || a.toPar - b.toPar);
@@ -8189,8 +8203,10 @@ function syncFinishRoundUi(match = getActiveMatch()) {
   const scoreboardRoundState = document.getElementById('scoreboardRoundState');
   const postRoundInline = document.getElementById('postRoundActionsInline');
   const postRoundInlineText = document.getElementById('postRoundActionsInlineText');
+  const scoreboardRoundActions = scoreboardRoundState?.closest?.('.scoreboard-round-actions') || null;
   const isComplete = !!match && match.status === 'complete';
   const hasMatch = !!match;
+  const activeRound = hasActiveRound(match);
   const reopenedEdit = !!match?.previousCompletedAt;
   const show = (el, visible) => {
     if (!el) return;
@@ -8202,15 +8218,16 @@ function syncFinishRoundUi(match = getActiveMatch()) {
   };
   show(scoringFinishBtn, false);
   show(scoringConfirmBtn, false);
-  show(scoreboardFinishBtn, hasMatch && !isComplete);
+  show(scoreboardFinishBtn, hasMatch && !isComplete && activeRound);
   show(scoreboardConfirmBtn, false);
   show(setupFinishBtn, false);
   show(setupConfirmBtn, false);
   show(postRoundInline, hasMatch && isComplete);
   if (scoreboardFinishBtn) scoreboardFinishBtn.textContent = reopenedEdit ? 'Save / End Round' : 'Finish / End Round';
   if (postRoundInlineText && hasMatch && isComplete) postRoundInlineText.textContent = `${completedHoles(match)} holes completed. What would you like to do next?`;
+  if (scoreboardRoundActions) scoreboardRoundActions.classList.toggle('no-active-round', !activeRound && !isComplete);
   if (scoreboardRoundState) {
-    if (!hasMatch) scoreboardRoundState.textContent = 'No active round.';
+    if (!activeRound && !isComplete) scoreboardRoundState.textContent = 'No active round. Start scoring to generate reports and summaries.';
     else if (isComplete) scoreboardRoundState.textContent = 'Round complete. Next-step options are available below.';
     else if (reopenedEdit) scoreboardRoundState.textContent = 'Editing previously completed round. Finish / End Round will overwrite the saved round.';
     else scoreboardRoundState.textContent = `${completedHoles(match)}/${getRequestedHoleCount(match)} holes completed.`;
@@ -12117,7 +12134,7 @@ window.getDyeLedgerScrollInfo = getDyeLedgerScrollInfo;
 
 function renderBuildInfoUi() {
   const values = {
-    appBuildTimestamp: BUILD_TIMESTAMP,
+    appBuildTimestamp: formatBuildDateET(BUILD_TIMESTAMP),
     appBuildLabel: BUILD_LABEL,
     appCurrentUrl: window.location.href,
     appServiceWorkerStatus: ('serviceWorker' in navigator)
@@ -12128,14 +12145,14 @@ function renderBuildInfoUi() {
     appCacheGuidance: ('serviceWorker' in navigator)
       ? 'If this version looks stale, use Refresh Now, force refresh, or clear site data. iPhone: delete Website Data or reinstall the Home Screen app.'
       : 'Service worker unavailable in this browser.',
-    appVersionFooterBuild: BUILD_TIMESTAMP
+    appVersionFooterBuild: formatBuildDateET(BUILD_TIMESTAMP)
   };
   Object.entries(values).forEach(([id, value]) => {
     const el = document.getElementById(id);
     if (el) el.textContent = value;
   });
   const footerBuild = document.getElementById('appVersionFooterBuild');
-  if (footerBuild) footerBuild.title = `${BUILD_LABEL} · ${BUILD_TIMESTAMP} · ${window.location.href}`;
+  if (footerBuild) footerBuild.title = `${BUILD_LABEL} · ${formatBuildDateET(BUILD_TIMESTAMP)} · ${window.location.href}`;
 }
 
 let swRegistration = null;

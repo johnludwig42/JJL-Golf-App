@@ -4038,7 +4038,7 @@ main {
   .snapshot-row, .round-award { grid-template-columns: 1fr; gap: 3px; }
 }
 
-/* v30.3.18 Match Summary export and Scores tab polish */
+/* v30.3.19 Match Summary export and Scores tab polish */
 .scoreboard-export-card {
   border: 1px solid rgba(12,55,33,.14);
   box-shadow: 0 8px 24px rgba(15, 23, 42, .06);
@@ -4104,4 +4104,39 @@ main {
   .scoreboard-export-card .print-actions > * { width: 100%; }
   #scoreboardPrintViewHint { border-radius: 12px; }
   .scoreboard-round-actions .actions > * { min-width: 0; }
+}
+
+
+/* v30.3.19 Scores tab state cleanup and build date diagnostics */
+#missingScoreWarning.hidden,
+#postRoundActionsInline.hidden,
+#scoreboardFinishRoundBtn.hidden,
+#scoreboardConfirmFinishRoundBtn.hidden {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+#missingScoreWarning {
+  position: relative;
+  z-index: 0;
+  clear: both;
+}
+.scoreboard-export-card,
+.scoreboard-round-actions {
+  overflow: visible;
+}
+.scoreboard-round-actions.no-active-round .actions {
+  display: none !important;
+}
+.app-footer-version #appVersionFooterBuild {
+  white-space: nowrap;
+}
+@media (max-width: 760px) {
+  .app-footer-version {
+    gap: 8px;
+    font-size: 12px;
+  }
+  .app-footer-version #appVersionFooterBuild {
+    font-size: 11px;
+  }
 }

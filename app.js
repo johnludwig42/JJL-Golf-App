@@ -1,7 +1,16 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
-const APP_VERSION = 'v30.3.20';
-const BUILD_TIMESTAMP = '2026-06-23T18:36:30Z';
-const BUILD_LABEL = 'PWA Update Controls and Diagnostics';
+const BUILD_INFO = {
+  version: 'v30.3.21',
+  versionNumber: '30.3.21',
+  cacheName: 'the-dye-ledger-v30.3.21',
+  buildDate: '2026-06-23T18:48:51Z',
+  buildLabel: 'PWA Version Consistency and Service Worker Control Fix'
+};
+const APP_VERSION = BUILD_INFO.version;
+const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
+const BUILD_LABEL = BUILD_INFO.buildLabel;
+const APP_CACHE_NAME = BUILD_INFO.cacheName;
+const APP_VERSION_NUMBER = BUILD_INFO.versionNumber;
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -2056,6 +2065,52 @@ function formatTimestampET(timestamp, { includeDate = true } = {}) {
 function formatBuildDateET(timestamp) {
   const formatted = formatTimestampET(timestamp, { includeDate: true });
   return formatted ? `Build Date: ${formatted}` : 'Build Date: unavailable';
+}
+
+function getUrlVersionDiagnostic() {
+  try {
+    const url = new URL(window.location.href);
+    return url.searchParams.get('v') || url.searchParams.get('version') || '';
+  } catch {
+    return '';
+  }
+}
+
+function cleanupStaleUrlVersionParameter() {
+  try {
+    const url = new URL(window.location.href);
+    const versionValue = url.searchParams.get('v');
+    const versionParamIsStale = versionValue && versionValue !== BUILD_INFO.versionNumber && versionValue !== BUILD_INFO.version;
+    if (versionParamIsStale || url.searchParams.get('version')) {
+      url.searchParams.delete('v');
+      url.searchParams.delete('version');
+      const clean = `${url.pathname}${url.search}${url.hash}`;
+      window.history.replaceState(window.history.state, document.title, clean);
+    }
+  } catch (err) {
+    console.warn('[PWA] URL version cleanup skipped:', err);
+  }
+}
+
+function getVersionConsistencyStatus({ sw = null, appCaches = [] } = {}) {
+  const urlVersion = getUrlVersionDiagnostic();
+  const staleUrl = !!urlVersion && urlVersion !== BUILD_INFO.versionNumber && urlVersion !== BUILD_INFO.version;
+  const currentCachePresent = appCaches.includes(APP_CACHE_NAME);
+  const staleCaches = appCaches.filter(key => key !== APP_CACHE_NAME);
+  const cacheMismatch = appCaches.length > 0 && !currentCachePresent;
+  const pageUncontrolled = !!sw?.supported && !sw?.controller;
+  const warnings = [];
+  if (staleUrl) warnings.push(`URL version is stale (${urlVersion}).`);
+  if (cacheMismatch) warnings.push('Detected app cache does not match the current app version.');
+  if (staleCaches.length && !currentCachePresent) warnings.push(`Old app cache detected: ${staleCaches.join(', ')}.`);
+  if (pageUncontrolled) warnings.push('This page is not currently controlled by the service worker.');
+  return {
+    ok: warnings.length === 0,
+    urlVersion,
+    currentCachePresent,
+    staleCaches,
+    warnings
+  };
 }
 function hasActiveRound(match, metrics = null) {
   if (!match || match.status === 'complete') return false;
@@ -12078,12 +12133,13 @@ function getBuildInfoSnapshot() {
     buildTimestamp: BUILD_TIMESTAMP,
     buildLabel: BUILD_LABEL,
     url: window.location.href,
+    urlVersion: getUrlVersionDiagnostic(),
     userAgent: navigator.userAgent,
     serviceWorkerSupported: swSupported,
     serviceWorkerControlled: !!controller,
     serviceWorkerControllerScriptURL: controller?.scriptURL || active?.scriptURL || null,
     updateAvailable: !!window.dyeLedgerUpdateAvailable,
-    activeCacheName: `the-dye-ledger-${APP_VERSION}`,
+    activeCacheName: APP_CACHE_NAME,
     activeServiceWorkerState: active?.state || (registration?.waiting ? 'waiting' : 'unknown'),
     cacheKeys: 'pending'
   };
@@ -12156,7 +12212,7 @@ function getServiceWorkerDiagnosticSnapshot() {
 
 function renderBuildInfoUi() {
   const sw = getServiceWorkerDiagnosticSnapshot();
-  const cacheName = `the-dye-ledger-${APP_VERSION}`;
+  const cacheName = APP_CACHE_NAME;
   const pageControl = sw.supported ? (sw.controller ? 'Controlled' : 'Not controlled yet') : 'Unsupported';
   const updateAvailable = !!(window.dyeLedgerUpdateAvailable || sw.waiting);
   const values = {
@@ -12167,7 +12223,9 @@ function renderBuildInfoUi() {
     appPageControlStatus: pageControl,
     appWorkerStateStatus: sw.workerState,
     appActiveCacheName: cacheName,
-    appCacheMatchesStatus: 'Yes',
+    appUrlVersionStatus: getUrlVersionDiagnostic() || 'Not used',
+    appCacheMatchesStatus: 'Checking…',
+    appVersionConsistencyStatus: 'Checking…',
     appUpdateAvailableStatus: updateAvailable ? 'Yes' : (pwaUpdateStatusMessage === 'Checking…' ? 'Checking…' : 'No'),
     appLastUpdateCheck: lastPwaUpdateCheckAt ? formatTimestampET(lastPwaUpdateCheckAt) : 'Not checked yet',
     appUpdateStatusMessage: pwaUpdateStatusMessage || 'Not checked yet',
@@ -12188,15 +12246,17 @@ function renderBuildInfoUi() {
       const appCaches = keys.filter(key => key.includes('the-dye-ledger'));
       const cacheEl = document.getElementById('appActiveCacheName');
       if (cacheEl) cacheEl.textContent = appCaches.length ? appCaches.join(', ') : cacheName;
+      const consistency = getVersionConsistencyStatus({ sw, appCaches });
       const matchEl = document.getElementById('appCacheMatchesStatus');
       if (matchEl) matchEl.textContent = appCaches.includes(cacheName) ? 'Yes' : (appCaches.length ? 'No' : 'Not cached yet');
+      const urlEl = document.getElementById('appUrlVersionStatus');
+      if (urlEl) urlEl.textContent = consistency.urlVersion || 'Not used';
+      const consistencyEl = document.getElementById('appVersionConsistencyStatus');
+      if (consistencyEl) consistencyEl.textContent = consistency.ok ? 'OK' : 'Warning';
       const warning = document.getElementById('appUpdateWarning');
       if (warning) {
-        const mismatch = appCaches.length && !appCaches.includes(cacheName);
-        warning.classList.toggle('hidden', !mismatch && !!sw.controller);
-        warning.textContent = mismatch
-          ? 'Warning: App version and cache version do not match. Refresh Now or Reset App Cache may be needed.'
-          : (!sw.controller ? 'This page is not currently controlled by the service worker. Refresh Now may activate the app cache.' : '');
+        warning.classList.toggle('hidden', consistency.ok);
+        warning.textContent = consistency.ok ? '' : `Warning: The app may be running stale cached files. ${consistency.warnings.join(' ')} Tap Refresh Now. If the warning remains, use Reset App Cache.`;
       }
     }).catch(() => {});
   }
@@ -12399,7 +12459,7 @@ function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   window.addEventListener('load', async () => {
     try {
-      const registration = await navigator.serviceWorker.register('./service-worker.js?v=30.3.20', { scope: './' });
+      const registration = await navigator.serviceWorker.register(`./service-worker.js?v=${BUILD_INFO.versionNumber}`, { scope: './' });
       hookServiceWorkerRegistration(registration);
       await forceDyeLedgerUpdateCheck();
       navigator.serviceWorker.addEventListener('controllerchange', () => {
@@ -12414,6 +12474,7 @@ function registerServiceWorker() {
   });
 }
 
+cleanupStaleUrlVersionParameter();
 logDyeLedgerBuildInfo();
 registerServiceWorker();
 

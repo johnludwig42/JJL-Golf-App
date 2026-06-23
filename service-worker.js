@@ -1,11 +1,17 @@
-const CACHE_NAME = 'the-dye-ledger-v30.3.20';
+const BUILD_INFO = {
+  version: 'v30.3.21',
+  versionNumber: '30.3.21',
+  cacheName: 'the-dye-ledger-v30.3.21',
+  buildDate: '2026-06-23T18:48:51Z'
+};
+const CACHE_NAME = BUILD_INFO.cacheName;
 const ASSETS = [
   './',
   './index.html',
-  './style.css?v=30.3.20',
-  './app.js?v=30.3.20',
-  './supabase-config.js?v=30.3.20',
-  './manifest.json?v=30.3.20',
+  './style.css?v=30.3.21',
+  './app.js?v=30.3.21',
+  './supabase-config.js?v=30.3.21',
+  './manifest.json?v=30.3.21',
   './apple-touch-icon.png',
   './favicon-32x32.png',
   './favicon-16x16.png',
@@ -22,13 +28,14 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', event => {
+  self.skipWaiting();
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
 });
 
 self.addEventListener('activate', event => {
   event.waitUntil(
     Promise.all([
-      caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))),
+      caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('the-dye-ledger-') && k !== CACHE_NAME).map(k => caches.delete(k)))),
       self.clients.claim()
     ])
   );

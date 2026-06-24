@@ -1,10 +1,10 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.23',
-  versionNumber: '30.3.23',
-  cacheName: 'the-dye-ledger-v30.3.23',
-  buildDate: '2026-06-24T04:20:00Z',
-  buildLabel: 'Match Setup Finalization Diagnostics & Validation Fix'
+  version: 'v30.3.24',
+  versionNumber: '30.3.24',
+  cacheName: 'the-dye-ledger-v30.3.24',
+  buildDate: '2026-06-24T04:45:00Z',
+  buildLabel: 'Match Finalization Missing Variable Hotfix'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -11779,9 +11779,17 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     };
   }
 
+  function getUserFacingMissingRequirements(validationState) {
+    const technicalPatterns = /\b(variable|undefined|null|referenceerror|typeerror|validationstate|matchstate|is not defined|cannot read|cannot access)\b/i;
+    return (validationState?.missingRequirements || [])
+      .map(item => String(item || '').trim())
+      .filter(Boolean)
+      .filter(item => !technicalPatterns.test(item));
+  }
+
   function formatMatchSetupFailureMessage(validationState) {
-    const missing = validationState?.missingRequirements || [];
-    if (!missing.length) return 'Could not finalize match setup.\n\nMissing:\n• Unknown setup requirement. See Match Setup Diagnostics in More.';
+    const missing = getUserFacingMissingRequirements(validationState);
+    if (!missing.length) return 'Could not finalize match setup because of an internal app error.\n\nPlease try Refresh Now. If this continues, check Match Setup Diagnostics.';
     return `Could not finalize match setup.\n\nMissing:\n${missing.map(item => `• ${item}`).join('\n')}`;
   }
 
@@ -11824,14 +11832,17 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (selectedPlayers.length < 1) return toast('Select at least 1 player.');
     if (selectedPlayers.some(p => !p.teeId)) { markMissingTeeRows(); return toast('Select a tee for each player.'); }
     const selectedGames = collectSelectedGames();
+    if (selectedGames.length > 5) return toast('Select up to 5 gambling games.');
+    if (selectedGames.some(g => g.key === 'nassau') && teamCount !== 2) return toast('Nassau requires exactly 2 teams.');
+    if (selectedGames.some(g => ['team_match','team_stroke'].includes(g.key)) && teamCount < 2) return toast('Team games require at least 2 teams.');
+    if (selectedGames.some(g => g.key === 'nine_point') && selectedPlayers.length < 3) return toast('9-Point Game requires at least 3 assigned players.');
+    if (selectedGames.some(g => g.key === 'nine_point' && (!Array.isArray(g.playerIds) || [...new Set(g.playerIds)].length !== 3))) return toast('Select 3 players for the 9-Point Game.');
     const existing = editingMatchId ? getMatch(editingMatchId) : null;
     const scoringAccessMode = normalizeScoringAccessMode(fd.get('scoreEntryMode') || 'single_device');
     const scoreEntryMode = getLegacyScoreEntryMode(scoringAccessMode);
     const officialScorerName = String(fd.get('officialScorerName') || '').trim() || 'Official scorer';
     const sharedMatchEnabled = (scoringAccessMode === 'assigned_players' || fd.get('sharedMatchEnabled') === 'on') && hasSupabaseConfig();
-    const validationState = getMatchSetupValidationState({ fd, selectedPlayers, selectedGames, existing, sharedMatchEnabled, scoringAccessMode });
-    logMatchFinalizationDiagnostics('pre-validation', { validationState, selectedPlayers, selectedGames, existing, sharedMatchEnabled, scoringAccessMode, courseId: String(fd.get('courseId') || ''), teeId: String(fd.get('teeId') || ''), holeCount: Number(fd.get('holeCount')) === 9 ? 9 : 18 });
-    if (!validationState.ready) { if (selectedPlayers.some(p => !p.teeId)) markMissingTeeRows(); return toastMatchSetupFailure(validationState); }
+    logMatchFinalizationDiagnostics('pre-build', { selectedPlayers, selectedGames, existing, sharedMatchEnabled, scoringAccessMode, courseId: String(fd.get('courseId') || ''), teeId: String(fd.get('teeId') || ''), holeCount: Number(fd.get('holeCount')) === 9 ? 9 : 18 });
     const teamScorers = collectTeamScorerAssignments(teamCount, teamNames, existing?.teamScorers || []);
     const match = {
       id: editingMatchId || uid(),
@@ -11949,10 +11960,10 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
     toast(editingMatchId ? 'Match setup saved.' : (sharedMatchEnabled ? 'Shared match setup saved. Assign devices, then tap Start Scoring.' : 'Match setup saved.'));
     } catch (err) {
-      const fallbackValidation = (() => { try { return getMatchSetupValidationState(); } catch { return { ready: false, missingRequirements: ['Unexpected setup error — see console diagnostics'], summary: {} }; } })();
-      logMatchFinalizationDiagnostics('exception', { error: err, validationState: fallbackValidation });
-      console.error(err);
-      toastMatchSetupFailure(fallbackValidation?.missingRequirements?.length ? fallbackValidation : { ready: false, missingRequirements: [err?.message || 'Unexpected setup error'], summary: {} });
+      logMatchFinalizationDiagnostics('exception', { error: err });
+      console.error('Unexpected match finalization error:', err);
+      toast('Could not finalize match setup because of an internal app error. Please try Refresh Now. If this continues, check Match Setup Diagnostics.', 5200);
+      try { window.dyeLedgerLastMatchSetupValidation = { ready: false, missingRequirements: ['Internal app error — see console diagnostics'], summary: {} }; } catch {}
     }
   });
   document.getElementById('cancelMatchEditBtn').addEventListener('click', cancelMatchSetupChanges);

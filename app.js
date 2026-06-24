@@ -1,9 +1,9 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.24',
-  versionNumber: '30.3.24',
-  cacheName: 'the-dye-ledger-v30.3.24',
-  buildDate: '2026-06-24T04:45:00Z',
+  version: 'v30.3.25',
+  versionNumber: '30.3.25',
+  cacheName: 'the-dye-ledger-v30.3.25',
+  buildDate: '2026-06-24T13:18:31Z',
   buildLabel: 'Match Finalization Missing Variable Hotfix'
 };
 const APP_VERSION = BUILD_INFO.version;
@@ -2115,7 +2115,7 @@ function getVersionConsistencyStatus({ sw = null, appCaches = [] } = {}) {
 function hasActiveRound(match, metrics = null) {
   if (!match || match.status === 'complete') return false;
   const players = Array.isArray(metrics?.players) ? metrics.players : (Array.isArray(match.players) ? match.players : []);
-  const tee = metrics?.tee || getCourseById(match.courseId)?.tees?.find(t => t.id === match.teeId) || null;
+  const tee = metrics?.tee || getTee(match.courseId, match.teeId) || getCourse(match.courseId)?.tees?.find(t => t.id === match.teeId) || null;
   const holes = tee ? getSelectedScoringHoles(match, tee) : [];
   return players.length > 0 && holes.length > 0 && state.activeMatchId === match.id;
 }

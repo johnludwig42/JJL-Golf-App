@@ -1,10 +1,10 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.22',
-  versionNumber: '30.3.22',
-  cacheName: 'the-dye-ledger-v30.3.22',
-  buildDate: '2026-06-24T03:45:00Z',
-  buildLabel: 'Service Worker Reload Safety Fix'
+  version: 'v30.3.23',
+  versionNumber: '30.3.23',
+  cacheName: 'the-dye-ledger-v30.3.23',
+  buildDate: '2026-06-24T04:20:00Z',
+  buildLabel: 'Match Setup Finalization Diagnostics & Validation Fix'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -11734,6 +11734,82 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('setupSharedAdminPanel')?.addEventListener('pointerdown', e => { onDemandAssignmentRefresh(e.target); });
 
 
+
+  function getMatchSetupValidationState({ fd = null, selectedPlayers = null, selectedGames = null, existing = null, sharedMatchEnabled = false, scoringAccessMode = '' } = {}) {
+    const formData = fd || new FormData(document.getElementById('matchForm'));
+    const teamCount = Number(formData.get('teamCount')) || 1;
+    const playersPerTeam = Number(formData.get('playersPerTeam')) || 1;
+    const courseId = String(formData.get('courseId') || '').trim();
+    const players = Array.isArray(selectedPlayers) ? selectedPlayers : getSelectedPlayersFromSetup();
+    const games = Array.isArray(selectedGames) ? selectedGames : collectSelectedGames();
+    const requestedHoleCount = Number(formData.get('holeCount')) === 9 ? 9 : 18;
+    const teeId = String(formData.get('teeId') || document.getElementById('matchTeeSelect')?.value || players[0]?.teeId || '').trim();
+    const missing = [];
+    const warnings = [];
+    const uniqueIds = new Set(players.map(p => p.playerId).filter(Boolean));
+    if ((teamCount * playersPerTeam) > 32) missing.push('Limit is 32 total players');
+    if (!courseId) missing.push('Course selection');
+    if (!teeId && !players.some(p => p.teeId)) missing.push('Tee selection');
+    if (players.length < 1) missing.push('At least one player');
+    if (players.length !== uniqueIds.size) missing.push('Each player can only be selected once');
+    if (players.some(p => !p.teeId)) missing.push('A tee for each player');
+    if (![9, 18].includes(requestedHoleCount)) missing.push('Selected holes');
+    if (games.length > 5) missing.push('Select up to 5 gambling games');
+    if (games.some(g => g.key === 'nassau') && teamCount !== 2) missing.push('Nassau requires exactly 2 teams');
+    if (games.some(g => ['team_match','team_stroke'].includes(g.key)) && teamCount < 2) missing.push('Team games require at least 2 teams');
+    if (games.some(g => g.key === 'nine_point') && players.length < 3) missing.push('9-Point Game requires at least 3 assigned players');
+    if (games.some(g => g.key === 'nine_point' && (!Array.isArray(g.playerIds) || [...new Set(g.playerIds)].length !== 3))) missing.push('Select 3 players for the 9-Point Game');
+    if (sharedMatchEnabled && scoringAccessMode === 'assigned_players' && existing?.sharedPlayerAssignments) {
+      const unassigned = players.filter(p => !existing.sharedPlayerAssignments[p.playerId]);
+      if (unassigned.length && existing.sharedMatchId) warnings.push('Some Shared Match assignments will default to the host until changed');
+    }
+    return {
+      ready: missing.length === 0,
+      missingRequirements: [...new Set(missing)],
+      warnings,
+      summary: {
+        courseSelected: !!courseId,
+        teeSelected: !!teeId || players.every(p => p.teeId),
+        playerCount: players.length,
+        selectedHoles: requestedHoleCount,
+        sharedMatch: !!sharedMatchEnabled,
+        assignmentsComplete: sharedMatchEnabled ? (scoringAccessMode === 'assigned_players' ? 'Host default/managed' : 'N/A') : 'N/A',
+        roundStarted: !!getActiveMatch()?.players?.some(mp => (mp.scores || []).some(s => Number(s.gross) > 0)),
+      }
+    };
+  }
+
+  function formatMatchSetupFailureMessage(validationState) {
+    const missing = validationState?.missingRequirements || [];
+    if (!missing.length) return 'Could not finalize match setup.\n\nMissing:\n• Unknown setup requirement. See Match Setup Diagnostics in More.';
+    return `Could not finalize match setup.\n\nMissing:\n${missing.map(item => `• ${item}`).join('\n')}`;
+  }
+
+  function toastMatchSetupFailure(validationState) {
+    const message = formatMatchSetupFailureMessage(validationState);
+    toast(message);
+    try { window.dyeLedgerLastMatchSetupValidation = validationState; } catch {}
+  }
+
+  function logMatchFinalizationDiagnostics(stage, payload = {}) {
+    try {
+      console.group('Match Finalization');
+      console.log('Stage:', stage);
+      console.log('Course:', payload.courseId || payload.match?.courseId || '');
+      console.log('Tee:', payload.teeId || payload.match?.teeId || '');
+      console.log('Players:', payload.selectedPlayers || payload.match?.players || []);
+      console.log('Selected Holes:', payload.holeCount || payload.match?.holeCount || '');
+      console.log('Shared Match:', payload.sharedMatchEnabled ?? (payload.match?.storageMode === 'shared'));
+      console.log('Assignments:', payload.match?.sharedPlayerAssignments || payload.existing?.sharedPlayerAssignments || {});
+      console.log('Round State:', { activeMatchId: state.activeMatchId, currentHole, editingMatchId, setupWorkflowMode });
+      if (payload.validationState) console.log('Validation:', payload.validationState);
+      if (payload.error) console.error('Match finalization failed:', payload.error, payload);
+      console.groupEnd();
+    } catch (diagErr) {
+      console.warn('Match finalization diagnostics failed:', diagErr);
+    }
+  }
+
   document.getElementById('matchForm').addEventListener('submit', async e => {
     e.preventDefault();
     try {
@@ -11748,16 +11824,14 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (selectedPlayers.length < 1) return toast('Select at least 1 player.');
     if (selectedPlayers.some(p => !p.teeId)) { markMissingTeeRows(); return toast('Select a tee for each player.'); }
     const selectedGames = collectSelectedGames();
-    if (selectedGames.length > 5) return toast('Select up to 5 gambling games.');
-    if (selectedGames.some(g => g.key === 'nassau') && teamCount !== 2) return toast('Nassau requires exactly 2 teams.');
-    if (selectedGames.some(g => ['team_match','team_stroke'].includes(g.key)) && teamCount < 2) return toast('Team games require at least 2 teams.');
-    if (selectedGames.some(g => g.key === 'nine_point') && selectedPlayers.length < 3) return toast('9-Point Game requires at least 3 assigned players.');
-    if (selectedGames.some(g => g.key === 'nine_point' && (!Array.isArray(g.playerIds) || [...new Set(g.playerIds)].length !== 3))) return toast('Select 3 players for the 9-Point Game.');
     const existing = editingMatchId ? getMatch(editingMatchId) : null;
     const scoringAccessMode = normalizeScoringAccessMode(fd.get('scoreEntryMode') || 'single_device');
     const scoreEntryMode = getLegacyScoreEntryMode(scoringAccessMode);
     const officialScorerName = String(fd.get('officialScorerName') || '').trim() || 'Official scorer';
     const sharedMatchEnabled = (scoringAccessMode === 'assigned_players' || fd.get('sharedMatchEnabled') === 'on') && hasSupabaseConfig();
+    const validationState = getMatchSetupValidationState({ fd, selectedPlayers, selectedGames, existing, sharedMatchEnabled, scoringAccessMode });
+    logMatchFinalizationDiagnostics('pre-validation', { validationState, selectedPlayers, selectedGames, existing, sharedMatchEnabled, scoringAccessMode, courseId: String(fd.get('courseId') || ''), teeId: String(fd.get('teeId') || ''), holeCount: Number(fd.get('holeCount')) === 9 ? 9 : 18 });
+    if (!validationState.ready) { if (selectedPlayers.some(p => !p.teeId)) markMissingTeeRows(); return toastMatchSetupFailure(validationState); }
     const teamScorers = collectTeamScorerAssignments(teamCount, teamNames, existing?.teamScorers || []);
     const match = {
       id: editingMatchId || uid(),
@@ -11785,7 +11859,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       previousCompletedAt: existing?.previousCompletedAt || null,
       reopenedAt: existing?.reopenedAt || null,
       players: selectedPlayers.map(sp => {
-        const old = existing?.players.find(op => op.playerId === sp.playerId);
+        const old = Array.isArray(existing?.players) ? existing.players.find(op => op.playerId === sp.playerId) : null;
         return old ? { ...old, team: sp.team, slot: sp.slot, teeId: sp.teeId || selectedPlayers[0]?.teeId || '', stats: Array.isArray(old.stats) && old.stats.length ? old.stats : buildEmptyStats(Number(fd.get('holeCount')) === 9 ? 9 : 18) } : { playerId: sp.playerId, team: sp.team, slot: sp.slot, teeId: sp.teeId || selectedPlayers[0]?.teeId || '', scores: buildEmptyScores(Number(fd.get('holeCount')) === 9 ? 9 : 18), stats: buildEmptyStats(Number(fd.get('holeCount')) === 9 ? 9 : 18) };
       }),
       greeniesWinners: existing?.greeniesWinners || {},
@@ -11874,7 +11948,12 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       activateTab('score');
     }
     toast(editingMatchId ? 'Match setup saved.' : (sharedMatchEnabled ? 'Shared match setup saved. Assign devices, then tap Start Scoring.' : 'Match setup saved.'));
-    } catch (err) { console.error(err); toast('Could not finalize match setup. Please try again.'); }
+    } catch (err) {
+      const fallbackValidation = (() => { try { return getMatchSetupValidationState(); } catch { return { ready: false, missingRequirements: ['Unexpected setup error — see console diagnostics'], summary: {} }; } })();
+      logMatchFinalizationDiagnostics('exception', { error: err, validationState: fallbackValidation });
+      console.error(err);
+      toastMatchSetupFailure(fallbackValidation?.missingRequirements?.length ? fallbackValidation : { ready: false, missingRequirements: [err?.message || 'Unexpected setup error'], summary: {} });
+    }
   });
   document.getElementById('cancelMatchEditBtn').addEventListener('click', cancelMatchSetupChanges);
   document.getElementById('topCancelMatchSetupBtn')?.addEventListener('click', cancelMatchSetupChanges);
@@ -12210,8 +12289,102 @@ function getServiceWorkerDiagnosticSnapshot() {
   return { supported, registration, controller, installing, waiting, active, workerState };
 }
 
+
+
+function getMatchSetupValidationState({ fd = null, selectedPlayers = null, selectedGames = null, existing = null, sharedMatchEnabled = false, scoringAccessMode = '' } = {}) {
+  const form = document.getElementById('matchForm');
+  const formData = fd || (form ? new FormData(form) : null);
+  const active = getActiveMatch();
+  const teamCount = formData ? (Number(formData.get('teamCount')) || 1) : (Number(active?.teamCount) || 1);
+  const playersPerTeam = formData ? (Number(formData.get('playersPerTeam')) || 1) : (Number(active?.playersPerTeam) || 1);
+  const courseId = String(formData?.get('courseId') || active?.courseId || '').trim();
+  const players = Array.isArray(selectedPlayers) ? selectedPlayers : (form ? getSelectedPlayersFromSetup() : (Array.isArray(active?.players) ? active.players : []));
+  const games = Array.isArray(selectedGames) ? selectedGames : (form ? collectSelectedGames() : (active?.selectedGames || []));
+  const requestedHoleCount = formData ? (Number(formData.get('holeCount')) === 9 ? 9 : 18) : (active ? getRequestedHoleCount(active) : 0);
+  const teeId = String(formData?.get('teeId') || document.getElementById('matchTeeSelect')?.value || active?.teeId || players[0]?.teeId || '').trim();
+  const normalizedMode = normalizeScoringAccessMode(scoringAccessMode || formData?.get('scoreEntryMode') || active?.scoringAccessMode || 'single_device');
+  const isShared = !!sharedMatchEnabled || active?.storageMode === 'shared' || normalizedMode === 'assigned_players';
+  const missing = [];
+  const warnings = [];
+  const uniqueIds = new Set(players.map(p => p.playerId).filter(Boolean));
+  if ((teamCount * playersPerTeam) > 32) missing.push('Limit is 32 total players');
+  if (!courseId) missing.push('Course selection');
+  if (!teeId && !players.some(p => p.teeId)) missing.push('Tee selection');
+  if (players.length < 1) missing.push('At least one player');
+  if (players.length !== uniqueIds.size) missing.push('Each player can only be selected once');
+  if (players.some(p => !p.teeId)) missing.push('A tee for each player');
+  if (![9, 18].includes(Number(requestedHoleCount))) missing.push('Selected holes');
+  if (games.length > 5) missing.push('Select up to 5 gambling games');
+  if (games.some(g => g.key === 'nassau') && teamCount !== 2) missing.push('Nassau requires exactly 2 teams');
+  if (games.some(g => ['team_match','team_stroke'].includes(g.key)) && teamCount < 2) missing.push('Team games require at least 2 teams');
+  if (games.some(g => g.key === 'nine_point') && players.length < 3) missing.push('9-Point Game requires at least 3 assigned players');
+  if (games.some(g => g.key === 'nine_point' && (!Array.isArray(g.playerIds) || [...new Set(g.playerIds)].length !== 3))) missing.push('Select 3 players for the 9-Point Game');
+  return {
+    ready: missing.length === 0,
+    missingRequirements: [...new Set(missing)],
+    warnings,
+    summary: {
+      courseSelected: !!courseId,
+      teeSelected: !!teeId || players.every(p => p.teeId),
+      playerCount: players.length,
+      selectedHoles: requestedHoleCount,
+      sharedMatch: !!isShared,
+      assignmentsComplete: isShared ? (normalizedMode === 'assigned_players' ? 'Host default/managed' : 'N/A') : 'N/A',
+      roundStarted: matchHasStarted(active)
+    }
+  };
+}
+
+function getMatchSetupDiagnosticSnapshot() {
+  try {
+    const validation = (document.getElementById('matchForm') ? getMatchSetupValidationState() : (window.dyeLedgerLastMatchSetupValidation || null));
+    const active = getActiveMatch();
+    if (validation) return validation;
+    return {
+      ready: false,
+      missingRequirements: ['Match form not currently open'],
+      summary: {
+        courseSelected: !!active?.courseId,
+        teeSelected: !!active?.teeId,
+        playerCount: Array.isArray(active?.players) ? active.players.length : 0,
+        selectedHoles: active ? getRequestedHoleCount(active) : 0,
+        sharedMatch: active?.storageMode === 'shared',
+        assignmentsComplete: active?.storageMode === 'shared' ? 'Review Shared Match' : 'N/A',
+        roundStarted: matchHasStarted(active)
+      }
+    };
+  } catch (err) {
+    return { ready: false, missingRequirements: [err?.message || 'Unable to read setup state'], summary: {} };
+  }
+}
+
+function renderMatchSetupDiagnosticsUi() {
+  const box = document.getElementById('matchSetupDiagnosticsMore');
+  if (!box) return;
+  const diag = getMatchSetupDiagnosticSnapshot();
+  const summary = diag.summary || {};
+  const missing = diag.missingRequirements || [];
+  box.innerHTML = `
+    <details>
+      <summary><strong>Match Setup Diagnostics</strong> — ${diag.ready ? 'Ready' : 'Not Ready'}</summary>
+      <div class="app-update-summary top-gap">
+        <div><span class="muted-label">Course Selected</span><strong>${summary.courseSelected ? 'Yes' : 'No'}</strong></div>
+        <div><span class="muted-label">Tee Selected</span><strong>${summary.teeSelected ? 'Yes' : 'No'}</strong></div>
+        <div><span class="muted-label">Players</span><strong>${Number(summary.playerCount || 0)}</strong></div>
+        <div><span class="muted-label">Selected Holes</span><strong>${Number(summary.selectedHoles || 0) || 'None'}</strong></div>
+        <div><span class="muted-label">Shared Match</span><strong>${summary.sharedMatch ? 'Yes' : 'No'}</strong></div>
+        <div><span class="muted-label">Assignments Complete</span><strong>${escapeHtml(summary.assignmentsComplete || 'N/A')}</strong></div>
+        <div><span class="muted-label">Round Started</span><strong>${summary.roundStarted ? 'Yes' : 'No'}</strong></div>
+        <div><span class="muted-label">Match Finalization State</span><strong>${diag.ready ? 'Ready' : 'Not Ready'}</strong></div>
+      </div>
+      ${missing.length ? `<div class="tiny warning-text top-gap">Missing Requirements:<br>${missing.map(m => `• ${escapeHtml(m)}`).join('<br>')}</div>` : '<div class="tiny top-gap">No setup validation issues detected.</div>'}
+    </details>`;
+  box.classList.remove('hidden');
+}
+
 function renderBuildInfoUi() {
   const sw = getServiceWorkerDiagnosticSnapshot();
+  renderMatchSetupDiagnosticsUi();
   const cacheName = APP_CACHE_NAME;
   const pageControl = sw.supported ? (sw.controller ? 'Controlled' : 'Not controlled yet') : 'Unsupported';
   const updateAvailable = !!(window.dyeLedgerUpdateAvailable || sw.waiting);

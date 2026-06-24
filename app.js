@@ -1,10 +1,10 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.21',
-  versionNumber: '30.3.21',
-  cacheName: 'the-dye-ledger-v30.3.21',
-  buildDate: '2026-06-23T18:48:51Z',
-  buildLabel: 'PWA Version Consistency and Service Worker Control Fix'
+  version: 'v30.3.22',
+  versionNumber: '30.3.22',
+  cacheName: 'the-dye-ledger-v30.3.22',
+  buildDate: '2026-06-24T03:45:00Z',
+  buildLabel: 'Service Worker Reload Safety Fix'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -12265,6 +12265,9 @@ function renderBuildInfoUi() {
 let swRegistration = null;
 let appUpdateBannerVisible = false;
 let hasReloadedForServiceWorker = false;
+let userRequestedAppReload = false;
+let forceUnsafeAppReload = false;
+let pendingDeferredAppReload = false;
 let lastPwaUpdateCheckAt = null;
 let pwaUpdateStatusMessage = 'Not checked yet';
 
@@ -12328,11 +12331,13 @@ async function resumeActiveSharedMatchOnStartup() {
   }
 }
 
-function showUpdateBanner() {
+function showUpdateBanner(options = {}) {
   window.dyeLedgerUpdateAvailable = true;
+  if (options.deferred) pendingDeferredAppReload = true;
+  setUpdateBannerContent({ deferred: !!options.deferred || pendingDeferredAppReload });
   renderBuildInfoUi();
   const banner = document.getElementById('updateBanner');
-  if (!banner || appUpdateBannerVisible) return;
+  if (!banner) return;
   banner.classList.remove('hidden');
   appUpdateBannerVisible = true;
 }
@@ -12342,6 +12347,80 @@ function hideUpdateBanner() {
   if (!banner) return;
   banner.classList.add('hidden');
   appUpdateBannerVisible = false;
+}
+
+
+function setUpdateBannerContent({ deferred = false } = {}) {
+  const banner = document.getElementById('updateBanner');
+  if (!banner) return;
+  const title = banner.querySelector('.update-banner-copy strong');
+  const copy = banner.querySelector('.update-banner-copy span');
+  const action = document.getElementById('updateNowBtn');
+  if (deferred) {
+    if (title) title.textContent = 'Update ready';
+    if (copy) copy.textContent = 'Refresh when you are done with match setup or scoring.';
+    if (action) action.textContent = 'Refresh Now Anyway';
+  } else {
+    if (title) title.textContent = 'New version available';
+    if (copy) copy.textContent = 'Refresh to update to the latest build.';
+    if (action) action.textContent = 'Update';
+  }
+}
+
+function getActivePanelId() {
+  return document.querySelector('.panel.active')?.id || '';
+}
+
+function hasOpenBlockingUi() {
+  return Array.from(document.querySelectorAll('.modal-backdrop')).some(el => !el.classList.contains('hidden'));
+}
+
+function hasUnsavedVisibleScoreInputs() {
+  const match = getActiveMatch();
+  if (!match || getActivePanelId() !== 'score') return false;
+  const inputs = Array.from(document.querySelectorAll('[data-score-player]'));
+  if (!inputs.length) return false;
+  return inputs.some(input => {
+    const playerId = input.dataset.scorePlayer;
+    const player = match.players?.find(p => p.id === playerId || p.playerId === playerId);
+    const saved = player?.scores?.[Math.max(0, currentHole - 1)]?.gross;
+    const shown = String(input.value || '').trim();
+    const savedText = saved == null || saved === '' ? '' : String(saved);
+    return shown !== savedText;
+  });
+}
+
+function hasUnsafeReloadContext() {
+  const activePanel = getActivePanelId();
+  const activeMatch = getActiveMatch();
+  if (newMatchStartInProgress || cleanNewMatchSetupInProgress) return true;
+  if (uiState.scorecardImportLoading || uiState.cloudCoursesLoading) return true;
+  if (hasOpenBlockingUi()) return true;
+  if (activePanel === 'setup' && (setupWorkflowMode === 'create' || setupWorkflowMode === 'join' || editingMatchId)) return true;
+  if (activePanel === 'score') return true;
+  if (hasUnsavedVisibleScoreInputs()) return true;
+  if (activeMatch && activeMatch.status !== 'complete' && activePanel !== 'more') return true;
+  return false;
+}
+
+function showReloadDeferredMessage() {
+  pendingDeferredAppReload = true;
+  pwaUpdateStatusMessage = 'Update ready. Refresh when you are done with match setup or scoring.';
+  setUpdateBannerContent({ deferred: true });
+  showUpdateBanner({ deferred: true });
+  renderBuildInfoUi();
+  toast('Update ready. Refresh when you are done with match setup or scoring.');
+}
+
+function reloadOnceSafely({ force = false } = {}) {
+  if (hasReloadedForServiceWorker) return;
+  if (!force && hasUnsafeReloadContext()) {
+    showReloadDeferredMessage();
+    return;
+  }
+  hasReloadedForServiceWorker = true;
+  pendingDeferredAppReload = false;
+  window.location.reload();
 }
 
 async function checkForPwaUpdates() {
@@ -12366,7 +12445,13 @@ async function checkForPwaUpdates() {
   toast(pwaUpdateStatusMessage);
 }
 
-async function refreshPwaNow() {
+async function refreshPwaNow(options = {}) {
+  userRequestedAppReload = true;
+  forceUnsafeAppReload = !!options.force;
+  if (!forceUnsafeAppReload && hasUnsafeReloadContext()) {
+    showReloadDeferredMessage();
+    return;
+  }
   pwaUpdateStatusMessage = 'Refreshing…';
   renderBuildInfoUi();
   try {
@@ -12374,19 +12459,28 @@ async function refreshPwaNow() {
     if (registration) hookServiceWorkerRegistration(registration);
     if (registration?.waiting) {
       registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-      setTimeout(() => window.location.reload(), 1200);
+      setTimeout(() => reloadOnceSafely({ force: forceUnsafeAppReload }), 1200);
       return;
     }
-    if (registration) await registration.update();
+    if (registration) {
+      await registration.update();
+      if (registration.waiting) {
+        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+        setTimeout(() => reloadOnceSafely({ force: forceUnsafeAppReload }), 1200);
+        return;
+      }
+    }
   } catch (err) {
     console.warn('[PWA] Refresh Now update check failed:', err);
   }
-  window.location.reload();
+  reloadOnceSafely({ force: forceUnsafeAppReload });
 }
 
 async function resetDyeLedgerAppCache() {
   const ok = window.confirm('Reset downloaded app files and reload?\n\nThis may help if the app is stuck on an old version. Saved matches, local courses, players, and scores will remain on this device.');
   if (!ok) return;
+  userRequestedAppReload = true;
+  forceUnsafeAppReload = true;
   pwaUpdateStatusMessage = 'Resetting app cache…';
   renderBuildInfoUi();
   try {
@@ -12406,7 +12500,7 @@ async function resetDyeLedgerAppCache() {
 }
 
 function triggerAppUpdate() {
-  refreshPwaNow();
+  refreshPwaNow({ force: pendingDeferredAppReload });
 }
 
 function hookServiceWorkerRegistration(registration) {
@@ -12463,9 +12557,13 @@ function registerServiceWorker() {
       hookServiceWorkerRegistration(registration);
       await forceDyeLedgerUpdateCheck();
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (hasReloadedForServiceWorker) return;
-        hasReloadedForServiceWorker = true;
-        window.location.reload();
+        renderBuildInfoUi();
+        if (!userRequestedAppReload) {
+          pwaUpdateStatusMessage = 'Service worker updated. Tap Refresh Now when you are ready.';
+          renderBuildInfoUi();
+          return;
+        }
+        reloadOnceSafely({ force: forceUnsafeAppReload });
       });
     } catch (error) {
       console.warn('[BuildInfo] Service worker registration/update check failed:', error);

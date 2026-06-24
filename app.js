@@ -1,10 +1,10 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.26',
-  versionNumber: '30.3.26',
-  cacheName: 'the-dye-ledger-v30.3.26',
-  buildDate: '2026-06-24T14:05:00Z',
-  buildLabel: 'Incomplete Round Intelligence and Score Distribution Fix'
+  version: 'v30.3.27',
+  versionNumber: '30.3.27',
+  cacheName: 'the-dye-ledger-v30.3.27',
+  buildDate: '2026-06-24T20:46:57Z',
+  buildLabel: 'Incomplete Round Finalization and Match Intelligence'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -1950,27 +1950,49 @@ function getMissingScoreEntries(match, metrics) {
   return missing;
 }
 
+function isHoleComplete(holeNumberOrResult, activePlayers = [], scoresOrMetrics = null) {
+  const holeResult = holeNumberOrResult && typeof holeNumberOrResult === 'object' ? holeNumberOrResult : null;
+  const players = Array.isArray(activePlayers) ? activePlayers : [];
+  if (holeResult) {
+    const playerScores = Array.isArray(holeResult.playerScores) ? holeResult.playerScores : [];
+    const required = players.length ? players : playerScores;
+    return required.length > 0 && required.every(p => {
+      const playerId = p.playerId || p.id;
+      const scoreObj = playerScores.find(ps => String(ps.playerId) === String(playerId));
+      const gross = Number(scoreObj?.gross);
+      return Number.isFinite(gross) && gross > 0;
+    });
+  }
+  const holeNumber = Number(holeNumberOrResult);
+  const metrics = scoresOrMetrics;
+  const result = (metrics?.holeResults || []).find(h => Number(h?.holeNumber) === holeNumber);
+  return result ? isHoleComplete(result, activePlayers, metrics) : false;
+}
 function getRoundCompletionState(match, metrics) {
   const tee = metrics?.tee || getTee(match?.courseId, match?.teeId);
   const holes = tee ? getSelectedScoringHoles(match, tee) : [];
   const holeResults = Array.isArray(metrics?.holeResults) ? metrics.holeResults : [];
+  const players = Array.isArray(metrics?.players) ? metrics.players : (Array.isArray(match?.players) ? match.players : []);
   const completedHoles = [];
   const missingHoles = [];
   holes.forEach((hole, idx) => {
     const result = holeResults[idx];
     const holeNumber = Number(hole?.holeNumber || result?.holeNumber || idx + 1);
-    if (result?.completed) completedHoles.push(holeNumber);
+    if (result && isHoleComplete(result, players, metrics)) completedHoles.push(holeNumber);
     else missingHoles.push(holeNumber);
   });
   const selectedHoleCount = holes.length || Number(metrics?.holeCount) || getPlayableHoleCount(match, tee);
   const completedHoleCount = completedHoles.length;
   const incompleteHoleCount = Math.max(0, selectedHoleCount - completedHoleCount);
+  const remainingHoleNumbers = missingHoles.slice();
   return {
     selectedHoleCount,
     completedHoleCount,
     incompleteHoleCount,
     completedHoles,
     missingHoles,
+    remainingHoleNumbers,
+    completionPct: selectedHoleCount ? Math.round((completedHoleCount / selectedHoleCount) * 100) : 0,
     isComplete: selectedHoleCount > 0 && completedHoleCount >= selectedHoleCount,
     isIncomplete: selectedHoleCount > 0 && completedHoleCount < selectedHoleCount,
     label: `${completedHoleCount} of ${selectedHoleCount} holes completed`,
@@ -1979,8 +2001,13 @@ function getRoundCompletionState(match, metrics) {
 }
 function isHoleRangeComplete(match, metrics, startIdx, endIdx) {
   const holeResults = Array.isArray(metrics?.holeResults) ? metrics.holeResults : [];
+  const players = Array.isArray(metrics?.players) ? metrics.players : [];
   const slice = holeResults.slice(startIdx, endIdx);
-  return slice.length === Math.max(0, endIdx - startIdx) && slice.every(h => h?.completed);
+  return slice.length === Math.max(0, endIdx - startIdx) && slice.every(h => isHoleComplete(h, players, metrics));
+}
+function getCompletedHoleCountInRange(match, metrics, startIdx, endIdx) {
+  const players = Array.isArray(metrics?.players) ? metrics.players : [];
+  return (metrics?.holeResults || []).slice(startIdx, endIdx).filter(h => isHoleComplete(h, players, metrics)).length;
 }
 function formatIncompleteScopeSuffix(completion) {
   return completion?.isIncomplete ? ` ${completion.throughLabel}` : '';
@@ -1988,26 +2015,103 @@ function formatIncompleteScopeSuffix(completion) {
 function formatProvisionalSuffix(completion) {
   return completion?.isIncomplete ? ' — provisional' : '';
 }
-function isMatchResultClinched(diff, remainingHoles) {
-  return Math.abs(Number(diff) || 0) > Math.max(0, Number(remainingHoles) || 0);
+function getMatchClinchState({ margin, holesRemaining } = {}) {
+  const m = Math.abs(Number(margin) || 0);
+  const r = Math.max(0, Number(holesRemaining) || 0);
+  const isClinched = m > 0 && m > r;
+  return {
+    isClinched,
+    margin: m,
+    holesRemaining: r,
+    resultText: isClinched ? `Won ${m} & ${r}` : (m ? `Leads ${m} up · ${r} hole${r === 1 ? '' : 's'} remain` : `All square · ${r} hole${r === 1 ? '' : 's'} remain`)
+  };
 }
-function formatTeamGameStatusScoped(match, metrics, diff, completion, { provisional = false } = {}) {
-  const status = formatTeamGameStatus(match, metrics, diff);
-  if (!completion?.isIncomplete) return status;
-  const remaining = Number(completion.incompleteHoleCount || 0);
-  const clinched = isMatchResultClinched(diff, remaining);
-  const leadStatus = status.replace(/\bup\b/i, 'lead');
-  return `${leadStatus} ${completion.throughLabel}${(!clinched || provisional) ? ' — provisional' : ' — clinched'}`;
+function isMatchResultClinched(diff, remainingHoles) {
+  return getMatchClinchState({ margin: diff, holesRemaining: remainingHoles }).isClinched;
+}
+function formatTeamGameStatusScoped(match, metrics, diff, completion, { holesRemaining = null, scopeLabel = '', forceProvisional = false } = {}) {
+  if (!completion?.isIncomplete && holesRemaining == null) return formatTeamGameStatus(match, metrics, diff);
+  if (!metrics || metrics.teams?.length !== 2) return '—';
+  const margin = Math.abs(Number(diff) || 0);
+  const remaining = holesRemaining == null ? Number(completion?.incompleteHoleCount || 0) : Math.max(0, Number(holesRemaining) || 0);
+  const teamLabel = diff > 0 ? describeTeamLabel(match, 1, metrics) : diff < 0 ? describeTeamLabel(match, 2, metrics) : '';
+  const clinch = getMatchClinchState({ margin, holesRemaining: remaining });
+  const suffix = scopeLabel || completion?.throughLabel || '';
+  if (!margin) return `AS${suffix ? ` ${suffix}` : ''}${remaining ? ' — provisional' : ''}`;
+  if (clinch.isClinched && !forceProvisional) return `${teamLabel} won ${margin} & ${remaining}`;
+  return `${teamLabel} lead ${margin} up${suffix ? ` ${suffix}` : ''} — provisional`;
+}
+function getRoundEndReasonLabel(reason) {
+  const map = {
+    completed: 'Completed normally',
+    darkness: 'darkness',
+    weather: 'weather',
+    injury: 'injury',
+    conceded: 'concession',
+    endedEarly: 'the group ending early',
+    other: 'another reason'
+  };
+  return map[String(reason || '').trim()] || '';
+}
+function buildRoundEndReasonSentence(match) {
+  const reason = String(match?.roundEndReason || '').trim();
+  if (!reason || reason === 'completed') return '';
+  if (reason === 'conceded') return 'Match was conceded before all holes were completed.';
+  const label = getRoundEndReasonLabel(reason);
+  return label ? `Round ended due to ${label}.` : '';
+}
+function getGameClinchStates(match, metrics) {
+  const completion = getRoundCompletionState(match, metrics);
+  const selected = Array.isArray(match?.selectedGames) ? match.selectedGames : [];
+  const states = [];
+  selected.forEach(cfg => {
+    const key = cfg.key;
+    try {
+      if ((key === 'nassau' || key === 'team_match') && metrics?.teams?.length === 2) {
+        const diffs = key === 'nassau' ? computeNassauDiffsForBasis(metrics, String(cfg.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net') : computeTeamGameDiffs(match, metrics, key);
+        const frontCompleted = getCompletedHoleCountInRange(match, metrics, 0, Math.min(9, metrics?.holeResults?.length || 0));
+        const backCompleted = getCompletedHoleCountInRange(match, metrics, 9, metrics?.holeResults?.length || 0);
+        const frontRemaining = Math.max(0, Math.min(9, getPlayableHoleCount(match, metrics?.tee)) - frontCompleted);
+        const backSpan = Math.max(0, getPlayableHoleCount(match, metrics?.tee) - 9);
+        const backRemaining = Math.max(0, backSpan - backCompleted);
+        states.push({ key, segment: 'front', diff: diffs.front, ...getMatchClinchState({ margin: diffs.front, holesRemaining: frontRemaining }) });
+        if (backSpan) states.push({ key, segment: 'back', diff: diffs.back, ...getMatchClinchState({ margin: diffs.back, holesRemaining: backRemaining }) });
+        states.push({ key, segment: 'overall', diff: diffs.overall, ...getMatchClinchState({ margin: diffs.overall, holesRemaining: completion.incompleteHoleCount }) });
+      } else if (completion.isComplete) {
+        states.push({ key, segment: 'overall', isClinched: true, holesRemaining: 0, resultText: 'Complete' });
+      } else {
+        states.push({ key, segment: 'overall', isClinched: false, holesRemaining: completion.incompleteHoleCount, resultText: 'Provisional' });
+      }
+    } catch (_) {
+      states.push({ key, segment: 'overall', isClinched: false, holesRemaining: completion.incompleteHoleCount, resultText: 'Unavailable' });
+    }
+  });
+  return states;
+}
+function areAllGamesFinal(match, metrics) {
+  const completion = getRoundCompletionState(match, metrics);
+  if (completion.isComplete) return true;
+  const states = getGameClinchStates(match, metrics);
+  if (!states.length) return false;
+  const selectedKeys = new Set((match?.selectedGames || []).map(g => g.key));
+  if ([...selectedKeys].some(key => ['skins','net_skins','greenies','nine_point','team_stroke','individual_match'].includes(key))) return false;
+  return states.every(s => s.isClinched || Number(s.holesRemaining || 0) === 0);
 }
 function buildIncompleteRoundNotice(match, metrics) {
   const completion = getRoundCompletionState(match, metrics);
   if (!completion.isIncomplete) return '';
+  const reasonSentence = buildRoundEndReasonSentence(match);
+  const finality = areAllGamesFinal(match, metrics)
+    ? 'All selected game outcomes are mathematically determined despite the unplayed holes.'
+    : 'Some game outcomes may still change if the remaining holes are played.';
   return `
     <div class="export-provisional-detail">
       <strong>Provisional Report — Incomplete Round</strong><br>
       ${escapeHtml(completion.label)}.<br>
+      ${reasonSentence ? `${escapeHtml(reasonSentence)}<br>` : ''}
       Statistics and settlements are based on completed holes only.<br>
-      Unplayed holes were not counted or estimated.
+      Unplayed holes were not counted or estimated.<br>
+      ${escapeHtml(finality)}
     </div>`;
 }
 
@@ -2074,7 +2178,7 @@ function buildScorecardSnapshot(match, metrics) {
     if (metrics.teams?.length === 2) {
       const diffs = computeTeamGameDiffs(match, metrics, nassau.key || 'nassau');
       matchStatus = completion.isIncomplete
-        ? formatTeamGameStatusScoped(match, metrics, diffs.overall, completion, { provisional: true })
+        ? formatTeamGameStatusScoped(match, metrics, diffs.overall, completion)
         : formatTeamGameStatus(match, metrics, diffs.overall);
     }
   } catch (_) {}
@@ -2102,6 +2206,25 @@ function computePlayerFrontBack(match, metrics, playerMetric) {
     back: holes.length > 9 ? (completeRange(9, holes.length) ? sumRange(9, holes.length) : null) : null
   };
 }
+function getPartialNineLeaderRows(match, metrics, startIdx, endIdx) {
+  const holeResults = Array.isArray(metrics?.holeResults) ? metrics.holeResults : [];
+  const players = Array.isArray(metrics?.players) ? metrics.players : [];
+  const completedIndexes = [];
+  for (let idx = startIdx; idx < endIdx; idx += 1) {
+    const h = holeResults[idx];
+    if (h && isHoleComplete(h, players, metrics)) completedIndexes.push(idx);
+  }
+  if (!completedIndexes.length) return { completedCount: 0, span: Math.max(0, endIdx - startIdx), leaders: [], value: null };
+  const totals = players.map(p => {
+    const total = completedIndexes.reduce((sum, idx) => {
+      const scoreObj = holeResults[idx]?.playerScores?.find(ps => String(ps.playerId) === String(p.playerId));
+      return sum + (Number(scoreObj?.gross) || 0);
+    }, 0);
+    return { name: p.player?.name || 'Player', value: total };
+  });
+  const low = getLowRows(totals, 'value');
+  return { completedCount: completedIndexes.length, span: Math.max(0, endIdx - startIdx), leaders: low.rows, value: low.value };
+}
 function buildRoundAwards(match, metrics) {
   if (!metrics) return '';
   const completion = getRoundCompletionState(match, metrics);
@@ -2114,21 +2237,27 @@ function buildRoundAwards(match, metrics) {
   if (lowGross.rows.length) awards.push([completion.isIncomplete ? 'Low Gross Leader' : 'Low Gross', `${formatAwardWinners(lowGross.rows.map(r => r.player?.name), lowGross.value)}${formatIncompleteScopeSuffix(completion)}`]);
   if (lowNet.rows.length) awards.push([completion.isIncomplete ? 'Low Net Leader' : 'Low Net', `${formatAwardWinners(lowNet.rows.map(r => r.player?.name), lowNet.value)}${formatIncompleteScopeSuffix(completion)}`]);
   const frontRows = players.map(p => ({ ...p, fb: computePlayerFrontBack(match, metrics, p) }));
-  const frontComplete = isHoleRangeComplete(match, metrics, 0, Math.min(9, metrics.holeResults?.length || 0));
+  const frontSpan = Math.min(9, metrics.holeResults?.length || 0);
+  const frontComplete = isHoleRangeComplete(match, metrics, 0, frontSpan);
   if (frontComplete) {
     const bestFront = getLowRows(frontRows.map(p => ({ name: p.player?.name, value: p.fb.front })).filter(r => r.value != null), 'value');
     if (bestFront.rows.length) awards.push(['Best Front Nine', formatAwardWinners(bestFront.rows.map(r => r.name), bestFront.value)]);
-  } else if (completion.isIncomplete && (metrics.holeResults || []).length >= 9) {
-    awards.push(['Best Front Nine', 'Not determined — front nine incomplete']);
+  } else if (completion.isIncomplete && frontSpan > 0) {
+    const partial = getPartialNineLeaderRows(match, metrics, 0, frontSpan);
+    if (partial.leaders.length) awards.push(['Front Nine Leader', `${formatAwardWinners(partial.leaders.map(r => r.name), partial.value)} through ${partial.completedCount} of ${partial.span} holes — provisional`]);
+    else awards.push(['Best Front Nine', 'Not determined — front nine incomplete']);
   }
   const backExists = (metrics.holeResults || []).length > 9;
+  const backSpan = backExists ? metrics.holeResults.length - 9 : 0;
   const backComplete = backExists && isHoleRangeComplete(match, metrics, 9, metrics.holeResults.length);
   if (backComplete) {
     const backCandidates = frontRows.filter(p => p.fb.back != null).map(p => ({ name: p.player?.name, value: p.fb.back }));
     const bestBack = getLowRows(backCandidates, 'value');
     if (bestBack.rows.length) awards.push(['Best Back Nine', formatAwardWinners(bestBack.rows.map(r => r.name), bestBack.value)]);
   } else if (backExists && completion.isIncomplete) {
-    awards.push(['Best Back Nine', 'Not determined — back nine incomplete']);
+    const partial = getPartialNineLeaderRows(match, metrics, 9, metrics.holeResults.length);
+    if (partial.leaders.length) awards.push(['Back Nine Leader', `${formatAwardWinners(partial.leaders.map(r => r.name), partial.value)} through ${partial.completedCount} of ${partial.span} holes — provisional`]);
+    else awards.push(['Best Back Nine', 'Not determined — back nine incomplete']);
   }
   const birdies = getHighRows(dist.map(r => ({ name: r.playerMetric?.player?.name, value: Number(r.totals?.birdie || 0) })), 'value');
   if (birdies.rows.length && birdies.value > 0) awards.push(['Most Birdies', `${formatAwardWinners(birdies.rows.map(r => r.name), birdies.value)}${formatIncompleteScopeSuffix(completion)}`]);
@@ -2409,6 +2538,9 @@ function buildRoundRecapPayload(match, metrics) {
       });
     }
   } catch (_) {}
+  const roundCompletionState = getRoundCompletionState(match, metrics);
+  const gameClinchStates = getGameClinchStates(match, metrics);
+  const allGamesFinal = areAllGamesFinal(match, metrics);
   return {
     app: 'The Dye Ledger',
     course: courseName,
@@ -2417,9 +2549,13 @@ function buildRoundRecapPayload(match, metrics) {
     holesCompleted: Number(metrics?.completed || 0),
     holeCount: getPlayableHoleCount(match, metrics?.tee),
     status: match?.status || 'active',
+    roundCompletionState,
+    roundEndReason: match?.roundEndReason || (roundCompletionState.isComplete ? 'completed' : ''),
+    allGamesFinal,
+    gameClinchStates,
     roundNotes: String(match?.roundRecapNotes || '').trim(),
     memories: getRoundMemories(match).map(m => ({ text: m.text, category: m.category, holeNumber: m.holeNumber, createdAt: m.createdAt })),
-    recapInstructions: 'Use Round Notes and Memories when relevant. Do not fabricate events. Do not assume details not provided. Memories should supplement scoring information and statistics.',
+    recapInstructions: 'Use Round Notes and Memories when relevant. Do not fabricate events. Do not assume details not provided. Memories should supplement scoring information and statistics. If the round is incomplete, explicitly mention the completed-hole count, round end reason when provided, and whether games are clinched or provisional. Do not call a provisional lead a final win.',
     players: playerSummaries,
     games: summarizeSelectedGamesForRecap(match, metrics),
     finalSettlement,
@@ -2588,8 +2724,8 @@ function buildSummaryExportBody(match, metrics) {
 
     <section class="export-section export-section-net-payout">
       <div class="export-section-head">
-        <h2>${getRoundCompletionState(match, metrics).isIncomplete ? 'Final Net Settlement — Provisional' : 'Final Net Settlement — Efficient Cash Payments'}</h2>
-        ${getRoundCompletionState(match, metrics).isIncomplete ? `<div class="export-section-sub">Based on completed holes only.</div>` : ''}
+        <h2>${getRoundCompletionState(match, metrics).isIncomplete ? (areAllGamesFinal(match, metrics) ? 'Final Net Settlement' : 'Final Net Settlement — Provisional') : 'Final Net Settlement — Efficient Cash Payments'}</h2>
+        ${getRoundCompletionState(match, metrics).isIncomplete ? `<div class="export-section-sub">${areAllGamesFinal(match, metrics) ? 'All selected games are mathematically determined despite unplayed holes.' : 'Based on completed holes only. Some game outcomes may still change.'}</div>` : ''}
       </div>
       ${buildExportFinalNetSettlementSummary(match, metrics)}
     </section>
@@ -3625,6 +3761,8 @@ function normalizeMatch(match) {
   match.roundRecapFinal = typeof match.roundRecapFinal === 'string' ? match.roundRecapFinal : '';
   match.roundRecapGeneratedAt = match.roundRecapGeneratedAt || null;
   match.roundRecapStatus = typeof match.roundRecapStatus === 'string' ? match.roundRecapStatus : '';
+  match.roundEndReason = String(match.roundEndReason || '').trim();
+  match.roundCompletionState = match.roundCompletionState && typeof match.roundCompletionState === 'object' ? match.roundCompletionState : null;
   match.notes = typeof match.notes === 'string' ? match.notes : '';
   match.roundRecapNotes = mergeRoundNoteText(match.roundRecapNotes, match.notes);
   match.notes = match.roundRecapNotes;
@@ -4523,7 +4661,8 @@ function buildExportFinalNetSettlementSummary(match, metrics) {
   const completion = getRoundCompletionState(match, metrics);
   if (!ctx.selected.length) return '<div><strong>Net payout (live):</strong> No gambling games selected.</div>';
   if (!ctx.payoutGames.length) return '<div><strong>Net payout (live):</strong> No payout-producing games selected.</div>';
-  const note = completion.isIncomplete ? `<div class="export-provisional-label">Provisional Net Settlement — based on ${completion.completedHoleCount} of ${completion.selectedHoleCount} holes completed.</div>` : '';
+  const settlementFinal = areAllGamesFinal(match, metrics);
+  const note = completion.isIncomplete ? `<div class="export-provisional-label">${settlementFinal ? 'Final Net Settlement — all selected games are mathematically determined despite unplayed holes.' : `Provisional Net Settlement — based on ${completion.completedHoleCount} of ${completion.selectedHoleCount} holes completed. Some game outcomes may still change.`}</div>` : '';
   return `<div class="payout-summary-stack">${note}${buildFinalNetSettlementSection(ctx.players, ctx.finalTotals)}</div>`;
 }
 
@@ -4547,9 +4686,8 @@ function buildNetPayoutSummary(match, metrics) {
   return `<div class="payout-summary-stack">${buildFinalNetSettlementSection(ctx.players, ctx.finalTotals)}${buildGrossGameDetailSection(match, ctx.players, ctx.payoutGames)}</div>`;
 }
 function getCompletedStatHoleLimit(match, metrics) {
-  const limit = Number(getLastFullyCompletedHole(match)) || Number(metrics?.completed) || 0;
-  const holeCount = Number(metrics?.holeCount) || getRequestedHoleCount(match);
-  return Math.max(0, Math.min(limit, holeCount));
+  const completion = getRoundCompletionState(match, metrics);
+  return Math.max(0, Math.min(Number(completion.completedHoleCount || 0), Number(metrics?.holeCount) || getRequestedHoleCount(match)));
 }
 
 function computeStatTrackingSummary(match, metrics) {
@@ -4559,7 +4697,7 @@ function computeStatTrackingSummary(match, metrics) {
   const summary = trackedPlayers.map(playerMetric => {
     const playerRef = match.players.find(row => row.playerId === playerMetric.playerId);
     const totals = { fairwaysHit: 0, fairwayOpps: 0, greens: 0, putts: 0, penaltyStrokes: 0, upAndDowns: 0, sandies: 0 };
-    (metrics?.holeResults || []).slice(0, completedLimit).forEach((holeResult, holeIdx) => {
+    (metrics?.holeResults || []).forEach((holeResult, holeIdx) => {
       if (!holeResult?.completed) return;
       const scoreObj = holeResult?.playerScores?.find(ps => ps.playerId === playerMetric.playerId);
       if (!Number.isFinite(Number(scoreObj?.gross))) return;
@@ -4670,7 +4808,7 @@ function buildExportStatTrackingSummary(match, metrics) {
   const rows = trackedPlayers.map(playerMetric => {
     const playerRef = match.players.find(row => row.playerId === playerMetric.playerId);
     const totals = { fairwaysHit: 0, fairwayOpps: 0, greens: 0, greenOpps: 0, putts: 0, puttOpps: 0, penaltyStrokes: 0, upAndDowns: 0, sandies: 0 };
-    (metrics?.holeResults || []).slice(0, completedLimit).forEach((holeResult, holeIdx) => {
+    (metrics?.holeResults || []).forEach((holeResult, holeIdx) => {
       if (!holeResult?.completed) return;
       const scoreObj = holeResult?.playerScores?.find(ps => ps.playerId === playerMetric.playerId);
       if (!Number.isFinite(Number(scoreObj?.gross))) return;
@@ -4721,7 +4859,7 @@ function buildExportStatTrackingSummary(match, metrics) {
 function buildPlayerHoleStatSummaryTable(match, metrics, playerMetric, completedLimit) {
   const playerRef = match.players.find(row => row.playerId === playerMetric.playerId);
   if (!playerRef) return '<div class="tiny top-gap">No hole-by-hole stats available.</div>';
-  const statRows = (metrics?.holeResults || []).slice(0, completedLimit).map((holeResult, holeIdx) => {
+  const statRows = (metrics?.holeResults || []).map((holeResult, holeIdx) => {
     if (!holeResult?.completed) return null;
     const scoreObj = holeResult?.playerScores?.find(ps => ps.playerId === playerMetric.playerId);
     const gross = Number(scoreObj?.gross);
@@ -8400,6 +8538,7 @@ function showRoundEndPrompt(mode, match = getActiveMatch()) {
   const text = document.getElementById('roundEndPromptText');
   const primary = document.getElementById('roundEndPrimaryBtn');
   const secondary = document.getElementById('roundEndSecondaryBtn');
+  const reasonBox = document.getElementById('roundEndReasonChoices');
   if (!modal || !title || !text || !primary || !secondary) {
     if (mode === 'early') {
       const ok = window.confirm(`End Round Early?\n\n${completed} of ${requested} holes completed.\n\nOK = End Round\nCancel = Continue Playing`);
@@ -8412,9 +8551,26 @@ function showRoundEndPrompt(mode, match = getActiveMatch()) {
     return;
   }
   modal.dataset.roundEndMode = mode;
+  if (reasonBox) {
+    reasonBox.innerHTML = '';
+    reasonBox.classList.add('hidden');
+  }
   if (mode === 'early') {
     title.textContent = 'End Round Early?';
-    text.textContent = `${completed} of ${requested} holes completed.`;
+    text.textContent = `${completed} of ${requested} holes completed. Why did the round end early?`;
+    if (reasonBox) {
+      reasonBox.classList.remove('hidden');
+      const currentReason = String(match.roundEndReason || 'darkness');
+      const options = [
+        ['darkness', 'Darkness'],
+        ['weather', 'Weather'],
+        ['injury', 'Injury'],
+        ['conceded', 'Conceded'],
+        ['endedEarly', 'Group Ended Early'],
+        ['other', 'Other']
+      ];
+      reasonBox.innerHTML = `<div class="round-end-reason-grid">${options.map(([value,label]) => `<label class="round-end-reason-option"><input type="radio" name="roundEndReason" value="${value}" ${value === currentReason ? 'checked' : ''}> <span>${label}</span></label>`).join('')}</div>`;
+    }
     primary.textContent = 'End Round';
     secondary.textContent = 'Continue Playing';
   } else {
@@ -8435,6 +8591,13 @@ function handleScoreboardFinishEndRound() {
   showRoundEndPrompt(completed >= requested ? 'complete' : 'early', match);
 }
 function handleRoundEndPrimary() {
+  const match = getActiveMatch();
+  const modal = document.getElementById('roundEndPrompt');
+  const mode = modal?.dataset?.roundEndMode || '';
+  if (match) {
+    if (mode === 'early') match.roundEndReason = document.querySelector('input[name="roundEndReason"]:checked')?.value || 'endedEarly';
+    else match.roundEndReason = 'completed';
+  }
   hideRoundEndPrompt();
   finishConfirmArmed = true;
   completeActiveRound();
@@ -8467,6 +8630,12 @@ function completeActiveRound() {
     const wasReopened = !!(match.reopenedAt || match.previousCompletedAt);
     match.status = 'complete';
     match.completedAt = new Date().toISOString();
+    const finishMetrics = computeMatchMetrics(match);
+    const finishCompletion = getRoundCompletionState(match, finishMetrics);
+    if (!match.roundEndReason) match.roundEndReason = finishCompletion.isComplete ? 'completed' : 'endedEarly';
+    match.roundCompletionState = finishCompletion;
+    match.completedHoleCount = finishCompletion.completedHoleCount;
+    match.remainingHoleNumbers = finishCompletion.remainingHoleNumbers;
     delete match.reopenedAt;
     delete match.previousCompletedAt;
     const progress = computeMatchProgress(match);
@@ -9441,19 +9610,25 @@ function buildSelectedGamesSummary(match, metrics) {
     let sub = '';
     if (cfg.key === 'nassau') {
       const diffs = computeTeamGameDiffs(match, metrics, cfg.key);
-      value = completion.isIncomplete ? formatTeamGameStatusScoped(match, metrics, diffs.overall, completion, { provisional: true }) : formatTeamGameStatus(match, metrics, diffs.overall);
+      value = completion.isIncomplete ? formatTeamGameStatusScoped(match, metrics, diffs.overall, completion) : formatTeamGameStatus(match, metrics, diffs.overall);
       const frontStake = Number(cfg.stakesFront || 0);
       const backStake = Number(cfg.stakesBack || 0);
       const overallStake = Number(cfg.stakesOverall || 0);
       const wagerNote = (!frontStake && !backStake && !overallStake) ? ' · Nassau enabled with no wager configured.' : '';
-      const frontComplete = isHoleRangeComplete(match, metrics, 0, Math.min(9, metrics.holeResults?.length || 0));
-      const backComplete = (metrics.holeResults || []).length > 9 && isHoleRangeComplete(match, metrics, 9, metrics.holeResults.length);
-      const frontText = frontComplete ? `Front 9: ${formatTeamGameStatus(match, metrics, diffs.front)}` : `Front 9: ${formatTeamGameStatus(match, metrics, diffs.front)} — provisional`;
-      const backText = backComplete ? `Back 9: ${formatTeamGameStatus(match, metrics, diffs.back)}` : `Back 9: ${formatTeamGameStatus(match, metrics, diffs.back)} — provisional`;
-      sub = (getPlayableHoleCount(match, metrics.tee) <= 9 ? `Format: ${getHoleSegmentLabel(match, metrics.tee)}` : `${frontText} · ${backText}`) + wagerNote;
+      const frontSpan = Math.min(9, metrics.holeResults?.length || 0);
+      const backSpan = Math.max(0, (metrics.holeResults || []).length - 9);
+      const frontComplete = isHoleRangeComplete(match, metrics, 0, frontSpan);
+      const backComplete = backSpan > 0 && isHoleRangeComplete(match, metrics, 9, metrics.holeResults.length);
+      const frontPlayed = getCompletedHoleCountInRange(match, metrics, 0, frontSpan);
+      const backPlayed = getCompletedHoleCountInRange(match, metrics, 9, metrics.holeResults.length);
+      const frontRemaining = Math.max(0, frontSpan - frontPlayed);
+      const backRemaining = Math.max(0, backSpan - backPlayed);
+      const frontText = frontComplete ? `Front 9: ${formatTeamGameStatus(match, metrics, diffs.front)}` : `Front 9: ${formatTeamGameStatusScoped(match, metrics, diffs.front, completion, { holesRemaining: frontRemaining, scopeLabel: `through ${frontPlayed} of ${frontSpan} holes` })}`;
+      const backText = backSpan ? (backComplete ? `Back 9: ${formatTeamGameStatus(match, metrics, diffs.back)}` : `Back 9: ${formatTeamGameStatusScoped(match, metrics, diffs.back, completion, { holesRemaining: backRemaining, scopeLabel: `through ${backPlayed} of ${backSpan} holes` })}`) : '';
+      sub = (getPlayableHoleCount(match, metrics.tee) <= 9 ? `Format: ${getHoleSegmentLabel(match, metrics.tee)}` : `${frontText}${backText ? ` · ${backText}` : ''}`) + wagerNote;
     } else if (cfg.key === 'team_match') {
       const diffs = computeTeamGameDiffs(match, metrics, cfg.key);
-      value = formatTeamGameStatus(match, metrics, diffs.overall);
+      value = completion.isIncomplete ? formatTeamGameStatusScoped(match, metrics, diffs.overall, completion) : formatTeamGameStatus(match, metrics, diffs.overall);
       sub = getPlayableHoleCount(match, metrics.tee) <= 9 ? `Format: ${getHoleSegmentLabel(match, metrics.tee)}` : `Front 9: ${formatTeamGameStatus(match, metrics, diffs.front)} · Back 9: ${formatTeamGameStatus(match, metrics, diffs.back)}`;
     } else if (cfg.key === 'team_stroke') {
       const stroke = getTeamStrokeScoreboardData(match, metrics, cfg);

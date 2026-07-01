@@ -1,0 +1,13 @@
+{
+  "name": "the-dye-ledger",
+  "version": "30.3.29",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint app.js service-worker.js scripts/**/*.js",
+    "validate": "node scripts/validate-release.js"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0"
+  }
+}

@@ -4204,3 +4204,16 @@ main {
   font-size: 0.92rem;
 }
 .round-end-reason-option input { margin: 0; }
+
+.diagnostics-pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+  max-height: 220px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #f7faf8;
+  font-size: 12px;
+  line-height: 1.35;
+}

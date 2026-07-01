@@ -1,16 +1,203 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.27',
-  versionNumber: '30.3.27',
-  cacheName: 'the-dye-ledger-v30.3.27',
-  buildDate: '2026-06-24T20:46:57Z',
-  buildLabel: 'Incomplete Round Finalization and Match Intelligence'
+  version: 'v30.3.29',
+  versionNumber: '30.3.29',
+  cacheName: 'the-dye-ledger-v30.3.29',
+  buildDate: '2026-07-01T17:16:42Z',
+  buildLabel: 'Hole Sequence Navigation Fix'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
 const BUILD_LABEL = BUILD_INFO.buildLabel;
 const APP_CACHE_NAME = BUILD_INFO.cacheName;
 const APP_VERSION_NUMBER = BUILD_INFO.versionNumber;
+
+
+const APP_ERROR_STORAGE_KEY = 'dye-ledger-recent-app-errors';
+const APP_ERROR_LIMIT = 20;
+
+function normalizeAppError(error) {
+  if (error instanceof Error) return error;
+  if (error && typeof error === 'object') {
+    const message = error.message || error.reason || JSON.stringify(error);
+    const normalized = new Error(String(message || 'Unknown app error'));
+    normalized.name = error.name || 'AppError';
+    if (error.stack) normalized.stack = error.stack;
+    return normalized;
+  }
+  return new Error(String(error || 'Unknown app error'));
+}
+
+function readRecentAppErrors() {
+  try {
+    const raw = localStorage.getItem(APP_ERROR_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.slice(0, APP_ERROR_LIMIT) : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+function writeRecentAppErrors(errors) {
+  try {
+    const bounded = Array.isArray(errors) ? errors.slice(0, APP_ERROR_LIMIT) : [];
+    localStorage.setItem(APP_ERROR_STORAGE_KEY, JSON.stringify(bounded));
+  } catch (err) {
+    // Ignore diagnostics storage failures.
+  }
+}
+
+function getSafeUserAgent() {
+  try { return navigator.userAgent || ''; } catch (err) { return ''; }
+}
+
+function getSafeUrl() {
+  try { return window.location.href || ''; } catch (err) { return ''; }
+}
+
+function recordAppError(error, context = 'App') {
+  try {
+    const normalized = normalizeAppError(error);
+    const entry = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      timestamp: new Date().toISOString(),
+      context: String(context || 'App'),
+      name: normalized.name || 'Error',
+      message: normalized.message || 'Unknown app error',
+      stack: normalized.stack || '',
+      appVersion: APP_VERSION,
+      buildDate: BUILD_TIMESTAMP,
+      cacheName: APP_CACHE_NAME,
+      url: getSafeUrl(),
+      userAgent: getSafeUserAgent()
+    };
+    const existing = readRecentAppErrors();
+    writeRecentAppErrors([entry, ...existing]);
+    return entry;
+  } catch (diagnosticsError) {
+    console.warn('Unable to record app error', diagnosticsError);
+    return null;
+  }
+}
+
+function clearRecentAppErrors() {
+  writeRecentAppErrors([]);
+  renderRecentAppErrorsDiagnostics();
+}
+
+function formatDiagnosticsTimestamp(timestamp) {
+  try {
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return String(timestamp || 'Unknown time');
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    }).format(date) + ' ET';
+  } catch (err) {
+    return String(timestamp || 'Unknown time');
+  }
+}
+
+function getMatchSetupDiagnosticsText() {
+  try {
+    if (typeof getMatchSetupDiagnosticSnapshot !== 'function') return 'Match Setup Diagnostics: unavailable';
+    const diag = getMatchSetupDiagnosticSnapshot();
+    return [
+      'Match Setup Diagnostics:',
+      `Ready: ${diag?.ready ? 'Yes' : 'No'}`,
+      `Missing Requirements: ${(diag?.missingRequirements || []).join(', ') || 'None'}`,
+      `Course Selected: ${diag?.summary?.courseSelected ? 'Yes' : 'No'}`,
+      `Tee Selected: ${diag?.summary?.teeSelected ? 'Yes' : 'No'}`,
+      `Players: ${diag?.summary?.playerCount ?? 'Unknown'}`,
+      `Selected Holes: ${diag?.summary?.selectedHoleCount ?? 'Unknown'}`,
+      `Shared Match: ${diag?.summary?.sharedMatchEnabled ? 'Yes' : 'No'}`,
+      `Assignments Complete: ${diag?.summary?.assignmentsComplete ?? 'N/A'}`,
+      `Round Started: ${diag?.summary?.roundStarted ? 'Yes' : 'No'}`
+    ].join('\n');
+  } catch (err) {
+    return `Match Setup Diagnostics: unavailable (${err.message || err})`;
+  }
+}
+
+function getAppDiagnosticsText() {
+  const errors = readRecentAppErrors().slice(0, 5);
+  const lines = [
+    'The Dye Ledger Diagnostics',
+    `App Version: ${APP_VERSION}`,
+    `Build Date: ${formatDiagnosticsTimestamp(BUILD_TIMESTAMP)}`,
+    `Build Label: ${BUILD_LABEL}`,
+    `Cache Name: ${APP_CACHE_NAME}`,
+    `URL: ${getSafeUrl()}`,
+    `User Agent: ${getSafeUserAgent()}`,
+    '',
+    getMatchSetupDiagnosticsText(),
+    '',
+    'Recent App Errors:'
+  ];
+  if (!errors.length) {
+    lines.push('None');
+  } else {
+    errors.forEach((err, index) => {
+      lines.push('');
+      lines.push(`#${index + 1} ${formatDiagnosticsTimestamp(err.timestamp)}`);
+      lines.push(`Context: ${err.context || 'App'}`);
+      lines.push(`${err.name || 'Error'}: ${err.message || 'Unknown error'}`);
+      if (err.stack) lines.push(`Stack:\n${err.stack}`);
+    });
+  }
+  return lines.join('\n');
+}
+
+async function copyAppDiagnostics() {
+  const text = getAppDiagnosticsText();
+  try {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      await navigator.clipboard.writeText(text);
+      toast('Diagnostics copied.');
+      return;
+    }
+  } catch (err) {
+    recordAppError(err, 'Copy Diagnostics');
+  }
+  try {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', 'readonly');
+    area.style.position = 'fixed';
+    area.style.left = '-9999px';
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand('copy');
+    document.body.removeChild(area);
+    toast('Diagnostics copied.');
+  } catch (err) {
+    recordAppError(err, 'Copy Diagnostics Fallback');
+    toast('Unable to copy diagnostics automatically.');
+  }
+}
+
+function installGlobalErrorHandlers() {
+  if (window.__dyeLedgerErrorHandlersInstalled) return;
+  window.__dyeLedgerErrorHandlersInstalled = true;
+  window.addEventListener('error', event => {
+    const error = event.error || new Error(event.message || 'Unhandled script error');
+    recordAppError(error, 'Unhandled Error');
+    renderRecentAppErrorsDiagnostics();
+  });
+  window.addEventListener('unhandledrejection', event => {
+    recordAppError(event.reason || new Error('Unhandled promise rejection'), 'Unhandled Promise Rejection');
+    renderRecentAppErrorsDiagnostics();
+  });
+}
+
+installGlobalErrorHandlers();
+
 
 function cssEscape(value) {
   const text = String(value == null ? '' : value);
@@ -1129,6 +1316,7 @@ let editingCourseId = null;
 let editingTeeRef = null;
 let editingMatchId = null;
 let currentHole = 1;
+let currentHoleSequenceStart = 1;
 let finishConfirmArmed = false;
 let roundCompletePromptShownForMatchId = null;
 let currentLeaderboardMatchRef = null;
@@ -1381,6 +1569,52 @@ function getSelectedHoleIndexes(match, tee = null) {
 function getSelectedScoringHoles(match, tee = null) {
   const source = Array.isArray(tee?.holes) ? tee.holes : buildDefaultHoles();
   return getSelectedHoleIndexes(match, tee).map(idx => normalizeHole(source[idx] || { holeNumber: idx + 1 }, idx));
+}
+
+function getPlayableHoleSequence(match, tee = null, startHole = currentHoleSequenceStart) {
+  const count = getPlayableHoleCount(match, tee);
+  const base = Array.from({ length: count }, (_, idx) => idx + 1);
+  // The app's scoring arrays are indexed by selected-hole position. Only full 18-hole
+  // rounds should wrap after Hole 18 for shotgun/back-nine starts. Nine-hole and custom
+  // selections finish at the end of their selected sequence.
+  if (count !== 18) return base;
+  const start = Math.max(1, Math.min(count, Number(startHole) || 1));
+  if (start <= 1) return base;
+  return base.slice(start - 1).concat(base.slice(0, start - 1));
+}
+
+function getAdjacentPlayableHole(match, current = currentHole, direction = 1, tee = null) {
+  const sequence = getPlayableHoleSequence(match, tee);
+  if (!sequence.length) return null;
+  const currentNumber = Math.max(1, Math.min(sequence.length, Number(current) || sequence[0] || 1));
+  const idx = sequence.indexOf(currentNumber);
+  if (idx < 0) return sequence[0] || null;
+  const nextIdx = idx + (direction >= 0 ? 1 : -1);
+  return nextIdx >= 0 && nextIdx < sequence.length ? sequence[nextIdx] : null;
+}
+
+function isSelectedRoundComplete(match, tee = null) {
+  if (!match) return false;
+  const count = getPlayableHoleCount(match, tee || getTee(match.courseId, match.teeId));
+  const players = Array.isArray(match.players) ? match.players : [];
+  return count > 0 && players.length > 0 && Array.from({ length: count }, (_, idx) => idx).every(idx =>
+    players.every(player => Number(player?.scores?.[idx]?.gross) > 0)
+  );
+}
+
+function shouldInferRotatedHoleSequenceStart(match, position, tee = null) {
+  const count = getPlayableHoleCount(match, tee || getTee(match?.courseId, match?.teeId));
+  const pos = Number(position) || 1;
+  if (!match || count !== 18 || pos <= 1 || currentHoleSequenceStart !== 1) return false;
+  const players = Array.isArray(match.players) ? match.players : [];
+  if (!players.length) return false;
+  const anyPriorScores = Array.from({ length: pos - 1 }, (_, idx) => idx).some(idx =>
+    players.some(player => Number(player?.scores?.[idx]?.gross) > 0)
+  );
+  const anyCurrentOrLaterScores = Array.from({ length: count - pos + 1 }, (_, offset) => pos - 1 + offset).some(idx =>
+    players.some(player => Number(player?.scores?.[idx]?.gross) > 0)
+  );
+  return !anyPriorScores && anyCurrentOrLaterScores;
 }
 function getHoleSegmentLabel(match, tee = null) {
   if (!isNineHoleMatch(match)) return '18 Holes';
@@ -7442,6 +7676,45 @@ function renderSharedAssignmentDiagnosticsMore() {
   el.innerHTML = `<h2>Shared Assignment Diagnostics</h2><div class="tiny">Troubleshooting details for joined devices, participants, and assignment ownership. Collapsed by default.</div>${renderSharedAssignmentDiagnosticsPanel(match, { context: 'more' })}`;
 }
 
+function renderRecentAppErrorsDiagnostics() {
+  const el = document.getElementById('recentAppErrorsMore');
+  if (!el) return;
+  const errors = readRecentAppErrors();
+  const latest = errors[0];
+  const details = errors.slice(0, 5).map((err, index) => `
+    <details class="top-gap">
+      <summary>${index + 1}. ${escapeHtml(err.name || 'Error')} — ${escapeHtml(err.message || 'Unknown error')}</summary>
+      <div class="tiny top-gap">
+        <div><strong>Time:</strong> ${escapeHtml(formatDiagnosticsTimestamp(err.timestamp))}</div>
+        <div><strong>Context:</strong> ${escapeHtml(err.context || 'App')}</div>
+        <div><strong>Version:</strong> ${escapeHtml(err.appVersion || APP_VERSION)}</div>
+        <div><strong>Build:</strong> ${escapeHtml(formatDiagnosticsTimestamp(err.buildDate || BUILD_TIMESTAMP))}</div>
+        <div><strong>URL:</strong> <span class="break-word">${escapeHtml(err.url || '')}</span></div>
+        ${err.stack ? `<pre class="diagnostics-pre">${escapeHtml(err.stack)}</pre>` : '<div>No stack trace available.</div>'}
+      </div>
+    </details>
+  `).join('');
+  el.classList.remove('hidden');
+  el.innerHTML = `
+    <h2>Recent App Errors</h2>
+    <div class="tiny">Collapsed diagnostics for unexpected app errors. Use Copy Diagnostics to paste useful details into ChatGPT.</div>
+    <div class="app-update-summary top-gap">
+      <div><span class="muted-label">Last Error</span><strong>${latest ? `${escapeHtml(latest.name || 'Error')} — ${escapeHtml(latest.message || 'Unknown error')}` : 'None recorded'}</strong></div>
+      <div><span class="muted-label">Error Count</span><strong>${errors.length}</strong></div>
+    </div>
+    ${details || '<div class="tiny top-gap">No recent app errors recorded.</div>'}
+    <div class="actions wrap top-gap">
+      <button id="copyAppDiagnosticsBtn" type="button" class="secondary">Copy Diagnostics</button>
+      <button id="clearAppErrorsBtn" type="button" class="secondary">Clear Errors</button>
+    </div>
+  `;
+  const copyBtn = document.getElementById('copyAppDiagnosticsBtn');
+  if (copyBtn) copyBtn.addEventListener('click', copyAppDiagnostics);
+  const clearBtn = document.getElementById('clearAppErrorsBtn');
+  if (clearBtn) clearBtn.addEventListener('click', clearRecentAppErrors);
+}
+
+
 function renderAll() {
   updateAppChromeOffset();
   renderPlayers();
@@ -7452,6 +7725,7 @@ function renderAll() {
   renderLeaderboard();
   renderMatchSetupState();
   renderSharedAssignmentDiagnosticsMore();
+  renderRecentAppErrorsDiagnostics();
   populateCourseSelects();
   populateCalcPlayers();
   populateCalcCourses();
@@ -7785,7 +8059,7 @@ function removeLocalCourse(courseId) {
   const before = state.courses.length;
   state.courses = state.courses.filter(c => String(c.id) !== String(courseId));
   if (editingCourseId === courseId) loadCourseEditor(null);
-  if (editingTeeCourseId === courseId) loadTeeEditor(null, null);
+  if (editingTeeRef?.courseId === courseId) loadTeeEditor(null, null);
   normalizeState();
   persist();
   return before !== state.courses.length;
@@ -8117,6 +8391,7 @@ function startAnotherRoundWithSameGroup() {
   setupWorkflowMode = 'create';
   editingMatchId = null;
   currentHole = 1;
+  currentHoleSequenceStart = 1;
   finishConfirmArmed = false;
   state.notes = '';
   roundCompletePromptShownForMatchId = null;
@@ -8230,6 +8505,7 @@ function startCleanNewMatchSetup() {
     setupWorkflowMode = 'create';
     editingMatchId = null;
     currentHole = 1;
+    currentHoleSequenceStart = 1;
     pendingScoreCommitFocus = null;
     scoreInputSessionState.clear();
     finishConfirmArmed = false;
@@ -8287,6 +8563,7 @@ function startJoinNewMatchSetup({ message = 'Enter the new shared match code.' }
   setupWorkflowMode = 'join';
   editingMatchId = null;
   currentHole = 1;
+  currentHoleSequenceStart = 1;
   finishConfirmArmed = false;
   roundCompletePromptShownForMatchId = null;
   persist({ skipRender: true });
@@ -8444,22 +8721,22 @@ function hideRoundCompletePrompt() {
 }
 function showRoundCompletePrompt(match = getActiveMatch()) {
   if (!match || match.status === 'complete') return;
-  const requested = getRequestedHoleCount(match);
-  if (completedHoles(match) < requested) return;
+  if (!isSelectedRoundComplete(match, getTee(match.courseId, match.teeId))) return;
   if (roundCompletePromptShownForMatchId === match.id) return;
   roundCompletePromptShownForMatchId = match.id;
+  const selectedCount = getPlayableHoleCount(match, getTee(match.courseId, match.teeId));
   const modal = document.getElementById('roundCompletePrompt');
   const title = document.getElementById('roundCompletePromptTitle');
   const text = document.getElementById('roundCompletePromptText');
   if (title) title.textContent = 'Round Complete';
-  if (text) text.textContent = `${requested}/${requested} holes completed. Generate Match Summary?`;
+  if (text) text.textContent = `${selectedCount}/${selectedCount} holes completed. Generate Match Summary?`;
   if (!modal) {
-    const finishNow = window.confirm(`${requested}/${requested} holes completed. Finish round and generate Match Summary?\n\nOK = Finish Round\nCancel = Review Final Hole`);
+    const finishNow = window.confirm(`${selectedCount}/${selectedCount} holes completed. Finish round and generate Match Summary?\n\nOK = Finish Round\nCancel = Review Final Hole`);
     if (finishNow) {
       finishConfirmArmed = true;
       completeActiveRound();
     } else {
-      currentHole = requested;
+      currentHole = selectedCount;
       renderCurrentMatch();
     }
     return;
@@ -8586,9 +8863,7 @@ function showRoundEndPrompt(mode, match = getActiveMatch()) {
 function handleScoreboardFinishEndRound() {
   const match = getActiveMatch();
   if (!match) return toast('No active match.');
-  const requested = getRequestedHoleCount(match);
-  const completed = completedHoles(match);
-  showRoundEndPrompt(completed >= requested ? 'complete' : 'early', match);
+  showRoundEndPrompt(isSelectedRoundComplete(match, getTee(match.courseId, match.teeId)) ? 'complete' : 'early', match);
 }
 function handleRoundEndPrimary() {
   const match = getActiveMatch();
@@ -9270,10 +9545,9 @@ function commitScoreInput(inputEl, { viaEnter = false, viaAutoAdvance = false, e
     queueScoreCommitFocus(nextInput?.dataset?.scorePlayer || null, currentHole);
     saveCurrentHole({ targetHole: currentHole, silent: true });
   } else if (hasCommittedValue) {
-    const maxHole = getPlayableHoleCount(match, getTee(match.courseId, match.teeId));
-    const nextHole = Math.min(maxHole, currentHole + 1);
-    queueScoreCommitFocus(editableInputs[0]?.dataset?.scorePlayer || null, nextHole > currentHole ? nextHole : currentHole);
-    if (nextHole > currentHole) {
+    const nextHole = getAdjacentPlayableHole(match, currentHole, 1, getTee(match.courseId, match.teeId));
+    queueScoreCommitFocus(editableInputs[0]?.dataset?.scorePlayer || null, nextHole || currentHole);
+    if (nextHole) {
       saveCurrentHole({ targetHole: nextHole, silent: true });
     } else {
       saveCurrentHole({ targetHole: currentHole, silent: true });
@@ -11781,7 +12055,12 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   });
   document.getElementById('score').addEventListener('change', e => {
     if (e.target && e.target.id === 'currentHoleSelect') {
-      saveCurrentHole({ targetHole: Number(e.target.value), silent: true });
+      const selectedHole = Number(e.target.value);
+      const match = getActiveMatch();
+      if (match && getPlayableHoleCount(match, getTee(match.courseId, match.teeId)) === 18 && Number.isFinite(selectedHole)) {
+        currentHoleSequenceStart = Math.max(1, Math.min(18, selectedHole));
+      }
+      saveCurrentHole({ targetHole: selectedHole, silent: true });
       return;
     }
     if (e.target && e.target.matches('input[data-stat-player][data-stat-key]')) {
@@ -12237,9 +12516,18 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     toast(editingMatchId ? 'Match setup saved.' : (sharedMatchEnabled ? 'Shared match setup saved. Assign devices, then tap Start Scoring.' : 'Match setup saved.'));
     } catch (err) {
       logMatchFinalizationDiagnostics('exception', { error: err });
+      const diagnosticEntry = recordAppError(err, 'Match Finalization');
       console.error('Unexpected match finalization error:', err);
-      toast('Could not finalize match setup because of an internal app error. Please try Refresh Now. If this continues, check Match Setup Diagnostics.', 5200);
-      try { window.dyeLedgerLastMatchSetupValidation = { ready: false, missingRequirements: ['Internal app error — see console diagnostics'], summary: {} }; } catch {}
+      toast('Could not finalize match setup because of an internal app error. The error has been saved in More → Recent App Errors.', 6200);
+      try {
+        window.dyeLedgerLastMatchSetupValidation = {
+          ready: false,
+          missingRequirements: ['Internal app error — see More → Recent App Errors'],
+          summary: getMatchSetupDiagnosticSnapshot?.().summary || {},
+          errorId: diagnosticEntry?.id || null
+        };
+      } catch {}
+      renderRecentAppErrorsDiagnostics();
     }
   });
   document.getElementById('cancelMatchEditBtn').addEventListener('click', cancelMatchSetupChanges);
@@ -12287,19 +12575,30 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (wasCompleteBeforeSave && mutated) markRoundReopenedForEditing(match);
     const savedHole = actualHoleNumber;
     const maxHole = getPlayableHoleCount(match, getTee(match.courseId, match.teeId));
-    if (Number.isFinite(targetHole) && targetHole >= 1 && targetHole <= maxHole) {
-      currentHole = targetHole;
+    const savedPosition = currentHole;
+    const normalizedTarget = Number(targetHole);
+    const teeForNavigation = getTee(match.courseId, match.teeId);
+    if (shouldInferRotatedHoleSequenceStart(match, savedPosition, teeForNavigation)) currentHoleSequenceStart = savedPosition;
+    const sequence = getPlayableHoleSequence(match, teeForNavigation);
+    const nextHoleInSequence = getAdjacentPlayableHole(match, savedPosition, 1, teeForNavigation);
+    const prevHoleInSequence = getAdjacentPlayableHole(match, savedPosition, -1, teeForNavigation);
+    if (Number.isFinite(normalizedTarget) && normalizedTarget >= 1 && normalizedTarget <= maxHole) {
+      currentHole = normalizedTarget;
     } else if (advance) {
-      currentHole = Math.min(maxHole, currentHole + 1);
+      currentHole = nextHoleInSequence || savedPosition;
+    } else if (targetHole === 'previous') {
+      currentHole = prevHoleInSequence || savedPosition;
     } else {
-      currentHole = Math.min(maxHole, Math.max(currentHole, completedHoles(match) + 1));
+      currentHole = nextHoleInSequence || savedPosition;
     }
     persist();
     scheduleSharedMatchSync(match, { immediate: true, silent: true });
     if (match.storageMode === 'shared') refreshActiveSharedScores({ silent: true, render: false });
     if (!silent) toast(hostOverridePlayers && hostOverridePlayers.length ? `Host updated Hole ${savedHole} score.` : `Hole ${savedHole} saved.`);
-    if (!wasCompleteBeforeSave && completedHoles(match) >= maxHole) {
-      showRoundCompletePrompt(match);
+    const savedHoleWasFinalInSequence = sequence.length > 0 && sequence[sequence.length - 1] === savedPosition;
+    if (!wasCompleteBeforeSave && savedHoleWasFinalInSequence && !nextHoleInSequence) {
+      if (isSelectedRoundComplete(match, teeForNavigation)) showRoundCompletePrompt(match);
+      else showRoundEndPrompt('early', match);
     }
     return true;
   }
@@ -12342,7 +12641,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       persist();
     }
   });
-  document.getElementById('prevHoleBtn').addEventListener('click', () => { saveCurrentHole({ targetHole: Math.max(1, currentHole - 1), silent: true }); });
+  document.getElementById('prevHoleBtn').addEventListener('click', () => { saveCurrentHole({ targetHole: 'previous', silent: true }); });
   document.getElementById('nextHoleBtn').addEventListener('click', () => { saveCurrentHole({ advance: true, silent: true }); });
   document.getElementById('leaderboard')?.addEventListener('click', e => {
     const promptBtn = e.target.closest('[data-round-note-prompt]');
@@ -12444,7 +12743,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const holeNo = Number(cell.dataset.editHole);
     const playerId = cell.dataset.editPlayer;
     if (!Number.isFinite(holeNo) || holeNo < 1 || !playerId) return;
-    currentHole = Math.max(1, Math.min(getRequestedHoleCount(match) || 18, holeNo));
+    currentHole = Math.max(1, Math.min(getPlayableHoleCount(match, getTee(match.courseId, match.teeId)) || 18, holeNo));
+    if (getPlayableHoleCount(match, getTee(match.courseId, match.teeId)) === 18) currentHoleSequenceStart = currentHole;
     queueScoreCommitFocus(playerId, currentHole);
     activateTab('score');
     renderCurrentMatch();

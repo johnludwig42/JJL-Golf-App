@@ -1,10 +1,10 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.29',
-  versionNumber: '30.3.29',
-  cacheName: 'the-dye-ledger-v30.3.29',
+  version: 'v30.3.30',
+  versionNumber: '30.3.30',
+  cacheName: 'the-dye-ledger-v30.3.30',
   buildDate: '2026-07-01T17:16:42Z',
-  buildLabel: 'Hole Sequence Navigation Fix'
+  buildLabel: 'Singles Match Play & Actual Play Momentum'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -207,6 +207,7 @@ function cssEscape(value) {
 
 const GAME_LIBRARY = [
   { key: 'nassau', label: 'Nassau' },
+  { key: 'singles_match', label: 'Singles Match Play' },
   { key: 'individual_match', label: 'Head-to-Head Side Match' },
   { key: 'team_match', label: 'Team Match Play' },
   { key: 'team_stroke', label: 'Team Stroke Play' },
@@ -1274,6 +1275,7 @@ function getDefaultFeaturedGameKey(selectedGames = []) {
   const ordered = normalizeSelectedGamesOrder(Array.isArray(selectedGames) ? selectedGames : []);
   return ordered.find(g => g.key === 'team_match')?.key
     || ordered.find(g => g.key === 'nassau')?.key
+    || ordered.find(g => g.key === 'singles_match')?.key
     || ordered.find(g => g.key === 'team_stroke')?.key
     || ordered.find(g => g.key !== 'individual_match')?.key
     || ordered[0]?.key
@@ -1297,13 +1299,14 @@ function getMomentumPerspectiveTeam(match) {
 }
 function hasMomentumGame(match) {
   const selected = Array.isArray(match?.selectedGames) ? match.selectedGames : [];
-  return selected.some(g => g.key === 'nassau' || g.key === 'team_match' || g.key === 'team_stroke' || (g.key === 'individual_match' && Array.isArray(g.matchups) && g.matchups.some(row => ['nassau','match_play'].includes(String(row?.game || 'nassau').toLowerCase()))));
+  return selected.some(g => g.key === 'nassau' || g.key === 'singles_match' || g.key === 'team_match' || g.key === 'team_stroke' || (g.key === 'individual_match' && Array.isArray(g.matchups) && g.matchups.some(row => ['nassau','match_play'].includes(String(row?.game || 'nassau').toLowerCase()))));
 }
 function hasTeamMomentumMatch(match, metrics) {
   const teams = metrics?.teams || [];
   const hasTwoCompetingTeams = teams.length === 2 && teams.every(team => Array.isArray(team.members) && team.members.length > 0);
+  const hasSinglesMatch = (Array.isArray(match?.selectedGames) ? match.selectedGames : []).some(g => g.key === 'singles_match') && isSinglesMatchPlayEligible(match, metrics);
   const hasSideMatch = getSideMatchConfigs(match).some(row => ['nassau', 'match_play'].includes(String(row?.game || 'nassau').toLowerCase()));
-  return (hasTwoCompetingTeams || hasSideMatch) && hasMomentumGame(match);
+  return (hasTwoCompetingTeams || hasSideMatch || hasSinglesMatch) && hasMomentumGame(match);
 }
 function formatPerspectiveStatus(diff, perspectiveTeam = 1) {
   const oriented = perspectiveTeam === 2 ? -Number(diff || 0) : Number(diff || 0);
@@ -1687,6 +1690,9 @@ function formatFinalNetSettlementMoney(amount) {
 }
 function getFeaturedGameLabel(match, gameKey) {
   const cfg = (match.selectedGames || []).find(g => g.key === gameKey) || {};
+  if (gameKey === 'singles_match') {
+    return `${getGameLabel(gameKey)} (${formatBasisLabel(cfg.basis || 'net')} · ${String(cfg.stakeType || 'match') === 'per_hole' ? 'Per-Hole' : 'Match'} Stakes)`;
+  }
   if (gameKey === 'individual_match') {
     const matchups = Array.isArray(cfg.matchups) ? cfg.matchups : [];
     if (matchups.length === 1) {
@@ -2078,7 +2084,7 @@ function buildExportMomentum(match, metrics) {
   if (!selectedGame || !options.length) return '';
   const perspectiveTeam = getMomentumPerspectiveTeam(match);
   let running = 0;
-  const pills = (metrics?.holeResults || []).map(h => {
+  const pills = getMomentumHoleResults(match, metrics, selectedGame).map(h => {
     const outcome = computeMomentumOutcome(match, metrics, h, selectedGame);
     let cls = 'tied';
     if (outcome === 'team1') {
@@ -2311,6 +2317,9 @@ function getGameClinchStates(match, metrics) {
         states.push({ key, segment: 'front', diff: diffs.front, ...getMatchClinchState({ margin: diffs.front, holesRemaining: frontRemaining }) });
         if (backSpan) states.push({ key, segment: 'back', diff: diffs.back, ...getMatchClinchState({ margin: diffs.back, holesRemaining: backRemaining }) });
         states.push({ key, segment: 'overall', diff: diffs.overall, ...getMatchClinchState({ margin: diffs.overall, holesRemaining: completion.incompleteHoleCount }) });
+      } else if (key === 'singles_match') {
+        const singles = computeSinglesMatchPlayResult(match, metrics, cfg);
+        states.push({ key, segment: 'overall', isClinched: singles.isClinched || singles.isComplete || singles.stakeType === 'per_hole', holesRemaining: singles.holesRemaining, resultText: singles.resultText });
       } else if (completion.isComplete) {
         states.push({ key, segment: 'overall', isClinched: true, holesRemaining: 0, resultText: 'Complete' });
       } else {
@@ -2329,6 +2338,11 @@ function areAllGamesFinal(match, metrics) {
   if (!states.length) return false;
   const selectedKeys = new Set((match?.selectedGames || []).map(g => g.key));
   if ([...selectedKeys].some(key => ['skins','net_skins','greenies','nine_point','team_stroke','individual_match'].includes(key))) return false;
+  if (selectedKeys.has('singles_match')) {
+    const cfg = (match?.selectedGames || []).find(g => g.key === 'singles_match');
+    const singles = computeSinglesMatchPlayResult(match, metrics, cfg);
+    if (!singles.isComplete && !singles.isClinched && singles.stakeType !== 'per_hole') return false;
+  }
   return states.every(s => s.isClinched || Number(s.holesRemaining || 0) === 0);
 }
 function buildIncompleteRoundNotice(match, metrics) {
@@ -3997,6 +4011,8 @@ function normalizeMatch(match) {
   match.roundRecapStatus = typeof match.roundRecapStatus === 'string' ? match.roundRecapStatus : '';
   match.roundEndReason = String(match.roundEndReason || '').trim();
   match.roundCompletionState = match.roundCompletionState && typeof match.roundCompletionState === 'object' ? match.roundCompletionState : null;
+  match.playedHoleOrder = Array.isArray(match.playedHoleOrder) ? [...new Set(match.playedHoleOrder.map(Number).filter(n => Number.isFinite(n) && n > 0))] : [];
+  match.holeFirstCompletedAt = match.holeFirstCompletedAt && typeof match.holeFirstCompletedAt === 'object' ? match.holeFirstCompletedAt : {};
   match.notes = typeof match.notes === 'string' ? match.notes : '';
   match.roundRecapNotes = mergeRoundNoteText(match.roundRecapNotes, match.notes);
   match.notes = match.roundRecapNotes;
@@ -4490,6 +4506,156 @@ function getIndividualMatchPairings(match, metrics) {
 
 
 
+function getSinglesMatchConfig(match) {
+  return (Array.isArray(match?.selectedGames) ? match.selectedGames : []).find(g => g.key === 'singles_match') || null;
+}
+function isSinglesMatchPlayEligible(match, metrics = null) {
+  const teams = Array.isArray(metrics?.teams) && metrics.teams.length ? metrics.teams : null;
+  if (teams) return teams.length === 2 && teams.every(t => Array.isArray(t.members) && t.members.length === 1);
+  const players = Array.isArray(match?.players) ? match.players : [];
+  const teamNos = [...new Set(players.map(p => Number(p.team) || 1))];
+  if (teamNos.length !== 2) return false;
+  return teamNos.every(teamNo => players.filter(p => (Number(p.team) || 1) === teamNo).length === 1);
+}
+function getSinglesMatchPlayers(match, metrics = null) {
+  if (!isSinglesMatchPlayEligible(match, metrics)) return null;
+  if (Array.isArray(metrics?.teams) && metrics.teams.length === 2) {
+    const teams = metrics.teams.slice().sort((a, b) => Number(a.team) - Number(b.team));
+    return { teamA: teams[0], teamB: teams[1], playerA: teams[0].members[0], playerB: teams[1].members[0] };
+  }
+  const players = (match?.players || []).slice().sort((a, b) => (Number(a.team) || 1) - (Number(b.team) || 1));
+  const teamA = { team: Number(players[0]?.team) || 1, members: [players[0]] };
+  const teamB = { team: Number(players[1]?.team) || 2, members: [players[1]] };
+  return { teamA, teamB, playerA: players[0], playerB: players[1] };
+}
+function formatSinglesStakeLabel(result) {
+  const stake = formatMoneyAccounting(result?.stake || 0);
+  return result?.stakeType === 'per_hole' ? `${stake} per hole` : `${stake} Match`;
+}
+function computeSinglesMatchPlayResult(match, metrics, cfg = null) {
+  const config = cfg || getSinglesMatchConfig(match) || { basis: 'net', stakeType: 'match', stake: 0 };
+  const basis = String(config.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net';
+  const stakeType = String(config.stakeType || config.payoutType || 'match').toLowerCase() === 'per_hole' ? 'per_hole' : 'match';
+  const stake = Number(config.stake || 0) || 0;
+  const pair = getSinglesMatchPlayers(match, metrics);
+  const result = {
+    eligible: !!pair,
+    basis,
+    stakeType,
+    stake,
+    playerAId: pair?.playerA?.playerId || '',
+    playerBId: pair?.playerB?.playerId || '',
+    playerAName: pair?.playerA?.player?.name || getPlayer(pair?.playerA?.playerId)?.name || 'Player A',
+    playerBName: pair?.playerB?.player?.name || getPlayer(pair?.playerB?.playerId)?.name || 'Player B',
+    holes: [],
+    completedHoles: 0,
+    selectedHoleCount: getPlayableHoleCount(match, metrics?.tee),
+    holesRemaining: 0,
+    diff: 0,
+    leaderId: '',
+    leaderName: '',
+    status: 'Unavailable',
+    isComplete: false,
+    isClinched: false,
+    isProvisional: true,
+    resultText: 'Singles Match Play requires two teams with one player on each team.',
+    playerAWins: 0,
+    playerBWins: 0,
+    halvedHoles: 0,
+    amounts: {},
+    paymentLines: []
+  };
+  if (!pair || !metrics) return result;
+  const pa = pair.playerA;
+  const pb = pair.playerB;
+  const lowPlaying = Math.min(Number(pa.playHdcp) || 0, Number(pb.playHdcp) || 0);
+  (metrics.holeResults || []).forEach((hole, holeIdx) => {
+    const scoreAObj = hole?.playerScores?.find(ps => String(ps.playerId) === String(pa.playerId));
+    const scoreBObj = hole?.playerScores?.find(ps => String(ps.playerId) === String(pb.playerId));
+    const grossA = Number(scoreAObj?.gross) || null;
+    const grossB = Number(scoreBObj?.gross) || null;
+    const row = { holeNumber: hole?.holeNumber || holeIdx + 1, completed: false, winnerId: '', scoreA: null, scoreB: null, runningDiff: result.diff };
+    if (!grossA || !grossB) {
+      result.holes.push(row);
+      return;
+    }
+    const scoreA = basis === 'net' ? getSideMatchNetHoleScore(match, holeIdx, pa, lowPlaying, hole) : grossA;
+    const scoreB = basis === 'net' ? getSideMatchNetHoleScore(match, holeIdx, pb, lowPlaying, hole) : grossB;
+    if (!Number.isFinite(scoreA) || !Number.isFinite(scoreB)) {
+      result.holes.push(row);
+      return;
+    }
+    row.completed = true;
+    row.scoreA = scoreA;
+    row.scoreB = scoreB;
+    result.completedHoles += 1;
+    if (scoreA < scoreB) {
+      result.diff += 1;
+      result.playerAWins += 1;
+      row.winnerId = pa.playerId;
+    } else if (scoreB < scoreA) {
+      result.diff -= 1;
+      result.playerBWins += 1;
+      row.winnerId = pb.playerId;
+    } else {
+      result.halvedHoles += 1;
+    }
+    row.runningDiff = result.diff;
+    result.holes.push(row);
+  });
+  result.holesRemaining = Math.max(0, result.selectedHoleCount - result.completedHoles);
+  const margin = Math.abs(result.diff);
+  result.leaderId = result.diff > 0 ? pa.playerId : result.diff < 0 ? pb.playerId : '';
+  result.leaderName = result.diff > 0 ? result.playerAName : result.diff < 0 ? result.playerBName : '';
+  const clinch = getMatchClinchState({ margin, holesRemaining: result.holesRemaining });
+  result.isComplete = result.completedHoles >= result.selectedHoleCount && result.selectedHoleCount > 0;
+  result.isClinched = !!clinch.isClinched;
+  result.isProvisional = !result.isComplete && !result.isClinched;
+  if (!margin) result.resultText = result.isComplete ? 'Halved match' : `All square through ${result.completedHoles} holes — provisional`;
+  else if (result.isComplete || result.isClinched) result.resultText = `${result.leaderName} defeated ${result.diff > 0 ? result.playerBName : result.playerAName} ${margin} & ${result.holesRemaining}`;
+  else result.resultText = `${result.leaderName} leads ${margin} up through ${result.completedHoles} holes — provisional`;
+  result.status = result.isComplete || result.isClinched ? 'Final' : 'Provisional';
+  result.amounts[pa.playerId] = 0;
+  result.amounts[pb.playerId] = 0;
+  if (stake) {
+    if (stakeType === 'match') {
+      if (result.leaderId && (result.isComplete || result.isClinched)) {
+        const loserId = result.leaderId === pa.playerId ? pb.playerId : pa.playerId;
+        result.amounts[result.leaderId] += stake;
+        result.amounts[loserId] -= stake;
+        result.paymentLines.push({ from: loserId, to: result.leaderId, amount: stake });
+      }
+    } else {
+      const amount = (result.playerAWins - result.playerBWins) * stake;
+      result.amounts[pa.playerId] += amount;
+      result.amounts[pb.playerId] -= amount;
+      if (amount > 0) result.paymentLines.push({ from: pb.playerId, to: pa.playerId, amount: Math.abs(amount) });
+      else if (amount < 0) result.paymentLines.push({ from: pa.playerId, to: pb.playerId, amount: Math.abs(amount) });
+    }
+  }
+  return result;
+}
+function getActualPlayOrder(match, metrics = null) {
+  const selectedHoles = getSelectedScoringHoles(match, metrics?.tee || getTee(match?.courseId, match?.teeId)).map(h => Number(h.holeNumber)).filter(Boolean);
+  const selectedSet = new Set(selectedHoles);
+  const base = Array.isArray(match?.playedHoleOrder) ? match.playedHoleOrder.map(Number).filter(h => selectedSet.has(h)) : [];
+  const seen = new Set(base);
+  const completed = (metrics?.holeResults || []).filter(h => h?.completed).map(h => Number(h.holeNumber)).filter(h => selectedSet.has(h) && !seen.has(h));
+  completed.forEach(h => { seen.add(h); base.push(h); });
+  selectedHoles.forEach(h => { if (!seen.has(h)) base.push(h); });
+  return base;
+}
+function getMomentumHoleResults(match, metrics, gameKey) {
+  const holes = Array.isArray(metrics?.holeResults) ? metrics.holeResults.slice() : [];
+  if (String(gameKey || '') === 'singles_match') {
+    const order = getActualPlayOrder(match, metrics);
+    const byNumber = new Map(holes.map(h => [Number(h.holeNumber), h]));
+    return order.map(holeNo => byNumber.get(Number(holeNo))).filter(Boolean);
+  }
+  return holes;
+}
+
+
 function getMatchStatusOptions(match) {
   const selected = getOrderedSelectedGames(match);
   if (!selected.length) return [];
@@ -4497,6 +4663,19 @@ function getMatchStatusOptions(match) {
 }
 
 function describeMomentumMeta(match, metrics, gameKey) {
+  if (gameKey === 'singles_match') {
+    const singles = computeSinglesMatchPlayResult(match, metrics, getSinglesMatchConfig(match) || {});
+    return {
+      type: 'singles_match',
+      side1Label: singles.playerAName || 'Player A',
+      side2Label: singles.playerBName || 'Player B',
+      side1Members: [singles.playerAName].filter(Boolean),
+      side2Members: [singles.playerBName].filter(Boolean),
+      team1: 1,
+      team2: 2,
+      singles
+    };
+  }
   const sidePairing = getMomentumSidePairing(match, metrics, gameKey);
   if (sidePairing) {
     const gameLabel = getSideMatchGameLabel(sidePairing.game || 'nassau');
@@ -4505,6 +4684,10 @@ function describeMomentumMeta(match, metrics, gameKey) {
     return `${escapeHtml(sidePairing.label)} · ${escapeHtml(gameLabel)} · ${escapeHtml(basis)} · ${escapeHtml(perspective)} perspective`;
   }
   const cfg = (match.selectedGames || []).find(g => g.key === gameKey) || {};
+  if (gameKey === 'singles_match') {
+    const result = computeSinglesMatchPlayResult(match, metrics, cfg);
+    return `Singles Match Play · Actual play order · ${escapeHtml(formatBasisLabel(result.basis))} · ${escapeHtml(getMomentumPerspectiveLabel(match, metrics, gameKey))} perspective`;
+  }
   const perspectiveTeam = getMomentumPerspectiveTeam(match);
   const teamName = getTeamName(match, perspectiveTeam);
   const members = metrics?.teams?.find(t => t.team === perspectiveTeam)?.members?.map(m => m.player.name).join(', ') || '';
@@ -5341,7 +5524,7 @@ function renderLeaderboard() {
   if (showMomentum && holeMomentum) {
     let running = 0;
     const perspectiveTeam = getMomentumPerspectiveTeam(match);
-    holeMomentum.innerHTML = metrics.holeResults.map(h => {
+    holeMomentum.innerHTML = getMomentumHoleResults(match, metrics, activeMomentumGame).map(h => {
       const outcome = computeMomentumOutcome(match, metrics, h, activeMomentumGame);
       let cls = 'tied';
       if (outcome === 'team1') {
@@ -9587,6 +9770,10 @@ function getMomentumOptions(match, metrics = null) {
   const options = [];
   const teamOptions = getMomentumTeamOptions(match);
   if ((metrics?.teams || []).length === 2) options.push(...teamOptions);
+  const singlesCfg = (Array.isArray(match?.selectedGames) ? match.selectedGames : []).find(g => g.key === 'singles_match');
+  if (singlesCfg && (!metrics || isSinglesMatchPlayEligible(match, metrics))) {
+    options.push({ key: 'singles_match', label: `Singles Match Play (${formatBasisLabel(singlesCfg.basis || 'net')})`, type: 'singles_match' });
+  }
   const sidePairings = metrics ? getMomentumSidePairings(match, metrics) : [];
   sidePairings.forEach((pair, idx) => {
     const gameLabel = getSideMatchGameLabel(pair.game || 'nassau');
@@ -9613,6 +9800,19 @@ function getDefaultMomentumGameKey(match, metrics = null) {
   return options[0].key;
 }
 function getMomentumSides(match, metrics, gameKey) {
+  if (gameKey === 'singles_match') {
+    const singles = computeSinglesMatchPlayResult(match, metrics, getSinglesMatchConfig(match) || {});
+    return {
+      type: 'singles_match',
+      side1Label: singles.playerAName || 'Player A',
+      side2Label: singles.playerBName || 'Player B',
+      side1Members: [singles.playerAName].filter(Boolean),
+      side2Members: [singles.playerBName].filter(Boolean),
+      team1: 1,
+      team2: 2,
+      singles
+    };
+  }
   const sidePairing = getMomentumSidePairing(match, metrics, gameKey);
   if (sidePairing) {
     return {
@@ -9644,6 +9844,26 @@ function getMomentumPerspectiveLabel(match, metrics, gameKey) {
 }
 function computeMomentumOutcome(match, metrics, holeResult, gameKey) {
   if (!holeResult?.completed) return 'pending';
+  if (gameKey === 'singles_match') {
+    const singles = computeSinglesMatchPlayResult(match, metrics, getSinglesMatchConfig(match) || {});
+    return {
+      type: 'singles_match',
+      side1Label: singles.playerAName || 'Player A',
+      side2Label: singles.playerBName || 'Player B',
+      side1Members: [singles.playerAName].filter(Boolean),
+      side2Members: [singles.playerBName].filter(Boolean),
+      team1: 1,
+      team2: 2,
+      singles
+    };
+  }
+  if (gameKey === 'singles_match') {
+    const result = computeSinglesMatchPlayResult(match, metrics, getSinglesMatchConfig(match) || {});
+    const row = (result.holes || []).find(h => Number(h.holeNumber) === Number(holeResult?.holeNumber));
+    if (!row || !row.completed) return 'pending';
+    if (!row.winnerId) return 'tie';
+    return row.winnerId === result.playerAId ? 'team1' : 'team2';
+  }
   const sidePairing = getMomentumSidePairing(match, metrics, gameKey);
   if (sidePairing) {
     const holeIdx = Math.max(0, (metrics?.holeResults || []).indexOf(holeResult));
@@ -9813,6 +10033,11 @@ function computeLivePayoutGames(match, metrics) {
       }
       pushGame(cfg.key, 'Greenies', amounts); return;
     }
+    if (cfg.key === 'singles_match') {
+      const singles = computeSinglesMatchPlayResult(match, metrics, cfg);
+      pushGame(cfg.key, `${getGameLabel(cfg.key)} (${formatBasisLabel(singles.basis)} · ${singles.stakeType === 'per_hole' ? 'Per-Hole' : 'Match'} Stakes)`, singles.amounts || {}, 'side', singles.paymentLines || null, cfg.key, { singles });
+      return;
+    }
     if (cfg.key === 'individual_match') {
       const amounts = {};
       const pairings = getIndividualMatchPairings(match, metrics);
@@ -9910,6 +10135,15 @@ function buildSelectedGamesSummary(match, metrics) {
       if (!stroke.leader) sub = `Mode: ${formatScoringModeLabel(cfg.scoringMode)} · ${formatBasisLabel(cfg.basis)}`;
       else if (stroke.tie) sub = `Tied at ${stroke.leader.total} · ${formatBasisLabel(stroke.basis)} · ${formatScoringModeLabel(stroke.scoringMode)}`;
       else sub = `${describeTeamLabel(match, stroke.leader.team, metrics)} by ${stroke.margin} stroke${stroke.margin === 1 ? '' : 's'} · ${formatBasisLabel(stroke.basis)} · ${formatScoringModeLabel(stroke.scoringMode)}`;
+    } else if (cfg.key === 'singles_match') {
+      const singles = computeSinglesMatchPlayResult(match, metrics, cfg);
+      if (!singles.eligible) {
+        value = 'Requires two singles teams';
+        sub = 'Two teams with one player on each team.';
+      } else {
+        value = singles.resultText;
+        sub = `${formatBasisLabel(singles.basis)} · ${formatSinglesStakeLabel(singles)} · ${singles.playerAName} ${singles.playerAWins} · ${singles.playerBName} ${singles.playerBWins} · ${singles.halvedHoles} halved`;
+      }
     } else if (cfg.key === 'individual_match') {
       const pairings = getIndividualMatchPairings(match, metrics);
       if (!pairings.length) {
@@ -10495,6 +10729,7 @@ function renderTodaysMatchSummary() {
 function getDefaultGameConfigs() {
   return [
     { key: 'nassau', basis: 'net', stakesFront: 5, stakesBack: 5, stakesOverall: 5 },
+    { key: 'singles_match', basis: 'net', stakeType: 'match', stake: 5 },
     { key: 'individual_match', matchups: [] },
     { key: 'team_match', basis: 'net', stake: 5 },
     { key: 'team_stroke', basis: 'net', scoringMode: 'aggregate', stake: 5 },
@@ -10696,12 +10931,15 @@ function renderGamesPicker(existing = []) {
   if (!picker || !configsWrap) return;
   const normalizedExisting = normalizeSelectedGamesOrder(existing || []);
   const selectedKeys = normalizedExisting.map(g => g.key);
-  picker.innerHTML = GAME_LIBRARY.map(game => `
-    <label class="game-pill ${selectedKeys.includes(game.key) ? 'selected' : ''}">
-      <input type="checkbox" data-game-key="${game.key}" ${selectedKeys.includes(game.key) ? 'checked' : ''} />
+  const singlesEligibleInSetup = getCurrentSetupTeamCount() === 2 && Number(document.getElementById('playersPerTeamSelect')?.value || 1) === 1;
+  picker.innerHTML = GAME_LIBRARY.map(game => {
+    const singlesBlocked = game.key === 'singles_match' && !singlesEligibleInSetup;
+    return `
+    <label class="game-pill ${selectedKeys.includes(game.key) ? 'selected' : ''} ${singlesBlocked ? 'disabled' : ''}" ${singlesBlocked ? 'title="Singles Match Play requires two teams with one player on each team."' : ''}>
+      <input type="checkbox" data-game-key="${game.key}" ${selectedKeys.includes(game.key) ? 'checked' : ''} ${singlesBlocked ? 'disabled' : ''} />
       <span>${getGameLabel(game.key)}</span>
-    </label>
-  `).join('');
+    </label>`;
+  }).join('');
   const selectedGames = normalizeSelectedGamesOrder(GAME_LIBRARY.filter(g => selectedKeys.includes(g.key)));
   configsWrap.innerHTML = selectedGames.map(game => {
     const cfg = getGameConfig(game.key, normalizedExisting);
@@ -10779,6 +11017,25 @@ function renderGamesPicker(existing = []) {
         </div>
       </div>`;
     }
+    if (game.key === 'singles_match') {
+      const eligible = getCurrentSetupTeamCount() === 2 && Number(document.getElementById('playersPerTeamSelect')?.value || 1) === 1;
+      const disabledNote = eligible ? '' : '<div class="tiny warning-text top-gap">Singles Match Play requires two teams with one player on each team.</div>';
+      return `<div class="card inset-card game-config-card">
+        <div class="game-config-header"><div class="section-label">Singles Match Play</div><div class="tiny">One-on-one match play for exactly two teams with one player each.</div></div>
+        ${disabledNote}
+        <div class="grid two compact-grid top-gap">
+          <label><span>Basis</span><select data-game-config="${game.key}" data-field="basis">
+            <option value="net" ${cfg.basis !== 'gross' ? 'selected' : ''}>Net</option>
+            <option value="gross" ${cfg.basis === 'gross' ? 'selected' : ''}>Gross</option>
+          </select></label>
+          <label><span>Stakes</span><select data-game-config="${game.key}" data-field="stakeType">
+            <option value="match" ${String(cfg.stakeType || 'match') !== 'per_hole' ? 'selected' : ''}>Match Stakes</option>
+            <option value="per_hole" ${String(cfg.stakeType || '') === 'per_hole' ? 'selected' : ''}>Per-Hole Stakes</option>
+          </select></label>
+          <label><span>$ Amount</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stake" value="${cfg.stake ?? 5}" /></label>
+        </div>
+      </div>`;
+    }
     if (game.key === 'individual_match') {
       const rows = Array.isArray(cfg.matchups) && cfg.matchups.length ? cfg.matchups : [{ id: uid(), playerAId: '', playerBId: '', game: 'nassau', basis: 'net', stake: 5 }];
       const players = getCurrentAssignablePlayers();
@@ -10836,6 +11093,11 @@ function collectSelectedGames() {
     document.querySelectorAll(`[data-game-config="${key}"]`).forEach(el => {
       cfg[el.dataset.field] = el.value;
     });
+    if (key === 'singles_match') {
+      cfg.basis = String(cfg.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net';
+      cfg.stakeType = String(cfg.stakeType || 'match').toLowerCase() === 'per_hole' ? 'per_hole' : 'match';
+      cfg.stake = Number(cfg.stake || 0) || 0;
+    }
     if (key === 'greenies') {
       const allowed = new Set(getCurrentAssignablePlayers().map(p => p.id));
       cfg.participants = Array.from(document.querySelectorAll('[data-greenie-player]:checked')).map(el => el.dataset.greeniePlayer).filter(id => allowed.has(id));
@@ -12568,6 +12830,17 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       });
     }
     const mutated = applyCurrentHoleDomToMatch(match);
+    try {
+      match.playedHoleOrder = Array.isArray(match.playedHoleOrder) ? match.playedHoleOrder : [];
+      match.holeFirstCompletedAt = match.holeFirstCompletedAt && typeof match.holeFirstCompletedAt === 'object' ? match.holeFirstCompletedAt : {};
+      const nowCompleteAfterSave = (match.players || []).length > 0 && (match.players || []).every(mp => Number(mp?.scores?.[currentHole - 1]?.gross) > 0);
+      if (nowCompleteAfterSave && !match.playedHoleOrder.map(Number).includes(Number(actualHoleNumber))) {
+        match.playedHoleOrder.push(Number(actualHoleNumber));
+        match.holeFirstCompletedAt[String(actualHoleNumber)] = new Date().toISOString();
+      }
+    } catch (orderErr) {
+      recordAppError(orderErr, 'Actual Play Order Tracking');
+    }
     if (hostOverridePlayers.length) {
       match.sharedHostScoreOverrides = match.sharedHostScoreOverrides && typeof match.sharedHostScoreOverrides === 'object' ? match.sharedHostScoreOverrides : {};
       hostOverridePlayers.forEach(playerId => { match.sharedHostScoreOverrides[getSharedPlayerHoleKey(playerId, actualHoleNumber)] = new Date().toISOString(); });

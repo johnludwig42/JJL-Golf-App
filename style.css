@@ -4247,7 +4247,7 @@ main {
   .readiness-start-btn { flex:1 1 auto; }
 }
 
-/* v30.3.36 — iPhone modal and Save / End Round layout hotfix
+/* v30.3.37 — iPhone modal and Save / End Round layout hotfix
    Root cause: shared full-width form input styles were applying to radio buttons,
    and export/round-action containers allowed rounded child fragments to paint outside
    their parent card on iPhone Safari. */
@@ -4394,5 +4394,121 @@ main {
   #roundEndPrompt .actions button {
     width: 100%;
     min-height: 52px;
+  }
+}
+
+
+/* v30.3.37 — Scores tab status stack hotfix
+   Root cause: the Share / Save PDF card still rendered Save/End Round and
+   missing-score status as independent nested card surfaces. iPhone Safari
+   exposed those nested rounded surfaces as partial boxes along the left edge.
+   The fix is structural: one parent export card, one internal status stack,
+   and simple inset panels instead of nested full cards. */
+.scoreboard-export-card .scoreboard-status-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 100%;
+  margin-top: 14px;
+  box-sizing: border-box;
+  overflow: visible;
+}
+.scoreboard-export-card .scoreboard-status-stack,
+.scoreboard-export-card .scoreboard-status-stack * {
+  box-sizing: border-box;
+}
+.scoreboard-export-card .scoreboard-status-stack > * {
+  width: 100%;
+  max-width: 100%;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+.scoreboard-export-card .scoreboard-round-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 !important;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none !important;
+  overflow: visible !important;
+  contain: none;
+  isolation: auto;
+}
+.scoreboard-export-card #scoreboardRoundState {
+  min-width: 0;
+  max-width: 100%;
+}
+.scoreboard-export-card .scoreboard-round-actions .actions {
+  min-width: 0;
+  max-width: 100%;
+  overflow: visible;
+}
+.scoreboard-export-card .scoreboard-round-actions .actions > *,
+.scoreboard-export-card #scoreboardFinishRoundBtn,
+.scoreboard-export-card #scoreboardConfirmFinishRoundBtn {
+  min-width: 0;
+  max-width: 100%;
+}
+.scoreboard-export-card #missingScoreWarning {
+  display: block;
+  position: static;
+  z-index: auto;
+  clear: none;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 !important;
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  box-shadow: none !important;
+}
+.scoreboard-export-card #missingScoreWarning.hidden {
+  display: none !important;
+}
+.scoreboard-export-card #missingScoreWarning .incomplete-round-warning {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 !important;
+  padding: 0;
+  border-radius: 14px;
+  box-shadow: none !important;
+  overflow: hidden;
+}
+.scoreboard-export-card #missingScoreWarning .incomplete-round-warning.card,
+.scoreboard-export-card #missingScoreWarning .incomplete-round-warning.tight-card {
+  border-radius: 14px;
+  box-shadow: none !important;
+}
+.scoreboard-export-card .post-round-inline {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 !important;
+  overflow: visible;
+  background: transparent;
+  box-shadow: none !important;
+}
+@media (max-width: 760px) {
+  .scoreboard-export-card .scoreboard-status-stack {
+    gap: 12px;
+  }
+  .scoreboard-export-card .scoreboard-round-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .scoreboard-export-card .scoreboard-round-actions .actions {
+    justify-content: stretch;
+  }
+  .scoreboard-export-card .scoreboard-round-actions .actions > * {
+    flex: 1 1 auto;
+    width: 100%;
   }
 }

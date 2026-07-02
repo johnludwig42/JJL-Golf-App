@@ -1,10 +1,10 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.36',
-  versionNumber: '30.3.36',
-  cacheName: 'the-dye-ledger-v30.3.36',
+  version: 'v30.3.37',
+  versionNumber: '30.3.37',
+  cacheName: 'the-dye-ledger-v30.3.37',
   buildDate: new Date().toISOString(),
-  buildLabel: 'iPhone Modal & Save Round Layout Hotfix'
+  buildLabel: 'Scores Tab Status Stack Hotfix'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -2506,7 +2506,7 @@ function buildMissingScoreWarning(match, metrics, { exportMode = false } = {}) {
       </div>`;
   }
   return `
-    <details class="incomplete-round-warning card tight-card ${complete ? 'round-complete-warning' : ''}">
+    <details class="incomplete-round-warning ${complete ? 'round-complete-warning' : ''}">
       <summary class="missing-score-summary"><span>${escapeHtml(title)}</span></summary>
       ${complete
         ? '<div class="tiny top-gap">All selected players have gross scores for all selected holes.</div>'

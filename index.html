@@ -347,15 +347,16 @@
               <button id="scoreboardShareRoundBtn" type="button" class="primary share-match-btn">Share Match</button>
             </div>
           </div>
-          <div class="scoreboard-round-actions no-print">
-            <div id="scoreboardRoundState" class="tiny">Round is live.</div>
-            <div class="actions wrap compact-actions">
-              <button id="scoreboardFinishRoundBtn" type="button" class="secondary">Finish / End Round</button>
-              <button id="scoreboardConfirmFinishRoundBtn" type="button" class="secondary hidden">Confirm Finish</button>
+          <div class="scoreboard-status-stack no-print" aria-label="Round status and completion actions">
+            <div class="scoreboard-round-actions">
+              <div id="scoreboardRoundState" class="tiny">Round is live.</div>
+              <div class="actions wrap compact-actions">
+                <button id="scoreboardFinishRoundBtn" type="button" class="secondary">Finish / End Round</button>
+                <button id="scoreboardConfirmFinishRoundBtn" type="button" class="secondary hidden">Confirm Finish</button>
+              </div>
             </div>
-          </div>
-          <div id="missingScoreWarning" class="no-print hidden"></div>
-          <div id="postRoundActionsInline" class="post-round-inline no-print hidden" aria-hidden="true">
+            <div id="missingScoreWarning" class="hidden"></div>
+            <div id="postRoundActionsInline" class="post-round-inline hidden" aria-hidden="true">
             <div class="section-label">Round Complete ✓</div>
             <div id="postRoundActionsInlineText" class="tiny top-gap">What would you like to do next?</div>
             <div class="post-round-actions top-gap">
@@ -364,6 +365,7 @@
               <button id="postRoundInlineNewMatchBtn" type="button" class="secondary">➕ Create New Match</button>
               <button id="postRoundInlineJoinMatchBtn" type="button" class="secondary">🔗 Join New Match</button>
             </div>
+          </div>
           </div>
         </div>
         <div class="card tight-card scoreboard-card print-section-match-status">
@@ -714,7 +716,7 @@
       <div class="card tight-card app-updates-card">
         <h2>App Updates</h2>
         <div class="app-update-summary">
-          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.36</strong></div>
+          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.37</strong></div>
           <div><span class="muted-label">Build Date</span><strong id="appBuildTimestamp">loading…</strong></div>
           <div><span class="muted-label">Cache</span><span id="appActiveCacheName" class="break-word">checking…</span></div>
           <div><span class="muted-label">Update Available</span><strong id="appUpdateAvailableStatus">checking…</strong></div>
@@ -746,8 +748,8 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
-          <li>v30.3.36 fixes iPhone Save / End Round layout artifacts.</li>
-          <li>v30.3.36 repairs the End Round Early modal so reason choices render cleanly on iPhone.</li>
+          <li>v30.3.37 flattens the Scores tab Save / End Round status area into one clean status stack.</li>
+          <li>v30.3.37 removes nested-card artifacts from the Share / Save PDF card on iPhone.</li>
         </ul>
       </div>
     </section>
@@ -767,7 +769,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.3.36</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
+    <span id="appVersionFooter">v30.3.37</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>

@@ -1,8 +1,8 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.33',
-  versionNumber: '30.3.33',
-  cacheName: 'the-dye-ledger-v30.3.33',
+  version: 'v30.3.34',
+  versionNumber: '30.3.34',
+  cacheName: 'the-dye-ledger-v30.3.34',
   buildDate: '2026-07-01T17:16:42Z',
   buildLabel: 'Singles Match Play & Actual Play Momentum'
 };
@@ -1293,6 +1293,113 @@ function getDefaultFeaturedGameKey(selectedGames = []) {
     || ordered[0]?.key
     || 'team_match';
 }
+
+function normalizeFeaturedCompetition(value) {
+  const v = String(value || 'auto').trim();
+  if (!v) return 'auto';
+  if (['auto', 'none', 'stroke_net', 'stroke_gross'].includes(v)) return v;
+  return GAME_LIBRARY.some(g => g.key === v) ? v : 'auto';
+}
+function getFeaturedCompetitionOptions(selectedGames = []) {
+  const selected = normalizeSelectedGamesOrder(Array.isArray(selectedGames) ? selectedGames : []);
+  const opts = [
+    { key: 'auto', label: 'Auto' },
+    { key: 'none', label: 'None / Social Round' },
+    { key: 'stroke_net', label: 'Stroke Play — Low Net' },
+    { key: 'stroke_gross', label: 'Stroke Play — Low Gross' },
+  ];
+  selected.forEach(game => {
+    if (game?.key && !opts.some(opt => opt.key === game.key)) opts.push({ key: game.key, label: getGameLabel(game.key) });
+  });
+  return opts;
+}
+function getFeaturedCompetitionSelection(matchOrValue, selectedGames = null) {
+  if (typeof matchOrValue === 'string') return normalizeFeaturedCompetition(matchOrValue);
+  const match = matchOrValue || {};
+  return normalizeFeaturedCompetition(match.featuredCompetition || 'auto');
+}
+function resolveAutoFeaturedCompetition(match, metrics = null) {
+  const selected = getOrderedSelectedGames(match);
+  const nonSideGames = selected.filter(g => g.key !== 'greenies');
+  if (nonSideGames.length === 1) return nonSideGames[0].key;
+  if (selected.some(g => g.key === 'nassau')) return 'nassau';
+  if (selected.some(g => g.key === 'singles_match')) return 'singles_match';
+  if (selected.some(g => g.key === 'nine_point')) return 'nine_point';
+  const skinsOnly = selected.filter(g => ['skins', 'net_skins'].includes(g.key));
+  if (skinsOnly.length === 1 && selected.length === 1) return skinsOnly[0].key;
+  return 'stroke_net';
+}
+function resolveFeaturedCompetitionKey(match, metrics = null) {
+  const selected = getFeaturedCompetitionSelection(match);
+  if (selected === 'auto') return resolveAutoFeaturedCompetition(match, metrics);
+  return selected;
+}
+function getFeaturedCompetitionDisplayName(match, key) {
+  if (key === 'auto') return 'Auto';
+  if (key === 'none') return 'Social Round';
+  if (key === 'stroke_net') return 'Stroke Play — Low Net';
+  if (key === 'stroke_gross') return 'Stroke Play — Low Gross';
+  return getFeaturedGameLabel(match, key) || getGameLabel(key) || 'Featured Competition';
+}
+function formatStrokeFeaturedResult(match, metrics, basis = 'net') {
+  const players = Array.isArray(metrics?.players) ? metrics.players : [];
+  if (!players.length) return 'Featured result unavailable until more holes are scored.';
+  const field = basis === 'gross' ? 'grossTotal' : 'leaderboardNetTotal';
+  const rows = getLowRows(players, field);
+  if (!rows.rows.length || !Number.isFinite(Number(rows.value))) return 'Featured result unavailable until more holes are scored.';
+  const completion = getRoundCompletionState(match, metrics);
+  const label = formatAwardWinners(rows.rows.map(r => r.player?.name), rows.value);
+  return `${label}${formatIncompleteScopeSuffix(completion)}`;
+}
+function getFeaturedCompetitionResult(match, metrics) {
+  const selection = getFeaturedCompetitionSelection(match);
+  const key = resolveFeaturedCompetitionKey(match, metrics);
+  const completion = metrics ? getRoundCompletionState(match, metrics) : null;
+  if (key === 'none') return { key, label: 'Social Round', result: 'No featured competition selected.', selection };
+  if (key === 'stroke_net') return { key, label: 'Low Net', result: formatStrokeFeaturedResult(match, metrics, 'net'), selection };
+  if (key === 'stroke_gross') return { key, label: 'Low Gross', result: formatStrokeFeaturedResult(match, metrics, 'gross'), selection };
+  if (key === 'singles_match') {
+    const result = computeSinglesMatchPlayResult(match, metrics, getSinglesMatchConfig(match) || {});
+    const text = result?.displayResult || result?.statusText || result?.winnerText || 'Featured result unavailable until more holes are scored.';
+    return { key, label: 'Singles Match Play', result: completion?.isIncomplete && !String(text).includes('through') ? `${text}${formatIncompleteScopeSuffix(completion)}` : text, selection };
+  }
+  if (['nassau', 'team_match'].includes(key) && metrics?.teams?.length === 2) {
+    const diffs = computeTeamGameDiffs(match, metrics, key);
+    const result = completion?.isIncomplete ? formatTeamGameStatusScoped(match, metrics, diffs.overall, completion) : formatTeamGameStatus(match, metrics, diffs.overall);
+    return { key, label: getGameLabel(key), result, selection };
+  }
+  if (key === 'team_stroke' && metrics?.teams?.length >= 2) {
+    const cfg = (match.selectedGames || []).find(g => g.key === key) || {};
+    const stroke = getTeamStrokeScoreboardData(match, metrics, cfg);
+    const result = !stroke.leader ? 'Featured result unavailable until more holes are scored.' : (stroke.tie ? `Tied at ${stroke.leader.total}` : `${describeTeamLabel(match, stroke.leader.team, metrics)} by ${stroke.margin} stroke${stroke.margin === 1 ? '' : 's'}`);
+    return { key, label: getGameLabel(key), result, selection };
+  }
+  if (key === 'nine_point') {
+    const nine = computeNinePointResults(match, metrics, (match.selectedGames || []).find(g => g.key === 'nine_point') || {});
+    const rows = Object.entries(nine?.amounts || {}).map(([id, amount]) => ({ id, amount: Number(amount || 0), name: getPlayer(id)?.name || id }));
+    const high = getHighRows(rows, 'amount');
+    const result = high.rows.length && high.value > 0 ? formatAwardWinners(high.rows.map(r => r.name), formatMoneyAccounting(high.value)) : 'No 9-Point winner yet.';
+    return { key, label: '9-Point', result, selection };
+  }
+  if (['skins','net_skins','greenies','individual_match'].includes(key)) {
+    const ctx = getPayoutReportContext(match, metrics);
+    const game = (ctx.payoutGames || []).find(g => g.key === key);
+    const rows = Object.entries(game?.amounts || {}).map(([id, amount]) => ({ id, amount: Number(amount || 0), name: getPlayer(id)?.name || id }));
+    const high = getHighRows(rows, 'amount');
+    const result = high.rows.length && high.value > 0 ? formatAwardWinners(high.rows.map(r => r.name), formatMoneyAccounting(high.value)) : 'Featured result unavailable until more holes are scored.';
+    return { key, label: getGameLabel(key), result, selection };
+  }
+  return { key, label: getFeaturedCompetitionDisplayName(match, key), result: 'Featured result unavailable until more holes are scored.', selection };
+}
+function renderFeaturedCompetitionSetup(selectedGames = null, selectedValue = null) {
+  const select = document.getElementById('featuredCompetitionSelect');
+  if (!select) return;
+  const games = Array.isArray(selectedGames) ? selectedGames : collectSelectedGames();
+  const current = normalizeFeaturedCompetition(selectedValue || select.value || 'auto');
+  const options = getFeaturedCompetitionOptions(games);
+  select.innerHTML = options.map(opt => `<option value="${escapeHtml(opt.key)}" ${opt.key === current ? 'selected' : ''}>${escapeHtml(opt.label)}</option>`).join('');
+  if (!options.some(opt => opt.key === current)) select.value = 'auto';
+}
 function showTeamMatchMetric(match, metrics) {
   if ((metrics?.teams || []).length !== 2) return false;
   return (match?.selectedGames || []).some(g => ['nassau', 'team_match'].includes(g.key));
@@ -2161,12 +2268,12 @@ function buildRoundRecapExport(match, metrics = null) {
     <section class="export-section export-section-round-recap">
       <div class="export-section-head">
         <h2>AI Round Recap</h2>
-        <div class="export-section-sub">Host notes, saved memories, and round facts.</div>
+        <div class="export-section-sub">Story-driven recap centered on the Featured Competition, round notes, memories, scores, games, and stats.</div>
       </div>
       ${incompleteNote}
       ${recap
         ? `<div class="export-round-recap-text">${formatRoundRecapHtml(recap)}</div>`
-        : '<div class="export-empty empty-state-card"><strong>No AI recap generated yet.</strong><br>Add Round Notes before generating a recap to give it more context.</div>'}
+        : '<div class="export-empty empty-state-card"><strong>No AI recap generated yet.</strong><br>Add Round Notes for AI Recap to give the story more context.</div>'}
     </section>`;
 }
 
@@ -2540,18 +2647,9 @@ function buildRoundSnapshot(match, metrics) {
   const biggest = getHighRows(settlementRows, 'amount');
   const lowGross = getLowRows(players, 'grossTotal');
   const lowNet = getLowRows(players, 'leaderboardNetTotal');
-  let matchStatus = '';
-  try {
-    const nassau = (match.selectedGames || []).find(g => g.key === 'nassau') || (match.selectedGames || [])[0] || {};
-    if (metrics.teams?.length === 2) {
-      const diffs = computeTeamGameDiffs(match, metrics, nassau.key || 'nassau');
-      matchStatus = completion.isIncomplete
-        ? formatTeamGameStatusScoped(match, metrics, diffs.overall, completion)
-        : formatTeamGameStatus(match, metrics, diffs.overall);
-    }
-  } catch (_) {}
+  const featured = getFeaturedCompetitionResult(match, metrics);
   const keyDetails = [];
-  if (matchStatus) keyDetails.push([completion.isIncomplete ? 'Match Status' : 'Match Winner', matchStatus]);
+  if (featured?.result) keyDetails.push(['Featured Competition', `${escapeHtml(featured.label)} — ${escapeHtml(featured.result)}`]);
   if (biggest.rows.length && biggest.value > 0) keyDetails.push(['Final Settlement', `${formatAwardWinners(biggest.rows.map(r => r.name), formatMoneyAccounting(biggest.value))}${completion.isIncomplete && !areAllGamesFinal(match, metrics) ? ' provisional' : ''}`]);
   if (lowGross.rows.length) keyDetails.push([completion.isIncomplete ? 'Low Gross Leader' : 'Low Gross', `${formatAwardWinners(lowGross.rows.map(r => r.player?.name), lowGross.value)}${formatIncompleteScopeSuffix(completion)}`]);
   if (lowNet.rows.length) keyDetails.push([completion.isIncomplete ? 'Low Net Leader' : 'Low Net', `${formatAwardWinners(lowNet.rows.map(r => r.player?.name), lowNet.value)}${formatIncompleteScopeSuffix(completion)}`]);
@@ -2666,8 +2764,12 @@ function buildRecapInputTransparency(match) {
   return `
     <div class="round-recap-input-preview" aria-label="AI recap inputs preview">
       <div class="recap-input-row">
+        <strong>Featured Competition</strong>
+        <span>${escapeHtml(getFeaturedCompetitionDisplayName(match, resolveFeaturedCompetitionKey(match, match ? computeMatchMetrics(match) : null)))}</span>
+      </div>
+      <div class="recap-input-row">
         <strong>Round Notes Included</strong>
-        <span>${notes ? `${notes.length} characters` : 'None yet'}</span>
+        <span>${notes ? `${notes.length} characters` : 'None yet — recap will rely on scores, games, and stats.'}</span>
       </div>
       <div class="recap-input-row recap-input-row-stack">
         <strong>Memories Included in Recap (${memories.length})</strong>
@@ -2694,13 +2796,13 @@ function buildRoundRecapControls(match) {
   return `
     <div class="round-recap-control-card no-print">
       <div>
-        <div class="section-label">The Dye Ledger Round Recap</div>
+        <div class="section-label">AI Round Recap</div>
         <div class="tiny">${escapeHtml(recapStatus)}</div>
       </div>
       <div class="round-recap-notes-field">
-        <label for="roundRecapNotesBox">Round Notes</label>
-        <div class="tiny">Free-form host journal for context, storylines, course conditions, and details the AI should understand. Memories captured on the Play tab are also included.</div>
-        <textarea id="roundRecapNotesBox" rows="7" placeholder="Add host notes for the AI recap. Example: Wind picked up on the back nine, Mike got hot late, and the press on 16 changed the match.">${escapeHtml(match.roundRecapNotes || '')}</textarea>
+        <label for="roundRecapNotesBox">Round Notes for AI Recap</label>
+        <div class="tiny">Add context the scorecard cannot see — funny moments, clutch shots, weather, side bets, injuries, pace, or anything worth remembering. Memories captured on the Play tab are also included.</div>
+        <textarea id="roundRecapNotesBox" rows="7" placeholder="Example: Tom birdied 16 to close out match play. Mike holed a bunker shot on 8. Wind picked up on the back nine.">${escapeHtml(match.roundRecapNotes || '')}</textarea>
       </div>
       ${buildRecapInputTransparency(match)}
       <div class="actions wrap compact-actions">
@@ -2871,8 +2973,14 @@ function buildRoundRecapPayload(match, metrics) {
     allGamesFinal,
     gameClinchStates,
     roundNotes: String(match?.roundRecapNotes || '').trim(),
+    featuredCompetition: {
+      selected: getFeaturedCompetitionSelection(match),
+      resolved: resolveFeaturedCompetitionKey(match, metrics),
+      label: getFeaturedCompetitionResult(match, metrics).label,
+      result: getFeaturedCompetitionResult(match, metrics).result,
+    },
     memories: getRoundMemories(match).map(m => ({ text: m.text, category: m.category, holeNumber: m.holeNumber, createdAt: m.createdAt })),
-    recapInstructions: 'Use Round Notes and Memories when relevant. Do not fabricate events. Do not assume details not provided. Memories should supplement scoring information and statistics. If the round is incomplete, explicitly mention the completed-hole count, round end reason when provided, and whether games are clinched or provisional. Do not call a provisional lead a final win.',
+    recapInstructions: 'Write a polished, private-club style golf recap with short sections: Round Story, Featured Competition, Turning Points, Player Highlights, Game Story, Statistical Notes, Memorable Moments, and Closing Note or Fun Awards when supported. Center the Featured Competition first, distinguish it from Low Gross, Low Net, Money Winner, game winners, and awards, and use Round Notes and Memories for personality. Do not fabricate shots, weather, holes, or emotions not supported by data or notes. If the round is incomplete, explicitly describe the recap as provisional unless all selected games are already clinched/final. If clinched early, explain that the featured competition was decided before all holes were played. Keep the tone professional, fun, golf-aware, specific, and concise on mobile.',
     players: playerSummaries,
     games: summarizeSelectedGamesForRecap(match, metrics),
     finalSettlement,
@@ -3012,6 +3120,7 @@ function buildSummaryExportBody(match, metrics) {
     </section>` : '';
   return `
     ${exportRoundSnapshotHtml}
+    ${exportRoundRecapHtml}
     ${exportProvisionalLabelHtml}
 
     <section class="export-section export-section-net-payout">
@@ -3089,8 +3198,6 @@ function buildSummaryExportBody(match, metrics) {
       </div>
       ${exportGrossGameDetailHtml}
     </section>` : ''}
-
-    ${exportRoundRecapHtml}
 
     ${buildExportNotes()}`;
 }
@@ -10792,6 +10899,7 @@ function renderTodaysMatchSummary() {
   const selectedPlayers = getSelectedPlayersFromSetup();
   const teamCount = getCurrentSetupTeamCount();
   const selectedGames = collectSelectedGames();
+  const featuredCompetition = normalizeFeaturedCompetition(document.getElementById('featuredCompetitionSelect')?.value || 'auto');
   const gameNames = selectedGames.map(g => getGameLabel(g)).filter(Boolean);
   const statEnabled = !!document.getElementById('enableStatTrackingInput')?.checked;
   const statIds = statEnabled ? collectStatTrackingPlayerIdsFromSetup(selectedPlayers) : [];
@@ -10802,6 +10910,7 @@ function renderTodaysMatchSummary() {
     ['Players', selectedPlayers.length ? String(selectedPlayers.length) : 'Select players'],
     ['Teams', String(teamCount)],
     ['Games', gameNames.length ? gameNames.join(', ') : 'None selected'],
+    ['Featured Competition', getFeaturedCompetitionDisplayName({ selectedGames }, featuredCompetition === 'auto' ? resolveAutoFeaturedCompetition({ selectedGames }) : featuredCompetition)],
     ['Stat Tracking', statEnabled ? (statNames.length ? statNames.join(', ') : 'No players selected') : 'Off'],
   ];
   wrap.innerHTML = rows.map(([label, value]) => `<div class="setup-summary-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('');
@@ -11022,6 +11131,7 @@ function renderGamesPicker(existing = []) {
     </label>`;
   }).join('');
   const selectedGames = normalizeSelectedGamesOrder(GAME_LIBRARY.filter(g => selectedKeys.includes(g.key)));
+  renderFeaturedCompetitionSetup(normalizedExisting, document.getElementById('featuredCompetitionSelect')?.value || 'auto');
   configsWrap.innerHTML = selectedGames.map(game => {
     const cfg = getGameConfig(game.key, normalizedExisting);
     if (game.key === 'nassau') {
@@ -11748,6 +11858,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
     populateMatchPlayerPicker(uiState.matchPlayerDraft);
     renderStatTrackingPlayerSelector(Array.isArray(draft.statTrackingPlayerIds) ? draft.statTrackingPlayerIds : null);
     renderGamesPicker(draft.selectedGames || []);
+    renderFeaturedCompetitionSetup(draft.selectedGames || [], draft.featuredCompetition || 'auto');
     renderSetupHandicapPreview();
     renderTodaysMatchSummary();
     return;
@@ -11777,6 +11888,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
   populateMatchPlayerPicker(uiState.matchPlayerDraft);
   renderStatTrackingPlayerSelector(Array.isArray(match.statTrackingPlayerIds) ? match.statTrackingPlayerIds : null);
   renderGamesPicker(match.selectedGames || []);
+  renderFeaturedCompetitionSetup(match.selectedGames || [], match.featuredCompetition || 'auto');
   renderSetupHandicapPreview();
   renderTodaysMatchSummary();
   window.scrollTo({ top: document.getElementById('matchFormTitle').getBoundingClientRect().top + window.scrollY - 20, behavior: 'smooth' });
@@ -12304,8 +12416,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   });
   document.getElementById('setup').addEventListener('change', e => {
     if (e.target && (e.target.id === 'enableStatTrackingInput' || e.target.matches('[data-player-slot], [data-stat-track-player]'))) renderStatTrackingPlayerSelector();
-    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #scoreEntryModeSelect, #officialScorerNameInput, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-game-config], #enableStatTrackingInput, [data-stat-track-player]')) {
-      setTimeout(() => { renderSetupHandicapPreview(); renderGamesPicker(collectSelectedGames()); renderTodaysMatchSummary(); }, 0);
+    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #featuredCompetitionSelect, #scoreEntryModeSelect, #officialScorerNameInput, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-game-config], #enableStatTrackingInput, [data-stat-track-player]')) {
+      setTimeout(() => { renderSetupHandicapPreview(); renderGamesPicker(collectSelectedGames()); renderFeaturedCompetitionSetup(collectSelectedGames()); renderTodaysMatchSummary(); }, 0);
     }
   });
   document.getElementById('setup').addEventListener('input', e => {
@@ -12763,6 +12875,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       statTrackingPlayerIds: fd.get('enableStatTracking') === 'on' ? collectStatTrackingPlayerIdsFromSetup(selectedPlayers) : [],
       teamScorers,
       selectedGames: normalizeSelectedGamesOrder(selectedGames),
+      featuredCompetition: normalizeFeaturedCompetition(fd.get('featuredCompetition') || existing?.featuredCompetition || 'auto'),
       status: existing?.status || 'active',
       completedAt: existing?.completedAt || null,
       previousCompletedAt: existing?.previousCompletedAt || null,

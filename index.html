@@ -240,6 +240,27 @@
             </details>
           </div>
 
+          <div class="span-2 card inset-card match-templates-card top-gap">
+            <div class="item-header compact-item-header">
+              <div>
+                <div class="section-label">Match Templates</div>
+                <div class="tiny">Save and reuse setup only — never scores, settlements, recaps, or results.</div>
+              </div>
+              <button id="saveCurrentSetupTemplateBtn" type="button" class="secondary">Save Current Setup as Template</button>
+            </div>
+            <div id="matchTemplatesPanel" class="match-templates-panel top-gap"></div>
+          </div>
+
+          <div class="span-2 card inset-card round-readiness-card top-gap">
+            <div class="item-header compact-item-header">
+              <div>
+                <div class="section-label">Round Readiness</div>
+                <div class="tiny">Advisory confidence checks before the first tee shot.</div>
+              </div>
+            </div>
+            <div id="roundReadinessPanel" class="top-gap"></div>
+          </div>
+
           <div class="span-2 card inset-card handicap-preview-card top-gap">
             <div class="item-header compact-item-header">
               <div>
@@ -693,7 +714,7 @@
       <div class="card tight-card app-updates-card">
         <h2>App Updates</h2>
         <div class="app-update-summary">
-          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.34</strong></div>
+          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.35</strong></div>
           <div><span class="muted-label">Build Date</span><strong id="appBuildTimestamp">loading…</strong></div>
           <div><span class="muted-label">Cache</span><span id="appActiveCacheName" class="break-word">checking…</span></div>
           <div><span class="muted-label">Update Available</span><strong id="appUpdateAvailableStatus">checking…</strong></div>
@@ -725,8 +746,8 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
-          <li>v30.3.34 consolidates Scorecard Snapshot and Round Awards into a polished Round Snapshot.</li>
-          <li>v30.3.34 improves Match Summary print layout, incomplete-round messaging, and AI Round Recap empty states.</li>
+          <li>v30.3.35 consolidates Scorecard Snapshot and Round Awards into a polished Round Snapshot.</li>
+          <li>v30.3.35 improves Match Summary print layout, incomplete-round messaging, and AI Round Recap empty states.</li>
         </ul>
       </div>
     </section>
@@ -746,7 +767,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.3.34</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
+    <span id="appVersionFooter">v30.3.35</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>

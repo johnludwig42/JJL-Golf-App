@@ -1,16 +1,18 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.34',
-  versionNumber: '30.3.34',
-  cacheName: 'the-dye-ledger-v30.3.34',
-  buildDate: '2026-07-01T17:16:42Z',
-  buildLabel: 'Singles Match Play & Actual Play Momentum'
+  version: 'v30.3.35',
+  versionNumber: '30.3.35',
+  cacheName: 'the-dye-ledger-v30.3.35',
+  buildDate: new Date().toISOString(),
+  buildLabel: 'Match Templates & Round Readiness'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
 const BUILD_LABEL = BUILD_INFO.buildLabel;
 const APP_CACHE_NAME = BUILD_INFO.cacheName;
 const APP_VERSION_NUMBER = BUILD_INFO.versionNumber;
+
+const MATCH_TEMPLATES_STORAGE_KEY = 'dyeLedger.matchTemplates.v1';
 
 
 const APP_ERROR_STORAGE_KEY = 'dye-ledger-recent-app-errors';
@@ -10914,6 +10916,238 @@ function renderTodaysMatchSummary() {
     ['Stat Tracking', statEnabled ? (statNames.length ? statNames.join(', ') : 'No players selected') : 'Off'],
   ];
   wrap.innerHTML = rows.map(([label, value]) => `<div class="setup-summary-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('');
+  renderRoundReadiness();
+}
+
+
+function readMatchTemplates() {
+  try {
+    const raw = localStorage.getItem(MATCH_TEMPLATES_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter(t => t && typeof t === 'object') : [];
+  } catch (err) {
+    recordAppError(err, 'Read Match Templates');
+    return [];
+  }
+}
+
+function writeMatchTemplates(templates) {
+  try {
+    const cleaned = Array.isArray(templates) ? templates.slice(0, 50) : [];
+    localStorage.setItem(MATCH_TEMPLATES_STORAGE_KEY, JSON.stringify(cleaned));
+  } catch (err) {
+    recordAppError(err, 'Write Match Templates');
+    toast('Could not save match template on this device.');
+  }
+}
+
+function sanitizeTemplatePlayers(players) {
+  return Array.isArray(players) ? players.map((p, idx) => ({
+    playerId: String(p.playerId || ''),
+    team: Number(p.team || 1) || 1,
+    slot: Number.isFinite(Number(p.slot)) ? Number(p.slot) : idx,
+    teeId: String(p.teeId || '')
+  })).filter(p => p.playerId) : [];
+}
+
+function buildTemplateFromCurrentSetup(nameOverride = '') {
+  const form = document.getElementById('matchForm');
+  const fd = form ? new FormData(form) : new FormData();
+  const teamCount = Number(fd.get('teamCount')) || Number(document.getElementById('teamCountSelect')?.value || 1) || 1;
+  const selectedPlayers = getSelectedPlayersFromSetup();
+  const templateName = String(nameOverride || fd.get('name') || '').trim() || `Match Template ${new Date().toLocaleDateString()}`;
+  return {
+    id: uid(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    appVersion: APP_VERSION,
+    name: templateName,
+    matchName: String(fd.get('name') || '').trim(),
+    courseId: String(fd.get('courseId') || ''),
+    teeId: String(fd.get('teeId') || ''),
+    allowance: Number(fd.get('allowance')) || 100,
+    holeCount: Number(fd.get('holeCount')) === 9 ? 9 : 18,
+    nineHoleSegment: String(fd.get('nineHoleSegment') || 'front'),
+    customStartHole: Math.max(1, Math.min(10, Number(fd.get('customStartHole')) || 1)),
+    teamCount,
+    playersPerTeam: Number(fd.get('playersPerTeam')) || 1,
+    teamNames: Array.from({ length: teamCount }, (_, i) => String(document.querySelector(`[data-team-name="${i + 1}"]`)?.value || '').trim().slice(0, 25)),
+    players: sanitizeTemplatePlayers(selectedPlayers),
+    selectedGames: normalizeSelectedGamesOrder(collectSelectedGames()).map(g => JSON.parse(JSON.stringify(g))),
+    featuredCompetition: normalizeFeaturedCompetition(fd.get('featuredCompetition') || 'auto'),
+    scoringAccessMode: normalizeScoringAccessMode(fd.get('scoreEntryMode') || 'single_device'),
+    officialScorerName: String(fd.get('officialScorerName') || '').trim() || 'Official scorer',
+    statTrackingEnabled: fd.get('enableStatTracking') === 'on',
+    statTrackingPlayerIds: fd.get('enableStatTracking') === 'on' ? collectStatTrackingPlayerIdsFromSetup(selectedPlayers) : []
+  };
+}
+
+function applyMatchTemplate(templateId) {
+  const template = readMatchTemplates().find(t => t.id === templateId);
+  if (!template) return toast('Template not found.');
+  const draft = createEmptyMatch();
+  Object.assign(draft, {
+    id: uid(),
+    date: todayIso(),
+    name: template.matchName || template.name || 'Round',
+    courseId: template.courseId || '',
+    teeId: template.teeId || '',
+    allowance: Number(template.allowance) || 100,
+    holeCount: Number(template.holeCount) === 9 ? 9 : 18,
+    nineHoleSegment: template.nineHoleSegment || 'front',
+    customStartHole: Math.max(1, Math.min(10, Number(template.customStartHole) || 1)),
+    teamCount: Number(template.teamCount) || 1,
+    playersPerTeam: Number(template.playersPerTeam) || 1,
+    teamNames: Array.isArray(template.teamNames) ? template.teamNames.slice() : [],
+    selectedGames: normalizeSelectedGamesOrder(Array.isArray(template.selectedGames) ? template.selectedGames : []),
+    featuredCompetition: normalizeFeaturedCompetition(template.featuredCompetition || 'auto'),
+    scoringAccessMode: normalizeScoringAccessMode(template.scoringAccessMode || 'single_device'),
+    officialScorerName: template.officialScorerName || 'Official scorer',
+    statTrackingEnabled: !!template.statTrackingEnabled,
+    statTrackingPlayerIds: Array.isArray(template.statTrackingPlayerIds) ? template.statTrackingPlayerIds.slice() : [],
+    players: sanitizeTemplatePlayers(template.players).map((p, idx) => ({
+      ...p,
+      slot: Number.isFinite(Number(p.slot)) ? Number(p.slot) : idx,
+      scores: buildEmptyScores(Number(template.holeCount) === 9 ? 9 : 18),
+      stats: buildEmptyStats(Number(template.holeCount) === 9 ? 9 : 18)
+    })),
+    notes: '',
+    roundRecap: '',
+    roundRecapGenerated: '',
+    roundRecapFinal: '',
+    roundRecapNotes: '',
+    completedAt: null,
+    status: 'active'
+  });
+  loadMatchEditor(null, draft);
+  renderMatchTemplatesPanel();
+  toast('Template applied. Review setup, then start round.');
+}
+
+function saveCurrentSetupAsTemplate() {
+  const name = window.prompt('Template name?', document.querySelector('#matchForm [name="name"]')?.value || 'Regular Group');
+  if (name === null) return;
+  const template = buildTemplateFromCurrentSetup(name);
+  const templates = readMatchTemplates();
+  templates.unshift(template);
+  writeMatchTemplates(templates);
+  renderMatchTemplatesPanel();
+  toast('Match template saved.');
+}
+
+function renameMatchTemplate(templateId) {
+  const templates = readMatchTemplates();
+  const template = templates.find(t => t.id === templateId);
+  if (!template) return;
+  const name = window.prompt('Rename template', template.name || 'Match Template');
+  if (name === null) return;
+  template.name = String(name || '').trim() || template.name || 'Match Template';
+  template.updatedAt = new Date().toISOString();
+  writeMatchTemplates(templates);
+  renderMatchTemplatesPanel();
+}
+
+function deleteMatchTemplate(templateId) {
+  const templates = readMatchTemplates();
+  const template = templates.find(t => t.id === templateId);
+  if (!template) return;
+  if (!window.confirm(`Delete template "${template.name || 'Match Template'}"?`)) return;
+  writeMatchTemplates(templates.filter(t => t.id !== templateId));
+  renderMatchTemplatesPanel();
+  toast('Template deleted.');
+}
+
+function duplicateMatchTemplate(templateId) {
+  const templates = readMatchTemplates();
+  const template = templates.find(t => t.id === templateId);
+  if (!template) return;
+  const clone = JSON.parse(JSON.stringify(template));
+  clone.id = uid();
+  clone.name = `${template.name || 'Match Template'} Copy`;
+  clone.createdAt = new Date().toISOString();
+  clone.updatedAt = clone.createdAt;
+  templates.unshift(clone);
+  writeMatchTemplates(templates);
+  renderMatchTemplatesPanel();
+}
+
+function renderMatchTemplatesPanel() {
+  const wrap = document.getElementById('matchTemplatesPanel');
+  if (!wrap) return;
+  const templates = readMatchTemplates();
+  if (!templates.length) {
+    wrap.innerHTML = `<div class="empty-state-card compact-empty-state"><strong>No templates saved yet.</strong><br>Create your first Match Template from the current setup. Templates save setup only — never scores or results.</div>`;
+    return;
+  }
+  wrap.innerHTML = templates.map(t => {
+    const players = sanitizeTemplatePlayers(t.players).map(row => getPlayer(row.playerId)?.name || '').filter(Boolean);
+    const games = normalizeSelectedGamesOrder(t.selectedGames || []).map(g => getGameLabel(g)).filter(Boolean);
+    const course = getCourse(t.courseId);
+    const tee = course ? getTee(t.courseId, t.teeId) : null;
+    return `<div class="match-template-row" data-template-id="${escapeHtml(t.id)}">
+      <div class="match-template-main">
+        <strong>${escapeHtml(t.name || 'Match Template')}</strong>
+        <div class="tiny">${escapeHtml([course?.name, tee?.teeName, players.length ? `${players.length} players` : '', games.length ? games.join(', ') : 'No games selected'].filter(Boolean).join(' · ') || 'Setup template')}</div>
+      </div>
+      <div class="actions wrap compact-actions match-template-actions">
+        <button type="button" class="secondary" data-apply-template="${escapeHtml(t.id)}">Apply</button>
+        <button type="button" class="secondary" data-rename-template="${escapeHtml(t.id)}">Rename</button>
+        <button type="button" class="secondary" data-duplicate-template="${escapeHtml(t.id)}">Duplicate</button>
+        <button type="button" class="secondary danger-lite" data-delete-template="${escapeHtml(t.id)}">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function getRoundReadinessState() {
+  const courseId = document.getElementById('matchCourseSelect')?.value || '';
+  const teeId = document.getElementById('matchTeeSelect')?.value || '';
+  const course = getCourse(courseId);
+  const tee = course ? getTee(courseId, teeId) : null;
+  const selectedPlayers = getSelectedPlayersFromSetup();
+  const selectedGames = collectSelectedGames();
+  const featured = normalizeFeaturedCompetition(document.getElementById('featuredCompetitionSelect')?.value || 'auto');
+  const checks = [];
+  const add = (label, ok, warning = '') => checks.push({ label, ok: !!ok, warning });
+  add('Course selected', !!courseId && !!course, courseId ? 'Selected course is not available locally.' : 'No course selected yet.');
+  add('Tee selected', !!teeId && !!tee, teeId ? 'Selected tee is not available locally.' : 'No tee selected yet.');
+  add('Course holes loaded', !!tee && Array.isArray(tee.holes) && tee.holes.length >= 18, 'Course holes are not fully loaded.');
+  add('Players added', selectedPlayers.length > 0, 'No players selected yet.');
+  add('Teams configured', getCurrentSetupTeamCount() >= 1, 'Team setup needs attention.');
+  add('Handicaps assigned or intentionally blank', selectedPlayers.every(row => Number.isFinite(Number(getPlayer(row.playerId)?.index ?? 0))), 'One or more players may be missing a handicap index.');
+  add('Games selected', selectedGames.length > 0, 'No games selected for this round.');
+  add(`Featured Competition: ${getFeaturedCompetitionDisplayName({ selectedGames }, featured === 'auto' ? resolveAutoFeaturedCompetition({ selectedGames }) : featured) || 'Auto'}`, !!featured, 'No Featured Competition selected.');
+  const selectedKeys = new Set(selectedGames.map(g => g.key));
+  const featureMap = { nassau: 'nassau', singles_match: 'singles_match', skins: 'skins', net_skins: 'net_skins', nine_point: 'nine_point' };
+  if (featureMap[featured]) add('Featured Competition matches selected games', selectedKeys.has(featureMap[featured]), 'Featured Competition references a game that is not selected.');
+  if (selectedKeys.has('singles_match')) add('Singles Match Play setup', getCurrentSetupTeamCount() === 2 && Number(document.getElementById('playersPerTeamSelect')?.value || 1) === 1, 'Singles Match Play is designed for exactly two teams with one player each.');
+  if (selectedKeys.has('nine_point')) {
+    const cfg = selectedGames.find(g => g.key === 'nine_point');
+    add('9-Point players selected', Array.isArray(cfg?.playerIds) && new Set(cfg.playerIds.filter(Boolean)).size === 3, 'Select exactly 3 players for 9-Point.');
+  }
+  const warnings = checks.filter(c => !c.ok);
+  return { checks, warnings, ready: warnings.length === 0 };
+}
+
+function renderRoundReadiness() {
+  const wrap = document.getElementById('roundReadinessPanel');
+  if (!wrap) return;
+  const state = getRoundReadinessState();
+  const statusTitle = state.ready ? 'Ready to Play' : 'Review Setup';
+  const statusText = state.ready ? 'Everything looks good.' : `${state.warnings.length} item${state.warnings.length === 1 ? '' : 's'} may need attention.`;
+  wrap.innerHTML = `<div class="round-readiness-status ${state.ready ? 'ready' : 'review'}">
+      <div><div class="section-label">${escapeHtml(statusTitle)}</div><div class="tiny">${escapeHtml(statusText)}</div></div>
+      <button type="submit" form="matchForm" class="setup-action-btn readiness-start-btn">${state.ready ? 'Start Round' : 'Continue Anyway'}</button>
+    </div>
+    <div class="readiness-check-list top-gap">
+      ${state.checks.map(c => `<div class="readiness-check ${c.ok ? 'ok' : 'warn'}"><span>${c.ok ? '✓' : '⚠'}</span><div><strong>${escapeHtml(c.label)}</strong>${c.ok ? '' : `<div class="tiny">${escapeHtml(c.warning)}</div>`}</div></div>`).join('')}
+    </div>`;
+}
+
+function renderSetupConfidencePanels() {
+  renderTodaysMatchSummary();
+  renderMatchTemplatesPanel();
+  renderRoundReadiness();
 }
 
 function getDefaultGameConfigs() {
@@ -11861,6 +12095,8 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
     renderFeaturedCompetitionSetup(draft.selectedGames || [], draft.featuredCompetition || 'auto');
     renderSetupHandicapPreview();
     renderTodaysMatchSummary();
+    renderMatchTemplatesPanel();
+    renderRoundReadiness();
     return;
   }
   const match = getMatch(matchId); if (!match) return;
@@ -11891,6 +12127,8 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
   renderFeaturedCompetitionSetup(match.selectedGames || [], match.featuredCompetition || 'auto');
   renderSetupHandicapPreview();
   renderTodaysMatchSummary();
+  renderMatchTemplatesPanel();
+  renderRoundReadiness();
   window.scrollTo({ top: document.getElementById('matchFormTitle').getBoundingClientRect().top + window.scrollY - 20, behavior: 'smooth' });
 }
 
@@ -12427,6 +12665,15 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
   document.getElementById('setup').addEventListener('click', e => {
+    const applyTemplateId = e.target.closest('[data-apply-template]')?.dataset.applyTemplate;
+    if (applyTemplateId) { applyMatchTemplate(applyTemplateId); return; }
+    const renameTemplateId = e.target.closest('[data-rename-template]')?.dataset.renameTemplate;
+    if (renameTemplateId) { renameMatchTemplate(renameTemplateId); return; }
+    const deleteTemplateId = e.target.closest('[data-delete-template]')?.dataset.deleteTemplate;
+    if (deleteTemplateId) { deleteMatchTemplate(deleteTemplateId); return; }
+    const duplicateTemplateId = e.target.closest('[data-duplicate-template]')?.dataset.duplicateTemplate;
+    if (duplicateTemplateId) { duplicateMatchTemplate(duplicateTemplateId); return; }
+    if (e.target.id === 'saveCurrentSetupTemplateBtn') { saveCurrentSetupAsTemplate(); return; }
     if (e.target.id === 'statTrackingSelectAllBtn') {
       document.querySelectorAll('[data-stat-track-player]').forEach(el => { el.checked = true; });
       renderTodaysMatchSummary();

@@ -1,8 +1,8 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.30',
-  versionNumber: '30.3.30',
-  cacheName: 'the-dye-ledger-v30.3.30',
+  version: 'v30.3.31',
+  versionNumber: '30.3.31',
+  cacheName: 'the-dye-ledger-v30.3.31',
   buildDate: '2026-07-01T17:16:42Z',
   buildLabel: 'Singles Match Play & Actual Play Momentum'
 };
@@ -4664,17 +4664,11 @@ function getMatchStatusOptions(match) {
 
 function describeMomentumMeta(match, metrics, gameKey) {
   if (gameKey === 'singles_match') {
-    const singles = computeSinglesMatchPlayResult(match, metrics, getSinglesMatchConfig(match) || {});
-    return {
-      type: 'singles_match',
-      side1Label: singles.playerAName || 'Player A',
-      side2Label: singles.playerBName || 'Player B',
-      side1Members: [singles.playerAName].filter(Boolean),
-      side2Members: [singles.playerBName].filter(Boolean),
-      team1: 1,
-      team2: 2,
-      singles
-    };
+    const result = computeSinglesMatchPlayResult(match, metrics, getSinglesMatchConfig(match) || {});
+    const basis = escapeHtml(formatBasisLabel(result.basis, 'Net'));
+    const playerA = escapeHtml(result.playerAName || 'Player A');
+    const playerB = escapeHtml(result.playerBName || 'Player B');
+    return `Singles Match Play · Actual play order · ${basis} · ${playerA} vs ${playerB}`;
   }
   const sidePairing = getMomentumSidePairing(match, metrics, gameKey);
   if (sidePairing) {
@@ -4684,10 +4678,6 @@ function describeMomentumMeta(match, metrics, gameKey) {
     return `${escapeHtml(sidePairing.label)} · ${escapeHtml(gameLabel)} · ${escapeHtml(basis)} · ${escapeHtml(perspective)} perspective`;
   }
   const cfg = (match.selectedGames || []).find(g => g.key === gameKey) || {};
-  if (gameKey === 'singles_match') {
-    const result = computeSinglesMatchPlayResult(match, metrics, cfg);
-    return `Singles Match Play · Actual play order · ${escapeHtml(formatBasisLabel(result.basis))} · ${escapeHtml(getMomentumPerspectiveLabel(match, metrics, gameKey))} perspective`;
-  }
   const perspectiveTeam = getMomentumPerspectiveTeam(match);
   const teamName = getTeamName(match, perspectiveTeam);
   const members = metrics?.teams?.find(t => t.team === perspectiveTeam)?.members?.map(m => m.player.name).join(', ') || '';
@@ -9845,24 +9835,13 @@ function getMomentumPerspectiveLabel(match, metrics, gameKey) {
 function computeMomentumOutcome(match, metrics, holeResult, gameKey) {
   if (!holeResult?.completed) return 'pending';
   if (gameKey === 'singles_match') {
-    const singles = computeSinglesMatchPlayResult(match, metrics, getSinglesMatchConfig(match) || {});
-    return {
-      type: 'singles_match',
-      side1Label: singles.playerAName || 'Player A',
-      side2Label: singles.playerBName || 'Player B',
-      side1Members: [singles.playerAName].filter(Boolean),
-      side2Members: [singles.playerBName].filter(Boolean),
-      team1: 1,
-      team2: 2,
-      singles
-    };
-  }
-  if (gameKey === 'singles_match') {
     const result = computeSinglesMatchPlayResult(match, metrics, getSinglesMatchConfig(match) || {});
     const row = (result.holes || []).find(h => Number(h.holeNumber) === Number(holeResult?.holeNumber));
     if (!row || !row.completed) return 'pending';
     if (!row.winnerId) return 'tie';
-    return row.winnerId === result.playerAId ? 'team1' : 'team2';
+    if (String(row.winnerId) === String(result.playerAId)) return 'team1';
+    if (String(row.winnerId) === String(result.playerBId)) return 'team2';
+    return 'tie';
   }
   const sidePairing = getMomentumSidePairing(match, metrics, gameKey);
   if (sidePairing) {

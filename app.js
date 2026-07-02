@@ -1,10 +1,10 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.35',
-  versionNumber: '30.3.35',
-  cacheName: 'the-dye-ledger-v30.3.35',
+  version: 'v30.3.36',
+  versionNumber: '30.3.36',
+  cacheName: 'the-dye-ledger-v30.3.36',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Match Templates & Round Readiness'
+  buildLabel: 'iPhone Modal & Save Round Layout Hotfix'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;

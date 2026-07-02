@@ -4246,3 +4246,153 @@ main {
   .match-template-actions button,
   .readiness-start-btn { flex:1 1 auto; }
 }
+
+/* v30.3.36 — iPhone modal and Save / End Round layout hotfix
+   Root cause: shared full-width form input styles were applying to radio buttons,
+   and export/round-action containers allowed rounded child fragments to paint outside
+   their parent card on iPhone Safari. */
+.scoreboard-export-card {
+  overflow: hidden !important;
+  isolation: isolate;
+}
+.scoreboard-export-card > *,
+.scoreboard-round-actions,
+.scoreboard-round-actions *,
+.post-round-inline,
+.post-round-inline * {
+  box-sizing: border-box;
+}
+.scoreboard-round-actions {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+  overflow: hidden !important;
+  border-radius: 16px;
+  isolation: isolate;
+  contain: layout paint;
+}
+.scoreboard-round-actions .actions {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+.scoreboard-round-actions .actions > *,
+#scoreboardFinishRoundBtn,
+#scoreboardConfirmFinishRoundBtn {
+  min-width: 0;
+  max-width: 100%;
+}
+.post-round-inline {
+  max-width: 100%;
+  overflow: hidden;
+  isolation: isolate;
+}
+#missingScoreWarning {
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+#roundEndPrompt .modal-card {
+  width: min(460px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 48px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  overflow: auto;
+}
+#roundEndPrompt .modal-body {
+  box-sizing: border-box;
+}
+.round-end-reason-choices,
+.round-end-reason-grid {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.round-end-reason-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.round-end-reason-option {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 52px;
+  gap: 12px;
+  padding: 12px 14px;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid rgba(11, 93, 59, 0.18);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.84);
+  line-height: 1.25;
+}
+.round-end-reason-option input[type="radio"] {
+  width: 22px !important;
+  min-width: 22px !important;
+  max-width: 22px !important;
+  height: 22px !important;
+  min-height: 22px !important;
+  flex: 0 0 22px;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 50%;
+  box-sizing: border-box;
+  appearance: auto;
+  -webkit-appearance: radio;
+}
+.round-end-reason-option span {
+  display: block;
+  min-width: 0;
+  margin: 0;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+#roundEndPrompt .actions {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+#roundEndPrompt .actions button {
+  min-width: 0;
+  max-width: 100%;
+}
+@media (min-width: 560px) {
+  .round-end-reason-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 520px) {
+  #roundEndPrompt.modal-backdrop {
+    align-items: center;
+    padding: 14px;
+  }
+  #roundEndPrompt .modal-card {
+    width: calc(100vw - 28px);
+    max-width: calc(100vw - 28px);
+    padding: 14px;
+  }
+  #roundEndPrompt .modal-body {
+    padding: 8px;
+  }
+  #roundEndPrompt .actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  #roundEndPrompt .actions button {
+    width: 100%;
+    min-height: 52px;
+  }
+}

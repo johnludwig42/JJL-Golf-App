@@ -1,8 +1,8 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.31',
-  versionNumber: '30.3.31',
-  cacheName: 'the-dye-ledger-v30.3.31',
+  version: 'v30.3.33',
+  versionNumber: '30.3.33',
+  cacheName: 'the-dye-ledger-v30.3.33',
   buildDate: '2026-07-01T17:16:42Z',
   buildLabel: 'Singles Match Play & Actual Play Momentum'
 };
@@ -1055,11 +1055,23 @@ function getScoreAccessHint(match) {
 
 function normalizeSelectedGamesOrder(games = []) {
   const ordered = Array.isArray(games) ? games.slice() : [];
+  const priority = {
+    nassau: 10,
+    team_match: 15,
+    singles_match: 20,
+    skins: 30,
+    net_skins: 31,
+    nine_point: 40,
+    greenies: 50,
+    long_drive: 51,
+    closest_to_pin: 52,
+    individual_match: 80,
+  };
   ordered.sort((a, b) => {
-    const aSide = a?.key === 'individual_match' ? 1 : 0;
-    const bSide = b?.key === 'individual_match' ? 1 : 0;
-    if (aSide !== bSide) return aSide - bSide;
-    return 0;
+    const aRank = priority[a?.key] ?? 70;
+    const bRank = priority[b?.key] ?? 70;
+    if (aRank !== bRank) return aRank - bRank;
+    return String(getGameLabel(a?.key || '')).localeCompare(String(getGameLabel(b?.key || '')));
   });
   return ordered;
 }
@@ -2139,15 +2151,22 @@ function formatRoundRecapHtml(text) {
   if (!paragraphs.length) return '';
   return paragraphs.map(p => `<p>${escapeHtml(p)}</p>`).join('');
 }
-function buildRoundRecapExport(match) {
+function buildRoundRecapExport(match, metrics = null) {
   const recap = getStoredRoundRecap(match);
-  if (!recap) return '';
+  const completion = metrics ? getRoundCompletionState(match, metrics) : null;
+  const incompleteNote = completion?.isIncomplete
+    ? `<div class="export-provisional-label">${areAllGamesFinal(match, metrics) ? 'Clinched Early — recap reflects completed holes.' : 'Incomplete Round — recap should be read as provisional.'}</div>`
+    : '';
   return `
     <section class="export-section export-section-round-recap">
       <div class="export-section-head">
-        <h2>The Dye Ledger Round Recap</h2>
+        <h2>AI Round Recap</h2>
+        <div class="export-section-sub">Host notes, saved memories, and round facts.</div>
       </div>
-      <div class="export-round-recap-text">${formatRoundRecapHtml(recap)}</div>
+      ${incompleteNote}
+      ${recap
+        ? `<div class="export-round-recap-text">${formatRoundRecapHtml(recap)}</div>`
+        : '<div class="export-empty empty-state-card"><strong>No AI recap generated yet.</strong><br>Add Round Notes before generating a recap to give it more context.</div>'}
     </section>`;
 }
 
@@ -2404,40 +2423,36 @@ function getHighRows(rows, key) {
   const value = Math.max(...vals);
   return { value, rows: rows.filter(r => Number(r?.[key]) === value) };
 }
-function buildScorecardSnapshot(match, metrics) {
-  if (!metrics) return '';
+function buildRoundStatusSummary(match, metrics) {
   const completion = getRoundCompletionState(match, metrics);
-  const ctx = getPayoutReportContext(match, metrics);
-  const players = metrics.players || [];
-  const lowGross = getLowRows(players, 'grossTotal');
-  const lowNet = getLowRows(players, 'leaderboardNetTotal');
-  const settlement = ctx.finalTotals || {};
-  const biggest = getHighRows(Object.entries(settlement).map(([id, amount]) => ({ id, amount: Number(amount || 0), name: getPlayer(id)?.name || id })), 'amount');
-  let greenies = '';
-  const greenCfg = (match.selectedGames || []).find(g => g.key === 'greenies');
-  if (greenCfg) {
-    const g = getGreeniesResults(match, metrics, greenCfg);
-    const max = Math.max(0, ...Object.values(g.counts || {}).map(Number));
-    if (max > 0) greenies = Object.entries(g.counts).filter(([,n]) => Number(n) === max).map(([id,n]) => `${getPlayer(id)?.name || 'Player'} (${n})`).join(', ');
+  const selectedHoleCount = Number(completion.selectedHoleCount || getPlayableHoleCount(match, metrics?.tee) || 0);
+  const completedHoleCount = Number(completion.completedHoleCount || metrics?.completed || 0);
+  const lastHole = getLastFullyCompletedHole(match, metrics);
+  const lastHoleText = lastHole ? `Hole ${lastHole}` : `${completedHoleCount} of ${selectedHoleCount} holes`;
+  if (!completion.isIncomplete) {
+    return {
+      badge: 'Complete Round',
+      tone: 'complete',
+      headline: 'Final results',
+      detail: 'All selected holes were completed.'
+    };
   }
-  let matchStatus = '';
-  try {
-    const nassau = (match.selectedGames || []).find(g => g.key === 'nassau') || (match.selectedGames || [])[0] || {};
-    if (metrics.teams?.length === 2) {
-      const diffs = computeTeamGameDiffs(match, metrics, nassau.key || 'nassau');
-      matchStatus = completion.isIncomplete
-        ? formatTeamGameStatusScoped(match, metrics, diffs.overall, completion)
-        : formatTeamGameStatus(match, metrics, diffs.overall);
-    }
-  } catch (_) {}
-  const rows = [];
-  if (matchStatus) rows.push([completion.isIncomplete ? '🏆 Match Status' : '🏆 Match Winner', matchStatus]);
-  if (lowGross.rows.length) rows.push([completion.isIncomplete ? '🥇 Low Gross Leader' : '🥇 Low Gross', `${formatAwardWinners(lowGross.rows.map(r => r.player?.name), lowGross.value)}${formatIncompleteScopeSuffix(completion)}`]);
-  if (lowNet.rows.length) rows.push([completion.isIncomplete ? '🥇 Low Net Leader' : '🥇 Low Net', `${formatAwardWinners(lowNet.rows.map(r => r.player?.name), lowNet.value)}${formatIncompleteScopeSuffix(completion)}`]);
-  if (greenies) rows.push(['🎯 Greenies', `${greenies}${completion.isIncomplete ? ' through completed par 3s' : ''}`]);
-  if (biggest.rows.length && biggest.value > 0) rows.push(['💰 Biggest Winner', `${formatAwardWinners(biggest.rows.map(r => r.name), formatMoneyAccounting(biggest.value))}${completion.isIncomplete ? ' provisional' : ''}`]);
-  if (!rows.length) return '';
-  return `<section class="export-section export-section-scorecard-snapshot"><div class="export-section-head"><h2>Scorecard Snapshot</h2></div><div class="snapshot-grid">${rows.map(([label, value]) => `<div class="snapshot-row"><span class="award-label">${escapeHtml(label)}:</span><strong>${value}</strong></div>`).join('')}</div></section>`;
+  const allFinal = areAllGamesFinal(match, metrics);
+  const reasonSentence = buildRoundEndReasonSentence(match);
+  if (allFinal) {
+    return {
+      badge: 'Clinched Early',
+      tone: 'clinched',
+      headline: `Match clinched early — final through ${lastHoleText}`,
+      detail: `${reasonSentence ? `${reasonSentence} ` : ''}Result is final based on completed holes; remaining holes were not required to determine the selected game outcomes.`.trim()
+    };
+  }
+  return {
+    badge: 'Incomplete Round — Provisional',
+    tone: 'provisional',
+    headline: `Round incomplete — showing results through ${lastHoleText}`,
+    detail: `${reasonSentence ? `${reasonSentence} ` : ''}Remaining holes were not completed. Settlement is provisional unless a selected game was already decided.`.trim()
+  };
 }
 function computePlayerFrontBack(match, metrics, playerMetric) {
   const holes = getSelectedScoringHoles(match, metrics?.tee);
@@ -2448,7 +2463,7 @@ function computePlayerFrontBack(match, metrics, playerMetric) {
     return Number.isFinite(v) && v > 0 ? v : null;
   };
   const completeRange = (start, end) => Array.from({ length: Math.max(0, end - start) }, (_, i) => start + i).every(idx => grossAt(idx) != null);
-  const sumRange = (start, end) => Array.from({ length: Math.max(0, end - start) }, (_, i) => grossAt(start + i)).reduce((s, v) => s + (Number(v) || 0), 0);
+  const sumRange = (start, end) => Array.from({ length: Math.max(0, end - start) }, (_, i) => grossAt(start + i)).reduce((sum, value) => sum + (Number(value) || 0), 0);
   return {
     front: completeRange(0, frontCount) ? sumRange(0, frontCount) : null,
     back: holes.length > 9 ? (completeRange(9, holes.length) ? sumRange(9, holes.length) : null) : null
@@ -2473,8 +2488,8 @@ function getPartialNineLeaderRows(match, metrics, startIdx, endIdx) {
   const low = getLowRows(totals, 'value');
   return { completedCount: completedIndexes.length, span: Math.max(0, endIdx - startIdx), leaders: low.rows, value: low.value };
 }
-function buildRoundAwards(match, metrics) {
-  if (!metrics) return '';
+function buildRoundAwardsRows(match, metrics) {
+  if (!metrics) return [];
   const completion = getRoundCompletionState(match, metrics);
   const players = metrics.players || [];
   const dist = computeScoreDistributionSummary(match, metrics);
@@ -2493,10 +2508,8 @@ function buildRoundAwards(match, metrics) {
   } else if (completion.isIncomplete && frontSpan > 0) {
     const partial = getPartialNineLeaderRows(match, metrics, 0, frontSpan);
     if (partial.leaders.length) awards.push(['Front Nine Leader', `${formatAwardWinners(partial.leaders.map(r => r.name), partial.value)} through ${partial.completedCount} of ${partial.span} holes — provisional`]);
-    else awards.push(['Best Front Nine', 'Not determined — front nine incomplete']);
   }
   const backExists = (metrics.holeResults || []).length > 9;
-  const backSpan = backExists ? metrics.holeResults.length - 9 : 0;
   const backComplete = backExists && isHoleRangeComplete(match, metrics, 9, metrics.holeResults.length);
   if (backComplete) {
     const backCandidates = frontRows.filter(p => p.fb.back != null).map(p => ({ name: p.player?.name, value: p.fb.back }));
@@ -2505,7 +2518,6 @@ function buildRoundAwards(match, metrics) {
   } else if (backExists && completion.isIncomplete) {
     const partial = getPartialNineLeaderRows(match, metrics, 9, metrics.holeResults.length);
     if (partial.leaders.length) awards.push(['Back Nine Leader', `${formatAwardWinners(partial.leaders.map(r => r.name), partial.value)} through ${partial.completedCount} of ${partial.span} holes — provisional`]);
-    else awards.push(['Best Back Nine', 'Not determined — back nine incomplete']);
   }
   const birdies = getHighRows(dist.map(r => ({ name: r.playerMetric?.player?.name, value: Number(r.totals?.birdie || 0) })), 'value');
   if (birdies.rows.length && birdies.value > 0) awards.push(['Most Birdies', `${formatAwardWinners(birdies.rows.map(r => r.name), birdies.value)}${formatIncompleteScopeSuffix(completion)}`]);
@@ -2515,8 +2527,65 @@ function buildRoundAwards(match, metrics) {
   if (updowns.rows.length && updowns.value > 0) awards.push(['Most Up & Downs', `${formatAwardWinners(updowns.rows.map(r => r.name), updowns.value)}${formatIncompleteScopeSuffix(completion)}`]);
   const putts = getLowRows(stats.map(r => ({ name: r.playerMetric?.player?.name, value: Number(r.totals?.putts || 0) })).filter(r => r.value > 0), 'value');
   if (putts.rows.length) awards.push(['Fewest Putts', `${formatAwardWinners(putts.rows.map(r => r.name), putts.value)}${formatIncompleteScopeSuffix(completion)}`]);
-  if (!awards.length) return '';
-  return `<section class="export-section export-section-round-awards"><div class="export-section-head"><h2>Round Awards</h2></div><div class="round-awards-grid">${awards.map(([label, value]) => `<div class="round-award"><span class="award-label">${escapeHtml(label)}:</span><strong>${value}</strong></div>`).join('')}</div></section>`;
+  return awards;
+}
+function buildRoundSnapshot(match, metrics) {
+  if (!metrics) return '';
+  const completion = getRoundCompletionState(match, metrics);
+  const ctx = getPayoutReportContext(match, metrics);
+  const players = metrics.players || [];
+  const status = buildRoundStatusSummary(match, metrics);
+  const settlement = ctx.finalTotals || {};
+  const settlementRows = Object.entries(settlement).map(([id, amount]) => ({ id, amount: Number(amount || 0), name: getPlayer(id)?.name || id }));
+  const biggest = getHighRows(settlementRows, 'amount');
+  const lowGross = getLowRows(players, 'grossTotal');
+  const lowNet = getLowRows(players, 'leaderboardNetTotal');
+  let matchStatus = '';
+  try {
+    const nassau = (match.selectedGames || []).find(g => g.key === 'nassau') || (match.selectedGames || [])[0] || {};
+    if (metrics.teams?.length === 2) {
+      const diffs = computeTeamGameDiffs(match, metrics, nassau.key || 'nassau');
+      matchStatus = completion.isIncomplete
+        ? formatTeamGameStatusScoped(match, metrics, diffs.overall, completion)
+        : formatTeamGameStatus(match, metrics, diffs.overall);
+    }
+  } catch (_) {}
+  const keyDetails = [];
+  if (matchStatus) keyDetails.push([completion.isIncomplete ? 'Match Status' : 'Match Winner', matchStatus]);
+  if (biggest.rows.length && biggest.value > 0) keyDetails.push(['Final Settlement', `${formatAwardWinners(biggest.rows.map(r => r.name), formatMoneyAccounting(biggest.value))}${completion.isIncomplete && !areAllGamesFinal(match, metrics) ? ' provisional' : ''}`]);
+  if (lowGross.rows.length) keyDetails.push([completion.isIncomplete ? 'Low Gross Leader' : 'Low Gross', `${formatAwardWinners(lowGross.rows.map(r => r.player?.name), lowGross.value)}${formatIncompleteScopeSuffix(completion)}`]);
+  if (lowNet.rows.length) keyDetails.push([completion.isIncomplete ? 'Low Net Leader' : 'Low Net', `${formatAwardWinners(lowNet.rows.map(r => r.player?.name), lowNet.value)}${formatIncompleteScopeSuffix(completion)}`]);
+  (ctx.payoutGames || []).slice(0, 4).forEach(game => {
+    const rows = Object.entries(game.amounts || {}).map(([id, amount]) => ({ id, amount: Number(amount || 0), name: getPlayer(id)?.name || id }));
+    const high = getHighRows(rows, 'amount');
+    if (high.rows.length && high.value > 0) keyDetails.push([game.label || getGameLabel(game.key), formatAwardWinners(high.rows.map(r => r.name), formatMoneyAccounting(high.value))]);
+  });
+  const awards = buildRoundAwardsRows(match, metrics);
+  const metaBits = [metrics?.course?.name || getCourse(match?.courseId)?.name || 'Course', metrics?.tee?.teeName || getTee(match?.courseId, match?.teeId)?.teeName || 'Tee', match?.date || todayIso()].filter(Boolean);
+  const playerNames = players.map(p => p?.player?.name).filter(Boolean).join(' · ');
+  const recap = getStoredRoundRecap(match);
+  const recapTeaser = recap ? splitRoundRecapParagraphs(recap)[0] || '' : '';
+  const uniqueAwardKeys = new Set(keyDetails.map(([label]) => String(label).replace(/ Leader$/,'').toLowerCase()));
+  const compactAwards = awards.filter(([label]) => !uniqueAwardKeys.has(String(label).replace(/ Leader$/,'').toLowerCase())).slice(0, 8);
+  return `
+    <section class="export-section export-section-round-snapshot print-keep-together">
+      <div class="export-section-head round-snapshot-head">
+        <div>
+          <h2>Round Snapshot</h2>
+          <div class="export-section-sub">Premium round summary, awards, and status.</div>
+        </div>
+        <span class="round-snapshot-badge round-snapshot-badge-${escapeHtml(status.tone)}">${escapeHtml(status.badge)}</span>
+      </div>
+      <div class="round-snapshot-hero">
+        <div class="round-snapshot-kicker">${escapeHtml(metaBits.join(' · '))}</div>
+        <div class="round-snapshot-title">${escapeHtml(status.headline)}</div>
+        <div class="round-snapshot-detail">${escapeHtml(status.detail)}</div>
+        ${playerNames ? `<div class="round-snapshot-players">${escapeHtml(playerNames)}</div>` : ''}
+      </div>
+      ${keyDetails.length ? `<div class="round-snapshot-grid">${keyDetails.map(([label, value]) => `<div class="round-snapshot-row"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`).join('')}</div>` : `<div class="export-empty empty-state-card">No round highlights available yet.</div>`}
+      ${compactAwards.length ? `<div class="round-snapshot-awards"><div class="round-snapshot-awards-title">Round Awards</div><div class="round-snapshot-awards-grid">${compactAwards.map(([label, value]) => `<div class="round-snapshot-award"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`).join('')}</div></div>` : ''}
+      ${recapTeaser ? `<div class="round-snapshot-recap-teaser"><span>AI Recap Teaser</span>${escapeHtml(recapTeaser)}</div>` : ''}
+    </section>`;
 }
 
 function formatTimestampET(timestamp, { includeDate = true } = {}) {
@@ -2925,9 +2994,8 @@ function buildSummaryExportBody(match, metrics) {
   const exportStatTrackingHtml = buildExportStatTrackingSummary(match, metrics);
   const exportGrossGameDetailHtml = buildExportGrossGameDetailSummary(match, metrics);
   const exportMomentumHtml = buildExportMomentum(match, metrics);
-  const exportRoundRecapHtml = buildRoundRecapExport(match);
-  const exportScorecardSnapshotHtml = buildScorecardSnapshot(match, metrics);
-  const exportRoundAwardsHtml = buildRoundAwards(match, metrics);
+  const exportRoundRecapHtml = buildRoundRecapExport(match, metrics);
+  const exportRoundSnapshotHtml = buildRoundSnapshot(match, metrics);
   const exportProvisionalLabelHtml = buildMissingScoreWarning(match, metrics, { exportMode: true });
   const showNinePoint = (match.selectedGames || []).some(g => g.key === 'nine_point');
   const exportNinePointScorecardHtml = showNinePoint ? `
@@ -2943,13 +3011,21 @@ function buildSummaryExportBody(match, metrics) {
       </div>
     </section>` : '';
   return `
-    ${exportRoundRecapHtml}
-    ${(exportScorecardSnapshotHtml || exportRoundAwardsHtml) ? `<div class="recap-highlights-grid">${exportScorecardSnapshotHtml}${exportRoundAwardsHtml}</div>` : ''}
+    ${exportRoundSnapshotHtml}
     ${exportProvisionalLabelHtml}
 
-    <section class="export-section export-section-games-summary${exportRoundRecapHtml ? ' export-section-games-summary-after-recap' : ''}">
+    <section class="export-section export-section-net-payout">
       <div class="export-section-head">
-        <h2>Games summary</h2>
+        <h2>${getRoundCompletionState(match, metrics).isIncomplete ? (areAllGamesFinal(match, metrics) ? 'Final Net Settlement' : 'Final Net Settlement — Provisional') : 'Final Net Settlement — Efficient Cash Payments'}</h2>
+        ${getRoundCompletionState(match, metrics).isIncomplete ? `<div class="export-section-sub">${areAllGamesFinal(match, metrics) ? 'All selected games are mathematically determined despite unplayed holes.' : 'Based on completed holes only. Some game outcomes may still change.'}</div>` : ''}
+      </div>
+      ${buildExportFinalNetSettlementSummary(match, metrics)}
+    </section>
+
+
+    <section class="export-section export-section-games-summary">
+      <div class="export-section-head">
+        <h2>Games Summary</h2>
       </div>
       ${buildSelectedGamesSummary(match, metrics)}
     </section>
@@ -2970,13 +3046,7 @@ function buildSummaryExportBody(match, metrics) {
       ${buildExportTeamLeaderboard(match, metrics)}
     </section>` : ''}
 
-    <section class="export-section export-section-net-payout">
-      <div class="export-section-head">
-        <h2>${getRoundCompletionState(match, metrics).isIncomplete ? (areAllGamesFinal(match, metrics) ? 'Final Net Settlement' : 'Final Net Settlement — Provisional') : 'Final Net Settlement — Efficient Cash Payments'}</h2>
-        ${getRoundCompletionState(match, metrics).isIncomplete ? `<div class="export-section-sub">${areAllGamesFinal(match, metrics) ? 'All selected games are mathematically determined despite unplayed holes.' : 'Based on completed holes only. Some game outcomes may still change.'}</div>` : ''}
-      </div>
-      ${buildExportFinalNetSettlementSummary(match, metrics)}
-    </section>
+
 
     <section class="export-section export-section-classic export-section-classic-summary">
       <div class="export-section-head">
@@ -3019,6 +3089,8 @@ function buildSummaryExportBody(match, metrics) {
       </div>
       ${exportGrossGameDetailHtml}
     </section>` : ''}
+
+    ${exportRoundRecapHtml}
 
     ${buildExportNotes()}`;
 }
@@ -3173,6 +3245,24 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     }
     .snapshot-row .award-label, .round-award .award-label { color: var(--muted); font-weight: 800; padding-right: 6px; white-space: nowrap; }
     .snapshot-row strong, .round-award strong { text-align: left; padding-left: 2px; }
+    .round-snapshot-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+    .round-snapshot-badge { display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; padding: 7px 10px; font-size: 10px; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; border: 1px solid var(--border); }
+    .round-snapshot-badge-complete { background: #edf7f1; color: #0b5d3b; border-color: rgba(11,93,59,.22); }
+    .round-snapshot-badge-clinched { background: #eff6ff; color: #1d4ed8; border-color: rgba(29,78,216,.22); }
+    .round-snapshot-badge-provisional { background: #fff7ed; color: #9a3412; border-color: rgba(154,52,18,.25); }
+    .round-snapshot-hero { border: 1px solid rgba(11,93,59,.14); background: linear-gradient(180deg, #f8fbf9 0%, #fff 100%); border-radius: 16px; padding: 12px; margin-bottom: 10px; }
+    .round-snapshot-kicker { color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+    .round-snapshot-title { margin-top: 5px; color: #172033; font-weight: 900; font-size: 17px; line-height: 1.16; letter-spacing: -.015em; }
+    .round-snapshot-detail, .round-snapshot-players { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.35; }
+    .round-snapshot-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+    .round-snapshot-row, .round-snapshot-award { border: 1px solid var(--border); background: #fff; border-radius: 13px; padding: 9px 10px; min-width: 0; }
+    .round-snapshot-row span, .round-snapshot-award span, .round-snapshot-recap-teaser span { display: block; color: var(--muted); font-weight: 850; font-size: 10px; text-transform: uppercase; letter-spacing: .045em; margin-bottom: 4px; }
+    .round-snapshot-row strong, .round-snapshot-award strong { font-size: 12px; line-height: 1.25; overflow-wrap: anywhere; }
+    .round-snapshot-awards { margin-top: 11px; border-top: 1px solid var(--border); padding-top: 10px; }
+    .round-snapshot-awards-title { font-size: 11px; font-weight: 900; color: #243247; margin-bottom: 7px; text-transform: uppercase; letter-spacing: .05em; }
+    .round-snapshot-awards-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+    .round-snapshot-recap-teaser, .empty-state-card { margin-top: 10px; border: 1px dashed var(--border-strong); border-radius: 13px; padding: 10px; background: #fbfcfd; color: var(--muted); font-size: 11px; line-height: 1.38; }
+    .print-keep-together { break-inside: avoid; page-break-inside: avoid; }
     .export-note-block {
       font-size: 12px;
       line-height: 1.45;
@@ -3426,6 +3516,7 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     .payout-total-negative { color: #9f1d1d; }
     strong { font-weight: 800; }
 
+    .export-section-round-snapshot,
     .export-section-games-summary,
     .export-section-round-recap,
     .export-section-net-payout,
@@ -3514,7 +3605,9 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     }
 
     @media (max-width: 760px) {
-      .export-pill-grid, .match-status-grid, .game-summary-grid, .stat-summary-grid, .export-header-players { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .export-pill-grid, .match-status-grid, .game-summary-grid, .stat-summary-grid, .round-snapshot-grid, .round-snapshot-awards-grid, .export-header-players { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .round-snapshot-head { display: grid; }
+      .round-snapshot-badge { justify-self: start; }
       .export-toolbar { justify-content: stretch; }
       .export-toolbar button { width: 100%; }
     }
@@ -3553,6 +3646,9 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
         page-break-before: auto;
         min-height: 0;
       }
+      .export-section-round-snapshot,
+      .export-section-net-payout,
+      .export-section-games-summary,
       .export-section-classic-summary,
       .export-section-nine-point,
       .export-section-notes {
@@ -3561,7 +3657,11 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       }
       .export-section-head h2 { font-size: 13px; }
       .export-section-sub, .match-status-meta, .game-summary-sub, .tiny, .scorecard-sub { font-size: 9px; }
-      .match-status-grid, .game-summary-grid, .stat-summary-grid { gap: 8px; }
+      .match-status-grid, .game-summary-grid, .stat-summary-grid, .round-snapshot-grid, .round-snapshot-awards-grid { gap: 6px; }
+      .round-snapshot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .round-snapshot-awards-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .round-snapshot-hero { padding: 9px; }
+      .round-snapshot-title { font-size: 13px; }
       .match-status-tile, .game-summary-card, .stat-summary-card, .gross-game-player-card, .gross-game-section, .export-pill {
         padding: 8px;
         break-inside: avoid-page;
@@ -3584,6 +3684,8 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       }
       .match-status-value, .game-summary-value { font-size: 12px; }
       .export-pill { font-size: 10px; padding: 7px 8px; }
+      .round-snapshot-row, .round-snapshot-award, .round-snapshot-recap-teaser, .empty-state-card { padding: 7px; }
+      .round-snapshot-row strong, .round-snapshot-award strong { font-size: 10px; }
       .export-table { font-size: 9px; }
       .export-table th, .export-table td { padding: 4px 5px; }
       .payout-game-table, .settlement-table, .scorecard-table { font-size: 8.5px; }
@@ -10078,9 +10180,9 @@ function computeLivePayoutGames(match, metrics) {
 
 function buildSelectedGamesSummary(match, metrics) {
   const completion = getRoundCompletionState(match, metrics);
-  const selected = Array.isArray(match.selectedGames) ? match.selectedGames : [];
+  const selected = getOrderedSelectedGames(match);
   if (!selected.length) {
-    return `<div class="game-summary-grid"><div class="game-summary-card"><div class="game-summary-title">Round pace</div><div class="game-summary-value">${metrics.completed ? `${Math.round((metrics.completed / Math.max(1, getPlayableHoleCount(match, metrics.tee))) * 100)}% complete` : 'Not started'}</div><div class="game-summary-sub">${metrics.completed}/${getPlayableHoleCount(match, metrics.tee)} holes completed · ${getHoleSegmentLabel(match, metrics.tee)}</div></div></div>`;
+    return `<div class="game-summary-grid"><div class="game-summary-card empty-state-card"><div class="game-summary-title">No payout games selected</div><div class="game-summary-value">No payout games were selected for this round.</div><div class="game-summary-sub">${metrics.completed}/${getPlayableHoleCount(match, metrics.tee)} holes completed · ${getHoleSegmentLabel(match, metrics.tee)}</div></div></div>`;
   }
   const cards = selected.map(cfg => {
     const title = getFeaturedGameLabel(match, cfg.key);

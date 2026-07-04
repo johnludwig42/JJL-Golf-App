@@ -1,10 +1,10 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.38',
-  versionNumber: '30.3.38',
-  cacheName: 'the-dye-ledger-v30.3.38',
+  version: 'v30.3.39',
+  versionNumber: '30.3.39',
+  cacheName: 'the-dye-ledger-v30.3.39',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Smart Score Advance & Sticky Tabs'
+  buildLabel: 'Scoring UX Cleanup & Runtime Error Fix'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -9758,9 +9758,9 @@ function isGrossScoreValidValue(value) {
 }
 
 function triggerSmartScoreHaptic() {
-  try {
-    if (navigator && typeof navigator.vibrate === 'function') navigator.vibrate(10);
-  } catch (err) {}
+  // v30.3.39: intentionally no-op on iPhone/PWA. navigator.vibrate is not
+  // supported reliably by iOS Safari, and scoring confirmation should not rely on haptics.
+  return false;
 }
 
 function flashCompletedScoreInput(inputEl) {
@@ -9771,34 +9771,9 @@ function flashCompletedScoreInput(inputEl) {
   setTimeout(() => { try { inputEl.classList.remove('score-confirmed-flash'); } catch (err) {} }, 260);
 }
 
-function findNextBlankScoreInputOnSameHole(inputEl) {
-  const inputs = getEditableScoreInputs();
-  const startIndex = inputs.indexOf(inputEl);
-  if (startIndex < 0) return null;
-  for (let offset = 1; offset < inputs.length; offset += 1) {
-    const candidate = inputs[(startIndex + offset) % inputs.length];
-    if (!candidate || candidate === inputEl) continue;
-    if (String(candidate.value || '').trim() === '') return candidate;
-  }
-  return null;
-}
-
 function allEditableScoresCompleteOnCurrentHole() {
   const inputs = getEditableScoreInputs();
   return inputs.length > 0 && inputs.every(input => isGrossScoreValidValue(String(input.value || '').trim()));
-}
-
-function focusSmartScoreInput(inputEl) {
-  if (!inputEl || inputEl.disabled) return;
-  try {
-    inputEl.focus({ preventScroll: true });
-    const end = String(inputEl.value || '').length;
-    if (typeof inputEl.setSelectionRange === 'function') inputEl.setSelectionRange(end, end);
-    const rect = inputEl.getBoundingClientRect?.();
-    if (rect && (rect.top < 120 || rect.bottom > (window.innerHeight || 0) - 80)) {
-      inputEl.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
-    }
-  } catch (err) {}
 }
 
 function applySmartScoreStep(inputEl, direction) {
@@ -10019,37 +9994,33 @@ function commitScoreInput(inputEl, { viaEnter = false, viaAutoAdvance = false, e
   }
   if (changed) markRecentScoreCommit(playerId, normalizedValue);
 
-  const canSmartAdvance = viaAutoAdvance && isSmartScoreAdvanceEnabled(match) && !isMatchFinished(match) && initialValue === '' && hasCommittedValue;
-  let nextBlankPlayerId = '';
-  let shouldAdvanceHole = false;
-  let nextHole = null;
-  if (canSmartAdvance) {
-    const nextBlank = findNextBlankScoreInputOnSameHole(inputEl);
-    nextBlankPlayerId = nextBlank?.dataset?.scorePlayer || '';
-    if (!nextBlankPlayerId && !isStatTrackingEnabled(match) && allEditableScoresCompleteOnCurrentHole()) {
-      nextHole = getAdjacentPlayableHole(match, currentHole, 1, getTee(match.courseId, match.teeId));
-      shouldAdvanceHole = !!nextHole;
-    }
-  }
+  // v30.3.39: same-hole player-to-player auto focus was removed. Smart Score
+  // Advance now only performs the no-stat-tracking end-of-hole auto-next behavior.
+  const canAutoNextHole = viaAutoAdvance
+    && isSmartScoreAdvanceEnabled(match)
+    && !isMatchFinished(match)
+    && initialValue === ''
+    && hasCommittedValue
+    && !isStatTrackingEnabled(match)
+    && allEditableScoresCompleteOnCurrentHole();
+  const nextHole = canAutoNextHole ? getAdjacentPlayableHole(match, currentHole, 1, getTee(match.courseId, match.teeId)) : null;
 
-  if (hasCommittedValue) {
-    saveCurrentHole({ targetHole: currentHole, silent: true });
+  const saveFn = window.dyeLedgerSaveCurrentHole;
+  if (typeof saveFn === 'function') {
+    saveFn({ targetHole: currentHole, silent: true });
   } else {
-    saveCurrentHole({ targetHole: currentHole, silent: true });
-    scoreInputSessionState.delete(playerId);
-    return true;
+    persistCurrentMatch({ applyDom: true, immediateShared: true, silent: true });
   }
 
-  if (canSmartAdvance) {
+  if (changed && hasCommittedValue) {
     flashCompletedScoreInput(inputEl);
     triggerSmartScoreHaptic();
-    if (nextBlankPlayerId) {
-      queueScoreCommitFocus(nextBlankPlayerId, currentHole);
-      applyPendingScoreCommitFocus();
-    } else if (shouldAdvanceHole && nextHole) {
-      saveCurrentHole({ targetHole: nextHole, silent: true });
-    }
   }
+
+  if (canAutoNextHole && nextHole && typeof saveFn === 'function') {
+    saveFn({ targetHole: nextHole, silent: true });
+  }
+
   scoreInputSessionState.delete(playerId);
   return true;
 }
@@ -13445,6 +13416,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
     return true;
   }
+  window.dyeLedgerSaveCurrentHole = saveCurrentHole;
 
   document.getElementById('matchesList').addEventListener('click', e => {
     const loadId = e.target.dataset.loadMatch;

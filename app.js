@@ -1,10 +1,10 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.37',
-  versionNumber: '30.3.37',
-  cacheName: 'the-dye-ledger-v30.3.37',
+  version: 'v30.3.38',
+  versionNumber: '30.3.38',
+  cacheName: 'the-dye-ledger-v30.3.38',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Scores Tab Status Stack Hotfix'
+  buildLabel: 'Smart Score Advance & Sticky Tabs'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -13,6 +13,9 @@ const APP_CACHE_NAME = BUILD_INFO.cacheName;
 const APP_VERSION_NUMBER = BUILD_INFO.versionNumber;
 
 const MATCH_TEMPLATES_STORAGE_KEY = 'dyeLedger.matchTemplates.v1';
+const DEFAULT_SMART_SCORE_ADVANCE = true;
+const SMART_SCORE_ADVANCE_DELAY_MS = 200;
+
 
 
 const APP_ERROR_STORAGE_KEY = 'dye-ledger-recent-app-errors';
@@ -249,7 +252,7 @@ let scoreAutoAdvanceGeneration = 0;
 const scoreInputSessionState = new Map();
 let pendingScoreAutoAdvanceTimer = null;
 let pendingScoreAutoAdvancePlayerId = null;
-const SCORE_AUTO_ADVANCE_DELAY_MS = 300;
+const SCORE_AUTO_ADVANCE_DELAY_MS = SMART_SCORE_ADVANCE_DELAY_MS;
 const SCORE_ENTRY_MODES = {
   single_device: 'One device scores for everyone',
   assigned_players: 'Assigned Players Score Entry',
@@ -4097,6 +4100,7 @@ function createEmptyMatch(overrides = {}) {
     scoreEntryMode: getLegacyScoreEntryMode(normalizeScoringAccessMode(overrides.scoringAccessMode || overrides.scoreEntryMode || 'single_device')),
     officialScorerName: String(overrides.officialScorerName || 'Official scorer').trim() || 'Official scorer',
     statTrackingEnabled: !!overrides.statTrackingEnabled,
+    smartScoreAdvanceEnabled: overrides.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!overrides.smartScoreAdvanceEnabled,
     statTrackingPlayerIds: Array.isArray(overrides.statTrackingPlayerIds) ? overrides.statTrackingPlayerIds.map(String) : null,
     selectedGames: Array.isArray(overrides.selectedGames) ? overrides.selectedGames : [],
     status: 'active',
@@ -4174,6 +4178,7 @@ function normalizeMatch(match) {
   if (match.scoringAccessMode === 'single_device' && (match.activeScoreRole === 'team_scorer' || match.activeScoreRole === 'assigned_player_scorer')) match.activeScoreRole = 'official_scorer';
   match.activeScoreTeam = Math.min(Math.max(1, Number(match.activeScoreTeam) || 1), Math.max(1, Number(match.teamCount) || 1));
   match.statTrackingEnabled = !!match.statTrackingEnabled;
+  match.smartScoreAdvanceEnabled = match.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!match.smartScoreAdvanceEnabled;
   match.players = Array.isArray(match.players) ? match.players : [];
   match.players = match.players.map((mp, idx) => ({
     playerId: mp.playerId,
@@ -8650,6 +8655,7 @@ function createBlankSetupDraft() {
     scoreEntryMode: 'team',
     officialScorerName: 'Official scorer',
     statTrackingEnabled: false,
+    smartScoreAdvanceEnabled: DEFAULT_SMART_SCORE_ADVANCE,
     selectedGames: [],
     players: [],
   });
@@ -8701,6 +8707,7 @@ function buildNextRoundDraft(prior) {
     scoreEntryMode: getLegacyScoreEntryMode(prior.scoringAccessMode || prior.scoreEntryMode || 'single_device'),
     officialScorerName: prior.officialScorerName || 'Official scorer',
     statTrackingEnabled: !!prior.statTrackingEnabled,
+    smartScoreAdvanceEnabled: prior.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!prior.smartScoreAdvanceEnabled,
     statTrackingPlayerIds: Array.isArray(prior.statTrackingPlayerIds) ? clonePlain(prior.statTrackingPlayerIds) : null,
     selectedGames: [],
     players: cleanPlayers,
@@ -9720,7 +9727,7 @@ function renderScoreGrid(match, tee, metrics, scoringHoles = null) {
       <tr class="${canEdit ? '' : 'score-row-readonly'}">
         <td>${escapeHtml(p.player.name)}<div class="tiny">${escapeHtml(getHoleTeeNameForDisplay(match.courseId, p.tee || tee, currentHole - 1) || p.tee?.teeName || tee?.teeName || 'Tee')}${canEdit ? '' : ' · locked'}</div></td>
         <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
-        <td><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="next" autocomplete="off" min="1" max="15" data-score-player="${p.playerId}" data-score-locked="${canEdit ? '0' : '1'}" title="${canEdit ? 'Enter score' : 'You can only score your assigned players.'}" value="${gross}" ${canEdit ? '' : 'disabled'} /></td>
+        <td><div class="gross-score-stepper" role="group" aria-label="Gross score for ${escapeHtml(p.player.name)}"><button type="button" class="score-step-btn" data-score-step="down" data-score-player="${escapeHtml(p.playerId)}" ${canEdit ? '' : 'disabled'}>−</button><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="next" autocomplete="off" min="1" max="15" data-score-player="${p.playerId}" data-score-locked="${canEdit ? '0' : '1'}" title="${canEdit ? 'Enter score' : 'You can only score your assigned players.'}" data-hole-par="${Number(playerHole?.par || hole?.par || 4) || 4}" placeholder="—" value="${gross}" ${canEdit ? '' : 'disabled'} /><button type="button" class="score-step-btn" data-score-step="up" data-score-player="${escapeHtml(p.playerId)}" ${canEdit ? '' : 'disabled'}>+</button></div></td>
         <td>${strokes}</td>
         <td>${net}</td>
       </tr>
@@ -9728,6 +9735,88 @@ function renderScoreGrid(match, tee, metrics, scoringHoles = null) {
   }).join('');
 }
 
+
+
+function getHoleParForScoreInput(inputEl) {
+  const explicit = Number(inputEl?.dataset?.holePar);
+  if (Number.isFinite(explicit) && explicit > 0) return Math.round(explicit);
+  const match = getActiveMatch();
+  const tee = match ? getTee(match.courseId, match.teeId) : null;
+  const holes = match ? getSelectedScoringHoles(match, tee) : [];
+  const hole = holes[currentHole - 1];
+  return Math.round(Number(hole?.par) || 4);
+}
+
+function isSmartScoreAdvanceEnabled(match = getActiveMatch()) {
+  if (!match) return false;
+  return match.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!match.smartScoreAdvanceEnabled;
+}
+
+function isGrossScoreValidValue(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0;
+}
+
+function triggerSmartScoreHaptic() {
+  try {
+    if (navigator && typeof navigator.vibrate === 'function') navigator.vibrate(10);
+  } catch (err) {}
+}
+
+function flashCompletedScoreInput(inputEl) {
+  if (!inputEl || !inputEl.classList) return;
+  inputEl.classList.remove('score-confirmed-flash');
+  void inputEl.offsetWidth;
+  inputEl.classList.add('score-confirmed-flash');
+  setTimeout(() => { try { inputEl.classList.remove('score-confirmed-flash'); } catch (err) {} }, 260);
+}
+
+function findNextBlankScoreInputOnSameHole(inputEl) {
+  const inputs = getEditableScoreInputs();
+  const startIndex = inputs.indexOf(inputEl);
+  if (startIndex < 0) return null;
+  for (let offset = 1; offset < inputs.length; offset += 1) {
+    const candidate = inputs[(startIndex + offset) % inputs.length];
+    if (!candidate || candidate === inputEl) continue;
+    if (String(candidate.value || '').trim() === '') return candidate;
+  }
+  return null;
+}
+
+function allEditableScoresCompleteOnCurrentHole() {
+  const inputs = getEditableScoreInputs();
+  return inputs.length > 0 && inputs.every(input => isGrossScoreValidValue(String(input.value || '').trim()));
+}
+
+function focusSmartScoreInput(inputEl) {
+  if (!inputEl || inputEl.disabled) return;
+  try {
+    inputEl.focus({ preventScroll: true });
+    const end = String(inputEl.value || '').length;
+    if (typeof inputEl.setSelectionRange === 'function') inputEl.setSelectionRange(end, end);
+    const rect = inputEl.getBoundingClientRect?.();
+    if (rect && (rect.top < 120 || rect.bottom > (window.innerHeight || 0) - 80)) {
+      inputEl.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+    }
+  } catch (err) {}
+}
+
+function applySmartScoreStep(inputEl, direction) {
+  if (!inputEl || inputEl.disabled) return false;
+  const raw = String(inputEl.value || '').trim();
+  let next;
+  if (!raw) {
+    next = getHoleParForScoreInput(inputEl);
+  } else {
+    const current = Number(raw);
+    if (!Number.isFinite(current)) return false;
+    next = Math.max(1, Math.round(current + (direction >= 0 ? 1 : -1)));
+  }
+  inputEl.value = String(next);
+  updateLiveNetForScoreInput(inputEl);
+  schedulePendingScoreAutoAdvance(inputEl);
+  return true;
+}
 
 function updateLiveNetForScoreInput(inputEl) {
   const match = getMatch(state.activeMatchId);
@@ -9881,10 +9970,15 @@ function getLiveScoreInputForPlayer(playerId) {
 }
 
 function schedulePendingScoreAutoAdvance(inputEl) {
-  if (!inputEl || inputEl.disabled) return;
+  const match = getActiveMatch();
+  if (!match || !inputEl || inputEl.disabled) return;
+  if (!isSmartScoreAdvanceEnabled(match)) return;
+  if (isMatchFinished(match)) return;
   const playerId = inputEl.dataset.scorePlayer;
   if (!playerId) return;
   const session = scoreInputSessionState.get(playerId) || {};
+  const normalizedValue = normalizeCommittedScoreValue(inputEl.value);
+  if (!isGrossScoreValidValue(normalizedValue)) return;
   const generation = ++scoreAutoAdvanceGeneration;
   scoreInputSessionState.set(playerId, { ...session, generation, lastTypedValue: String(inputEl.value || '') });
   cancelPendingScoreAutoAdvance();
@@ -9896,6 +9990,7 @@ function schedulePendingScoreAutoAdvance(inputEl) {
     const liveSession = scoreInputSessionState.get(playerId) || {};
     if (!liveInput || liveInput.disabled) return;
     if ((liveSession.generation || 0) !== generation) return;
+    if (document.activeElement && document.activeElement !== liveInput && document.activeElement.matches?.('input,select,textarea,button')) return;
     commitScoreInput(liveInput, { viaAutoAdvance: true, expectedGeneration: generation });
   }, SCORE_AUTO_ADVANCE_DELAY_MS);
 }
@@ -9906,8 +10001,6 @@ function commitScoreInput(inputEl, { viaEnter = false, viaAutoAdvance = false, e
   const playerId = inputEl.dataset.scorePlayer;
   if (!playerId) return false;
   cancelPendingScoreAutoAdvance(playerId);
-  const editableInputs = getEditableScoreInputs();
-  const currentIndex = editableInputs.findIndex(el => el.dataset.scorePlayer === playerId);
   const priorState = scoreInputSessionState.get(playerId) || {};
   if (expectedGeneration != null && Number(priorState.generation || 0) !== Number(expectedGeneration)) return false;
   const normalizedValue = normalizeCommittedScoreValue(inputEl.value);
@@ -9921,27 +10014,46 @@ function commitScoreInput(inputEl, { viaEnter = false, viaAutoAdvance = false, e
     return false;
   }
   if (!changed && isRecentDuplicateScoreCommit(playerId, normalizedValue)) {
+    scoreInputSessionState.delete(playerId);
     return false;
   }
   if (changed) markRecentScoreCommit(playerId, normalizedValue);
-  if (hasCommittedValue && currentIndex >= 0 && currentIndex < editableInputs.length - 1) {
-    const nextInput = editableInputs[currentIndex + 1];
-    queueScoreCommitFocus(nextInput?.dataset?.scorePlayer || null, currentHole);
-    saveCurrentHole({ targetHole: currentHole, silent: true });
-  } else if (hasCommittedValue) {
-    const nextHole = getAdjacentPlayableHole(match, currentHole, 1, getTee(match.courseId, match.teeId));
-    queueScoreCommitFocus(editableInputs[0]?.dataset?.scorePlayer || null, nextHole || currentHole);
-    if (nextHole) {
-      saveCurrentHole({ targetHole: nextHole, silent: true });
-    } else {
-      saveCurrentHole({ targetHole: currentHole, silent: true });
+
+  const canSmartAdvance = viaAutoAdvance && isSmartScoreAdvanceEnabled(match) && !isMatchFinished(match) && initialValue === '' && hasCommittedValue;
+  let nextBlankPlayerId = '';
+  let shouldAdvanceHole = false;
+  let nextHole = null;
+  if (canSmartAdvance) {
+    const nextBlank = findNextBlankScoreInputOnSameHole(inputEl);
+    nextBlankPlayerId = nextBlank?.dataset?.scorePlayer || '';
+    if (!nextBlankPlayerId && !isStatTrackingEnabled(match) && allEditableScoresCompleteOnCurrentHole()) {
+      nextHole = getAdjacentPlayableHole(match, currentHole, 1, getTee(match.courseId, match.teeId));
+      shouldAdvanceHole = !!nextHole;
     }
+  }
+
+  if (hasCommittedValue) {
+    saveCurrentHole({ targetHole: currentHole, silent: true });
   } else {
     saveCurrentHole({ targetHole: currentHole, silent: true });
+    scoreInputSessionState.delete(playerId);
+    return true;
+  }
+
+  if (canSmartAdvance) {
+    flashCompletedScoreInput(inputEl);
+    triggerSmartScoreHaptic();
+    if (nextBlankPlayerId) {
+      queueScoreCommitFocus(nextBlankPlayerId, currentHole);
+      applyPendingScoreCommitFocus();
+    } else if (shouldAdvanceHole && nextHole) {
+      saveCurrentHole({ targetHole: nextHole, silent: true });
+    }
   }
   scoreInputSessionState.delete(playerId);
   return true;
 }
+
 
 function getMomentumSidePairings(match, metrics) {
   return getIndividualMatchPairings(match, metrics).filter(pair => ['nassau', 'match_play'].includes(String(pair?.game || 'nassau').toLowerCase()));
@@ -10904,6 +11016,7 @@ function renderTodaysMatchSummary() {
   const featuredCompetition = normalizeFeaturedCompetition(document.getElementById('featuredCompetitionSelect')?.value || 'auto');
   const gameNames = selectedGames.map(g => getGameLabel(g)).filter(Boolean);
   const statEnabled = !!document.getElementById('enableStatTrackingInput')?.checked;
+  const smartAdvanceEnabled = !!document.getElementById('smartScoreAdvanceInput')?.checked;
   const statIds = statEnabled ? collectStatTrackingPlayerIdsFromSetup(selectedPlayers) : [];
   const statNames = statIds.map(id => getPlayer(id)?.name || '').filter(Boolean);
   const rows = [
@@ -10914,6 +11027,7 @@ function renderTodaysMatchSummary() {
     ['Games', gameNames.length ? gameNames.join(', ') : 'None selected'],
     ['Featured Competition', getFeaturedCompetitionDisplayName({ selectedGames }, featuredCompetition === 'auto' ? resolveAutoFeaturedCompetition({ selectedGames }) : featuredCompetition)],
     ['Stat Tracking', statEnabled ? (statNames.length ? statNames.join(', ') : 'No players selected') : 'Off'],
+    ['Smart Score Advance', smartAdvanceEnabled ? 'On' : 'Off'],
   ];
   wrap.innerHTML = rows.map(([label, value]) => `<div class="setup-summary-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('');
   renderRoundReadiness();
@@ -10978,6 +11092,7 @@ function buildTemplateFromCurrentSetup(nameOverride = '') {
     scoringAccessMode: normalizeScoringAccessMode(fd.get('scoreEntryMode') || 'single_device'),
     officialScorerName: String(fd.get('officialScorerName') || '').trim() || 'Official scorer',
     statTrackingEnabled: fd.get('enableStatTracking') === 'on',
+    smartScoreAdvanceEnabled: fd.get('smartScoreAdvance') === 'on',
     statTrackingPlayerIds: fd.get('enableStatTracking') === 'on' ? collectStatTrackingPlayerIdsFromSetup(selectedPlayers) : []
   };
 }
@@ -11004,6 +11119,7 @@ function applyMatchTemplate(templateId) {
     scoringAccessMode: normalizeScoringAccessMode(template.scoringAccessMode || 'single_device'),
     officialScorerName: template.officialScorerName || 'Official scorer',
     statTrackingEnabled: !!template.statTrackingEnabled,
+    smartScoreAdvanceEnabled: template.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!template.smartScoreAdvanceEnabled,
     statTrackingPlayerIds: Array.isArray(template.statTrackingPlayerIds) ? template.statTrackingPlayerIds.slice() : [],
     players: sanitizeTemplatePlayers(template.players).map((p, idx) => ({
       ...p,
@@ -12083,6 +12199,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
     const sharedMatchToggle = document.getElementById('sharedMatchEnabled'); if (sharedMatchToggle) sharedMatchToggle.checked = draft.storageMode === 'shared';
     document.getElementById('officialScorerNameInput').value = draft.officialScorerName || 'Official scorer';
     const statToggle = document.getElementById('enableStatTrackingInput'); if (statToggle) statToggle.checked = !!draft.statTrackingEnabled;
+    const smartToggle = document.getElementById('smartScoreAdvanceInput'); if (smartToggle) smartToggle.checked = draft.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!draft.smartScoreAdvanceEnabled;
     populateMatchCourseSelects(draft.courseId || '', draft.teeId || '');
     renderTeamNameInputs(draft.teamCount || 1, draft.teamNames || []);
     renderScoringControlConfig(draft);
@@ -12114,6 +12231,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
   const sharedMatchToggle = document.getElementById('sharedMatchEnabled'); if (sharedMatchToggle) sharedMatchToggle.checked = match.storageMode === 'shared';
   document.getElementById('officialScorerNameInput').value = match.officialScorerName || 'Official scorer';
   const statToggle = document.getElementById('enableStatTrackingInput'); if (statToggle) statToggle.checked = !!match.statTrackingEnabled;
+  const smartToggle = document.getElementById('smartScoreAdvanceInput'); if (smartToggle) smartToggle.checked = match.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!match.smartScoreAdvanceEnabled;
   renderTeamNameInputs(match.teamCount || 2, match.teamNames || []);
   renderScoringControlConfig(match);
   uiState.matchPlayerDraft = (match.players || []).map((p, idx) => ({ ...p, slot: Number.isFinite(Number(p.slot)) ? Number(p.slot) : idx, teeId: p.teeId || match.teeId || '' }));
@@ -12654,7 +12772,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   });
   document.getElementById('setup').addEventListener('change', e => {
     if (e.target && (e.target.id === 'enableStatTrackingInput' || e.target.matches('[data-player-slot], [data-stat-track-player]'))) renderStatTrackingPlayerSelector();
-    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #featuredCompetitionSelect, #scoreEntryModeSelect, #officialScorerNameInput, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-game-config], #enableStatTrackingInput, [data-stat-track-player]')) {
+    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #featuredCompetitionSelect, #scoreEntryModeSelect, #officialScorerNameInput, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-game-config], #enableStatTrackingInput, #smartScoreAdvanceInput, [data-stat-track-player]')) {
       setTimeout(() => { renderSetupHandicapPreview(); renderGamesPicker(collectSelectedGames()); renderFeaturedCompetitionSetup(collectSelectedGames()); renderTodaysMatchSummary(); }, 0);
     }
   });
@@ -12726,6 +12844,16 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
   document.getElementById('score').addEventListener('click', e => {
+    const scoreStepBtn = e.target.closest('[data-score-step]');
+    if (scoreStepBtn) {
+      const playerId = scoreStepBtn.dataset.scorePlayer || '';
+      const escapedId = cssEscape(playerId);
+      const input = document.querySelector(`input[data-score-player="${escapedId}"]`);
+      if (!input || input.disabled) return;
+      const dir = scoreStepBtn.dataset.scoreStep === 'down' ? -1 : 1;
+      applySmartScoreStep(input, dir);
+      return;
+    }
     const stepBtn = e.target.closest('[data-stat-step]');
     if (stepBtn) {
       const match = getActiveMatch();
@@ -13119,6 +13247,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       scoreEntryMode,
       officialScorerName,
       statTrackingEnabled: fd.get('enableStatTracking') === 'on',
+      smartScoreAdvanceEnabled: fd.get('smartScoreAdvance') === 'on',
       statTrackingPlayerIds: fd.get('enableStatTracking') === 'on' ? collectStatTrackingPlayerIdsFromSetup(selectedPlayers) : [],
       teamScorers,
       selectedGames: normalizeSelectedGamesOrder(selectedGames),

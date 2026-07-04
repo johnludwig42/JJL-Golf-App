@@ -4247,7 +4247,7 @@ main {
   .readiness-start-btn { flex:1 1 auto; }
 }
 
-/* v30.3.37 — iPhone modal and Save / End Round layout hotfix
+/* v30.3.38 — iPhone modal and Save / End Round layout hotfix
    Root cause: shared full-width form input styles were applying to radio buttons,
    and export/round-action containers allowed rounded child fragments to paint outside
    their parent card on iPhone Safari. */
@@ -4398,7 +4398,7 @@ main {
 }
 
 
-/* v30.3.37 — Scores tab status stack hotfix
+/* v30.3.38 — Scores tab status stack hotfix
    Root cause: the Share / Save PDF card still rendered Save/End Round and
    missing-score status as independent nested card surfaces. iPhone Safari
    exposed those nested rounded surfaces as partial boxes along the left edge.
@@ -4511,4 +4511,58 @@ main {
     flex: 1 1 auto;
     width: 100%;
   }
+}
+
+
+/* v30.3.38 — Smart Score Advance and sticky tabs polish */
+.gross-score-stepper{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  width:100%;
+  max-width:164px;
+}
+.gross-score-stepper .score-input{
+  text-align:center;
+  font-weight:800;
+}
+.score-step-btn{
+  width:36px;
+  min-width:36px;
+  height:36px;
+  padding:0;
+  border-radius:999px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  font-size:18px;
+  line-height:1;
+}
+.score-input.score-confirmed-flash{
+  animation:score-confirmed-flash .24s ease-out;
+}
+@keyframes score-confirmed-flash{
+  0%{background:var(--accent-2);color:var(--accent);transform:scale(1.025);box-shadow:0 0 0 3px rgba(11,93,59,.10)}
+  100%{transform:scale(1);box-shadow:none}
+}
+@media (prefers-reduced-motion: reduce){
+  .score-input.score-confirmed-flash{animation:none;background:var(--accent-2)}
+}
+.app-chrome{
+  position:sticky !important;
+  top:0 !important;
+  z-index:1600 !important;
+  contain:layout paint;
+}
+.app-chrome .top-tabs{
+  position:sticky !important;
+  top:0 !important;
+  z-index:1601 !important;
+  background:linear-gradient(to bottom,var(--bg) 88%,rgba(243,246,244,.98));
+  transform:translateZ(0);
+}
+.panel{scroll-margin-top:calc(var(--app-chrome-height, 0px) + 12px)}
+@media print{
+  .app-chrome,.app-chrome .top-tabs{position:static !important;contain:none !important;transform:none !important;}
 }

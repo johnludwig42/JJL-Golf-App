@@ -1,8 +1,8 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.39',
-  versionNumber: '30.3.39',
-  cacheName: 'the-dye-ledger-v30.3.39',
+  version: 'v30.3.40',
+  versionNumber: '30.3.40',
+  cacheName: 'the-dye-ledger-v30.3.40',
   buildDate: new Date().toISOString(),
   buildLabel: 'Scoring UX Cleanup & Runtime Error Fix'
 };
@@ -6556,7 +6556,7 @@ function applyCurrentHoleDomToMatch(match) {
   const holeMeta = scoringHoles[currentHole - 1] || null;
   const actualHoleNumber = holeMeta?.holeNumber || currentHole;
   let mutated = false;
-  document.querySelectorAll('[data-score-player]').forEach(input => {
+  document.querySelectorAll('input[data-score-player]').forEach(input => {
     const playerId = input.dataset.scorePlayer;
     const mp = match.players.find(p => p.playerId === playerId);
     if (!mp || !mp.scores?.[currentHole - 1]) return;
@@ -9727,7 +9727,7 @@ function renderScoreGrid(match, tee, metrics, scoringHoles = null) {
       <tr class="${canEdit ? '' : 'score-row-readonly'}">
         <td>${escapeHtml(p.player.name)}<div class="tiny">${escapeHtml(getHoleTeeNameForDisplay(match.courseId, p.tee || tee, currentHole - 1) || p.tee?.teeName || tee?.teeName || 'Tee')}${canEdit ? '' : ' · locked'}</div></td>
         <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
-        <td><div class="gross-score-stepper" role="group" aria-label="Gross score for ${escapeHtml(p.player.name)}"><button type="button" class="score-step-btn" data-score-step="down" data-score-player="${escapeHtml(p.playerId)}" ${canEdit ? '' : 'disabled'}>−</button><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="next" autocomplete="off" min="1" max="15" data-score-player="${p.playerId}" data-score-locked="${canEdit ? '0' : '1'}" title="${canEdit ? 'Enter score' : 'You can only score your assigned players.'}" data-hole-par="${Number(playerHole?.par || hole?.par || 4) || 4}" placeholder="—" value="${gross}" ${canEdit ? '' : 'disabled'} /><button type="button" class="score-step-btn" data-score-step="up" data-score-player="${escapeHtml(p.playerId)}" ${canEdit ? '' : 'disabled'}>+</button></div></td>
+        <td><div class="gross-score-stepper" role="group" aria-label="Gross score for ${escapeHtml(p.player.name)}"><button type="button" class="score-step-btn" data-score-step="down" data-score-step-player="${escapeHtml(p.playerId)}" ${canEdit ? '' : 'disabled'}>−</button><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="next" autocomplete="off" min="1" max="15" data-score-player="${p.playerId}" data-score-locked="${canEdit ? '0' : '1'}" title="${canEdit ? 'Enter score' : 'You can only score your assigned players.'}" data-hole-par="${Number(playerHole?.par || hole?.par || 4) || 4}" placeholder="—" value="${gross}" ${canEdit ? '' : 'disabled'} /><button type="button" class="score-step-btn" data-score-step="up" data-score-step-player="${escapeHtml(p.playerId)}" ${canEdit ? '' : 'disabled'}>+</button></div></td>
         <td>${strokes}</td>
         <td>${net}</td>
       </tr>
@@ -9758,7 +9758,7 @@ function isGrossScoreValidValue(value) {
 }
 
 function triggerSmartScoreHaptic() {
-  // v30.3.39: intentionally no-op on iPhone/PWA. navigator.vibrate is not
+  // v30.3.40: intentionally no-op on iPhone/PWA. navigator.vibrate is not
   // supported reliably by iOS Safari, and scoring confirmation should not rely on haptics.
   return false;
 }
@@ -9821,7 +9821,7 @@ function normalizeCommittedScoreValue(raw) {
 }
 
 function getEditableScoreInputs() {
-  return Array.from(document.querySelectorAll('#score [data-score-player]')).filter(input => !input.disabled);
+  return Array.from(document.querySelectorAll('#score input[data-score-player]')).filter(input => !input.disabled);
 }
 
 function isRecentDuplicateScoreCommit(playerId, normalizedValue) {
@@ -9862,7 +9862,7 @@ function handleLiveScoreInputEvent(inputEl) {
 
 function handleLiveScoreInputKeydown(event) {
   const inputEl = event?.target;
-  if (!inputEl || inputEl.disabled || !inputEl.matches?.('[data-score-player]')) return;
+  if (!inputEl || inputEl.disabled || !inputEl.matches?.('input[data-score-player]')) return;
   if (event.key === 'Enter') {
     event.preventDefault();
     commitScoreInput(inputEl, { viaEnter: true });
@@ -9877,7 +9877,7 @@ function handleLiveScoreInputBlur(inputEl) {
 function wireLiveScoreInputs() {
   const scoreRoot = document.getElementById('score');
   if (!scoreRoot) return;
-  scoreRoot.querySelectorAll('[data-score-player]').forEach(input => {
+  scoreRoot.querySelectorAll('input[data-score-player]').forEach(input => {
     if (input.dataset.scoreWired === 'direct') return;
     input.dataset.scoreWired = 'direct';
     input.addEventListener('focus', () => handleLiveScoreInputFocus(input));
@@ -9909,14 +9909,14 @@ function applyPendingScoreCommitFocus() {
   if (!pendingScoreCommitFocus) return;
   const pending = pendingScoreCommitFocus;
   if (Number(pending.holeNumber) !== Number(currentHole)) return;
-  const target = document.querySelector(`#score [data-score-player="${pending.playerId}"]`);
+  const target = document.querySelector(`#score input[data-score-player="${pending.playerId}"]`);
   if (!target || target.disabled) {
     pendingScoreCommitFocus = null;
     return;
   }
   setTimeout(() => {
     requestAnimationFrame(() => {
-      const liveTarget = document.querySelector(`#score [data-score-player="${pending.playerId}"]`);
+      const liveTarget = document.querySelector(`#score input[data-score-player="${pending.playerId}"]`);
       if (!liveTarget || liveTarget.disabled) {
         pendingScoreCommitFocus = null;
         return;
@@ -9941,7 +9941,7 @@ function cancelPendingScoreAutoAdvance(playerId = null) {
 
 function getLiveScoreInputForPlayer(playerId) {
   if (!playerId) return null;
-  return document.querySelector(`#score [data-score-player="${playerId}"]`);
+  return document.querySelector(`#score input[data-score-player="${playerId}"]`);
 }
 
 function schedulePendingScoreAutoAdvance(inputEl) {
@@ -9994,7 +9994,7 @@ function commitScoreInput(inputEl, { viaEnter = false, viaAutoAdvance = false, e
   }
   if (changed) markRecentScoreCommit(playerId, normalizedValue);
 
-  // v30.3.39: same-hole player-to-player auto focus was removed. Smart Score
+  // v30.3.40: same-hole player-to-player auto focus was removed. Smart Score
   // Advance now only performs the no-stat-tracking end-of-hole auto-next behavior.
   const canAutoNextHole = viaAutoAdvance
     && isSmartScoreAdvanceEnabled(match)
@@ -12628,7 +12628,7 @@ function installHandlers() {
   }
   document.addEventListener('focusin', e => {
     if (e.target.closest('#score') && e.target.matches('input, select, textarea')) {
-      if (e.target.matches('[data-score-player]')) return;
+      if (e.target.matches('input[data-score-player]')) return;
       setTimeout(() => {
         if (document.activeElement !== e.target) return;
         try { e.target.scrollIntoView({ block: 'nearest', behavior: 'auto' }); } catch (_) {}
@@ -12817,7 +12817,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('score').addEventListener('click', e => {
     const scoreStepBtn = e.target.closest('[data-score-step]');
     if (scoreStepBtn) {
-      const playerId = scoreStepBtn.dataset.scorePlayer || '';
+      const playerId = scoreStepBtn.dataset.scoreStepPlayer || '';
       const escapedId = cssEscape(playerId);
       const input = document.querySelector(`input[data-score-player="${escapedId}"]`);
       if (!input || input.disabled) return;
@@ -12879,7 +12879,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
   document.getElementById('score').addEventListener('focusin', e => {
-    if (e.target.matches('[data-score-player]')) {
+    if (e.target.matches('input[data-score-player]')) {
       if (e.target.dataset.scoreWired !== 'direct') handleLiveScoreInputFocus(e.target);
     }
     if (e.target.matches('.stat-putts-input') && !e.target.disabled && typeof e.target.select === 'function') {
@@ -12889,12 +12889,12 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
   document.getElementById('score').addEventListener('keydown', e => {
-    if (!e.target.matches('[data-score-player]')) return;
+    if (!e.target.matches('input[data-score-player]')) return;
     if (e.target.dataset.scoreWired === 'direct') return;
     handleLiveScoreInputKeydown(e);
   });
   document.getElementById('score').addEventListener('blur', e => {
-    if (e.target.matches('[data-score-player]')) {
+    if (e.target.matches('input[data-score-player]')) {
       if (e.target.dataset.scoreWired !== 'direct') handleLiveScoreInputBlur(e.target);
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
     }
@@ -12907,7 +12907,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   }, true);
   document.getElementById('score').addEventListener('input', e => {
-    if (e.target.matches('[data-score-player]')) {
+    if (e.target.matches('input[data-score-player]')) {
       if (e.target.dataset.scoreWired !== 'direct') handleLiveScoreInputEvent(e.target);
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
     }
@@ -13361,7 +13361,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const hostOverridePlayers = [];
     if (match.storageMode === 'shared' && isAssignedPlayersMode(match) && isCurrentDeviceMatchHost(match)) {
       const owned = getSharedLocallyOwnedPlayerIds(match);
-      document.querySelectorAll('[data-score-player]').forEach(input => {
+      document.querySelectorAll('input[data-score-player]').forEach(input => {
         const playerId = input.dataset.scorePlayer;
         if (!playerId || owned.has(playerId)) return;
         const mp = (match.players || []).find(row => row.playerId === playerId);
@@ -13953,7 +13953,7 @@ function hasOpenBlockingUi() {
 function hasUnsavedVisibleScoreInputs() {
   const match = getActiveMatch();
   if (!match || getActivePanelId() !== 'score') return false;
-  const inputs = Array.from(document.querySelectorAll('[data-score-player]'));
+  const inputs = Array.from(document.querySelectorAll('input[data-score-player]'));
   if (!inputs.length) return false;
   return inputs.some(input => {
     const playerId = input.dataset.scorePlayer;
@@ -14176,7 +14176,7 @@ function installViewportStabilityGuards() {
   document.addEventListener('focusin', (event) => {
     const target = event.target;
     if (!target || !target.closest) return;
-    if (target.closest('#score') && !target.matches?.('[data-score-player]')) resetSoon();
+    if (target.closest('#score') && !target.matches?.('input[data-score-player]')) resetSoon();
   });
   document.addEventListener('input', (event) => {
     const target = event.target;

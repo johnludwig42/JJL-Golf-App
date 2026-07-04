@@ -4247,7 +4247,7 @@ main {
   .readiness-start-btn { flex:1 1 auto; }
 }
 
-/* v30.3.39 — iPhone modal and Save / End Round layout hotfix
+/* v30.3.40 — iPhone modal and Save / End Round layout hotfix
    Root cause: shared full-width form input styles were applying to radio buttons,
    and export/round-action containers allowed rounded child fragments to paint outside
    their parent card on iPhone Safari. */
@@ -4398,7 +4398,7 @@ main {
 }
 
 
-/* v30.3.39 — Scores tab status stack hotfix
+/* v30.3.40 — Scores tab status stack hotfix
    Root cause: the Share / Save PDF card still rendered Save/End Round and
    missing-score status as independent nested card surfaces. iPhone Safari
    exposed those nested rounded surfaces as partial boxes along the left edge.
@@ -4514,7 +4514,7 @@ main {
 }
 
 
-/* v30.3.39 — Smart Score Advance and sticky tabs polish */
+/* v30.3.40 — Smart Score Advance and sticky tabs polish */
 .gross-score-stepper{
   display:inline-flex;
   align-items:center;
@@ -4567,7 +4567,7 @@ main {
   .app-chrome,.app-chrome .top-tabs{position:static !important;contain:none !important;transform:none !important;}
 }
 
-/* v30.3.39 — Scoring UX cleanup, iPhone row fit, and sticky app shell repair */
+/* v30.3.40 — Scoring UX cleanup, iPhone row fit, and sticky app shell repair */
 .gross-score-stepper{
   gap:4px !important;
   max-width:136px !important;

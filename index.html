@@ -7,12 +7,12 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=30.3.34" />
+  <link rel="manifest" href="manifest.json?v=30.3.41" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
   <link rel="shortcut icon" href="./favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="style.css?v=30.3.34" />
+  <link rel="stylesheet" href="style.css?v=30.3.41" />
 </head>
 <body>
   <div class="app-chrome"><header class="app-header compact-header">
@@ -209,7 +209,14 @@
             <label class="inline-check top-gap"><input id="enableStatTrackingInput" name="enableStatTracking" type="checkbox" /><span>Enable Stat Tracking</span></label>
             <div id="statTrackingPlayersWrap" class="top-gap hidden"></div>
             <label class="inline-check top-gap"><input id="smartScoreAdvanceInput" name="smartScoreAdvance" type="checkbox" checked /><span>Smart Score Advance</span></label>
-            <div class="tiny top-gap">After entering a gross score, confirm it and move to the next blank player score on the same hole. If stat tracking is off, the app can advance to the next hole after all players have scores.</div>
+            <label id="smartScoreAdvancePresetWrap" class="smart-score-preset-wrap"><span>Advance timing</span>
+              <select id="smartScoreAdvancePresetSelect" name="smartScoreAdvancePreset">
+                <option value="fast">Fast (200 ms)</option>
+                <option value="normal" selected>Normal (300 ms)</option>
+                <option value="relaxed">Relaxed (500 ms)</option>
+              </select>
+            </label>
+            <div class="tiny top-gap">After entering gross scores, the app can advance to the next playable hole when Stat Tracking is off and every active scoring row has a score.</div>
           </div>
 
           <div class="span-2 card inset-card">
@@ -718,7 +725,7 @@
       <div class="card tight-card app-updates-card">
         <h2>App Updates</h2>
         <div class="app-update-summary">
-          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.40</strong></div>
+          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.41</strong></div>
           <div><span class="muted-label">Build Date</span><strong id="appBuildTimestamp">loading…</strong></div>
           <div><span class="muted-label">Cache</span><span id="appActiveCacheName" class="break-word">checking…</span></div>
           <div><span class="muted-label">Update Available</span><strong id="appUpdateAvailableStatus">checking…</strong></div>
@@ -750,8 +757,8 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
-          <li>v30.3.40 flattens the Scores tab Save / End Round status area into one clean status stack.</li>
-          <li>v30.3.40 removes nested-card artifacts from the Share / Save PDF card on iPhone.</li>
+          <li>v30.3.41 adds Smart Score Advance timing presets: Fast, Normal, and Relaxed.</li>
+          <li>v30.3.41 keeps auto-advance focused on completed active scoring rows and the existing Next Hole flow.</li>
         </ul>
       </div>
     </section>
@@ -771,7 +778,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.3.40</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
+    <span id="appVersionFooter">v30.3.41</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>
@@ -874,7 +881,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=30.3.40"></script>
-  <script src="app.js?v=30.3.40"></script>
+  <script src="supabase-config.js?v=30.3.41"></script>
+  <script src="app.js?v=30.3.41"></script>
 </body>
 </html>

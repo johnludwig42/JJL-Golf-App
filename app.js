@@ -1,8 +1,8 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.41',
-  versionNumber: '30.3.41',
-  cacheName: 'the-dye-ledger-v30.3.41',
+  version: 'v30.3.42',
+  versionNumber: '30.3.42',
+  cacheName: 'the-dye-ledger-v30.3.42',
   buildDate: new Date().toISOString(),
   buildLabel: 'Smart Score Advance Timing & Sticky Nav Polish'
 };
@@ -1476,6 +1476,7 @@ const uiState = {
   cloudCoursesStatus: '',
   cloudCoursesLoading: false,
   cloudCoursesLastLoadAt: 0,
+  courseLibraryDiagnostics: { cloudCourses: 0, localCourses: 0, renderedCourseOptions: 0 },
   courseSyncTimers: {},
   scorecardImportData: null,
   scorecardImportFileName: '',
@@ -5922,6 +5923,49 @@ function normalizeCloudTeeRow(row = {}, courseName = '') {
   normalizeTee(tee, courseName);
   return tee;
 }
+function getCourseStableIdentity(course = {}) {
+  return String(course.cloudCourseId || (course.source === 'supabase' ? course.id : '') || '').trim();
+}
+function getCourseRenderedIdentity(course = {}) {
+  const stable = getCourseStableIdentity(course);
+  return stable ? `cloud:${stable}` : `name:${normalizeCourseIdentityText(course.name || '')}`;
+}
+function isCourseBetterDropdownCandidate(candidate = {}, current = {}, selectedCourseId = '') {
+  if (selectedCourseId && String(candidate.id) === String(selectedCourseId)) return true;
+  if (selectedCourseId && String(current.id) === String(selectedCourseId)) return false;
+  const candidateCloud = !!getCourseStableIdentity(candidate);
+  const currentCloud = !!getCourseStableIdentity(current);
+  if (candidateCloud !== currentCloud) return candidateCloud;
+  const candidateTees = Array.isArray(candidate.tees) ? candidate.tees.length : 0;
+  const currentTees = Array.isArray(current.tees) ? current.tees.length : 0;
+  if (candidateTees !== currentTees) return candidateTees > currentTees;
+  return String(candidate.name || '').localeCompare(String(current.name || '')) < 0;
+}
+function getDedupedCourseOptions(selectedCourseId = '') {
+  const byStableOrName = new Map();
+  (state.courses || []).forEach(course => {
+    if (!course?.id || !String(course.name || '').trim()) return;
+    const key = getCourseRenderedIdentity(course);
+    const existing = byStableOrName.get(key);
+    if (!existing || isCourseBetterDropdownCandidate(course, existing, selectedCourseId)) byStableOrName.set(key, course);
+  });
+  const byDisplayName = new Map();
+  Array.from(byStableOrName.values()).forEach(course => {
+    const key = normalizeCourseIdentityText(course.name || '');
+    const existing = byDisplayName.get(key);
+    if (!existing || isCourseBetterDropdownCandidate(course, existing, selectedCourseId)) byDisplayName.set(key, course);
+  });
+  return Array.from(byDisplayName.values()).sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')) || String(a.id || '').localeCompare(String(b.id || '')));
+}
+function updateCourseLibraryDiagnostics({ cloudCourses = null, localCourses = null, renderedCourseOptions = null } = {}) {
+  const prior = uiState.courseLibraryDiagnostics || {};
+  uiState.courseLibraryDiagnostics = {
+    cloudCourses: cloudCourses == null ? Number(prior.cloudCourses || 0) : Number(cloudCourses) || 0,
+    localCourses: localCourses == null ? (state.courses || []).length : Number(localCourses) || 0,
+    renderedCourseOptions: renderedCourseOptions == null ? Number(prior.renderedCourseOptions || 0) : Number(renderedCourseOptions) || 0,
+  };
+  return uiState.courseLibraryDiagnostics;
+}
 function mergeSupabaseCourses(cloudCourses = []) {
   let added = 0;
   let updated = 0;
@@ -6010,6 +6054,11 @@ async function loadSupabaseCourses({ silent = false } = {}) {
       return course;
     });
     const result = mergeSupabaseCourses(cloudCourses);
+    updateCourseLibraryDiagnostics({
+      cloudCourses: cloudCourses.length,
+      localCourses: (state.courses || []).length,
+      renderedCourseOptions: getDedupedCourseOptions(document.getElementById('matchCourseSelect')?.value || '').length,
+    });
     persist({ skipRender: true });
     uiState.cloudCoursesStatus = cloudCourses.length
       ? `Cloud course library loaded: ${cloudCourses.length} course${cloudCourses.length === 1 ? '' : 's'} (${result.added} new, ${result.updated} refreshed).`
@@ -7536,6 +7585,13 @@ function getCourseLibraryStatusMessage() {
     ? 'Cloud course library connected. Manual setup remains available.'
     : 'Supabase not configured. Manual course entry remains available.';
 }
+function getCourseLibraryDiagnosticsText() {
+  const diag = uiState.courseLibraryDiagnostics || {};
+  return `Diagnostics: cloud ${Number(diag.cloudCourses || 0)}, local ${Number(diag.localCourses || 0)}, rendered options ${Number(diag.renderedCourseOptions || 0)}.`;
+}
+function getCourseLibraryStatusDisplayMessage(message = getCourseLibraryStatusMessage()) {
+  return `${message} ${getCourseLibraryDiagnosticsText()}`;
+}
 function getCourseLibraryStatusClass(message = '') {
   const text = String(message || '').toLowerCase();
   if (text.includes('loading') || text.includes('syncing')) return 'is-loading';
@@ -8373,11 +8429,16 @@ function renderCourses() {
   const syncLocalCoursesMoreBtn = document.getElementById('syncLocalCoursesMoreBtn');
   const cloudCourseSyncActions = document.getElementById('cloudCourseSyncActions');
   const cloudCourseSyncUnavailable = document.getElementById('cloudCourseSyncUnavailable');
+  updateCourseLibraryDiagnostics({
+    localCourses: (state.courses || []).length,
+    renderedCourseOptions: getDedupedCourseOptions(document.getElementById('matchCourseSelect')?.value || '').length,
+  });
   const statusMessage = getCourseLibraryStatusMessage();
+  const statusDisplayMessage = getCourseLibraryStatusDisplayMessage(statusMessage);
   const statusClass = getCourseLibraryStatusClass(statusMessage);
   const cloudReachable = isCourseCloudReachableStatus(statusMessage);
   [cloudStatus, setupCloudStatus, moreCloudStatus].filter(Boolean).forEach(node => {
-    node.textContent = statusMessage;
+    node.textContent = statusDisplayMessage;
     node.className = `course-library-status tiny top-gap ${statusClass}`;
   });
   if (cloudBtn) cloudBtn.disabled = uiState.cloudCoursesLoading || !hasSupabaseConfig();
@@ -10493,7 +10554,8 @@ function buildSelectedGamesSummary(match, metrics) {
 }
 
 function populateCourseSelects() {
-  const options = state.courses.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  const courses = getDedupedCourseOptions(document.getElementById('teeCourseSelect')?.value || '');
+  const options = courses.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
   document.getElementById('teeCourseSelect').innerHTML = `<option value="">Select course</option>${options}`;
 }
 function populateCalcPlayers() {
@@ -10501,7 +10563,8 @@ function populateCalcPlayers() {
   document.getElementById('calcPlayer').innerHTML = `<option value="">Select player</option>${options}`;
 }
 function populateCalcCourses() {
-  const options = state.courses.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  const courses = getDedupedCourseOptions(document.getElementById('calcCourse')?.value || '');
+  const options = courses.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
   document.getElementById('calcCourse').innerHTML = `<option value="">Select course</option>${options}`;
   populateCalcTees();
 }
@@ -10512,11 +10575,17 @@ function populateCalcTees() {
   teeSelect.innerHTML = !course ? '<option value="">Select tee</option>' : `<option value="">Select tee</option>${getSortedTeesByYardage(course).map(t => `<option value="${t.id}">${formatTeeSummary(t)}</option>`).join('')}`;
 }
 function populateMatchCourseSelects(selectedCourseId = null, selectedTeeId = null) {
-  const options = state.courses.map(c => `<option value="${c.id}" ${selectedCourseId === c.id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
+  const courses = getDedupedCourseOptions(selectedCourseId || '');
+  updateCourseLibraryDiagnostics({
+    localCourses: (state.courses || []).length,
+    renderedCourseOptions: courses.length,
+  });
+  const options = courses.map(c => `<option value="${c.id}" ${String(selectedCourseId || '') === String(c.id || '') ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('');
   const courseSelect = document.getElementById('matchCourseSelect');
   courseSelect.innerHTML = `<option value="">Select course</option>${options}`;
-  if (selectedCourseId) courseSelect.value = selectedCourseId;
-  populateMatchTees(selectedCourseId || courseSelect.value, selectedTeeId);
+  if (selectedCourseId && courses.some(c => String(c.id) === String(selectedCourseId))) courseSelect.value = selectedCourseId;
+  const renderedCourseId = courseSelect.value || '';
+  populateMatchTees(renderedCourseId, selectedTeeId);
 }
 function populateMatchTees(courseId = null, selectedTeeId = null) {
   const resolvedCourseId = courseId ?? document.getElementById('matchCourseSelect').value;

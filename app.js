@@ -1,10 +1,10 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.40',
-  versionNumber: '30.3.40',
-  cacheName: 'the-dye-ledger-v30.3.40',
+  version: 'v30.3.41',
+  versionNumber: '30.3.41',
+  cacheName: 'the-dye-ledger-v30.3.41',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Scoring UX Cleanup & Runtime Error Fix'
+  buildLabel: 'Smart Score Advance Timing & Sticky Nav Polish'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -14,7 +14,12 @@ const APP_VERSION_NUMBER = BUILD_INFO.versionNumber;
 
 const MATCH_TEMPLATES_STORAGE_KEY = 'dyeLedger.matchTemplates.v1';
 const DEFAULT_SMART_SCORE_ADVANCE = true;
-const SMART_SCORE_ADVANCE_DELAY_MS = 200;
+const SMART_SCORE_ADVANCE_PRESETS = {
+  fast: { label: 'Fast', delay: 200 },
+  normal: { label: 'Normal', delay: 300 },
+  relaxed: { label: 'Relaxed', delay: 500 }
+};
+const DEFAULT_SMART_SCORE_ADVANCE_PRESET = 'normal';
 
 
 
@@ -252,13 +257,27 @@ let scoreAutoAdvanceGeneration = 0;
 const scoreInputSessionState = new Map();
 let pendingScoreAutoAdvanceTimer = null;
 let pendingScoreAutoAdvancePlayerId = null;
-const SCORE_AUTO_ADVANCE_DELAY_MS = SMART_SCORE_ADVANCE_DELAY_MS;
 const SCORE_ENTRY_MODES = {
   single_device: 'One device scores for everyone',
   assigned_players: 'Assigned Players Score Entry',
   team_codes: 'Each team enters its own scores (legacy)',
   open_edit: 'Anyone can enter scores (future)',
 };
+
+function normalizeSmartScoreAdvancePreset(value) {
+  const key = String(value || '').trim().toLowerCase();
+  return SMART_SCORE_ADVANCE_PRESETS[key] ? key : DEFAULT_SMART_SCORE_ADVANCE_PRESET;
+}
+
+function getSmartScoreAdvanceDelay(match = getActiveMatch()) {
+  const preset = normalizeSmartScoreAdvancePreset(match?.smartScoreAdvancePreset);
+  return SMART_SCORE_ADVANCE_PRESETS[preset].delay;
+}
+
+function getSmartScoreAdvancePresetLabel(value) {
+  const preset = normalizeSmartScoreAdvancePreset(value);
+  return SMART_SCORE_ADVANCE_PRESETS[preset].label;
+}
 const LEGACY_SCORE_ENTRY_MODE_MAP = {
   official_scorer: 'single_device',
   team_input: 'assigned_players',
@@ -4101,6 +4120,7 @@ function createEmptyMatch(overrides = {}) {
     officialScorerName: String(overrides.officialScorerName || 'Official scorer').trim() || 'Official scorer',
     statTrackingEnabled: !!overrides.statTrackingEnabled,
     smartScoreAdvanceEnabled: overrides.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!overrides.smartScoreAdvanceEnabled,
+    smartScoreAdvancePreset: normalizeSmartScoreAdvancePreset(overrides.smartScoreAdvancePreset),
     statTrackingPlayerIds: Array.isArray(overrides.statTrackingPlayerIds) ? overrides.statTrackingPlayerIds.map(String) : null,
     selectedGames: Array.isArray(overrides.selectedGames) ? overrides.selectedGames : [],
     status: 'active',
@@ -4179,6 +4199,7 @@ function normalizeMatch(match) {
   match.activeScoreTeam = Math.min(Math.max(1, Number(match.activeScoreTeam) || 1), Math.max(1, Number(match.teamCount) || 1));
   match.statTrackingEnabled = !!match.statTrackingEnabled;
   match.smartScoreAdvanceEnabled = match.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!match.smartScoreAdvanceEnabled;
+  match.smartScoreAdvancePreset = normalizeSmartScoreAdvancePreset(match.smartScoreAdvancePreset);
   match.players = Array.isArray(match.players) ? match.players : [];
   match.players = match.players.map((mp, idx) => ({
     playerId: mp.playerId,
@@ -8656,6 +8677,7 @@ function createBlankSetupDraft() {
     officialScorerName: 'Official scorer',
     statTrackingEnabled: false,
     smartScoreAdvanceEnabled: DEFAULT_SMART_SCORE_ADVANCE,
+    smartScoreAdvancePreset: DEFAULT_SMART_SCORE_ADVANCE_PRESET,
     selectedGames: [],
     players: [],
   });
@@ -8708,6 +8730,7 @@ function buildNextRoundDraft(prior) {
     officialScorerName: prior.officialScorerName || 'Official scorer',
     statTrackingEnabled: !!prior.statTrackingEnabled,
     smartScoreAdvanceEnabled: prior.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!prior.smartScoreAdvanceEnabled,
+    smartScoreAdvancePreset: normalizeSmartScoreAdvancePreset(prior.smartScoreAdvancePreset),
     statTrackingPlayerIds: Array.isArray(prior.statTrackingPlayerIds) ? clonePlain(prior.statTrackingPlayerIds) : null,
     selectedGames: [],
     players: cleanPlayers,
@@ -9768,11 +9791,11 @@ function flashCompletedScoreInput(inputEl) {
   inputEl.classList.remove('score-confirmed-flash');
   void inputEl.offsetWidth;
   inputEl.classList.add('score-confirmed-flash');
-  setTimeout(() => { try { inputEl.classList.remove('score-confirmed-flash'); } catch (err) {} }, 260);
+  setTimeout(() => { try { inputEl.classList.remove('score-confirmed-flash'); } catch (err) {} }, 360);
 }
 
 function allEditableScoresCompleteOnCurrentHole() {
-  const inputs = getEditableScoreInputs();
+  const inputs = getActiveScoringWorkflowInputs();
   return inputs.length > 0 && inputs.every(input => isGrossScoreValidValue(String(input.value || '').trim()));
 }
 
@@ -9820,8 +9843,20 @@ function normalizeCommittedScoreValue(raw) {
   return String(Math.max(0, Math.round(numeric)));
 }
 
+function isActiveScoringWorkflowInput(input) {
+  if (!input || input.disabled || !input.matches?.('#score input[data-score-player]')) return false;
+  if (input.dataset.scoreLocked === '1') return false;
+  if (input.closest('.hidden,[hidden],[aria-hidden="true"]')) return false;
+  const rect = typeof input.getBoundingClientRect === 'function' ? input.getBoundingClientRect() : null;
+  return !rect || rect.width > 0 || rect.height > 0;
+}
+
+function getActiveScoringWorkflowInputs() {
+  return Array.from(document.querySelectorAll('#score input[data-score-player]')).filter(isActiveScoringWorkflowInput);
+}
+
 function getEditableScoreInputs() {
-  return Array.from(document.querySelectorAll('#score input[data-score-player]')).filter(input => !input.disabled);
+  return getActiveScoringWorkflowInputs();
 }
 
 function isRecentDuplicateScoreCommit(playerId, normalizedValue) {
@@ -9909,14 +9944,14 @@ function applyPendingScoreCommitFocus() {
   if (!pendingScoreCommitFocus) return;
   const pending = pendingScoreCommitFocus;
   if (Number(pending.holeNumber) !== Number(currentHole)) return;
-  const target = document.querySelector(`#score input[data-score-player="${pending.playerId}"]`);
+  const target = getLiveScoreInputForPlayer(pending.playerId);
   if (!target || target.disabled) {
     pendingScoreCommitFocus = null;
     return;
   }
   setTimeout(() => {
     requestAnimationFrame(() => {
-      const liveTarget = document.querySelector(`#score input[data-score-player="${pending.playerId}"]`);
+      const liveTarget = getLiveScoreInputForPlayer(pending.playerId);
       if (!liveTarget || liveTarget.disabled) {
         pendingScoreCommitFocus = null;
         return;
@@ -9941,7 +9976,8 @@ function cancelPendingScoreAutoAdvance(playerId = null) {
 
 function getLiveScoreInputForPlayer(playerId) {
   if (!playerId) return null;
-  return document.querySelector(`#score input[data-score-player="${playerId}"]`);
+  const escapedId = cssEscape(playerId);
+  return document.querySelector(`#score input[data-score-player="${escapedId}"]`);
 }
 
 function schedulePendingScoreAutoAdvance(inputEl) {
@@ -9967,7 +10003,7 @@ function schedulePendingScoreAutoAdvance(inputEl) {
     if ((liveSession.generation || 0) !== generation) return;
     if (document.activeElement && document.activeElement !== liveInput && document.activeElement.matches?.('input,select,textarea,button')) return;
     commitScoreInput(liveInput, { viaAutoAdvance: true, expectedGeneration: generation });
-  }, SCORE_AUTO_ADVANCE_DELAY_MS);
+  }, getSmartScoreAdvanceDelay(match));
 }
 
 function commitScoreInput(inputEl, { viaEnter = false, viaAutoAdvance = false, expectedGeneration = null } = {}) {
@@ -10005,20 +10041,16 @@ function commitScoreInput(inputEl, { viaEnter = false, viaAutoAdvance = false, e
     && allEditableScoresCompleteOnCurrentHole();
   const nextHole = canAutoNextHole ? getAdjacentPlayableHole(match, currentHole, 1, getTee(match.courseId, match.teeId)) : null;
 
-  const saveFn = window.dyeLedgerSaveCurrentHole;
-  if (typeof saveFn === 'function') {
-    saveFn({ targetHole: currentHole, silent: true });
-  } else {
-    persistCurrentMatch({ applyDom: true, immediateShared: true, silent: true });
-  }
-
   if (changed && hasCommittedValue) {
     flashCompletedScoreInput(inputEl);
     triggerSmartScoreHaptic();
   }
 
-  if (canAutoNextHole && nextHole && typeof saveFn === 'function') {
-    saveFn({ targetHole: nextHole, silent: true });
+  const saveFn = window.dyeLedgerSaveCurrentHole;
+  if (typeof saveFn === 'function') {
+    saveFn(canAutoNextHole && nextHole ? { advance: true, silent: true } : { targetHole: currentHole, silent: true });
+  } else {
+    persistCurrentMatch({ applyDom: true, immediateShared: true, silent: true });
   }
 
   scoreInputSessionState.delete(playerId);
@@ -10973,6 +11005,21 @@ function renderStatTrackingPlayerSelector(explicitIds = null) {
     </div>`;
 }
 
+function syncSmartScoreAdvancePresetUi(matchOrDraft = null) {
+  const toggle = document.getElementById('smartScoreAdvanceInput');
+  const preset = document.getElementById('smartScoreAdvancePresetSelect');
+  const wrap = document.getElementById('smartScoreAdvancePresetWrap');
+  if (!preset) return;
+  preset.value = normalizeSmartScoreAdvancePreset(matchOrDraft?.smartScoreAdvancePreset || preset.value);
+  const enabled = toggle ? !!toggle.checked : true;
+  preset.disabled = !enabled;
+  if (wrap) wrap.classList.toggle('is-disabled', !enabled);
+}
+
+function getSmartScoreAdvancePresetFromSetup() {
+  return normalizeSmartScoreAdvancePreset(document.getElementById('smartScoreAdvancePresetSelect')?.value || DEFAULT_SMART_SCORE_ADVANCE_PRESET);
+}
+
 
 function renderTodaysMatchSummary() {
   const wrap = document.getElementById('todaysMatchSummary');
@@ -10988,6 +11035,7 @@ function renderTodaysMatchSummary() {
   const gameNames = selectedGames.map(g => getGameLabel(g)).filter(Boolean);
   const statEnabled = !!document.getElementById('enableStatTrackingInput')?.checked;
   const smartAdvanceEnabled = !!document.getElementById('smartScoreAdvanceInput')?.checked;
+  const smartAdvancePreset = getSmartScoreAdvancePresetFromSetup();
   const statIds = statEnabled ? collectStatTrackingPlayerIdsFromSetup(selectedPlayers) : [];
   const statNames = statIds.map(id => getPlayer(id)?.name || '').filter(Boolean);
   const rows = [
@@ -10998,7 +11046,7 @@ function renderTodaysMatchSummary() {
     ['Games', gameNames.length ? gameNames.join(', ') : 'None selected'],
     ['Featured Competition', getFeaturedCompetitionDisplayName({ selectedGames }, featuredCompetition === 'auto' ? resolveAutoFeaturedCompetition({ selectedGames }) : featuredCompetition)],
     ['Stat Tracking', statEnabled ? (statNames.length ? statNames.join(', ') : 'No players selected') : 'Off'],
-    ['Smart Score Advance', smartAdvanceEnabled ? 'On' : 'Off'],
+    ['Smart Score Advance', smartAdvanceEnabled ? `${getSmartScoreAdvancePresetLabel(smartAdvancePreset)} (${SMART_SCORE_ADVANCE_PRESETS[smartAdvancePreset].delay} ms)` : 'Off'],
   ];
   wrap.innerHTML = rows.map(([label, value]) => `<div class="setup-summary-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('');
   renderRoundReadiness();
@@ -11064,6 +11112,7 @@ function buildTemplateFromCurrentSetup(nameOverride = '') {
     officialScorerName: String(fd.get('officialScorerName') || '').trim() || 'Official scorer',
     statTrackingEnabled: fd.get('enableStatTracking') === 'on',
     smartScoreAdvanceEnabled: fd.get('smartScoreAdvance') === 'on',
+    smartScoreAdvancePreset: getSmartScoreAdvancePresetFromSetup(),
     statTrackingPlayerIds: fd.get('enableStatTracking') === 'on' ? collectStatTrackingPlayerIdsFromSetup(selectedPlayers) : []
   };
 }
@@ -11091,6 +11140,7 @@ function applyMatchTemplate(templateId) {
     officialScorerName: template.officialScorerName || 'Official scorer',
     statTrackingEnabled: !!template.statTrackingEnabled,
     smartScoreAdvanceEnabled: template.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!template.smartScoreAdvanceEnabled,
+    smartScoreAdvancePreset: normalizeSmartScoreAdvancePreset(template.smartScoreAdvancePreset),
     statTrackingPlayerIds: Array.isArray(template.statTrackingPlayerIds) ? template.statTrackingPlayerIds.slice() : [],
     players: sanitizeTemplatePlayers(template.players).map((p, idx) => ({
       ...p,
@@ -12171,6 +12221,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
     document.getElementById('officialScorerNameInput').value = draft.officialScorerName || 'Official scorer';
     const statToggle = document.getElementById('enableStatTrackingInput'); if (statToggle) statToggle.checked = !!draft.statTrackingEnabled;
     const smartToggle = document.getElementById('smartScoreAdvanceInput'); if (smartToggle) smartToggle.checked = draft.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!draft.smartScoreAdvanceEnabled;
+    syncSmartScoreAdvancePresetUi(draft);
     populateMatchCourseSelects(draft.courseId || '', draft.teeId || '');
     renderTeamNameInputs(draft.teamCount || 1, draft.teamNames || []);
     renderScoringControlConfig(draft);
@@ -12203,6 +12254,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
   document.getElementById('officialScorerNameInput').value = match.officialScorerName || 'Official scorer';
   const statToggle = document.getElementById('enableStatTrackingInput'); if (statToggle) statToggle.checked = !!match.statTrackingEnabled;
   const smartToggle = document.getElementById('smartScoreAdvanceInput'); if (smartToggle) smartToggle.checked = match.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!match.smartScoreAdvanceEnabled;
+  syncSmartScoreAdvancePresetUi(match);
   renderTeamNameInputs(match.teamCount || 2, match.teamNames || []);
   renderScoringControlConfig(match);
   uiState.matchPlayerDraft = (match.players || []).map((p, idx) => ({ ...p, slot: Number.isFinite(Number(p.slot)) ? Number(p.slot) : idx, teeId: p.teeId || match.teeId || '' }));
@@ -12743,12 +12795,13 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   });
   document.getElementById('setup').addEventListener('change', e => {
     if (e.target && (e.target.id === 'enableStatTrackingInput' || e.target.matches('[data-player-slot], [data-stat-track-player]'))) renderStatTrackingPlayerSelector();
-    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #featuredCompetitionSelect, #scoreEntryModeSelect, #officialScorerNameInput, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-game-config], #enableStatTrackingInput, #smartScoreAdvanceInput, [data-stat-track-player]')) {
+    if (e.target && (e.target.id === 'smartScoreAdvanceInput' || e.target.id === 'smartScoreAdvancePresetSelect')) syncSmartScoreAdvancePresetUi();
+    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #featuredCompetitionSelect, #scoreEntryModeSelect, #officialScorerNameInput, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-game-config], #enableStatTrackingInput, #smartScoreAdvanceInput, #smartScoreAdvancePresetSelect, [data-stat-track-player]')) {
       setTimeout(() => { renderSetupHandicapPreview(); renderGamesPicker(collectSelectedGames()); renderFeaturedCompetitionSetup(collectSelectedGames()); renderTodaysMatchSummary(); }, 0);
     }
   });
   document.getElementById('setup').addEventListener('input', e => {
-    if (e.target.matches('[data-team-name], [name="allowance"], #scoreEntryModeSelect, #officialScorerNameInput, [data-team-scorer-label], [data-team-scorer-code], [data-game-config], [data-nine-point-player], #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect')) {
+    if (e.target.matches('[data-team-name], [name="allowance"], #scoreEntryModeSelect, #officialScorerNameInput, [data-team-scorer-label], [data-team-scorer-code], [data-game-config], [data-nine-point-player], #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, #smartScoreAdvancePresetSelect')) {
       renderSetupHandicapPreview();
       renderTodaysMatchSummary();
     }
@@ -13219,6 +13272,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       officialScorerName,
       statTrackingEnabled: fd.get('enableStatTracking') === 'on',
       smartScoreAdvanceEnabled: fd.get('smartScoreAdvance') === 'on',
+      smartScoreAdvancePreset: getSmartScoreAdvancePresetFromSetup(),
       statTrackingPlayerIds: fd.get('enableStatTracking') === 'on' ? collectStatTrackingPlayerIdsFromSetup(selectedPlayers) : [],
       teamScorers,
       selectedGames: normalizeSelectedGamesOrder(selectedGames),

@@ -1496,6 +1496,24 @@ body.sheet-open{overflow:hidden}
 /* v23.8 stat tracking */
 .inline-check{display:flex;align-items:center;gap:10px;font-weight:600}
 .inline-check input{width:18px;height:18px}
+.smart-score-preset-wrap{
+  display:grid;
+  grid-template-columns:minmax(0, 1fr);
+  gap:4px;
+  margin-top:6px;
+  max-width:280px;
+}
+.smart-score-preset-wrap span{
+  font-size:12px;
+  color:var(--muted);
+  font-weight:700;
+}
+.smart-score-preset-wrap select{
+  min-height:40px;
+}
+.smart-score-preset-wrap.is-disabled{
+  opacity:.58;
+}
 .stat-entry-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .stat-player-card{border:1px solid var(--border);border-radius:14px;padding:12px;background:#fbfdfc}
 .stat-player-card.is-readonly{opacity:.7}
@@ -4598,10 +4616,13 @@ main {
   #score table th,#score table td{padding-left:5px !important;padding-right:5px !important;}
 }
 .score-input.score-confirmed-flash{
-  animation:score-confirmed-flash-v30339 .32s ease-out;
+  animation:score-confirmed-flash-v30341 .32s ease-out;
+  transform-origin:center;
+  will-change:transform,box-shadow,background-color;
 }
-@keyframes score-confirmed-flash-v30339{
-  0%{background:#e7f2ec;color:var(--accent);box-shadow:0 0 0 3px rgba(11,93,59,.10);transform:scale(1.018)}
+@keyframes score-confirmed-flash-v30341{
+  0%{background:#e7f2ec;color:var(--accent);box-shadow:0 0 0 3px rgba(11,93,59,.10);transform:scale(1)}
+  45%{background:#d8ebdf;color:var(--accent);box-shadow:0 0 0 4px rgba(11,93,59,.14);transform:scale(1.018)}
   100%{background:#fff;color:var(--text);box-shadow:none;transform:scale(1)}
 }
 @media (prefers-reduced-motion: reduce){
@@ -4638,9 +4659,37 @@ body.keyboard-open .app-chrome{
   top:0 !important;
 }
 .panel{scroll-margin-top:calc(var(--app-chrome-height, 0px) + 12px) !important;}
+#score .panel-head,
+#leaderboard .scoreboard-export-card,
+#courses > .card.tight-card:first-child,
+#insights > .card.tight-card:first-child,
+#settings > .card.tight-card:first-child{
+  scroll-margin-top:calc(var(--app-chrome-height, 0px) + 14px) !important;
+}
+#score .score-hole-nav{
+  top:calc(var(--app-chrome-height, 0px) + 8px) !important;
+  z-index:1400 !important;
+}
+#leaderboard .scoreboard-export-card{
+  position:sticky;
+  top:calc(var(--app-chrome-height, 0px) + 8px);
+  z-index:1200;
+  background:#fff;
+}
+#courses details.scoreboard-collapsible > summary{
+  position:sticky;
+  top:calc(var(--app-chrome-height, 0px) + 8px);
+  z-index:1100;
+  background:#fff;
+  border-radius:12px;
+}
 @media print{
   body{padding-top:0 !important;}
   .app-chrome{position:static !important;box-shadow:none !important;}
   .app-chrome .app-header,.app-chrome .top-tabs{position:static !important;}
   main{padding-top:0 !important;}
+  #leaderboard .scoreboard-export-card,
+  #courses details.scoreboard-collapsible > summary{
+    position:static !important;
+  }
 }

@@ -1,10 +1,10 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.44',
-  versionNumber: '30.3.44',
-  cacheName: 'the-dye-ledger-v30.3.44',
+  version: 'v30.3.45',
+  versionNumber: '30.3.45',
+  cacheName: 'the-dye-ledger-v30.3.45',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Scoring & Setup Polish'
+  buildLabel: 'Shared Match Trust Release'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -794,6 +794,7 @@ function getSharedSyncStatus(match) {
   }
   const stateLabel = String(match.cloudSyncState || 'local-cache');
   const pending = stateLabel === 'pending-sync' || sharedMatchSyncTimers.has(match.id) || sharedMatchSyncDirty.get(match.id) ? 1 : 0;
+  const lastError = String(match.lastSharedSyncError || '').trim();
   if (navigator.onLine === false) {
     return { label: 'Offline — changes saved locally', detail: pending ? `${pending} change waiting to sync` : 'Local scoring remains available.', tone: 'warning', pending };
   }
@@ -802,6 +803,9 @@ function getSharedSyncStatus(match) {
   }
   if (pending || stateLabel === 'pending-sync') {
     return { label: pending > 1 ? `${pending} changes waiting to sync` : 'Pending changes', detail: 'Tap Sync Now or keep scoring. Changes are saved locally.', tone: 'warning', pending };
+  }
+  if (lastError) {
+    return { label: 'Sync needs attention', detail: `${lastError} Scores are still saved on this phone.`, tone: 'warning', pending };
   }
   if (stateLabel === 'cloud-synced' || stateLabel === 'synced') {
     return { label: 'Synced', detail: 'Shared match is current.', tone: 'good', pending: 0 };
@@ -813,6 +817,17 @@ function getSharedSyncStatus(match) {
 }
 function formatSharedLastSync(match) {
   return match?.lastCloudSyncAt ? formatTimestampET(match.lastCloudSyncAt, { includeDate: false }) : 'Not synced yet';
+}
+function formatSharedStatusTimestamp(ts) {
+  return ts ? formatTimestampET(ts, { includeDate: false }) : 'Not yet';
+}
+function getSharedFriendlyError(err) {
+  const raw = String(err?.message || err?.details || err || '').trim();
+  if (!raw) return 'Cloud sync is unavailable right now.';
+  if (/network|fetch|failed|offline|unavailable|timeout/i.test(raw)) return 'Cloud sync is unavailable right now.';
+  if (/not found/i.test(raw)) return 'Shared match was not found.';
+  if (/permission|policy|auth|jwt|login/i.test(raw)) return 'Cloud permission needs attention.';
+  return 'Cloud sync needs attention.';
 }
 function getAssignedPlayerNamesForParticipant(match, participantId = getCurrentSharedParticipantId(match)) {
   if (!match || match.storageMode !== 'shared') return [];
@@ -4489,6 +4504,10 @@ function normalizeMatch(match) {
   match.sharedMatchId = String(match.sharedMatchId || match.id || '');
   match.cloudSyncState = String(match.cloudSyncState || (match.storageMode === 'shared' ? 'local-cache' : 'local-only'));
   match.lastCloudSyncAt = match.lastCloudSyncAt || null;
+  match.lastSharedSyncAttemptAt = match.lastSharedSyncAttemptAt || null;
+  match.lastSharedScorePullAt = match.lastSharedScorePullAt || null;
+  match.lastSharedScorePushAt = match.lastSharedScorePushAt || null;
+  match.lastSharedSyncError = String(match.lastSharedSyncError || '');
   match.sharedOwnerUserId = match.sharedOwnerUserId || null;
   match.sharedMatchRef = match.sharedMatchRef || match.sharedMatchId || match.id;
   match.sharedMatchCode = normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || '');
@@ -7197,6 +7216,8 @@ async function uploadSharedMatch(match) {
   match.sharedOwnerUserId = user?.id || null;
   match.cloudSyncState = 'cloud-synced';
   match.lastCloudSyncAt = new Date().toISOString();
+  match.lastSharedScorePushAt = match.lastCloudSyncAt;
+  match.lastSharedSyncError = '';
   rememberSharedMatchId(match.sharedMatchId);
   return match;
 }
@@ -7399,13 +7420,20 @@ async function pullSharedScoreEntries(match, { silent = true, render = true } = 
     if (changed) {
       match.cloudSyncState = 'cloud-synced';
       match.lastCloudSyncAt = new Date().toISOString();
+      match.lastSharedScorePullAt = match.lastCloudSyncAt;
+      match.lastSharedSyncError = '';
       persist({ skipRender: true });
       if (render) renderAll();
       if (!silent) toast('Shared scores updated.');
+    } else {
+      match.lastSharedScorePullAt = new Date().toISOString();
+      match.lastSharedSyncError = '';
     }
     return changed;
   } catch (err) {
     console.warn('Shared score pull failed.', err);
+    match.lastSharedSyncError = getSharedFriendlyError(err);
+    persist({ skipRender: true });
     if (!silent) toast('Could not refresh shared scores. Local scoring is still saved.');
     return false;
   }

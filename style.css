@@ -4249,6 +4249,11 @@ main {
 .round-readiness-status { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; padding:0.85rem; border-radius:16px; border:1px solid var(--line); background:rgba(255,255,255,0.72); }
 .round-readiness-status.ready { border-color:rgba(22,163,74,.35); background:rgba(22,163,74,.08); }
 .round-readiness-status.review { border-color:rgba(217,119,6,.35); background:rgba(217,119,6,.08); }
+.readiness-weather-status { display:grid; grid-template-columns:auto minmax(0,1fr); gap:0.55rem; align-items:start; margin-top:0.7rem; padding:0.7rem; border:1px solid var(--line); border-radius:12px; background:rgba(255,255,255,0.72); }
+.readiness-weather-status > span { display:inline-flex; align-items:center; justify-content:center; min-width:1.35rem; height:1.35rem; border-radius:999px; font-size:0.72rem; font-weight:850; background:#e8f2ec; color:#0b5d3b; }
+.readiness-weather-status.warn > span { background:#fff4db; color:#9a5b00; }
+.readiness-weather-status.info > span { background:#edf3fb; color:#265b8f; }
+.readiness-weather-status .tiny { margin-top:0.15rem; }
 .readiness-start-btn { white-space:nowrap; }
 .readiness-check-list { display:grid; gap:0.45rem; }
 .readiness-check { display:flex; align-items:flex-start; gap:0.55rem; padding:0.5rem 0.6rem; border-radius:12px; border:1px solid rgba(15,23,42,.08); background:rgba(255,255,255,0.58); }

@@ -1,10 +1,10 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.43',
-  versionNumber: '30.3.43',
-  cacheName: 'the-dye-ledger-v30.3.43',
+  version: 'v30.3.44',
+  versionNumber: '30.3.44',
+  cacheName: 'the-dye-ledger-v30.3.44',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Round Weather Context Foundation'
+  buildLabel: 'Scoring & Setup Polish'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -15,9 +15,9 @@ const APP_VERSION_NUMBER = BUILD_INFO.versionNumber;
 const MATCH_TEMPLATES_STORAGE_KEY = 'dyeLedger.matchTemplates.v1';
 const DEFAULT_SMART_SCORE_ADVANCE = true;
 const SMART_SCORE_ADVANCE_PRESETS = {
-  fast: { label: 'Fast', delay: 200 },
-  normal: { label: 'Normal', delay: 300 },
-  relaxed: { label: 'Relaxed', delay: 500 }
+  fast: { label: 'Fast', delay: 400 },
+  normal: { label: 'Normal', delay: 500 },
+  relaxed: { label: 'Relaxed', delay: 700 }
 };
 const DEFAULT_SMART_SCORE_ADVANCE_PRESET = 'normal';
 const WEATHER_CAPTURE_SOURCE = 'open-meteo';

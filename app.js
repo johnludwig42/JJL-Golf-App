@@ -1,10 +1,10 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.42',
-  versionNumber: '30.3.42',
-  cacheName: 'the-dye-ledger-v30.3.42',
+  version: 'v30.3.43',
+  versionNumber: '30.3.43',
+  cacheName: 'the-dye-ledger-v30.3.43',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Smart Score Advance Timing & Sticky Nav Polish'
+  buildLabel: 'Round Weather Context Foundation'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -20,6 +20,10 @@ const SMART_SCORE_ADVANCE_PRESETS = {
   relaxed: { label: 'Relaxed', delay: 500 }
 };
 const DEFAULT_SMART_SCORE_ADVANCE_PRESET = 'normal';
+const WEATHER_CAPTURE_SOURCE = 'open-meteo';
+const WEATHER_CAPTURE_TIMEOUT_MS = 5000;
+const WEATHER_GEOLOCATION_MAX_AGE_MS = 10 * 60 * 1000;
+const WEATHER_LAT_LON_PRECISION = 2;
 
 
 
@@ -1515,6 +1519,263 @@ function toast(message, ms = 2200) {
   toast._timer = setTimeout(() => el.classList.add('hidden'), ms);
 }
 
+function roundWeatherCoordinate(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  const factor = 10 ** WEATHER_LAT_LON_PRECISION;
+  return Math.round(n * factor) / factor;
+}
+
+function roundWeatherNumber(value, digits = 0) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  const factor = 10 ** Math.max(0, Number(digits) || 0);
+  return Math.round(n * factor) / factor;
+}
+
+function normalizeRoundWeatherStatus(status = {}) {
+  const allowed = new Set(['not_requested', 'pending', 'captured', 'permission_needed', 'unavailable', 'skipped']);
+  const stateValue = String(status?.state || 'not_requested');
+  return {
+    state: allowed.has(stateValue) ? stateValue : 'not_requested',
+    reason: String(status?.reason || '').trim(),
+    updatedAt: String(status?.updatedAt || '').trim(),
+  };
+}
+
+function normalizeRoundWeatherSnapshot(weather) {
+  if (!weather || typeof weather !== 'object') return null;
+  const summary = String(weather.summary || '').trim();
+  const normalized = {
+    capturedAt: String(weather.capturedAt || '').trim(),
+    source: String(weather.source || WEATHER_CAPTURE_SOURCE).trim() || WEATHER_CAPTURE_SOURCE,
+    latitudeApprox: roundWeatherCoordinate(weather.latitudeApprox),
+    longitudeApprox: roundWeatherCoordinate(weather.longitudeApprox),
+    temperature: roundWeatherNumber(weather.temperature),
+    apparentTemperature: roundWeatherNumber(weather.apparentTemperature),
+    windSpeed: roundWeatherNumber(weather.windSpeed),
+    windDirection: roundWeatherNumber(weather.windDirection),
+    precipitation: roundWeatherNumber(weather.precipitation, 2),
+    conditionsCode: Number.isFinite(Number(weather.conditionsCode)) ? Number(weather.conditionsCode) : null,
+    conditionsText: String(weather.conditionsText || '').trim(),
+    humidity: roundWeatherNumber(weather.humidity),
+    summary,
+  };
+  const hasWeatherData = !!normalized.summary
+    || !!normalized.capturedAt
+    || normalized.temperature != null
+    || normalized.apparentTemperature != null
+    || normalized.windSpeed != null
+    || normalized.conditionsCode != null;
+  return hasWeatherData ? normalized : null;
+}
+
+function normalizeRoundContext(context = {}) {
+  const roundContext = context && typeof context === 'object' ? context : {};
+  const weather = normalizeRoundWeatherSnapshot(roundContext.weather);
+  const weatherStatus = normalizeRoundWeatherStatus(roundContext.weatherStatus || (weather ? { state: 'captured', updatedAt: weather.capturedAt } : {}));
+  return {
+    ...roundContext,
+    weather,
+    weatherStatus: weather ? { ...weatherStatus, state: 'captured', reason: weatherStatus.reason || 'Weather context captured.' } : weatherStatus,
+  };
+}
+
+function setRoundWeatherStatus(match, stateValue, reason = '') {
+  if (!match) return;
+  match.roundContext = normalizeRoundContext(match.roundContext);
+  match.roundContext.weatherStatus = normalizeRoundWeatherStatus({
+    state: stateValue,
+    reason,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+function getWeatherConditionText(code) {
+  const n = Number(code);
+  if (!Number.isFinite(n)) return '';
+  if (n === 0) return 'clear skies';
+  if (n === 1) return 'mostly clear skies';
+  if (n === 2) return 'partly cloudy skies';
+  if (n === 3) return 'overcast skies';
+  if (n === 45 || n === 48) return 'fog';
+  if ([51, 53, 55].includes(n)) return 'drizzle';
+  if ([56, 57].includes(n)) return 'freezing drizzle';
+  if ([61, 63, 65].includes(n)) return 'rain';
+  if ([66, 67].includes(n)) return 'freezing rain';
+  if ([71, 73, 75, 77].includes(n)) return 'snow';
+  if ([80, 81, 82].includes(n)) return 'rain showers';
+  if ([85, 86].includes(n)) return 'snow showers';
+  if ([95, 96, 99].includes(n)) return 'thunderstorms';
+  return 'current conditions';
+}
+
+function getTemperatureDescriptor(temp) {
+  const n = Number(temp);
+  if (!Number.isFinite(n)) return '';
+  if (n < 45) return 'cold';
+  if (n < 60) return 'cool';
+  if (n < 76) return 'mild';
+  if (n < 86) return 'warm';
+  return 'hot';
+}
+
+function getWindDirectionText(degrees) {
+  const n = Number(degrees);
+  if (!Number.isFinite(n)) return '';
+  const directions = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'];
+  return directions[Math.round((((n % 360) + 360) % 360) / 45) % 8];
+}
+
+function getWindDescriptor(speed) {
+  const n = Number(speed);
+  if (!Number.isFinite(n) || n < 1) return 'calm';
+  if (n < 8) return 'light';
+  if (n < 15) return 'steady';
+  if (n < 22) return 'breezy';
+  return 'windy';
+}
+
+function buildWeatherSummary(weather) {
+  const condition = String(weather?.conditionsText || getWeatherConditionText(weather?.conditionsCode) || 'conditions').trim();
+  const temp = roundWeatherNumber(weather?.temperature);
+  const temperatureText = temp == null ? '' : `${temp}F`;
+  const descriptor = getTemperatureDescriptor(temp);
+  const windSpeed = roundWeatherNumber(weather?.windSpeed);
+  const windDirection = getWindDirectionText(weather?.windDirection);
+  const windDescriptor = getWindDescriptor(windSpeed);
+  const conditionLead = condition ? `${condition.charAt(0).toUpperCase()}${condition.slice(1)}` : 'Weather';
+  const tempLead = [descriptor, temperatureText].filter(Boolean).join(', ');
+  const windText = windSpeed == null || windDescriptor === 'calm'
+    ? 'calm winds'
+    : `${windDescriptor}${windDirection ? ` ${windDirection}` : ''} wind around ${windSpeed} mph`;
+  const precip = Number(weather?.precipitation);
+  const precipText = Number.isFinite(precip) && precip > 0 ? `, with ${roundWeatherNumber(precip, 2)} in. precipitation reported` : '';
+  return `${conditionLead}${tempLead ? ` and ${tempLead}` : ''}, with ${windText}${precipText}.`;
+}
+
+function getRoundWeatherSummary(match) {
+  return String(match?.roundContext?.weather?.summary || '').trim();
+}
+
+function getRoundWeatherStatusLabel(match) {
+  const summary = getRoundWeatherSummary(match);
+  if (summary) return { label: 'Weather context captured', detail: summary, kind: 'ok' };
+  const status = normalizeRoundWeatherStatus(match?.roundContext?.weatherStatus || {});
+  if (status.state === 'pending') return { label: 'Weather capture in progress', detail: 'Scoring is available while weather context is captured.', kind: 'info' };
+  if (status.state === 'permission_needed') return { label: 'Location permission needed', detail: status.reason || 'Weather context was skipped because location was not available.', kind: 'warn' };
+  if (status.state === 'unavailable') return { label: 'Weather unavailable', detail: status.reason || 'Weather context could not be captured for this round.', kind: 'warn' };
+  if (status.state === 'skipped') return { label: 'Weather skipped', detail: status.reason || 'Weather context was skipped for this round.', kind: 'info' };
+  return { label: 'Weather context optional', detail: 'Weather context uses your location once when the round starts. It is saved only with this round.', kind: 'info' };
+}
+
+function getCurrentWeatherPosition() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('Geolocation is not available on this device.'));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: false,
+      timeout: WEATHER_CAPTURE_TIMEOUT_MS,
+      maximumAge: WEATHER_GEOLOCATION_MAX_AGE_MS,
+    });
+  });
+}
+
+async function fetchOpenMeteoCurrentWeather(latitude, longitude) {
+  const params = new URLSearchParams({
+    latitude: String(latitude),
+    longitude: String(longitude),
+    current: 'temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m',
+    temperature_unit: 'fahrenheit',
+    wind_speed_unit: 'mph',
+    precipitation_unit: 'inch',
+    timezone: 'auto',
+  });
+  const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(`Weather unavailable (${response.status}).`);
+  return data;
+}
+
+function buildWeatherSnapshotFromOpenMeteo(position, data) {
+  const current = data?.current && typeof data.current === 'object' ? data.current : null;
+  if (!current) throw new Error('Weather response did not include current conditions.');
+  const weather = {
+    capturedAt: new Date().toISOString(),
+    source: WEATHER_CAPTURE_SOURCE,
+    latitudeApprox: roundWeatherCoordinate(position?.coords?.latitude),
+    longitudeApprox: roundWeatherCoordinate(position?.coords?.longitude),
+    temperature: roundWeatherNumber(current.temperature_2m),
+    apparentTemperature: roundWeatherNumber(current.apparent_temperature),
+    windSpeed: roundWeatherNumber(current.wind_speed_10m),
+    windDirection: roundWeatherNumber(current.wind_direction_10m),
+    precipitation: roundWeatherNumber(current.precipitation, 2),
+    conditionsCode: Number.isFinite(Number(current.weather_code)) ? Number(current.weather_code) : null,
+    conditionsText: getWeatherConditionText(current.weather_code),
+    humidity: roundWeatherNumber(current.relative_humidity_2m),
+  };
+  weather.summary = buildWeatherSummary(weather);
+  return normalizeRoundWeatherSnapshot(weather);
+}
+
+function getWeatherFailureStatus(error) {
+  const code = Number(error?.code);
+  if (code === 1) return { state: 'permission_needed', reason: 'Location permission was denied, so weather context was skipped.' };
+  if (code === 2) return { state: 'unavailable', reason: 'Location was unavailable, so weather context was skipped.' };
+  if (code === 3) return { state: 'unavailable', reason: 'Location timed out, so weather context was skipped.' };
+  return { state: 'unavailable', reason: 'Weather context could not be captured.' };
+}
+
+async function captureWeatherForMatch(matchId) {
+  const match = getMatch(matchId);
+  if (!match) return false;
+  match.roundContext = normalizeRoundContext(match.roundContext);
+  if (match.roundContext.weather) return false;
+  try {
+    if (navigator.onLine === false) {
+      setRoundWeatherStatus(match, 'skipped', 'Weather unavailable offline.');
+      persistWeatherCaptureResult(match);
+      return false;
+    }
+    if (!navigator.geolocation) {
+      setRoundWeatherStatus(match, 'skipped', 'Weather skipped because location is not available on this device.');
+      persistWeatherCaptureResult(match);
+      return false;
+    }
+    setRoundWeatherStatus(match, 'pending', 'Capturing weather context...');
+    persistWeatherCaptureResult(match);
+    const position = await getCurrentWeatherPosition();
+    const data = await fetchOpenMeteoCurrentWeather(position.coords.latitude, position.coords.longitude);
+    const snapshot = buildWeatherSnapshotFromOpenMeteo(position, data);
+    if (!snapshot) throw new Error('Weather response did not include usable current conditions.');
+    match.roundContext = normalizeRoundContext(match.roundContext);
+    match.roundContext.weather = snapshot;
+    setRoundWeatherStatus(match, 'captured', 'Weather context captured.');
+    persistWeatherCaptureResult(match);
+    return true;
+  } catch (err) {
+    const status = getWeatherFailureStatus(err);
+    setRoundWeatherStatus(match, status.state, status.reason);
+    persistWeatherCaptureResult(match);
+    return false;
+  }
+}
+
+function persistWeatherCaptureResult(match) {
+  normalizeMatch(match);
+  persist({ skipRender: true });
+  if (match?.storageMode === 'shared') scheduleSharedMatchSync(match, { immediate: true, silent: true });
+  renderRoundReadiness();
+  renderRoundRecapControlPanel(match);
+}
+
+function scheduleWeatherCaptureForMatch(matchId) {
+  if (!matchId) return;
+  window.setTimeout(() => { captureWeatherForMatch(matchId).catch(() => {}); }, 0);
+}
+
 function getPlayerIndexText(player) {
   return Number(player?.index || 0).toFixed(1);
 }
@@ -2796,6 +3057,10 @@ function buildRecapInputTransparency(match) {
         <strong>Round Notes Included</strong>
         <span>${notes ? `${notes.length} characters` : 'None yet — recap will rely on scores, games, and stats.'}</span>
       </div>
+      <div class="recap-input-row">
+        <strong>Weather Context</strong>
+        <span>${escapeHtml(getRoundWeatherSummary(match) || 'None captured yet.')}</span>
+      </div>
       <div class="recap-input-row recap-input-row-stack">
         <strong>Memories Included in Recap (${memories.length})</strong>
         ${previewMemories.length ? `<ul>${previewMemories.map(m => `<li>${escapeHtml(m.holeNumber ? `Hole ${m.holeNumber}: ` : '')}${escapeHtml(m.category && m.category !== 'General' ? `[${m.category}] ` : '')}${escapeHtml(m.text)}</li>`).join('')}</ul>` : '<div class="tiny">No memories saved yet. Use Add Memory on the Play tab to add moments for the recap.</div>'}
@@ -2998,6 +3263,9 @@ function buildRoundRecapPayload(match, metrics) {
     allGamesFinal,
     gameClinchStates,
     roundNotes: String(match?.roundRecapNotes || '').trim(),
+    roundContext: {
+      weather: normalizeRoundWeatherSnapshot(match?.roundContext?.weather),
+    },
     featuredCompetition: {
       selected: getFeaturedCompetitionSelection(match),
       resolved: resolveFeaturedCompetitionKey(match, metrics),
@@ -3005,7 +3273,7 @@ function buildRoundRecapPayload(match, metrics) {
       result: getFeaturedCompetitionResult(match, metrics).result,
     },
     memories: getRoundMemories(match).map(m => ({ text: m.text, category: m.category, holeNumber: m.holeNumber, createdAt: m.createdAt })),
-    recapInstructions: 'Write a polished, private-club style golf recap with short sections: Round Story, Featured Competition, Turning Points, Player Highlights, Game Story, Statistical Notes, Memorable Moments, and Closing Note or Fun Awards when supported. Center the Featured Competition first, distinguish it from Low Gross, Low Net, Money Winner, game winners, and awards, and use Round Notes and Memories for personality. Do not fabricate shots, weather, holes, or emotions not supported by data or notes. If the round is incomplete, explicitly describe the recap as provisional unless all selected games are already clinched/final. If clinched early, explain that the featured competition was decided before all holes were played. Keep the tone professional, fun, golf-aware, specific, and concise on mobile.',
+    recapInstructions: 'Write a polished, private-club style golf recap with short sections: Round Story, Featured Competition, Turning Points, Player Highlights, Game Story, Statistical Notes, Memorable Moments, and Closing Note or Fun Awards when supported. Center the Featured Competition first, distinguish it from Low Gross, Low Net, Money Winner, game winners, and awards, and use Round Notes and Memories for personality. If roundContext.weather.summary is present, you may reference the weather naturally where it helps explain the round, but do not force a weather mention or recite raw weather metrics awkwardly. Do not fabricate shots, weather, holes, or emotions not supported by data or notes. If the round is incomplete, explicitly describe the recap as provisional unless all selected games are already clinched/final. If clinched early, explain that the featured competition was decided before all holes were played. Keep the tone professional, fun, golf-aware, specific, and concise on mobile.',
     players: playerSummaries,
     games: summarizeSelectedGamesForRecap(match, metrics),
     finalSettlement,
@@ -4134,6 +4402,7 @@ function createEmptyMatch(overrides = {}) {
     cloudSyncState: 'local-only',
     notes: '',
     roundRecapNotes: '',
+    roundContext: normalizeRoundContext(overrides.roundContext || {}),
     sharedMatchCode: '',
     sharedHostDeviceId: '',
     sharedHostParticipantId: '',
@@ -4249,6 +4518,7 @@ function normalizeMatch(match) {
   match.roundRecapStatus = typeof match.roundRecapStatus === 'string' ? match.roundRecapStatus : '';
   match.roundEndReason = String(match.roundEndReason || '').trim();
   match.roundCompletionState = match.roundCompletionState && typeof match.roundCompletionState === 'object' ? match.roundCompletionState : null;
+  match.roundContext = normalizeRoundContext(match.roundContext);
   match.playedHoleOrder = Array.isArray(match.playedHoleOrder) ? [...new Set(match.playedHoleOrder.map(Number).filter(n => Number.isFinite(n) && n > 0))] : [];
   match.holeFirstCompletedAt = match.holeFirstCompletedAt && typeof match.holeFirstCompletedAt === 'object' ? match.holeFirstCompletedAt : {};
   match.notes = typeof match.notes === 'string' ? match.notes : '';
@@ -6780,7 +7050,7 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
     status: match.status || 'active',
     course_id: match.courseId || '',
     reference_tee_id: match.teeId || '',
-    course_snapshot: { ...courseSnapshot, sharedMatchMeta: { scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device'), matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || ''), hostDeviceId: match.sharedHostDeviceId || getSharedDeviceId(), hostParticipantId: match.sharedHostParticipantId || getCurrentSharedParticipantId(match), devices: Array.isArray(match.sharedDevices) ? match.sharedDevices : [], participants: getSharedAssignmentParticipants(match), playerAssignments: match.sharedPlayerAssignments || {}, memories: getRoundMemories(match), memoriesUpdatedAt: new Date().toISOString() } },
+    course_snapshot: { ...courseSnapshot, sharedMatchMeta: { scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device'), matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || ''), hostDeviceId: match.sharedHostDeviceId || getSharedDeviceId(), hostParticipantId: match.sharedHostParticipantId || getCurrentSharedParticipantId(match), devices: Array.isArray(match.sharedDevices) ? match.sharedDevices : [], participants: getSharedAssignmentParticipants(match), playerAssignments: match.sharedPlayerAssignments || {}, memories: getRoundMemories(match), memoriesUpdatedAt: new Date().toISOString(), roundContext: normalizeRoundContext(match.roundContext) } },
     format: match.format || 'teams',
     allowance: Number(match.allowance) || 100,
     hole_count: getRequestedHoleCount(match),
@@ -6876,6 +7146,12 @@ async function uploadSharedMatch(match) {
       payloadMeta.memories = mergedMemories;
       payloadMeta.memoriesUpdatedAt = new Date().toISOString();
       match.memories = mergedMemories;
+      const liveRoundContext = normalizeRoundContext(liveMeta.roundContext || {});
+      const payloadRoundContext = normalizeRoundContext(payloadMeta.roundContext || {});
+      if (liveRoundContext.weather && !payloadRoundContext.weather) {
+        payloadMeta.roundContext = liveRoundContext;
+        match.roundContext = liveRoundContext;
+      }
       // Devices: union so a just-joined device isn't dropped by a host upload.
       payloadMeta.devices = normalizeSharedDeviceList(
         [...(Array.isArray(liveMeta.devices) ? liveMeta.devices : []), ...(Array.isArray(payloadMeta.devices) ? payloadMeta.devices : [])],
@@ -7019,6 +7295,7 @@ function hydrateMatchFromCloudBundle(bundle) {
     sharedHostParticipantId: sharedMeta.hostParticipantId || '',
     sharedPlayerAssignments: sharedMeta.playerAssignments && typeof sharedMeta.playerAssignments === 'object' ? sharedMeta.playerAssignments : {},
     memories: Array.isArray(sharedMeta.memories) ? sharedMeta.memories.map(m => normalizeRoundMemory(m)).filter(Boolean) : [],
+    roundContext: normalizeRoundContext(sharedMeta.roundContext || {}),
     notes: String(notes?.body || ''),
     roundRecapNotes: String(notes?.body || ''),
     selectedGames: normalizeSelectedGamesOrder(matchRow?.selected_games || []),
@@ -11335,6 +11612,15 @@ function getRoundReadinessState() {
   return { checks, warnings, ready: warnings.length === 0 };
 }
 
+function buildRoundReadinessWeatherStatus() {
+  const match = editingMatchId ? getMatch(editingMatchId) : null;
+  const status = getRoundWeatherStatusLabel(match);
+  return `<div class="readiness-weather-status ${escapeHtml(status.kind)}">
+    <span>${status.kind === 'ok' ? 'OK' : status.kind === 'warn' ? '!' : 'i'}</span>
+    <div><strong>${escapeHtml(status.label)}</strong><div class="tiny">${escapeHtml(status.detail)}</div></div>
+  </div>`;
+}
+
 function renderRoundReadiness() {
   const wrap = document.getElementById('roundReadinessPanel');
   if (!wrap) return;
@@ -11347,7 +11633,8 @@ function renderRoundReadiness() {
     </div>
     <div class="readiness-check-list top-gap">
       ${state.checks.map(c => `<div class="readiness-check ${c.ok ? 'ok' : 'warn'}"><span>${c.ok ? '✓' : '⚠'}</span><div><strong>${escapeHtml(c.label)}</strong>${c.ok ? '' : `<div class="tiny">${escapeHtml(c.warning)}</div>`}</div></div>`).join('')}
-    </div>`;
+    </div>
+    ${buildRoundReadinessWeatherStatus()}`;
 }
 
 function renderSetupConfidencePanels() {
@@ -13379,6 +13666,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       roundRecapGeneratedAt: existing?.roundRecapGeneratedAt || null,
       roundRecapStatus: existing?.roundRecapStatus || '',
       roundRecapNotes: mergeRoundNoteText(existing?.roundRecapNotes, existing?.notes || state.notes || ''),
+      roundContext: normalizeRoundContext(existing?.roundContext || {}),
     };
     if (!editingMatchId && pendingNextRoundSessionContext) {
       match.sessionId = pendingNextRoundSessionContext.sessionId;
@@ -13439,6 +13727,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     } else {
       activateTab('score');
     }
+    if (!editingMatchId) scheduleWeatherCaptureForMatch(match.id);
     toast(editingMatchId ? 'Match setup saved.' : (sharedMatchEnabled ? 'Shared match setup saved. Assign devices, then tap Start Scoring.' : 'Match setup saved.'));
     } catch (err) {
       logMatchFinalizationDiagnostics('exception', { error: err });

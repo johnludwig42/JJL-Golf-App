@@ -4397,24 +4397,33 @@ main {
   }
 }
 @media (max-width: 520px) {
-  #roundEndPrompt.modal-backdrop {
-    align-items: center;
-    padding: 14px;
+  #roundEndPrompt.modal-backdrop,
+  #postRoundActionsPrompt.modal-backdrop {
+    align-items: flex-start;
+    padding: calc(var(--app-chrome-height, 0px) + max(14px, env(safe-area-inset-top))) 14px calc(14px + env(safe-area-inset-bottom));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
-  #roundEndPrompt .modal-card {
+  #roundEndPrompt .modal-card,
+  #postRoundActionsPrompt .modal-card {
     width: calc(100vw - 28px);
     max-width: calc(100vw - 28px);
+    max-height: calc(100dvh - var(--app-chrome-height, 0px) - max(14px, env(safe-area-inset-top)) - 14px - env(safe-area-inset-bottom));
     padding: 14px;
+    overflow: auto;
   }
-  #roundEndPrompt .modal-body {
+  #roundEndPrompt .modal-body,
+  #postRoundActionsPrompt .modal-body {
     padding: 8px;
   }
-  #roundEndPrompt .actions {
+  #roundEndPrompt .actions,
+  #postRoundActionsPrompt .post-round-actions {
     display: grid;
     grid-template-columns: 1fr;
     gap: 10px;
   }
-  #roundEndPrompt .actions button {
+  #roundEndPrompt .actions button,
+  #postRoundActionsPrompt .post-round-actions button {
     width: 100%;
     min-height: 52px;
   }

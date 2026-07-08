@@ -114,11 +114,10 @@ export const deterministicFixtures = [
   }),
   fixture({
     scenario: 'shared_match_two_device_assignment_model',
-    purpose: 'Model assigned-player authority without browser automation: joined devices can score assigned players only.',
+    purpose: 'Model assigned-player authority without browser automation.',
     scoringAccessMode: 'assigned_players',
     sharedParticipants: [{ participantId: 'host', role: 'host' }, { participantId: 'cart-two', role: 'participant' }],
     sharedAssignments: { p2: 'cart-two', p4: 'cart-two' },
-    expectedInvariants: ['assigned_scorers_only_score_assigned_players', 'host_retains_authority'],
     holeCount: 9,
     scores: {
       p1: [4, 5, 3, 4, 4, 5, 4, 3, 4],

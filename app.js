@@ -1,10 +1,11 @@
+const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.46',
-  versionNumber: '30.3.46',
-  cacheName: 'the-dye-ledger-v30.3.46',
+  version: 'v30.3.47',
+  versionNumber: '30.3.47',
+  cacheName: 'the-dye-ledger-v30.3.47',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Simulation Lab & Regression Harness'
+  buildLabel: 'Live Competition Engine Adapter'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -197,6 +198,7 @@ async function copyAppDiagnostics() {
 }
 
 function installGlobalErrorHandlers() {
+  if (DYE_LEDGER_ADAPTER_MODE) return;
   if (window.__dyeLedgerErrorHandlersInstalled) return;
   window.__dyeLedgerErrorHandlersInstalled = true;
   window.addEventListener('error', event => {
@@ -1552,7 +1554,7 @@ const uiState = {
 let pendingNextRoundSessionContext = null;
 
 
-const state = loadState();
+const state = DYE_LEDGER_ADAPTER_MODE ? { players: [], courses: [], matches: [], notes: '' } : loadState();
 normalizeState();
 
 function uid() {
@@ -14642,9 +14644,39 @@ function registerServiceWorker() {
   });
 }
 
-cleanupStaleUrlVersionParameter();
-logDyeLedgerBuildInfo();
-registerServiceWorker();
+function installDyeLedgerLiveEngineAdapter() {
+  window.__DYE_LEDGER_LIVE_ENGINE__ = {
+    version: APP_VERSION,
+    versionNumber: APP_VERSION_NUMBER,
+    seedState(seed = {}) {
+      state.players = Array.isArray(seed.players) ? seed.players : [];
+      state.courses = Array.isArray(seed.courses) ? seed.courses : [];
+      state.matches = Array.isArray(seed.matches) ? seed.matches : [];
+      state.activeMatchId = seed.activeMatchId || state.matches[0]?.id || null;
+      normalizeState();
+      return state;
+    },
+    createEmptyMatch,
+    normalizeMatch,
+    computeMatchMetrics,
+    computeLivePayoutGames,
+    getPayoutReportContext,
+    optimalSettlementRows,
+    computeTeamGameDiffs,
+    computeNassauDiffsForBasis,
+    computeSkinResults,
+    computeNinePointResults,
+  };
+  return window.__DYE_LEDGER_LIVE_ENGINE__;
+}
+
+if (DYE_LEDGER_ADAPTER_MODE) {
+  installDyeLedgerLiveEngineAdapter();
+} else {
+  cleanupStaleUrlVersionParameter();
+  logDyeLedgerBuildInfo();
+  registerServiceWorker();
+}
 
 
 function resetHorizontalViewportPosition() {
@@ -14704,22 +14736,24 @@ function installAppChromeHeightSync() {
   }
 }
 
-installViewportStabilityGuards();
-installAppChromeHeightSync();
+if (!DYE_LEDGER_ADAPTER_MODE) {
+  installViewportStabilityGuards();
+  installAppChromeHeightSync();
 
-installHandlers();
-renderHoleRows();
-loadPlayerEditor(null);
-loadCourseEditor(null);
-loadTeeEditor(null, null);
-loadMatchEditor(null);
-setupWorkflowMode = getActiveMatch() ? 'create' : 'landing';
-updateVersionUi();
-renderAll();
-if (hasSupabaseConfig()) {
-  window.setTimeout(() => refreshCourseLibraryFromCloud({ silent: true, force: true }), 250);
+  installHandlers();
+  renderHoleRows();
+  loadPlayerEditor(null);
+  loadCourseEditor(null);
+  loadTeeEditor(null, null);
+  loadMatchEditor(null);
+  setupWorkflowMode = getActiveMatch() ? 'create' : 'landing';
+  updateVersionUi();
+  renderAll();
+  if (hasSupabaseConfig()) {
+    window.setTimeout(() => refreshCourseLibraryFromCloud({ silent: true, force: true }), 250);
+  }
+  resumeActiveSharedMatchOnStartup();
 }
-resumeActiveSharedMatchOnStartup();
 
 
 /* v30.2 placeholders: Shared Memories, Round Story, editable story workflow, <=350 words target */

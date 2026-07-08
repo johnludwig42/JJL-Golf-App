@@ -9,9 +9,10 @@ import {
   summarizeResult,
   validateRound,
 } from './simulation-engine.js';
+import { compareRoundWithLiveEngine, getLiveAdapterCoverage, loadLiveEngine } from './live-engine-adapter.js';
 
 export function parseSimulationArgs(argv = process.argv.slice(2)) {
-  const args = { rounds: 50, seed: DEFAULT_SEED, fixtures: true, writeReport: true };
+  const args = { rounds: 50, seed: DEFAULT_SEED, fixtures: true, writeReport: true, adapterMode: 'compare' };
   argv.forEach((arg, idx) => {
     if (arg === '--rounds') args.rounds = Number(argv[idx + 1] || args.rounds);
     if (arg.startsWith('--rounds=')) args.rounds = Number(arg.split('=')[1] || args.rounds);
@@ -19,20 +20,44 @@ export function parseSimulationArgs(argv = process.argv.slice(2)) {
     if (arg.startsWith('--seed=')) args.seed = arg.split('=').slice(1).join('=') || args.seed;
     if (arg === '--no-fixtures') args.fixtures = false;
     if (arg === '--no-report') args.writeReport = false;
+    if (arg === '--adapter') args.adapterMode = argv[idx + 1] || args.adapterMode;
+    if (arg.startsWith('--adapter=')) args.adapterMode = arg.split('=')[1] || args.adapterMode;
   });
   args.rounds = Number.isFinite(args.rounds) && args.rounds >= 0 ? Math.round(args.rounds) : 50;
+  args.adapterMode = ['mirror', 'live', 'compare'].includes(String(args.adapterMode || '').toLowerCase()) ? String(args.adapterMode).toLowerCase() : 'compare';
   return args;
 }
 
 export function runSimulationLab(options = {}) {
   const seed = options.seed || DEFAULT_SEED;
+  const adapterMode = ['mirror', 'live', 'compare'].includes(String(options.adapterMode || options.adapter || '').toLowerCase()) ? String(options.adapterMode || options.adapter).toLowerCase() : 'compare';
   const rng = createRng(seed);
   const fixtureRounds = options.fixtures === false ? [] : deterministicFixtures;
   const randomRounds = Array.from({ length: Number(options.rounds ?? 50) }, (_, idx) => generateRandomRound(rng, idx));
-  const results = [...fixtureRounds, ...randomRounds].map(round => validateRound(round));
+  const rounds = [...fixtureRounds, ...randomRounds];
+  const results = rounds.map(round => validateRound(round));
+  let adapterCoverage = adapterMode === 'mirror' ? {
+    adapterMode: 'mirror-only',
+    liveFunctionsUsed: [],
+    mirroredFunctionsStillUsed: ['Full v30.3.46 mirrored Simulation Lab engine'],
+    unsupportedAreas: ['Live app engine not invoked in mirror-only mode'],
+  } : getLiveAdapterCoverage();
+  let liveComparisons = [];
+  let liveAdapterError = null;
+  if (adapterMode !== 'mirror') {
+    try {
+      const engine = loadLiveEngine();
+      liveComparisons = rounds.map(round => compareRoundWithLiveEngine(round, { engine }));
+    } catch (err) {
+      liveAdapterError = err?.message || String(err);
+      adapterCoverage = { ...adapterCoverage, adapterMode: 'adapter-load-failed' };
+    }
+  }
+  const liveDifferences = liveComparisons.flatMap(result => result.differences.map(message => ({ scenario: result.scenario, message })));
   const failures = results.flatMap(result => result.failures.map(message => ({ scenario: result.round.scenario, message })));
   const warnings = results.flatMap(result => result.warnings.map(message => ({ scenario: result.round.scenario, message })));
   const suspicious = results.flatMap(result => result.suspicious.map(message => ({ scenario: result.round.scenario, message })));
+  if (liveAdapterError) failures.push({ scenario: 'live-engine-adapter', message: liveAdapterError });
   const settlementTotals = {};
   results.forEach(result => {
     Object.entries(result.payout.finalTotals).forEach(([id, amount]) => {
@@ -40,14 +65,13 @@ export function runSimulationLab(options = {}) {
     });
   });
   const gamesTested = [...new Set(results.flatMap(result => result.payout.games.map(game => game.key)))].sort();
-  const interesting = results
-    .map(result => ({ ...summarizeResult(result), result }))
-    .sort((a, b) => (b.warnings + b.suspicious + b.settlement.length) - (a.warnings + a.suspicious + a.settlement.length))
-    .slice(0, 8);
+  const interesting = results.map(result => ({ ...summarizeResult(result), result })).sort((a, b) => (b.warnings + b.suspicious + b.settlement.length) - (a.warnings + a.suspicious + a.settlement.length)).slice(0, 8);
   return {
     version: SIMULATION_VERSION,
     timestamp: new Date().toISOString(),
     seed,
+    adapterMode,
+    adapterCoverage,
     randomRounds: randomRounds.length,
     fixtureCount: fixtureRounds.length,
     totalRounds: results.length,
@@ -57,6 +81,8 @@ export function runSimulationLab(options = {}) {
     failures,
     warnings,
     suspicious,
+    liveComparisons,
+    liveDifferences,
     settlementTotals,
     interesting,
   };
@@ -68,7 +94,7 @@ function listOrNone(items, formatter = item => `- ${item}`) {
 
 function buildReportMarkdown(summary) {
   const roi = [
-    'Create an importable competition-engine adapter so simulations can call live app scoring functions directly.',
+    'Add fixture-specific golden JSON snapshots now that live-vs-mirror settlement output can be compared.',
     'Add golden JSON snapshots for representative final settlements and game-level payout detail.',
     'Promote Shared Match assignment checks from model-only tests to browser/device automation.',
     'Add explicit provisional/final language assertions for incomplete rounds in Match Summary output.',
@@ -86,7 +112,6 @@ function buildReportMarkdown(summary) {
     'Shared Match authority can be modeled without a browser, but real trust still requires two-device automation or manual verification.',
   ];
   const engineeringFollowUps = [
-    'Extract or expose a safe, DOM-free adapter for computeMatchMetrics and computeLivePayoutGames.',
     'Store deterministic expected outcomes beside fixtures once product-owner intent is confirmed.',
     'Add simulation output to future release validation checklists.',
     'Consider a small fixture loader for saved localStorage match payloads.',
@@ -96,6 +121,8 @@ function buildReportMarkdown(summary) {
     'Consider inline net-skin explanations that show gross score, stroke received, and resulting net score.',
     'Consider a compact Match Play clinch note when a match is mathematically closed before hole 18.',
   ];
+  const exactLiveMatches = (summary.liveComparisons || []).filter(row => row.status === 'exact_match').length;
+  const liveWarnings = (summary.liveComparisons || []).filter(row => row.status !== 'exact_match').length;
   return `# Simulation Lab Summary
 
 ## Run Metadata
@@ -105,19 +132,40 @@ function buildReportMarkdown(summary) {
 - Random rounds: ${summary.randomRounds}
 - Fixtures run: ${summary.fixtureCount}
 - Total rounds simulated: ${summary.totalRounds}
+- Adapter mode: ${summary.adapterMode}
 - Games tested: ${summary.gamesTested.join(', ') || 'None'}
+
+## Adapter Coverage Summary
+- Adapter implementation: ${summary.adapterCoverage?.adapterMode || 'unknown'}
+- Live functions used:
+${listOrNone(summary.adapterCoverage?.liveFunctionsUsed || [])}
+- Mirrored functions still used:
+${listOrNone(summary.adapterCoverage?.mirroredFunctionsStillUsed || [])}
+- Unsupported live adapter coverage:
+${listOrNone(summary.adapterCoverage?.unsupportedAreas || [])}
 
 ## Pass/Fail Summary
 - Failures: ${summary.failures.length}
 - Warnings: ${summary.warnings.length}
 - Suspicious outcomes: ${summary.suspicious.length}
+- Live-vs-mirror exact matches: ${exactLiveMatches}
+- Live-vs-mirror warnings/differences: ${liveWarnings}
 
 ## Failures
 ${listOrNone(summary.failures, item => `- ${item.scenario}: ${item.message}`)}
 
+## Invariant Failures
+${listOrNone(summary.failures, item => `- ${item.scenario}: ${item.message}`)}
+
+## Live-vs-Mirror Differences
+${listOrNone(summary.liveDifferences || [], item => `- ${item.scenario}: ${item.message}`)}
+
 ## Warnings / Suspicious Outcomes
 ${listOrNone(summary.warnings, item => `- Warning - ${item.scenario}: ${item.message}`)}
 ${summary.suspicious.length ? '\n' + summary.suspicious.map(item => `- Suspicious - ${item.scenario}: ${item.message}`).join('\n') : ''}
+
+## High-Risk Areas Still Not Covered
+${listOrNone(summary.adapterCoverage?.unsupportedAreas || [])}
 
 ## Interesting Product Observations
 ${productObservations.map(item => `- ${item}`).join('\n')}
@@ -151,11 +199,16 @@ export function writeSimulationReport(summary, reportPath = path.join('reports',
 export function printSimulationSummary(summary, reportPath = null) {
   console.log(`Simulation Lab ${summary.version}`);
   console.log(`Seed: ${summary.seed}`);
+  console.log(`Adapter mode: ${summary.adapterMode}`);
   console.log(`Rounds: ${summary.totalRounds} (${summary.fixtureCount} fixtures, ${summary.randomRounds} random)`);
   console.log(`Games tested: ${summary.gamesTested.join(', ')}`);
   console.log(`Failures: ${summary.failures.length}`);
   console.log(`Warnings: ${summary.warnings.length}`);
   console.log(`Suspicious outcomes: ${summary.suspicious.length}`);
+  if (summary.liveComparisons?.length) {
+    console.log(`Live-vs-mirror exact matches: ${summary.liveComparisons.filter(row => row.status === 'exact_match').length}`);
+    console.log(`Live-vs-mirror differences: ${summary.liveDifferences.length}`);
+  }
   if (reportPath) console.log(`Report: ${reportPath}`);
 }
 

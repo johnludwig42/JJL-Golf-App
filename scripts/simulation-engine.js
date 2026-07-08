@@ -1,5 +1,5 @@
-export const SIMULATION_VERSION = 'v30.3.46';
-export const DEFAULT_SEED = 'dye-ledger-v30.3.46-default';
+export const SIMULATION_VERSION = 'v30.3.47';
+export const DEFAULT_SEED = 'dye-ledger-v30.3.47-default';
 
 export const DEFAULT_GAMES = [
   { key: 'match_play', basis: 'net', stake: 5 },

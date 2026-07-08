@@ -211,9 +211,9 @@
             <label class="inline-check top-gap"><input id="smartScoreAdvanceInput" name="smartScoreAdvance" type="checkbox" checked /><span>Smart Score Advance</span></label>
             <label id="smartScoreAdvancePresetWrap" class="smart-score-preset-wrap"><span>Advance timing</span>
               <select id="smartScoreAdvancePresetSelect" name="smartScoreAdvancePreset">
-                <option value="fast">Fast (400 ms)</option>
-                <option value="normal" selected>Normal (500 ms)</option>
-                <option value="relaxed">Relaxed (700 ms)</option>
+                <option value="fast">Fast (500 ms)</option>
+                <option value="normal" selected>Normal (750 ms)</option>
+                <option value="relaxed">Relaxed (1000 ms)</option>
               </select>
             </label>
             <div class="tiny top-gap">After entering gross scores, the app can advance to the next playable hole when Stat Tracking is off and every active scoring row has a score.</div>
@@ -725,7 +725,7 @@
       <div class="card tight-card app-updates-card">
         <h2>App Updates</h2>
         <div class="app-update-summary">
-          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.44</strong></div>
+          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.48</strong></div>
           <div><span class="muted-label">Build Date</span><strong id="appBuildTimestamp">loading…</strong></div>
           <div><span class="muted-label">Cache</span><span id="appActiveCacheName" class="break-word">checking…</span></div>
           <div><span class="muted-label">Update Available</span><strong id="appUpdateAvailableStatus">checking…</strong></div>
@@ -757,8 +757,8 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
-          <li>v30.3.44 polishes Smart Score Advance timing for a steadier scoring rhythm.</li>
-          <li>v30.3.44 improves mobile modal spacing beneath sticky navigation.</li>
+          <li>v30.3.48 adds read-only in-round player detail from the Play tab.</li>
+          <li>v30.3.48 updates Smart Score Advance timing to 500 / 750 / 1000 ms.</li>
         </ul>
       </div>
     </section>
@@ -778,10 +778,23 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.3.44</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
+    <span id="appVersionFooter">v30.3.48</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>
+
+  <div id="playerDetailDialog" class="modal-backdrop player-detail-backdrop hidden" aria-hidden="true">
+    <div class="modal-card player-detail-modal" role="dialog" aria-modal="true" aria-labelledby="playerDetailTitle">
+      <div class="player-detail-topbar">
+        <div>
+          <div class="tiny">Play tab</div>
+          <h3 id="playerDetailTitle">Player Detail</h3>
+        </div>
+        <button id="playerDetailCloseBtn" type="button" class="secondary">Close</button>
+      </div>
+      <div id="playerDetailBody" class="player-detail-body"></div>
+    </div>
+  </div>
 
 
   <div id="roundEndPrompt" class="modal-backdrop hidden" aria-hidden="true">

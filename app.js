@@ -1,11 +1,11 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.47',
-  versionNumber: '30.3.47',
-  cacheName: 'the-dye-ledger-v30.3.47',
+  version: 'v30.3.48',
+  versionNumber: '30.3.48',
+  cacheName: 'the-dye-ledger-v30.3.48',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Live Competition Engine Adapter'
+  buildLabel: 'In-Round Player Insight & Scoring Comfort'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -16,9 +16,9 @@ const APP_VERSION_NUMBER = BUILD_INFO.versionNumber;
 const MATCH_TEMPLATES_STORAGE_KEY = 'dyeLedger.matchTemplates.v1';
 const DEFAULT_SMART_SCORE_ADVANCE = true;
 const SMART_SCORE_ADVANCE_PRESETS = {
-  fast: { label: 'Fast', delay: 400 },
-  normal: { label: 'Normal', delay: 500 },
-  relaxed: { label: 'Relaxed', delay: 700 }
+  fast: { label: 'Fast', delay: 500 },
+  normal: { label: 'Normal', delay: 750 },
+  relaxed: { label: 'Relaxed', delay: 1000 }
 };
 const DEFAULT_SMART_SCORE_ADVANCE_PRESET = 'normal';
 const WEATHER_CAPTURE_SOURCE = 'open-meteo';
@@ -5335,9 +5335,11 @@ function buildFeaturedMatchStatus(match, metrics, gameKey) {
   return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-tile"><div class="tiny">Status</div><div class="match-status-value">Live</div></div>`;
 }
 
-function buildClassicScorecard(match, metrics) {
+function buildClassicScorecard(match, metrics, opts = {}) {
   const tee = metrics?.tee;
   if (!tee) return '<div class="tiny">No scorecard available.</div>';
+  const readOnly = !!opts.readOnly;
+  const selectedPlayerId = opts.playerId ? String(opts.playerId) : '';
   const holeCount = getPlayableHoleCount(match, tee);
   const holes = getSelectedScoringHoles(match, tee);
   const front = holes.slice(0, Math.min(9, holeCount));
@@ -5356,7 +5358,8 @@ function buildClassicScorecard(match, metrics) {
   const parRow = scorecardMetaRow('Par', h => Number(h.par) || 0);
   const siRow = scorecardMetaRow('Handicap', h => Number(h.strokeIndex) || 0);
   const dotMarkup = count => count > 0 ? `<span class="score-dots">${'•'.repeat(Math.min(count,3))}${count>3?`<sup>${count}</sup>`:''}</span>` : '';
-  const playerRows = metrics.players.map(p => {
+  const visiblePlayers = selectedPlayerId ? metrics.players.filter(p => String(p.playerId) === selectedPlayerId) : metrics.players;
+  const playerRows = visiblePlayers.map(p => {
     const playerScores = (p.scores || []).slice(0, holeCount);
     const frontGross = playerScores.slice(0, Math.min(9, holeCount)).reduce((s,x)=>s+(Number(x.gross)||0),0);
     const backGross = holeCount > 9 ? playerScores.slice(9, holeCount).reduce((s,x)=>s+(Number(x.gross)||0),0) : 0;
@@ -5379,10 +5382,11 @@ function buildClassicScorecard(match, metrics) {
       const gross = Number(playerScores[idx]?.gross) || null;
       const playerHole = getPlayerHole(match, p, idx, tee) || hole;
       const strokes = holeStrokeAllowanceForPlayer(playerHole.strokeIndex, p.playHdcp, metrics.lowPlaying);
-      const editAttrs = `data-scorecard-edit="1" data-edit-hole="${idx + 1}" data-edit-player="${p.playerId}" title="Edit ${escapeHtml(p.player.name)} on hole ${hole.holeNumber}"`;
-      if (!gross) return `<td class="score-hole-cell editable-scorecard-cell" ${editAttrs}><div class="score-main">${formatGolfScoreMarkup(null, hole.par, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(null, hole.par, 'net')}${dotMarkup(strokes)}</div></td>`;
+      const editAttrs = readOnly ? '' : `data-scorecard-edit="1" data-edit-hole="${idx + 1}" data-edit-player="${p.playerId}" title="Edit ${escapeHtml(p.player.name)} on hole ${hole.holeNumber}"`;
+      const editClass = readOnly ? '' : ' editable-scorecard-cell';
+      if (!gross) return `<td class="score-hole-cell${editClass}" ${editAttrs}><div class="score-main">${formatGolfScoreMarkup(null, hole.par, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(null, hole.par, 'net')}${dotMarkup(strokes)}</div></td>`;
       const net = gross - strokes;
-      return `<td class="score-hole-cell editable-scorecard-cell" ${editAttrs}><div class="score-main">${formatGolfScoreMarkup(gross, hole.par, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(net, hole.par, 'net')}${dotMarkup(strokes)}</div></td>`;
+      return `<td class="score-hole-cell${editClass}" ${editAttrs}><div class="score-main">${formatGolfScoreMarkup(gross, hole.par, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(net, hole.par, 'net')}${dotMarkup(strokes)}</div></td>`;
     }).join('');
     const totals = back.length
       ? `<td><strong>${frontGross}</strong><div class="score-sub total-sub">${frontNet || '—'}</div></td><td><strong>${backGross}</strong><div class="score-sub total-sub">${backNet || '—'}</div></td><td><strong>${p.grossTotal || 0}</strong><div class="score-sub total-sub">${p.netTotal || 0}</div></td>`
@@ -5390,7 +5394,7 @@ function buildClassicScorecard(match, metrics) {
     const playerTeeName = p.tee?.teeName || tee?.teeName || 'Tee';
     return `<tr><td class="scorecard-sticky-name"><strong>${escapeHtml(p.player.name)}</strong><div class="tiny">Tee: ${escapeHtml(playerTeeName)}</div></td><td class="scorecard-sticky-team">${escapeHtml(getTeamLabel(match,p.team))}</td>${cells}${totals}</tr>`;
   }).join('');
-  const teeLegend = metrics.players.map(p => `${p.player.name}: ${p.tee?.teeName || tee?.teeName || 'Tee'}`).join(' · ');
+  const teeLegend = visiblePlayers.map(p => `${p.player.name}: ${p.tee?.teeName || tee?.teeName || 'Tee'}`).join(' · ');
   const completion = getRoundCompletionState(match, metrics);
   const partialNote = completion.isIncomplete ? ' Totals reflect completed/scored holes only; unplayed holes are shown as dashes and are not counted.' : '';
   return `<div class="scorecard-sub tiny">Per-hole cells show gross on top and net below, with notation wrapped around the score and dots for strokes received. Course rows include yardage, par, and handicap. Player tees: ${escapeHtml(teeLegend)}${escapeHtml(partialNote)}</div><div class="scorecard-wrap"><table class="scorecard-table"><thead><tr><th class="scorecard-sticky-name">Player</th><th class="scorecard-sticky-team">Team</th>${holeHeader}${totalColumns}</tr></thead><tbody>${yardageRow}${parRow}${siRow}${playerRows}</tbody></table></div>`;
@@ -5904,6 +5908,121 @@ function buildStatTrackingSummary(match, metrics) {
       </details>
     </div>`).join('')}</div>`;
   return manualStatsHtml + scoreDistributionHtml;
+}
+
+function getPlayerDetailThroughLabel(match, metrics, playerMetric) {
+  const holes = getSelectedScoringHoles(match, metrics?.tee);
+  const scores = Array.isArray(playerMetric?.scores) ? playerMetric.scores : [];
+  let scoredCount = 0;
+  let lastHole = null;
+  scores.slice(0, holes.length || scores.length).forEach((score, idx) => {
+    if (Number(score?.gross) > 0) {
+      scoredCount += 1;
+      lastHole = holes[idx]?.holeNumber || score?.holeNumber || idx + 1;
+    }
+  });
+  const total = getPlayableHoleCount(match, metrics?.tee);
+  return lastHole ? `H${lastHole} (${scoredCount}/${total})` : `0/${total}`;
+}
+
+function getPlayerDetailMatchStatus(match, metrics, playerMetric) {
+  if (!match || !metrics || !playerMetric) return '';
+  const games = Array.isArray(match.selectedGames) ? match.selectedGames : [];
+  if (!games.length) return '';
+  if (games.some(g => g.key === 'singles_match') && isSinglesMatchPlayEligible(match, metrics)) {
+    const result = computeSinglesMatchPlayResult(match, metrics, getSinglesMatchConfig(match) || {});
+    if ([result.playerAId, result.playerBId].map(String).includes(String(playerMetric.playerId))) return result.resultText || '';
+  }
+  const sidePairing = getIndividualMatchPairings(match, metrics).find(pair => (
+    String(pair.playerA?.playerId) === String(playerMetric.playerId) || String(pair.playerB?.playerId) === String(playerMetric.playerId)
+  ));
+  if (sidePairing && ['match_play', 'nassau'].includes(String(sidePairing.game || '').toLowerCase())) {
+    return `${getSideMatchGameLabel(sidePairing.game)}: ${sidePairing.status}`;
+  }
+  if (metrics.teams?.length === 2) {
+    const teamGame = games.find(g => g.key === 'team_match') || games.find(g => g.key === 'nassau');
+    if (teamGame) {
+      const diffs = computeTeamGameDiffs(match, metrics, teamGame.key);
+      return `${getGameLabel(teamGame.key)}: ${formatTeamGameStatus(match, metrics, diffs.overall)}`;
+    }
+  }
+  return '';
+}
+
+function buildPlayerDetailStatBlock(match, metrics, playerMetric) {
+  if (!isStatTrackingEnabled(match) || !isPlayerStatTrackingEnabled(match, playerMetric?.playerId)) {
+    return '<div class="player-detail-empty tiny">No hole-by-hole stat tracking is enabled for this player.</div>';
+  }
+  const summary = computeStatTrackingSummary(match, metrics).find(row => String(row.playerMetric?.playerId) === String(playerMetric.playerId));
+  const totals = summary?.totals || { fairwaysHit: 0, fairwayOpps: 0, greens: 0, putts: 0, penaltyStrokes: 0, upAndDowns: 0, sandies: 0 };
+  const completedLimit = getCompletedStatHoleLimit(match, metrics);
+  return `
+    <div class="player-detail-stat-totals">
+      <div><span>Fairways</span><strong>${totals.fairwaysHit} / ${totals.fairwayOpps}</strong></div>
+      <div><span>GIR</span><strong>${totals.greens}</strong></div>
+      <div><span>Putts</span><strong>${totals.putts}</strong></div>
+      <div><span>Penalties</span><strong>${totals.penaltyStrokes}</strong></div>
+      <div><span>U&amp;D</span><strong>${totals.upAndDowns}</strong></div>
+      <div><span>Sand</span><strong>${totals.sandies}</strong></div>
+    </div>
+    ${buildPlayerHoleStatSummaryTable(match, metrics, playerMetric, completedLimit)}
+  `;
+}
+
+function buildPlayerDetailView(match, metrics, playerId) {
+  const playerMetric = (metrics?.players || []).find(p => String(p.playerId) === String(playerId));
+  if (!match || !metrics || !playerMetric) return '<div class="player-detail-empty">Player details are unavailable.</div>';
+  const showNet = Number(playerMetric.playHdcp || 0) !== 0 || Number(playerMetric.netTotal || 0) !== Number(playerMetric.grossTotal || 0);
+  const matchStatus = getPlayerDetailMatchStatus(match, metrics, playerMetric);
+  const scoreTiles = [
+    ['Gross', playerMetric.grossTotal || 0],
+    ...(showNet ? [['Net', playerMetric.netTotal || 0]] : []),
+    ['Vs Par', formatSigned(playerMetric.toPar || 0)],
+    ['Through', getPlayerDetailThroughLabel(match, metrics, playerMetric)],
+  ];
+  if (matchStatus) scoreTiles.push(['Match', matchStatus]);
+  return `
+    <div class="player-detail-hero">
+      <div>
+        <div class="tiny">In-round player detail</div>
+        <h2>${escapeHtml(playerMetric.player?.name || 'Player')}</h2>
+        <div class="tiny">${escapeHtml(getTeamLabel(match, playerMetric.team))} · ${escapeHtml(playerMetric.tee?.teeName || metrics.tee?.teeName || 'Tee')}</div>
+      </div>
+      <div class="player-detail-score-grid">
+        ${scoreTiles.map(([label, value]) => `<div class="player-detail-score-tile"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`).join('')}
+      </div>
+    </div>
+    <section class="player-detail-section">
+      <h3>Classic scorecard</h3>
+      ${buildClassicScorecard(match, metrics, { playerId: playerMetric.playerId, readOnly: true })}
+    </section>
+    <section class="player-detail-section">
+      <h3>Hole statistics</h3>
+      ${buildPlayerDetailStatBlock(match, metrics, playerMetric)}
+    </section>
+  `;
+}
+
+function openPlayerDetailView(playerId) {
+  const match = getActiveMatch();
+  if (!match || !playerId) return;
+  const modal = document.getElementById('playerDetailDialog');
+  const body = document.getElementById('playerDetailBody');
+  if (!modal || !body) return;
+  const metrics = computeMatchMetrics(match);
+  body.innerHTML = buildPlayerDetailView(match, metrics, playerId);
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('player-detail-open');
+  document.getElementById('playerDetailCloseBtn')?.focus({ preventScroll: true });
+}
+
+function closePlayerDetailView() {
+  const modal = document.getElementById('playerDetailDialog');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('player-detail-open');
 }
 
 function renderLeaderboard() {
@@ -10159,7 +10278,7 @@ function renderScoreGrid(match, tee, metrics, scoringHoles = null) {
     if (match.storageMode === 'shared') console.debug('[SharedScoreGate]', explainPlayerEditability(match, p.playerId));
     return `
       <tr class="${canEdit ? '' : 'score-row-readonly'}">
-        <td>${escapeHtml(p.player.name)}<div class="tiny">${escapeHtml(getHoleTeeNameForDisplay(match.courseId, p.tee || tee, currentHole - 1) || p.tee?.teeName || tee?.teeName || 'Tee')}${canEdit ? '' : ' · locked'}</div></td>
+        <td><button type="button" class="player-detail-trigger" data-player-detail="${escapeHtml(p.playerId)}">${escapeHtml(p.player.name)}</button><div class="tiny">${escapeHtml(getHoleTeeNameForDisplay(match.courseId, p.tee || tee, currentHole - 1) || p.tee?.teeName || tee?.teeName || 'Tee')}${canEdit ? '' : ' · locked'}</div></td>
         <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
         <td><div class="gross-score-stepper" role="group" aria-label="Gross score for ${escapeHtml(p.player.name)}"><button type="button" class="score-step-btn" data-score-step="down" data-score-step-player="${escapeHtml(p.playerId)}" ${canEdit ? '' : 'disabled'}>−</button><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="next" autocomplete="off" min="1" max="15" data-score-player="${p.playerId}" data-score-locked="${canEdit ? '0' : '1'}" title="${canEdit ? 'Enter score' : 'You can only score your assigned players.'}" data-hole-par="${Number(playerHole?.par || hole?.par || 4) || 4}" placeholder="—" value="${gross}" ${canEdit ? '' : 'disabled'} /><button type="button" class="score-step-btn" data-score-step="up" data-score-step-player="${escapeHtml(p.playerId)}" ${canEdit ? '' : 'disabled'}>+</button></div></td>
         <td>${strokes}</td>
@@ -13093,6 +13212,7 @@ function installHandlers() {
     if (e.target.id === 'playerSearchSheet') closePlayerSearchSheet();
   });
   document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && !document.getElementById('playerDetailDialog')?.classList.contains('hidden')) closePlayerDetailView();
     if (e.key === 'Escape' && !document.getElementById('playerSearchSheet')?.classList.contains('hidden')) closePlayerSearchSheet();
   });
   document.getElementById('gamesPicker').addEventListener('change', e => {
@@ -14005,7 +14125,14 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('addMemorySaveBtn')?.addEventListener('click', saveMemoryFromModal);
   document.getElementById('addMemoryCancelBtn')?.addEventListener('click', closeAddMemoryModal);
   document.getElementById('addMemoryDialog')?.addEventListener('click', e => { if (e.target?.id === 'addMemoryDialog') closeAddMemoryModal(); });
+  document.getElementById('playerDetailCloseBtn')?.addEventListener('click', closePlayerDetailView);
+  document.getElementById('playerDetailDialog')?.addEventListener('click', e => { if (e.target?.id === 'playerDetailDialog') closePlayerDetailView(); });
   document.getElementById('score')?.addEventListener('click', async e => {
+    const playerDetailBtn = e.target.closest('[data-player-detail]');
+    if (playerDetailBtn) {
+      openPlayerDetailView(playerDetailBtn.dataset.playerDetail);
+      return;
+    }
     if (e.target.closest('#addMemoryBtn')) { openAddMemoryModal(); return; }
     if (e.target.closest('[data-score-locked="1"], .score-row-readonly')) {
       const match = getActiveMatch();

@@ -1,10 +1,10 @@
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.45',
-  versionNumber: '30.3.45',
-  cacheName: 'the-dye-ledger-v30.3.45',
+  version: 'v30.3.46',
+  versionNumber: '30.3.46',
+  cacheName: 'the-dye-ledger-v30.3.46',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Shared Match Trust Release'
+  buildLabel: 'Simulation Lab & Regression Harness'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;

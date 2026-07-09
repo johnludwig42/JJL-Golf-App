@@ -68,6 +68,12 @@ Expected improvements may include:
 * last pulled / last pushed indicators
 * reload and reconnect test matrix
 
+### v30.3.50 progress
+
+The app now has scored-hole ledger extraction, parity comparison, missing-entry detection, player-hole conflict detection, joined-device score preservation, Match Summary reconciliation warnings, and unit-level shared-match ledger tests.
+
+Remaining debt includes full two-device browser automation, richer conflict resolution UI, offline replay/retry acceptance testing, and production-device validation for reload/reconnect flows.
+
 Status: Must address before broad use.
 
 ---
@@ -355,6 +361,9 @@ Add clearer wording where needed:
 * net skins handicap explanation
 * 9-Point explanation
 * Nassau front/back/overall explanation
+* deterministic settlement-row normalization for equivalent payment paths in simulation/live-vs-mirror comparison
+
+The simulation engine can currently produce equivalent settlement rows with identical final player totals but different payment paths. Validation should normalize economically equivalent settlements consistently before comparing live-vs-mirror settlement rows.
 
 Status: Should address during reporting polish.
 

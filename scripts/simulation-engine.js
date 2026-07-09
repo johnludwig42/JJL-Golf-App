@@ -3,9 +3,9 @@ import fs from 'node:fs';
 function readActivePackageVersion() {
   try {
     const packageJson = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-    return String(packageJson.version || '').trim() || '30.3.49';
+    return String(packageJson.version || '').trim() || '30.3.50';
   } catch {
-    return '30.3.49';
+    return '30.3.50';
   }
 }
 

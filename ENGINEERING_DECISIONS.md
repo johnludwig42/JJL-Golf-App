@@ -130,6 +130,16 @@ Status: Locked.
 
 ---
 
+### 8a. Shared Match sync requires score-ledger parity
+
+A successful Shared Match network request is not the same as score parity.
+
+For Shared Match reports and final-looking summaries, the app should pull latest shared scores, reconcile valid remote scored-hole entries into local state, preserve joined-device scores, compare local and remote scored-hole ledgers, and clearly warn when parity is not confirmed.
+
+Status: Locked.
+
+---
+
 ## Scoring Decisions
 
 ### 9. Scoring is the sacred workflow

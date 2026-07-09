@@ -1,11 +1,11 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.49',
-  versionNumber: '30.3.49',
-  cacheName: 'the-dye-ledger-v30.3.49',
+  version: 'v30.3.50',
+  versionNumber: '30.3.50',
+  cacheName: 'the-dye-ledger-v30.3.50',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Engineering Foundation & Release Hardening'
+  buildLabel: 'Shared Match Persistence & Reconciliation'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -740,6 +740,224 @@ function getSharedHostOverrideKeys(match) {
 function getSharedPlayerHoleKey(playerId, holeNumber) {
   return `${String(playerId || '')}:${Number(holeNumber) || 0}`;
 }
+function normalizeSharedLedgerValue(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+}
+function normalizeSharedLedgerOptionalNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n) : null;
+}
+function normalizeSharedLedgerOptionalBoolean(value) {
+  return value === true || value === false ? !!value : null;
+}
+function sharedLedgerPlayerName(match, playerId = '') {
+  return getPlayer(playerId)?.name || (match?.players || []).find(mp => String(mp.playerId) === String(playerId))?.player?.name || String(playerId || 'Unknown player');
+}
+function buildSharedLedgerEntry({ match = null, playerId = '', playerKey = '', playerName = '', holeNumber = 0, gross = null, stats = {}, source = '', sourceDevice = '', sourceParticipant = '', updatedAt = '' } = {}) {
+  const resolvedPlayerId = String(playerId || playerKey || '').trim();
+  const resolvedHole = Number(holeNumber) || 0;
+  const resolvedGross = normalizeSharedLedgerValue(gross);
+  if (!resolvedPlayerId || !resolvedHole || resolvedGross == null) return null;
+  const normalizedStats = {
+    putts: normalizeSharedLedgerOptionalNumber(stats?.putts),
+    fairway: normalizeSharedLedgerOptionalBoolean(stats?.fairway),
+    green: normalizeSharedLedgerOptionalBoolean(stats?.green),
+    upAndDown: normalizeSharedLedgerOptionalBoolean(stats?.upAndDown ?? stats?.up_and_down),
+    sandy: normalizeSharedLedgerOptionalBoolean(stats?.sandy),
+  };
+  return {
+    key: getSharedPlayerHoleKey(resolvedPlayerId, resolvedHole),
+    playerId: resolvedPlayerId,
+    playerKey: String(playerKey || resolvedPlayerId),
+    playerName: playerName || sharedLedgerPlayerName(match, resolvedPlayerId),
+    holeNumber: resolvedHole,
+    gross: resolvedGross,
+    scored: true,
+    stats: normalizedStats,
+    source,
+    sourceDevice,
+    sourceParticipant,
+    updatedAt,
+  };
+}
+function summarizeSharedLedgerCounts(entries = []) {
+  return (Array.isArray(entries) ? entries : []).reduce((acc, entry) => {
+    const label = entry.playerName || entry.playerId || 'Unknown player';
+    acc[label] = (acc[label] || 0) + 1;
+    return acc;
+  }, {});
+}
+function extractLocalScoredLedger(match) {
+  const entries = [];
+  const holeCount = getRequestedHoleCount(match);
+  (match?.players || []).forEach(mp => {
+    const playerId = String(mp.playerId || '').trim();
+    (Array.isArray(mp.scores) ? mp.scores : []).slice(0, holeCount).forEach((score, idx) => {
+      const holeNumber = Number(score?.holeNumber) || idx + 1;
+      const entry = buildSharedLedgerEntry({
+        match,
+        playerId,
+        holeNumber,
+        gross: score?.gross,
+        stats: mp.stats?.[idx] || {},
+        source: 'local',
+        sourceParticipant: getAssignedParticipantForPlayer(match, playerId) || '',
+      });
+      if (entry) entries.push(entry);
+    });
+  });
+  return entries.sort((a, b) => String(a.playerId).localeCompare(String(b.playerId)) || a.holeNumber - b.holeNumber);
+}
+function extractRemoteScoredLedger(match, scoreEntries = []) {
+  return (Array.isArray(scoreEntries) ? scoreEntries : []).map(entry => buildSharedLedgerEntry({
+    match,
+    playerId: entry?.player_id || entry?.playerId || '',
+    playerKey: entry?.player_id || entry?.playerId || entry?.match_player_id || entry?.matchPlayerId || '',
+    holeNumber: entry?.hole_number ?? entry?.holeNumber,
+    gross: entry?.gross,
+    stats: {
+      putts: entry?.putts,
+      fairway: entry?.fairway,
+      green: entry?.green,
+      upAndDown: entry?.up_and_down ?? entry?.upAndDown,
+      sandy: entry?.sandy,
+    },
+    source: 'remote',
+    sourceDevice: entry?.device_id || entry?.deviceId || '',
+    sourceParticipant: entry?.participant_id || entry?.participantId || '',
+    updatedAt: entry?.updated_at || entry?.updatedAt || '',
+  })).filter(Boolean).sort((a, b) => String(a.playerId).localeCompare(String(b.playerId)) || a.holeNumber - b.holeNumber);
+}
+function sharedLedgerChecksum(entries = []) {
+  const raw = (Array.isArray(entries) ? entries : []).map(entry => [
+    entry.playerId,
+    entry.holeNumber,
+    entry.gross,
+    entry.stats?.putts ?? '',
+    entry.stats?.fairway ?? '',
+    entry.stats?.green ?? '',
+    entry.stats?.upAndDown ?? '',
+    entry.stats?.sandy ?? '',
+  ].join(':')).sort().join('|');
+  let hash = 0;
+  for (let i = 0; i < raw.length; i += 1) hash = Math.imul(31, hash) + raw.charCodeAt(i) | 0;
+  return Math.abs(hash).toString(16);
+}
+function compareScoredLedgers(localLedger = [], remoteLedger = []) {
+  const localMap = new Map((Array.isArray(localLedger) ? localLedger : []).map(entry => [entry.key, entry]));
+  const remoteMap = new Map((Array.isArray(remoteLedger) ? remoteLedger : []).map(entry => [entry.key, entry]));
+  const missingLocal = [];
+  const missingRemote = [];
+  const conflicts = [];
+  remoteMap.forEach((remote, key) => {
+    const local = localMap.get(key);
+    if (!local) {
+      missingLocal.push(remote);
+      return;
+    }
+    [['gross', local.gross, remote.gross], ['putts', local.stats?.putts, remote.stats?.putts], ['fairway', local.stats?.fairway, remote.stats?.fairway], ['green', local.stats?.green, remote.stats?.green], ['upAndDown', local.stats?.upAndDown, remote.stats?.upAndDown], ['sandy', local.stats?.sandy, remote.stats?.sandy]].forEach(([field, localValue, remoteValue]) => {
+      if (localValue == null || remoteValue == null) return;
+      if (localValue !== remoteValue) conflicts.push({
+        playerId: local.playerId || remote.playerId,
+        playerName: local.playerName || remote.playerName,
+        holeNumber: local.holeNumber || remote.holeNumber,
+        field,
+        localValue,
+        remoteValue,
+        sourceDevice: remote.sourceDevice || '',
+        sourceParticipant: remote.sourceParticipant || '',
+      });
+    });
+  });
+  localMap.forEach((local, key) => {
+    if (!remoteMap.has(key)) missingRemote.push(local);
+  });
+  return {
+    parityConfirmed: !missingLocal.length && !missingRemote.length && !conflicts.length,
+    localCount: localMap.size,
+    remoteCount: remoteMap.size,
+    localCountsByPlayer: summarizeSharedLedgerCounts(localLedger),
+    remoteCountsByPlayer: summarizeSharedLedgerCounts(remoteLedger),
+    missingLocal,
+    missingRemote,
+    conflicts,
+    checksum: {
+      local: sharedLedgerChecksum(localLedger),
+      remote: sharedLedgerChecksum(remoteLedger),
+    },
+  };
+}
+function summarizeLedgerParity(comparison = null, { checkedAt = new Date().toISOString(), warning = '' } = {}) {
+  const status = warning ? 'warning' : (comparison?.conflicts?.length ? 'conflict' : (comparison?.parityConfirmed ? 'confirmed' : 'not-confirmed'));
+  return {
+    status,
+    parityConfirmed: status === 'confirmed',
+    checkedAt,
+    warning,
+    localCount: Number(comparison?.localCount || 0),
+    remoteCount: Number(comparison?.remoteCount || 0),
+    localCountsByPlayer: comparison?.localCountsByPlayer || {},
+    remoteCountsByPlayer: comparison?.remoteCountsByPlayer || {},
+    missingLocal: (comparison?.missingLocal || []).map(entry => ({ playerId: entry.playerId, playerName: entry.playerName, holeNumber: entry.holeNumber, gross: entry.gross })),
+    missingRemote: (comparison?.missingRemote || []).map(entry => ({ playerId: entry.playerId, playerName: entry.playerName, holeNumber: entry.holeNumber, gross: entry.gross })),
+    conflicts: (comparison?.conflicts || []).map(conflict => ({ ...conflict })),
+    checksum: comparison?.checksum || null,
+  };
+}
+function recordSharedLedgerParity(match, comparison = null, options = {}) {
+  if (!match || match.storageMode !== 'shared') return null;
+  match.sharedLedgerParity = summarizeLedgerParity(comparison, options);
+  match.lastSharedParityCheckAt = match.sharedLedgerParity.checkedAt;
+  return match.sharedLedgerParity;
+}
+function mergeSharedScoredLedgerIntoMatch(match, remoteLedger = []) {
+  if (!match || !Array.isArray(remoteLedger)) return { changed: false, conflicts: [] };
+  let changed = false;
+  const conflicts = [];
+  const byPlayerId = new Map((match.players || []).map(mp => [String(mp.playerId), mp]));
+  remoteLedger.forEach(remote => {
+    const playerId = String(remote?.playerId || '').trim();
+    const holeNumber = Number(remote?.holeNumber || 0);
+    if (!playerId || !holeNumber) return;
+    if (!shouldAcceptRemoteSharedPlayerHoleEntry(match, playerId, holeNumber)) return;
+    const mp = byPlayerId.get(playerId);
+    if (!mp) return;
+    const idx = holeNumber - 1;
+    if (!Array.isArray(mp.scores)) mp.scores = buildEmptyScores(getRequestedHoleCount(match));
+    if (!mp.scores[idx]) mp.scores[idx] = { holeNumber, gross: null };
+    const localGross = normalizeSharedLedgerValue(mp.scores[idx].gross);
+    if (localGross == null && remote.gross != null) {
+      mp.scores[idx].gross = remote.gross;
+      changed = true;
+    } else if (localGross != null && remote.gross != null && localGross !== remote.gross) {
+      conflicts.push({ playerId, playerName: remote.playerName, holeNumber, field: 'gross', localValue: localGross, remoteValue: remote.gross, sourceDevice: remote.sourceDevice || '', sourceParticipant: remote.sourceParticipant || '' });
+    }
+    if (!Array.isArray(mp.stats)) mp.stats = buildEmptyStats(getRequestedHoleCount(match));
+    const currentStat = normalizeHoleStat(mp.stats[idx] || {}, idx);
+    const nextStat = { ...currentStat };
+    ['putts', 'fairway', 'green', 'upAndDown', 'sandy'].forEach(field => {
+      const remoteValue = remote.stats?.[field];
+      if (remoteValue == null) return;
+      const localValue = currentStat[field];
+      if (localValue == null || localValue === false && remoteValue === true) {
+        nextStat[field] = remoteValue;
+      } else if (localValue !== remoteValue) {
+        conflicts.push({ playerId, playerName: remote.playerName, holeNumber, field, localValue, remoteValue, sourceDevice: remote.sourceDevice || '', sourceParticipant: remote.sourceParticipant || '' });
+      }
+    });
+    if (JSON.stringify(nextStat) !== JSON.stringify(currentStat)) {
+      mp.stats[idx] = normalizeHoleStat(nextStat, idx);
+      changed = true;
+    }
+  });
+  if (changed) {
+    const progress = computeMatchProgress(match);
+    match.lastTouchedHole = progress.lastTouchedHole;
+    match.lastFullyCompletedHole = progress.lastFullyCompletedHole;
+  }
+  return { changed, conflicts };
+}
 function countSharedLocalScoreEntries(match) {
   if (!match || match.storageMode !== 'shared') return 0;
   const owned = getSharedLocallyOwnedPlayerIds(match);
@@ -828,9 +1046,19 @@ function getSharedSyncStatus(match) {
   if (lastError) {
     return { label: 'Sync needs attention', detail: `${lastError} Scores are still saved on this phone.`, tone: 'warning', pending };
   }
+  const parity = match.sharedLedgerParity && typeof match.sharedLedgerParity === 'object' ? match.sharedLedgerParity : null;
+  if (parity?.status === 'conflict') {
+    return { label: 'Conflict detected', detail: 'Shared scores differ for at least one player/hole. Review diagnostics before final summary.', tone: 'warning', pending };
+  }
+  if (parity?.status === 'confirmed') {
+    return { label: 'Score parity confirmed', detail: 'Latest shared scores were pulled, reconciled, and compared on this device.', tone: 'good', pending: 0 };
+  }
+  if (parity?.status === 'warning' || parity?.status === 'not-confirmed') {
+    return { label: 'Sync warning', detail: parity.warning || 'Shared score parity has not been confirmed on this device.', tone: 'warning', pending };
+  }
   if (stateLabel === 'cloud-synced' || stateLabel === 'synced') {
-    if (stateLabel) return { label: 'Synced with host', detail: 'Latest shared scores reached the host.', tone: 'good', pending: 0 };
-    return { label: 'Synced', detail: 'Shared match is current.', tone: 'good', pending: 0 };
+    if (stateLabel) return { label: 'Pushed to shared match', detail: 'Network save completed. Pull and compare shared scores to confirm parity.', tone: 'neutral', pending: 0 };
+    return { label: 'Pushed', detail: 'Shared match network save completed.', tone: 'neutral', pending: 0 };
   }
   if (stateLabel === 'local-cache' || stateLabel === 'pending' || stateLabel === 'local-draft') {
     if (stateLabel) return { label: 'Saved on this phone', detail: 'Scoring works here even if cloud sync is delayed.', tone: 'neutral', pending: 0 };
@@ -1017,6 +1245,8 @@ function describeSharedAssignmentState(match) {
   const owned = getSharedLocallyOwnedPlayerIds(match || null);
   const assignmentCount = getParticipantAssignmentCount(match || null);
   const sync = getSharedSyncStatus(match || null);
+  const localLedger = extractLocalScoredLedger(match || null);
+  const parity = match?.sharedLedgerParity && typeof match.sharedLedgerParity === 'object' ? match.sharedLedgerParity : null;
   return {
     sharedMatchMode: match?.storageMode === 'shared' ? 'Shared Match' : 'Local Match',
     role: match?.storageMode === 'shared' ? (isCurrentDeviceMatchHost(match) ? 'Host device' : 'Joined device') : 'Local device',
@@ -1035,7 +1265,16 @@ function describeSharedAssignmentState(match) {
     assignmentCount,
     ownedPlayerIds: Array.from(owned || []),
     ownedPlayerNames: Array.from(owned || []).map(id => getPlayer(id)?.name || id),
-    localScoredHoleCount: countSharedLocalScoreEntries(match || null),
+    localScoredHoleCount: localLedger.length,
+    localScoredHolesByPlayer: summarizeSharedLedgerCounts(localLedger),
+    remoteScoredHolesByPlayer: parity?.remoteCountsByPlayer || {},
+    lastParityCheckAt: match?.lastSharedParityCheckAt || parity?.checkedAt || null,
+    parityStatus: parity?.status || 'not-checked',
+    parityConfirmed: !!parity?.parityConfirmed,
+    missingLocalEntries: parity?.missingLocal || [],
+    missingRemoteEntries: parity?.missingRemote || [],
+    conflictsDetected: parity?.conflicts || [],
+    ledgerChecksum: parity?.checksum || null,
     cloudSyncState: match?.cloudSyncState || '',
     sharedSyncLabel: sync.label,
     sharedSyncDetail: sync.detail,
@@ -1068,6 +1307,16 @@ function renderSharedAssignmentDiagnosticsPanel(match, { context = 'setup' } = {
     latestMetadataAssignments: state.latestMetadata?.playerAssignments || null,
     latestMetadataParticipants: state.latestMetadata?.participants || null,
     latestMetadataDevices: state.latestMetadata?.devices || null,
+    ledgerParity: {
+      status: state.parityStatus,
+      confirmed: state.parityConfirmed,
+      localScoredHolesByPlayer: state.localScoredHolesByPlayer,
+      remoteScoredHolesByPlayer: state.remoteScoredHolesByPlayer,
+      missingLocalEntries: state.missingLocalEntries,
+      missingRemoteEntries: state.missingRemoteEntries,
+      conflictsDetected: state.conflictsDetected,
+      checksum: state.ledgerChecksum,
+    },
   };
   return `<details class="shared-assignment-diagnostics top-gap" data-shared-assignment-diagnostics="${escapeHtml(context)}">
     <summary>Shared Assignment Diagnostics</summary>
@@ -1081,9 +1330,12 @@ function renderSharedAssignmentDiagnosticsPanel(match, { context = 'setup' } = {
       <div>assignmentCount<br><strong>${escapeHtml(`${state.assignmentCount.assigned}/${state.assignmentCount.total}`)}</strong></div>
       <div>sharedHostParticipantId<br><code>${escapeHtml(state.sharedHostParticipantId || '—')}</code></div>
       <div>sharedMatchCode<br><code>${escapeHtml(state.sharedMatchCode || '—')}</code></div>
+      <div>parityStatus<br><strong>${escapeHtml(state.parityStatus || 'not-checked')}</strong></div>
+      <div>lastParityCheck<br><strong>${escapeHtml(formatSharedStatusTimestamp(state.lastParityCheckAt))}</strong></div>
     </div>
     <div class="tiny top-gap"><strong>Scoring Access</strong>: ${escapeHtml(state.sharedAccessMode)} · Owned: ${escapeHtml(state.ownedPlayerNames.join(', ') || 'None')}</div>
     <div class="tiny top-gap"><strong>Sync</strong>: ${escapeHtml(state.sharedSyncLabel)} - Attempt: ${escapeHtml(formatSharedStatusTimestamp(state.lastSyncAttemptAt))} - Pull: ${escapeHtml(formatSharedStatusTimestamp(state.lastSuccessfulPullAt))} - Push: ${escapeHtml(formatSharedStatusTimestamp(state.lastSuccessfulPushAt))} - Local scored holes: ${escapeHtml(String(state.localScoredHoleCount || 0))}${state.lastSyncError ? ` - Last error: ${escapeHtml(state.lastSyncError)}` : ''}</div>
+    <div class="tiny top-gap"><strong>Ledger</strong>: Local ${escapeHtml(JSON.stringify(state.localScoredHolesByPlayer || {}))} - Remote ${escapeHtml(JSON.stringify(state.remoteScoredHolesByPlayer || {}))} - Missing local ${escapeHtml(String((state.missingLocalEntries || []).length))} - Missing remote ${escapeHtml(String((state.missingRemoteEntries || []).length))} - Conflicts ${escapeHtml(String((state.conflictsDetected || []).length))}</div>
     <div class="table-scroll top-gap"><table class="mini-table"><thead><tr><th>Participant</th><th>Participant ID</th><th>Device ID</th><th>Current?</th><th>Host?</th><th>Last seen</th></tr></thead><tbody>${participantRows || '<tr><td colspan="6">No participants</td></tr>'}</tbody></table></div>
     <div class="table-scroll top-gap"><table class="mini-table"><thead><tr><th>Player</th><th>Player ID</th><th>Assigned Participant</th><th>Matches Current?</th><th>Editable?</th></tr></thead><tbody>${playerRows || '<tr><td colspan="5">No players</td></tr>'}</tbody></table></div>
     <div class="tiny top-gap"><strong>Metadata Snapshot</strong></div>
@@ -1122,6 +1374,10 @@ if (typeof window !== 'undefined') {
   window.runSharedAssignmentDiagnosticSimulation = runSharedAssignmentDiagnosticSimulation;
   window.describeSharedAssignmentState = describeSharedAssignmentState;
   window.explainPlayerEditability = explainPlayerEditability;
+  window.extractLocalScoredLedger = extractLocalScoredLedger;
+  window.extractRemoteScoredLedger = extractRemoteScoredLedger;
+  window.compareScoredLedgers = compareScoredLedgers;
+  window.summarizeLedgerParity = summarizeLedgerParity;
 }
 function canEditGreenies(match, teamNo = 1, playerId = '') {
   return canEditPlayerScore(match, teamNo, playerId);
@@ -3445,6 +3701,24 @@ function buildExportHeaderPlayers(match, metrics) {
   return `<div class="export-header-players">${rows}</div>`;
 }
 
+function buildSharedLedgerReportNote(match) {
+  if (!match || match.storageMode !== 'shared') return '';
+  const parity = match.sharedLedgerParity && typeof match.sharedLedgerParity === 'object' ? match.sharedLedgerParity : null;
+  const confirmed = parity?.parityConfirmed || parity?.status === 'confirmed';
+  const conflicts = Array.isArray(parity?.conflicts) ? parity.conflicts.length : 0;
+  const missingLocal = Array.isArray(parity?.missingLocal) ? parity.missingLocal.length : 0;
+  const missingRemote = Array.isArray(parity?.missingRemote) ? parity.missingRemote.length : 0;
+  const detail = confirmed
+    ? 'Shared Match reconciliation: confirmed'
+    : `Shared Match reconciliation was not confirmed before this summary was generated.${conflicts ? ` Conflicts: ${conflicts}.` : ''}${missingLocal ? ` Missing local entries: ${missingLocal}.` : ''}${missingRemote ? ` Missing remote entries: ${missingRemote}.` : ''}`;
+  return `<section class="export-section export-section-shared-ledger-note print-keep-together">
+    <div class="export-section-head">
+      <h2>Shared Match Reconciliation</h2>
+      <div class="export-section-sub">${escapeHtml(detail)}</div>
+    </div>
+  </section>`;
+}
+
 function buildSummaryExportBody(match, metrics) {
   const exportScoreDistributionHtml = buildExportScoreDistributionSummary(match, metrics);
   const exportStatTrackingHtml = buildExportStatTrackingSummary(match, metrics);
@@ -3453,6 +3727,7 @@ function buildSummaryExportBody(match, metrics) {
   const exportRoundRecapHtml = buildRoundRecapExport(match, metrics);
   const exportRoundSnapshotHtml = buildRoundSnapshot(match, metrics);
   const exportProvisionalLabelHtml = buildMissingScoreWarning(match, metrics, { exportMode: true });
+  const exportSharedLedgerNoteHtml = buildSharedLedgerReportNote(match);
   const showNinePoint = (match.selectedGames || []).some(g => g.key === 'nine_point');
   const exportNinePointScorecardHtml = showNinePoint ? `
     <section class="export-section export-section-nine-point export-section-nine-point-scorecard">
@@ -3470,6 +3745,7 @@ function buildSummaryExportBody(match, metrics) {
     ${exportRoundSnapshotHtml}
     ${exportRoundRecapHtml}
     ${exportProvisionalLabelHtml}
+    ${exportSharedLedgerNoteHtml}
 
     <section class="export-section export-section-net-payout">
       <div class="export-section-head">
@@ -4329,7 +4605,7 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
 </html>`;
 }
 
-function openUnifiedExport(match, printView = 'summary') {
+async function openUnifiedExport(match, printView = 'summary') {
   const metrics = computeMatchMetrics(match);
   if (!metrics) {
     toast('No round selected to share.');
@@ -4344,7 +4620,14 @@ function openUnifiedExport(match, printView = 'summary') {
     toast('Please allow pop-ups to share this round.');
     return;
   }
-  const exportHtml = buildUnifiedExportDocument(match, metrics, printView);
+  exportWindow.document.open();
+  exportWindow.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Preparing Match Summary</title></head><body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:24px;"><strong>Reconciling shared scores...</strong><div style="margin-top:8px;color:#5a667a;">Pulling latest shared scores before creating the summary.</div></body></html>');
+  exportWindow.document.close();
+  if (match.storageMode === 'shared' && printView !== 'scorecard') {
+    await reconcileSharedMatchBeforeSummary(match, { silent: false });
+  }
+  const refreshedMetrics = computeMatchMetrics(match) || metrics;
+  const exportHtml = buildUnifiedExportDocument(match, refreshedMetrics, printView);
   try {
     const versionQuery = String(APP_VERSION || '').replace(/^v/i, '');
     const basePath = window.location.pathname || '/';
@@ -4547,6 +4830,8 @@ function normalizeMatch(match) {
   match.lastSharedSyncAttemptAt = match.lastSharedSyncAttemptAt || null;
   match.lastSharedScorePullAt = match.lastSharedScorePullAt || null;
   match.lastSharedScorePushAt = match.lastSharedScorePushAt || null;
+  match.lastSharedParityCheckAt = match.lastSharedParityCheckAt || null;
+  match.sharedLedgerParity = match.sharedLedgerParity && typeof match.sharedLedgerParity === 'object' ? match.sharedLedgerParity : null;
   match.lastSharedSyncError = String(match.lastSharedSyncError || '');
   match.sharedOwnerUserId = match.sharedOwnerUserId || null;
   match.sharedMatchRef = match.sharedMatchRef || match.sharedMatchId || match.id;
@@ -7528,45 +7813,11 @@ function hydrateMatchFromCloudBundle(bundle) {
 
 function mergeRemoteScoreEntriesIntoMatch(match, scoreEntries = []) {
   if (!match || !Array.isArray(scoreEntries) || !scoreEntries.length) return false;
-  let changed = false;
-  const byPlayerId = new Map((match.players || []).map(mp => [String(mp.playerId), mp]));
-  (scoreEntries || []).forEach(entry => {
-    const playerId = String(entry?.player_id || '').trim();
-    const holeNumber = Number(entry?.hole_number || 0);
-    if (!playerId || !holeNumber) return;
-    if (!shouldAcceptRemoteSharedPlayerHoleEntry(match, playerId, holeNumber)) return;
-    const mp = byPlayerId.get(playerId);
-    if (!mp) return;
-    const idx = holeNumber - 1;
-    if (!mp.scores || !Array.isArray(mp.scores)) mp.scores = buildEmptyScores(getRequestedHoleCount(match));
-    if (!mp.scores[idx]) mp.scores[idx] = { holeNumber, gross: null };
-    const nextGross = Number.isFinite(Number(entry.gross)) ? Math.round(Number(entry.gross)) : null;
-    if ((mp.scores[idx].gross ?? null) !== nextGross) {
-      mp.scores[idx].gross = nextGross;
-      changed = true;
-    }
-    if (!Array.isArray(mp.stats) || !mp.stats.length) mp.stats = buildEmptyStats(getRequestedHoleCount(match));
-    const before = JSON.stringify(normalizeHoleStat(mp.stats[idx] || {}, idx));
-    const nextStat = normalizeHoleStat({
-      holeNumber,
-      fairway: !!entry.fairway,
-      green: !!entry.green,
-      putts: Number.isFinite(Number(entry.putts)) ? Number(entry.putts) : null,
-      penaltyStrokes: Number.isFinite(Number(entry.penalty_strokes ?? entry.penaltyStrokes)) ? Number(entry.penalty_strokes ?? entry.penaltyStrokes) : 0,
-      upAndDown: !!entry.up_and_down,
-      sandy: !!entry.sandy,
-    }, idx);
-    if (JSON.stringify(nextStat) !== before) {
-      mp.stats[idx] = nextStat;
-      changed = true;
-    }
-  });
-  if (changed) {
-    const progress = computeMatchProgress(match);
-    match.lastTouchedHole = progress.lastTouchedHole;
-    match.lastFullyCompletedHole = progress.lastFullyCompletedHole;
-  }
-  return changed;
+  const remoteLedger = extractRemoteScoredLedger(match, scoreEntries);
+  const mergeResult = mergeSharedScoredLedgerIntoMatch(match, remoteLedger);
+  const comparison = compareScoredLedgers(extractLocalScoredLedger(match), remoteLedger);
+  recordSharedLedgerParity(match, comparison);
+  return mergeResult.changed;
 }
 async function pullSharedScoreEntries(match, { silent = true, render = true } = {}) {
   if (!match || match.storageMode !== 'shared' || !match.sharedMatchId || !hasSupabaseConfig()) return false;
@@ -7602,6 +7853,45 @@ async function refreshActiveSharedScores({ silent = true, render = true } = {}) 
   const match = getActiveMatch();
   if (!match || match.storageMode !== 'shared') return false;
   return pullSharedScoreEntries(match, { silent, render });
+}
+async function reconcileSharedMatchBeforeSummary(match, { silent = true } = {}) {
+  if (!match || match.storageMode !== 'shared') return { parityConfirmed: true, status: 'not-shared' };
+  const checkedAt = new Date().toISOString();
+  match.sharedLedgerParity = summarizeLedgerParity(compareScoredLedgers(extractLocalScoredLedger(match), []), {
+    checkedAt,
+    warning: 'Shared Match scores may not be fully reconciled on this device. Pull latest scores before creating a final Match Summary.',
+  });
+  if (!match.sharedMatchId || !hasSupabaseConfig()) {
+    match.lastSharedParityCheckAt = checkedAt;
+    persist({ skipRender: true });
+    if (!silent) toast('Shared Match scores may not be fully reconciled on this device.');
+    return match.sharedLedgerParity;
+  }
+  try {
+    const client = await ensureSupabaseClient();
+    if (!client) throw new Error('Supabase is not configured.');
+    const { data, error } = await client.from('score_entries').select('*').eq('match_id', match.sharedMatchId).eq('entry_status', 'active').order('hole_number');
+    if (error) throw error;
+    const remoteLedger = extractRemoteScoredLedger(match, data || []);
+    mergeSharedScoredLedgerIntoMatch(match, remoteLedger);
+    const comparison = compareScoredLedgers(extractLocalScoredLedger(match), remoteLedger);
+    const parity = recordSharedLedgerParity(match, comparison, { checkedAt: new Date().toISOString() });
+    match.lastSharedScorePullAt = parity.checkedAt;
+    match.lastSharedSyncError = '';
+    persist({ skipRender: true });
+    if (!parity.parityConfirmed && !silent) toast('Shared Match scores may not be fully reconciled on this device.');
+    return parity;
+  } catch (err) {
+    console.warn('Shared summary reconciliation failed.', err);
+    const parity = recordSharedLedgerParity(match, compareScoredLedgers(extractLocalScoredLedger(match), []), {
+      checkedAt: new Date().toISOString(),
+      warning: 'Shared Match reconciliation was not confirmed before this summary was generated.',
+    });
+    match.lastSharedSyncError = getSharedFriendlyError(err);
+    persist({ skipRender: true });
+    if (!silent) toast('Shared Match scores may not be fully reconciled on this device.');
+    return parity;
+  }
 }
 function startSharedScoreRefresh() {
   if (sharedScoreRefreshTimer) return;
@@ -11223,6 +11513,8 @@ function renderScoreAccessCard(match) {
   const assignmentLine = isAssignedPlayersMode(match)
     ? assignmentSummary
     : 'Shared scoring is open according to the selected scoring mode.';
+  const parity = match.sharedLedgerParity && typeof match.sharedLedgerParity === 'object' ? match.sharedLedgerParity : null;
+  const parityLabel = parity?.status === 'confirmed' ? 'Confirmed' : parity?.status === 'conflict' ? 'Conflict detected' : parity?.status === 'warning' ? 'Warning' : 'Not confirmed';
   card.classList.remove('hidden');
   card.classList.add('shared-score-compact-card', 'shared-secondary-controls-card');
   card.innerHTML = `
@@ -11242,6 +11534,7 @@ function renderScoreAccessCard(match) {
       <div><div class="tiny">Mode</div><strong>${escapeHtml(roleLabel)}</strong></div>
       <div><div class="tiny">Connection</div><strong>${escapeHtml(getSharedOnlineLabel())}</strong></div>
       <div><div class="tiny">Sync</div><strong>${escapeHtml(sync.label)}</strong></div>
+      <div><div class="tiny">Score parity</div><strong>${escapeHtml(parityLabel)}</strong></div>
       <div><div class="tiny">Last sync</div><strong>${escapeHtml(formatSharedLastSync(match))}</strong></div>
     </div>
     <div class="tiny top-gap"><strong>${escapeHtml(assignmentLine)}</strong></div>
@@ -12494,6 +12787,8 @@ function renderSetupSharedAdminPanel() {
   }
   const sync = getSharedSyncStatus(match);
   const lastSync = formatSharedLastSync(match);
+  const parity = match.sharedLedgerParity && typeof match.sharedLedgerParity === 'object' ? match.sharedLedgerParity : null;
+  const parityLabel = parity?.status === 'confirmed' ? 'Confirmed' : parity?.status === 'conflict' ? 'Conflict detected' : parity?.status === 'warning' ? 'Warning' : 'Not confirmed';
   const currentRoundStatus = match.completedAt ? 'Round complete' : 'In progress';
   const assignmentRows = participants.map(participant => {
     const assignedNames = isAssignedPlayersMode(match) ? getAssignedPlayerNamesForParticipant(match, participant.participantId) : [];
@@ -12532,6 +12827,7 @@ function renderSetupSharedAdminPanel() {
       <div class="shared-status-grid top-gap">
         <div><div class="tiny">Connection</div><strong>${escapeHtml(getSharedOnlineLabel())}</strong></div>
         <div><div class="tiny">Status</div><strong>${escapeHtml(sync.label)}</strong></div>
+        <div><div class="tiny">Score parity</div><strong>${escapeHtml(parityLabel)}</strong></div>
         <div><div class="tiny">Last synced</div><strong>${escapeHtml(lastSync)}</strong></div>
         <div><div class="tiny">Assignment</div><strong>${escapeHtml(getSharedAssignmentSummary(match))}</strong></div>
       </div>

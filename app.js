@@ -1,9 +1,9 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.50',
-  versionNumber: '30.3.50',
-  cacheName: 'the-dye-ledger-v30.3.50',
+  version: 'v30.3.51',
+  versionNumber: '30.3.51',
+  cacheName: 'the-dye-ledger-v30.3.51',
   buildDate: new Date().toISOString(),
   buildLabel: 'Shared Match Persistence & Reconciliation'
 };
@@ -2467,6 +2467,74 @@ function computeNassauDiffsForBasis(metrics, basis = 'net') {
   });
   return { front, back, overall };
 }
+function formatStrokesDisplay(strokes) {
+  const n = Number(strokes) || 0;
+  return n > 0 ? String(n) : '—';
+}
+function formatNassauSegmentStatus(match, metrics, diff) {
+  const n = Number(diff) || 0;
+  if (!Number.isFinite(n) || n === 0) return 'AS';
+  const teamNo = n > 0 ? 1 : 2;
+  return `${getTeamLabel(match, teamNo) || `Team ${teamNo}`} +${Math.abs(n)}`;
+}
+function buildNassauOneLineStatus(match, metrics) {
+  if (!match || !metrics || !(match.selectedGames || []).some(g => g.key === 'nassau')) return '';
+  if ((metrics.teams || []).length !== 2) return '';
+  const cfg = (match.selectedGames || []).find(g => g.key === 'nassau') || {};
+  const basis = String(cfg.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net';
+  const diffs = computeNassauDiffsForBasis(metrics, basis);
+  const holeCount = getPlayableHoleCount(match, metrics.tee);
+  const parts = [];
+  if (holeCount <= 9) {
+    parts.push(`${getHoleSegmentLabel(match, metrics.tee)}: ${formatNassauSegmentStatus(match, metrics, diffs.overall)}`);
+  } else {
+    parts.push(`Front: ${formatNassauSegmentStatus(match, metrics, diffs.front)}`);
+    parts.push(`Back: ${formatNassauSegmentStatus(match, metrics, diffs.back)}`);
+    parts.push(`18: ${formatNassauSegmentStatus(match, metrics, diffs.overall)}`);
+  }
+  return `Nassau: ${parts.join(' · ')}`;
+}
+function getPlayerHoleTeeInfo(match, playerRef, selectedHoleIdx, fallbackTee = null) {
+  const tee = getPlayerTee(match, playerRef) || fallbackTee || getTee(match?.courseId, match?.teeId);
+  const hole = getPlayerHole(match, playerRef, selectedHoleIdx, fallbackTee);
+  const teeName = getHoleTeeNameForDisplay(match?.courseId, tee, selectedHoleIdx) || tee?.teeName || '';
+  const yardage = Number(hole?.yardage);
+  return {
+    teeName,
+    yardage: Number.isFinite(yardage) && yardage > 0 ? yardage : null,
+    label: teeName
+      ? `${teeName}${Number.isFinite(yardage) && yardage > 0 ? ` · ${formatYardageValue(yardage)} yds` : ''}`
+      : ''
+  };
+}
+function getPlayerScorecardYardage(match, playerRef, selectedHoleIdx, fallbackTee = null, fallbackHole = null) {
+  const playerTee = getPlayerTee(match, playerRef);
+  if (playerTee) {
+    const selectedIndexes = getSelectedHoleIndexes(match, playerTee);
+    const actualIdx = Number.isFinite(selectedIndexes[selectedHoleIdx]) ? selectedIndexes[selectedHoleIdx] : selectedHoleIdx;
+    const yardage = Number(playerTee?.holes?.[actualIdx]?.yardage);
+    return Number.isFinite(yardage) && yardage > 0 ? yardage : null;
+  }
+  const fallbackYardage = Number((getPlayerHole(match, playerRef, selectedHoleIdx, fallbackTee) || fallbackHole)?.yardage);
+  return Number.isFinite(fallbackYardage) && fallbackYardage > 0 ? fallbackYardage : null;
+}
+function getRoundElapsedTimeState(match) {
+  const start = match?.roundTiming?.startedAt || match?.roundStartedAt || match?.createdAt || '';
+  const end = match?.roundTiming?.endedAt || match?.completedAt || match?.roundEndedAt || '';
+  const startMs = start ? Date.parse(start) : NaN;
+  const endMs = end ? Date.parse(end) : NaN;
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) {
+    return { available: false, label: 'Round duration: not available' };
+  }
+  const totalMinutes = Math.max(0, Math.round((endMs - startMs) / 60000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return {
+    available: true,
+    minutes: totalMinutes,
+    label: `Round elapsed time: ${hours ? `${hours}h ` : ''}${minutes}m`.trim()
+  };
+}
 function getTeamStrokeStanding(metrics, basis = 'net', scoringMode = 'best_ball') {
   const teams = (metrics?.teams || []).map(t => ({ team: t.team, total: 0, completeHoles: 0 }));
   const byTeam = Object.fromEntries(teams.map(t => [t.team, t]));
@@ -3576,6 +3644,11 @@ function buildRoundRecapPayload(match, metrics) {
     roundNotes: String(match?.roundRecapNotes || '').trim(),
     roundContext: {
       weather: normalizeRoundWeatherSnapshot(match?.roundContext?.weather),
+      roundTiming: {
+        startedAt: match?.roundTiming?.startedAt || null,
+        endedAt: match?.roundTiming?.endedAt || match?.completedAt || null,
+        elapsedLabel: getRoundElapsedTimeState(match).label,
+      },
     },
     featuredCompetition: {
       selected: getFeaturedCompetitionSelection(match),
@@ -4732,6 +4805,7 @@ function createEmptyMatch(overrides = {}) {
     selectedGames: Array.isArray(overrides.selectedGames) ? overrides.selectedGames : [],
     status: 'active',
     completedAt: null,
+    roundTiming: overrides.roundTiming || { startedAt: new Date().toISOString(), endedAt: null },
     players: Array.isArray(overrides.players) ? overrides.players : [],
     greeniesWinners: {},
     storageMode: 'local',
@@ -4797,6 +4871,9 @@ function normalizeMatch(match) {
   match.customStartHole = Math.max(1, Math.min(10, Number(match.customStartHole) || 1));
   match.status = match.status || 'active';
   match.completedAt = match.completedAt || null;
+  match.roundTiming = match.roundTiming && typeof match.roundTiming === 'object' ? match.roundTiming : {};
+  match.roundTiming.startedAt = match.roundTiming.startedAt || match.roundStartedAt || match.createdAt || new Date().toISOString();
+  match.roundTiming.endedAt = match.roundTiming.endedAt || match.roundEndedAt || match.completedAt || null;
   match.scoringAccessMode = normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device');
   match.scoreEntryMode = getLegacyScoreEntryMode(match.scoringAccessMode);
   match.officialScorerName = String(match.officialScorerName || 'Official scorer').trim() || 'Official scorer';
@@ -5624,26 +5701,35 @@ function buildClassicScorecard(match, metrics, opts = {}) {
   const tee = metrics?.tee;
   if (!tee) return '<div class="tiny">No scorecard available.</div>';
   const readOnly = !!opts.readOnly;
+  const blankCourseTeamCell = !!opts.blankCourseTeamCell;
+  const hideTeamColumn = !!opts.hideTeamColumn;
+  const blankPlayerHeader = !!opts.blankPlayerHeader;
   const selectedPlayerId = opts.playerId ? String(opts.playerId) : '';
   const holeCount = getPlayableHoleCount(match, tee);
   const holes = getSelectedScoringHoles(match, tee);
   const front = holes.slice(0, Math.min(9, holeCount));
   const back = holeCount > 9 ? holes.slice(9, holeCount) : [];
-  const holeHeader = holes.map(h => `<th>H${h.holeNumber}</th>`).join('');
+  const holeHeader = holes.map(h => `<th class="scorecard-hole-col">H${h.holeNumber}</th>`).join('');
   const sum = arr => arr.reduce((s,h)=>s+(Number(h)||0),0);
   const totalColumns = holeCount > 9 ? '<th>Out</th><th>In</th><th>Total</th>' : '<th>Out</th><th>Total</th>';
   const scorecardMetaRow = (label, extractor) => {
-    const holeValues = holes.map(h => extractor(h));
-    const outTotal = sum(front.map(extractor));
-    const inTotal = back.length ? sum(back.map(extractor)) : null;
-    const total = sum(holes.map(extractor));
-    return `<tr><td class="scorecard-sticky-name"><strong>${label}</strong></td><td class="scorecard-sticky-team">Course</td>${holeValues.map(v => `<td>${v ?? '—'}</td>`).join('')}<td><strong>${outTotal || '—'}</strong></td>${back.length ? `<td><strong>${inTotal || '—'}</strong></td>` : ''}<td><strong>${total || '—'}</strong></td></tr>`;
+    const holeValues = holes.map((h, idx) => extractor(h, idx));
+    const outTotal = sum(front.map((h, idx) => extractor(h, idx)));
+    const inTotal = back.length ? sum(back.map((h, idx) => extractor(h, idx + front.length))) : null;
+    const total = sum(holes.map((h, idx) => extractor(h, idx)));
+    return `<tr><td class="scorecard-sticky-name"><strong>${label}</strong></td>${hideTeamColumn ? '' : `<td class="scorecard-sticky-team">${blankCourseTeamCell ? '' : 'Course'}</td>`}${holeValues.map(v => `<td class="scorecard-hole-col">${v ?? '—'}</td>`).join('')}<td><strong>${outTotal || '—'}</strong></td>${back.length ? `<td><strong>${inTotal || '—'}</strong></td>` : ''}<td><strong>${total || '—'}</strong></td></tr>`;
   };
-  const yardageRow = scorecardMetaRow('Yds', h => formatYardageValue(h.yardage));
-  const parRow = scorecardMetaRow('Par', h => Number(h.par) || 0);
-  const siRow = scorecardMetaRow('Handicap', h => Number(h.strokeIndex) || 0);
   const dotMarkup = count => count > 0 ? `<span class="score-dots">${'•'.repeat(Math.min(count,3))}${count>3?`<sup>${count}</sup>`:''}</span>` : '';
   const visiblePlayers = selectedPlayerId ? metrics.players.filter(p => String(p.playerId) === selectedPlayerId) : metrics.players;
+  const selectedPlayerMetric = selectedPlayerId ? visiblePlayers[0] : null;
+  const yardageRow = scorecardMetaRow('Yds', (h, idx) => {
+    const yardage = selectedPlayerMetric
+      ? getPlayerScorecardYardage(match, selectedPlayerMetric, idx, tee, h)
+      : Number(h.yardage);
+    return Number.isFinite(yardage) && yardage > 0 ? formatYardageValue(yardage) : null;
+  });
+  const parRow = scorecardMetaRow('Par', h => Number(h.par) || 0);
+  const siRow = scorecardMetaRow('Handicap', h => Number(h.strokeIndex) || 0);
   const playerRows = visiblePlayers.map(p => {
     const playerScores = (p.scores || []).slice(0, holeCount);
     const frontGross = playerScores.slice(0, Math.min(9, holeCount)).reduce((s,x)=>s+(Number(x.gross)||0),0);
@@ -5669,20 +5755,20 @@ function buildClassicScorecard(match, metrics, opts = {}) {
       const strokes = holeStrokeAllowanceForPlayer(playerHole.strokeIndex, p.playHdcp, metrics.lowPlaying);
       const editAttrs = readOnly ? '' : `data-scorecard-edit="1" data-edit-hole="${idx + 1}" data-edit-player="${p.playerId}" title="Edit ${escapeHtml(p.player.name)} on hole ${hole.holeNumber}"`;
       const editClass = readOnly ? '' : ' editable-scorecard-cell';
-      if (!gross) return `<td class="score-hole-cell${editClass}" ${editAttrs}><div class="score-main">${formatGolfScoreMarkup(null, hole.par, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(null, hole.par, 'net')}${dotMarkup(strokes)}</div></td>`;
+      if (!gross) return `<td class="scorecard-hole-col score-hole-cell${editClass}" ${editAttrs}><div class="score-main">${formatGolfScoreMarkup(null, hole.par, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(null, hole.par, 'net')}${dotMarkup(strokes)}</div></td>`;
       const net = gross - strokes;
-      return `<td class="score-hole-cell${editClass}" ${editAttrs}><div class="score-main">${formatGolfScoreMarkup(gross, hole.par, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(net, hole.par, 'net')}${dotMarkup(strokes)}</div></td>`;
+      return `<td class="scorecard-hole-col score-hole-cell${editClass}" ${editAttrs}><div class="score-main">${formatGolfScoreMarkup(gross, hole.par, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(net, hole.par, 'net')}${dotMarkup(strokes)}</div></td>`;
     }).join('');
     const totals = back.length
       ? `<td><strong>${frontGross}</strong><div class="score-sub total-sub">${frontNet || '—'}</div></td><td><strong>${backGross}</strong><div class="score-sub total-sub">${backNet || '—'}</div></td><td><strong>${p.grossTotal || 0}</strong><div class="score-sub total-sub">${p.netTotal || 0}</div></td>`
       : `<td><strong>${frontGross}</strong><div class="score-sub total-sub">${frontNet || '—'}</div></td><td><strong>${p.grossTotal || 0}</strong><div class="score-sub total-sub">${p.netTotal || 0}</div></td>`;
     const playerTeeName = p.tee?.teeName || tee?.teeName || 'Tee';
-    return `<tr><td class="scorecard-sticky-name"><strong>${escapeHtml(p.player.name)}</strong><div class="tiny">Tee: ${escapeHtml(playerTeeName)}</div></td><td class="scorecard-sticky-team">${escapeHtml(getTeamLabel(match,p.team))}</td>${cells}${totals}</tr>`;
+    return `<tr><td class="scorecard-sticky-name"><strong>${escapeHtml(p.player.name)}</strong><div class="tiny">Tee: ${escapeHtml(playerTeeName)}</div></td>${hideTeamColumn ? '' : `<td class="scorecard-sticky-team">${escapeHtml(getTeamLabel(match,p.team))}</td>`}${cells}${totals}</tr>`;
   }).join('');
   const teeLegend = visiblePlayers.map(p => `${p.player.name}: ${p.tee?.teeName || tee?.teeName || 'Tee'}`).join(' · ');
   const completion = getRoundCompletionState(match, metrics);
   const partialNote = completion.isIncomplete ? ' Totals reflect completed/scored holes only; unplayed holes are shown as dashes and are not counted.' : '';
-  return `<div class="scorecard-sub tiny">Per-hole cells show gross on top and net below, with notation wrapped around the score and dots for strokes received. Course rows include yardage, par, and handicap. Player tees: ${escapeHtml(teeLegend)}${escapeHtml(partialNote)}</div><div class="scorecard-wrap"><table class="scorecard-table"><thead><tr><th class="scorecard-sticky-name">Player</th><th class="scorecard-sticky-team">Team</th>${holeHeader}${totalColumns}</tr></thead><tbody>${yardageRow}${parRow}${siRow}${playerRows}</tbody></table></div>`;
+  return `<div class="scorecard-sub tiny">Per-hole cells show gross on top and net below, with notation wrapped around the score and dots for strokes received. Course rows include yardage, par, and handicap. Player tees: ${escapeHtml(teeLegend)}${escapeHtml(partialNote)}</div><div class="scorecard-wrap"><table class="scorecard-table ${hideTeamColumn ? 'scorecard-no-team-col' : ''}"><thead><tr><th class="scorecard-sticky-name">${blankPlayerHeader ? '' : 'Player'}</th>${hideTeamColumn ? '' : '<th class="scorecard-sticky-team">Team</th>'}${holeHeader}${totalColumns}</tr></thead><tbody>${yardageRow}${parRow}${siRow}${playerRows}</tbody></table></div>`;
 }
 
 
@@ -6254,32 +6340,137 @@ function buildPlayerDetailStatBlock(match, metrics, playerMetric) {
   `;
 }
 
+function buildPlayerDetailGameStatusBlock(match, metrics, playerMetric) {
+  if (!match || !metrics || !playerMetric) return '';
+  const games = Array.isArray(match.selectedGames) ? match.selectedGames : [];
+  if (!games.length) return '';
+  const rows = [];
+  const add = (label, value) => {
+    const clean = String(value || '').trim();
+    if (clean) rows.push(`<div class="player-detail-action-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(clean)}</strong></div>`);
+  };
+  const teamNo = Number(playerMetric.team) || 1;
+  const teamLabel = getTeamLabel(match, teamNo);
+  const playerId = String(playerMetric.playerId);
+  const selectedKeys = new Set(games.map(g => g.key));
+  if (selectedKeys.has('nassau') && (metrics.teams || []).length === 2) {
+    add('Nassau', `${teamLabel} · ${buildNassauOneLineStatus(match, metrics).replace(/^Nassau:\s*/i, '')}`);
+  }
+  if (selectedKeys.has('team_match') && (metrics.teams || []).length === 2) {
+    const diffs = computeTeamGameDiffs(match, metrics, 'team_match');
+    add('Match', formatTeamGameStatus(match, metrics, diffs.overall));
+  }
+  const teamStrokeCfg = games.find(g => g.key === 'team_stroke');
+  if (teamStrokeCfg) {
+    const stroke = getTeamStrokeScoreboardData(match, metrics, teamStrokeCfg);
+    const teamRow = (stroke.rows || []).find(row => Number(row.team) === teamNo);
+    if (teamRow) {
+      const status = !stroke.leader
+        ? 'Active'
+        : stroke.tie
+          ? `Tied at ${stroke.leader.total}`
+          : `${getTeamLabel(match, stroke.leader.team)} by ${stroke.margin} stroke${stroke.margin === 1 ? '' : 's'}`;
+      add('Team Stroke', `${teamLabel} ${teamRow.total} · ${status}`);
+    } else {
+      add('Team Stroke', 'Active');
+    }
+  }
+  const singlesCfg = games.find(g => g.key === 'singles_match');
+  if (singlesCfg) {
+    const singles = computeSinglesMatchPlayResult(match, metrics, singlesCfg);
+    const involved = [singles.playerAId, singles.playerBId].map(String).includes(playerId);
+    if (involved) add('Singles', `${singles.resultText} · ${formatBasisLabel(singles.basis)}`);
+  }
+  games.filter(g => g.key === 'skins' || g.key === 'net_skins').forEach(cfg => {
+    const skinsCfg = cfg.key === 'net_skins' ? { ...cfg, basis: 'net' } : cfg;
+    const skins = computeSkinResults(match, metrics, skinsCfg);
+    const isTeam = skinsCfg.skinsType === 'team';
+    const key = isTeam ? String(teamNo) : String(playerMetric.playerId);
+    const count = Number(skins.counts?.[key] || 0);
+    const label = cfg.key === 'net_skins' ? 'Net Skins' : 'Skins';
+    add(label, count ? `${count} won${isTeam ? ` · ${teamLabel}` : ''}` : 'None yet');
+  });
+  const greeniesCfg = games.find(g => g.key === 'greenies');
+  if (greeniesCfg) {
+    const participants = new Set((greeniesCfg.participants || []).map(String));
+    if (!participants.size || participants.has(String(playerMetric.playerId))) {
+      const greenies = getGreeniesResults(match, metrics, greeniesCfg);
+      const count = Number(greenies.counts?.[playerMetric.playerId] || 0);
+      add('Greenies', count ? `${count} won` : 'Eligible · none yet');
+    }
+  }
+  const ninePointCfg = games.find(g => g.key === 'nine_point');
+  if (ninePointCfg) {
+    const nine = computeNinePointResults(match, metrics, ninePointCfg);
+    const configuredIds = new Set((ninePointCfg.playerIds || nine.playerIds || []).map(String));
+    if (configuredIds.has(playerId)) {
+      const row = (nine.leaderboard || []).find(item => String(item.playerId) === playerId);
+      const pointText = row ? `${row.total} pts` : 'Active';
+      const moneyText = row ? ` · ${formatMoneyAccounting(row.amount || 0)}` : '';
+      add('9-Point', `${pointText} · ${nine.completedHoles || 0} hole(s) complete${moneyText}`);
+    }
+  }
+  const side = getIndividualMatchPairings(match, metrics).find(pair => (
+    String(pair.playerA?.playerId) === String(playerMetric.playerId) || String(pair.playerB?.playerId) === String(playerMetric.playerId)
+  ));
+  if (side) add(getSideMatchGameLabel(side.game), side.status || 'Live');
+  if (!rows.length) return '';
+  return `<section class="player-detail-section player-detail-action-section"><h3>Games / Action</h3><div class="player-detail-action-list">${rows.join('')}</div></section>`;
+}
+
+function getPlayerScoringMixLabel(match, metrics, playerMetric) {
+  if (!match || !metrics || !playerMetric) return 'No scored holes yet';
+  const counts = { eagle: 0, birdie: 0, par: 0, bogey: 0, double: 0 };
+  const tee = metrics?.tee || getTee(match.courseId, match.teeId);
+  const holeCount = getPlayableHoleCount(match, tee);
+  (playerMetric.scores || []).slice(0, holeCount).forEach((score, idx) => {
+    const gross = Number(score?.gross);
+    const playerHole = getPlayerHole(match, playerMetric, idx, tee);
+    const par = Number(playerHole?.par);
+    if (!Number.isFinite(gross) || gross <= 0 || !Number.isFinite(par) || par <= 0) return;
+    const diff = gross - par;
+    if (diff <= -2) counts.eagle += 1;
+    else if (diff === -1) counts.birdie += 1;
+    else if (diff === 0) counts.par += 1;
+    else if (diff === 1) counts.bogey += 1;
+    else counts.double += 1;
+  });
+  const parts = [
+    ['Eagle+', 'Eagles+', counts.eagle],
+    ['Birdie', 'Birdies', counts.birdie],
+    ['Par', 'Pars', counts.par],
+    ['Bogey', 'Bogeys', counts.bogey],
+    ['Double+', 'Doubles+', counts.double],
+  ]
+    .filter(([, , count]) => count > 0)
+    .map(([singular, plural, count]) => `${count} ${count === 1 ? singular : plural}`);
+  return parts.length ? parts.join(' • ') : 'No scored holes yet';
+}
+
 function buildPlayerDetailView(match, metrics, playerId) {
   const playerMetric = (metrics?.players || []).find(p => String(p.playerId) === String(playerId));
   if (!match || !metrics || !playerMetric) return '<div class="player-detail-empty">Player details are unavailable.</div>';
   const showNet = Number(playerMetric.playHdcp || 0) !== 0 || Number(playerMetric.netTotal || 0) !== Number(playerMetric.grossTotal || 0);
-  const matchStatus = getPlayerDetailMatchStatus(match, metrics, playerMetric);
   const scoreTiles = [
     ['Gross', playerMetric.grossTotal || 0],
     ...(showNet ? [['Net', playerMetric.netTotal || 0]] : []),
     ['Vs Par', formatSigned(playerMetric.toPar || 0)],
     ['Through', getPlayerDetailThroughLabel(match, metrics, playerMetric)],
+    ['Scoring Mix', getPlayerScoringMixLabel(match, metrics, playerMetric)],
   ];
-  if (matchStatus) scoreTiles.push(['Match', matchStatus]);
   return `
     <div class="player-detail-hero">
       <div>
-        <div class="tiny">In-round player detail</div>
-        <h2>${escapeHtml(playerMetric.player?.name || 'Player')}</h2>
-        <div class="tiny">${escapeHtml(getTeamLabel(match, playerMetric.team))} · ${escapeHtml(playerMetric.tee?.teeName || metrics.tee?.teeName || 'Tee')}</div>
+        <div class="tiny">${escapeHtml(getTeamLabel(match, playerMetric.team))} · ${escapeHtml(playerMetric.tee?.teeName || metrics.tee?.teeName || 'Tee')} · ${escapeHtml(getPlayerDetailThroughLabel(match, metrics, playerMetric))}</div>
       </div>
       <div class="player-detail-score-grid">
         ${scoreTiles.map(([label, value]) => `<div class="player-detail-score-tile"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`).join('')}
       </div>
     </div>
+    ${buildPlayerDetailGameStatusBlock(match, metrics, playerMetric)}
     <section class="player-detail-section">
       <h3>Classic scorecard</h3>
-      ${buildClassicScorecard(match, metrics, { playerId: playerMetric.playerId, readOnly: true })}
+      ${buildClassicScorecard(match, metrics, { playerId: playerMetric.playerId, readOnly: true, blankCourseTeamCell: true, hideTeamColumn: true, blankPlayerHeader: true })}
     </section>
     <section class="player-detail-section">
       <h3>Hole statistics</h3>
@@ -6296,6 +6487,9 @@ function openPlayerDetailView(playerId) {
   if (!modal || !body) return;
   const metrics = computeMatchMetrics(match);
   body.innerHTML = buildPlayerDetailView(match, metrics, playerId);
+  const playerMetric = (metrics?.players || []).find(p => String(p.playerId) === String(playerId));
+  const title = document.getElementById('playerDetailTitle');
+  if (title) title.textContent = playerMetric?.player?.name || 'Player Detail';
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
   document.body.classList.add('player-detail-open');
@@ -6308,6 +6502,82 @@ function closePlayerDetailView() {
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
   document.body.classList.remove('player-detail-open');
+}
+
+function buildQuickScoreboardView(match, metrics) {
+  if (!match || !metrics) return '<div class="player-detail-empty">Scoreboard is unavailable.</div>';
+  const sortedPlayers = (metrics.players || []).slice().sort((a, b) => a.leaderboardNetDiff - b.leaderboardNetDiff || a.toPar - b.toPar || String(a.player?.name || '').localeCompare(String(b.player?.name || '')));
+  const playerRows = sortedPlayers.map((p, idx) => `
+    <tr>
+      <td>${idx + 1}</td>
+      <td>${escapeHtml(p.player?.name || 'Player')}</td>
+      <td>${p.grossTotal || 0}</td>
+      <td>${p.leaderboardNetTotal || 0}</td>
+      <td>${formatSigned(p.leaderboardNetDiff || 0)}</td>
+    </tr>`).join('');
+  const showTeams = hasMultiPlayerTeam(metrics);
+  const teamRows = showTeams ? (metrics.teams || []).slice().sort((a, b) => a.netTotal - b.netTotal || a.grossTotal - b.grossTotal || a.team - b.team).map(t => `
+    <tr>
+      <td>${escapeHtml(getTeamLabel(match, t.team))}</td>
+      <td>${t.grossTotal || 0}</td>
+      <td>${t.netTotal || 0}</td>
+      <td>${formatSigned(t.netDiff || 0)}</td>
+    </tr>`).join('') : '';
+  const completion = getRoundCompletionState(match, metrics);
+  const elapsed = getRoundElapsedTimeState(match);
+  const nassau = buildNassauOneLineStatus(match, metrics);
+  const live = buildLiveScoringStatusLine(match, metrics);
+  const payout = getPayoutReportContext(match, metrics);
+  const moneyRows = Object.entries(payout.finalTotals || {})
+    .map(([id, amount]) => ({ name: getPlayer(id)?.name || id, amount: Number(amount) || 0 }))
+    .filter(row => Math.abs(row.amount) > 0.0001)
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 4)
+    .map(row => `<div class="quick-money-row"><span>${escapeHtml(row.name)}</span><strong>${formatFinalNetSettlementMoney(row.amount)}</strong></div>`)
+    .join('');
+  return `
+    <div class="quick-scoreboard-meta">${escapeHtml(completion.label)}${match.status === 'complete' ? ' · Final' : ' · Live'}${elapsed.available ? ` · ${escapeHtml(elapsed.label.replace(/^Round elapsed time:\s*/i, ''))}` : ''}</div>
+    ${nassau ? `<div class="quick-scoreboard-status">${escapeHtml(nassau)}</div>` : (live ? `<div class="quick-scoreboard-status">${escapeHtml(live)}</div>` : '')}
+    <section class="quick-scoreboard-section">
+      <h4>Players</h4>
+      <div class="quick-table-wrap">
+        <table class="quick-scoreboard-table">
+          <thead><tr><th>#</th><th>Player</th><th>Gross</th><th>Net</th><th>Net +/-</th></tr></thead>
+          <tbody>${playerRows || '<tr><td colspan="5">No player standings yet.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </section>
+    ${showTeams ? `<section class="quick-scoreboard-section"><h4>Teams</h4><div class="quick-table-wrap"><table class="quick-scoreboard-table"><thead><tr><th>Team</th><th>Gross</th><th>Net</th><th>Net +/-</th></tr></thead><tbody>${teamRows}</tbody></table></div></section>` : ''}
+    <section class="quick-scoreboard-section">
+      <h4>Competition</h4>
+      <div class="quick-scoreboard-status">${escapeHtml(buildLiveScoringStatusLine(match, metrics) || 'No active competition status yet.')}</div>
+    </section>
+    <section class="quick-scoreboard-section">
+      <h4>Money</h4>
+      ${moneyRows ? `<div class="quick-money-list">${moneyRows}</div>` : '<div class="tiny">No money summary available yet.</div>'}
+    </section>`;
+}
+
+function openQuickScoreboardView() {
+  const match = getActiveMatch();
+  if (!match) return toast('Create or load a match first.');
+  const modal = document.getElementById('quickScoreboardDialog');
+  const body = document.getElementById('quickScoreboardBody');
+  if (!modal || !body) return;
+  const metrics = computeMatchMetrics(match);
+  body.innerHTML = buildQuickScoreboardView(match, metrics);
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('quick-scoreboard-open');
+  document.getElementById('quickScoreboardCloseBtn')?.focus({ preventScroll: true });
+}
+
+function closeQuickScoreboardView() {
+  const modal = document.getElementById('quickScoreboardDialog');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('quick-scoreboard-open');
 }
 
 function renderLeaderboard() {
@@ -10139,6 +10409,9 @@ function completeActiveRound() {
     const wasReopened = !!(match.reopenedAt || match.previousCompletedAt);
     match.status = 'complete';
     match.completedAt = new Date().toISOString();
+    match.roundTiming = match.roundTiming && typeof match.roundTiming === 'object' ? match.roundTiming : {};
+    match.roundTiming.startedAt = match.roundTiming.startedAt || match.roundStartedAt || match.createdAt || match.completedAt;
+    match.roundTiming.endedAt = match.completedAt;
     const finishMetrics = computeMatchMetrics(match);
     const finishCompletion = getRoundCompletionState(match, finishMetrics);
     if (!match.roundEndReason) match.roundEndReason = finishCompletion.isComplete ? 'completed' : 'endedEarly';
@@ -10240,9 +10513,7 @@ function renderCurrentMatch() {
   const holeSummaryEl = document.getElementById('holeSummary');
   if (holeSummaryEl) {
     if (hole) {
-      const primaryTeeName = getHoleTeeNameForDisplay(match.courseId, tee, currentHole - 1) || tee?.teeName || 'Tee';
-      const primaryYards = hole.yardage ? `${formatYardageValue(hole.yardage)} yds` : (teeYardages || '— yds');
-      const holeMeta = `Par ${hole.par || '-'} · SI ${hole.strokeIndex || '-'} · ${primaryYards} · ${primaryTeeName}`;
+      const holeMeta = `Par ${hole.par || '-'} · SI ${hole.strokeIndex || '-'}`;
       const statusLine = liveStatusLine || teamText;
       holeSummaryEl.innerHTML = `<div class="score-hole-meta">${escapeHtml(holeMeta)}</div>${statusLine ? `<div class="score-live-status">${escapeHtml(statusLine)}</div>` : ''}`;
     } else {
@@ -10294,13 +10565,7 @@ function formatConciseTeamDiff(match, metrics, diff) {
 }
 
 function buildLiveNassauStatus(match, metrics) {
-  if (!match || !metrics || (metrics?.teams || []).length !== 2) return '';
-  const diffs = computeTeamGameDiffs(match, metrics, 'nassau');
-  const holeCount = getPlayableHoleCount(match, metrics.tee);
-  if (holeCount <= 9) return `Nassau: ${formatConciseTeamDiff(match, metrics, diffs.overall)}`;
-  const segment = currentHole <= 9 ? 'F' : 'B';
-  const diff = currentHole <= 9 ? diffs.front : diffs.back;
-  return `Nassau ${segment}: ${formatConciseTeamDiff(match, metrics, diff)}`;
+  return buildNassauOneLineStatus(match, metrics);
 }
 
 function buildLiveTeamMatchStatus(match, metrics) {
@@ -10568,10 +10833,10 @@ function renderScoreGrid(match, tee, metrics, scoringHoles = null) {
     if (match.storageMode === 'shared') console.debug('[SharedScoreGate]', explainPlayerEditability(match, p.playerId));
     return `
       <tr class="${canEdit ? '' : 'score-row-readonly'}">
-        <td><button type="button" class="player-detail-trigger" data-player-detail="${escapeHtml(p.playerId)}">${escapeHtml(p.player.name)}</button><div class="tiny">${escapeHtml(getHoleTeeNameForDisplay(match.courseId, p.tee || tee, currentHole - 1) || p.tee?.teeName || tee?.teeName || 'Tee')}${canEdit ? '' : ' · locked'}</div></td>
+        <td><button type="button" class="player-detail-trigger score-player-name" data-player-detail="${escapeHtml(p.playerId)}" title="${escapeHtml(p.player.name)}">${escapeHtml(p.player.name)}</button><div class="tiny score-player-tee">${escapeHtml(getPlayerHoleTeeInfo(match, p, currentHole - 1, tee).label)}${canEdit ? '' : ' · locked'}</div></td>
         <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
         <td><div class="gross-score-stepper" role="group" aria-label="Gross score for ${escapeHtml(p.player.name)}"><button type="button" class="score-step-btn" data-score-step="down" data-score-step-player="${escapeHtml(p.playerId)}" ${canEdit ? '' : 'disabled'}>−</button><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="next" autocomplete="off" min="1" max="15" data-score-player="${p.playerId}" data-score-locked="${canEdit ? '0' : '1'}" title="${canEdit ? 'Enter score' : 'You can only score your assigned players.'}" data-hole-par="${Number(playerHole?.par || hole?.par || 4) || 4}" placeholder="—" value="${gross}" ${canEdit ? '' : 'disabled'} /><button type="button" class="score-step-btn" data-score-step="up" data-score-step-player="${escapeHtml(p.playerId)}" ${canEdit ? '' : 'disabled'}>+</button></div></td>
-        <td>${strokes}</td>
+        <td class="score-strokes-cell">${formatStrokesDisplay(strokes)}</td>
         <td>${net}</td>
       </tr>
     `;
@@ -10821,7 +11086,9 @@ function schedulePendingScoreAutoAdvance(inputEl) {
     const liveSession = scoreInputSessionState.get(playerId) || {};
     if (!liveInput || liveInput.disabled) return;
     if ((liveSession.generation || 0) !== generation) return;
-    if (document.activeElement && document.activeElement !== liveInput && document.activeElement.matches?.('input,select,textarea,button')) return;
+    const activeEl = document.activeElement;
+    const activeStepButton = activeEl?.matches?.('[data-score-step]') && String(activeEl?.dataset?.scoreStepPlayer || '') === String(playerId);
+    if (activeEl && activeEl !== liveInput && !activeStepButton && activeEl.matches?.('input,select,textarea,button')) return;
     commitScoreInput(liveInput, { viaAutoAdvance: true, expectedGeneration: generation });
   }, getSmartScoreAdvanceDelay(match));
 }
@@ -13509,6 +13776,7 @@ function installHandlers() {
   });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !document.getElementById('playerDetailDialog')?.classList.contains('hidden')) closePlayerDetailView();
+    if (e.key === 'Escape' && !document.getElementById('quickScoreboardDialog')?.classList.contains('hidden')) closeQuickScoreboardView();
     if (e.key === 'Escape' && !document.getElementById('playerSearchSheet')?.classList.contains('hidden')) closePlayerSearchSheet();
   });
   document.getElementById('gamesPicker').addEventListener('change', e => {
@@ -14423,6 +14691,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('addMemoryDialog')?.addEventListener('click', e => { if (e.target?.id === 'addMemoryDialog') closeAddMemoryModal(); });
   document.getElementById('playerDetailCloseBtn')?.addEventListener('click', closePlayerDetailView);
   document.getElementById('playerDetailDialog')?.addEventListener('click', e => { if (e.target?.id === 'playerDetailDialog') closePlayerDetailView(); });
+  document.getElementById('quickScoreboardBtn')?.addEventListener('click', openQuickScoreboardView);
+  document.getElementById('quickScoreboardCloseBtn')?.addEventListener('click', closeQuickScoreboardView);
+  document.getElementById('quickScoreboardDialog')?.addEventListener('click', e => { if (e.target?.id === 'quickScoreboardDialog') closeQuickScoreboardView(); });
   document.getElementById('score')?.addEventListener('click', async e => {
     const playerDetailBtn = e.target.closest('[data-player-detail]');
     if (playerDetailBtn) {

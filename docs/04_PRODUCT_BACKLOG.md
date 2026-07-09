@@ -26,20 +26,20 @@ Priority labels:
 
 NOW:
 
-- Play tab is the golfer's command center.
-- Quick Scoreboard modal from Play tab.
-- Player Detail modal polish.
-- Long player names truncate with ellipsis.
-- Keep Team / Gross / Strokes / Net visible without horizontal scrolling.
-- Remove tee name from hole header.
-- Player row shows tee name and yardage.
-- Combo tees show actual tee and yardage for current hole.
-- One-line Nassau status.
-- Dash instead of 0 when no stroke received.
-- Hole selector arrow polish without changing box size.
-- Stat tracking plus-button spacing.
-- Preserve current Stat Tracking header.
-- Capture round elapsed time for recap/reporting, but no live hole timer.
+- Play tab is the golfer's command center. (v30.3.51 shipped first polish pass)
+- Quick Scoreboard modal from Play tab. (v30.3.51 shipped)
+- Player Detail modal polish. (v30.3.51 shipped)
+- Long player names truncate with ellipsis. (v30.3.51 shipped)
+- Keep Team / Gross / Strokes / Net visible without horizontal scrolling. (v30.3.51 shipped)
+- Remove tee name from hole header. (v30.3.51 shipped)
+- Player row shows tee name and yardage. (v30.3.51 shipped)
+- Combo tees show actual tee and yardage for current hole. (v30.3.51 shipped)
+- One-line Nassau status. (v30.3.51 shipped)
+- Dash instead of 0 when no stroke received. (v30.3.51 shipped)
+- Hole selector arrow polish without changing box size. (v30.3.51 shipped)
+- Stat tracking plus-button spacing. (v30.3.51 shipped)
+- Preserve current Stat Tracking header. (v30.3.51 shipped)
+- Capture round elapsed time for recap/reporting, but no live hole timer. (v30.3.51 shipped additive metadata)
 
 Approved Nassau status format:
 

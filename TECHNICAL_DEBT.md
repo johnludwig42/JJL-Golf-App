@@ -734,6 +734,22 @@ Status: Process recommendation.
 
 ---
 
+## 31. Play tab visual acceptance automation
+
+v30.3.51 improves the Play tab command-center surface with compact score rows, Quick Scoreboard, per-player tee/yardage display, and modal polish. Remaining debt is real-device and automated visual acceptance around narrow iPhone widths, especially long names, mixed/combo tees, stat steppers, and modal scrolling.
+
+Future work should add a repeatable Play-tab visual QA path with representative fixtures for:
+
+* long player names
+* mixed tees and combo tees
+* Nassau active/inactive states
+* stat tracking on/off
+* Shared Match assigned-player read-only rows
+
+Status: Deferred acceptance hardening.
+
+---
+
 ## Known “Do Not Accidentally Redesign” Areas
 
 Avoid redesigning these unless specifically prompted:

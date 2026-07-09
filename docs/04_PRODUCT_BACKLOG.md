@@ -1,0 +1,176 @@
+# The Dye Ledger Product Backlog
+
+Version: 1.0
+Status: Living Document
+
+This backlog is the source of approved product direction. It is not a release plan, and not every item is scheduled.
+
+Priority labels:
+
+- NOW: Needed before commercial launch or required for core trust.
+- NEXT: High-value product maturity item.
+- FUTURE: Strategic vision or later-platform work.
+
+## Product Principles
+
+- The Dye Ledger must preserve the truth of the round.
+- Accuracy before reliability.
+- Reliability before convenience.
+- The product must be at least as effortless as paper while dramatically more valuable than paper.
+- The Play tab is the golfer's command center.
+- Engineer today's features so they naturally evolve into tomorrow's multi-tenant platform.
+- Statistics should become insights, and insights should become coaching.
+- The product should solve problems competitors do not solve, rather than chasing feature parity.
+
+## 1. Play Experience
+
+NOW:
+
+- Play tab is the golfer's command center.
+- Quick Scoreboard modal from Play tab.
+- Player Detail modal polish.
+- Long player names truncate with ellipsis.
+- Keep Team / Gross / Strokes / Net visible without horizontal scrolling.
+- Remove tee name from hole header.
+- Player row shows tee name and yardage.
+- Combo tees show actual tee and yardage for current hole.
+- One-line Nassau status.
+- Dash instead of 0 when no stroke received.
+- Hole selector arrow polish without changing box size.
+- Stat tracking plus-button spacing.
+- Preserve current Stat Tracking header.
+- Capture round elapsed time for recap/reporting, but no live hole timer.
+
+Approved Nassau status format:
+
+```text
+Nassau: Front: Team 1 +1 * Back: Team 2 +1 * 18: AS
+```
+
+Rules:
+
+- Show only when Nassau is active.
+- Use actual team names where available.
+- Always show the side that is ahead.
+- Never use negative values.
+- Keep it on one line.
+
+## 2. Shared Match
+
+NOW:
+
+- Shared Match Persistence & Reconciliation.
+- Device score parity.
+- Host/joiner score ledger comparison.
+- Final reconciliation before Match Summary.
+- Offline/reconnect handling.
+- Sync diagnostics.
+- Stale local state detection.
+- Conflict/authority rules.
+- Acceptance test matrix from real two-device usage.
+
+## 3. Course Library / Course Management
+
+NEXT:
+
+- Hybrid architecture:
+
+```text
+Canonical Course Catalog -> User Course Library -> Round Course Snapshot
+```
+
+- Current course sync is transitional.
+- Multi-image course upload.
+- AI Draft Course.
+- Review/correction workflow.
+- Save to My Courses.
+- Eventual submit-to-catalog flow.
+- Favorite courses.
+- Default tees.
+- Combo tees.
+- Duplicate detection.
+- Curated catalog governance.
+- Immutable round course snapshots.
+
+## 4. Player Library / Player Management
+
+NEXT:
+
+- Future Player Directory.
+- User Player Library.
+- Round Player Snapshot.
+- Player preferences.
+- Default tee.
+- Handicap/index.
+- Stat tracking preference.
+- Smart Score Advance preference.
+- Usual partners/groups.
+- Future identity model.
+
+## 5. Competition Engine
+
+NEXT:
+
+- Current-game regression protection.
+- Golden expected-output snapshots.
+
+FUTURE:
+
+- Wolf.
+- Sixes / Round Robin.
+- Best Ball.
+- Press Engine.
+
+## 6. Analytics & Coaching
+
+NEXT:
+
+- Short-term and long-term analytics.
+- Statistics -> insights -> coaching progression.
+- Analytics should help golfers improve, not merely show data.
+- Player trends.
+- Course trends.
+- Competition trends.
+- Partner/opponent trends.
+- AI coaching insights.
+
+FUTURE:
+
+- Future GPS/shot-distance consideration, but not near-term priority.
+
+## 7. Memories & Storytelling
+
+NEXT:
+
+- AI Round Recap.
+- One-tap memory capture.
+- Automatic story moments.
+- Round elapsed time in recap/reporting.
+
+FUTURE:
+
+- AI Event Recap.
+- Trip Recap.
+- Memory System.
+- Photos.
+- Voice notes.
+
+## 8. Platform / Architecture
+
+NOW:
+
+- Recurring Product Reviews every five releases.
+
+NEXT:
+
+- Future multi-tenant architecture.
+- Canonical catalogs.
+- Tenant/user/round/event boundaries.
+
+FUTURE:
+
+- Authentication later, not now.
+- Cloud saved-match sync later, not now.
+- Event ownership.
+- Apple Watch companion app exploration.
+- Voice entry exploration.

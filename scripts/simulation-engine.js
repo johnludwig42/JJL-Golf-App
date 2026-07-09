@@ -1,5 +1,18 @@
-export const SIMULATION_VERSION = 'v30.3.47';
-export const DEFAULT_SEED = 'dye-ledger-v30.3.47-default';
+import fs from 'node:fs';
+
+function readActivePackageVersion() {
+  try {
+    const packageJson = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    return String(packageJson.version || '').trim() || '30.3.49';
+  } catch {
+    return '30.3.49';
+  }
+}
+
+const ACTIVE_PACKAGE_VERSION = readActivePackageVersion();
+
+export const SIMULATION_VERSION = `v${ACTIVE_PACKAGE_VERSION}`;
+export const DEFAULT_SEED = `dye-ledger-v${ACTIVE_PACKAGE_VERSION}-default`;
 
 export const DEFAULT_GAMES = [
   { key: 'match_play', basis: 'net', stake: 5 },

@@ -357,6 +357,64 @@ Status: Designed / Deferred.
 
 ---
 
+## Future Multi-Tenant Readiness
+
+The Dye Ledger remains local-first today, with no authentication requirement and no cloud saved-match sync requirement in the current product. New engineering should still preserve a clean path toward a future multi-tenant architecture.
+
+Principles:
+
+1. Engineer today's features so they naturally evolve into tomorrow's cloud platform.
+2. Do not assume one device equals one golfer.
+3. Do not assume one local player list equals one user.
+4. Do not assume one course library equals one user.
+5. Do not assume one match owner equals the long-term tenant.
+6. Do not assume one shared match participant equals a permanent identity.
+7. Separate reference data from user-owned data.
+8. Preserve immutable history.
+9. Prefer future-compatible persistence shapes.
+
+Reference data examples:
+
+* canonical courses
+* tee definitions
+* course ratings
+* public catalog entries
+
+User-owned data examples:
+
+* favorite courses
+* preferred tees
+* player preferences
+* saved groups
+* personal notes
+
+Rounds must own snapshots of the course, player, tee, handicap, and competition data used when the round was played. The truth of the round must not drift when reference data changes later.
+
+When adding persistent data, prefer structures that can later support:
+
+* ownerId
+* tenantId
+* userId
+* catalogId
+* courseId
+* playerId
+* roundId
+* eventId
+* participantId
+* snapshotId
+
+Continue to preserve:
+
+* offline-first scoring
+* local-first round ownership
+* backward compatibility
+* additive migrations
+* no authentication requirement in the current product
+
+Status: Principle / Future Architecture. Do not implement multi-tenancy until explicitly planned.
+
+---
+
 ## Release Discipline Decisions
 
 ### 27. Narrow releases are preferred

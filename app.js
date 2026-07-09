@@ -1,11 +1,11 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.48',
-  versionNumber: '30.3.48',
-  cacheName: 'the-dye-ledger-v30.3.48',
+  version: 'v30.3.49',
+  versionNumber: '30.3.49',
+  cacheName: 'the-dye-ledger-v30.3.49',
   buildDate: new Date().toISOString(),
-  buildLabel: 'In-Round Player Insight & Scoring Comfort'
+  buildLabel: 'Engineering Foundation & Release Hardening'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;

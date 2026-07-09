@@ -625,6 +625,106 @@ Status: Future Vision.
 
 ---
 
+## 22. Shared Match persistence and reconciliation
+
+Shared Match needs a stronger reconciliation layer before broad trust.
+
+Future work should compare host and joined-device score ledgers, detect stale local state, handle offline/reconnect windows, clarify authority rules, and require final reconciliation before Match Summary.
+
+Status: High priority trust work.
+
+---
+
+## 23. Course architecture transition
+
+Current course sync is transitional architecture.
+
+The intended long-term model is:
+
+```text
+Canonical Course Catalog -> User Course Library -> Round Course Snapshot
+```
+
+Future work should support canonical catalog entries, user favorites/default tees/combo tees, multi-image course upload, AI Draft Course review, duplicate detection, curated catalog governance, and immutable round course snapshots.
+
+Status: Strategic architecture debt.
+
+---
+
+## 24. Player architecture transition
+
+The intended long-term model is:
+
+```text
+Player Directory -> User Player Library -> Round Player Snapshot
+```
+
+Future work should support player preferences, default tee, handicap/index, stat tracking preference, Smart Score Advance preference, usual partners/groups, and a future identity model without breaking local-first scoring.
+
+Status: Strategic architecture debt.
+
+---
+
+## 25. Future multi-tenant readiness
+
+The app remains local-first and unauthenticated today, but new persistence shapes should avoid assumptions that block a later tenant/user/round/event model.
+
+Future-compatible data should be able to evolve toward ownerId, tenantId, userId, catalogId, courseId, playerId, roundId, eventId, participantId, and snapshotId.
+
+Status: Principle / Deferred implementation.
+
+---
+
+## 26. Release workflow and branch-risk reduction
+
+Release safety depends on starting from the correct branch, verifying clean state, preserving prior build notes, and reviewing Codex output before commit.
+
+The release sanity script is a helper, not a substitute for Product Owner review. Known limitations include local environment differences, Git availability, and the fact that it reports repository state but cannot prove product behavior.
+
+The generated report at reports/simulation/latest-summary.md is currently a mutable validation artifact. Release cleanup should revert it when changes are only generated-report churn; future work should decide whether to stop tracking the latest report or refresh it only through an intentional report-update step.
+
+Status: Ongoing process hardening.
+
+---
+
+## 27. Apple Watch companion exploration
+
+An Apple Watch companion app may eventually support glanceable scoring, simple score entry, or on-course prompts.
+
+This is exploration only and should not distract from iPhone PWA trust, scoring speed, and Shared Match reliability.
+
+Status: Future exploration.
+
+---
+
+## 28. Voice entry exploration
+
+Voice entry may eventually reduce scoring friction, especially during play.
+
+Future work should evaluate accuracy, privacy, offline behavior, noisy outdoor conditions, and correction workflows before implementation.
+
+Status: Future exploration.
+
+---
+
+## 29. Analytics and coaching roadmap
+
+Statistics should become insights, and insights should become coaching.
+
+Future analytics should help golfers improve, not merely display data. Candidate areas include player trends, course trends, competition trends, partner/opponent trends, and AI coaching insights. GPS and shot-distance ideas remain possible but are not near-term priorities.
+
+Status: Future product maturity.
+
+---
+
+## 30. Recurring Product Review cadence
+
+Every five releases, schedule a Product Review to revisit backlog priority, technical debt, acceptance findings, and whether the product is still solving problems competitors do not solve.
+
+Status: Process recommendation.
+
+---
+
 ## Known “Do Not Accidentally Redesign” Areas
 
 Avoid redesigning these unless specifically prompted:

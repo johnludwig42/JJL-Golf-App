@@ -1,6 +1,6 @@
 {
   "name": "the-dye-ledger",
-  "version": "30.3.48",
+  "version": "30.3.49",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,7 +14,8 @@
     "simulate:live": "node scripts/simulate-rounds.js --adapter live",
     "simulate:compare": "node scripts/simulate-rounds.js --adapter compare",
     "test:simulations": "node --test tests/simulation-lab.test.js",
-    "test:live-engine": "node --test tests/live-engine-adapter.test.js"
+    "test:live-engine": "node --test tests/live-engine-adapter.test.js",
+    "release:sanity": "node scripts/release-sanity-check.js"
   },
   "devDependencies": {
     "eslint": "^9.0.0"

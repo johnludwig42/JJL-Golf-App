@@ -1,11 +1,11 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.52',
-  versionNumber: '30.3.52',
-  cacheName: 'the-dye-ledger-v30.3.52',
+  version: 'v30.3.53',
+  versionNumber: '30.3.53',
+  cacheName: 'the-dye-ledger-v30.3.53',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Shared Match Persistence & Reconciliation'
+  buildLabel: 'Sneaky / Sandy / Poley Foundation'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -230,6 +230,7 @@ const GAME_LIBRARY = [
   { key: 'skins', label: 'Skins' },
   { key: 'net_skins', label: 'Net Skins' },
   { key: 'greenies', label: 'Greenies' },
+  { key: 'sneaky_sandy_poley', label: 'Sneaky / Sandy / Poley' },
   { key: 'nine_point', label: '9-Point Game' },
 ];
 
@@ -2199,6 +2200,116 @@ function buildEmptyStats(count = 18) {
     sandy: false,
   }));
 }
+
+function getDefaultSneakySandyPoleyConfig() {
+  return {
+    key: 'sneaky_sandy_poley',
+    enabled: true,
+    pointValue: 1,
+    validateGreenyProx: false,
+    allowBridgeRebridge: false,
+    allowUmbee: false,
+    allowUmbeeWithBridge: false,
+    version: 1,
+  };
+}
+
+function normalizeSneakySandyPoleyConfig(config = {}) {
+  const defaults = getDefaultSneakySandyPoleyConfig();
+  const pointValue = Number(config.pointValue ?? config.stakePerPoint ?? defaults.pointValue);
+  const allowUmbee = !!config.allowUmbee;
+  return {
+    ...defaults,
+    ...config,
+    key: 'sneaky_sandy_poley',
+    enabled: config.enabled == null ? true : !!config.enabled,
+    pointValue: Number.isFinite(pointValue) && pointValue >= 0 ? pointValue : defaults.pointValue,
+    validateGreenyProx: !!config.validateGreenyProx,
+    allowBridgeRebridge: !!config.allowBridgeRebridge,
+    allowUmbee,
+    allowUmbeeWithBridge: allowUmbee && !!config.allowUmbeeWithBridge,
+    version: 1,
+  };
+}
+
+function isSneakySandyPoleyEnabled(match) {
+  return (match?.selectedGames || []).some(g => g.key === 'sneaky_sandy_poley');
+}
+
+function getSneakySandyPoleyConfig(match) {
+  const cfg = (match?.selectedGames || []).find(g => g.key === 'sneaky_sandy_poley');
+  return cfg ? normalizeSneakySandyPoleyConfig(cfg) : null;
+}
+
+function getDefaultSneakySandyPoleyHoleInput(match, holeNumber = 1) {
+  const playerIds = getMatchPlayerIds(match);
+  const players = {};
+  playerIds.forEach(playerId => {
+    players[playerId] = { sneaky: false, sandy: false, poley: false, greeny: false };
+  });
+  return { holeNumber: Number(holeNumber) || 1, players, proxPlayerId: '', bridge: false, rebridge: false, notes: '' };
+}
+
+function normalizeSneakySandyPoleyHoleInput(match, raw = {}, holeNumber = 1) {
+  const defaults = getDefaultSneakySandyPoleyHoleInput(match, holeNumber);
+  const rawPlayers = raw?.players && typeof raw.players === 'object' ? raw.players : {};
+  Object.keys(defaults.players).forEach(playerId => {
+    const row = rawPlayers[playerId] || {};
+    defaults.players[playerId] = {
+      sneaky: !!row.sneaky,
+      sandy: !!row.sandy,
+      poley: !!row.poley,
+      greeny: !!row.greeny,
+    };
+  });
+  const allowedIds = new Set(Object.keys(defaults.players));
+  const proxPlayerId = String(raw?.proxPlayerId || '');
+  defaults.proxPlayerId = allowedIds.has(proxPlayerId) ? proxPlayerId : '';
+  defaults.bridge = !!raw?.bridge;
+  defaults.rebridge = !!raw?.rebridge;
+  defaults.notes = String(raw?.notes || '').slice(0, 240);
+  return defaults;
+}
+
+function normalizeSneakySandyPoleyInputs(match) {
+  const source = match?.sneakySandyPoleyInputs && typeof match.sneakySandyPoleyInputs === 'object' ? match.sneakySandyPoleyInputs : {};
+  const normalized = {};
+  Object.keys(source).forEach(key => {
+    const holeNumber = Number(key);
+    if (!Number.isFinite(holeNumber) || holeNumber < 1 || holeNumber > 18) return;
+    normalized[String(holeNumber)] = normalizeSneakySandyPoleyHoleInput(match, source[key], holeNumber);
+  });
+  match.sneakySandyPoleyInputs = normalized;
+  return normalized;
+}
+
+function getSneakySandyPoleyHoleInput(match, holeNumber = currentHole) {
+  if (!match) return getDefaultSneakySandyPoleyHoleInput(match, holeNumber);
+  if (!match.sneakySandyPoleyInputs || typeof match.sneakySandyPoleyInputs !== 'object') match.sneakySandyPoleyInputs = {};
+  const key = String(Number(holeNumber) || 1);
+  return normalizeSneakySandyPoleyHoleInput(match, match.sneakySandyPoleyInputs[key] || {}, Number(key));
+}
+
+function getSneakySandyPoleyTeamWarnings({ teamCount = 1, playersPerTeam = 1, players = [] } = {}) {
+  const warnings = [];
+  const totalPlayers = Array.isArray(players) ? players.length : 0;
+  if (Number(teamCount) !== 2) warnings.push('Sneaky / Sandy / Poley requires exactly two teams.');
+  if (totalPlayers % 2 !== 0) warnings.push('Sneaky / Sandy / Poley requires an even number of players.');
+  if (Number(playersPerTeam) > 4) warnings.push('Sneaky / Sandy / Poley supports 1 to 4 players per team.');
+  const teamSizes = new Map();
+  (players || []).forEach(row => {
+    const team = Number(row.team) || 1;
+    teamSizes.set(team, (teamSizes.get(team) || 0) + 1);
+  });
+  if (Number(teamCount) === 2 && teamSizes.size !== 2) warnings.push('Sneaky / Sandy / Poley requires two populated teams.');
+  if (Number(teamCount) === 2 && teamSizes.size === 2) {
+    const sizes = [teamSizes.get(1) || 0, teamSizes.get(2) || 0];
+    if (sizes[0] !== sizes[1]) warnings.push('Sneaky / Sandy / Poley requires equal team sizes.');
+    if (sizes.some(size => size > 4)) warnings.push('Sneaky / Sandy / Poley supports no more than 4 players per team.');
+  }
+  return [...new Set(warnings)];
+}
+
 function normalizePuttsSource(source, fallback = 'default') {
   return ['default', 'auto', 'user'].includes(source) ? source : fallback;
 }
@@ -4894,6 +5005,8 @@ function normalizeMatch(match) {
     scores: Array.isArray(mp.scores) && mp.scores.length ? mp.scores.map((s, scoreIdx) => ({ holeNumber: scoreIdx + 1, gross: Number(s.gross) || null })) : buildEmptyScores(match.holeCount),
     stats: Array.isArray(mp.stats) && mp.stats.length ? mp.stats.map((s, statIdx) => normalizeHoleStat(s, statIdx)) : buildEmptyStats(match.holeCount),
   }));
+  match.selectedGames = normalizeSelectedGamesOrder(Array.isArray(match.selectedGames) ? match.selectedGames.map(game => game?.key === 'sneaky_sandy_poley' ? normalizeSneakySandyPoleyConfig(game) : game).filter(Boolean) : []);
+  normalizeSneakySandyPoleyInputs(match);
   normalizeStatTrackingParticipants(match);
   match.greeniesWinners = match.greeniesWinners && typeof match.greeniesWinners === 'object' ? match.greeniesWinners : {};
   match.greeniesSuggestions = match.greeniesSuggestions && typeof match.greeniesSuggestions === 'object' ? match.greeniesSuggestions : {};
@@ -7766,6 +7879,36 @@ function applyCurrentHoleDomToMatch(match) {
       mutated = true;
     }
   }
+  if (isSneakySandyPoleyEnabled(match)) {
+    const prior = getSneakySandyPoleyHoleInput(match, actualHoleNumber);
+    const next = normalizeSneakySandyPoleyHoleInput(match, prior, actualHoleNumber);
+    document.querySelectorAll('[data-ssp-player][data-ssp-key]').forEach(input => {
+      const playerId = input.dataset.sspPlayer || '';
+      const key = input.dataset.sspKey || '';
+      if (!next.players[playerId] || !['sneaky', 'sandy', 'poley', 'greeny'].includes(key)) return;
+      next.players[playerId][key] = !!input.checked;
+    });
+    const prox = document.querySelector('[data-ssp-prox]');
+    if (prox) next.proxPlayerId = String(prox.value || '');
+    document.querySelectorAll('[data-ssp-hole-key]').forEach(input => {
+      const key = input.dataset.sspHoleKey || '';
+      if (key === 'bridge' || key === 'rebridge') next[key] = !!input.checked;
+    });
+    const notes = document.querySelector('[data-ssp-notes]');
+    if (notes) next.notes = String(notes.value || '').slice(0, 240);
+    next.proxPlayerId = getMatchPlayerIds(match).includes(next.proxPlayerId) ? next.proxPlayerId : '';
+    if (!getSneakySandyPoleyConfig(match)?.allowBridgeRebridge) {
+      next.bridge = false;
+      next.rebridge = false;
+    }
+    const before = JSON.stringify(prior);
+    const after = JSON.stringify(next);
+    if (before !== after) {
+      match.sneakySandyPoleyInputs = match.sneakySandyPoleyInputs && typeof match.sneakySandyPoleyInputs === 'object' ? match.sneakySandyPoleyInputs : {};
+      match.sneakySandyPoleyInputs[String(actualHoleNumber)] = next;
+      mutated = true;
+    }
+  }
   return mutated;
 }
 function scheduleSharedActiveMatchSyncFromDom({ immediate = false, silent = true, persistLocal = true } = {}) {
@@ -10571,6 +10714,7 @@ function renderCurrentMatch() {
   renderScoreAccessCard(match);
   renderMemoryQuickCapture(match);
   renderScoreGrid(match, tee, metrics, scoringHoles);
+  renderSneakySandyPoleyEntry(match, hole, metrics);
   renderStatTrackingEntry(match, hole, metrics);
   renderGreeniesEntry(match, hole);
   renderHoleJumpTiles(match);
@@ -10799,6 +10943,76 @@ function renderHoleSelector(match, scoringHoles = []) {
   badge.innerHTML = `<label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select>`;
 }
 
+function renderSneakySandyPoleyEntry(match, hole, metrics) {
+  const wrap = document.getElementById('sneakySandyPoleyEntryWrap');
+  if (!wrap) return;
+  const cfg = getSneakySandyPoleyConfig(match);
+  if (!cfg) {
+    wrap.classList.add('hidden');
+    wrap.innerHTML = '';
+    return;
+  }
+  const actualHoleNumber = Number(hole?.holeNumber || currentHole) || currentHole;
+  const input = getSneakySandyPoleyHoleInput(match, actualHoleNumber);
+  const players = getVisibleScoringPlayers(match, (metrics?.players || []), { stats: false });
+  const canEditAny = players.some(p => canEditPlayerScore(match, p.team, p.playerId));
+  const actionKeys = [
+    { key: 'sneaky', label: 'Sneaky' },
+    { key: 'sandy', label: 'Sandy' },
+    { key: 'poley', label: 'Poley' },
+    { key: 'greeny', label: 'Greeny' },
+  ];
+  const selectedAwards = [];
+  players.forEach(p => {
+    const row = input.players[p.playerId] || {};
+    const awards = actionKeys.filter(action => row[action.key]).map(action => action.label);
+    if (awards.length) selectedAwards.push(`${p.player?.name || 'Player'}: ${awards.join(', ')}`);
+  });
+  if (input.proxPlayerId) selectedAwards.push(`Prox: ${getPlayer(input.proxPlayerId)?.name || 'Player'}`);
+  if (input.bridge) selectedAwards.push('Bridge');
+  if (input.rebridge) selectedAwards.push('Re-Bridge');
+  wrap.classList.remove('hidden');
+  wrap.innerHTML = `
+    <div class="card inset-card ssp-entry-card">
+      <div class="item-header compact-item-header">
+        <div>
+          <div class="section-label">Sneaky / Sandy / Poley</div>
+          <div class="tiny">Game Action · Hole ${actualHoleNumber}</div>
+        </div>
+        <span class="setup-role-badge">Inputs only</span>
+      </div>
+      <div class="ssp-status-row top-gap">
+        <span>$ per point ${Number(cfg.pointValue || 0).toFixed(2).replace(/\.00$/, '')}</span>
+        ${cfg.validateGreenyProx ? '<span>Validate on: Greeny/Prox require 2 putts or less.</span>' : '<span>Validate off</span>'}
+        ${cfg.allowUmbee ? `<span>Umbee allowed${cfg.allowUmbeeWithBridge ? ' with Bridge/Re-Bridge' : ''}</span>` : '<span>Umbee off</span>'}
+      </div>
+      <div class="ssp-player-list top-gap">
+        ${players.map(p => {
+          const row = input.players[p.playerId] || {};
+          const canEdit = canEditPlayerScore(match, p.team, p.playerId);
+          return `<div class="ssp-player-row ${canEdit ? '' : 'is-readonly'}">
+            <div class="ssp-player-name"><strong title="${escapeHtml(p.player?.name || 'Player')}">${escapeHtml(p.player?.name || 'Player')}</strong><span class="tiny">${escapeHtml(getTeamLabel(match, p.team))}${canEdit ? '' : ' · read only'}</span></div>
+            <div class="ssp-chip-group">
+              ${actionKeys.map(action => `<label class="ssp-chip"><input type="checkbox" data-ssp-player="${escapeHtml(p.playerId)}" data-ssp-key="${action.key}" ${row[action.key] ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>${action.label}</span></label>`).join('')}
+            </div>
+          </div>`;
+        }).join('') || '<div class="tiny">No scoring players available.</div>'}
+      </div>
+      <div class="grid two compact-grid top-gap">
+        <label><span>Prox</span><select data-ssp-prox ${canEditAny ? '' : 'disabled'}>
+          <option value="">None</option>
+          ${players.map(p => `<option value="${escapeHtml(p.playerId)}" ${input.proxPlayerId === p.playerId ? 'selected' : ''}>${escapeHtml(p.player?.name || 'Player')}</option>`).join('')}
+        </select></label>
+        ${cfg.allowBridgeRebridge ? `<div class="ssp-hole-actions">
+          <label class="inline-check"><input type="checkbox" data-ssp-hole-key="bridge" ${input.bridge ? 'checked' : ''} ${canEditAny ? '' : 'disabled'} /><span>Bridge</span></label>
+          <label class="inline-check"><input type="checkbox" data-ssp-hole-key="rebridge" ${input.rebridge ? 'checked' : ''} ${canEditAny ? '' : 'disabled'} /><span>Re-Bridge</span></label>
+        </div>` : '<div class="tiny">Bridge/Re-Bridge controls are off in Match Setup.</div>'}
+        <label class="span-2"><span>Notes</span><input type="text" maxlength="240" data-ssp-notes value="${escapeHtml(input.notes || '')}" placeholder="Optional SSP note" ${canEditAny ? '' : 'disabled'} /></label>
+      </div>
+      <div class="tiny top-gap">${selectedAwards.length ? `Preview: ${escapeHtml(selectedAwards.join(' · '))}` : 'SSP inputs saved for this hole when selected. Ledger coming in v30.3.54.'}</div>
+    </div>`;
+}
+
 function renderStatTrackingEntry(match, hole, metrics) {
   const wrap = document.getElementById('statTrackingEntryWrap');
   if (!wrap) return;
@@ -10977,6 +11191,7 @@ function getHoleParForScoreInput(inputEl) {
 
 function isSmartScoreAdvanceEnabled(match = getActiveMatch()) {
   if (!match) return false;
+  if (isSneakySandyPoleyEnabled(match)) return false;
   return match.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!match.smartScoreAdvanceEnabled;
 }
 
@@ -12235,15 +12450,27 @@ function renderStatTrackingPlayerSelector(explicitIds = null) {
     </div>`;
 }
 
+function isSneakySandyPoleySelectedInSetup(matchOrDraft = null) {
+  if ((matchOrDraft?.selectedGames || []).some(g => g.key === 'sneaky_sandy_poley')) return true;
+  return !!document.querySelector('[data-game-key="sneaky_sandy_poley"]:checked');
+}
+
 function syncSmartScoreAdvancePresetUi(matchOrDraft = null) {
   const toggle = document.getElementById('smartScoreAdvanceInput');
   const preset = document.getElementById('smartScoreAdvancePresetSelect');
   const wrap = document.getElementById('smartScoreAdvancePresetWrap');
+  const hint = document.getElementById('smartScoreAdvanceSspHint');
   if (!preset) return;
   preset.value = normalizeSmartScoreAdvancePreset(matchOrDraft?.smartScoreAdvancePreset || preset.value);
-  const enabled = toggle ? !!toggle.checked : true;
+  const sspSelected = isSneakySandyPoleySelectedInSetup(matchOrDraft);
+  if (toggle) {
+    if (sspSelected) toggle.checked = false;
+    toggle.disabled = sspSelected;
+  }
+  const enabled = !sspSelected && (toggle ? !!toggle.checked : true);
   preset.disabled = !enabled;
   if (wrap) wrap.classList.toggle('is-disabled', !enabled);
+  if (hint) hint.classList.toggle('hidden', !sspSelected);
 }
 
 function getSmartScoreAdvancePresetFromSetup() {
@@ -12261,10 +12488,11 @@ function renderTodaysMatchSummary() {
   const selectedPlayers = getSelectedPlayersFromSetup();
   const teamCount = getCurrentSetupTeamCount();
   const selectedGames = collectSelectedGames();
+  const hasSsp = selectedGames.some(g => g.key === 'sneaky_sandy_poley');
   const featuredCompetition = normalizeFeaturedCompetition(document.getElementById('featuredCompetitionSelect')?.value || 'auto');
   const gameNames = selectedGames.map(g => getGameLabel(g)).filter(Boolean);
   const statEnabled = !!document.getElementById('enableStatTrackingInput')?.checked;
-  const smartAdvanceEnabled = !!document.getElementById('smartScoreAdvanceInput')?.checked;
+  const smartAdvanceEnabled = !hasSsp && !!document.getElementById('smartScoreAdvanceInput')?.checked;
   const smartAdvancePreset = getSmartScoreAdvancePresetFromSetup();
   const statIds = statEnabled ? collectStatTrackingPlayerIdsFromSetup(selectedPlayers) : [];
   const statNames = statIds.map(id => getPlayer(id)?.name || '').filter(Boolean);
@@ -12276,7 +12504,7 @@ function renderTodaysMatchSummary() {
     ['Games', gameNames.length ? gameNames.join(', ') : 'None selected'],
     ['Featured Competition', getFeaturedCompetitionDisplayName({ selectedGames }, featuredCompetition === 'auto' ? resolveAutoFeaturedCompetition({ selectedGames }) : featuredCompetition)],
     ['Stat Tracking', statEnabled ? (statNames.length ? statNames.join(', ') : 'No players selected') : 'Off'],
-    ['Smart Score Advance', smartAdvanceEnabled ? `${getSmartScoreAdvancePresetLabel(smartAdvancePreset)} (${SMART_SCORE_ADVANCE_PRESETS[smartAdvancePreset].delay} ms)` : 'Off'],
+    ['Smart Score Advance', hasSsp ? 'Disabled for Sneaky / Sandy / Poley' : smartAdvanceEnabled ? `${getSmartScoreAdvancePresetLabel(smartAdvancePreset)} (${SMART_SCORE_ADVANCE_PRESETS[smartAdvancePreset].delay} ms)` : 'Off'],
   ];
   wrap.innerHTML = rows.map(([label, value]) => `<div class="setup-summary-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('');
   renderRoundReadiness();
@@ -12318,6 +12546,7 @@ function buildTemplateFromCurrentSetup(nameOverride = '') {
   const fd = form ? new FormData(form) : new FormData();
   const teamCount = Number(fd.get('teamCount')) || Number(document.getElementById('teamCountSelect')?.value || 1) || 1;
   const selectedPlayers = getSelectedPlayersFromSetup();
+  const selectedGames = normalizeSelectedGamesOrder(collectSelectedGames()).map(g => JSON.parse(JSON.stringify(g)));
   const templateName = String(nameOverride || fd.get('name') || '').trim() || `Match Template ${new Date().toLocaleDateString()}`;
   return {
     id: uid(),
@@ -12336,12 +12565,12 @@ function buildTemplateFromCurrentSetup(nameOverride = '') {
     playersPerTeam: Number(fd.get('playersPerTeam')) || 1,
     teamNames: Array.from({ length: teamCount }, (_, i) => String(document.querySelector(`[data-team-name="${i + 1}"]`)?.value || '').trim().slice(0, 25)),
     players: sanitizeTemplatePlayers(selectedPlayers),
-    selectedGames: normalizeSelectedGamesOrder(collectSelectedGames()).map(g => JSON.parse(JSON.stringify(g))),
+    selectedGames,
     featuredCompetition: normalizeFeaturedCompetition(fd.get('featuredCompetition') || 'auto'),
     scoringAccessMode: normalizeScoringAccessMode(fd.get('scoreEntryMode') || 'single_device'),
     officialScorerName: String(fd.get('officialScorerName') || '').trim() || 'Official scorer',
     statTrackingEnabled: fd.get('enableStatTracking') === 'on',
-    smartScoreAdvanceEnabled: fd.get('smartScoreAdvance') === 'on',
+    smartScoreAdvanceEnabled: selectedGames.some(g => g.key === 'sneaky_sandy_poley') ? false : fd.get('smartScoreAdvance') === 'on',
     smartScoreAdvancePreset: getSmartScoreAdvancePresetFromSetup(),
     statTrackingPlayerIds: fd.get('enableStatTracking') === 'on' ? collectStatTrackingPlayerIdsFromSetup(selectedPlayers) : []
   };
@@ -12492,6 +12721,14 @@ function getRoundReadinessState() {
     const cfg = selectedGames.find(g => g.key === 'nine_point');
     add('9-Point players selected', Array.isArray(cfg?.playerIds) && new Set(cfg.playerIds.filter(Boolean)).size === 3, 'Select exactly 3 players for 9-Point.');
   }
+  if (selectedKeys.has('sneaky_sandy_poley')) {
+    const warnings = getSneakySandyPoleyTeamWarnings({
+      teamCount: getCurrentSetupTeamCount(),
+      playersPerTeam: getCurrentSetupPlayersPerTeam(),
+      players: selectedPlayers,
+    });
+    add('Sneaky / Sandy / Poley team setup', warnings.length === 0, warnings[0] || 'Sneaky / Sandy / Poley requires two equal teams with an even number of players.');
+  }
   const warnings = checks.filter(c => !c.ok);
   return { checks, warnings, ready: warnings.length === 0 };
 }
@@ -12537,6 +12774,7 @@ function getDefaultGameConfigs() {
     { key: 'skins', basis: 'gross', skinsType: 'individual', stake: 5 },
     { key: 'net_skins', basis: 'net', skinsType: 'individual', stake: 5 },
     { key: 'greenies', stakePerPlayer: 1, participants: [] },
+    getDefaultSneakySandyPoleyConfig(),
     { key: 'nine_point', basis: 'net', stakePerPoint: 1, playerIds: [] },
   ];
 }
@@ -12819,6 +13057,29 @@ function renderGamesPicker(existing = []) {
         </div>
       </div>`;
     }
+    if (game.key === 'sneaky_sandy_poley') {
+      const sspCfg = normalizeSneakySandyPoleyConfig(cfg);
+      const warnings = getSneakySandyPoleyTeamWarnings({
+        teamCount: getCurrentSetupTeamCount(),
+        playersPerTeam: getCurrentSetupPlayersPerTeam(),
+        players: getSelectedPlayersFromSetup(),
+      });
+      return `<div class="card inset-card game-config-card ssp-config-card">
+        <div class="game-config-header"><div class="section-label">Sneaky / Sandy / Poley</div><div class="tiny">Two-team points game with manual action awards, low net points, optional Validate, Bridge/Re-Bridge, and Umbee rules.</div></div>
+        ${warnings.length ? `<div class="setup-warning top-gap">${warnings.map(item => `<div>${escapeHtml(item)}</div>`).join('')}</div>` : ''}
+        <div class="grid two compact-grid top-gap">
+          <label><span>$ per point</span><input type="number" step="0.01" min="0" data-game-config="${game.key}" data-field="pointValue" value="${Number(sspCfg.pointValue || 1).toFixed(2)}" /></label>
+          <div class="tiny">Settlement is net team points x dollar value per point.</div>
+          <label class="inline-check span-2"><input type="checkbox" data-game-config="${game.key}" data-field="validateGreenyProx" ${sspCfg.validateGreenyProx ? 'checked' : ''} /><span>Validate Greeny/Prox</span></label>
+          <div class="tiny span-2">When on, Greeny and Prox count only with 2 putts or less.</div>
+          <label class="inline-check span-2"><input type="checkbox" data-game-config="${game.key}" data-field="allowBridgeRebridge" ${sspCfg.allowBridgeRebridge ? 'checked' : ''} /><span>Allow Bridge/Re-Bridge</span></label>
+          <div class="tiny span-2">Optional per-hole multipliers: Bridge 2x, Re-Bridge 4x.</div>
+          <label class="inline-check span-2"><input type="checkbox" data-game-config="${game.key}" data-field="allowUmbee" ${sspCfg.allowUmbee ? 'checked' : ''} /><span>Allow Umbee</span></label>
+          <div class="tiny span-2">Optional pre-round multiplier for qualifying birdie/eagle holes.</div>
+          ${sspCfg.allowUmbee ? `<label class="inline-check span-2"><input type="checkbox" data-game-config="${game.key}" data-field="allowUmbeeWithBridge" ${sspCfg.allowUmbeeWithBridge ? 'checked' : ''} /><span>Allow Umbee with Bridge/Re-Bridge</span></label><div class="tiny span-2">If on, Umbee and Bridge/Re-Bridge multipliers may stack.</div>` : ''}
+        </div>
+      </div>`;
+    }
     if (game.key === 'singles_match') {
       const eligible = getCurrentSetupTeamCount() === 2 && Number(document.getElementById('playersPerTeamSelect')?.value || 1) === 1;
       const disabledNote = eligible ? '' : '<div class="tiny warning-text top-gap">Singles Match Play requires two teams with one player on each team.</div>';
@@ -12887,13 +13148,14 @@ function renderGamesPicker(existing = []) {
       </div>
     </div>`;
   }).join('');
+  syncSmartScoreAdvancePresetUi({ selectedGames: normalizedExisting });
 }
 function collectSelectedGames() {
   const keys = Array.from(document.querySelectorAll('[data-game-key]:checked')).map(el => el.dataset.gameKey).slice(0, 5);
   const games = keys.map(key => {
     const cfg = { key };
     document.querySelectorAll(`[data-game-config="${key}"]`).forEach(el => {
-      cfg[el.dataset.field] = el.value;
+      cfg[el.dataset.field] = el.type === 'checkbox' ? !!el.checked : el.value;
     });
     if (key === 'singles_match') {
       cfg.basis = String(cfg.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net';
@@ -12923,6 +13185,9 @@ function collectSelectedGames() {
     if (key === 'nine_point') {
       const allowed = new Set(getCurrentAssignablePlayers().map(p => p.id));
       cfg.playerIds = [...new Set(Array.from(document.querySelectorAll('[data-nine-point-player]')).slice(0, 3).map(el => allowed.has(el.value) ? el.value : '').filter(Boolean))];
+    }
+    if (key === 'sneaky_sandy_poley') {
+      Object.assign(cfg, normalizeSneakySandyPoleyConfig(cfg));
     }
     return cfg;
   });
@@ -14175,6 +14440,23 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       persist({ skipRender: true });
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
     }
+    if (e.target && e.target.matches('[data-ssp-player][data-ssp-key], [data-ssp-prox], [data-ssp-hole-key]')) {
+      const match = getActiveMatch();
+      if (!match) return;
+      applyCurrentHoleDomToMatch(match);
+      persist({ skipRender: true });
+      scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
+      renderCurrentMatch();
+    }
+  });
+  document.getElementById('score').addEventListener('input', e => {
+    if (e.target && e.target.matches('[data-ssp-notes]')) {
+      const match = getActiveMatch();
+      if (!match) return;
+      applyCurrentHoleDomToMatch(match);
+      persist({ skipRender: true });
+      scheduleSharedActiveMatchSyncFromDom({ immediate: false, silent: true, persistLocal: true });
+    }
   });
   document.getElementById('score').addEventListener('focusin', e => {
     if (e.target.matches('input[data-score-player]')) {
@@ -14413,6 +14695,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (games.some(g => ['team_match','team_stroke'].includes(g.key)) && teamCount < 2) missing.push('Team games require at least 2 teams');
     if (games.some(g => g.key === 'nine_point') && players.length < 3) missing.push('9-Point Game requires at least 3 assigned players');
     if (games.some(g => g.key === 'nine_point' && (!Array.isArray(g.playerIds) || [...new Set(g.playerIds)].length !== 3))) missing.push('Select 3 players for the 9-Point Game');
+    if (games.some(g => g.key === 'sneaky_sandy_poley')) missing.push(...getSneakySandyPoleyTeamWarnings({ teamCount, playersPerTeam, players }));
     if (sharedMatchEnabled && scoringAccessMode === 'assigned_players' && existing?.sharedPlayerAssignments) {
       const unassigned = players.filter(p => !existing.sharedPlayerAssignments[p.playerId]);
       if (unassigned.length && existing.sharedMatchId) warnings.push('Some Shared Match assignments will default to the host until changed');
@@ -14491,6 +14774,10 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (selectedGames.some(g => ['team_match','team_stroke'].includes(g.key)) && teamCount < 2) return toast('Team games require at least 2 teams.');
     if (selectedGames.some(g => g.key === 'nine_point') && selectedPlayers.length < 3) return toast('9-Point Game requires at least 3 assigned players.');
     if (selectedGames.some(g => g.key === 'nine_point' && (!Array.isArray(g.playerIds) || [...new Set(g.playerIds)].length !== 3))) return toast('Select 3 players for the 9-Point Game.');
+    if (selectedGames.some(g => g.key === 'sneaky_sandy_poley')) {
+      const sspWarnings = getSneakySandyPoleyTeamWarnings({ teamCount, playersPerTeam, players: selectedPlayers });
+      if (sspWarnings.length) return toast(sspWarnings[0]);
+    }
     const existing = editingMatchId ? getMatch(editingMatchId) : null;
     const scoringAccessMode = normalizeScoringAccessMode(fd.get('scoreEntryMode') || 'single_device');
     const scoreEntryMode = getLegacyScoreEntryMode(scoringAccessMode);
@@ -14516,7 +14803,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       scoreEntryMode,
       officialScorerName,
       statTrackingEnabled: fd.get('enableStatTracking') === 'on',
-      smartScoreAdvanceEnabled: fd.get('smartScoreAdvance') === 'on',
+      smartScoreAdvanceEnabled: selectedGames.some(g => g.key === 'sneaky_sandy_poley') ? false : fd.get('smartScoreAdvance') === 'on',
       smartScoreAdvancePreset: getSmartScoreAdvancePresetFromSetup(),
       statTrackingPlayerIds: fd.get('enableStatTracking') === 'on' ? collectStatTrackingPlayerIdsFromSetup(selectedPlayers) : [],
       teamScorers,
@@ -14531,6 +14818,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
         return old ? { ...old, team: sp.team, slot: sp.slot, teeId: sp.teeId || selectedPlayers[0]?.teeId || '', stats: Array.isArray(old.stats) && old.stats.length ? old.stats : buildEmptyStats(Number(fd.get('holeCount')) === 9 ? 9 : 18) } : { playerId: sp.playerId, team: sp.team, slot: sp.slot, teeId: sp.teeId || selectedPlayers[0]?.teeId || '', scores: buildEmptyScores(Number(fd.get('holeCount')) === 9 ? 9 : 18), stats: buildEmptyStats(Number(fd.get('holeCount')) === 9 ? 9 : 18) };
       }),
       greeniesWinners: existing?.greeniesWinners || {},
+      sneakySandyPoleyInputs: existing?.sneakySandyPoleyInputs || {},
       matchStatusGame: existing?.matchStatusGame || getDefaultFeaturedGameKey(selectedGames),
       momentumGame: existing?.momentumGame || existing?.matchStatusGame || getDefaultFeaturedGameKey(selectedGames),
       momentumPerspective: Number(existing?.momentumPerspective || 1) === 2 ? 2 : 1,
@@ -15032,6 +15320,7 @@ function getMatchSetupValidationState({ fd = null, selectedPlayers = null, selec
   if (games.some(g => ['team_match','team_stroke'].includes(g.key)) && teamCount < 2) missing.push('Team games require at least 2 teams');
   if (games.some(g => g.key === 'nine_point') && players.length < 3) missing.push('9-Point Game requires at least 3 assigned players');
   if (games.some(g => g.key === 'nine_point' && (!Array.isArray(g.playerIds) || [...new Set(g.playerIds)].length !== 3))) missing.push('Select 3 players for the 9-Point Game');
+  if (games.some(g => g.key === 'sneaky_sandy_poley')) missing.push(...getSneakySandyPoleyTeamWarnings({ teamCount, playersPerTeam, players }));
   return {
     ready: missing.length === 0,
     missingRequirements: [...new Set(missing)],

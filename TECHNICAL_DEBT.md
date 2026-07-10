@@ -17,7 +17,7 @@ The purpose of this document is to help Codex distinguish between:
 
 ## Current Production Version
 
-Current production version: v30.3.44
+Current production version: v30.3.53
 
 ---
 
@@ -75,6 +75,24 @@ The app now has scored-hole ledger extraction, parity comparison, missing-entry 
 Remaining debt includes full two-device browser automation, richer conflict resolution UI, offline replay/retry acceptance testing, and production-device validation for reload/reconnect flows.
 
 Status: Must address before broad use.
+
+---
+
+## 1a. Sneaky / Sandy / Poley scoring completion
+
+### Current state
+
+v30.3.53 adds SSP setup, team validation, durable local settings, and Play tab manual inputs.
+
+### Known concern
+
+The authoritative SSP hole ledger, Take/Keep, Bridge/Re-Bridge multiplier math, Umbee multiplier math, settlement, Match Summary reporting, and Shared Match SSP input reconciliation are intentionally deferred.
+
+### Near-term direction
+
+Use `docs/05_SNEAKY_SANDY_POLEY.md` as the implementation plan for v30.3.54 and v30.3.55. Do not treat v30.3.53 SSP preview text as final scoring or settlement output.
+
+Status: Planned follow-up.
 
 ---
 

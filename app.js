@@ -1,9 +1,9 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.51',
-  versionNumber: '30.3.51',
-  cacheName: 'the-dye-ledger-v30.3.51',
+  version: 'v30.3.52',
+  versionNumber: '30.3.52',
+  cacheName: 'the-dye-ledger-v30.3.52',
   buildDate: new Date().toISOString(),
   buildLabel: 'Shared Match Persistence & Reconciliation'
 };
@@ -5591,6 +5591,54 @@ function getMatchStatusOptions(match) {
   return selected.map(g => ({ key: g.key, label: getGameLabel(g.key) }));
 }
 
+function formatLeaderThruStatus(leaderLabel, diff, thruCount, { tiedLabel = 'Tied', notStarted = 'Not started' } = {}) {
+  const thru = Math.max(0, Number(thruCount) || 0);
+  if (!thru) return notStarted;
+  const n = Number(diff) || 0;
+  if (!Number.isFinite(n) || n === 0) return `${tiedLabel} thru ${thru}`;
+  return `${String(leaderLabel || 'Leader').trim()} +${Math.abs(n)} thru ${thru}`;
+}
+
+function getTeamGameThruCount(match, metrics, gameKey = 'team_match') {
+  const holes = Array.isArray(metrics?.holeResults) ? metrics.holeResults : [];
+  return holes.filter(hole => computeMomentumOutcome(match, metrics, hole, gameKey) !== 'pending').length;
+}
+
+function formatTeamGameThruStatus(match, metrics, diff, gameKey = 'team_match') {
+  const n = Number(diff) || 0;
+  const teamNo = n > 0 ? 1 : n < 0 ? 2 : 0;
+  const label = teamNo ? getConciseTeamName(match, teamNo, metrics) : '';
+  return formatLeaderThruStatus(label, n, getTeamGameThruCount(match, metrics, gameKey));
+}
+
+function formatSinglesMatchThruStatus(result) {
+  if (!result?.eligible) return 'Not started';
+  return formatLeaderThruStatus(result.leaderName, result.diff, result.completedHoles);
+}
+
+function formatSideMatchThruStatus(pairing) {
+  if (!pairing) return '';
+  const diff = Number(pairing.diff) || 0;
+  const leader = diff > 0 ? pairing.playerA?.player?.name : diff < 0 ? pairing.playerB?.player?.name : '';
+  return formatLeaderThruStatus(leader, diff, pairing.completedCount);
+}
+
+function getPrimaryMatchStatusLine(match, metrics) {
+  if (!match || !metrics) return '';
+  const statusOptions = getMatchStatusOptions(match);
+  const selectedKeys = new Set(statusOptions.map(opt => opt.key));
+  let key = selectedKeys.has(match.matchStatusGame) ? match.matchStatusGame : '';
+  if (!key) {
+    const featured = resolveFeaturedCompetitionKey(match, metrics);
+    key = selectedKeys.has(featured) || ['stroke_net', 'stroke_gross'].includes(featured) ? featured : '';
+  }
+  if (!key || key === 'none') return '';
+  const text = getCompactGameStatus(match, metrics, key);
+  if (!text || text === 'Active') return '';
+  const label = key === 'nassau' ? 'Nassau' : 'Primary Match';
+  return `${label}: ${text}`;
+}
+
 function describeMomentumMeta(match, metrics, gameKey) {
   if (gameKey === 'singles_match') {
     const result = computeSinglesMatchPlayResult(match, metrics, getSinglesMatchConfig(match) || {});
@@ -5730,25 +5778,26 @@ function buildClassicScorecard(match, metrics, opts = {}) {
   });
   const parRow = scorecardMetaRow('Par', h => Number(h.par) || 0);
   const siRow = scorecardMetaRow('Handicap', h => Number(h.strokeIndex) || 0);
+  const summarizePlayerScorecardRange = (p, startIdx, endIdx) => {
+    let gross = 0;
+    let net = 0;
+    let scored = 0;
+    for (let idx = startIdx; idx < endIdx; idx += 1) {
+      const score = p.scores?.[idx];
+      const grossValue = Number(score?.gross);
+      if (!Number.isFinite(grossValue) || grossValue <= 0) continue;
+      const hole = holes[idx];
+      const playerHole = getPlayerHole(match, p, idx, tee) || hole;
+      const strokes = holeStrokeAllowanceForPlayer(playerHole?.strokeIndex, p.playHdcp, metrics.lowPlaying);
+      gross += grossValue;
+      net += grossValue - strokes;
+      scored += 1;
+    }
+    return { gross, net, scored };
+  };
+  const scorecardSubtotalCell = summary => `<td><strong>${summary.scored ? summary.gross : '—'}</strong><div class="score-sub total-sub">${summary.scored ? summary.net : '—'}</div></td>`;
   const playerRows = visiblePlayers.map(p => {
     const playerScores = (p.scores || []).slice(0, holeCount);
-    const frontGross = playerScores.slice(0, Math.min(9, holeCount)).reduce((s,x)=>s+(Number(x.gross)||0),0);
-    const backGross = holeCount > 9 ? playerScores.slice(9, holeCount).reduce((s,x)=>s+(Number(x.gross)||0),0) : 0;
-    const frontNetValues = front.map((hole, idx) => {
-      const gross = Number(playerScores[idx]?.gross) || null;
-      const playerHole = getPlayerHole(match, p, idx, tee) || hole;
-      const strokes = holeStrokeAllowanceForPlayer(playerHole.strokeIndex, p.playHdcp, metrics.lowPlaying);
-      return gross ? gross - strokes : null;
-    });
-    const backNetValues = back.map((hole, idx) => {
-      const scoreIdx = idx + front.length;
-      const gross = Number(playerScores[scoreIdx]?.gross) || null;
-      const playerHole = getPlayerHole(match, p, scoreIdx, tee) || hole;
-      const strokes = holeStrokeAllowanceForPlayer(playerHole.strokeIndex, p.playHdcp, metrics.lowPlaying);
-      return gross ? gross - strokes : null;
-    });
-    const frontNet = frontNetValues.reduce((s,v)=>s+(Number(v)||0),0);
-    const backNet = backNetValues.reduce((s,v)=>s+(Number(v)||0),0);
     const cells = holes.map((hole, idx) => {
       const gross = Number(playerScores[idx]?.gross) || null;
       const playerHole = getPlayerHole(match, p, idx, tee) || hole;
@@ -5759,9 +5808,12 @@ function buildClassicScorecard(match, metrics, opts = {}) {
       const net = gross - strokes;
       return `<td class="scorecard-hole-col score-hole-cell${editClass}" ${editAttrs}><div class="score-main">${formatGolfScoreMarkup(gross, hole.par, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(net, hole.par, 'net')}${dotMarkup(strokes)}</div></td>`;
     }).join('');
+    const frontSummary = summarizePlayerScorecardRange(p, 0, Math.min(9, holeCount));
+    const backSummary = back.length ? summarizePlayerScorecardRange(p, 9, holeCount) : { gross: 0, net: 0, scored: 0 };
+    const totalSummary = summarizePlayerScorecardRange(p, 0, holeCount);
     const totals = back.length
-      ? `<td><strong>${frontGross}</strong><div class="score-sub total-sub">${frontNet || '—'}</div></td><td><strong>${backGross}</strong><div class="score-sub total-sub">${backNet || '—'}</div></td><td><strong>${p.grossTotal || 0}</strong><div class="score-sub total-sub">${p.netTotal || 0}</div></td>`
-      : `<td><strong>${frontGross}</strong><div class="score-sub total-sub">${frontNet || '—'}</div></td><td><strong>${p.grossTotal || 0}</strong><div class="score-sub total-sub">${p.netTotal || 0}</div></td>`;
+      ? `${scorecardSubtotalCell(frontSummary)}${scorecardSubtotalCell(backSummary)}${scorecardSubtotalCell(totalSummary)}`
+      : `${scorecardSubtotalCell(frontSummary)}${scorecardSubtotalCell(totalSummary)}`;
     const playerTeeName = p.tee?.teeName || tee?.teeName || 'Tee';
     return `<tr><td class="scorecard-sticky-name"><strong>${escapeHtml(p.player.name)}</strong><div class="tiny">Tee: ${escapeHtml(playerTeeName)}</div></td>${hideTeamColumn ? '' : `<td class="scorecard-sticky-team">${escapeHtml(getTeamLabel(match,p.team))}</td>`}${cells}${totals}</tr>`;
   }).join('');
@@ -6354,11 +6406,10 @@ function buildPlayerDetailGameStatusBlock(match, metrics, playerMetric) {
   const playerId = String(playerMetric.playerId);
   const selectedKeys = new Set(games.map(g => g.key));
   if (selectedKeys.has('nassau') && (metrics.teams || []).length === 2) {
-    add('Nassau', `${teamLabel} · ${buildNassauOneLineStatus(match, metrics).replace(/^Nassau:\s*/i, '')}`);
+    add('Nassau', getCompactGameStatus(match, metrics, 'nassau', games.find(g => g.key === 'nassau')));
   }
   if (selectedKeys.has('team_match') && (metrics.teams || []).length === 2) {
-    const diffs = computeTeamGameDiffs(match, metrics, 'team_match');
-    add('Match', formatTeamGameStatus(match, metrics, diffs.overall));
+    add('Match', getCompactGameStatus(match, metrics, 'team_match', games.find(g => g.key === 'team_match')));
   }
   const teamStrokeCfg = games.find(g => g.key === 'team_stroke');
   if (teamStrokeCfg) {
@@ -6379,7 +6430,7 @@ function buildPlayerDetailGameStatusBlock(match, metrics, playerMetric) {
   if (singlesCfg) {
     const singles = computeSinglesMatchPlayResult(match, metrics, singlesCfg);
     const involved = [singles.playerAId, singles.playerBId].map(String).includes(playerId);
-    if (involved) add('Singles', `${singles.resultText} · ${formatBasisLabel(singles.basis)}`);
+    if (involved) add('Singles', `${formatSinglesMatchThruStatus(singles)} · ${formatBasisLabel(singles.basis)}`);
   }
   games.filter(g => g.key === 'skins' || g.key === 'net_skins').forEach(cfg => {
     const skinsCfg = cfg.key === 'net_skins' ? { ...cfg, basis: 'net' } : cfg;
@@ -6413,7 +6464,7 @@ function buildPlayerDetailGameStatusBlock(match, metrics, playerMetric) {
   const side = getIndividualMatchPairings(match, metrics).find(pair => (
     String(pair.playerA?.playerId) === String(playerMetric.playerId) || String(pair.playerB?.playerId) === String(playerMetric.playerId)
   ));
-  if (side) add(getSideMatchGameLabel(side.game), side.status || 'Live');
+  if (side) add(getSideMatchGameLabel(side.game), formatSideMatchThruStatus(side) || 'Live');
   if (!rows.length) return '';
   return `<section class="player-detail-section player-detail-action-section"><h3>Games / Action</h3><div class="player-detail-action-list">${rows.join('')}</div></section>`;
 }
@@ -6525,8 +6576,8 @@ function buildQuickScoreboardView(match, metrics) {
     </tr>`).join('') : '';
   const completion = getRoundCompletionState(match, metrics);
   const elapsed = getRoundElapsedTimeState(match);
-  const nassau = buildNassauOneLineStatus(match, metrics);
-  const live = buildLiveScoringStatusLine(match, metrics);
+  const primaryStatus = getPrimaryMatchStatusLine(match, metrics);
+  const gameStatusRows = buildQuickScoreboardGameStatusRows(match, metrics);
   const payout = getPayoutReportContext(match, metrics);
   const moneyRows = Object.entries(payout.finalTotals || {})
     .map(([id, amount]) => ({ name: getPlayer(id)?.name || id, amount: Number(amount) || 0 }))
@@ -6537,21 +6588,18 @@ function buildQuickScoreboardView(match, metrics) {
     .join('');
   return `
     <div class="quick-scoreboard-meta">${escapeHtml(completion.label)}${match.status === 'complete' ? ' · Final' : ' · Live'}${elapsed.available ? ` · ${escapeHtml(elapsed.label.replace(/^Round elapsed time:\s*/i, ''))}` : ''}</div>
-    ${nassau ? `<div class="quick-scoreboard-status">${escapeHtml(nassau)}</div>` : (live ? `<div class="quick-scoreboard-status">${escapeHtml(live)}</div>` : '')}
+    ${primaryStatus ? `<div class="quick-scoreboard-status">${escapeHtml(primaryStatus)}</div>` : ''}
     <section class="quick-scoreboard-section">
       <h4>Players</h4>
       <div class="quick-table-wrap">
-        <table class="quick-scoreboard-table">
+        <table class="quick-scoreboard-table quick-player-table">
           <thead><tr><th>#</th><th>Player</th><th>Gross</th><th>Net</th><th>Net +/-</th></tr></thead>
           <tbody>${playerRows || '<tr><td colspan="5">No player standings yet.</td></tr>'}</tbody>
         </table>
       </div>
     </section>
-    ${showTeams ? `<section class="quick-scoreboard-section"><h4>Teams</h4><div class="quick-table-wrap"><table class="quick-scoreboard-table"><thead><tr><th>Team</th><th>Gross</th><th>Net</th><th>Net +/-</th></tr></thead><tbody>${teamRows}</tbody></table></div></section>` : ''}
-    <section class="quick-scoreboard-section">
-      <h4>Competition</h4>
-      <div class="quick-scoreboard-status">${escapeHtml(buildLiveScoringStatusLine(match, metrics) || 'No active competition status yet.')}</div>
-    </section>
+    ${showTeams ? `<section class="quick-scoreboard-section"><h4>Teams</h4><div class="quick-table-wrap"><table class="quick-scoreboard-table quick-team-table"><thead><tr><th>Team</th><th>Gross</th><th>Net</th><th>Net +/-</th></tr></thead><tbody>${teamRows}</tbody></table></div></section>` : ''}
+    ${gameStatusRows}
     <section class="quick-scoreboard-section">
       <h4>Money</h4>
       ${moneyRows ? `<div class="quick-money-list">${moneyRows}</div>` : '<div class="tiny">No money summary available yet.</div>'}
@@ -10509,13 +10557,12 @@ function renderCurrentMatch() {
     const key = `${playerTee?.id || p.teeId || ''}|${holeTeeName}|${playerHole?.yardage || ''}`;
     return [key, `${holeTeeName} ${playerHole?.yardage ? `${formatYardageValue(playerHole.yardage)} yds` : '— yds'}`];
   })).values()].join(' · ') : '';
-  const liveStatusLine = buildLiveScoringStatusLine(match, metrics);
+  const primaryStatusLine = getPrimaryMatchStatusLine(match, metrics);
   const holeSummaryEl = document.getElementById('holeSummary');
   if (holeSummaryEl) {
     if (hole) {
       const holeMeta = `Par ${hole.par || '-'} · SI ${hole.strokeIndex || '-'}`;
-      const statusLine = liveStatusLine || teamText;
-      holeSummaryEl.innerHTML = `<div class="score-hole-meta">${escapeHtml(holeMeta)}</div>${statusLine ? `<div class="score-live-status">${escapeHtml(statusLine)}</div>` : ''}`;
+      holeSummaryEl.innerHTML = `<div class="score-hole-meta">${escapeHtml(holeMeta)}</div>${primaryStatusLine ? `<div class="score-primary-status">${escapeHtml(primaryStatusLine)}</div>` : ''}`;
     } else {
       holeSummaryEl.innerHTML = '';
     }
@@ -10565,13 +10612,12 @@ function formatConciseTeamDiff(match, metrics, diff) {
 }
 
 function buildLiveNassauStatus(match, metrics) {
-  return buildNassauOneLineStatus(match, metrics);
+  return getCompactGameStatus(match, metrics, 'nassau', (match?.selectedGames || []).find(g => g.key === 'nassau'));
 }
 
 function buildLiveTeamMatchStatus(match, metrics) {
-  if (!match || !metrics || (metrics?.teams || []).length !== 2) return '';
-  const diffs = computeTeamGameDiffs(match, metrics, 'team_match');
-  return `Match: ${formatConciseTeamDiff(match, metrics, diffs.overall)}`;
+  const status = getCompactGameStatus(match, metrics, 'team_match', (match?.selectedGames || []).find(g => g.key === 'team_match'));
+  return status ? `Match: ${status}` : '';
 }
 
 function buildLiveIndividualMatchStatus(match, metrics) {
@@ -10581,13 +10627,11 @@ function buildLiveIndividualMatchStatus(match, metrics) {
   if (String(pairing.game || '').toLowerCase() === 'nassau') {
     const diff = currentHole <= 9 ? pairing.front : pairing.back;
     const segment = currentHole <= 9 ? 'F' : 'B';
-    if (!Number.isFinite(Number(diff)) || Number(diff) === 0) return `Match ${segment}: AS`;
+    if (!Number.isFinite(Number(diff)) || Number(diff) === 0) return `Match ${segment}: ${formatLeaderThruStatus('', 0, pairing.completedCount)}`;
     const leader = Number(diff) > 0 ? pairing.playerA?.player?.name : pairing.playerB?.player?.name;
-    return `Match ${segment}: ${getShortStatusName(leader, 9)} +${Math.abs(Number(diff))}`;
+    return `Match ${segment}: ${formatLeaderThruStatus(getShortStatusName(leader, 9), diff, pairing.completedCount)}`;
   }
-  const diff = Number(pairing.diff) || 0;
-  if (!diff) return 'Match: AS';
-  return `Match: ${getShortStatusName(pairing.leaderName, 9)} +${Math.abs(diff)}`;
+  return `Match: ${formatSideMatchThruStatus(pairing)}`;
 }
 
 function getSkinCarryoverCount(match, metrics, cfg = {}) {
@@ -10645,6 +10689,82 @@ function buildLiveGreeniesStatus(match, metrics, cfg = {}) {
   const leaders = Object.entries(counts).filter(([, n]) => Number(n) === max);
   const label = getShortStatusName(getPlayer(leaders[0]?.[0])?.name || 'Player', 8);
   return `G: ${label} ${max}`;
+}
+
+function getCompactGameStatus(match, metrics, gameKey, cfg = null) {
+  if (!match || !metrics || !gameKey) return '';
+  const config = cfg || (match.selectedGames || []).find(g => g.key === gameKey) || {};
+  if (gameKey === 'nassau' && (metrics.teams || []).length === 2) {
+    const basis = String(config.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net';
+    const diffs = computeNassauDiffsForBasis(metrics, basis);
+    return formatTeamGameThruStatus(match, metrics, diffs.overall, 'nassau');
+  }
+  if (gameKey === 'team_match' && (metrics.teams || []).length === 2) {
+    const diffs = computeTeamGameDiffs(match, metrics, 'team_match');
+    return formatTeamGameThruStatus(match, metrics, diffs.overall, 'team_match');
+  }
+  if (gameKey === 'singles_match') {
+    return formatSinglesMatchThruStatus(computeSinglesMatchPlayResult(match, metrics, config));
+  }
+  if (gameKey === 'individual_match') {
+    const pairings = getIndividualMatchPairings(match, metrics);
+    return pairings.length ? pairings.map(pair => `${pair.label}: ${formatSideMatchThruStatus(pair)}`).join(' · ') : 'Active';
+  }
+  if (gameKey === 'team_stroke' && (metrics.teams || []).length >= 2) {
+    const stroke = getTeamStrokeScoreboardData(match, metrics, config);
+    const thru = Number(metrics.completed || 0);
+    if (!stroke.leader) return thru ? `Tied thru ${thru}` : 'Not started';
+    return stroke.tie
+      ? (thru ? `Tied thru ${thru}` : 'Not started')
+      : `${getConciseTeamName(match, stroke.leader.team, metrics)} +${stroke.margin} ${formatBasisLabel(stroke.basis).toLowerCase()} thru ${thru}`;
+  }
+  if (gameKey === 'stroke_net' || gameKey === 'stroke_gross') {
+    const basis = gameKey === 'stroke_gross' ? 'gross' : 'net';
+    const field = basis === 'gross' ? 'grossTotal' : 'leaderboardNetTotal';
+    const rows = (metrics.players || []).filter(p => Number(p.holesPlayed || 0) > 0).sort((a, b) => Number(a[field] || 0) - Number(b[field] || 0));
+    if (!rows.length) return 'Not started';
+    const leader = rows[0];
+    const runner = rows[1];
+    const margin = runner ? Number(runner[field] || 0) - Number(leader[field] || 0) : 0;
+    const thru = Math.max(0, ...rows.map(row => Number(row.holesPlayed || 0)));
+    return margin ? `${leader.player?.name || 'Leader'} +${margin} ${basis} thru ${thru}` : `Tied thru ${thru}`;
+  }
+  if (gameKey === 'skins' || gameKey === 'net_skins') {
+    const skinsCfg = gameKey === 'net_skins' ? { ...config, basis: 'net' } : config;
+    const skins = computeSkinResults(match, metrics, skinsCfg);
+    const entries = Object.entries(skins.counts || {}).filter(([, n]) => Number(n) > 0).sort((a, b) => Number(b[1]) - Number(a[1]));
+    if (!entries.length) return 'None yet';
+    return entries.slice(0, 3).map(([id, count]) => {
+      const label = skinsCfg.skinsType === 'team' ? getConciseTeamName(match, Number(id), metrics) : (getPlayer(id)?.name || 'Player');
+      return `${label} ${count} skin${Number(count) === 1 ? '' : 's'}`;
+    }).join(' · ');
+  }
+  if (gameKey === 'greenies') {
+    const greenies = getGreeniesResults(match, metrics, config);
+    const entries = Object.entries(greenies.counts || {}).filter(([, n]) => Number(n) > 0).sort((a, b) => Number(b[1]) - Number(a[1]));
+    if (!entries.length) return 'None yet';
+    return entries.slice(0, 3).map(([id, count]) => `${getPlayer(id)?.name || 'Player'} ${count}`).join(' · ');
+  }
+  if (gameKey === 'nine_point') {
+    const nine = computeNinePointResults(match, metrics, config);
+    const rows = Array.isArray(nine.leaderboard) ? nine.leaderboard : [];
+    if (rows.length !== 3) return 'Active';
+    const lead = rows[0];
+    const runner = rows[1];
+    const margin = runner ? Number(lead.total || 0) - Number(runner.total || 0) : 0;
+    return margin ? `${lead.name} +${margin}` : 'Tied';
+  }
+  return 'Active';
+}
+
+function buildQuickScoreboardGameStatusRows(match, metrics) {
+  const selected = getOrderedSelectedGames(match);
+  if (!selected.length) return '';
+  const rows = selected.map(cfg => {
+    const status = getCompactGameStatus(match, metrics, cfg.key, cfg);
+    return status ? `<div class="quick-game-row"><span>${escapeHtml(getGameLabel(cfg.key))}</span><strong>${escapeHtml(status)}</strong></div>` : '';
+  }).filter(Boolean).join('');
+  return rows ? `<section class="quick-scoreboard-section"><h4>Active Games</h4><div class="quick-game-list">${rows}</div></section>` : '';
 }
 
 function buildLiveScoringStatusLine(match, metrics) {

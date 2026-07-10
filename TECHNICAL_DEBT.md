@@ -17,7 +17,7 @@ The purpose of this document is to help Codex distinguish between:
 
 ## Current Production Version
 
-Current production version: v30.3.53
+Current production version: v30.3.54
 
 ---
 
@@ -84,13 +84,15 @@ Status: Must address before broad use.
 
 v30.3.53 adds SSP setup, team validation, durable local settings, and Play tab manual inputs.
 
+v30.3.54 adds the base SSP point ledger for manual Sneaky, Sandy, Poley, Greeny, Prox, automatic Birdie, Eagle, Low Ball, Low Total, Play tab base-point previews, Quick Scoreboard status, and Player Detail contribution summaries.
+
 ### Known concern
 
-The authoritative SSP hole ledger, Take/Keep, Bridge/Re-Bridge multiplier math, Umbee multiplier math, settlement, Match Summary reporting, and Shared Match SSP input reconciliation are intentionally deferred.
+Take/Keep, honors carry-forward, Bridge/Re-Bridge multiplier math, Umbee multiplier math, settlement, Match Summary reporting, and Shared Match SSP input reconciliation are intentionally deferred.
 
 ### Near-term direction
 
-Use `docs/05_SNEAKY_SANDY_POLEY.md` as the implementation plan for v30.3.54 and v30.3.55. Do not treat v30.3.53 SSP preview text as final scoring or settlement output.
+Use `docs/05_SNEAKY_SANDY_POLEY.md` as the implementation plan for v30.3.55. Do not treat v30.3.54 base points as settlement output.
 
 Status: Planned follow-up.
 

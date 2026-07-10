@@ -1,11 +1,11 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.53',
-  versionNumber: '30.3.53',
-  cacheName: 'the-dye-ledger-v30.3.53',
+  version: 'v30.3.54',
+  versionNumber: '30.3.54',
+  cacheName: 'the-dye-ledger-v30.3.54',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Sneaky / Sandy / Poley Foundation'
+  buildLabel: 'SSP Hole Inputs and Core Point Ledger'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -2310,6 +2310,288 @@ function getSneakySandyPoleyTeamWarnings({ teamCount = 1, playersPerTeam = 1, pl
   return [...new Set(warnings)];
 }
 
+function getSneakySandyPoleyPlayerStat(match, playerId, holeIdx) {
+  const playerRef = (match?.players || []).find(row => String(row.playerId) === String(playerId));
+  const available = !!(match && playerRef && isStatTrackingEnabled(match) && isPlayerStatTrackingEnabled(match, playerId) && Array.isArray(playerRef.stats) && playerRef.stats[holeIdx]);
+  return { available, stat: available ? normalizeHoleStat(playerRef.stats[holeIdx] || {}, holeIdx) : null };
+}
+
+function buildSneakySandyPoleyLedger(match, options = {}) {
+  const cfg = getSneakySandyPoleyConfig(match);
+  const empty = {
+    enabled: false,
+    settings: cfg,
+    teams: [],
+    holes: {},
+    totalsByTeam: {},
+    leader: { teamId: null, margin: 0, thru: 0, tied: true },
+    warnings: [],
+  };
+  if (!match || !cfg) return empty;
+  const metrics = options.metrics || computeMatchMetrics(match);
+  if (!metrics || !Array.isArray(metrics.players) || !Array.isArray(metrics.holeResults)) {
+    return { ...empty, enabled: true, warnings: ['SSP ledger requires course, tee, and player score context.'] };
+  }
+  const teamNos = [...new Set((metrics.players || []).map(p => Number(p.team) || 1))].sort((a, b) => a - b).slice(0, 2);
+  const teams = teamNos.map(teamNo => ({
+    id: String(teamNo),
+    team: teamNo,
+    name: getTeamLabel(match, teamNo),
+    playerIds: (metrics.players || []).filter(p => Number(p.team) === teamNo).map(p => String(p.playerId)),
+  }));
+  const warnings = [];
+  if (teams.length !== 2) warnings.push('SSP base ledger requires exactly two teams.');
+  const totalsByTeam = Object.fromEntries(teams.map(team => [team.id, 0]));
+  const holes = {};
+  const getTeamIdForPlayer = playerId => {
+    const row = (metrics.players || []).find(p => String(p.playerId) === String(playerId));
+    return row ? String(Number(row.team) || 1) : '';
+  };
+  const getPlayerName = playerId => getPlayer(playerId)?.name || (metrics.players || []).find(p => String(p.playerId) === String(playerId))?.player?.name || 'Player';
+  const addCategory = (holeLedger, teamId, item) => {
+    if (!teamId || !holeLedger.basePointsByTeam.hasOwnProperty(teamId)) return;
+    const points = Number(item.points) || 0;
+    if (!points) return;
+    holeLedger.basePointsByTeam[teamId] += points;
+    holeLedger.categoriesByTeam[teamId].push({ ...item, points });
+  };
+  metrics.holeResults.forEach((holeResult, idx) => {
+    const holeNumber = Number(holeResult?.holeNumber || idx + 1);
+    const rawHoleInputs = match?.sneakySandyPoleyInputs && typeof match.sneakySandyPoleyInputs === 'object' ? match.sneakySandyPoleyInputs : {};
+    const holeInput = normalizeSneakySandyPoleyHoleInput(match, rawHoleInputs[String(holeNumber)] || {}, holeNumber);
+    const holeWarnings = [];
+    const holeLedger = {
+      holeNumber,
+      complete: !!holeResult?.completed,
+      counted: false,
+      basePointsByTeam: Object.fromEntries(teams.map(team => [team.id, 0])),
+      categoriesByTeam: Object.fromEntries(teams.map(team => [team.id, []])),
+      warnings: holeWarnings,
+    };
+    const playerScores = Array.isArray(holeResult?.playerScores) ? holeResult.playerScores : [];
+    const byPlayer = new Map(playerScores.map(score => [String(score.playerId), score]));
+    (metrics.players || []).forEach(playerMetric => {
+      const playerId = String(playerMetric.playerId);
+      const teamId = String(Number(playerMetric.team) || 1);
+      if (!holeLedger.basePointsByTeam.hasOwnProperty(teamId)) return;
+      const score = byPlayer.get(playerId) || {};
+      const gross = Number(score.gross);
+      const par = Number(score.par || holeResult?.par || 0);
+      const hasGross = Number.isFinite(gross) && gross > 0;
+      const hasPar = Number.isFinite(par) && par > 0;
+      const input = holeInput.players?.[playerId] || {};
+      const { available: statsAvailable, stat } = getSneakySandyPoleyPlayerStat(match, playerId, idx);
+      if (input.sneaky) {
+        if (!hasGross || !hasPar) holeWarnings.push(`${getPlayerName(playerId)} Sneaky pending score/par validation.`);
+        else if (gross !== par) holeWarnings.push(`${getPlayerName(playerId)} Sneaky requires par.`);
+        else addCategory(holeLedger, teamId, { category: 'sneaky', points: 1, playerId, label: `${getPlayerName(playerId)}: Sneaky` });
+      }
+      if (input.sandy) {
+        if (!hasGross || !hasPar) holeWarnings.push(`${getPlayerName(playerId)} Sandy pending score/par validation.`);
+        else if (gross !== par) holeWarnings.push(`${getPlayerName(playerId)} Sandy requires par.`);
+        else addCategory(holeLedger, teamId, { category: 'sandy', points: 1, playerId, label: `${getPlayerName(playerId)}: Sandy` });
+        if (!input.sneaky) holeWarnings.push(`${getPlayerName(playerId)} Sandy stacks with Sneaky; confirm Sneaky if applicable.`);
+      }
+      if (input.poley) {
+        if (!hasGross || !hasPar) holeWarnings.push(`${getPlayerName(playerId)} Poley pending score/par validation.`);
+        else if (gross > par + 2) holeWarnings.push(`${getPlayerName(playerId)} Poley requires double bogey or better.`);
+        else addCategory(holeLedger, teamId, { category: 'poley', points: 1, playerId, label: `${getPlayerName(playerId)}: Poley` });
+      }
+      if (input.greeny) {
+        if (cfg.validateGreenyProx) {
+          if (!statsAvailable) holeWarnings.push(`${getPlayerName(playerId)} Greeny requires 2 putts or less to validate.`);
+          else if (Number(stat.putts) <= 2) addCategory(holeLedger, teamId, { category: 'greeny', points: 1, playerId, label: `${getPlayerName(playerId)}: Greeny` });
+          else holeWarnings.push(`${getPlayerName(playerId)} Greeny requires 2 putts or less to validate.`);
+        } else {
+          addCategory(holeLedger, teamId, { category: 'greeny', points: 1, playerId, label: `${getPlayerName(playerId)}: Greeny` });
+        }
+      }
+      if (hasGross && hasPar && gross === par - 1) addCategory(holeLedger, teamId, { category: 'birdie', points: 2, playerId, label: `${getPlayerName(playerId)}: Birdie` });
+      if (hasGross && hasPar && gross <= par - 2) addCategory(holeLedger, teamId, { category: 'eagle', points: 4, playerId, label: `${getPlayerName(playerId)}: Eagle` });
+    });
+    if (holeInput.proxPlayerId) {
+      const playerId = String(holeInput.proxPlayerId);
+      const teamId = getTeamIdForPlayer(playerId);
+      const playerInput = holeInput.players?.[playerId] || {};
+      const { available: statsAvailable, stat } = getSneakySandyPoleyPlayerStat(match, playerId, idx);
+      const validateOk = !cfg.validateGreenyProx || (statsAvailable && Number(stat?.putts) <= 2);
+      if (!teamId || !holeLedger.basePointsByTeam.hasOwnProperty(teamId)) holeWarnings.push('Prox player is not on an SSP team.');
+      else if (!playerInput.greeny) holeWarnings.push('Prox requires an eligible Greeny.');
+      else if (!validateOk) holeWarnings.push('Prox requires 2 putts or less to validate.');
+      else addCategory(holeLedger, teamId, { category: 'prox', points: 2, playerId, label: `${getPlayerName(playerId)}: Prox` });
+    }
+    const scoredByTeam = teams.map(team => {
+      const scores = playerScores.filter(score => String(score.team) === team.id && score.net != null && Number.isFinite(Number(score.net)));
+      return { teamId: team.id, scores };
+    });
+    if (scoredByTeam.length === 2 && scoredByTeam.every(row => row.scores.length > 0)) {
+      const lowNet = Math.min(...scoredByTeam.flatMap(row => row.scores.map(score => Number(score.net))));
+      const lowTeams = new Set(scoredByTeam.flatMap(row => row.scores.filter(score => Number(score.net) === lowNet).map(() => row.teamId)));
+      if (lowTeams.size === 1) addCategory(holeLedger, [...lowTeams][0], { category: 'lowBall', points: 2, label: 'Low Ball' });
+    } else {
+      holeWarnings.push('Low Ball requires at least one valid score on each team.');
+    }
+    const teamTotals = scoredByTeam.map(row => {
+      const expected = teams.find(team => team.id === row.teamId)?.playerIds.length || 0;
+      return { ...row, expected, complete: expected > 0 && row.scores.length === expected, net: row.scores.reduce((sum, score) => sum + Number(score.net), 0) };
+    });
+    if (teamTotals.length === 2 && teamTotals.every(row => row.complete)) {
+      if (teamTotals[0].net < teamTotals[1].net) addCategory(holeLedger, teamTotals[0].teamId, { category: 'lowTotal', points: 2, label: 'Low Total' });
+      else if (teamTotals[1].net < teamTotals[0].net) addCategory(holeLedger, teamTotals[1].teamId, { category: 'lowTotal', points: 2, label: 'Low Total' });
+    } else {
+      holeWarnings.push('Low Total requires all players on both teams to have valid scores.');
+    }
+    const holeTotal = Object.values(holeLedger.basePointsByTeam).reduce((sum, value) => sum + Number(value || 0), 0);
+    holeLedger.counted = holeLedger.complete || holeTotal > 0;
+    Object.entries(holeLedger.basePointsByTeam).forEach(([teamId, points]) => { totalsByTeam[teamId] = (totalsByTeam[teamId] || 0) + Number(points || 0); });
+    holes[String(holeNumber)] = holeLedger;
+  });
+  const totalEntries = Object.entries(totalsByTeam);
+  const sortedTotals = totalEntries.slice().sort((a, b) => Number(b[1]) - Number(a[1]));
+  const margin = sortedTotals.length >= 2 ? Math.abs(Number(sortedTotals[0][1]) - Number(sortedTotals[1][1])) : 0;
+  const tied = !margin;
+  return {
+    enabled: true,
+    settings: cfg,
+    teams,
+    holes,
+    totalsByTeam,
+    leader: {
+      teamId: tied ? null : sortedTotals[0]?.[0] || null,
+      margin,
+      thru: Object.values(holes).filter(hole => hole.counted).length,
+      tied,
+    },
+    warnings,
+  };
+}
+
+function formatSneakySandyPoleyTeamName(ledger, match, teamId) {
+  const team = (ledger?.teams || []).find(row => String(row.id) === String(teamId));
+  return team?.name || getTeamLabel(match, Number(teamId) || 1);
+}
+
+function getSneakySandyPoleyTeamDiffText(match, ledger, holeLedger = null) {
+  const teams = ledger?.teams || [];
+  if (teams.length !== 2) return '';
+  const points = holeLedger?.basePointsByTeam || ledger.totalsByTeam || {};
+  const a = Number(points[teams[0].id] || 0);
+  const b = Number(points[teams[1].id] || 0);
+  if (a === b) return 'Tied';
+  const leader = a > b ? teams[0] : teams[1];
+  return `${leader.name} +${Math.abs(a - b)}`;
+}
+
+function getSneakySandyPoleyStatus(match, metrics = null) {
+  const ledger = buildSneakySandyPoleyLedger(match, { metrics });
+  if (!ledger.enabled) return '';
+  if ((ledger.teams || []).length !== 2) return 'SSP Base: setup incomplete';
+  if (!ledger.leader.thru) return 'SSP Base: Not started';
+  if (ledger.leader.tied) return `SSP Base: Tied base pts thru ${ledger.leader.thru}`;
+  return `SSP Base: ${formatSneakySandyPoleyTeamName(ledger, match, ledger.leader.teamId)} +${ledger.leader.margin} base pts thru ${ledger.leader.thru}`;
+}
+
+function flattenSneakySandyPoleyCategories(holeLedger) {
+  return Object.entries(holeLedger?.categoriesByTeam || {}).flatMap(([teamId, rows]) => (rows || []).map(row => ({ ...row, teamId })));
+}
+
+function getSneakySandyPoleyEligibleProxPlayers(input, players = []) {
+  const rows = input?.players || {};
+  return (players || []).filter(player => !!rows[player.playerId]?.greeny);
+}
+
+function isSneakySandyPoleyProxEligible(input, playerId) {
+  if (!playerId) return false;
+  return !!input?.players?.[String(playerId)]?.greeny;
+}
+
+const SSP_PROX_TBD_VALUE = '__tbd';
+
+function resolveSneakySandyPoleyProxSelection(input, players = [], options = {}) {
+  const eligiblePlayers = getSneakySandyPoleyEligibleProxPlayers(input, players);
+  const eligibleIds = eligiblePlayers.map(player => String(player.playerId || '')).filter(Boolean);
+  const requested = String(options.requestedProxPlayerId ?? input?.proxPlayerId ?? '');
+  const forceTbdOnMultiple = !!options.forceTbdOnMultiple;
+  if (!eligibleIds.length) {
+    return { proxPlayerId: '', uiValue: '', mode: 'none', eligiblePlayers };
+  }
+  if (eligibleIds.length === 1) {
+    return { proxPlayerId: eligibleIds[0], uiValue: eligibleIds[0], mode: 'auto', eligiblePlayers };
+  }
+  if (!forceTbdOnMultiple && requested && requested !== SSP_PROX_TBD_VALUE && eligibleIds.includes(requested)) {
+    return { proxPlayerId: requested, uiValue: requested, mode: 'selected', eligiblePlayers };
+  }
+  return { proxPlayerId: '', uiValue: SSP_PROX_TBD_VALUE, mode: 'tbd', eligiblePlayers };
+}
+
+function buildSneakySandyPoleyTeamDetailsHtml(match, ledger, holeLedger) {
+  const teams = ledger?.teams || [];
+  const sections = teams.map(team => {
+    const rows = (holeLedger?.categoriesByTeam?.[team.id] || []);
+    const details = rows.length
+      ? rows.map(item => {
+          const category = getSspCategoryLabel(item.category);
+          const owner = item.playerId ? (getPlayer(item.playerId)?.name || 'Player') : team.name;
+          return `<div class="ssp-ledger-detail"><span>${escapeHtml(owner)}: ${escapeHtml(category)}</span><strong>+${Number(item.points || 0)}</strong></div>`;
+        }).join('')
+      : '<div class="tiny">No base points.</div>';
+    return `<div class="ssp-ledger-team-detail"><div class="ssp-ledger-team-name">${escapeHtml(team.name || formatSneakySandyPoleyTeamName(ledger, match, team.id))}</div>${details}</div>`;
+  }).join('');
+  return sections || '<div class="tiny">No base points calculated for this hole yet.</div>';
+}
+
+function buildSneakySandyPoleyHolePreviewHtml(match, ledger, holeNumber) {
+  if (!ledger.enabled) return '<div class="tiny top-gap">SSP ledger unavailable.</div>';
+  const holeLedger = ledger.holes?.[String(holeNumber)];
+  if (!holeLedger) return '<div class="tiny top-gap">No SSP ledger row for this hole yet.</div>';
+  const teams = ledger.teams || [];
+  const scoreTiles = teams.map(team => `<div class="ssp-ledger-tile"><span>${escapeHtml(team.name)}</span><strong>${Number(holeLedger.basePointsByTeam?.[team.id] || 0)}</strong></div>`).join('');
+  const details = buildSneakySandyPoleyTeamDetailsHtml(match, ledger, holeLedger);
+  const cfg = ledger.settings || {};
+  const deferred = [
+    cfg.allowBridgeRebridge && (getSneakySandyPoleyHoleInput(match, holeNumber).bridge || getSneakySandyPoleyHoleInput(match, holeNumber).rebridge) ? 'Bridge/Re-Bridge multiplier deferred to v30.3.55.' : '',
+    cfg.allowUmbee ? 'Umbee multiplier deferred to v30.3.55.' : '',
+  ].filter(Boolean);
+  const warnings = (holeLedger.warnings || []).slice(0, 3).map(item => `<div class="ssp-ledger-warning">${escapeHtml(item)}</div>`).join('');
+  return `
+    <div class="ssp-ledger-preview top-gap">
+      <div class="ssp-ledger-head"><span>Hole ${Number(holeNumber) || ''} Base Points</span><strong>${escapeHtml(getSneakySandyPoleyTeamDiffText(match, ledger, holeLedger))}</strong></div>
+      <div class="ssp-ledger-tiles">${scoreTiles}</div>
+      <div class="ssp-ledger-detail-list">${details}</div>
+      ${deferred.length ? `<div class="tiny top-gap">${deferred.map(escapeHtml).join(' ')}</div>` : ''}
+      ${warnings ? `<div class="ssp-ledger-warning-list top-gap">${warnings}</div>` : ''}
+    </div>`;
+}
+
+function getSneakySandyPoleyPlayerContribution(match, metrics, playerId) {
+  const ledger = buildSneakySandyPoleyLedger(match, { metrics });
+  if (!ledger.enabled) return null;
+  const categoryCounts = {};
+  let points = 0;
+  Object.values(ledger.holes || {}).forEach(hole => {
+    flattenSneakySandyPoleyCategories(hole).forEach(item => {
+      if (String(item.playerId || '') !== String(playerId)) return;
+      points += Number(item.points || 0);
+      categoryCounts[item.category] = (categoryCounts[item.category] || 0) + 1;
+    });
+  });
+  return { points, categoryCounts };
+}
+
+function getSspCategoryLabel(key = '') {
+  return ({
+    sneaky: 'Sneaky',
+    sandy: 'Sandy',
+    poley: 'Poley',
+    greeny: 'Greeny',
+    prox: 'Prox',
+    lowBall: 'Low Ball',
+    lowTotal: 'Low Total',
+    birdie: 'Birdie',
+    eagle: 'Eagle',
+  })[key] || String(key || 'SSP');
+}
+
 function normalizePuttsSource(source, fallback = 'default') {
   return ['default', 'auto', 'user'].includes(source) ? source : fallback;
 }
@@ -2509,6 +2791,11 @@ function formatMoneyAccounting(amount) {
   if (Math.abs(value) < 0.0001) return "$0.00";
   return value < 0 ? `($${abs})` : `$${abs}`;
 }
+function formatPositiveCurrency(amount, fallback = 1) {
+  const value = Number(amount);
+  const normalized = Number.isFinite(value) && value >= 0 ? value : Number(fallback) || 0;
+  return `$${normalized.toFixed(2)}`;
+}
 function formatFinalNetSettlementMoney(amount) {
   const value = Number(amount) || 0;
   const abs = Math.abs(value).toFixed(2);
@@ -2605,16 +2892,29 @@ function buildNassauOneLineStatus(match, metrics) {
   }
   return `Nassau: ${parts.join(' · ')}`;
 }
+function formatCompactTeeName(name = '') {
+  const clean = String(name || '').trim();
+  if (!clean) return '';
+  const withoutCombo = clean
+    .replace(/\bcombo\b/ig, '')
+    .replace(/\bc\.\s*/ig, '')
+    .replace(/\bcourse\b/ig, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return withoutCombo || clean;
+}
 function getPlayerHoleTeeInfo(match, playerRef, selectedHoleIdx, fallbackTee = null) {
   const tee = getPlayerTee(match, playerRef) || fallbackTee || getTee(match?.courseId, match?.teeId);
   const hole = getPlayerHole(match, playerRef, selectedHoleIdx, fallbackTee);
   const teeName = getHoleTeeNameForDisplay(match?.courseId, tee, selectedHoleIdx) || tee?.teeName || '';
   const yardage = Number(hole?.yardage);
+  const compactTeeName = formatCompactTeeName(teeName);
+  const yardageLabel = Number.isFinite(yardage) && yardage > 0 ? `${formatYardageValue(yardage)}y` : '—';
   return {
-    teeName,
+    teeName: compactTeeName,
     yardage: Number.isFinite(yardage) && yardage > 0 ? yardage : null,
-    label: teeName
-      ? `${teeName}${Number.isFinite(yardage) && yardage > 0 ? ` · ${formatYardageValue(yardage)} yds` : ''}`
+    label: compactTeeName
+      ? `${compactTeeName} · ${yardageLabel}`
       : ''
   };
 }
@@ -6563,6 +6863,16 @@ function buildPlayerDetailGameStatusBlock(match, metrics, playerMetric) {
       add('Greenies', count ? `${count} won` : 'Eligible · none yet');
     }
   }
+  if (selectedKeys.has('sneaky_sandy_poley')) {
+    const contribution = getSneakySandyPoleyPlayerContribution(match, metrics, playerMetric.playerId);
+    if (contribution) {
+      const categoryText = Object.entries(contribution.categoryCounts || {})
+        .filter(([, count]) => Number(count) > 0)
+        .map(([key, count]) => `${getSspCategoryLabel(key)} ${count}`)
+        .join(', ');
+      add('SSP', `${Number(contribution.points || 0)} base pts contributed${categoryText ? ` · ${categoryText}` : ''}`);
+    }
+  }
   const ninePointCfg = games.find(g => g.key === 'nine_point');
   if (ninePointCfg) {
     const nine = computeNinePointResults(match, metrics, ninePointCfg);
@@ -7784,7 +8094,7 @@ function extractGreeniesSuggestionsFromSelectedGames(selectedGames) {
   const suggestions = greeniesCfg?.suggestionsByHole;
   return suggestions && typeof suggestions === 'object' ? { ...suggestions } : {};
 }
-function applyCurrentHoleDomToMatch(match) {
+function applyCurrentHoleDomToMatch(match, options = {}) {
   if (!match) return false;
   const scoringHoles = getSelectedScoringHoles(match, getTee(match.courseId, match.teeId));
   const holeMeta = scoringHoles[currentHole - 1] || null;
@@ -7889,14 +8199,19 @@ function applyCurrentHoleDomToMatch(match) {
       next.players[playerId][key] = !!input.checked;
     });
     const prox = document.querySelector('[data-ssp-prox]');
-    if (prox) next.proxPlayerId = String(prox.value || '');
+    const requestedProxPlayerId = prox ? String(prox.value || '') : next.proxPlayerId;
     document.querySelectorAll('[data-ssp-hole-key]').forEach(input => {
       const key = input.dataset.sspHoleKey || '';
       if (key === 'bridge' || key === 'rebridge') next[key] = !!input.checked;
     });
     const notes = document.querySelector('[data-ssp-notes]');
     if (notes) next.notes = String(notes.value || '').slice(0, 240);
-    next.proxPlayerId = getMatchPlayerIds(match).includes(next.proxPlayerId) ? next.proxPlayerId : '';
+    const proxState = resolveSneakySandyPoleyProxSelection(
+      next,
+      (match.players || []).map(player => ({ playerId: player.playerId })),
+      { requestedProxPlayerId, forceTbdOnMultiple: !!options.sspGreenyChanged }
+    );
+    next.proxPlayerId = proxState.proxPlayerId;
     if (!getSneakySandyPoleyConfig(match)?.allowBridgeRebridge) {
       next.bridge = false;
       next.rebridge = false;
@@ -7911,10 +8226,10 @@ function applyCurrentHoleDomToMatch(match) {
   }
   return mutated;
 }
-function scheduleSharedActiveMatchSyncFromDom({ immediate = false, silent = true, persistLocal = true } = {}) {
+function scheduleSharedActiveMatchSyncFromDom({ immediate = false, silent = true, persistLocal = true, applyOptions = {} } = {}) {
   const match = getActiveMatch();
   if (!match || match.storageMode !== 'shared') return;
-  const mutated = applyCurrentHoleDomToMatch(match);
+  const mutated = applyCurrentHoleDomToMatch(match, applyOptions);
   if (mutated || persistLocal) persist({ skipRender: true });
   scheduleSharedMatchSync(match, { immediate, silent });
 }
@@ -10716,6 +11031,7 @@ function renderCurrentMatch() {
   renderScoreGrid(match, tee, metrics, scoringHoles);
   renderSneakySandyPoleyEntry(match, hole, metrics);
   renderStatTrackingEntry(match, hole, metrics);
+  renderSneakySandyPoleyNote(match, hole, metrics);
   renderGreeniesEntry(match, hole);
   renderHoleJumpTiles(match);
   initializePlayInputs();
@@ -10898,6 +11214,9 @@ function getCompactGameStatus(match, metrics, gameKey, cfg = null) {
     const margin = runner ? Number(lead.total || 0) - Number(runner.total || 0) : 0;
     return margin ? `${lead.name} +${margin}` : 'Tied';
   }
+  if (gameKey === 'sneaky_sandy_poley') {
+    return getSneakySandyPoleyStatus(match, metrics).replace(/^SSP Base:\s*/, '');
+  }
   return 'Active';
 }
 
@@ -10906,7 +11225,8 @@ function buildQuickScoreboardGameStatusRows(match, metrics) {
   if (!selected.length) return '';
   const rows = selected.map(cfg => {
     const status = getCompactGameStatus(match, metrics, cfg.key, cfg);
-    return status ? `<div class="quick-game-row"><span>${escapeHtml(getGameLabel(cfg.key))}</span><strong>${escapeHtml(status)}</strong></div>` : '';
+    const label = cfg.key === 'sneaky_sandy_poley' ? 'SSP' : getGameLabel(cfg.key);
+    return status ? `<div class="quick-game-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(status)}</strong></div>` : '';
   }).filter(Boolean).join('');
   return rows ? `<section class="quick-scoreboard-section"><h4>Active Games</h4><div class="quick-game-list">${rows}</div></section>` : '';
 }
@@ -10927,6 +11247,7 @@ function buildLiveScoringStatusLine(match, metrics) {
   if (byKey.has('skins')) push(buildLiveSkinsStatus(match, metrics, byKey.get('skins')));
   if (byKey.has('nine_point')) push(buildLiveNinePointStatus(match, metrics, byKey.get('nine_point')));
   if (byKey.has('greenies')) push(buildLiveGreeniesStatus(match, metrics, byKey.get('greenies')));
+  if (byKey.has('sneaky_sandy_poley')) push(getSneakySandyPoleyStatus(match, metrics));
   return items.slice(0, 3).join(' | ');
 }
 
@@ -10956,33 +11277,31 @@ function renderSneakySandyPoleyEntry(match, hole, metrics) {
   const input = getSneakySandyPoleyHoleInput(match, actualHoleNumber);
   const players = getVisibleScoringPlayers(match, (metrics?.players || []), { stats: false });
   const canEditAny = players.some(p => canEditPlayerScore(match, p.team, p.playerId));
+  const proxState = resolveSneakySandyPoleyProxSelection(input, players);
+  const proxEligiblePlayers = proxState.eligiblePlayers;
+  if (input.proxPlayerId !== proxState.proxPlayerId) {
+    input.proxPlayerId = proxState.proxPlayerId;
+    persist({ skipRender: true });
+  }
   const actionKeys = [
     { key: 'sneaky', label: 'Sneaky' },
     { key: 'sandy', label: 'Sandy' },
     { key: 'poley', label: 'Poley' },
     { key: 'greeny', label: 'Greeny' },
   ];
-  const selectedAwards = [];
-  players.forEach(p => {
-    const row = input.players[p.playerId] || {};
-    const awards = actionKeys.filter(action => row[action.key]).map(action => action.label);
-    if (awards.length) selectedAwards.push(`${p.player?.name || 'Player'}: ${awards.join(', ')}`);
-  });
-  if (input.proxPlayerId) selectedAwards.push(`Prox: ${getPlayer(input.proxPlayerId)?.name || 'Player'}`);
-  if (input.bridge) selectedAwards.push('Bridge');
-  if (input.rebridge) selectedAwards.push('Re-Bridge');
+  const ledger = buildSneakySandyPoleyLedger(match, { metrics });
   wrap.classList.remove('hidden');
   wrap.innerHTML = `
     <div class="card inset-card ssp-entry-card">
       <div class="item-header compact-item-header">
         <div>
           <div class="section-label">Sneaky / Sandy / Poley</div>
-          <div class="tiny">Game Action · Hole ${actualHoleNumber}</div>
+          <div class="tiny">Game Action · Base Ledger · Hole ${actualHoleNumber}</div>
         </div>
-        <span class="setup-role-badge">Inputs only</span>
+        <span class="setup-role-badge">Base Points</span>
       </div>
       <div class="ssp-status-row top-gap">
-        <span>$ per point ${Number(cfg.pointValue || 0).toFixed(2).replace(/\.00$/, '')}</span>
+        <span>Stakes: ${formatPositiveCurrency(cfg.pointValue, 1)} per point</span>
         ${cfg.validateGreenyProx ? '<span>Validate on: Greeny/Prox require 2 putts or less.</span>' : '<span>Validate off</span>'}
         ${cfg.allowUmbee ? `<span>Umbee allowed${cfg.allowUmbeeWithBridge ? ' with Bridge/Re-Bridge' : ''}</span>` : '<span>Umbee off</span>'}
       </div>
@@ -10999,18 +11318,36 @@ function renderSneakySandyPoleyEntry(match, hole, metrics) {
         }).join('') || '<div class="tiny">No scoring players available.</div>'}
       </div>
       <div class="grid two compact-grid top-gap">
-        <label><span>Prox</span><select data-ssp-prox ${canEditAny ? '' : 'disabled'}>
+        <label><span>Prox</span><select data-ssp-prox ${canEditAny && proxEligiblePlayers.length ? '' : 'disabled'}>
           <option value="">None</option>
-          ${players.map(p => `<option value="${escapeHtml(p.playerId)}" ${input.proxPlayerId === p.playerId ? 'selected' : ''}>${escapeHtml(p.player?.name || 'Player')}</option>`).join('')}
+          ${proxEligiblePlayers.length > 1 ? `<option value="${SSP_PROX_TBD_VALUE}" ${proxState.uiValue === SSP_PROX_TBD_VALUE ? 'selected' : ''}>TBD</option>` : ''}
+          ${proxEligiblePlayers.map(p => `<option value="${escapeHtml(p.playerId)}" ${proxState.uiValue === p.playerId ? 'selected' : ''}>${escapeHtml(p.player?.name || 'Player')}</option>`).join('')}
         </select></label>
+        ${proxEligiblePlayers.length ? (proxEligiblePlayers.length > 1 ? '<div class="tiny">Choose Prox when multiple Greenies are selected.</div>' : '<div class="tiny">Only Greeny is auto-selected for Prox.</div>') : '<div class="tiny">Select Greeny for a player to enable Prox.</div>'}
         ${cfg.allowBridgeRebridge ? `<div class="ssp-hole-actions">
           <label class="inline-check"><input type="checkbox" data-ssp-hole-key="bridge" ${input.bridge ? 'checked' : ''} ${canEditAny ? '' : 'disabled'} /><span>Bridge</span></label>
           <label class="inline-check"><input type="checkbox" data-ssp-hole-key="rebridge" ${input.rebridge ? 'checked' : ''} ${canEditAny ? '' : 'disabled'} /><span>Re-Bridge</span></label>
         </div>` : '<div class="tiny">Bridge/Re-Bridge controls are off in Match Setup.</div>'}
-        <label class="span-2"><span>Notes</span><input type="text" maxlength="240" data-ssp-notes value="${escapeHtml(input.notes || '')}" placeholder="Optional SSP note" ${canEditAny ? '' : 'disabled'} /></label>
       </div>
-      <div class="tiny top-gap">${selectedAwards.length ? `Preview: ${escapeHtml(selectedAwards.join(' · '))}` : 'SSP inputs saved for this hole when selected. Ledger coming in v30.3.54.'}</div>
+      ${buildSneakySandyPoleyHolePreviewHtml(match, ledger, actualHoleNumber)}
     </div>`;
+}
+
+function renderSneakySandyPoleyNote(match, hole, metrics) {
+  const wrap = document.getElementById('sneakySandyPoleyNoteWrap');
+  if (!wrap) return;
+  const cfg = getSneakySandyPoleyConfig(match);
+  if (!cfg) {
+    wrap.classList.add('hidden');
+    wrap.innerHTML = '';
+    return;
+  }
+  const actualHoleNumber = Number(hole?.holeNumber || currentHole) || currentHole;
+  const input = getSneakySandyPoleyHoleInput(match, actualHoleNumber);
+  const players = getVisibleScoringPlayers(match, (metrics?.players || []), { stats: false });
+  const canEditAny = players.some(p => canEditPlayerScore(match, p.team, p.playerId));
+  wrap.classList.remove('hidden');
+  wrap.innerHTML = `<label class="ssp-note-field"><span>Optional SSP note</span><input type="text" maxlength="240" data-ssp-notes value="${escapeHtml(input.notes || '')}" placeholder="Optional SSP note" ${canEditAny ? '' : 'disabled'} /></label>`;
 }
 
 function renderStatTrackingEntry(match, hole, metrics) {
@@ -13068,8 +13405,8 @@ function renderGamesPicker(existing = []) {
         <div class="game-config-header"><div class="section-label">Sneaky / Sandy / Poley</div><div class="tiny">Two-team points game with manual action awards, low net points, optional Validate, Bridge/Re-Bridge, and Umbee rules.</div></div>
         ${warnings.length ? `<div class="setup-warning top-gap">${warnings.map(item => `<div>${escapeHtml(item)}</div>`).join('')}</div>` : ''}
         <div class="grid two compact-grid top-gap">
-          <label><span>$ per point</span><input type="number" step="0.01" min="0" data-game-config="${game.key}" data-field="pointValue" value="${Number(sspCfg.pointValue || 1).toFixed(2)}" /></label>
-          <div class="tiny">Settlement is net team points x dollar value per point.</div>
+          <label><span>$ per point</span><span class="currency-input"><span aria-hidden="true">$</span><input type="number" step="0.01" min="0" data-game-config="${game.key}" data-field="pointValue" value="${Number(sspCfg.pointValue ?? 1).toFixed(2)}" /></span></label>
+          <div class="tiny">Settlement is net team points &times; dollar value per point.</div>
           <label class="inline-check span-2"><input type="checkbox" data-game-config="${game.key}" data-field="validateGreenyProx" ${sspCfg.validateGreenyProx ? 'checked' : ''} /><span>Validate Greeny/Prox</span></label>
           <div class="tiny span-2">When on, Greeny and Prox count only with 2 putts or less.</div>
           <label class="inline-check span-2"><input type="checkbox" data-game-config="${game.key}" data-field="allowBridgeRebridge" ${sspCfg.allowBridgeRebridge ? 'checked' : ''} /><span>Allow Bridge/Re-Bridge</span></label>
@@ -14443,9 +14780,10 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (e.target && e.target.matches('[data-ssp-player][data-ssp-key], [data-ssp-prox], [data-ssp-hole-key]')) {
       const match = getActiveMatch();
       if (!match) return;
-      applyCurrentHoleDomToMatch(match);
+      const applyOptions = { sspGreenyChanged: e.target.matches('[data-ssp-player][data-ssp-key="greeny"]') };
+      applyCurrentHoleDomToMatch(match, applyOptions);
       persist({ skipRender: true });
-      scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
+      scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true, applyOptions });
       renderCurrentMatch();
     }
   });
@@ -15769,6 +16107,8 @@ function installDyeLedgerLiveEngineAdapter() {
     computeNassauDiffsForBasis,
     computeSkinResults,
     computeNinePointResults,
+    buildSneakySandyPoleyLedger,
+    resolveSneakySandyPoleyProxSelection,
   };
   return window.__DYE_LEDGER_LIVE_ENGINE__;
 }

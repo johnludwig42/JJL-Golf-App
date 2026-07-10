@@ -13,6 +13,8 @@ test('live engine adapter exposes the expected app.js functions', () => {
     'computeLivePayoutGames',
     'getPayoutReportContext',
     'optimalSettlementRows',
+    'buildSneakySandyPoleyLedger',
+    'resolveSneakySandyPoleyProxSelection',
   ].forEach(name => assert.equal(typeof engine[name], 'function', `${name} should be exposed`));
 });
 

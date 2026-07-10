@@ -3151,6 +3151,122 @@ main,
   gap:8px 12px;
   align-items:end;
 }
+.ssp-ledger-preview{
+  display:grid;
+  gap:8px;
+  padding:10px;
+  border:1px solid rgba(11,93,59,.16);
+  border-radius:8px;
+  background:#f7fbf8;
+}
+.ssp-ledger-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  font-size:.84rem;
+}
+.ssp-ledger-head span{
+  color:var(--muted);
+  font-weight:800;
+}
+.ssp-ledger-head strong{
+  color:var(--accent);
+  text-align:right;
+}
+.ssp-ledger-tiles{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+}
+.ssp-ledger-tile{
+  min-width:0;
+  padding:8px;
+  border:1px solid var(--line, #d7e0da);
+  border-radius:8px;
+  background:#fff;
+}
+.ssp-ledger-tile span{
+  display:block;
+  color:var(--muted);
+  font-size:.74rem;
+  font-weight:800;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.ssp-ledger-tile strong{
+  display:block;
+  margin-top:3px;
+  font-size:1.05rem;
+}
+.ssp-ledger-detail-list{
+  display:grid;
+  gap:5px;
+}
+.ssp-ledger-team-detail{
+  display:grid;
+  gap:4px;
+}
+.ssp-ledger-team-detail + .ssp-ledger-team-detail{
+  padding-top:6px;
+  border-top:1px dashed rgba(15,23,42,.12);
+}
+.ssp-ledger-team-name{
+  color:var(--muted);
+  font-size:.76rem;
+  font-weight:900;
+}
+.ssp-ledger-detail{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:8px;
+  align-items:center;
+  font-size:.82rem;
+}
+.ssp-ledger-detail span{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.ssp-ledger-detail strong{
+  font-variant-numeric:tabular-nums;
+}
+.ssp-ledger-warning-list{
+  display:grid;
+  gap:4px;
+}
+.ssp-ledger-warning{
+  color:#6b4608;
+  font-size:.76rem;
+  line-height:1.25;
+}
+.ssp-note-field{
+  display:grid;
+  gap:5px;
+  padding:8px 10px;
+  border:1px solid rgba(11,93,59,.14);
+  border-radius:8px;
+  background:#f7fbf8;
+}
+.ssp-note-field span{
+  color:var(--muted);
+  font-size:.78rem;
+  font-weight:900;
+}
+.currency-input{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.currency-input > span{
+  color:var(--muted);
+  font-weight:900;
+}
+.currency-input input{
+  min-width:0;
+}
 @media (max-width: 560px) {
   .ssp-player-row{
     grid-template-columns:1fr;

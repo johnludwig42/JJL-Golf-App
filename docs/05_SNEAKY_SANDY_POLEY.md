@@ -1,8 +1,8 @@
 # Sneaky / Sandy / Poley
 
-Status: v30.3.53 foundation only
+Status: v30.3.54 base ledger
 
-This document captures the Sneaky / Sandy / Poley source rules and implementation plan. v30.3.53 does not produce an authoritative SSP ledger, settlement, Match Summary result, or Take/Keep state.
+This document captures the Sneaky / Sandy / Poley source rules and implementation plan. v30.3.54 produces a base-point ledger only; final settlement, Take/Keep, honors, Bridge/Re-Bridge multiplier math, Umbee multiplier math, and full Match Summary reporting remain deferred.
 
 ## Source Rule Summary
 
@@ -25,7 +25,7 @@ This document captures the Sneaky / Sandy / Poley source rules and implementatio
 - Umbee multiplies all points for the qualifying team on that hole.
 - Bridge/Re-Bridge and Umbee are cumulative only when setup allows.
 - Settlement is net team points x dollar value per point.
-- The setup field `pointValue` represents the dollar value per point for later settlement.
+- The setup field `pointValue` is stored numerically for later settlement and displayed as a dollar value per point.
 
 ## v30.3.53 Scope
 
@@ -38,6 +38,53 @@ This document captures the Sneaky / Sandy / Poley source rules and implementatio
 - Persists manual player awards, Prox selection, Bridge/Re-Bridge selections, and notes by hole.
 - Shows inputs-only preview text and setup status.
 - Does not change existing scoring, Smart Score Advance, payout, settlement, Match Summary, or Shared Match reconciliation behavior.
+
+## v30.3.54 Base Ledger
+
+- Adds `buildSneakySandyPoleyLedger(match, options)` as the derived base ledger helper.
+- Calculates manual Sneaky, Sandy, Poley, Greeny, and Prox points from per-hole manual facts.
+- Calculates automatic Birdie, Eagle, Low Ball, and Low Total points from score/net/team data.
+- Sums per-hole base points into running team base totals.
+- Shows current-hole Base Points in the Play tab SSP section.
+- Adds SSP Base status to Quick Scoreboard Active Games.
+- Adds conservative Player Detail SSP base-points contribution status.
+- Restricts the Prox selector to players with Greeny selected on the current hole.
+- Applies Prox input rules in the Play tab: zero Greenies means None, one Greeny auto-selects that player, and multiple Greenies show TBD until the scorer chooses a Greeny player.
+- Moves the Optional SSP note lower in the Play tab flow, after SSP inputs/base ledger and Stat Tracking, just before Save Hole Scores.
+- Displays `pointValue` as `$ per point` currency while preserving numeric storage.
+- Does not store calculated ledger results as authoritative match state.
+
+### Data Flow
+
+```text
+match.selectedGames SSP settings
+  + match.sneakySandyPoleyInputs manual facts
+  + computeMatchMetrics gross/net/team/par data
+  + optional stat-tracking GIR/putts
+  -> buildSneakySandyPoleyLedger()
+  -> Play tab preview / Quick Scoreboard / Player Detail
+```
+
+### Validation Assumptions
+
+- Sneaky is manual/scorer-confirmed in v30.3.54 and scores when the selected player makes par. Missing GIR/putt stats do not create a Play tab warning.
+- Sandy requires par. Sandy does not auto-award Sneaky; the ledger warns when Sandy is selected without Sneaky.
+- Poley requires double bogey or better. First-putt and flagstick length remain manual confirmation.
+- Greeny scores from manual input when Validate is off.
+- When Validate is on, Greeny and Prox require putts available and 2 or less.
+- Prox selection depends on the Greeny input in v30.3.54. The Play tab selector shows None when no players have Greeny, auto-selects the only Greeny, and shows TBD when multiple Greenies exist until the scorer deliberately chooses one.
+- Low Ball requires at least one valid net score on each team. Same-team low ties still award that team; cross-team low ties push.
+- Low Total requires every player on both teams to have a valid net score.
+- Missing scores are never treated as zero.
+
+### Partial-Hole Behavior
+
+- Manual categories that cannot be score-validated are left unawarded with warnings.
+- Birdie/Eagle require valid gross score and par.
+- Low Ball waits for at least one scored player on each team.
+- Low Total waits for all players on both teams.
+- Empty holes show zero base points.
+- Base ledger warnings are intentionally conservative and do not block scoring.
 
 ## Data Model
 
@@ -98,7 +145,7 @@ Manual inputs are user-entered facts. Future calculated ledgers should derive fr
 
 ## Deferred Builds
 
-v30.3.54 - SSP Hole Inputs and Core Point Ledger
+v30.3.54 - SSP Hole Inputs and Core Point Ledger (shipped)
 
 - Use manual SSP inputs.
 - Calculate Low Ball, Low Total, Birdie, and Eagle.
@@ -117,6 +164,7 @@ v30.3.55 - SSP Advanced Rules, Honors, Settlement, and Reporting
 
 ## Warnings
 
-- Do not treat v30.3.53 as final SSP scoring.
-- Do not include SSP preview text in settlement or Match Summary totals.
-- Shared Match score sync remains preserved, but SSP input reconciliation is not complete in v30.3.53.
+- v30.3.54 is base points only.
+- Do not include SSP base ledger totals in settlement or Final Net Settlement.
+- Take/Keep, honors, Bridge/Re-Bridge multiplier math, Umbee multiplier math, and SSP settlement remain deferred.
+- Shared Match score sync remains preserved, but full SSP input reconciliation is not complete in v30.3.54.

@@ -17,6 +17,8 @@ const LIVE_FUNCTIONS_USED = [
   'computeNassauDiffsForBasis',
   'computeSkinResults',
   'computeNinePointResults',
+  'buildSneakySandyPoleyLedger',
+  'resolveSneakySandyPoleyProxSelection',
 ];
 
 const MIRRORED_FUNCTIONS_STILL_USED = [

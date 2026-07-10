@@ -7,12 +7,12 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=30.3.52" />
+  <link rel="manifest" href="manifest.json?v=30.3.53" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
   <link rel="shortcut icon" href="./favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="style.css?v=30.3.52" />
+  <link rel="stylesheet" href="style.css?v=30.3.53" />
 </head>
 <body>
   <div class="app-chrome"><header class="app-header compact-header">
@@ -216,6 +216,7 @@
                 <option value="relaxed">Relaxed (1000 ms)</option>
               </select>
             </label>
+            <div id="smartScoreAdvanceSspHint" class="tiny top-gap hidden">Smart Score Advance is disabled because Sneaky / Sandy / Poley requires per-hole game inputs.</div>
             <div class="tiny top-gap">After entering gross scores, the app can advance to the next playable hole when Stat Tracking is off and every active scoring row has a score.</div>
           </div>
 
@@ -330,6 +331,7 @@
               <tbody id="scoreGridBody"></tbody>
             </table>
           </div>
+          <div id="sneakySandyPoleyEntryWrap" class="top-gap hidden"></div>
           <div id="statTrackingEntryWrap" class="top-gap hidden"></div>
           <div class="actions top-gap wrap compact-actions">
             <button id="saveScoresBtn" type="button">Save Hole Scores</button>
@@ -732,7 +734,7 @@
       <div class="card tight-card app-updates-card">
         <h2>App Updates</h2>
         <div class="app-update-summary">
-          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.52</strong></div>
+          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.53</strong></div>
           <div><span class="muted-label">Build Date</span><strong id="appBuildTimestamp">loading…</strong></div>
           <div><span class="muted-label">Cache</span><span id="appActiveCacheName" class="break-word">checking…</span></div>
           <div><span class="muted-label">Update Available</span><strong id="appUpdateAvailableStatus">checking…</strong></div>
@@ -764,8 +766,8 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
-          <li>v30.3.52 adds Play tab primary match status and scorecard polish.</li>
-          <li>v30.3.52 preserves Shared Match reconciliation and score parity behavior.</li>
+          <li>v30.3.53 adds the Sneaky / Sandy / Poley foundation.</li>
+          <li>v30.3.53 preserves existing scoring, settlement, and Shared Match behavior.</li>
         </ul>
       </div>
     </section>
@@ -785,7 +787,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.3.52</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
+    <span id="appVersionFooter">v30.3.53</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>
@@ -913,7 +915,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=30.3.52"></script>
-  <script src="app.js?v=30.3.52"></script>
+  <script src="supabase-config.js?v=30.3.53"></script>
+  <script src="app.js?v=30.3.53"></script>
 </body>
 </html>

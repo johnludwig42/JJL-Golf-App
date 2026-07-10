@@ -113,6 +113,8 @@ NEXT:
 
 - Current-game regression protection.
 - Golden expected-output snapshots.
+- Sneaky / Sandy / Poley v30.3.54: calculate the core pre-multiplier hole ledger from manual SSP inputs, net Low Ball / Low Total, gross Birdie / Eagle, and Validate Greeny/Prox.
+- Sneaky / Sandy / Poley v30.3.55: implement Take/Keep, honors carry-forward, Bridge/Re-Bridge, Umbee, Match Summary reporting, settlement, and regression coverage.
 
 FUTURE:
 

@@ -3917,6 +3917,15 @@ main,
   text-align:center;
   overflow-wrap:anywhere;
 }
+#score #holeSummary .score-honors-status{
+  margin-top:3px;
+  color:var(--muted);
+  font-size:11px;
+  font-weight:800;
+  line-height:1.2;
+  text-align:center;
+  overflow-wrap:anywhere;
+}
 .greenies-suggestion {
   color: var(--accent);
   font-weight: 700;
@@ -3968,6 +3977,12 @@ main,
   #score #holeSummary .score-hole-meta { font-size: 13px; }
   #score #holeSummary .score-live-status { font-size: 12px; }
   #score #holeSummary .score-primary-status { font-size: 11px; padding:4px 7px; }
+  #score #holeSummary .score-honors-status { font-size:10.5px; margin-top:2px; }
+}
+@media (max-width:390px){
+  #score .score-hole-nav{gap:5px;padding:5px;}
+  #score #holeSummary{margin-top:3px;}
+  #score #holeSummary .score-primary-status{display:block;margin:3px auto 0;padding:4px 6px;}
 }
 
 

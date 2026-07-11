@@ -117,6 +117,7 @@ NEXT:
 - Sneaky / Sandy / Poley v30.3.55 shipped: Take/Keep state machine, honors indicator/carry-forward, Bridge/Re-Bridge multipliers, Umbee multiplier, SSP final points, SSP settlement, Match Summary reporting, outdoor-readable selected chips, centered chip rows, live draft preview, and expanded regression coverage.
 - Sneaky / Sandy / Poley v30.3.56 shipped: Shared Match SSP settings/input/sequence sync, assigned-player authority, host-owned hole facts, three-way conflict detection, SSP trust status, and final shared-state pull before settlement/reporting.
 - SSP v30.3.57 shipped: final-point Momentum Chart, deterministic Quick Scoreboard trend, clearer live/saved status, hole-card/reporting polish, and baseline print improvements.
+- Play v30.3.58 shipped: Sandy-implies-Sneaky UI/ledger consistency, featured competition-aware Play status, separate SSP honors line, and small-iPhone header polish.
 - SSP follow-ups: polished field-by-field conflict-resolution UI, randomized two-device SSP simulation expansion, optional manual overrides, deeper printed/PDF optimization, Junk Games Framework abstraction, and AI narrative trends in future recaps (not live Quick Scoreboard).
 
 FUTURE:

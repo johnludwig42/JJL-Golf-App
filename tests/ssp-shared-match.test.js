@@ -54,3 +54,15 @@ test('matches without SSP facts remain unaffected', () => {
   const engine = loadLiveEngine();
   assert.deepEqual(JSON.parse(JSON.stringify(engine.reconcileSharedSspFacts(null, null, null))), { facts: null, conflicts: [] });
 });
+
+test('Sandy-only shared facts normalize Sneaky without creating a false conflict', () => {
+  const engine = loadLiveEngine();
+  const local = facts({ sourceDeviceId: 'local' });
+  const remote = facts({ sourceDeviceId: 'remote', inputs: structuredClone(local.inputs) });
+  remote.inputs['5'].players.p1.sandy = true;
+  remote.inputs['5'].players.p1.sneaky = false;
+  local.inputs['5'].players.p1.sandy = true;
+  local.inputs['5'].players.p1.sneaky = true;
+  const result = engine.reconcileSharedSspFacts(local, remote, local, { isHost: true });
+  assert.equal(result.conflicts.length, 0);
+});

@@ -1,6 +1,13 @@
 # Sneaky / Sandy / Poley
 
-Status: v30.3.57 Shared Match-safe reporting and momentum
+Status: v30.3.58 Shared Match-safe Play UX and reporting
+
+## v30.3.58 Sandy and Play Header Behavior
+
+- A Sandy is a Sneaky from a bunker. Selecting Sandy automatically selects Sneaky; clearing Sandy does not clear Sneaky, and selecting Sneaky alone does not select Sandy.
+- Input normalization defensively scores legacy Sandy-only data as Sandy plus Sneaky without changing unrelated inputs. Shared Match comparison uses the same implication so devices converge without a normalization-only conflict.
+- The Play header shows the configured featured competition. When SSP is featured it uses `Live SSP` for an unsaved current-hole preview and `SSP Match` for saved results.
+- When safely derivable, SSP honors appears on its own compact second line below the featured competition rather than being appended to it.
 
 ## v30.3.57 Reporting and Momentum
 

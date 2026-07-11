@@ -1,11 +1,11 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.57',
-  versionNumber: '30.3.57',
-  cacheName: 'the-dye-ledger-v30.3.57',
+  version: 'v30.3.58',
+  versionNumber: '30.3.58',
+  cacheName: 'the-dye-ledger-v30.3.58',
   buildDate: new Date().toISOString(),
-  buildLabel: 'SSP Reporting, Momentum and Scoreboard Polish'
+  buildLabel: 'Play Tab UX Scrub and Featured Match Polish'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -2258,9 +2258,10 @@ function normalizeSneakySandyPoleyHoleInput(match, raw = {}, holeNumber = 1) {
   const rawPlayers = raw?.players && typeof raw.players === 'object' ? raw.players : {};
   Object.keys(defaults.players).forEach(playerId => {
     const row = rawPlayers[playerId] || {};
+    const sandy = !!row.sandy;
     defaults.players[playerId] = {
-      sneaky: !!row.sneaky,
-      sandy: !!row.sandy,
+      sneaky: !!row.sneaky || sandy,
+      sandy,
       poley: !!row.poley,
       greeny: !!row.greeny,
     };
@@ -2304,7 +2305,9 @@ function flattenSharedSspFacts(facts = null) {
   if (facts.settings) flat.settings = JSON.stringify(facts.settings);
   Object.entries(facts.inputs || {}).forEach(([hole, input]) => {
     Object.entries(input?.players || {}).forEach(([playerId, row]) => {
-      ['sneaky', 'sandy', 'poley', 'greeny'].forEach(key => { flat[`holes.${hole}.players.${playerId}.${key}`] = !!row?.[key]; });
+      ['sneaky', 'sandy', 'poley', 'greeny'].forEach(key => {
+        flat[`holes.${hole}.players.${playerId}.${key}`] = key === 'sneaky' ? (!!row?.sneaky || !!row?.sandy) : !!row?.[key];
+      });
     });
     ['proxPlayerId', 'bridge', 'rebridge', 'notes'].forEach(key => { flat[`holes.${hole}.${key}`] = input?.[key] ?? (key === 'proxPlayerId' || key === 'notes' ? '' : false); });
   });
@@ -6461,24 +6464,35 @@ function getPrimaryMatchStatusLine(match, metrics) {
   if (!match || !metrics) return '';
   const statusOptions = getMatchStatusOptions(match);
   const selectedKeys = new Set(statusOptions.map(opt => opt.key));
-  let key = selectedKeys.has(match.matchStatusGame) ? match.matchStatusGame : '';
+  const featuredSelection = getFeaturedCompetitionSelection(match);
+  const featured = resolveFeaturedCompetitionKey(match, metrics);
+  let key = featuredSelection !== 'auto' && (selectedKeys.has(featured) || ['stroke_net', 'stroke_gross'].includes(featured)) ? featured : '';
+  if (!key) key = selectedKeys.has(match.matchStatusGame) ? match.matchStatusGame : '';
   if (!key) {
-    const featured = resolveFeaturedCompetitionKey(match, metrics);
     key = selectedKeys.has(featured) || ['stroke_net', 'stroke_gross'].includes(featured) ? featured : '';
   }
   if (!key || key === 'none') return '';
   const text = getCompactGameStatus(match, metrics, key);
   if (!text || text === 'Active') return '';
-  const label = key === 'nassau' ? 'Nassau' : 'Primary Match';
-  if (isSneakySandyPoleyEnabled(match)) {
+  if (key === 'sneaky_sandy_poley') {
     const ledger = buildSneakySandyPoleyLedger(match, { metrics });
     const scoringHoles = getSelectedScoringHoles(match, getTee(match.courseId, match.teeId));
     const actualHoleNumber = Number(scoringHoles[currentHole - 1]?.holeNumber || currentHole);
-    const honorsTeamId = ledger.honorsByHole?.[String(actualHoleNumber)];
-    const honors = honorsTeamId ? ` · Honors: ${formatSneakySandyPoleyTeamName(ledger, match, honorsTeamId)}` : '';
-    return `${label}: ${text}${honors}`;
+    const holeLedger = ledger.holes?.[String(actualHoleNumber)];
+    return holeLedger?.counted ? buildSneakySandyPoleyRunningText(match, ledger, holeLedger) : 'SSP Match: Not started';
   }
-  return `${label}: ${text}`;
+  const label = key === 'nassau' ? 'Nassau' : getGameLabel(key);
+  return label ? `${label}: ${text}` : text;
+}
+
+function getSneakySandyPoleyHonorsLine(match, metrics) {
+  if (!isSneakySandyPoleyEnabled(match) || !metrics) return '';
+  const ledger = buildSneakySandyPoleyLedger(match, { metrics });
+  if (!ledger.enabled || !(ledger.sequenceHoleNumbers || []).length) return '';
+  const scoringHoles = getSelectedScoringHoles(match, getTee(match.courseId, match.teeId));
+  const actualHoleNumber = Number(scoringHoles[currentHole - 1]?.holeNumber || currentHole);
+  const honorsTeamId = ledger.honorsByHole?.[String(actualHoleNumber)];
+  return honorsTeamId ? `Honors: ${formatSneakySandyPoleyTeamName(ledger, match, honorsTeamId)}` : '';
 }
 
 function describeMomentumMeta(match, metrics, gameKey) {
@@ -8632,6 +8646,7 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
       if (!next.players[playerId] || !['sneaky', 'sandy', 'poley', 'greeny'].includes(key)) return;
       next.players[playerId][key] = !!input.checked;
     });
+    Object.values(next.players).forEach(row => { if (row.sandy) row.sneaky = true; });
     const prox = document.querySelector('[data-ssp-prox]');
     const requestedProxPlayerId = prox ? String(prox.value || '') : next.proxPlayerId;
     document.querySelectorAll('[data-ssp-hole-key]').forEach(input => {
@@ -11498,11 +11513,12 @@ function renderCurrentMatch() {
     return [key, `${holeTeeName} ${playerHole?.yardage ? `${formatYardageValue(playerHole.yardage)} yds` : '— yds'}`];
   })).values()].join(' · ') : '';
   const primaryStatusLine = getPrimaryMatchStatusLine(match, metrics);
+  const honorsStatusLine = getSneakySandyPoleyHonorsLine(match, metrics);
   const holeSummaryEl = document.getElementById('holeSummary');
   if (holeSummaryEl) {
     if (hole) {
       const holeMeta = `Par ${hole.par || '-'} · SI ${hole.strokeIndex || '-'}`;
-      holeSummaryEl.innerHTML = `<div class="score-hole-meta">${escapeHtml(holeMeta)}</div>${primaryStatusLine ? `<div class="score-primary-status">${escapeHtml(primaryStatusLine)}</div>` : ''}`;
+      holeSummaryEl.innerHTML = `<div class="score-hole-meta">${escapeHtml(holeMeta)}</div>${primaryStatusLine ? `<div class="score-primary-status">${escapeHtml(primaryStatusLine)}</div>` : ''}${honorsStatusLine ? `<div class="score-honors-status">${escapeHtml(honorsStatusLine)}</div>` : ''}`;
     } else {
       holeSummaryEl.innerHTML = '';
     }
@@ -11829,8 +11845,11 @@ function refreshSneakySandyPoleyLivePreview() {
   const scoringHoles = getSelectedScoringHoles(match, getTee(match.courseId, match.teeId));
   renderSneakySandyPoleyEntry(previewMatch, scoringHoles[currentHole - 1] || null, metrics);
   const primaryStatusLine = getPrimaryMatchStatusLine(previewMatch, metrics);
+  const honorsStatusLine = getSneakySandyPoleyHonorsLine(previewMatch, metrics);
   const statusEl = document.getElementById('holeSummary')?.querySelector('.score-primary-status');
   if (statusEl) statusEl.textContent = primaryStatusLine;
+  const honorsEl = document.getElementById('holeSummary')?.querySelector('.score-honors-status');
+  if (honorsEl) honorsEl.textContent = honorsStatusLine;
 }
 
 function renderSneakySandyPoleyNote(match, hole, metrics) {
@@ -15291,6 +15310,15 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (e.target && e.target.matches('[data-ssp-player][data-ssp-key], [data-ssp-prox], [data-ssp-hole-key]')) {
       const match = getActiveMatch();
       if (!match) return;
+      if (e.target.matches('[data-ssp-player][data-ssp-key]')) {
+        const playerId = e.target.dataset.sspPlayer || '';
+        const key = e.target.dataset.sspKey || '';
+        const escapedPlayerId = cssEscape(playerId);
+        const sneaky = document.querySelector(`[data-ssp-player="${escapedPlayerId}"][data-ssp-key="sneaky"]`);
+        const sandy = document.querySelector(`[data-ssp-player="${escapedPlayerId}"][data-ssp-key="sandy"]`);
+        if (key === 'sandy' && e.target.checked && sneaky) sneaky.checked = true;
+        if (key === 'sneaky' && !e.target.checked && sandy?.checked) e.target.checked = true;
+      }
       const applyOptions = { sspGreenyChanged: e.target.matches('[data-ssp-player][data-ssp-key="greeny"]') };
       applyCurrentHoleDomToMatch(match, applyOptions);
       persist({ skipRender: true });
@@ -16620,9 +16648,12 @@ function installDyeLedgerLiveEngineAdapter() {
     computeSkinResults,
     computeNinePointResults,
     buildSneakySandyPoleyLedger,
+    normalizeSneakySandyPoleyHoleInput,
     buildSneakySandyPoleyMomentumData,
     getSneakySandyPoleySmartTrend,
     formatToPar,
+    getPrimaryMatchStatusLine,
+    getSneakySandyPoleyHonorsLine,
     resolveSneakySandyPoleyProxSelection,
     buildSharedSspFacts,
     reconcileSharedSspFacts,

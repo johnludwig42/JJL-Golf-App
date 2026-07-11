@@ -140,6 +140,32 @@ test('manual Sneaky, Sandy, and Poley awards validate against gross score', () =
   assert.equal(hole.warnings.some(text => /not fully stat-validated/.test(text)), false);
 });
 
+test('Sandy defensively implies Sneaky without changing unrelated SSP inputs', () => {
+  const engine = loadLiveEngine();
+  const state = engine.seedState(buildSeed());
+  const match = state.matches[0];
+  const normalized = engine.normalizeSneakySandyPoleyHoleInput(match, {
+    players: { p1: { sneaky: false, sandy: true, poley: true }, p2: { sneaky: true, sandy: false } },
+    bridge: true,
+    notes: 'keep me',
+  }, 1);
+  assert.equal(normalized.players.p1.sandy, true);
+  assert.equal(normalized.players.p1.sneaky, true);
+  assert.equal(normalized.players.p1.poley, true);
+  assert.equal(normalized.players.p2.sneaky, true);
+  assert.equal(normalized.players.p2.sandy, false);
+  assert.equal(normalized.bridge, true);
+  assert.equal(normalized.notes, 'keep me');
+
+  const ledger = getLedger({
+    scores: { p1: [4], p2: [5], p3: [5], p4: [5] },
+    inputs: { 1: { players: { p1: { sandy: true, sneaky: false } } } },
+  });
+  const categories = ledger.holes['1'].categoriesByTeam['1'].map(row => row.category);
+  assert.equal(categories.includes('sandy'), true);
+  assert.equal(categories.includes('sneaky'), true);
+});
+
 test('Sneaky is scorer-confirmed on par without stat-validation warning noise', () => {
   const ledger = getLedger({
     statTracking: true,
@@ -509,4 +535,29 @@ test('to-par formatter uses golf-native even par without changing signed values'
   assert.equal(engine.formatToPar(0), 'E');
   assert.equal(engine.formatToPar(3), '+3');
   assert.equal(engine.formatToPar(-2), '-2');
+});
+
+test('featured SSP status distinguishes live preview from saved match and keeps honors separate', () => {
+  const engine = loadLiveEngine();
+  const liveState = engine.seedState(buildSeed({
+    selectedGames: [{ key: 'nassau' }, { key: 'sneaky_sandy_poley', pointValue: 1 }],
+    scores: { p1: [4] },
+    inputs: { 1: { players: { p1: { sandy: true } } } },
+  }));
+  const liveMatch = liveState.matches[0];
+  liveMatch.featuredCompetition = 'sneaky_sandy_poley';
+  liveMatch.matchStatusGame = 'nassau';
+  const liveMetrics = engine.computeMatchMetrics(liveMatch);
+  assert.match(engine.getPrimaryMatchStatusLine(liveMatch, liveMetrics), /^Live SSP: Alpha \+/);
+  assert.match(engine.getSneakySandyPoleyHonorsLine(liveMatch, liveMetrics), /^Honors: /);
+
+  const savedState = engine.seedState(buildSeed({ scores: { p1: [4], p2: [4], p3: [5], p4: [5] } }));
+  const savedMatch = savedState.matches[0];
+  savedMatch.featuredCompetition = 'sneaky_sandy_poley';
+  const savedMetrics = engine.computeMatchMetrics(savedMatch);
+  assert.match(engine.getPrimaryMatchStatusLine(savedMatch, savedMetrics), /^SSP Match: /);
+
+  savedMatch.featuredCompetition = 'none';
+  savedMatch.selectedGames = [];
+  assert.equal(engine.getSneakySandyPoleyHonorsLine(savedMatch, engine.computeMatchMetrics(savedMatch)), '');
 });

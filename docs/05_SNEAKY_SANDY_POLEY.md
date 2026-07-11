@@ -1,6 +1,21 @@
 # Sneaky / Sandy / Poley
 
-Status: v30.3.58 Shared Match-safe Play UX and reporting
+Status: v30.3.59 Shared Match-safe current status and reporting
+
+## v30.3.59 Current Status Semantics
+
+- The Play header shows the latest/current cumulative SSP match state from `finalLeader`; navigating to an earlier displayed hole does not rewind it.
+- `SSP Match` is saved/persisted status. `Live SSP` is used only when unsaved current-hole DOM scores are included and materially change the featured result.
+- Displayed-hole history remains in the SSP card as `SSP After Hole N` or `Live SSP After Hole N`, preserving auditability without confusing it with the latest header.
+- `Honors for Hole N` identifies tee order entering the displayed hole, based on prior eligible holes in the configured SSP sequence. It is not an overall match-status label.
+
+## v30.3.59 Per-Player Settlement Add-on
+
+- Final SSP point differential × configured dollars per point is the amount **per player**.
+- Every losing-team player pays that full amount and every winning-team player receives it. Total transferred is the per-player amount × losing-team player count. Equal SSP team sizes keep the result zero-sum.
+- SSP player balances appear in Quick Scoreboard Money and net with all other games in Final Net Settlement. The dedicated SSP section remains for transparent point/stake/payment audit detail.
+- Unsafe unequal legacy team sizes contribute no player balances rather than corrupting settlement.
+- Match Setup labels the preserved sequence values as **Standard hole order** (normal scorecard order) and **Out-of-sequence / shotgun order** (actual completion order, useful for shotgun starts, back-nine starts, or other out-of-order play).
 
 ## v30.3.58 Sandy and Play Header Behavior
 

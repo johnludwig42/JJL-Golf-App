@@ -1,6 +1,14 @@
 # Sneaky / Sandy / Poley
 
-Status: v30.3.56 Shared Match-safe ledger
+Status: v30.3.57 Shared Match-safe reporting and momentum
+
+## v30.3.57 Reporting and Momentum
+
+- Match Summary shows **SSP Momentum**, the cumulative signed margin from final hole points. It follows the configured hole-routing or score-entry sequence, ignores skipped/unplayed holes, and includes Take/Keep, Bridge/Re-Bridge, and Umbee effects. It is points-based, not dollar-based.
+- **Points Before Multiplier** includes performance points plus Take/Keep. Take/Keep also remains visible in the hole audit detail. **Final Hole Total** applies the displayed Bridge/Re-Bridge and Umbee multipliers.
+- Quick Scoreboard selects a compact deterministic trend from the final ledger. It makes no live AI call and shows no trend when data is insufficient.
+- `SSP Match` describes saved/completed-hole results. `Live SSP` identifies a current unsaved preview.
+- Print keeps the compact momentum block together where supported. Long audit tables and browser-specific PDF pagination may still require deeper future optimization.
 
 This document captures the Sneaky / Sandy / Poley source rules and implementation plan. v30.3.55 derives base points, advanced hole points, honors, final team totals, SSP-only settlement, Play tab final preview, and Match Summary reporting.
 

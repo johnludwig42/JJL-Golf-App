@@ -1,8 +1,18 @@
 # Sneaky / Sandy / Poley
 
-Status: v30.3.55 advanced ledger
+Status: v30.3.56 Shared Match-safe ledger
 
 This document captures the Sneaky / Sandy / Poley source rules and implementation plan. v30.3.55 derives base points, advanced hole points, honors, final team totals, SSP-only settlement, Play tab final preview, and Match Summary reporting.
+
+## v30.3.56 Shared Match Behavior
+
+- Shared Match synchronizes facts, not the calculated ledger: normalized SSP settings, per-player Sneaky/Sandy/Poley/Greeny flags, Prox, Bridge/Re-Bridge, SSP notes, played-hole order, and first-completion timestamps.
+- Each device derives Base Points, Take/Keep, honors, multipliers, final points, and settlement from reconciled facts.
+- Player-level controls follow assigned-player scoring. The host may edit all players; joined scorers may edit only assigned players.
+- Prox, Bridge/Re-Bridge, and the SSP note are host-controlled and read-only on joined devices. Local-only SSP remains unrestricted.
+- Three-way reconciliation merges independent fields. Competing edits to the same field are retained as a conflict and never silently overwritten.
+- A final Match Summary pulls scores and SSP metadata before deriving the report. Older and non-SSP Shared Matches normalize without SSP UI.
+- Missing entry-order metadata uses the existing deterministic routing fallback.
 
 ## Source Rule Summary
 
@@ -213,7 +223,9 @@ v30.3.56 - SSP Shared Match Sync and Reconciliation
 
 ## Warnings
 
-- Full Shared Match SSP input reconciliation remains deferred.
+- Polished field-by-field SSP conflict-resolution UI remains deferred; warned fields require host review.
+- Randomized two-device SSP simulation expansion remains deferred.
+- SSP Momentum Chart remains deferred.
 - Bridge/Re-Bridge timing is not mechanically enforced.
 - Poley first-putt and flagstick length remain scorer-confirmed.
 - Sandy bunker source remains scorer-confirmed.

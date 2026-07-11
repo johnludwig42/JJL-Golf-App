@@ -114,7 +114,8 @@ NEXT:
 - Current-game regression protection.
 - Golden expected-output snapshots.
 - Sneaky / Sandy / Poley base ledger shipped in v30.3.54: manual SSP inputs, net Low Ball / Low Total, gross Birdie / Eagle, Validate Greeny/Prox, Play tab preview, Quick Scoreboard status, and focused regression tests.
-- Sneaky / Sandy / Poley v30.3.55: implement Take/Keep state machine, honors indicator/carry-forward, Bridge/Re-Bridge multipliers, Umbee multiplier, SSP settlement, Match Summary reporting, Shared Match SSP input reconciliation, and expanded regression coverage.
+- Sneaky / Sandy / Poley v30.3.55 shipped: Take/Keep state machine, honors indicator/carry-forward, Bridge/Re-Bridge multipliers, Umbee multiplier, SSP final points, SSP settlement, Match Summary reporting, outdoor-readable selected chips, centered chip rows, live draft preview, and expanded regression coverage.
+- Sneaky / Sandy / Poley v30.3.56 follow-up: Shared Match SSP sync and reconciliation for manual SSP inputs, conflict detection, final shared-state pull before settlement/reporting, optional manual overrides, printed/PDF SSP reporting optimization, and eventual junk-games framework abstraction.
 
 FUTURE:
 
@@ -176,3 +177,6 @@ FUTURE:
 - Event ownership.
 - Apple Watch companion app exploration.
 - Voice entry exploration.
+# Future SSP polish
+
+- SSP Momentum Chart using cumulative final SSP point margin by hole, similar to Nassau momentum. Deferred until the advanced SSP rules and settlement behavior stabilize.

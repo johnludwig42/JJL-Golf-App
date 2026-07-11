@@ -20,7 +20,7 @@ function emptyStats(overrides = []) {
   }));
 }
 
-function buildSeed({ selectedGames = [{ key: 'sneaky_sandy_poley', pointValue: 1 }], scores = {}, inputs = {}, stats = {}, statTracking = false } = {}) {
+function buildSeed({ selectedGames = [{ key: 'sneaky_sandy_poley', pointValue: 1 }], scores = {}, inputs = {}, stats = {}, statTracking = false, playedHoleOrder = [] } = {}) {
   const players = [
     { id: 'p1', name: 'Alex', index: 0 },
     { id: 'p2', name: 'Blake', index: 0 },
@@ -61,6 +61,7 @@ function buildSeed({ selectedGames = [{ key: 'sneaky_sandy_poley', pointValue: 1
       { playerId: 'p4', team: 2, slot: 3, teeId: 'tee', scores: emptyScores(scores.p4), stats: emptyStats(stats.p4) },
     ],
     sneakySandyPoleyInputs: inputs,
+    playedHoleOrder,
   };
   return { players, courses: [course], matches: [match], activeMatchId: 'match' };
 }
@@ -252,4 +253,218 @@ test('partial holes do not count missing scores as zero', () => {
   assert.equal(hole.basePointsByTeam['1'], 4);
   assert.equal(hole.basePointsByTeam['2'], 0);
   assert.ok(hole.warnings.some(text => /Low Total requires all players/.test(text)));
+});
+
+test('Take and Keep state machine awards only one team per eligible hole', () => {
+  const ledger = getLedger({
+    scores: { p1: [4, 4, 4, 4], p2: [4, 4, 4, 4], p3: [4, 4, 4, 4], p4: [4, 4, 4, 4] },
+    inputs: {
+      1: { players: { p1: { sneaky: true } } },
+      2: { players: { p3: { sneaky: true } } },
+      3: { players: { p3: { sneaky: true } } },
+      4: { players: { p1: { sneaky: true }, p3: { sneaky: true } } },
+    },
+  });
+  assert.equal(ledger.holes['1'].takeKeep.type, 'take');
+  assert.equal(ledger.holes['1'].takeKeep.teamId, '1');
+  assert.equal(ledger.holes['1'].takeKeep.points, 2);
+  assert.equal(ledger.holes['2'].takeKeep.type, 'take');
+  assert.equal(ledger.holes['2'].takeKeep.teamId, '2');
+  assert.equal(ledger.holes['2'].takeKeep.points, 2);
+  assert.equal(ledger.holes['3'].takeKeep.type, 'keep');
+  assert.equal(ledger.holes['3'].takeKeep.teamId, '2');
+  assert.equal(ledger.holes['3'].takeKeep.points, 1);
+  assert.equal(ledger.holes['4'].takeKeep.type, 'keep');
+  assert.equal(ledger.holes['4'].takeKeep.teamId, '2');
+  assert.equal(ledger.holes['4'].takeKeep.points, 1);
+  assert.equal(ledger.holes['4'].categoriesByTeam['1'].filter(row => row.category === 'keep').length, 0);
+  assert.equal(ledger.holes['4'].categoriesByTeam['2'].filter(row => row.category === 'keep').length, 1);
+});
+
+test('Take and Keep are not awarded when base points are unavailable', () => {
+  const ledger = getLedger({
+    scores: { p1: [4], p2: [4], p3: [4], p4: [4] },
+  });
+  assert.equal(ledger.holes['1'].basePointsByTeam['1'], 0);
+  assert.equal(ledger.holes['1'].basePointsByTeam['2'], 0);
+  assert.equal(ledger.holes['1'].takeKeep.type, null);
+  assert.equal(ledger.holes['1'].finalPointsByTeam['1'], 0);
+  assert.equal(ledger.holes['1'].finalPointsByTeam['2'], 0);
+});
+
+test('Honors follow cumulative final points and carry forward on ties', () => {
+  const ledger = getLedger({
+    scores: { p1: [4, 4, 4], p2: [4, 4, 4], p3: [4, 4, 4], p4: [4, 4, 4] },
+    inputs: {
+      1: { players: { p1: { sneaky: true } } },
+      2: { players: { p3: { sneaky: true } } },
+      3: { players: { p1: { sneaky: true }, p3: { sneaky: true } } },
+    },
+  });
+  assert.equal(ledger.honorsByHole['1'], '1');
+  assert.equal(ledger.honorsByHole['2'], '1');
+  assert.equal(ledger.honorsByHole['3'], '1');
+});
+
+test('routing sequence skips missing holes and follows official hole order', () => {
+  const ledger = getLedger({
+    selectedGames: [{ key: 'sneaky_sandy_poley', sspSequenceMode: 'routing', pointValue: 1 }],
+    playedHoleOrder: [5, 4],
+    scores: { p1: [null, null, null, 4, 4], p2: [null, null, null, 4, 4], p3: [null, null, null, 4, 4], p4: [null, null, null, 4, 4] },
+    inputs: { 4: { players: { p1: { sneaky: true } } }, 5: { players: { p1: { sneaky: true } } } },
+  });
+  assert.equal(Array.from(ledger.sequenceHoleNumbers).join(','), '4,5');
+  assert.equal(ledger.holes['4'].takeKeep.type, 'take');
+  assert.equal(ledger.holes['5'].takeKeep.type, 'keep');
+  assert.equal(ledger.honorsByHole['5'], '1');
+  assert.equal(ledger.holes['1'].takeKeep.type, null);
+});
+
+test('entry sequence follows first-completed order and carries honors in that order', () => {
+  const ledger = getLedger({
+    selectedGames: [{ key: 'sneaky_sandy_poley', sspSequenceMode: 'entry', pointValue: 1 }],
+    playedHoleOrder: [5, 4],
+    scores: { p1: [null, null, null, 4, 4], p2: [null, null, null, 4, 4], p3: [null, null, null, 4, 4], p4: [null, null, null, 4, 4] },
+    inputs: { 4: { players: { p1: { sneaky: true } } }, 5: { players: { p1: { sneaky: true } } } },
+  });
+  assert.equal(Array.from(ledger.sequenceHoleNumbers).join(','), '5,4');
+  assert.equal(ledger.holes['5'].takeKeep.type, 'take');
+  assert.equal(ledger.holes['4'].takeKeep.type, 'keep');
+  assert.equal(ledger.honorsByHole['4'], '1');
+  assert.equal(ledger.entryOrderFallback, false);
+});
+
+test('older entry-mode matches safely fall back to routing without order metadata', () => {
+  const ledger = getLedger({
+    selectedGames: [{ key: 'sneaky_sandy_poley', sspSequenceMode: 'entry', pointValue: 1 }],
+    scores: { p1: [4], p2: [4], p3: [4], p4: [4] },
+    inputs: { 1: { players: { p1: { sneaky: true } } } },
+  });
+  assert.equal(ledger.entryOrderFallback, true);
+  assert.equal(Array.from(ledger.sequenceHoleNumbers).join(','), '1');
+});
+
+test('Bridge and Re-Bridge multiply post-Take/Keep points only when enabled', () => {
+  const bridge = getLedger({
+    selectedGames: [{ key: 'sneaky_sandy_poley', allowBridgeRebridge: true, pointValue: 1 }],
+    scores: { p1: [4], p2: [4], p3: [4], p4: [4] },
+    inputs: { 1: { bridge: true, players: { p1: { sneaky: true } } } },
+  });
+  assert.equal(bridge.holes['1'].bridge.multiplier, 2);
+  assert.equal(bridge.holes['1'].finalPointsByTeam['1'], 6);
+
+  const rebridge = getLedger({
+    selectedGames: [{ key: 'sneaky_sandy_poley', allowBridgeRebridge: true, pointValue: 1 }],
+    scores: { p1: [4], p2: [4], p3: [4], p4: [4] },
+    inputs: { 1: { rebridge: true, players: { p1: { sneaky: true } } } },
+  });
+  assert.equal(rebridge.holes['1'].bridge.multiplier, 4);
+  assert.equal(rebridge.holes['1'].finalPointsByTeam['1'], 12);
+
+  const disabled = getLedger({
+    selectedGames: [{ key: 'sneaky_sandy_poley', allowBridgeRebridge: false, pointValue: 1 }],
+    scores: { p1: [4], p2: [4], p3: [4], p4: [4] },
+    inputs: { 1: { bridge: true, players: { p1: { sneaky: true } } } },
+  });
+  assert.equal(disabled.holes['1'].bridge.multiplier, 1);
+  assert.equal(disabled.holes['1'].finalPointsByTeam['1'], 3);
+});
+
+test('Umbee doubles or quadruples qualifying birdie and eagle holes', () => {
+  const singleBirdie = getLedger({
+    selectedGames: [{ key: 'sneaky_sandy_poley', allowUmbee: true, pointValue: 1 }],
+    scores: { p1: [3], p2: [4], p3: [4], p4: [4] },
+  });
+  assert.equal(singleBirdie.holes['1'].umbee.multiplier, 2);
+  assert.equal(singleBirdie.holes['1'].finalPointsByTeam['1'], singleBirdie.holes['1'].pointsAfterTakeKeepByTeam['1'] * 2);
+
+  const doubleBirdie = getLedger({
+    selectedGames: [{ key: 'sneaky_sandy_poley', allowUmbee: true, pointValue: 1 }],
+    scores: { p1: [3], p2: [3], p3: [4], p4: [4] },
+  });
+  assert.equal(doubleBirdie.holes['1'].umbee.multiplier, 4);
+
+  const eagle = getLedger({
+    selectedGames: [{ key: 'sneaky_sandy_poley', allowUmbee: true, pointValue: 1 }],
+    scores: { p1: [2], p2: [4], p3: [4], p4: [4] },
+  });
+  assert.equal(eagle.holes['1'].umbee.multiplier, 4);
+});
+
+test('Umbee requires the other team to have zero post-Take/Keep points', () => {
+  const ledger = getLedger({
+    selectedGames: [{ key: 'sneaky_sandy_poley', allowUmbee: true, pointValue: 1 }],
+    scores: { p1: [3], p2: [4], p3: [4], p4: [4] },
+    inputs: { 1: { players: { p3: { sneaky: true } } } },
+  });
+  assert.equal(ledger.holes['1'].pointsAfterTakeKeepByTeam['2'] > 0, true);
+  assert.equal(ledger.holes['1'].umbee.active, false);
+});
+
+test('Bridge and Umbee stack only when setup allows', () => {
+  const stacked = getLedger({
+    selectedGames: [{ key: 'sneaky_sandy_poley', allowBridgeRebridge: true, allowUmbee: true, allowUmbeeWithBridge: true, pointValue: 1 }],
+    scores: { p1: [3], p2: [4], p3: [4], p4: [4] },
+    inputs: { 1: { bridge: true } },
+  });
+  assert.equal(stacked.holes['1'].bridge.multiplier, 2);
+  assert.equal(stacked.holes['1'].umbee.multiplier, 2);
+  assert.equal(stacked.holes['1'].finalMultiplierByTeam['1'], 4);
+
+  const unstacked = getLedger({
+    selectedGames: [{ key: 'sneaky_sandy_poley', allowBridgeRebridge: true, allowUmbee: true, allowUmbeeWithBridge: false, pointValue: 1 }],
+    scores: { p1: [3], p2: [4], p3: [4], p4: [4] },
+    inputs: { 1: { bridge: true } },
+  });
+  assert.equal(unstacked.holes['1'].bridge.multiplier, 2);
+  assert.equal(unstacked.holes['1'].umbee.active, false);
+  assert.equal(unstacked.holes['1'].finalMultiplierByTeam['1'], 2);
+});
+
+test('Final totals and SSP settlement use net final team points', () => {
+  const ledger = getLedger({
+    selectedGames: [{ key: 'sneaky_sandy_poley', pointValue: 2 }],
+    scores: { p1: [4, 4], p2: [4, 4], p3: [4, 4], p4: [4, 4] },
+    inputs: {
+      1: { players: { p1: { sneaky: true } } },
+      2: { players: { p1: { sneaky: true } } },
+    },
+  });
+  assert.equal(ledger.finalTotalsByTeam['1'], 5);
+  assert.equal(ledger.finalTotalsByTeam['2'], 0);
+  assert.equal(ledger.settlement.payerTeamId, '2');
+  assert.equal(ledger.settlement.payeeTeamId, '1');
+  assert.equal(ledger.settlement.amount, 10);
+  assert.match(ledger.settlement.label, /Bravo pays Alpha \$10\.00/);
+});
+
+test('100 deterministic generated SSP cases preserve ledger and settlement invariants', () => {
+  let state = 30355;
+  const next = () => ((state = (state * 1664525 + 1013904223) >>> 0) / 4294967296);
+  for (let caseNo = 0; caseNo < 100; caseNo += 1) {
+    const scores = {};
+    ['p1', 'p2', 'p3', 'p4'].forEach(playerId => {
+      scores[playerId] = Array.from({ length: 6 }, () => next() < 0.12 ? null : 2 + Math.floor(next() * 6));
+    });
+    const order = [1, 2, 3, 4, 5, 6].sort(() => next() - 0.5);
+    const ledger = getLedger({
+      selectedGames: [{
+        key: 'sneaky_sandy_poley',
+        pointValue: 2,
+        sspSequenceMode: caseNo % 2 ? 'entry' : 'routing',
+        allowBridgeRebridge: true,
+        allowUmbee: true,
+        allowUmbeeWithBridge: caseNo % 3 === 0,
+      }],
+      playedHoleOrder: order,
+      scores,
+      inputs: { 1: { bridge: caseNo % 4 === 0 }, 2: { rebridge: caseNo % 7 === 0 } },
+    });
+    assert.equal(Object.values(ledger.finalTotalsByTeam).every(Number.isFinite), true);
+    assert.equal(ledger.settlement.amount, ledger.settlement.netPoints * 2);
+    assert.equal(ledger.sequenceHoleNumbers.every(holeNumber => ledger.holes[String(holeNumber)].counted), true);
+    Object.values(ledger.holes).forEach(hole => {
+      assert.equal(Object.values(hole.finalPointsByTeam).every(points => Number.isFinite(points) && points >= 0), true);
+    });
+  }
 });

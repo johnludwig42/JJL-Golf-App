@@ -17,7 +17,7 @@ The purpose of this document is to help Codex distinguish between:
 
 ## Current Production Version
 
-Current production version: v30.3.54
+Current production version: v30.3.55
 
 ---
 
@@ -86,15 +86,19 @@ v30.3.53 adds SSP setup, team validation, durable local settings, and Play tab m
 
 v30.3.54 adds the base SSP point ledger for manual Sneaky, Sandy, Poley, Greeny, Prox, automatic Birdie, Eagle, Low Ball, Low Total, Play tab base-point previews, Quick Scoreboard status, and Player Detail contribution summaries.
 
+v30.3.55 adds Take/Keep, honors, Bridge/Re-Bridge, Umbee, final SSP points, SSP-only settlement, Match Summary reporting, outdoor-readable selected chips, centered chip rows, and live draft preview.
+
 ### Known concern
 
-Take/Keep, honors carry-forward, Bridge/Re-Bridge multiplier math, Umbee multiplier math, settlement, Match Summary reporting, and Shared Match SSP input reconciliation are intentionally deferred.
+Full Shared Match SSP input reconciliation is intentionally deferred. Scores sync through the existing shared score path, but SSP manual inputs still need conflict-aware shared-state handling before multi-device SSP settlement should be considered authoritative.
+
+Additional deferred SSP polish includes optional manual overrides for Low Ball, Low Total, and Honors, plus printed/PDF layout optimization for large SSP ledgers.
 
 ### Near-term direction
 
-Use `docs/05_SNEAKY_SANDY_POLEY.md` as the implementation plan for v30.3.55. Do not treat v30.3.54 base points as settlement output.
+Use `docs/05_SNEAKY_SANDY_POLEY.md` as the source for v30.3.56 Shared Match SSP Sync and Reconciliation: sync scores plus SSP manual inputs, detect conflicts, derive the same ledger on every device, and pull latest shared SSP state before settlement/reporting.
 
-Status: Planned follow-up.
+Status: Planned follow-up for v30.3.56.
 
 ---
 

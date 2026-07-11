@@ -461,7 +461,46 @@ test('Final totals and SSP settlement use net final team points', () => {
   assert.equal(ledger.settlement.payerTeamId, '2');
   assert.equal(ledger.settlement.payeeTeamId, '1');
   assert.equal(ledger.settlement.amount, 10);
-  assert.match(ledger.settlement.label, /Bravo pays Alpha \$10\.00/);
+  assert.equal(ledger.settlement.perPlayerAmount, 10);
+  assert.equal(ledger.settlement.totalTransferred, 20);
+  assert.deepEqual(JSON.parse(JSON.stringify(ledger.settlement.playerAmounts)), { p1: 10, p2: 10, p3: -10, p4: -10 });
+  assert.equal(Object.values(ledger.settlement.playerAmounts).reduce((sum, amount) => sum + amount, 0), 0);
+  assert.match(ledger.settlement.payerLabel, /Each Bravo player pays \$10\.00/);
+  assert.match(ledger.settlement.payeeLabel, /Each Alpha player receives \$10\.00/);
+});
+
+test('SSP player settlement joins combined payouts once, ties add zero, and unequal legacy teams fail safely', () => {
+  const engine = loadLiveEngine();
+  const seed = buildSeed({
+    selectedGames: [{ key: 'sneaky_sandy_poley', pointValue: 2 }],
+    scores: { p1: [4], p2: [4], p3: [4], p4: [4] },
+    inputs: { 1: { players: { p1: { sneaky: true } } } },
+  });
+  const state = engine.seedState(seed);
+  const match = state.matches[0];
+  const metrics = engine.computeMatchMetrics(match);
+  const ledger = engine.buildSneakySandyPoleyLedger(match, { metrics });
+  const payout = engine.getPayoutReportContext(match, metrics);
+  assert.deepEqual(JSON.parse(JSON.stringify(payout.finalTotals)), JSON.parse(JSON.stringify(ledger.settlement.playerAmounts)));
+  assert.equal(payout.payoutGames.filter(game => game.key === 'sneaky_sandy_poley').length, 1);
+  const quickHtml = engine.buildQuickScoreboardView(match, metrics);
+  assert.match(quickHtml, /SSP: Alpha \+\d+ · \$\d+\.00\/player/);
+  assert.match(quickHtml, /Each Bravo player pays/);
+  const summaryHtml = engine.buildSneakySandyPoleyExportSummary(match, metrics);
+  assert.match(summaryHtml, /per player/);
+  assert.match(summaryHtml, /Total transferred:/);
+  assert.doesNotMatch(summaryHtml, /Shown separately from Final Net Settlement/);
+
+  const tied = getLedger({ scores: { p1: [4], p2: [4], p3: [4], p4: [4] } });
+  assert.equal(tied.settlement.tied, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(tied.settlement.playerAmounts)), {});
+
+  const badState = engine.seedState(buildSeed({ scores: { p1: [4], p2: [4], p3: [4] } }));
+  badState.matches[0].players = badState.matches[0].players.filter(player => player.playerId !== 'p4');
+  const badMetrics = engine.computeMatchMetrics(badState.matches[0]);
+  const badLedger = engine.buildSneakySandyPoleyLedger(badState.matches[0], { metrics: badMetrics });
+  assert.equal(badLedger.settlement.valid, false);
+  assert.deepEqual(JSON.parse(JSON.stringify(badLedger.settlement.playerAmounts)), {});
 });
 
 test('100 deterministic generated SSP cases preserve ledger and settlement invariants', () => {
@@ -537,7 +576,7 @@ test('to-par formatter uses golf-native even par without changing signed values'
   assert.equal(engine.formatToPar(-2), '-2');
 });
 
-test('featured SSP status distinguishes live preview from saved match and keeps honors separate', () => {
+test('featured SSP status uses latest saved state, explicit live basis, and separate displayed-hole honors', () => {
   const engine = loadLiveEngine();
   const liveState = engine.seedState(buildSeed({
     selectedGames: [{ key: 'nassau' }, { key: 'sneaky_sandy_poley', pointValue: 1 }],
@@ -548,8 +587,9 @@ test('featured SSP status distinguishes live preview from saved match and keeps 
   liveMatch.featuredCompetition = 'sneaky_sandy_poley';
   liveMatch.matchStatusGame = 'nassau';
   const liveMetrics = engine.computeMatchMetrics(liveMatch);
-  assert.match(engine.getPrimaryMatchStatusLine(liveMatch, liveMetrics), /^Live SSP: Alpha \+/);
-  assert.match(engine.getSneakySandyPoleyHonorsLine(liveMatch, liveMetrics), /^Honors: /);
+  assert.match(engine.getPrimaryMatchStatusLine(liveMatch, liveMetrics), /^SSP Match: Alpha \+/);
+  assert.match(engine.getPrimaryMatchStatusLine(liveMatch, liveMetrics, { includesDraft: true }), /^Live SSP: Alpha \+/);
+  assert.match(engine.getSneakySandyPoleyHonorsLine(liveMatch, liveMetrics), /^Honors for Hole 1: /);
 
   const savedState = engine.seedState(buildSeed({ scores: { p1: [4], p2: [4], p3: [5], p4: [5] } }));
   const savedMatch = savedState.matches[0];
@@ -560,4 +600,32 @@ test('featured SSP status distinguishes live preview from saved match and keeps 
   savedMatch.featuredCompetition = 'none';
   savedMatch.selectedGames = [];
   assert.equal(engine.getSneakySandyPoleyHonorsLine(savedMatch, engine.computeMatchMetrics(savedMatch)), '');
+});
+
+test('featured SSP header does not rewind to displayed hole while hole audit retains historical running state', () => {
+  const engine = loadLiveEngine();
+  const state = engine.seedState(buildSeed({
+    scores: { p1: [4, null, 4], p2: [4, null, 4], p3: [5, null, 3], p4: [5, null, 3] },
+  }));
+  const match = state.matches[0];
+  match.featuredCompetition = 'sneaky_sandy_poley';
+  const metrics = engine.computeMatchMetrics(match);
+  assert.match(engine.getPrimaryMatchStatusLine(match, metrics), /^SSP Match: .* thru 2$/);
+  const ledger = engine.buildSneakySandyPoleyLedger(match, { metrics });
+  assert.match(engine.buildSneakySandyPoleyRunningText(match, ledger, ledger.holes['1']), /^SSP After Hole 1:/);
+  assert.match(engine.buildSneakySandyPoleyRunningText(match, ledger, ledger.holes['1'], { includesDraft: true }), /^Live SSP After Hole 1:/);
+});
+
+test('Nassau featured status basis is independent of SSP activation', () => {
+  const engine = loadLiveEngine();
+  const scoreSet = { p1: [4], p2: [4], p3: [5], p4: [5] };
+  const nassauState = engine.seedState(buildSeed({ selectedGames: [{ key: 'nassau' }], scores: scoreSet }));
+  const comboState = engine.seedState(buildSeed({ selectedGames: [{ key: 'nassau' }, { key: 'sneaky_sandy_poley' }], scores: scoreSet }));
+  const nassau = nassauState.matches[0];
+  const combo = comboState.matches[0];
+  nassau.featuredCompetition = 'nassau';
+  combo.featuredCompetition = 'nassau';
+  const savedOnly = engine.getPrimaryMatchStatusLine(nassau, engine.computeMatchMetrics(nassau));
+  assert.equal(engine.getPrimaryMatchStatusLine(combo, engine.computeMatchMetrics(combo)), savedOnly);
+  assert.match(engine.getPrimaryMatchStatusLine(combo, engine.computeMatchMetrics(combo), { includesDraft: true }), /^Live Nassau:/);
 });

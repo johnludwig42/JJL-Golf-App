@@ -3917,6 +3917,9 @@ main,
   text-align:center;
   overflow-wrap:anywhere;
 }
+#score #holeSummary .score-status-row{display:flex;justify-content:center;align-items:baseline;gap:4px 8px;flex-wrap:wrap;margin-top:4px;}
+#score #holeSummary .score-status-row .score-primary-status,#score #holeSummary .score-status-row .score-honors-status{margin-top:0;}
+#score #holeSummary .score-status-row .score-honors-status::before{content:'· ';}
 #score #holeSummary .score-honors-status{
   margin-top:3px;
   color:var(--muted);
@@ -3926,6 +3929,8 @@ main,
   text-align:center;
   overflow-wrap:anywhere;
 }
+.quick-ssp-money{display:grid;gap:3px;padding:8px 10px;border:1px solid rgba(11,93,59,.16);border-radius:10px;background:#f7fbf8;font-size:.8rem;}
+.quick-ssp-money span{color:var(--muted);font-weight:700;}
 .greenies-suggestion {
   color: var(--accent);
   font-weight: 700;
@@ -3983,6 +3988,8 @@ main,
   #score .score-hole-nav{gap:5px;padding:5px;}
   #score #holeSummary{margin-top:3px;}
   #score #holeSummary .score-primary-status{display:block;margin:3px auto 0;padding:4px 6px;}
+  #score #holeSummary .score-status-row{display:grid;gap:2px;}
+  #score #holeSummary .score-status-row .score-honors-status::before{content:'';}
 }
 
 

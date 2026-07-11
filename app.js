@@ -1,11 +1,11 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.58',
-  versionNumber: '30.3.58',
-  cacheName: 'the-dye-ledger-v30.3.58',
+  version: 'v30.3.59',
+  versionNumber: '30.3.59',
+  cacheName: 'the-dye-ledger-v30.3.59',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Play Tab UX Scrub and Featured Match Polish'
+  buildLabel: 'Featured Match Status Consistency and Play/Scores UX Scrub'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -2466,26 +2466,43 @@ function getSneakySandyPoleyUmbeeState(cfg = {}, holeLedger, teams = [], bridge 
 
 function buildSneakySandyPoleySettlement(match, ledger) {
   const teams = ledger?.teams || [];
-  if (teams.length !== 2) return { tied: true, netPoints: 0, pointValue: 0, amount: 0, payerTeamId: null, payeeTeamId: null, label: 'SSP: setup incomplete' };
+  const invalid = (label = 'SSP: settlement unavailable — teams must be equal') => ({ valid: false, tied: true, netPoints: 0, pointValue: 0, amount: 0, perPlayerAmount: 0, totalTransferred: 0, playerAmounts: {}, payerTeamId: null, payeeTeamId: null, label });
+  if (teams.length !== 2) return invalid('SSP: setup incomplete');
+  const teamPlayerIds = teams.map(team => Array.isArray(team.playerIds) ? team.playerIds.filter(Boolean) : []);
+  if (!teamPlayerIds[0].length || teamPlayerIds[0].length !== teamPlayerIds[1].length) return invalid();
   const totals = ledger?.finalTotalsByTeam || ledger?.totalsByTeam || {};
   const pointValue = Number(ledger?.settings?.pointValue ?? getSneakySandyPoleyConfig(match)?.pointValue ?? 0) || 0;
   const a = Number(totals[teams[0].id] || 0);
   const b = Number(totals[teams[1].id] || 0);
   const netPoints = Math.abs(a - b);
-  if (!netPoints) return { tied: true, netPoints: 0, pointValue, amount: 0, payerTeamId: null, payeeTeamId: null, label: 'SSP: tied, no payment' };
+  if (!netPoints) return { valid: true, tied: true, netPoints: 0, pointValue, amount: 0, perPlayerAmount: 0, totalTransferred: 0, playerAmounts: {}, payerTeamId: null, payeeTeamId: null, label: 'SSP: tied, no money changes hands' };
   const payeeTeamId = a > b ? teams[0].id : teams[1].id;
   const payerTeamId = a > b ? teams[1].id : teams[0].id;
   const amount = netPoints * pointValue;
   const payer = formatSneakySandyPoleyTeamName(ledger, match, payerTeamId);
   const payee = formatSneakySandyPoleyTeamName(ledger, match, payeeTeamId);
+  const payerIds = teams.find(team => team.id === payerTeamId)?.playerIds || [];
+  const payeeIds = teams.find(team => team.id === payeeTeamId)?.playerIds || [];
+  const playerAmounts = {};
+  payerIds.forEach(playerId => { playerAmounts[playerId] = -amount; });
+  payeeIds.forEach(playerId => { playerAmounts[playerId] = amount; });
+  const totalTransferred = amount * payerIds.length;
   return {
+    valid: true,
     tied: false,
     netPoints,
     pointValue,
     amount,
+    perPlayerAmount: amount,
+    totalTransferred,
+    playerAmounts,
     payerTeamId,
     payeeTeamId,
-    label: `SSP: ${payer} pays ${payee} ${formatPositiveCurrency(amount, 2)}`,
+    payerTeamName: payer,
+    payeeTeamName: payee,
+    label: `SSP: ${payee} +${netPoints} · ${formatPositiveCurrency(amount, 2)}/player`,
+    payerLabel: `Each ${payer} player pays ${formatPositiveCurrency(amount, 2)}`,
+    payeeLabel: `Each ${payee} player receives ${formatPositiveCurrency(amount, 2)}`,
   };
 }
 
@@ -2860,12 +2877,13 @@ function buildSneakySandyPoleyTeamTilesHtml(ledger, pointsByTeam = {}) {
   return (ledger?.teams || []).map(team => `<div class="ssp-ledger-tile"><span>${escapeHtml(team.name)}</span><strong>${Number(pointsByTeam?.[team.id] || 0)}</strong></div>`).join('');
 }
 
-function buildSneakySandyPoleyRunningText(match, ledger, holeLedger) {
+function buildSneakySandyPoleyRunningText(match, ledger, holeLedger, options = {}) {
   const running = holeLedger?.runningLeader || ledger?.finalLeader || {};
-  const prefix = holeLedger?.complete ? 'SSP Match' : 'Live SSP';
-  if (!holeLedger?.counted) return 'SSP Match: Not started';
-  if (running.tied) return `${prefix}: Tied thru ${Number(holeLedger.holeNumber) || ''}`;
-  return `${prefix}: ${formatSneakySandyPoleyTeamName(ledger, match, running.teamId)} +${Number(running.margin || 0)} thru ${Number(holeLedger.holeNumber) || ''}`;
+  const holeNumber = Number(holeLedger?.holeNumber) || '';
+  const prefix = options.includesDraft ? `Live SSP After Hole ${holeNumber}` : `SSP After Hole ${holeNumber}`;
+  if (!holeLedger?.counted) return `${prefix}: Not scored`;
+  if (running.tied) return `${prefix}: Tied`;
+  return `${prefix}: ${formatSneakySandyPoleyTeamName(ledger, match, running.teamId)} +${Number(running.margin || 0)}`;
 }
 
 function buildSneakySandyPoleyHolePreviewHtml(match, ledger, holeNumber) {
@@ -2888,7 +2906,7 @@ function buildSneakySandyPoleyHolePreviewHtml(match, ledger, holeNumber) {
       <div class="ssp-ledger-adjustment-line"><span>Multiplier:</span> <strong>${escapeHtml([multiplierText, umbeeText === 'None' ? 'Umbee off' : umbeeText].join(' · '))}</strong></div>
       <div class="ssp-ledger-mini-row"><span>Final Hole Total</span><strong>${escapeHtml(getSneakySandyPoleyTeamDiffText(match, ledger, holeLedger, { final: true }))}</strong></div>
       <div class="ssp-ledger-tiles">${finalTiles}</div>
-      <div class="ssp-ledger-match-line">${escapeHtml(buildSneakySandyPoleyRunningText(match, ledger, holeLedger))}</div>
+      <div class="ssp-ledger-match-line">${escapeHtml(buildSneakySandyPoleyRunningText(match, ledger, holeLedger, { includesDraft: !!match.__includesUnsavedDraft }))}</div>
       ${warnings ? `<div class="ssp-ledger-warning-list top-gap">${warnings}</div>` : ''}
     </div>`;
 }
@@ -4604,9 +4622,13 @@ function buildSneakySandyPoleyExportSummary(match, metrics) {
           <div class="game-summary-sub">per point</div>
         </div>
         <div class="game-summary-card span-2">
-          <div class="game-summary-title">Settlement</div>
-          <div class="game-summary-value">${escapeHtml(ledger.settlement?.label || 'SSP: tied, no payment')}</div>
-          <div class="game-summary-sub">Shown separately from Final Net Settlement.</div>
+          <div class="game-summary-title">SSP Settlement</div>
+          <div class="game-summary-value">${escapeHtml(ledger.settlement?.tied ? 'Tied' : leaderText)}</div>
+          <div class="game-summary-sub">${ledger.settlement?.valid === false
+            ? escapeHtml(ledger.settlement.label)
+            : ledger.settlement?.tied
+              ? 'No SSP money changes hands.'
+              : `${escapeHtml(formatPositiveCurrency(ledger.settlement.perPlayerAmount, 2))} per player · ${escapeHtml(ledger.settlement.payerLabel)} · ${escapeHtml(ledger.settlement.payeeLabel)} · Total transferred: ${escapeHtml(formatPositiveCurrency(ledger.settlement.totalTransferred, 2))}`}</div>
         </div>
       </div>
       ${momentumHtml}
@@ -6460,7 +6482,7 @@ function formatSideMatchThruStatus(pairing) {
   return formatLeaderThruStatus(leader, diff, pairing.completedCount);
 }
 
-function getPrimaryMatchStatusLine(match, metrics) {
+function getPrimaryMatchStatusLine(match, metrics, options = {}) {
   if (!match || !metrics) return '';
   const statusOptions = getMatchStatusOptions(match);
   const selectedKeys = new Set(statusOptions.map(opt => opt.key));
@@ -6476,13 +6498,15 @@ function getPrimaryMatchStatusLine(match, metrics) {
   if (!text || text === 'Active') return '';
   if (key === 'sneaky_sandy_poley') {
     const ledger = buildSneakySandyPoleyLedger(match, { metrics });
-    const scoringHoles = getSelectedScoringHoles(match, getTee(match.courseId, match.teeId));
-    const actualHoleNumber = Number(scoringHoles[currentHole - 1]?.holeNumber || currentHole);
-    const holeLedger = ledger.holes?.[String(actualHoleNumber)];
-    return holeLedger?.counted ? buildSneakySandyPoleyRunningText(match, ledger, holeLedger) : 'SSP Match: Not started';
+    const leader = ledger.finalLeader || {};
+    const prefix = options.includesDraft ? 'Live SSP' : 'SSP Match';
+    if (!leader.thru) return `${prefix}: Not started`;
+    if (leader.tied) return `${prefix}: Tied thru ${Number(leader.thru) || 0}`;
+    return `${prefix}: ${formatSneakySandyPoleyTeamName(ledger, match, leader.teamId)} +${Number(leader.margin || 0)} thru ${Number(leader.thru) || 0}`;
   }
   const label = key === 'nassau' ? 'Nassau' : getGameLabel(key);
-  return label ? `${label}: ${text}` : text;
+  const statusLabel = options.includesDraft && label ? `Live ${label}` : label;
+  return statusLabel ? `${statusLabel}: ${text}` : text;
 }
 
 function getSneakySandyPoleyHonorsLine(match, metrics) {
@@ -6492,7 +6516,7 @@ function getSneakySandyPoleyHonorsLine(match, metrics) {
   const scoringHoles = getSelectedScoringHoles(match, getTee(match.courseId, match.teeId));
   const actualHoleNumber = Number(scoringHoles[currentHole - 1]?.holeNumber || currentHole);
   const honorsTeamId = ledger.honorsByHole?.[String(actualHoleNumber)];
-  return honorsTeamId ? `Honors: ${formatSneakySandyPoleyTeamName(ledger, match, honorsTeamId)}` : '';
+  return honorsTeamId ? `Honors for Hole ${actualHoleNumber}: ${formatSneakySandyPoleyTeamName(ledger, match, honorsTeamId)}` : '';
 }
 
 function describeMomentumMeta(match, metrics, gameKey) {
@@ -7446,6 +7470,13 @@ function buildQuickScoreboardView(match, metrics) {
   const primaryStatus = getPrimaryMatchStatusLine(match, metrics);
   const gameStatusRows = buildQuickScoreboardGameStatusRows(match, metrics);
   const payout = getPayoutReportContext(match, metrics);
+  const sspSettlement = isSneakySandyPoleyEnabled(match) ? buildSneakySandyPoleyLedger(match, { metrics }).settlement : null;
+  const sspMoneyHtml = sspSettlement?.valid && !sspSettlement.tied && sspSettlement.amount > 0 ? `
+    <div class="quick-ssp-money">
+      <strong>${escapeHtml(sspSettlement.label)}</strong>
+      <span>${escapeHtml(sspSettlement.payerLabel)}</span>
+      <span>${escapeHtml(sspSettlement.payeeLabel)}</span>
+    </div>` : '';
   const moneyRows = Object.entries(payout.finalTotals || {})
     .map(([id, amount]) => ({ name: getPlayer(id)?.name || id, amount: Number(amount) || 0 }))
     .filter(row => Math.abs(row.amount) > 0.0001)
@@ -7469,6 +7500,7 @@ function buildQuickScoreboardView(match, metrics) {
     ${gameStatusRows}
     <section class="quick-scoreboard-section">
       <h4>Money</h4>
+      ${sspMoneyHtml}
       ${moneyRows ? `<div class="quick-money-list">${moneyRows}</div>` : '<div class="tiny">No money summary available yet.</div>'}
     </section>`;
 }
@@ -11518,7 +11550,8 @@ function renderCurrentMatch() {
   if (holeSummaryEl) {
     if (hole) {
       const holeMeta = `Par ${hole.par || '-'} · SI ${hole.strokeIndex || '-'}`;
-      holeSummaryEl.innerHTML = `<div class="score-hole-meta">${escapeHtml(holeMeta)}</div>${primaryStatusLine ? `<div class="score-primary-status">${escapeHtml(primaryStatusLine)}</div>` : ''}${honorsStatusLine ? `<div class="score-honors-status">${escapeHtml(honorsStatusLine)}</div>` : ''}`;
+      const statusItems = `${primaryStatusLine ? `<div class="score-primary-status">${escapeHtml(primaryStatusLine)}</div>` : ''}${honorsStatusLine ? `<div class="score-honors-status">${escapeHtml(honorsStatusLine)}</div>` : ''}`;
+      holeSummaryEl.innerHTML = `<div class="score-hole-meta">${escapeHtml(holeMeta)}</div>${statusItems ? `<div class="score-status-row">${statusItems}</div>` : ''}`;
     } else {
       holeSummaryEl.innerHTML = '';
     }
@@ -11836,20 +11869,24 @@ function renderSneakySandyPoleyEntry(match, hole, metrics) {
     </div>`;
 }
 
-function refreshSneakySandyPoleyLivePreview() {
+function refreshFeaturedCompetitionLivePreview() {
   const match = getActiveMatch();
-  if (!match || !isSneakySandyPoleyEnabled(match)) return;
+  if (!match) return;
+  const savedMetrics = computeMatchMetrics(match);
+  const savedStatusLine = getPrimaryMatchStatusLine(match, savedMetrics);
   const previewMatch = JSON.parse(JSON.stringify(match));
   applyCurrentHoleDomToMatch(previewMatch);
   const metrics = computeMatchMetrics(previewMatch);
-  const scoringHoles = getSelectedScoringHoles(match, getTee(match.courseId, match.teeId));
-  renderSneakySandyPoleyEntry(previewMatch, scoringHoles[currentHole - 1] || null, metrics);
-  const primaryStatusLine = getPrimaryMatchStatusLine(previewMatch, metrics);
-  const honorsStatusLine = getSneakySandyPoleyHonorsLine(previewMatch, metrics);
+  const previewSavedLabel = getPrimaryMatchStatusLine(previewMatch, metrics);
+  const includesDraft = hasUnsavedVisibleScoreInputs() && previewSavedLabel !== savedStatusLine;
+  previewMatch.__includesUnsavedDraft = includesDraft;
+  if (isSneakySandyPoleyEnabled(match)) {
+    const scoringHoles = getSelectedScoringHoles(match, getTee(match.courseId, match.teeId));
+    renderSneakySandyPoleyEntry(previewMatch, scoringHoles[currentHole - 1] || null, metrics);
+  }
+  const primaryStatusLine = includesDraft ? getPrimaryMatchStatusLine(previewMatch, metrics, { includesDraft: true }) : savedStatusLine;
   const statusEl = document.getElementById('holeSummary')?.querySelector('.score-primary-status');
   if (statusEl) statusEl.textContent = primaryStatusLine;
-  const honorsEl = document.getElementById('holeSummary')?.querySelector('.score-honors-status');
-  if (honorsEl) honorsEl.textContent = honorsStatusLine;
 }
 
 function renderSneakySandyPoleyNote(match, hole, metrics) {
@@ -12530,6 +12567,12 @@ function computeLivePayoutGames(match, metrics) {
   const pushGame = (key, label, amounts, group = 'team', paymentLines = null, sourceKey = key, meta = {}) => games.push({ key, sourceKey, label, amounts, group, paymentLines: Array.isArray(paymentLines) ? paymentLines : null, meta });
 
   selected.forEach(cfg => {
+    if (cfg.key === 'sneaky_sandy_poley') {
+      const ledger = buildSneakySandyPoleyLedger(match, { metrics });
+      const settlement = ledger.settlement || {};
+      pushGame(cfg.key, 'Sneaky / Sandy / Poley', settlement.valid ? { ...(settlement.playerAmounts || {}) } : {}, 'team', null, cfg.key, { settlement });
+      return;
+    }
     if (cfg.key === 'nassau' && metrics.teams.length === 2) {
       const runNassau = (basisLabel, basisKey) => {
         const amounts = {};
@@ -13934,9 +13977,9 @@ function renderGamesPicker(existing = []) {
         ${warnings.length ? `<div class="setup-warning top-gap">${warnings.map(item => `<div>${escapeHtml(item)}</div>`).join('')}</div>` : ''}
         <div class="grid two compact-grid top-gap">
           <label><span>$ per point</span><span class="currency-input"><span aria-hidden="true">$</span><input type="number" step="0.01" min="0" data-game-config="${game.key}" data-field="pointValue" value="${Number(sspCfg.pointValue ?? 1).toFixed(2)}" /></span></label>
-          <div class="tiny">Settlement is net team points &times; dollar value per point.</div>
-          <label class="span-2"><span>SSP sequence</span><select data-game-config="${game.key}" data-field="sspSequenceMode"><option value="routing" ${sspCfg.sspSequenceMode !== 'entry' ? 'selected' : ''}>Hole routing order</option><option value="entry" ${sspCfg.sspSequenceMode === 'entry' ? 'selected' : ''}>Score-entry order</option></select></label>
-          <div class="tiny span-2">Controls how Take/Keep and honors progress when holes are skipped or scored out of order.</div>
+          <div class="tiny">Final point differential &times; dollar value per point is the amount paid or received by each player.</div>
+          <label class="span-2"><span>SSP Hole Sequence</span><select data-game-config="${game.key}" data-field="sspSequenceMode"><option value="routing" ${sspCfg.sspSequenceMode !== 'entry' ? 'selected' : ''}>Standard hole order</option><option value="entry" ${sspCfg.sspSequenceMode === 'entry' ? 'selected' : ''}>Out-of-sequence / shotgun order</option></select></label>
+          <div class="tiny span-2">Standard follows normal scorecard order. Out-of-sequence follows the order holes are actually completed.</div>
           <label class="inline-check span-2"><input type="checkbox" data-game-config="${game.key}" data-field="validateGreenyProx" ${sspCfg.validateGreenyProx ? 'checked' : ''} /><span>Validate Greeny/Prox</span></label>
           <div class="tiny span-2">When on, Greeny and Prox count only with 2 putts or less.</div>
           <label class="inline-check span-2"><input type="checkbox" data-game-config="${game.key}" data-field="allowBridgeRebridge" ${sspCfg.allowBridgeRebridge ? 'checked' : ''} /><span>Allow Bridge/Re-Bridge</span></label>
@@ -15367,7 +15410,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (e.target.matches('input[data-score-player]')) {
       if (e.target.dataset.scoreWired !== 'direct') handleLiveScoreInputEvent(e.target);
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
-      refreshSneakySandyPoleyLivePreview();
+      refreshFeaturedCompetitionLivePreview();
     }
     if (e.target.matches('.stat-putts-input')) {
       e.target.dataset.puttsSource = 'user';
@@ -16654,6 +16697,9 @@ function installDyeLedgerLiveEngineAdapter() {
     formatToPar,
     getPrimaryMatchStatusLine,
     getSneakySandyPoleyHonorsLine,
+    buildSneakySandyPoleyRunningText,
+    buildQuickScoreboardView,
+    buildSneakySandyPoleyExportSummary,
     resolveSneakySandyPoleyProxSelection,
     buildSharedSspFacts,
     reconcileSharedSspFacts,

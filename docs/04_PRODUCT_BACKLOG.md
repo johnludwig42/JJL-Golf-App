@@ -118,6 +118,15 @@ NEXT:
 - Sneaky / Sandy / Poley v30.3.56 shipped: Shared Match SSP settings/input/sequence sync, assigned-player authority, host-owned hole facts, three-way conflict detection, SSP trust status, and final shared-state pull before settlement/reporting.
 - SSP v30.3.57 shipped: final-point Momentum Chart, deterministic Quick Scoreboard trend, clearer live/saved status, hole-card/reporting polish, and baseline print improvements.
 - Play v30.3.58 shipped: Sandy-implies-Sneaky UI/ledger consistency, featured competition-aware Play status, separate SSP honors line, and small-iPhone header polish.
+- Play v30.3.59 shipped: consistent saved/live featured status, latest-state SSP header, displayed-hole SSP audit wording, Nassau draft parity, and hole-specific honors labeling.
+- v30.3.59 add-on shipped: SSP per-player allocation in Quick Scoreboard and combined Final Net Settlement, dedicated settlement wording, golfer-friendly SSP sequence labels, and responsive Featured Match/Honors layout.
+
+## Future release: Starting Hole, Play Routing, and Gambling Segment Basis
+
+- Keep **scorecard order** traditional: Holes 1–18, Front 1–9, Back 10–18. Classic Scorecard remains in this order.
+- Add **play routing order** for the order actually played, including Hole 10 starts, shotgun starts, and custom/out-of-sequence routing; the Play tab can eventually follow this route.
+- Add an explicit **gambling segment basis** choice: traditional scorecard front/back (recommended default) or first nine played/second nine played.
+- Treat this as a dedicated compatibility release affecting Nassau, navigation, reporting, saved matches, and potentially future Presses—not as incidental SSP work.
 - SSP follow-ups: polished field-by-field conflict-resolution UI, randomized two-device SSP simulation expansion, optional manual overrides, deeper printed/PDF optimization, Junk Games Framework abstraction, and AI narrative trends in future recaps (not live Quick Scoreboard).
 
 FUTURE:

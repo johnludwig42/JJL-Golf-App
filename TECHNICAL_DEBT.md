@@ -716,6 +716,8 @@ The release sanity script is a helper, not a substitute for Product Owner review
 
 The generated report at reports/simulation/latest-summary.md is currently a mutable validation artifact. Release cleanup should revert it when changes are only generated-report churn; future work should decide whether to stop tracking the latest report or refresh it only through an intentional report-update step.
 
+Completed-round Scores viewing still temporarily uses `activeMatchId` in v30.3.60 so existing export, recap, settlement, and summary handlers retain one match target. A future state-model pass should separate the active working round from a viewed historical-summary ID; the current explicit Done/Match exit flow intentionally avoids that broader release-risk refactor.
+
 Status: Ongoing process hardening.
 
 ---
@@ -835,3 +837,10 @@ Do not redesign settled architecture to solve a narrow bug.
 Do not add new features while fixing trust, scoring, settlement, or sync issues unless the prompt explicitly asks for them.
 
 When uncertain, preserve the current local-first, offline-first, iPhone-first architecture.
+## Course Library and snapshots
+
+- Legacy matches created before v30.3.60 may not contain `courseSnapshot` and therefore continue resolving current Library data. A future migration/hardening pass should snapshot safely when historical source data can be established without guessing.
+- Duplicate course matching is heuristic. A canonical catalog needs stable facility/course identity rather than normalized name/location alone.
+- Saved tee authoring remains 18-hole-first; 9-hole rounds select a segment from that data. Dedicated 9-hole course authoring/import compatibility remains future work.
+- AI scorecard extraction still requires manual review for ambiguous layouts, combo tees, and incomplete par/SI/yardage panels.
+- Multi-file import depends on the deployed scorecard-import service supporting the documented `files` array. The client combines files into one request/review workflow but does not independently merge multiple backend course objects.

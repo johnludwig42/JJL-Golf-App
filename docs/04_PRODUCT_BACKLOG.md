@@ -71,6 +71,10 @@ NOW:
 
 ## 3. Course Library / Course Management
 
+- v30.3.60 completed: Courses Functionality Audit, Course Library clarity/metadata polish, location-aware dropdown de-dupe, duplicate-save prompts, tee validation, visible tee fallback, and new-round local Course Snapshots.
+- Future: canonical Course Catalog, personal Library favorites/defaults/preferred tees with identity, legacy snapshot migration/hardening, authoritative duplicate matching, and dedicated 9-hole course authoring.
+- Architecture boundary: v30.3.60 remains a local Course Library plus new-round snapshots. Central canonical identity, cloud user ownership, and legacy snapshot migration are explicitly deferred.
+
 NEXT:
 
 - Hybrid architecture:

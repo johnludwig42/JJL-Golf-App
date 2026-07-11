@@ -148,6 +148,18 @@ function checkVersionConsistency() {
   return add('PASS', 'Version metadata consistent', targetLabel || unique[0]);
 }
 
+function checkAppShellAssetVersions() {
+  if (!targetVersion) return add('WARN', 'App shell asset version target unavailable');
+  const html = readText('index.html') || '';
+  const expectedAssets = ['app.js', 'style.css', 'supabase-config.js', 'manifest.json'];
+  const stale = expectedAssets.filter(asset => !html.includes(`${asset}?v=${targetVersion}`));
+  if (stale.length) return add('FAIL', 'App shell asset queries stale or missing', stale.join(', '));
+  const queryVersions = [...html.matchAll(/(?:app\.js|style\.css|supabase-config\.js|manifest\.json)\?v=([0-9.]+)/g)].map(match => match[1]);
+  const mismatches = queryVersions.filter(version => version !== targetVersion);
+  if (mismatches.length) return add('FAIL', 'App shell asset query version mismatch', [...new Set(mismatches)].join(', '));
+  return add('PASS', 'App shell asset queries current', targetLabel);
+}
+
 function checkSimulationFiles() {
   const files = [
     'scripts/simulate-rounds.js',
@@ -169,6 +181,7 @@ checkConflictMarkers();
 checkRequiredFiles();
 checkBuildNote();
 checkVersionConsistency();
+checkAppShellAssetVersions();
 checkSimulationFiles();
 
 const counts = results.reduce((acc, row) => {

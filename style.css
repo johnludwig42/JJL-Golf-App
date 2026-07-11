@@ -791,6 +791,10 @@ body.keyboard-open .top-tabs{
 .combo-toggle{display:flex;align-items:center;gap:8px;font-weight:600}
 .combo-grid select{min-width:120px}
 .scoreboard-export-card{margin-bottom:12px}
+.completed-summary-session-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px;padding:11px 12px;border:1px solid rgba(11,93,59,.24);border-radius:14px;background:#eef8f2;color:#174b32;box-shadow:0 5px 14px rgba(11,93,59,.06)}
+.completed-summary-session-banner .tiny{margin-top:2px}
+.completed-summary-session-banner button{flex:0 0 auto}
+@media (max-width:760px){.completed-summary-session-banner{align-items:stretch;flex-direction:column}.completed-summary-session-banner button{width:100%;min-height:44px}}
 
 .scoreboard-export-card .item-header{align-items:flex-start;flex-wrap:wrap;}
 .scoreboard-export-card .item-header > div:first-child{min-width:0;flex:1 1 260px;}
@@ -2549,6 +2553,7 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
 .soft-divider { border: 0; border-top: 1px solid var(--border); margin: 14px 0; }
 .scorecard-import-review-card h3 { margin: 0 0 4px; }
 .import-confidence { margin-top: 8px; font-size: 0.9rem; }
+.import-completeness-warning { margin-top:10px; padding:12px; border:2px solid #b45309; border-radius:12px; background:#fff7ed; color:#7c2d12; display:grid; gap:5px; line-height:1.4; }
 .warning-text { color: #9a5a00; }
 .import-tee-card { border: 1px solid var(--border); border-radius: 12px; padding: 10px; margin-top: 10px; background: rgba(255,255,255,0.7); }
 .import-tee-card summary { cursor: pointer; }

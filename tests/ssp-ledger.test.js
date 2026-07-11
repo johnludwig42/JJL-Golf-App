@@ -468,3 +468,45 @@ test('100 deterministic generated SSP cases preserve ledger and settlement invar
     });
   }
 });
+
+test('SSP momentum uses final points, configured sequence, ties, and ignores unplayed holes without mutation', () => {
+  const engine = loadLiveEngine();
+  const ledger = {
+    enabled: true,
+    teams: [{ id: '1', name: 'Alpha' }, { id: '2', name: 'Bravo' }],
+    sequenceHoleNumbers: [3, 1, 4],
+    holes: {
+      1: { counted: true, finalPointsByTeam: { 1: 2, 2: 6 }, basePointsByTeam: { 1: 99, 2: 0 } },
+      2: { counted: false, finalPointsByTeam: { 1: 50, 2: 0 } },
+      3: { counted: true, finalPointsByTeam: { 1: 4, 2: 0 } },
+      4: { counted: true, finalPointsByTeam: { 1: 1, 2: 1 } },
+    },
+  };
+  const before = JSON.stringify(ledger);
+  assert.deepEqual(JSON.parse(JSON.stringify(engine.buildSneakySandyPoleyMomentumData({}, { ledger }))), [
+    { holeNumber: 3, margin: 4, cumulative: 4, leaderTeamId: '1' },
+    { holeNumber: 1, margin: -4, cumulative: 0, leaderTeamId: null },
+    { holeNumber: 4, margin: 0, cumulative: 0, leaderTeamId: null },
+  ]);
+  assert.equal(JSON.stringify(ledger), before);
+});
+
+test('SSP smart trend is deterministic and suppresses insufficient data', () => {
+  const engine = loadLiveEngine();
+  const base = { enabled: true, teams: [{ id: '1', name: 'Alpha' }, { id: '2', name: 'Bravo' }] };
+  const one = { ...base, sequenceHoleNumbers: [1], holes: { 1: { counted: true, finalPointsByTeam: { 1: 3, 2: 0 } } } };
+  assert.equal(engine.getSneakySandyPoleySmartTrend({}, { ledger: one }), '');
+  const change = { ...base, sequenceHoleNumbers: [1, 2], holes: {
+    1: { counted: true, finalPointsByTeam: { 1: 1, 2: 4 } },
+    2: { counted: true, finalPointsByTeam: { 1: 7, 2: 0 } },
+  } };
+  assert.equal(engine.getSneakySandyPoleySmartTrend({}, { ledger: change }), 'Trend: Alpha took the lead on Hole 2');
+  assert.equal(engine.getSneakySandyPoleySmartTrend({}, { ledger: change }), engine.getSneakySandyPoleySmartTrend({}, { ledger: change }));
+});
+
+test('to-par formatter uses golf-native even par without changing signed values', () => {
+  const engine = loadLiveEngine();
+  assert.equal(engine.formatToPar(0), 'E');
+  assert.equal(engine.formatToPar(3), '+3');
+  assert.equal(engine.formatToPar(-2), '-2');
+});

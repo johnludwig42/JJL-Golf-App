@@ -1,11 +1,11 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.56',
-  versionNumber: '30.3.56',
-  cacheName: 'the-dye-ledger-v30.3.56',
+  version: 'v30.3.57',
+  versionNumber: '30.3.57',
+  cacheName: 'the-dye-ledger-v30.3.57',
   buildDate: new Date().toISOString(),
-  buildLabel: 'SSP Advanced Rules, Honors, Settlement, and Reporting'
+  buildLabel: 'SSP Reporting, Momentum and Scoreboard Polish'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -2751,7 +2751,9 @@ function getSneakySandyPoleyTeamDiffText(match, ledger, holeLedger = null, optio
   if (teams.length !== 2) return '';
   const points = options.final
     ? (holeLedger?.finalPointsByTeam || ledger.finalTotalsByTeam || ledger.totalsByTeam || {})
-    : (holeLedger?.basePointsByTeam || ledger.totalsByTeam || {});
+    : options.beforeMultiplier
+      ? (holeLedger?.pointsAfterTakeKeepByTeam || {})
+      : (holeLedger?.basePointsByTeam || ledger.totalsByTeam || {});
   const a = Number(points[teams[0].id] || 0);
   const b = Number(points[teams[1].id] || 0);
   if (a === b) return 'Tied';
@@ -2767,6 +2769,39 @@ function getSneakySandyPoleyStatus(match, metrics = null) {
   if (!leader.thru) return 'SSP: Not started';
   if (leader.tied) return `SSP: Tied thru ${leader.thru}`;
   return `SSP: ${formatSneakySandyPoleyTeamName(ledger, match, leader.teamId)} +${leader.margin} thru ${leader.thru}`;
+}
+
+function buildSneakySandyPoleyMomentumData(match, options = {}) {
+  const ledger = options.ledger || buildSneakySandyPoleyLedger(match, options);
+  const teams = ledger?.teams || [];
+  if (!ledger?.enabled || teams.length !== 2) return [];
+  let cumulative = 0;
+  return (ledger.sequenceHoleNumbers || []).map(holeNumber => {
+    const hole = ledger.holes?.[String(holeNumber)];
+    if (!hole?.counted) return null;
+    const margin = Number(hole.finalPointsByTeam?.[teams[0].id] || 0) - Number(hole.finalPointsByTeam?.[teams[1].id] || 0);
+    cumulative += margin;
+    return { holeNumber: Number(holeNumber), margin, cumulative, leaderTeamId: cumulative === 0 ? null : (cumulative > 0 ? teams[0].id : teams[1].id) };
+  }).filter(Boolean);
+}
+
+function getSneakySandyPoleySmartTrend(match, options = {}) {
+  const ledger = options.ledger || buildSneakySandyPoleyLedger(match, options);
+  const data = buildSneakySandyPoleyMomentumData(match, { ...options, ledger });
+  if (data.length < 2) return '';
+  const teamName = id => formatSneakySandyPoleyTeamName(ledger, match, id);
+  for (let i = data.length - 1; i > 0; i -= 1) {
+    const before = data[i - 1].cumulative;
+    const after = data[i].cumulative;
+    if (before && after && Math.sign(before) !== Math.sign(after)) return `Trend: ${teamName(data[i].leaderTeamId)} took the lead on Hole ${data[i].holeNumber}`;
+  }
+  const recent = data.slice(-3);
+  const swing = recent.reduce((sum, row) => sum + row.margin, 0);
+  if (recent.length === 3 && swing === 0) return 'Trend: Match is tied over the last 3 holes';
+  if (recent.length === 3 && Math.abs(swing) >= 2) return `Trend: ${teamName(swing > 0 ? ledger.teams[0].id : ledger.teams[1].id)} gained ${Math.abs(swing)} over the last 3 holes`;
+  const biggest = data.slice().sort((a, b) => Math.abs(b.margin) - Math.abs(a.margin) || b.holeNumber - a.holeNumber)[0];
+  if (biggest && Math.abs(biggest.margin) >= 2) return `Trend: ${teamName(biggest.margin > 0 ? ledger.teams[0].id : ledger.teams[1].id)} gained ${Math.abs(biggest.margin)} on Hole ${biggest.holeNumber}`;
+  return '';
 }
 
 function flattenSneakySandyPoleyCategories(holeLedger) {
@@ -2824,37 +2859,33 @@ function buildSneakySandyPoleyTeamTilesHtml(ledger, pointsByTeam = {}) {
 
 function buildSneakySandyPoleyRunningText(match, ledger, holeLedger) {
   const running = holeLedger?.runningLeader || ledger?.finalLeader || {};
-  if (!holeLedger?.counted) return 'SSP Match: pending';
-  if (running.tied) return `SSP Match: Tied thru ${Number(holeLedger.holeNumber) || ''}`;
-  return `SSP Match: ${formatSneakySandyPoleyTeamName(ledger, match, running.teamId)} +${Number(running.margin || 0)} thru ${Number(holeLedger.holeNumber) || ''}`;
+  const prefix = holeLedger?.complete ? 'SSP Match' : 'Live SSP';
+  if (!holeLedger?.counted) return 'SSP Match: Not started';
+  if (running.tied) return `${prefix}: Tied thru ${Number(holeLedger.holeNumber) || ''}`;
+  return `${prefix}: ${formatSneakySandyPoleyTeamName(ledger, match, running.teamId)} +${Number(running.margin || 0)} thru ${Number(holeLedger.holeNumber) || ''}`;
 }
 
 function buildSneakySandyPoleyHolePreviewHtml(match, ledger, holeNumber) {
   if (!ledger.enabled) return '<div class="tiny top-gap">SSP ledger unavailable.</div>';
   const holeLedger = ledger.holes?.[String(holeNumber)];
   if (!holeLedger) return '<div class="tiny top-gap">No SSP ledger row for this hole yet.</div>';
-  const baseTiles = buildSneakySandyPoleyTeamTilesHtml(ledger, holeLedger.basePointsByTeam);
   const finalTiles = buildSneakySandyPoleyTeamTilesHtml(ledger, holeLedger.finalPointsByTeam);
   const details = buildSneakySandyPoleyTeamDetailsHtml(match, ledger, holeLedger);
-  const takeKeepText = holeLedger.takeKeep?.teamId
-    ? `${formatSneakySandyPoleyTeamName(ledger, match, holeLedger.takeKeep.teamId)} ${holeLedger.takeKeep.type === 'take' ? 'Take +2' : 'Keep +1'}`
-    : 'None';
   const multiplierText = holeLedger.bridge?.label || '1x';
   const umbeeText = holeLedger.umbee?.active
     ? `${formatSneakySandyPoleyTeamName(ledger, match, holeLedger.umbee.teamId)} ${holeLedger.umbee.reason}`
     : 'None';
-  const adjustmentText = [takeKeepText, multiplierText, umbeeText === 'None' ? 'Umbee off' : umbeeText].join(' · ');
   const warnings = (holeLedger.warnings || []).slice(0, 3).map(item => `<div class="ssp-ledger-warning">${escapeHtml(item)}</div>`).join('');
   return `
     <div class="ssp-ledger-preview top-gap">
       <div class="ssp-ledger-head"><span>Hole Points · Hole ${Number(holeNumber) || ''}</span><span class="tiny">Live preview</span></div>
-      <div class="ssp-ledger-mini-row"><span>Base</span><strong>${escapeHtml(getSneakySandyPoleyTeamDiffText(match, ledger, holeLedger))}</strong></div>
-      <div class="ssp-ledger-tiles">${baseTiles}</div>
+      <div class="ssp-ledger-mini-row"><span>Points Before Multiplier</span><strong>${escapeHtml(getSneakySandyPoleyTeamDiffText(match, ledger, holeLedger, { beforeMultiplier: true }))}</strong></div>
+      <div class="ssp-ledger-tiles">${buildSneakySandyPoleyTeamTilesHtml(ledger, holeLedger.pointsAfterTakeKeepByTeam)}</div>
       <div class="ssp-ledger-detail-list">${details}</div>
-      <div class="ssp-ledger-adjustment-line"><span>Adjustments:</span> <strong>${escapeHtml(adjustmentText)}</strong></div>
-      <div class="ssp-ledger-match-line">${escapeHtml(buildSneakySandyPoleyRunningText(match, ledger, holeLedger))}</div>
-      <div class="ssp-ledger-mini-row"><span>Final</span><strong>${escapeHtml(getSneakySandyPoleyTeamDiffText(match, ledger, holeLedger, { final: true }))}</strong></div>
+      <div class="ssp-ledger-adjustment-line"><span>Multiplier:</span> <strong>${escapeHtml([multiplierText, umbeeText === 'None' ? 'Umbee off' : umbeeText].join(' · '))}</strong></div>
+      <div class="ssp-ledger-mini-row"><span>Final Hole Total</span><strong>${escapeHtml(getSneakySandyPoleyTeamDiffText(match, ledger, holeLedger, { final: true }))}</strong></div>
       <div class="ssp-ledger-tiles">${finalTiles}</div>
+      <div class="ssp-ledger-match-line">${escapeHtml(buildSneakySandyPoleyRunningText(match, ledger, holeLedger))}</div>
       ${warnings ? `<div class="ssp-ledger-warning-list top-gap">${warnings}</div>` : ''}
     </div>`;
 }
@@ -3062,6 +3093,10 @@ function extractStrokeTemplate(holes) {
   return arr.length === 18 && arr.every(v => v !== null) ? arr : null;
 }
 function formatSigned(n) { return n > 0 ? `+${n}` : `${n}`; }
+function formatToPar(n) {
+  const value = Number(n) || 0;
+  return value === 0 ? 'E' : formatSigned(value);
+}
 function formatRatingValue(v) {
   const num = Number(v);
   return Number.isFinite(num) ? num.toFixed(1) : '0.0';
@@ -3395,14 +3430,14 @@ This round is missing valid course or tee data.`;
     lines.push('');
     lines.push('Team Totals');
     metrics.teams.forEach(team => {
-      lines.push(`${getTeamLabel(match, team.team)} (${team.members.map(m => m.player.name).join(', ')}): gross ${team.grossTotal}, net ${team.netTotal}, to par ${formatSigned(team.toPar)}, net diff ${formatSigned(team.netDiff)}, skins ${team.skins}`);
+      lines.push(`${getTeamLabel(match, team.team)} (${team.members.map(m => m.player.name).join(', ')}): gross ${team.grossTotal}, net ${team.netTotal}, to par ${formatToPar(team.toPar)}, net diff ${formatToPar(team.netDiff)}, skins ${team.skins}`);
     });
     lines.push('');
   }
 
   lines.push('Player Totals');
   metrics.players.slice().sort((a, b) => a.netDiff - b.netDiff || a.toPar - b.toPar).forEach(p => {
-    lines.push(`${p.player.name} (${getTeamLabel(match, p.team)}): gross ${p.grossTotal || 0}, net ${p.netTotal || 0}, to par ${formatSigned(p.toPar || 0)}, net diff ${formatSigned(p.netDiff || 0)}, skins ${p.skins}`);
+    lines.push(`${p.player.name} (${getTeamLabel(match, p.team)}): gross ${p.grossTotal || 0}, net ${p.netTotal || 0}, to par ${formatToPar(p.toPar || 0)}, net diff ${formatToPar(p.netDiff || 0)}, skins ${p.skins}`);
   });
 
   lines.push('');
@@ -3523,7 +3558,7 @@ function buildExportPlayerLeaderboard(match, metrics) {
       ${showTeamColumn ? `<td>${escapeHtml(getTeamLabel(match, p.team))}</td>` : ''}
       <td>${p.grossTotal || 0}</td>
       <td>${p.leaderboardNetTotal || 0}</td>
-      <td>${formatSigned(p.leaderboardNetDiff || 0)}</td>
+      <td>${formatToPar(p.leaderboardNetDiff || 0)}</td>
       <td>${p.postableTotal || 0}</td>
     </tr>
   `).join('');
@@ -3554,8 +3589,8 @@ function buildExportTeamLeaderboard(match, metrics) {
       <td>${escapeHtml(t.members.map(m => m.player.name).join(', '))}</td>
       <td>${t.grossTotal || 0}</td>
       <td>${t.netTotal || 0}</td>
-      <td>${formatSigned(t.toPar || 0)}</td>
-      <td>${formatSigned(t.netDiff || 0)}</td>
+      <td>${formatToPar(t.toPar || 0)}</td>
+      <td>${formatToPar(t.netDiff || 0)}</td>
       <td>${showH2h ? formatSigned(t.overall || 0) : '—'}</td>
     </tr>
   `).join('');
@@ -4521,7 +4556,7 @@ function buildSneakySandyPoleyExportSummary(match, metrics) {
       <div class="game-summary-sub">Base ${Number(ledger.baseTotalsByTeam?.[team.id] || 0)} pts</div>
     </div>`).join('');
   const holeRows = Object.values(ledger.holes || {}).filter(hole => hole.counted).map(hole => {
-    const base = teams.map(team => `${team.name} ${Number(hole.basePointsByTeam?.[team.id] || 0)}`).join(' / ');
+    const base = teams.map(team => `${team.name} ${Number(hole.pointsAfterTakeKeepByTeam?.[team.id] || 0)}`).join(' / ');
     const final = teams.map(team => `${team.name} ${Number(hole.finalPointsByTeam?.[team.id] || 0)}`).join(' / ');
     const takeKeep = hole.takeKeep?.teamId ? `${formatSneakySandyPoleyTeamName(ledger, match, hole.takeKeep.teamId)} ${hole.takeKeep.type === 'take' ? 'Take +2' : 'Keep +1'}` : '-';
     const umbee = hole.umbee?.active ? `${formatSneakySandyPoleyTeamName(ledger, match, hole.umbee.teamId)} ${hole.umbee.reason}` : '-';
@@ -4537,6 +4572,16 @@ function buildSneakySandyPoleyExportSummary(match, metrics) {
     </tr>`;
   }).join('');
   const pointValue = Number(ledger.settlement?.pointValue || ledger.settings?.pointValue || 0);
+  const momentum = buildSneakySandyPoleyMomentumData(match, { ledger });
+  const momentumHtml = momentum.length ? (() => {
+    const width = 640, height = 180, pad = 28;
+    const max = Math.max(1, ...momentum.map(row => Math.abs(row.cumulative)));
+    const x = i => momentum.length === 1 ? width / 2 : pad + (i * (width - pad * 2) / (momentum.length - 1));
+    const y = value => height / 2 - (value / max) * (height / 2 - pad);
+    const points = momentum.map((row, i) => `${x(i)},${y(row.cumulative)}`).join(' ');
+    const labels = momentum.map((row, i) => `<text x="${x(i)}" y="${height - 6}" text-anchor="middle">${row.holeNumber}</text>`).join('');
+    return `<div class="ssp-momentum print-keep-together"><h3>SSP Momentum</h3><div class="export-section-sub">Cumulative final SSP point margin by hole.</div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="SSP cumulative point margin"><line x1="${pad}" y1="${height / 2}" x2="${width - pad}" y2="${height / 2}" class="ssp-momentum-zero"/><polyline points="${points}" class="ssp-momentum-line"/>${labels}</svg></div>`;
+  })() : '<div class="ssp-momentum-empty">SSP Momentum will appear after holes are scored.</div>';
   return `
     <section class="export-section export-section-ssp-summary">
       <div class="export-section-head">
@@ -4561,10 +4606,11 @@ function buildSneakySandyPoleyExportSummary(match, metrics) {
           <div class="game-summary-sub">Shown separately from Final Net Settlement.</div>
         </div>
       </div>
+      ${momentumHtml}
       <div class="fit-stage top-gap" data-fit="width" data-fit-min="0.72">
         <div class="fit-box">
           <table class="export-table ssp-export-table">
-            <thead><tr><th>Hole</th><th>Base</th><th>Take/Keep</th><th>Multiplier</th><th>Umbee</th><th>Final</th><th>Leader</th></tr></thead>
+            <thead><tr><th>Hole</th><th>Points Before Multiplier</th><th>Take/Keep</th><th>Multiplier</th><th>Umbee</th><th>Final Hole Total</th><th>Match</th></tr></thead>
             <tbody>${holeRows || '<tr><td colspan="7">No SSP holes counted yet.</td></tr>'}</tbody>
           </table>
         </div>
@@ -7312,7 +7358,7 @@ function buildPlayerDetailView(match, metrics, playerId) {
   const scoreTiles = [
     ['Gross', playerMetric.grossTotal || 0],
     ...(showNet ? [['Net', playerMetric.netTotal || 0]] : []),
-    ['Vs Par', formatSigned(playerMetric.toPar || 0)],
+    ['Vs Par', formatToPar(playerMetric.toPar || 0)],
     ['Through', getPlayerDetailThroughLabel(match, metrics, playerMetric)],
     ['Scoring Mix', getPlayerScoringMixLabel(match, metrics, playerMetric)],
   ];
@@ -7371,7 +7417,7 @@ function buildQuickScoreboardView(match, metrics) {
       <td>${escapeHtml(p.player?.name || 'Player')}</td>
       <td>${p.grossTotal || 0}</td>
       <td>${p.leaderboardNetTotal || 0}</td>
-      <td>${formatSigned(p.leaderboardNetDiff || 0)}</td>
+      <td>${formatToPar(p.leaderboardNetDiff || 0)}</td>
     </tr>`).join('');
   const showTeams = hasMultiPlayerTeam(metrics);
   const teamRows = showTeams ? (metrics.teams || []).slice().sort((a, b) => a.netTotal - b.netTotal || a.grossTotal - b.grossTotal || a.team - b.team).map(t => `
@@ -7379,7 +7425,7 @@ function buildQuickScoreboardView(match, metrics) {
       <td>${escapeHtml(getTeamLabel(match, t.team))}</td>
       <td>${t.grossTotal || 0}</td>
       <td>${t.netTotal || 0}</td>
-      <td>${formatSigned(t.netDiff || 0)}</td>
+      <td>${formatToPar(t.netDiff || 0)}</td>
     </tr>`).join('') : '';
   const completion = getRoundCompletionState(match, metrics);
   const elapsed = getRoundElapsedTimeState(match);
@@ -7426,6 +7472,7 @@ function openQuickScoreboardView() {
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
   document.body.classList.add('quick-scoreboard-open');
+  document.documentElement.classList.add('quick-scoreboard-open');
   document.getElementById('quickScoreboardCloseBtn')?.focus({ preventScroll: true });
 }
 
@@ -7435,6 +7482,7 @@ function closeQuickScoreboardView() {
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
   document.body.classList.remove('quick-scoreboard-open');
+  document.documentElement.classList.remove('quick-scoreboard-open');
 }
 
 function renderLeaderboard() {
@@ -7494,9 +7542,9 @@ function renderLeaderboard() {
       <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
       <td>${p.grossTotal || 0}</td>
       <td>${p.postableTotal || 0}</td>
-      <td>${formatSigned(p.toPar || 0)}</td>
+      <td>${formatToPar(p.toPar || 0)}</td>
       <td>${p.leaderboardNetTotal || 0}</td>
-      <td>${formatSigned(p.leaderboardNetDiff || 0)}</td>
+      <td>${formatToPar(p.leaderboardNetDiff || 0)}</td>
     </tr>
   `).join('');
   const playerMobile = document.getElementById('playerLeaderboardMobile');
@@ -7507,9 +7555,9 @@ function renderLeaderboard() {
         <div class="leader-mobile-grid">
           <div><div class="leader-mobile-label">Gross</div><div>${p.grossTotal || 0}</div></div>
           <div><div class="leader-mobile-label">Postable</div><div>${p.postableTotal || 0}</div></div>
-          <div><div class="leader-mobile-label">Gross to Par</div><div>${formatSigned(p.toPar || 0)}</div></div>
+          <div><div class="leader-mobile-label">Gross to Par</div><div>${formatToPar(p.toPar || 0)}</div></div>
           <div><div class="leader-mobile-label">Net</div><div>${p.leaderboardNetTotal || 0}</div></div>
-          <div><div class="leader-mobile-label">Net to Par</div><div>${formatSigned(p.leaderboardNetDiff || 0)}</div></div>
+          <div><div class="leader-mobile-label">Net to Par</div><div>${formatToPar(p.leaderboardNetDiff || 0)}</div></div>
         </div>
       </div>
     `).join('');
@@ -7530,8 +7578,8 @@ function renderLeaderboard() {
       <td>${escapeHtml(t.members.map(m => m.player.name).join(', '))}</td>
       <td>${t.grossTotal}</td>
       <td>${t.netTotal}</td>
-      <td>${formatSigned(t.toPar)}</td>
-      <td>${formatSigned(t.netDiff)}</td>
+      <td>${formatToPar(t.toPar)}</td>
+      <td>${formatToPar(t.netDiff)}</td>
       <td>${teamMetricValue(t)}</td>
     </tr>
   `).join('') : '';
@@ -7544,8 +7592,8 @@ function renderLeaderboard() {
         <div class="leader-mobile-grid">
           <div><div class="leader-mobile-label">Gross</div><div>${t.grossTotal}</div></div>
           <div><div class="leader-mobile-label">Net</div><div>${t.netTotal}</div></div>
-          <div><div class="leader-mobile-label">To Par</div><div>${formatSigned(t.toPar)}</div></div>
-          <div><div class="leader-mobile-label">Net Diff</div><div>${formatSigned(t.netDiff)}</div></div>
+          <div><div class="leader-mobile-label">To Par</div><div>${formatToPar(t.toPar)}</div></div>
+          <div><div class="leader-mobile-label">Net Diff</div><div>${formatToPar(t.netDiff)}</div></div>
           <div><div class="leader-mobile-label">${teamMetricLabel}</div><div>${teamMetricValue(t)}</div></div>
         </div>
       </div>
@@ -11660,7 +11708,8 @@ function buildQuickScoreboardGameStatusRows(match, metrics) {
   const rows = selected.map(cfg => {
     const status = getCompactGameStatus(match, metrics, cfg.key, cfg);
     const label = cfg.key === 'sneaky_sandy_poley' ? 'SSP' : getGameLabel(cfg.key);
-    return status ? `<div class="quick-game-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(status)}</strong></div>` : '';
+    const trend = cfg.key === 'sneaky_sandy_poley' ? getSneakySandyPoleySmartTrend(match, { metrics }) : '';
+    return status ? `<div class="quick-game-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(status)}</strong>${trend ? `<small>${escapeHtml(trend)}</small>` : ''}</div>` : '';
   }).filter(Boolean).join('');
   return rows ? `<section class="quick-scoreboard-section"><h4>Active Games</h4><div class="quick-game-list">${rows}</div></section>` : '';
 }
@@ -11960,7 +12009,7 @@ function renderScoreGrid(match, tee, metrics, scoringHoles = null) {
         <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
         <td><div class="gross-score-stepper" role="group" aria-label="Gross score for ${escapeHtml(p.player.name)}"><button type="button" class="score-step-btn" data-score-step="down" data-score-step-player="${escapeHtml(p.playerId)}" ${canEdit ? '' : 'disabled'}>−</button><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="next" autocomplete="off" min="1" max="15" data-score-player="${p.playerId}" data-score-locked="${canEdit ? '0' : '1'}" title="${canEdit ? 'Enter score' : 'You can only score your assigned players.'}" data-hole-par="${Number(playerHole?.par || hole?.par || 4) || 4}" placeholder="—" value="${gross}" ${canEdit ? '' : 'disabled'} /><button type="button" class="score-step-btn" data-score-step="up" data-score-step-player="${escapeHtml(p.playerId)}" ${canEdit ? '' : 'disabled'}>+</button></div></td>
         <td class="score-strokes-cell">${formatStrokesDisplay(strokes)}</td>
-        <td>${net}</td>
+        <td>${net === '' ? '—' : net}</td>
       </tr>
     `;
   }).join('');
@@ -16571,6 +16620,9 @@ function installDyeLedgerLiveEngineAdapter() {
     computeSkinResults,
     computeNinePointResults,
     buildSneakySandyPoleyLedger,
+    buildSneakySandyPoleyMomentumData,
+    getSneakySandyPoleySmartTrend,
+    formatToPar,
     resolveSneakySandyPoleyProxSelection,
     buildSharedSspFacts,
     reconcileSharedSspFacts,

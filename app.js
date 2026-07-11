@@ -1,11 +1,11 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.59',
-  versionNumber: '30.3.59',
-  cacheName: 'the-dye-ledger-v30.3.59',
+  version: 'v30.3.60',
+  versionNumber: '30.3.60',
+  cacheName: 'the-dye-ledger-v30.3.60',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Featured Match Status Consistency and Play/Scores UX Scrub'
+  buildLabel: 'Courses Functionality Audit and Library Polish'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -1799,6 +1799,7 @@ const uiState = {
   scorecardImportFiles: [],
   scorecardImportStatus: '',
   scorecardImportLoading: false,
+  completedSummaryMatchId: null,
   matchPlayerDraft: [],
   referenceTeeManual: false,
   referenceTeeAutoId: '',
@@ -3130,11 +3131,20 @@ function getPlayerTeeId(match, playerRef = null) {
   const ref = playerRef || {};
   return ref.teeId || match?.teeId || '';
 }
+function getMatchCourse(match) {
+  const snapshot = match?.courseSnapshot;
+  return snapshot && Array.isArray(snapshot.tees) && snapshot.tees.length ? snapshot : getCourse(match?.courseId);
+}
+function getMatchTee(match, teeId = '') {
+  const course = getMatchCourse(match);
+  const requestedId = teeId || match?.teeId || '';
+  return course?.tees?.find(tee => String(tee.id) === String(requestedId)) || course?.tees?.[0] || null;
+}
 function getPlayerTee(match, playerRef = null) {
-  return getTee(match?.courseId, getPlayerTeeId(match, playerRef));
+  return getMatchTee(match, getPlayerTeeId(match, playerRef));
 }
 function getPlayerHole(match, playerRef, holeIdx, fallbackTee = null) {
-  const tee = getPlayerTee(match, playerRef) || fallbackTee || getTee(match?.courseId, match?.teeId);
+  const tee = getPlayerTee(match, playerRef) || fallbackTee || getMatchTee(match, match?.teeId);
   const selectedIndexes = getSelectedHoleIndexes(match, tee);
   const actualIdx = Number.isFinite(selectedIndexes[holeIdx]) ? selectedIndexes[holeIdx] : holeIdx;
   return tee?.holes?.[actualIdx] || fallbackTee?.holes?.[actualIdx] || null;
@@ -3263,7 +3273,7 @@ function formatCompactTeeName(name = '') {
 function getPlayerHoleTeeInfo(match, playerRef, selectedHoleIdx, fallbackTee = null) {
   const tee = getPlayerTee(match, playerRef) || fallbackTee || getTee(match?.courseId, match?.teeId);
   const hole = getPlayerHole(match, playerRef, selectedHoleIdx, fallbackTee);
-  const teeName = getHoleTeeNameForDisplay(match?.courseId, tee, selectedHoleIdx) || tee?.teeName || '';
+  const teeName = getHoleTeeNameForDisplay(match?.courseId, tee, selectedHoleIdx, getMatchCourse(match)) || tee?.teeName || '';
   const yardage = Number(hole?.yardage);
   const compactTeeName = formatCompactTeeName(teeName);
   const yardageLabel = Number.isFinite(yardage) && yardage > 0 ? `${formatYardageValue(yardage)}y` : '—';
@@ -5907,7 +5917,7 @@ function inferFlattenedComboSourceTeeName(courseId, tee, holeIdx) {
   if (distinctIds.size < 2) return '';
   return resolvedByHole[holeIdx]?.teeName || '';
 }
-function getComboSourceTeeName(courseId, comboTee, holeIdx) {
+function getComboSourceTeeName(courseId, comboTee, holeIdx, courseOverride = null) {
   if (!comboTee?.isCombo) return '';
   const displayHoleNumber = Number(comboTee.holes?.[holeIdx]?.holeNumber) || holeIdx + 1;
   const source = Array.isArray(comboTee.comboSources)
@@ -5915,14 +5925,14 @@ function getComboSourceTeeName(courseId, comboTee, holeIdx) {
     : null;
   const sourceId = source?.sourceTeeId || '';
   if (sourceId) {
-    const sourceTee = getTee(courseId, sourceId) || (getCourse(courseId)?.tees || []).find(t => String(t?.id || '') === String(sourceId));
+    const sourceTee = (courseOverride?.tees || []).find(t => String(t?.id || '') === String(sourceId)) || getTee(courseId, sourceId) || (getCourse(courseId)?.tees || []).find(t => String(t?.id || '') === String(sourceId));
     if (sourceTee?.teeName) return sourceTee.teeName;
   }
   return inferComboSourceTeeName(courseId, comboTee, holeIdx);
 }
-function getHoleTeeNameForDisplay(courseId, tee, holeIdx) {
+function getHoleTeeNameForDisplay(courseId, tee, holeIdx, courseOverride = null) {
   if (!tee) return '';
-  if (tee.isCombo) return getComboSourceTeeName(courseId, tee, holeIdx) || '';
+  if (tee.isCombo) return getComboSourceTeeName(courseId, tee, holeIdx, courseOverride) || '';
   return inferFlattenedComboSourceTeeName(courseId, tee, holeIdx) || tee.teeName || '';
 }
 function formatComboHoleTeeIndicator(courseId, comboTee, holeIdx, prefix = 'Tee') {
@@ -5955,8 +5965,8 @@ function holePostingStrokeAllowance(holeStrokeIndex, playerHandicap) {
 }
 function computeMatchMetrics(match) {
   if (!match) return null;
-  const course = getCourse(match.courseId);
-  const tee = getTee(match.courseId, match.teeId);
+  const course = getMatchCourse(match);
+  const tee = getMatchTee(match, match.teeId);
   if (!course || !tee) return null;
   const holeCount = getPlayableHoleCount(match, tee);
   const scoringHoles = getSelectedScoringHoles(match, tee);
@@ -6102,6 +6112,8 @@ function computeMatchMetrics(match) {
     bestTeam,
     matchDiff,
     holeCount,
+    courseSource: match.courseSnapshot ? 'round-snapshot' : 'legacy-library-fallback',
+    teeFallbackUsed: !!match.teeId && String(tee?.id || '') !== String(match.teeId),
   };
 }
 
@@ -6485,6 +6497,7 @@ function formatSideMatchThruStatus(pairing) {
 function getPrimaryMatchStatusLine(match, metrics, options = {}) {
   if (!match || !metrics) return '';
   const statusOptions = getMatchStatusOptions(match);
+  if (!statusOptions.length && getFeaturedCompetitionSelection(match) === 'auto') return '';
   const selectedKeys = new Set(statusOptions.map(opt => opt.key));
   const featuredSelection = getFeaturedCompetitionSelection(match);
   const featured = resolveFeaturedCompetitionKey(match, metrics);
@@ -7535,6 +7548,7 @@ function renderLeaderboard() {
   const match = getActiveMatch();
   const empty = document.getElementById('leaderboardEmpty');
   const wrap = document.getElementById('leaderboardWrap');
+  const completedSummaryBanner = document.getElementById('completedSummarySessionBanner');
   const playerBody = document.getElementById('playerLeaderboardBody');
   const teamBody = document.getElementById('teamLeaderboardBody');
   const matchStatus = document.getElementById('matchStatusSummary');
@@ -7551,6 +7565,7 @@ function renderLeaderboard() {
   const perspectiveSelect = document.getElementById('momentumPerspectiveSelect');
 
   if (!match) {
+    completedSummaryBanner?.classList.add('hidden');
     syncFinishRoundUi(null);
     empty.classList.remove('hidden');
     wrap.classList.add('hidden');
@@ -7567,6 +7582,7 @@ function renderLeaderboard() {
 
   empty.classList.add('hidden');
   wrap.classList.remove('hidden');
+  completedSummaryBanner?.classList.toggle('hidden', !isCompletedSummarySession(match));
   syncFinishRoundUi(match);
   const missingScoreEl = document.getElementById('missingScoreWarning');
   if (missingScoreEl) {
@@ -7882,7 +7898,9 @@ function getCourseStableIdentity(course = {}) {
 }
 function getCourseRenderedIdentity(course = {}) {
   const stable = getCourseStableIdentity(course);
-  return stable ? `cloud:${stable}` : `name:${normalizeCourseIdentityText(course.name || '')}`;
+  if (stable) return `cloud:${stable}`;
+  const identity = buildCourseIdentity(course);
+  return `local:${[identity.name, identity.city, identity.state, identity.country, identity.holeCount || ''].join('|')}`;
 }
 function isCourseBetterDropdownCandidate(candidate = {}, current = {}, selectedCourseId = '') {
   if (selectedCourseId && String(candidate.id) === String(selectedCourseId)) return true;
@@ -7905,7 +7923,8 @@ function getDedupedCourseOptions(selectedCourseId = '') {
   });
   const byDisplayName = new Map();
   Array.from(byStableOrName.values()).forEach(course => {
-    const key = normalizeCourseIdentityText(course.name || '');
+    const identity = buildCourseIdentity(course);
+    const key = [identity.name, identity.city, identity.state, identity.country, identity.holeCount || ''].join('|');
     const existing = byDisplayName.get(key);
     if (!existing || isCourseBetterDropdownCandidate(course, existing, selectedCourseId)) byDisplayName.set(key, course);
   });
@@ -8077,6 +8096,9 @@ function isSameCourseIdentity(a = {}, b = {}) {
   }
   if (left.holeCount && right.holeCount && left.holeCount !== right.holeCount) return false;
   return true;
+}
+function findLikelyDuplicateCourses(course = {}, excludeId = '') {
+  return (state.courses || []).filter(existing => String(existing.id || '') !== String(excludeId || '') && isSameCourseIdentity(existing, course));
 }
 function makeDuplicateCloudCourseError(course, matches = []) {
   const courseName = String(course?.name || 'Course').trim() || 'Course';
@@ -8535,8 +8557,16 @@ function readCachedCloudMatchBundle(matchId) {
   }
 }
 function getCourseSnapshotForMatch(match) {
+  if (match?.courseSnapshot && Array.isArray(match.courseSnapshot.tees) && match.courseSnapshot.tees.length) {
+    return JSON.parse(JSON.stringify(match.courseSnapshot));
+  }
   const course = getCourse(match.courseId);
-  const teeIds = [...new Set([match.teeId, ...match.players.map(p => p.teeId)].filter(Boolean))];
+  const selectedTeeIds = [...new Set([match.teeId, ...(match.players || []).map(p => p.teeId)].filter(Boolean))];
+  const comboSourceIds = selectedTeeIds.flatMap(teeId => {
+    const tee = getTee(match.courseId, teeId);
+    return tee?.isCombo ? (tee.comboSources || []).map(source => source?.sourceTeeId).filter(Boolean) : [];
+  });
+  const teeIds = [...new Set([...selectedTeeIds, ...comboSourceIds])];
   const tees = teeIds.map(teeId => {
     const tee = getTee(match.courseId, teeId);
     if (!tee) return null;
@@ -9824,7 +9854,7 @@ function renderScorecardImportSelection() {
   }
   el.innerHTML = `
     <div class="scorecard-import-selection-card">
-      <div class="strong">Selected files</div>
+      <div class="strong">Selected files (${files.length})</div>
       <ol class="scorecard-import-file-list">
         ${files.map((file, idx) => `
           <li class="scorecard-import-file-row">
@@ -9856,7 +9886,7 @@ function normalizeScorecardImportResult(raw) {
   const root = raw?.course ? raw.course : raw;
   const courseName = String(root?.courseName || root?.name || raw?.courseName || '').trim();
   const holeCount = Number(root?.holeCount || root?.holesCount || (Array.isArray(root?.holes) ? root.holes.length : 18)) || 18;
-  const cappedHoleCount = Math.max(1, Math.min(36, holeCount));
+  const cappedHoleCount = holeCount === 9 ? 9 : (holeCount <= 18 ? 18 : Math.min(36, holeCount));
   const commonHoles = Array.from({ length: cappedHoleCount }, (_, idx) => normalizeImportedHole(getImportedCommonHole(root, idx + 1), idx + 1));
   const rawTees = Array.isArray(root?.tees) ? root.tees : Array.isArray(root?.teeBoxes) ? root.teeBoxes : [];
   let tees = rawTees.map((tee, teeIdx) => {
@@ -9895,7 +9925,7 @@ function normalizeScorecardImportResult(raw) {
       rating: null, slope: null, holes: commonHoles, source: 'scorecard-import'
     }];
   }
-  tees.forEach(t => normalizeTee(t, courseName || 'Imported Course'));
+  tees.forEach(t => { t.courseName = courseName || 'Imported Course'; });
   const confidence = Number(root?.confidence ?? raw?.confidence ?? 0);
   return {
     name: courseName,
@@ -9908,6 +9938,45 @@ function normalizeScorecardImportResult(raw) {
     confidence: Number.isFinite(confidence) && confidence > 0 ? Math.round(confidence) : null,
     uncertainFields: Array.isArray(root?.uncertainFields) ? root.uncertainFields : Array.isArray(raw?.uncertainFields) ? raw.uncertainFields : [],
   };
+}
+function buildScorecardImportRequestBody(encodedFiles = []) {
+  return encodedFiles.length === 1 ? {
+    fileName: encodedFiles[0].fileName,
+    mimeType: encodedFiles[0].mimeType,
+    dataUrl: encodedFiles[0].dataUrl,
+    requestedSchema: 'the-dye-ledger-scorecard-v1',
+  } : {
+    files: encodedFiles,
+    requestedSchema: 'the-dye-ledger-scorecard-v1',
+  };
+}
+function getScorecardImportReviewWarnings(data = {}) {
+  const warnings = [];
+  const courseName = String(data.courseName || data.name || '').trim();
+  const tees = Array.isArray(data.tees) ? data.tees : [];
+  if (!courseName) warnings.push('Course name is missing.');
+  if (!tees.length) warnings.push('No tees were extracted.');
+  tees.forEach((tee, idx) => {
+    const name = String(tee?.teeName || '').trim() || `Tee ${idx + 1}`;
+    const holes = Array.isArray(tee?.holes) ? tee.holes : [];
+    const intendedHoleCount = Number(data.holeCount) === 9 ? 9 : 18;
+    const meaningfulHoleNumbers = new Set(holes.filter(hole => Number(hole?.par) || Number(hole?.strokeIndex) || Number(hole?.yardage)).map(hole => Number(hole?.holeNumber)).filter(number => number >= 1 && number <= intendedHoleCount));
+    const missingHoleNumbers = Array.from({ length: intendedHoleCount }, (_, holeIdx) => holeIdx + 1).filter(number => !meaningfulHoleNumbers.has(number));
+    if (missingHoleNumbers.length) warnings.push(`${name}: incomplete ${intendedHoleCount}-hole draft; missing hole${missingHoleNumbers.length === 1 ? '' : 's'} ${missingHoleNumbers.join(', ')}.`);
+    const missingPar = holes.filter(hole => !Number(hole?.par)).length;
+    const missingSi = holes.filter(hole => !Number(hole?.strokeIndex)).length;
+    const missingYardage = holes.filter(hole => !Number(hole?.yardage)).length;
+    if (missingPar) warnings.push(`${name}: par missing on ${missingPar} hole${missingPar === 1 ? '' : 's'}.`);
+    if (missingSi) warnings.push(`${name}: SI missing on ${missingSi} hole${missingSi === 1 ? '' : 's'}.`);
+    if (missingYardage) warnings.push(`${name}: yardage missing on ${missingYardage} hole${missingYardage === 1 ? '' : 's'}.`);
+    if (!Number(tee?.rating)) warnings.push(`${name}: course rating is missing.`);
+    if (!Number(tee?.slope)) warnings.push(`${name}: slope is missing.`);
+  });
+  return warnings;
+}
+function getScorecardImportSaveGuard(data = {}) {
+  const warnings = getScorecardImportReviewWarnings(data);
+  return { warnings, requiresConfirmation: warnings.length > 0 };
 }
 async function requestAiScorecardExtraction(filesOrFile) {
   const endpoint = getScorecardImportEndpoint();
@@ -9925,15 +9994,7 @@ async function requestAiScorecardExtraction(filesOrFile) {
     dataUrl: await fileToDataUrl(file),
     label: getScorecardImportFileLabel(file, idx),
   })));
-  const body = encodedFiles.length === 1 ? {
-    fileName: encodedFiles[0].fileName,
-    mimeType: encodedFiles[0].mimeType,
-    dataUrl: encodedFiles[0].dataUrl,
-    requestedSchema: 'the-dye-ledger-scorecard-v1',
-  } : {
-    files: encodedFiles,
-    requestedSchema: 'the-dye-ledger-scorecard-v1',
-  };
+  const body = buildScorecardImportRequestBody(encodedFiles);
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: getScorecardImportHeaders(),
@@ -9987,12 +10048,19 @@ function collectScorecardImportReviewData() {
     normalizeTee(tee, courseName || 'Imported Course');
     return tee;
   }).filter(t => t.teeName);
-  return { courseName, city, state: stateValue, country, tees };
+  const holeCount = Number(wrap.dataset.importHoleCount) === 9 ? 9 : 18;
+  return { courseName, city, state: stateValue, country, holeCount, tees };
 }
 function saveImportedScorecardCourse() {
   const reviewed = collectScorecardImportReviewData();
   if (!reviewed?.courseName) return toast('Course name is required before saving.');
   if (!reviewed.tees.length) return toast('At least one tee is required before saving.');
+  const saveGuard = getScorecardImportSaveGuard(reviewed);
+  if (saveGuard.requiresConfirmation && !confirm(`WARNING: This imported course is incomplete.\n\n${saveGuard.warnings.slice(0, 10).join('\n')}\n\nSave this incomplete course to the Library anyway?`)) {
+    uiState.scorecardImportStatus = 'Course not saved. Correct the highlighted/missing course data in Review Imported Course.';
+    updateScorecardImportStatus();
+    return;
+  }
   const course = {
     id: uid(),
     name: reviewed.courseName,
@@ -10007,6 +10075,12 @@ function saveImportedScorecardCourse() {
     importedAt: new Date().toISOString(),
   };
   course.tees.forEach(t => { t.courseName = course.name; normalizeTee(t, course.name); });
+  const duplicates = findLikelyDuplicateCourses(course);
+  if (duplicates.length && !confirm(`A likely matching saved course already exists: ${duplicates[0].name}${duplicates[0].city ? ` (${duplicates[0].city})` : ''}. Save this import as a new course anyway?`)) {
+    uiState.scorecardImportStatus = 'Import not saved. Review the existing saved course or change the course name/location.';
+    renderScorecardImportStatus();
+    return;
+  }
   state.courses.push(course);
   uiState.expandedCourses.add(course.id);
   uiState.scorecardImportStatus = 'Course saved locally. Use Publish Local Changes to upload it to the cloud.';
@@ -10051,10 +10125,15 @@ function renderScorecardImportReview() {
     el.innerHTML = '';
     return;
   }
+  el.dataset.importHoleCount = Number(data.holeCount) === 9 ? '9' : '18';
   const confidence = data.confidence ? `<div class="import-confidence"><strong>Confidence:</strong> ${escapeHtml(data.confidence)}%</div>` : '<div class="import-confidence"><strong>Confidence:</strong> Review required</div>';
+  const computedWarnings = getScorecardImportReviewWarnings(data);
   const uncertain = Array.isArray(data.uncertainFields) && data.uncertainFields.length
     ? `<div class="tiny warning-text">Please review: ${data.uncertainFields.slice(0, 8).map(escapeHtml).join(', ')}</div>`
-    : '<div class="tiny">Review and correct the imported course before saving.</div>';
+    : '<div class="tiny">Review and correct the combined course draft before saving.</div>';
+  const missingGuidance = computedWarnings.length
+    ? `<div class="import-completeness-warning" role="alert"><strong>Incomplete import — review before saving.</strong><div>${computedWarnings.slice(0, 10).map(escapeHtml).join(' ')}</div><div>You may fill the blank hole fields below or explicitly confirm an incomplete save.</div></div>`
+    : '<div class="tiny">All core extracted fields are present. Confirm them against every selected file before saving.</div>';
   const teeHtml = data.tees.map((tee, teeIdx) => `
     <details class="import-tee-card" data-import-tee="${teeIdx}" open>
       <summary><strong>${escapeHtml(tee.teeName || `Tee ${teeIdx + 1}`)}</strong> <span class="tiny">${Number(tee.par) || '—'} par · ${getTeeTotalYardage(tee) ? formatYardageValue(getTeeTotalYardage(tee)) : '—'} yds</span></summary>
@@ -10084,6 +10163,7 @@ function renderScorecardImportReview() {
       <div class="item-header compact-item-header"><div><h3>Review Imported Course</h3><div class="tiny">${escapeHtml(uiState.scorecardImportFileName || 'Scorecard import')}</div></div></div>
       ${confidence}
       ${uncertain}
+      ${missingGuidance}
       <div class="grid two compact-grid top-gap">
         <label><span>Course name</span><input data-import-field="name" value="${escapeHtml(data.name || '')}" required /></label>
         <label><span>City</span><input data-import-field="city" value="${escapeHtml(data.city || '')}" /></label>
@@ -10137,13 +10217,19 @@ function updateScorecardImportStatus() {
   const message = uiState.scorecardImportStatus || 'Upload a scorecard image or PDF. AI extraction requires the scorecard-import service to be configured.';
   status.textContent = message;
   status.className = `tiny top-gap ${uiState.scorecardImportLoading ? 'is-loading' : ''}`;
+  const analyzeButton = document.getElementById('analyzeScorecardImportBtn');
+  if (analyzeButton) {
+    analyzeButton.disabled = uiState.scorecardImportLoading;
+    analyzeButton.textContent = uiState.scorecardImportLoading ? 'Analyzing…' : 'Analyze Scorecard';
+  }
 }
 async function analyzeSelectedScorecardImportFiles() {
+  if (uiState.scorecardImportLoading) return;
   const files = getScorecardImportFiles();
   if (!files.length) return toast('Add at least one scorecard photo or file first.');
   uiState.scorecardImportLoading = true;
   uiState.scorecardImportFileName = files.map(f => f.name || 'Scorecard file').join(', ');
-  uiState.scorecardImportStatus = files.length === 1 ? 'Reading scorecard with AI…' : `Reading ${files.length} scorecard files with AI…`;
+  uiState.scorecardImportStatus = files.length === 1 ? 'Preparing and reading 1 scorecard file with AI…' : `Preparing and combining ${files.length} scorecard files with AI…`;
   updateScorecardImportStatus();
   renderScorecardImportReview();
   try {
@@ -10537,7 +10623,8 @@ function renderCourses() {
     const expanded = query ? true : uiState.expandedCourses.has(c.id);
     const sortedTees = getSortedTeesByYardage(c);
     const lastPlayedAt = getCourseLastPlayedAt(c);
-    const recentText = lastPlayedAt ? `Last Played: ${formatRelativeCourseDate(lastPlayedAt)}` : 'Search result';
+    const recentText = lastPlayedAt ? `Last Played: ${formatRelativeCourseDate(lastPlayedAt)}` : 'Saved Course';
+    const holeCount = getCourseHoleCount(c);
     return `
     <div class="item compact-item course-card ${expanded ? 'expanded' : 'collapsed'}">
       <div class="item-header compact-item-header course-card-header">
@@ -10546,7 +10633,7 @@ function renderCourses() {
           <span>
             <span class="item-title">${escapeHtml(c.name)}</span>
             <span class="muted course-meta-line">${escapeHtml([c.city, c.state].filter(Boolean).join(', ') || c.country || 'Course')}</span>
-            <span class="tiny course-meta-line">${escapeHtml(recentText)} · ${sortedTees.length} tee${sortedTees.length === 1 ? '' : 's'}</span>
+            <span class="tiny course-meta-line">${escapeHtml(recentText)} · ${holeCount || '—'} holes · ${sortedTees.length} tee${sortedTees.length === 1 ? '' : 's'}</span>
           </span>
         </button>
         <div class="actions wrap compact-actions">
@@ -10906,6 +10993,44 @@ function hidePostRoundActions() {
   modal.setAttribute('aria-hidden', 'true');
 }
 
+function isCompletedSummarySession(match, summaryMatchId = uiState.completedSummaryMatchId, activeMatchId = state.activeMatchId) {
+  return !!match && match.status === 'complete' && String(summaryMatchId || '') === String(match.id || '') && String(activeMatchId || '') === String(match.id || '');
+}
+
+function closeCompletedSummarySession() {
+  const summaryMatch = getMatch(uiState.completedSummaryMatchId);
+  if (!isCompletedSummarySession(summaryMatch)) return false;
+  clearScheduledSharedMatchSync(summaryMatch.id);
+  sharedMatchSyncDirty.delete(summaryMatch.id);
+  if (String(state.lastOpenedSharedMatchId || '') === String(summaryMatch.id)) state.lastOpenedSharedMatchId = null;
+  state.activeMatchId = null;
+  uiState.completedSummaryMatchId = null;
+  setupWorkflowMode = 'landing';
+  editingMatchId = null;
+  currentHole = 1;
+  currentHoleSequenceStart = 1;
+  pendingScoreCommitFocus = null;
+  scoreInputSessionState.clear();
+  finishConfirmArmed = false;
+  newMatchPromptFinishArmed = false;
+  roundCompletePromptShownForMatchId = null;
+  state.notes = '';
+  hidePostRoundActions();
+  hideRoundCompletePrompt();
+  hideRoundEndPrompt();
+  persist({ skipRender: true });
+  return true;
+}
+
+function exitCompletedSummaryToMatch() {
+  if (!closeCompletedSummarySession()) return false;
+  activateTab('setup');
+  renderAll();
+  renderMatchSetupState();
+  toast('Completed round saved. Start or join your next match.');
+  return true;
+}
+
 function startAnotherRoundWithSameGroup() {
   const prior = getActiveMatch();
   if (!prior) return toast('No completed round is loaded.');
@@ -10926,6 +11051,7 @@ function startAnotherRoundWithSameGroup() {
     sharedPlayerAssignments: prior.sharedPlayerAssignments && typeof prior.sharedPlayerAssignments === 'object' ? clonePlain(prior.sharedPlayerAssignments) : {},
     storageMode: prior.storageMode === 'shared' ? 'shared' : 'local'
   };
+  closeCompletedSummarySession();
   state.activeMatchId = null;
   setupWorkflowMode = 'create';
   editingMatchId = null;
@@ -11016,6 +11142,7 @@ function resetMatchSetupFormDomToBlank() {
 }
 
 function startCleanNewMatchSetup() {
+  closeCompletedSummarySession();
   pendingNextRoundSessionContext = null;
   const snapshot = {
     activeMatchId: state.activeMatchId,
@@ -11090,6 +11217,7 @@ function startCleanNewMatchSetup() {
 }
 
 function startJoinNewMatchSetup({ message = 'Enter the new shared match code.' } = {}) {
+  closeCompletedSummarySession();
   hidePostRoundActions();
   const priorId = state.activeMatchId;
   if (priorId) {
@@ -11521,8 +11649,8 @@ function renderCurrentMatch() {
     renderMemoryQuickCapture(null);
     return;
   }
-  const course = getCourse(match.courseId);
-  const tee = getTee(match.courseId, match.teeId);
+  const course = getMatchCourse(match);
+  const tee = getMatchTee(match, match.teeId);
   if (ensurePlayInputState(match)) persist({ skipRender: true });
   const metrics = computeMatchMetrics(match);
   const holeCount = getPlayableHoleCount(match, tee);
@@ -11530,7 +11658,7 @@ function renderCurrentMatch() {
   const reopenedNote = match.previousCompletedAt
     ? ' · Reopened from completed round (Finish Round will overwrite the saved round)'
     : '';
-  metaEl.textContent = `${getSessionRoundLabel(match)} · ${match.date} · ${match.name || 'Round'} · ${course?.name || ''} · ${getHoleSegmentLabel(match, tee)} · ${metrics?.completed || 0}/${holeCount} holes completed${match.storageMode === 'shared' ? ` · Shared ID ${match.sharedMatchRef || match.sharedMatchId || match.id}` : ''}${reopenedNote}`;
+  metaEl.textContent = `${getSessionRoundLabel(match)} · ${match.date} · ${match.name || 'Round'} · ${course?.name || ''} · ${getHoleSegmentLabel(match, tee)} · ${metrics?.completed || 0}/${holeCount} holes completed${metrics?.teeFallbackUsed ? ` · Tee fallback: ${tee?.teeName || 'first saved tee'}` : ''}${match.storageMode === 'shared' ? ` · Shared ID ${match.sharedMatchRef || match.sharedMatchId || match.id}` : ''}${reopenedNote}`;
   emptyEl.classList.add('hidden');
   wrapEl.classList.remove('hidden');
   currentHole = Math.min(holeCount, Math.max(1, currentHole));
@@ -14521,8 +14649,11 @@ function loadCourseEditor(courseId = null) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function activateTab(tabId) {
+  const previousTabId = document.querySelector('.panel.active')?.id || '';
+  const closedCompletedSummary = tabId === 'setup' && closeCompletedSummarySession();
   document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tabId));
   document.querySelectorAll('.panel').forEach(el => el.classList.toggle('active', el.id === tabId));
+  if (closedCompletedSummary) renderAll();
   updateAppChromeOffset();
   syncFinishRoundUi(getActiveMatch());
   if (tabId === 'setup') {
@@ -14535,6 +14666,15 @@ function activateTab(tabId) {
     renderCurrentMatch();
   }
   if (tabId === 'courses') renderPlayers();
+  if (previousTabId !== tabId) window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+}
+
+function viewCompletedMatchSummary() {
+  const match = getActiveMatch();
+  if (match?.status === 'complete') uiState.completedSummaryMatchId = match.id;
+  hidePostRoundActions();
+  activateTab('leaderboard');
+  renderLeaderboard();
 }
 
 function loadTeeEditor(courseId = null, teeId = null) {
@@ -14799,6 +14939,8 @@ function installHandlers() {
     const base = editingCourseId ? getCourse(editingCourseId) : { tees: [], strokeIndexes: null };
     const course = { ...base, id: editingCourseId || uid(), name: String(fd.get('name') || '').trim(), city: String(fd.get('city') || '').trim(), state: String(fd.get('state') || '').trim(), country: String(fd.get('country') || '').trim() || 'United States of America' };
     if (!course.name) return toast('Course name is required.');
+    const duplicates = findLikelyDuplicateCourses(course, editingCourseId || '');
+    if (duplicates.length && !confirm(`A likely matching saved course already exists: ${duplicates[0].name}${duplicates[0].city ? ` (${duplicates[0].city})` : ''}. Save this as a separate course anyway?`)) return;
     if (editingCourseId) state.courses = state.courses.map(c => c.id === editingCourseId ? course : c); else state.courses.push(course);
     markCoursePendingSync(course);
     loadCourseEditor(null); persist(); toast(editingCourseId ? 'Course updated locally. Use Publish Local Changes to publish changes.' : 'Course added locally. Use Publish Local Changes to publish it.');
@@ -14849,8 +14991,13 @@ function installHandlers() {
     const enteredTemplate = extractStrokeTemplate(holes);
     if (!enteredTemplate && courseTemplate) holes = applyStrokeTemplate(holes, courseTemplate);
     const strokeTotal = holes.reduce((sum, h) => sum + (Number(h.strokeIndex) || 0), 0);
+    if (holes.length !== 18) return toast('A saved tee must include holes 1–18.');
+    if (holes.some((hole, idx) => Number(hole.holeNumber) !== idx + 1)) return toast('Hole numbers must run from 1 through 18.');
+    if (holes.some(hole => !Number.isFinite(Number(hole.par)) || Number(hole.par) < 3 || Number(hole.par) > 6)) return toast('Enter a reasonable par (3–6) for every hole.');
+    if (holes.some(hole => hole.yardage != null && (!Number.isFinite(Number(hole.yardage)) || Number(hole.yardage) < 0))) return toast('Yardage must be a positive number or left blank.');
     if (holes.some(h => !Number.isFinite(h.strokeIndex) || !h.strokeIndex)) return toast('Enter stroke indexes for all 18 holes.');
     if (strokeTotal !== 171) return toast('Stroke indexes must total 171 before saving.');
+    if (new Set(holes.map(hole => Number(hole.strokeIndex))).size !== 18) return toast('Stroke indexes must use each value from 1 through 18 once.');
     if (isCombo && comboSources.some(row => !row.sourceTeeId)) return toast('Choose a source tee for every hole in a combo tee.');
     const tee = {
       id: editingTeeRef?.teeId || uid(),
@@ -15782,6 +15929,11 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
     normalizeMatch(match);
     if (!match.courseId) return toast('Select a course.');
+    const courseChanged = !!existing && String(existing.courseId || '') !== String(match.courseId || '');
+    const teeSetChanged = !!existing && JSON.stringify((existing.players || []).map(player => player.teeId || '').sort()) !== JSON.stringify((match.players || []).map(player => player.teeId || '').sort());
+    match.courseSnapshot = (!existing || courseChanged || teeSetChanged || !existing.courseSnapshot)
+      ? getCourseSnapshotForMatch({ ...match, courseSnapshot: null })
+      : JSON.parse(JSON.stringify(existing.courseSnapshot));
     markCourseRecentlyUsed(match.courseId, match.date || todayIso());
     if (!match.players.every(p => p.teeId)) { markMissingTeeRows(); return toast('Each player needs a tee.'); }
     clearMatchTeeErrors();
@@ -15846,7 +15998,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('cancelMatchEditBtn').addEventListener('click', cancelMatchSetupChanges);
   document.getElementById('topCancelMatchSetupBtn')?.addEventListener('click', cancelMatchSetupChanges);
   const postRoundSummaryBtn = document.getElementById('postRoundViewSummaryBtn');
-  if (postRoundSummaryBtn) postRoundSummaryBtn.addEventListener('click', () => { hidePostRoundActions(); activateTab('leaderboard'); });
+  if (postRoundSummaryBtn) postRoundSummaryBtn.addEventListener('click', viewCompletedMatchSummary);
   const postRoundAnotherBtn = document.getElementById('postRoundAnotherRoundBtn');
   if (postRoundAnotherBtn) postRoundAnotherBtn.addEventListener('click', startAnotherRoundWithSameGroup);
   const postRoundNewBtn = document.getElementById('postRoundNewMatchBtn');
@@ -15854,7 +16006,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   const postRoundJoinBtn = document.getElementById('postRoundJoinMatchBtn');
   if (postRoundJoinBtn) postRoundJoinBtn.addEventListener('click', () => startJoinNewMatchSetup());
   const postRoundInlineSummaryBtn = document.getElementById('postRoundInlineViewSummaryBtn');
-  if (postRoundInlineSummaryBtn) postRoundInlineSummaryBtn.addEventListener('click', () => { hidePostRoundActions(); activateTab('leaderboard'); });
+  if (postRoundInlineSummaryBtn) postRoundInlineSummaryBtn.addEventListener('click', viewCompletedMatchSummary);
+  document.getElementById('completedSummaryDoneBtn')?.addEventListener('click', exitCompletedSummaryToMatch);
   const postRoundInlineAnotherBtn = document.getElementById('postRoundInlineAnotherRoundBtn');
   if (postRoundInlineAnotherBtn) postRoundInlineAnotherBtn.addEventListener('click', startAnotherRoundWithSameGroup);
   const postRoundInlineNewBtn = document.getElementById('postRoundInlineNewMatchBtn');
@@ -16704,6 +16857,19 @@ function installDyeLedgerLiveEngineAdapter() {
     buildSharedSspFacts,
     reconcileSharedSspFacts,
     applySharedSspFacts,
+    getMatchCourse,
+    getMatchTee,
+    getCourseSnapshotForMatch,
+    normalizeCourseIdentityText,
+    isSameCourseIdentity,
+    findLikelyDuplicateCourses,
+    getDedupedCourseOptions,
+    getPlayerHoleTeeInfo,
+    buildScorecardImportRequestBody,
+    getScorecardImportReviewWarnings,
+    getScorecardImportSaveGuard,
+    updateScorecardImportStatus,
+    isCompletedSummarySession,
   };
   return window.__DYE_LEDGER_LIVE_ENGINE__;
 }

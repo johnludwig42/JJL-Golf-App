@@ -7,12 +7,12 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=30.3.54" />
+  <link rel="manifest" href="manifest.json?v=30.3.60" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
   <link rel="shortcut icon" href="./favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="style.css?v=30.3.54" />
+  <link rel="stylesheet" href="style.css?v=30.3.60" />
 </head>
 <body>
   <div class="app-chrome"><header class="app-header compact-header">
@@ -348,6 +348,13 @@
     <section id="leaderboard" class="panel">
       <div id="leaderboardWrap" class="hidden">
         <div id="printRoundMeta" class="print-round-meta hidden"></div>
+        <div id="completedSummarySessionBanner" class="completed-summary-session-banner hidden no-print" role="status">
+          <div>
+            <strong>Round saved.</strong>
+            <div class="tiny">You are viewing the completed match summary.</div>
+          </div>
+          <button id="completedSummaryDoneBtn" type="button" class="secondary">Done — Return to Match</button>
+        </div>
         <div class="card tight-card scoreboard-card scoreboard-export-card print-section-export">
           <div class="item-header compact-item-header">
             <div>
@@ -522,7 +529,7 @@
         <div class="item-header compact-item-header">
           <div>
             <h2>Courses</h2>
-            <div class="tiny">Choose a recent course or search your full course library.</div>
+            <div class="tiny">Reusable saved courses for Match Setup. New rounds keep their own course copy, so later Library edits do not change round history.</div>
           </div>
           <div class="course-library-actions">
             <button id="refreshCloudCoursesBtn" type="button" class="secondary" title="Download new or updated courses from the cloud to this device.">Download Cloud Courses</button>
@@ -539,7 +546,7 @@
       </div>
 
       <div class="card tight-card">
-        <h2 id="courseFormTitle">Add course</h2>
+        <h2 id="courseFormTitle">Add Saved Course</h2>
         <form id="courseForm" class="grid two compact-grid">
           <label><span>Course name</span><input name="name" required /></label>
           <label><span>City</span><input name="city" /></label>
@@ -643,16 +650,16 @@
         <div id="cloudCourseSyncUnavailable" class="tiny top-gap hidden">Cloud sync unavailable. Local courses are still available.</div>
         <div id="localCourseSyncResult" class="result compact-result top-gap hidden"></div>
         <hr class="soft-divider" />
-        <h3>Import Scorecard</h3>
-        <div class="tiny">Upload or photograph one or more scorecard files. Use this for front/back scorecard photos, separate tee panels, or PDFs. Imported courses save locally first.</div>
+        <h3>Import Scorecard to Library</h3>
+        <div class="tiny">Select one or multiple photos/files for the same course—such as front nine + back nine or separate tee panels. AI combines them into one editable course draft before anything is saved.</div>
         <div class="actions wrap top-gap">
-          <button id="importScorecardBtn" type="button" class="secondary">Add Photo / File</button>
+          <button id="importScorecardBtn" type="button" class="secondary">Add Photos / Files</button>
           <button id="analyzeScorecardImportBtn" type="button">Analyze Scorecard</button>
           <button id="clearScorecardImportBtn" type="button" class="secondary">Clear</button>
           <input id="importScorecardInput" class="sr-only" type="file" multiple accept="application/pdf,image/png,image/jpeg,image/jpg,image/heic,image/heif,.pdf,.png,.jpg,.jpeg,.heic,.heif" />
         </div>
         <div id="scorecardImportSelection" class="top-gap"></div>
-        <div id="scorecardImportStatus" class="tiny top-gap">Add one or more scorecard photos/files. AI extraction requires the scorecard-import service to be configured.</div>
+        <div id="scorecardImportStatus" class="tiny top-gap">Add one or more scorecard photos/files for one course. Selected files are combined into one review draft.</div>
         <div id="scorecardImportReview" class="top-gap hidden"></div>
       </div>
 
@@ -735,7 +742,7 @@
       <div class="card tight-card app-updates-card">
         <h2>App Updates</h2>
         <div class="app-update-summary">
-          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.54</strong></div>
+          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.60</strong></div>
           <div><span class="muted-label">Build Date</span><strong id="appBuildTimestamp">loading…</strong></div>
           <div><span class="muted-label">Cache</span><span id="appActiveCacheName" class="break-word">checking…</span></div>
           <div><span class="muted-label">Update Available</span><strong id="appUpdateAvailableStatus">checking…</strong></div>
@@ -767,8 +774,8 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
-          <li>v30.3.54 adds Sneaky / Sandy / Poley base point ledger previews.</li>
-          <li>v30.3.54 keeps SSP settlement and advanced multipliers deferred.</li>
+          <li>v30.3.60 adds safer Course Library snapshots and hardened scorecard import review.</li>
+          <li>v30.3.60 keeps completed Match Summaries available until their explicit exit.</li>
         </ul>
       </div>
     </section>
@@ -788,7 +795,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.3.54</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
+    <span id="appVersionFooter">v30.3.60</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>
@@ -916,7 +923,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=30.3.54"></script>
-  <script src="app.js?v=30.3.54"></script>
+  <script src="supabase-config.js?v=30.3.60"></script>
+  <script src="app.js?v=30.3.60"></script>
 </body>
 </html>

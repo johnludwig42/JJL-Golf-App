@@ -1,9 +1,9 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.55',
-  versionNumber: '30.3.55',
-  cacheName: 'the-dye-ledger-v30.3.55',
+  version: 'v30.3.56',
+  versionNumber: '30.3.56',
+  cacheName: 'the-dye-ledger-v30.3.56',
   buildDate: new Date().toISOString(),
   buildLabel: 'SSP Advanced Rules, Honors, Settlement, and Reporting'
 };
@@ -2286,6 +2286,84 @@ function normalizeSneakySandyPoleyInputs(match) {
   return normalized;
 }
 
+function buildSharedSspFacts(match) {
+  if (!isSneakySandyPoleyEnabled(match)) return null;
+  return {
+    version: 1,
+    settings: getSneakySandyPoleyConfig(match),
+    inputs: JSON.parse(JSON.stringify(normalizeSneakySandyPoleyInputs(match))),
+    playedHoleOrder: Array.isArray(match.playedHoleOrder) ? [...match.playedHoleOrder] : [],
+    holeFirstCompletedAt: { ...(match.holeFirstCompletedAt || {}) },
+    updatedAt: match.sharedSspUpdatedAt || new Date().toISOString(),
+    sourceDeviceId: match.sharedSspSourceDeviceId || getSharedDeviceId(),
+  };
+}
+function flattenSharedSspFacts(facts = null) {
+  const flat = {};
+  if (!facts || typeof facts !== 'object') return flat;
+  if (facts.settings) flat.settings = JSON.stringify(facts.settings);
+  Object.entries(facts.inputs || {}).forEach(([hole, input]) => {
+    Object.entries(input?.players || {}).forEach(([playerId, row]) => {
+      ['sneaky', 'sandy', 'poley', 'greeny'].forEach(key => { flat[`holes.${hole}.players.${playerId}.${key}`] = !!row?.[key]; });
+    });
+    ['proxPlayerId', 'bridge', 'rebridge', 'notes'].forEach(key => { flat[`holes.${hole}.${key}`] = input?.[key] ?? (key === 'proxPlayerId' || key === 'notes' ? '' : false); });
+  });
+  flat.playedHoleOrder = JSON.stringify(facts.playedHoleOrder || []);
+  flat.holeFirstCompletedAt = JSON.stringify(facts.holeFirstCompletedAt || {});
+  return flat;
+}
+function reconcileSharedSspFacts(localFacts, remoteFacts, baselineFacts = null, { isHost = false } = {}) {
+  if (!localFacts) return { facts: remoteFacts || null, conflicts: [] };
+  if (!remoteFacts) return { facts: localFacts, conflicts: [] };
+  const local = flattenSharedSspFacts(localFacts);
+  const remote = flattenSharedSspFacts(remoteFacts);
+  const base = flattenSharedSspFacts(baselineFacts);
+  const conflicts = [];
+  const useRemote = new Set();
+  new Set([...Object.keys(local), ...Object.keys(remote)]).forEach(field => {
+    if (local[field] === remote[field]) return;
+    const localChanged = !baselineFacts || local[field] !== base[field];
+    const remoteChanged = !baselineFacts || remote[field] !== base[field];
+    if (localChanged && remoteChanged) conflicts.push({ field, localValue: local[field], remoteValue: remote[field], holeNumber: Number(field.match(/^holes\.(\d+)/)?.[1] || 0), remoteSourceDeviceId: remoteFacts.sourceDeviceId || '' });
+    else if (remoteChanged || (!localChanged && !isHost)) useRemote.add(field);
+  });
+  if (conflicts.length) return { facts: localFacts, conflicts };
+  if (!useRemote.size) return { facts: localFacts, conflicts: [] };
+  const merged = JSON.parse(JSON.stringify(localFacts));
+  useRemote.forEach(field => {
+    if (field === 'settings') merged.settings = JSON.parse(remote[field]);
+    else if (field === 'playedHoleOrder') merged.playedHoleOrder = JSON.parse(remote[field]);
+    else if (field === 'holeFirstCompletedAt') merged.holeFirstCompletedAt = JSON.parse(remote[field]);
+    else {
+      const parts = field.split('.');
+      if (parts[0] === 'holes') parts[0] = 'inputs';
+      let cursor = merged;
+      parts.forEach((part, idx) => {
+        if (idx === parts.length - 1) cursor[part] = remote[field];
+        else cursor = cursor[part] || (cursor[part] = {});
+      });
+    }
+  });
+  merged.updatedAt = remoteFacts.updatedAt || merged.updatedAt;
+  return { facts: merged, conflicts: [] };
+}
+function applySharedSspFacts(match, facts, { baseline = true } = {}) {
+  if (!match || !facts) return false;
+  const before = JSON.stringify(buildSharedSspFacts(match));
+  if (facts.settings) {
+    const others = (match.selectedGames || []).filter(game => game.key !== 'sneaky_sandy_poley');
+    match.selectedGames = normalizeSelectedGamesOrder([...others, normalizeSneakySandyPoleyConfig(facts.settings)]);
+  }
+  match.sneakySandyPoleyInputs = JSON.parse(JSON.stringify(facts.inputs || {}));
+  match.playedHoleOrder = Array.isArray(facts.playedHoleOrder) ? [...facts.playedHoleOrder] : [];
+  match.holeFirstCompletedAt = { ...(facts.holeFirstCompletedAt || {}) };
+  normalizeSneakySandyPoleyInputs(match);
+  match.sharedSspUpdatedAt = facts.updatedAt || null;
+  match.sharedSspSourceDeviceId = facts.sourceDeviceId || '';
+  if (baseline) match.sharedSspBaseline = JSON.parse(JSON.stringify(facts));
+  return before !== JSON.stringify(buildSharedSspFacts(match));
+}
+
 function getSneakySandyPoleyHoleInput(match, holeNumber = currentHole) {
   if (!match) return getDefaultSneakySandyPoleyHoleInput(match, holeNumber);
   if (!match.sneakySandyPoleyInputs || typeof match.sneakySandyPoleyInputs !== 'object') match.sneakySandyPoleyInputs = {};
@@ -2769,7 +2847,7 @@ function buildSneakySandyPoleyHolePreviewHtml(match, ledger, holeNumber) {
   const warnings = (holeLedger.warnings || []).slice(0, 3).map(item => `<div class="ssp-ledger-warning">${escapeHtml(item)}</div>`).join('');
   return `
     <div class="ssp-ledger-preview top-gap">
-      <div class="ssp-ledger-head"><span>SSP - Hole ${Number(holeNumber) || ''}</span></div>
+      <div class="ssp-ledger-head"><span>Hole Points · Hole ${Number(holeNumber) || ''}</span><span class="tiny">Live preview</span></div>
       <div class="ssp-ledger-mini-row"><span>Base</span><strong>${escapeHtml(getSneakySandyPoleyTeamDiffText(match, ledger, holeLedger))}</strong></div>
       <div class="ssp-ledger-tiles">${baseTiles}</div>
       <div class="ssp-ledger-detail-list">${details}</div>
@@ -4415,13 +4493,14 @@ function buildSharedLedgerReportNote(match) {
   const conflicts = Array.isArray(parity?.conflicts) ? parity.conflicts.length : 0;
   const missingLocal = Array.isArray(parity?.missingLocal) ? parity.missingLocal.length : 0;
   const missingRemote = Array.isArray(parity?.missingRemote) ? parity.missingRemote.length : 0;
+  const sspConflicts = isSneakySandyPoleyEnabled(match) ? (match.sharedSspConflicts || []).length : 0;
   const detail = confirmed
     ? 'Shared Match reconciliation: confirmed'
     : `Shared Match reconciliation was not confirmed before this summary was generated.${conflicts ? ` Conflicts: ${conflicts}.` : ''}${missingLocal ? ` Missing local entries: ${missingLocal}.` : ''}${missingRemote ? ` Missing remote entries: ${missingRemote}.` : ''}`;
   return `<section class="export-section export-section-shared-ledger-note print-keep-together">
     <div class="export-section-head">
       <h2>Shared Match Reconciliation</h2>
-      <div class="export-section-sub">${escapeHtml(detail)}</div>
+      <div class="export-section-sub">${escapeHtml(detail)}${sspConflicts ? ` Shared SSP conflict${sspConflicts === 1 ? '' : 's'} must be resolved before settlement is final.` : (isSneakySandyPoleyEnabled(match) ? ' SSP reconciled from shared facts.' : '')}</div>
     </div>
   </section>`;
 }
@@ -5615,6 +5694,9 @@ function normalizeMatch(match) {
   match.lastSharedScorePushAt = match.lastSharedScorePushAt || null;
   match.lastSharedParityCheckAt = match.lastSharedParityCheckAt || null;
   match.sharedLedgerParity = match.sharedLedgerParity && typeof match.sharedLedgerParity === 'object' ? match.sharedLedgerParity : null;
+  match.sharedSspBaseline = match.sharedSspBaseline && typeof match.sharedSspBaseline === 'object' ? match.sharedSspBaseline : null;
+  match.sharedSspConflicts = Array.isArray(match.sharedSspConflicts) ? match.sharedSspConflicts : [];
+  match.sharedSspSyncState = String(match.sharedSspSyncState || (isSneakySandyPoleyEnabled(match) && match.storageMode === 'shared' ? 'pending' : 'not-applicable'));
   match.lastSharedSyncError = String(match.lastSharedSyncError || '');
   match.sharedOwnerUserId = match.sharedOwnerUserId || null;
   match.sharedMatchRef = match.sharedMatchRef || match.sharedMatchId || match.id;
@@ -8525,6 +8607,9 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
     if (before !== after) {
       match.sneakySandyPoleyInputs = match.sneakySandyPoleyInputs && typeof match.sneakySandyPoleyInputs === 'object' ? match.sneakySandyPoleyInputs : {};
       match.sneakySandyPoleyInputs[String(actualHoleNumber)] = next;
+      match.sharedSspUpdatedAt = new Date().toISOString();
+      match.sharedSspSourceDeviceId = getSharedDeviceId();
+      match.sharedSspSyncState = match.storageMode === 'shared' ? 'pending' : 'not-applicable';
       mutated = true;
     }
   }
@@ -8593,7 +8678,7 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
     status: match.status || 'active',
     course_id: match.courseId || '',
     reference_tee_id: match.teeId || '',
-    course_snapshot: { ...courseSnapshot, sharedMatchMeta: { scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device'), matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || ''), hostDeviceId: match.sharedHostDeviceId || getSharedDeviceId(), hostParticipantId: match.sharedHostParticipantId || getCurrentSharedParticipantId(match), devices: Array.isArray(match.sharedDevices) ? match.sharedDevices : [], participants: getSharedAssignmentParticipants(match), playerAssignments: match.sharedPlayerAssignments || {}, memories: getRoundMemories(match), memoriesUpdatedAt: new Date().toISOString(), roundContext: normalizeRoundContext(match.roundContext) } },
+    course_snapshot: { ...courseSnapshot, sharedMatchMeta: { scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device'), matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || ''), hostDeviceId: match.sharedHostDeviceId || getSharedDeviceId(), hostParticipantId: match.sharedHostParticipantId || getCurrentSharedParticipantId(match), devices: Array.isArray(match.sharedDevices) ? match.sharedDevices : [], participants: getSharedAssignmentParticipants(match), playerAssignments: match.sharedPlayerAssignments || {}, memories: getRoundMemories(match), memoriesUpdatedAt: new Date().toISOString(), roundContext: normalizeRoundContext(match.roundContext), sspFacts: buildSharedSspFacts(match) } },
     format: match.format || 'teams',
     allowance: Number(match.allowance) || 100,
     hole_count: getRequestedHoleCount(match),
@@ -8710,6 +8795,24 @@ async function uploadSharedMatch(match) {
       if (!isCurrentDeviceMatchHost(match) && liveMeta.playerAssignments && typeof liveMeta.playerAssignments === 'object') {
         payloadMeta.playerAssignments = liveMeta.playerAssignments;
       }
+      if (payloadMeta.sspFacts || liveMeta.sspFacts) {
+        if ((match.sharedSspConflicts || []).length) {
+          payloadMeta.sspFacts = liveMeta.sspFacts || payloadMeta.sspFacts;
+          match.sharedSspSyncState = 'conflict';
+        } else {
+        const result = reconcileSharedSspFacts(payloadMeta.sspFacts, liveMeta.sspFacts, match.sharedSspBaseline, { isHost: isCurrentDeviceMatchHost(match) });
+        if (result.conflicts.length) {
+          match.sharedSspConflicts = result.conflicts;
+          match.sharedSspSyncState = 'conflict';
+          payloadMeta.sspFacts = liveMeta.sspFacts || payloadMeta.sspFacts;
+        } else {
+          payloadMeta.sspFacts = result.facts;
+          match.sharedSspConflicts = [];
+          match.sharedSspSyncState = 'synced';
+          if (result.facts) applySharedSspFacts(match, result.facts);
+        }
+        }
+      }
     }
   } catch (err) {
     console.warn('Could not merge live shared metadata before upload; proceeding with local snapshot.', err);
@@ -8742,6 +8845,10 @@ async function uploadSharedMatch(match) {
   match.lastCloudSyncAt = new Date().toISOString();
   match.lastSharedScorePushAt = match.lastCloudSyncAt;
   match.lastSharedSyncError = '';
+  if (payload.matchRow.course_snapshot.sharedMatchMeta.sspFacts && !(match.sharedSspConflicts || []).length) {
+    match.sharedSspBaseline = JSON.parse(JSON.stringify(payload.matchRow.course_snapshot.sharedMatchMeta.sspFacts));
+    match.sharedSspSyncState = 'synced';
+  }
   rememberSharedMatchId(match.sharedMatchId);
   return match;
 }
@@ -8841,6 +8948,12 @@ function hydrateMatchFromCloudBundle(bundle) {
     sharedPlayerAssignments: sharedMeta.playerAssignments && typeof sharedMeta.playerAssignments === 'object' ? sharedMeta.playerAssignments : {},
     memories: Array.isArray(sharedMeta.memories) ? sharedMeta.memories.map(m => normalizeRoundMemory(m)).filter(Boolean) : [],
     roundContext: normalizeRoundContext(sharedMeta.roundContext || {}),
+    sneakySandyPoleyInputs: JSON.parse(JSON.stringify(sharedMeta.sspFacts?.inputs || {})),
+    playedHoleOrder: Array.isArray(sharedMeta.sspFacts?.playedHoleOrder) ? [...sharedMeta.sspFacts.playedHoleOrder] : [],
+    holeFirstCompletedAt: { ...(sharedMeta.sspFacts?.holeFirstCompletedAt || {}) },
+    sharedSspBaseline: sharedMeta.sspFacts ? JSON.parse(JSON.stringify(sharedMeta.sspFacts)) : null,
+    sharedSspSyncState: sharedMeta.sspFacts ? 'synced' : 'not-applicable',
+    sharedSspConflicts: [],
     notes: String(notes?.body || ''),
     roundRecapNotes: String(notes?.body || ''),
     selectedGames: normalizeSelectedGamesOrder(matchRow?.selected_games || []),
@@ -8954,12 +9067,13 @@ async function reconcileSharedMatchBeforeSummary(match, { silent = true } = {}) 
     if (error) throw error;
     const remoteLedger = extractRemoteScoredLedger(match, data || []);
     mergeSharedScoredLedgerIntoMatch(match, remoteLedger);
+    await mergeCloudSharedMetadata(match, { includeAssignments: !isCurrentDeviceMatchHost(match), includeMemories: true });
     const comparison = compareScoredLedgers(extractLocalScoredLedger(match), remoteLedger);
     const parity = recordSharedLedgerParity(match, comparison, { checkedAt: new Date().toISOString() });
     match.lastSharedScorePullAt = parity.checkedAt;
     match.lastSharedSyncError = '';
     persist({ skipRender: true });
-    if (!parity.parityConfirmed && !silent) toast('Shared Match scores may not be fully reconciled on this device.');
+    if ((!parity.parityConfirmed || (match.sharedSspConflicts || []).length) && !silent) toast((match.sharedSspConflicts || []).length ? 'SSP conflicts must be resolved before final settlement.' : 'Shared Match scores may not be fully reconciled on this device.');
     return parity;
   } catch (err) {
     console.warn('Shared summary reconciliation failed.', err);
@@ -8992,7 +9106,7 @@ function setLastOpenedSharedMatch(matchOrId = null) {
 
 async function fetchSharedMatchMetadata(matchId, match = null) {
   const client = await ensureSupabaseClient();
-  if (!client) return { devices: [], playerAssignments: null, memories: [] };
+  if (!client) return { devices: [], playerAssignments: null, memories: [], sspFacts: null };
   const [{ data: matchRow, error: matchError }, { data: memberships, error: membershipsError }] = await Promise.all([
     client.from('matches').select('id,course_snapshot,updated_at').eq('id', matchId).maybeSingle(),
     client.from('match_memberships').select('*').eq('match_id', matchId).eq('status', 'active').order('joined_at'),
@@ -9022,6 +9136,7 @@ async function fetchSharedMatchMetadata(matchId, match = null) {
     participants,
     playerAssignments,
     memories: Array.isArray(meta.memories) ? meta.memories : [],
+    sspFacts: meta.sspFacts && typeof meta.sspFacts === 'object' ? meta.sspFacts : null,
   };
 }
 async function fetchSharedParticipantDevices(matchId, match = null) {
@@ -9078,6 +9193,21 @@ async function mergeCloudSharedMetadata(match, { includeAssignments = false, inc
   }
   if (includeMemories && Array.isArray(meta.memories) && meta.memories.length) {
     changed = mergeRoundMemories(match, meta.memories, { source: 'shared' }) || changed;
+  }
+  if (isSneakySandyPoleyEnabled(match) || meta.sspFacts) {
+    if ((match.sharedSspConflicts || []).length) {
+      match.sharedSspSyncState = 'conflict';
+    } else {
+    const result = reconcileSharedSspFacts(buildSharedSspFacts(match), meta.sspFacts, match.sharedSspBaseline, { isHost: isCurrentDeviceMatchHost(match) });
+    match.sharedSspConflicts = result.conflicts;
+    if (result.conflicts.length) {
+      match.sharedSspSyncState = 'conflict';
+    } else if (result.facts) {
+      changed = applySharedSspFacts(match, result.facts) || changed;
+      match.sharedSspSyncState = 'synced';
+      match.lastSharedSspPullAt = new Date().toISOString();
+    }
+    }
   }
   console.debug('[SharedAssignmentMap]', 'mergeCloudSharedMetadata', {
     includeAssignments,
@@ -11581,6 +11711,7 @@ function renderSneakySandyPoleyEntry(match, hole, metrics) {
   const input = getSneakySandyPoleyHoleInput(match, actualHoleNumber);
   const players = getVisibleScoringPlayers(match, (metrics?.players || []), { stats: false });
   const canEditAny = players.some(p => canEditPlayerScore(match, p.team, p.playerId));
+  const canEditHoleFacts = match.storageMode !== 'shared' || isCurrentDeviceMatchHost(match);
   const proxState = resolveSneakySandyPoleyProxSelection(input, players);
   const proxEligiblePlayers = proxState.eligiblePlayers;
   if (input.proxPlayerId !== proxState.proxPlayerId) {
@@ -11599,17 +11730,23 @@ function renderSneakySandyPoleyEntry(match, hole, metrics) {
     <div class="card inset-card ssp-entry-card">
       <div class="item-header compact-item-header">
         <div>
-          <div class="section-label">Sneaky / Sandy / Poley</div>
-          <div class="tiny">Game Action · Live Preview · Hole ${actualHoleNumber}</div>
+          <div class="section-label ssp-section-title">Sneaky / Sandy / Poley</div>
+          <div class="tiny ssp-section-subline">Game Action · Live Preview · Hole ${actualHoleNumber}</div>
         </div>
-        <span class="setup-role-badge">SSP Points</span>
       </div>
       <div class="ssp-status-row top-gap">
         <span>Stakes: ${formatPositiveCurrency(cfg.pointValue, 1)} per point</span>
         ${cfg.validateGreenyProx ? '<span>Validate on: Greeny/Prox require 2 putts or less.</span>' : '<span>Validate off</span>'}
-        <span>${escapeHtml(ledger.holes?.[String(actualHoleNumber)]?.bridge?.label || 'Multiplier: 1x')}</span>
+        <span class="ssp-multiplier-status">${escapeHtml(input.rebridge ? 'Re-Bridge 4x' : input.bridge ? 'Bridge 2x' : '1x')}</span>
         ${cfg.allowUmbee ? `<span>Umbee allowed${cfg.allowUmbeeWithBridge ? ' with Bridge/Re-Bridge' : ''}</span>` : '<span>Umbee off</span>'}
       </div>
+      ${cfg.allowBridgeRebridge ? `<div class="ssp-header-actions top-gap" aria-label="Bridge controls">
+        <span class="tiny ssp-header-actions-label">Tee-box call</span>
+        <div class="ssp-chip-group ssp-bridge-chip-group">
+          <label class="ssp-chip"><input type="checkbox" data-ssp-hole-key="bridge" ${input.bridge ? 'checked' : ''} ${canEditHoleFacts ? '' : 'disabled'} /><span>${input.bridge ? '✓ Bridge' : 'Bridge'}</span></label>
+          <label class="ssp-chip"><input type="checkbox" data-ssp-hole-key="rebridge" ${input.rebridge ? 'checked' : ''} ${canEditHoleFacts ? '' : 'disabled'} /><span>${input.rebridge ? '✓ Re-Bridge' : 'Re-Bridge'}</span></label>
+        </div>
+      </div>` : ''}
       <div class="ssp-player-list top-gap">
         ${players.map(p => {
           const row = input.players[p.playerId] || {};
@@ -11623,16 +11760,12 @@ function renderSneakySandyPoleyEntry(match, hole, metrics) {
         }).join('') || '<div class="tiny">No scoring players available.</div>'}
       </div>
       <div class="grid two compact-grid top-gap">
-        <label><span>Prox</span><select data-ssp-prox ${canEditAny && proxEligiblePlayers.length ? '' : 'disabled'}>
+        <label><span>Prox</span><select data-ssp-prox ${canEditHoleFacts && proxEligiblePlayers.length ? '' : 'disabled'}>
           <option value="">None</option>
           ${proxEligiblePlayers.length > 1 ? `<option value="${SSP_PROX_TBD_VALUE}" ${proxState.uiValue === SSP_PROX_TBD_VALUE ? 'selected' : ''}>TBD</option>` : ''}
           ${proxEligiblePlayers.map(p => `<option value="${escapeHtml(p.playerId)}" ${proxState.uiValue === p.playerId ? 'selected' : ''}>${escapeHtml(p.player?.name || 'Player')}</option>`).join('')}
         </select></label>
         ${proxEligiblePlayers.length ? (proxEligiblePlayers.length > 1 ? '<div class="tiny">Choose Prox when multiple Greenies are selected.</div>' : '<div class="tiny">Only Greeny is auto-selected for Prox.</div>') : '<div class="tiny">Select Greeny for a player to enable Prox.</div>'}
-        ${cfg.allowBridgeRebridge ? `<div class="ssp-hole-actions">
-          <label class="inline-check"><input type="checkbox" data-ssp-hole-key="bridge" ${input.bridge ? 'checked' : ''} ${canEditAny ? '' : 'disabled'} /><span>Bridge</span></label>
-          <label class="inline-check"><input type="checkbox" data-ssp-hole-key="rebridge" ${input.rebridge ? 'checked' : ''} ${canEditAny ? '' : 'disabled'} /><span>Re-Bridge</span></label>
-        </div>` : '<div class="tiny">Bridge/Re-Bridge controls are off in Match Setup.</div>'}
       </div>
       ${buildSneakySandyPoleyHolePreviewHtml(match, ledger, actualHoleNumber)}
     </div>`;
@@ -11664,8 +11797,9 @@ function renderSneakySandyPoleyNote(match, hole, metrics) {
   const input = getSneakySandyPoleyHoleInput(match, actualHoleNumber);
   const players = getVisibleScoringPlayers(match, (metrics?.players || []), { stats: false });
   const canEditAny = players.some(p => canEditPlayerScore(match, p.team, p.playerId));
+  const canEditHoleFacts = match.storageMode !== 'shared' || isCurrentDeviceMatchHost(match);
   wrap.classList.remove('hidden');
-  wrap.innerHTML = `<label class="ssp-note-field"><span>Optional SSP note</span><input type="text" maxlength="240" data-ssp-notes value="${escapeHtml(input.notes || '')}" placeholder="Optional SSP note" ${canEditAny ? '' : 'disabled'} /></label>`;
+  wrap.innerHTML = `<label class="ssp-note-field"><span>Optional SSP note</span><input type="text" maxlength="240" data-ssp-notes value="${escapeHtml(input.notes || '')}" placeholder="Optional SSP note" ${canEditHoleFacts ? '' : 'disabled'} /></label>${!canEditHoleFacts ? '<div class="tiny">Host controls Prox, Bridge/Re-Bridge, and the SSP note in Shared Match.</div>' : ''}`;
 }
 
 function renderStatTrackingEntry(match, hole, metrics) {
@@ -12777,6 +12911,8 @@ function renderScoreAccessCard(match) {
     : 'Shared scoring is open according to the selected scoring mode.';
   const parity = match.sharedLedgerParity && typeof match.sharedLedgerParity === 'object' ? match.sharedLedgerParity : null;
   const parityLabel = parity?.status === 'confirmed' ? 'Confirmed' : parity?.status === 'conflict' ? 'Conflict detected' : parity?.status === 'warning' ? 'Warning' : 'Not confirmed';
+  const sspConflicts = Array.isArray(match.sharedSspConflicts) ? match.sharedSspConflicts : [];
+  const sspLabel = sspConflicts.length ? `Conflict on Hole ${sspConflicts[0].holeNumber || '?'}` : match.sharedSspSyncState === 'pending' ? 'Pending sync' : match.sharedSspSyncState === 'synced' ? 'Synced' : 'Final pull needed';
   card.classList.remove('hidden');
   card.classList.add('shared-score-compact-card', 'shared-secondary-controls-card');
   card.innerHTML = `
@@ -12797,6 +12933,7 @@ function renderScoreAccessCard(match) {
       <div><div class="tiny">Connection</div><strong>${escapeHtml(getSharedOnlineLabel())}</strong></div>
       <div><div class="tiny">Sync</div><strong>${escapeHtml(sync.label)}</strong></div>
       <div><div class="tiny">Score parity</div><strong>${escapeHtml(parityLabel)}</strong></div>
+      ${isSneakySandyPoleyEnabled(match) ? `<div><div class="tiny">SSP</div><strong>${escapeHtml(sspLabel)}</strong></div>` : ''}
       <div><div class="tiny">Last sync</div><strong>${escapeHtml(formatSharedLastSync(match))}</strong></div>
     </div>
     <div class="tiny top-gap"><strong>${escapeHtml(assignmentLine)}</strong></div>
@@ -16435,6 +16572,9 @@ function installDyeLedgerLiveEngineAdapter() {
     computeNinePointResults,
     buildSneakySandyPoleyLedger,
     resolveSneakySandyPoleyProxSelection,
+    buildSharedSspFacts,
+    reconcileSharedSspFacts,
+    applySharedSspFacts,
   };
   return window.__DYE_LEDGER_LIVE_ENGINE__;
 }

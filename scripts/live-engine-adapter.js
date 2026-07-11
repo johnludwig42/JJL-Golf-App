@@ -19,6 +19,9 @@ const LIVE_FUNCTIONS_USED = [
   'computeNinePointResults',
   'buildSneakySandyPoleyLedger',
   'resolveSneakySandyPoleyProxSelection',
+  'buildSharedSspFacts',
+  'reconcileSharedSspFacts',
+  'applySharedSspFacts',
 ];
 
 const MIRRORED_FUNCTIONS_STILL_USED = [

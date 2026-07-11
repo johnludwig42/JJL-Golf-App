@@ -1,8 +1,8 @@
 # Sneaky / Sandy / Poley
 
-Status: v30.3.54 base ledger
+Status: v30.3.55 advanced ledger
 
-This document captures the Sneaky / Sandy / Poley source rules and implementation plan. v30.3.54 produces a base-point ledger only; final settlement, Take/Keep, honors, Bridge/Re-Bridge multiplier math, Umbee multiplier math, and full Match Summary reporting remain deferred.
+This document captures the Sneaky / Sandy / Poley source rules and implementation plan. v30.3.55 derives base points, advanced hole points, honors, final team totals, SSP-only settlement, Play tab final preview, and Match Summary reporting.
 
 ## Source Rule Summary
 
@@ -54,6 +54,27 @@ This document captures the Sneaky / Sandy / Poley source rules and implementatio
 - Displays `pointValue` as `$ per point` currency while preserving numeric storage.
 - Does not store calculated ledger results as authoritative match state.
 
+## v30.3.55 Advanced Ledger
+
+- Extends `buildSneakySandyPoleyLedger(match, options)` without removing v30.3.54 base fields.
+- Adds per-hole Take/Keep state after base points and before multipliers.
+- Adds `honorsByHole` and per-hole honors labels. The first played hole defaults to Team 1, the cumulative final-points leader gets next-hole honors, and ties carry prior honors forward.
+- Applies Bridge/Re-Bridge when enabled in setup. Bridge is 2x, Re-Bridge is 4x, and Re-Bridge implies a bridged hole.
+- Applies Umbee when enabled in setup and the qualifying team has birdie/eagle points while the other team has zero points after Take/Keep.
+- Stacks Umbee with Bridge/Re-Bridge only when `allowUmbeeWithBridge` is enabled.
+- Returns final per-hole and team totals: `pointsAfterTakeKeepByTeam`, `bridge`, `umbee`, `finalMultiplierByTeam`, `finalPointsByTeam`, `finalTotalsByTeam`, `finalLeader`, `settlement`, and `honorsByHole`.
+- Shows Play tab base points, Take/Keep, multiplier, Umbee, final points, running status, and honors.
+- Uses the current on-screen draft gross scores and SSP selections for the Play tab preview before Save Hole Scores.
+- Live preview is calculation-only: changing an on-screen gross score refreshes the SSP card, top Play status, and Quick Scoreboard opened from Play, but does not save or sync the score. Blank draft scores stay missing and are never converted to zero.
+- Match Setup includes `SSP sequence`. `Hole routing order` is the default and processes the most recent prior ledger-eligible hole in official course routing, skipping missing holes. `Score-entry order` processes holes in the recorded order they first became complete; older matches without that metadata fall back to routing order.
+- Take/Keep and cumulative honors both use the selected sequence. Honors for the next sequence hole belongs to the cumulative final-points leader; a cumulative tie carries prior honors forward.
+- Honors is shown beside the top Play-tab primary match status with configured team names. The lower SSP card uses compact `SSP Points`, `SSP Match`, and adjustment summaries.
+- SSP Momentum Chart (cumulative final SSP margin by hole) is deferred pending advanced-rule stabilization.
+- Shared Match SSP sync/reconciliation remains a v30.3.56 limitation; remote draft state is not merged into the local SSP preview.
+- Keeps player-specific detail focused on individual base contributions and shows team final standing separately.
+- Adds SSP final totals, net points, stakes, settlement, and a hole-by-hole table to Match Summary.
+- Does not merge SSP settlement into the existing Final Net Settlement engine.
+
 ### Data Flow
 
 ```text
@@ -62,7 +83,7 @@ match.selectedGames SSP settings
   + computeMatchMetrics gross/net/team/par data
   + optional stat-tracking GIR/putts
   -> buildSneakySandyPoleyLedger()
-  -> Play tab preview / Quick Scoreboard / Player Detail
+  -> Play tab preview / Quick Scoreboard / Player Detail / Match Summary
 ```
 
 ### Validation Assumptions
@@ -129,7 +150,7 @@ Manual hole inputs are stored on the match:
 
 Manual inputs are user-entered facts. Future calculated ledgers should derive from scores, stat inputs where appropriate, SSP settings, and these manual inputs.
 
-## Order Of Operations For Future Ledger
+## Order Of Operations
 
 1. Read gross scores, net scores, teams, and SSP manual inputs.
 2. Resolve player-team mapping.
@@ -138,10 +159,31 @@ Manual inputs are user-entered facts. Future calculated ledgers should derive fr
 5. Calculate gross Birdie and Eagle bonuses.
 6. Build pre-Take/Keep team points.
 7. Apply Take/Keep state.
-8. Apply Bridge/Re-Bridge multiplier.
-9. Apply Umbee multiplier when qualifying.
-10. Apply cumulative multiplier behavior only when setup allows.
-11. Produce hole ledger, team totals, net point differential, and settlement.
+8. Determine whether Umbee qualifies from points after Take/Keep.
+9. Apply Bridge/Re-Bridge multiplier.
+10. Apply Umbee multiplier when qualifying.
+11. Apply cumulative multiplier behavior only when setup allows.
+12. Produce hole ledger, final team totals, honors, net point differential, and settlement.
+
+## Settlement
+
+Settlement is based on final SSP team point differential multiplied by `$ per point`.
+
+Example: if Irish finishes +6 points and point value is `$2.00`, E&Y pays Irish `$12.00`.
+
+The SSP settlement is displayed in the SSP reporting section and kept separate from Final Net Settlement until a broader payout aggregation pass is designed.
+
+## Outdoor Play Notes
+
+- Selected Sneaky, Sandy, Poley, and Greeny chips use a high-contrast filled state with white bold text, thicker border, and checkmark label.
+- Chip rows stay inside each player card and are centered, with wrapping on narrow screens.
+- The Optional SSP note remains below SSP inputs and Stat Tracking, immediately before Save Hole Scores.
+
+## Live Preview And Save Behavior
+
+- The Play tab SSP preview uses draft gross scores and current SSP selections while the scorer is still on the hole.
+- Preview updates are display calculations; they do not bypass the existing save flow.
+- Saved match persistence remains based on the normal score and SSP input update paths.
 
 ## Deferred Builds
 
@@ -155,16 +197,26 @@ v30.3.54 - SSP Hole Inputs and Core Point Ledger (shipped)
 
 v30.3.55 - SSP Advanced Rules, Honors, Settlement, and Reporting
 
-- Implement Take/Keep state machine.
-- Implement honors carry-forward.
-- Implement Bridge/Re-Bridge multipliers.
-- Implement Umbee and cumulative multiplier option.
-- Add Match Summary and settlement output.
-- Add tests and simulation coverage.
+- Implement Take/Keep state machine. (shipped)
+- Implement honors carry-forward. (shipped)
+- Implement Bridge/Re-Bridge multipliers. (shipped)
+- Implement Umbee and cumulative multiplier option. (shipped)
+- Add Match Summary and settlement output. (shipped)
+- Add tests and simulation coverage. (shipped)
+
+v30.3.56 - SSP Shared Match Sync and Reconciliation
+
+- Sync scores plus SSP manual inputs across devices.
+- Ensure every device derives the same SSP ledger from shared state.
+- Detect conflicts instead of silently overwriting scorer-entered SSP facts.
+- Pull latest shared SSP state before final settlement/reporting.
 
 ## Warnings
 
-- v30.3.54 is base points only.
-- Do not include SSP base ledger totals in settlement or Final Net Settlement.
-- Take/Keep, honors, Bridge/Re-Bridge multiplier math, Umbee multiplier math, and SSP settlement remain deferred.
-- Shared Match score sync remains preserved, but full SSP input reconciliation is not complete in v30.3.54.
+- Full Shared Match SSP input reconciliation remains deferred.
+- Bridge/Re-Bridge timing is not mechanically enforced.
+- Poley first-putt and flagstick length remain scorer-confirmed.
+- Sandy bunker source remains scorer-confirmed.
+- Some group-specific SSP variants may require future options.
+- Manual overrides for Low Ball, Low Total, and Honors remain deferred.
+- Printed/PDF SSP reporting may need future layout refinement.

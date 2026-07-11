@@ -3114,7 +3114,7 @@ main,
   display:flex;
   flex-wrap:wrap;
   gap:6px;
-  justify-content:flex-end;
+  justify-content:center;
 }
 .ssp-chip{
   display:inline-flex;
@@ -3129,18 +3129,21 @@ main,
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  min-height:30px;
-  padding:5px 8px;
-  border:1px solid var(--line, #d7e0da);
+  min-height:34px;
+  padding:6px 10px;
+  border:1.5px solid var(--line, #d7e0da);
   border-radius:999px;
   background:#f7fbf8;
   font-size:.78rem;
   font-weight:800;
 }
 .ssp-chip input:checked + span{
-  border-color:rgba(11,93,59,.45);
-  background:#e5f1eb;
-  color:var(--accent);
+  border-color:#053d26;
+  border-width:2px;
+  background:#075d3b;
+  color:#fff;
+  font-weight:950;
+  box-shadow:0 0 0 2px rgba(7,93,59,.16);
 }
 .ssp-chip input:disabled + span{
   opacity:.62;
@@ -3173,6 +3176,52 @@ main,
 .ssp-ledger-head strong{
   color:var(--accent);
   text-align:right;
+}
+.ssp-ledger-mini-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding-top:2px;
+  font-size:.8rem;
+}
+.ssp-ledger-mini-row span,
+.ssp-ledger-mini-grid span{
+  color:var(--muted);
+  font-weight:900;
+}
+.ssp-ledger-mini-row strong,
+.ssp-ledger-mini-grid strong{
+  color:#123a28;
+  text-align:right;
+}
+.ssp-ledger-adjustment-line,
+.ssp-ledger-match-line{
+  margin-top:8px;
+  font-size:12px;
+  line-height:1.35;
+}
+.ssp-ledger-adjustment-line span{color:var(--muted);}
+.ssp-ledger-match-line{font-weight:700;}
+.ssp-ledger-mini-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:6px;
+}
+.ssp-ledger-mini-grid > div{
+  display:grid;
+  gap:3px;
+  min-width:0;
+  padding:7px;
+  border:1px solid rgba(11,93,59,.12);
+  border-radius:8px;
+  background:#fff;
+  font-size:.76rem;
+}
+.ssp-ledger-mini-grid strong{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }
 .ssp-ledger-tiles{
   display:grid;
@@ -3272,8 +3321,9 @@ main,
     grid-template-columns:1fr;
   }
   .ssp-chip-group{
-    justify-content:flex-start;
+    justify-content:center;
   }
+  .ssp-ledger-mini-grid{grid-template-columns:1fr;}
 }
 
 .player-detail-trigger{

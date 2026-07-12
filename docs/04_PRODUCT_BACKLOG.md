@@ -196,3 +196,8 @@ FUTURE:
 # Future SSP polish
 
 - SSP Momentum Chart using cumulative final SSP point margin shipped in v30.3.57.
+# Post-v30.3.61 timing and reporting follow-ups
+
+- Consider explicit pause/resume only if real-world round timing proves materially distorted by weather or long delays.
+- Consider richer pace analytics (front/back splits and per-hole delay flags) after `holeFirstCompletedAt` has sufficient production data.
+- Continue the deferred separation of active working round state from viewed historical Match Summary state before broader report editing features.

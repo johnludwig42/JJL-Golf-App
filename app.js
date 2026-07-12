@@ -1,11 +1,11 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.60',
-  versionNumber: '30.3.60',
-  cacheName: 'the-dye-ledger-v30.3.60',
+  version: 'v30.3.61',
+  versionNumber: '30.3.61',
+  cacheName: 'the-dye-ledger-v30.3.61',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Courses Functionality Audit and Library Polish'
+  buildLabel: 'Analyst-Style Match Summary, SSP Momentum and Round Timing'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -1698,6 +1698,16 @@ function getFeaturedCompetitionResult(match, metrics) {
   if (key === 'none') return { key, label: 'Social Round', result: 'No featured competition selected.', selection };
   if (key === 'stroke_net') return { key, label: 'Low Net', result: formatStrokeFeaturedResult(match, metrics, 'net'), selection };
   if (key === 'stroke_gross') return { key, label: 'Low Gross', result: formatStrokeFeaturedResult(match, metrics, 'gross'), selection };
+  if (key === 'sneaky_sandy_poley') {
+    const ledger = buildSneakySandyPoleyLedger(match, { metrics });
+    const leader = ledger?.finalLeader || {};
+    const label = 'Sneaky / Sandy / Poley';
+    if (!ledger?.enabled || !Number(leader.thru)) return { key, label, result: 'SSP result unavailable until at least one SSP hole is scored.', selection };
+    const result = leader.tied
+      ? `Tied thru ${Number(leader.thru)} SSP hole${Number(leader.thru) === 1 ? '' : 's'}`
+      : `${formatSneakySandyPoleyTeamName(ledger, match, leader.teamId)} +${Number(leader.margin || 0)} thru ${Number(leader.thru)} SSP hole${Number(leader.thru) === 1 ? '' : 's'}`;
+    return { key, label, result, selection };
+  }
   if (key === 'singles_match') {
     const result = computeSinglesMatchPlayResult(match, metrics, getSinglesMatchConfig(match) || {});
     const text = result?.displayResult || result?.statusText || result?.winnerText || 'Featured result unavailable until more holes are scored.';
@@ -1969,6 +1979,22 @@ function buildWeatherSummary(weather) {
 
 function getRoundWeatherSummary(match) {
   return String(match?.roundContext?.weather?.summary || '').trim();
+}
+
+function formatRoundWeatherDisplay(match) {
+  try {
+    const weather = normalizeRoundWeatherSnapshot(match?.roundContext?.weather || match?.weatherSnapshot || match?.weather);
+    if (!weather) return '';
+    const bits = [];
+    if (weather.temperature != null) bits.push(`${weather.temperature}°F`);
+    const condition = String(weather.conditionsText || getWeatherConditionText(weather.conditionsCode) || '').trim();
+    const windDirection = getWindDirectionText(weather.windDirection);
+    if (weather.windSpeed != null) bits.push(`Wind ${weather.windSpeed} mph${windDirection ? ` ${windDirection}` : ''}`);
+    if (condition) bits.push(condition.charAt(0).toUpperCase() + condition.slice(1));
+    return bits.length ? `Weather: ${bits.join(' · ')}` : String(weather.summary || '').trim();
+  } catch (_) {
+    return '';
+  }
 }
 
 function getRoundWeatherStatusLabel(match) {
@@ -3296,22 +3322,77 @@ function getPlayerScorecardYardage(match, playerRef, selectedHoleIdx, fallbackTe
   const fallbackYardage = Number((getPlayerHole(match, playerRef, selectedHoleIdx, fallbackTee) || fallbackHole)?.yardage);
   return Number.isFinite(fallbackYardage) && fallbackYardage > 0 ? fallbackYardage : null;
 }
-function getRoundElapsedTimeState(match) {
-  const start = match?.roundTiming?.startedAt || match?.roundStartedAt || match?.createdAt || '';
-  const end = match?.roundTiming?.endedAt || match?.completedAt || match?.roundEndedAt || '';
-  const startMs = start ? Date.parse(start) : NaN;
-  const endMs = end ? Date.parse(end) : NaN;
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) {
-    return { available: false, label: 'Round duration: not available' };
-  }
-  const totalMinutes = Math.max(0, Math.round((endMs - startMs) / 60000));
+function formatRoundDuration(totalMs) {
+  if (!Number.isFinite(Number(totalMs)) || Number(totalMs) < 0) return '';
+  const totalMinutes = Math.max(0, Math.round(Number(totalMs) / 60000));
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  return {
-    available: true,
-    minutes: totalMinutes,
-    label: `Round elapsed time: ${hours ? `${hours}h ` : ''}${minutes}m`.trim()
-  };
+  return `${hours ? `${hours}h ` : ''}${minutes}m`.trim();
+}
+function formatRoundClockTime(timestamp) {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(date);
+}
+function ensureRoundTimingStarted(match, timestamp = new Date().toISOString()) {
+  if (!match) return false;
+  match.roundTiming = match.roundTiming && typeof match.roundTiming === 'object' ? match.roundTiming : { startedAt: null, endedAt: null };
+  if (match.roundTiming.startedAt) return false;
+  match.roundTiming.startedAt = timestamp;
+  return true;
+}
+function ensureRoundTimingEnded(match, timestamp = new Date().toISOString(), { overwrite = false } = {}) {
+  if (!match) return false;
+  match.roundTiming = match.roundTiming && typeof match.roundTiming === 'object' ? match.roundTiming : { startedAt: null, endedAt: null };
+  if (match.roundTiming.endedAt && !overwrite) return false;
+  match.roundTiming.endedAt = timestamp;
+  return true;
+}
+function recordHoleFirstCompletedAt(match, holeNumber, timestamp = new Date().toISOString()) {
+  if (!match || !Number(holeNumber)) return false;
+  match.holeFirstCompletedAt = match.holeFirstCompletedAt && typeof match.holeFirstCompletedAt === 'object' ? match.holeFirstCompletedAt : {};
+  const key = String(Number(holeNumber));
+  if (match.holeFirstCompletedAt[key]) return false;
+  match.holeFirstCompletedAt[key] = timestamp;
+  return true;
+}
+function getRoundElapsedTimeState(match, metrics = null, nowMs = Date.now()) {
+  const start = match?.roundTiming?.startedAt || match?.roundStartedAt || '';
+  const isComplete = match?.status === 'complete';
+  const end = isComplete ? (match?.roundTiming?.endedAt || match?.completedAt || match?.roundEndedAt || '') : '';
+  const startMs = start ? Date.parse(start) : NaN;
+  const effectiveEndMs = isComplete ? Date.parse(end) : Number(nowMs);
+  if (!Number.isFinite(startMs) || !Number.isFinite(effectiveEndMs) || effectiveEndMs < startMs) return { available: false, label: 'Timing unavailable' };
+  const elapsedMs = effectiveEndMs - startMs;
+  const completion = metrics ? getRoundCompletionState(match, metrics) : null;
+  const completedHoleCount = Number(completion?.completedHoleCount || 0);
+  const selectedHoleCount = Number(completion?.selectedHoleCount || getRequestedHoleCount(match) || 0);
+  const projectionCandidate = !isComplete && completedHoleCount >= 3 && selectedHoleCount > completedHoleCount;
+  const candidateTotalMs = projectionCandidate ? elapsedMs / completedHoleCount * selectedHoleCount : null;
+  const minimumProjectedMs = selectedHoleCount <= 9
+    ? 45 * 60000
+    : selectedHoleCount >= 18
+      ? 90 * 60000
+      : Math.max(45, selectedHoleCount * 5) * 60000;
+  const maximumProjectedMs = selectedHoleCount <= 9
+    ? 4 * 3600000
+    : selectedHoleCount >= 18
+      ? 7 * 3600000
+      : Math.min(7 * 60, selectedHoleCount * 24) * 60000;
+  const projectionAvailable = projectionCandidate
+    && elapsedMs >= 30 * 60000
+    && candidateTotalMs >= minimumProjectedMs
+    && candidateTotalMs <= maximumProjectedMs;
+  const projectedTotalMs = projectionAvailable ? candidateTotalMs : null;
+  const projectedFinishMs = projectionAvailable ? startMs + projectedTotalMs : null;
+  const elapsedLabel = formatRoundDuration(elapsedMs);
+  const bits = isComplete
+    ? [`Round Time ${elapsedLabel}`, `Started ${formatRoundClockTime(startMs)}`, `Finished ${formatRoundClockTime(effectiveEndMs)}`]
+    : [`Elapsed ${elapsedLabel}`];
+  if (projectionAvailable) bits.push(`Projected pace ${formatRoundDuration(projectedTotalMs)}`, `Est. finish ${formatRoundClockTime(projectedFinishMs)}`);
+  else if (!isComplete && completedHoleCount < 3) bits.push('Pace available after 3 completed holes');
+  else if (projectionCandidate) bits.push('Pace projection available after more playing time');
+  return { available: true, isComplete, elapsedMs, minutes: Math.round(elapsedMs / 60000), completedHoleCount, selectedHoleCount, projectionAvailable, projectedTotalMs, projectedFinishMs, label: bits.filter(Boolean).join(' · ') };
 }
 function getTeamStrokeStanding(metrics, basis = 'net', scoringMode = 'best_ball') {
   const teams = (metrics?.teams || []).map(t => ({ team: t.team, total: 0, completeHoles: 0 }));
@@ -3646,7 +3727,12 @@ function buildExportMomentum(match, metrics) {
   if (!selectedGame || !options.length) return '';
   const perspectiveTeam = getMomentumPerspectiveTeam(match);
   let running = 0;
-  const pills = getMomentumHoleResults(match, metrics, selectedGame).map(h => {
+  const completion = getRoundCompletionState(match, metrics);
+  const allResults = getMomentumHoleResults(match, metrics, selectedGame);
+  const renderedResults = completion.isIncomplete
+    ? allResults.filter(h => computeMomentumOutcome(match, metrics, h, selectedGame) !== 'pending')
+    : allResults;
+  const pills = renderedResults.map(h => {
     const outcome = computeMomentumOutcome(match, metrics, h, selectedGame);
     let cls = 'tied';
     if (outcome === 'team1') {
@@ -3658,16 +3744,23 @@ function buildExportMomentum(match, metrics) {
     } else if (outcome === 'pending') {
       cls = 'pending';
     }
-    const txt = outcome === 'pending' ? '•' : formatPerspectiveStatus(running, perspectiveTeam);
+    const txt = outcome === 'pending' ? 'Not played' : formatPerspectiveStatus(running, perspectiveTeam);
     return `<div class="export-pill ${cls}">H${h.holeNumber}<span>${escapeHtml(txt)}</span></div>`;
   }).join('');
+  const unplayed = completion.isIncomplete
+    ? allResults.filter(h => computeMomentumOutcome(match, metrics, h, selectedGame) === 'pending').map(h => Number(h.holeNumber)).filter(Number.isFinite)
+    : [];
+  const unplayedLabel = unplayed.length
+    ? `${unplayed.length === 1 ? `H${unplayed[0]}` : `H${unplayed[0]}–H${unplayed[unplayed.length - 1]}`}`
+    : '';
   return `
     <section class="export-section export-section-momentum">
       <div class="export-section-head">
         <h2>Hole-by-hole momentum</h2>
         <div class="export-section-sub">${describeMomentumMeta(match, metrics, selectedGame)}</div>
       </div>
-      <div class="export-pill-grid">${pills}</div>
+      <div class="export-pill-grid">${pills || '<div class="export-empty">No completed momentum holes yet.</div>'}</div>
+      ${unplayedLabel ? `<div class="export-momentum-pending"><strong>Not played:</strong> ${escapeHtml(unplayedLabel)}</div>` : ''}
     </section>`;
 }
 
@@ -3794,6 +3887,9 @@ function getRoundCompletionState(match, metrics) {
   const completedHoleCount = completedHoles.length;
   const incompleteHoleCount = Math.max(0, selectedHoleCount - completedHoleCount);
   const remainingHoleNumbers = missingHoles.slice();
+  const selectedHoleNumbers = holes.map((hole, idx) => Number(hole?.holeNumber || idx + 1));
+  const expectedPrefix = selectedHoleNumbers.slice(0, completedHoleCount);
+  const isSequential = completedHoles.length === expectedPrefix.length && completedHoles.every((holeNumber, idx) => holeNumber === expectedPrefix[idx]);
   return {
     selectedHoleCount,
     completedHoleCount,
@@ -3801,11 +3897,13 @@ function getRoundCompletionState(match, metrics) {
     completedHoles,
     missingHoles,
     remainingHoleNumbers,
+    isSequential,
+    completedHolesLabel: completedHoles.join(', '),
     completionPct: selectedHoleCount ? Math.round((completedHoleCount / selectedHoleCount) * 100) : 0,
     isComplete: selectedHoleCount > 0 && completedHoleCount >= selectedHoleCount,
     isIncomplete: selectedHoleCount > 0 && completedHoleCount < selectedHoleCount,
     label: `${completedHoleCount} of ${selectedHoleCount} holes completed`,
-    throughLabel: `through ${completedHoleCount} of ${selectedHoleCount} holes`
+    throughLabel: `through ${completedHoleCount} completed hole${completedHoleCount === 1 ? '' : 's'}`
   };
 }
 function isHoleRangeComplete(match, metrics, startIdx, endIdx) {
@@ -3923,11 +4021,10 @@ function buildIncompleteRoundNotice(match, metrics) {
     : 'Some game outcomes may still change if the remaining holes are played.';
   return `
     <div class="export-provisional-detail">
-      <strong>Provisional Report — Incomplete Round</strong><br>
+      <strong>Incomplete Round — Provisional</strong><br>
       ${escapeHtml(completion.label)}.<br>
       ${reasonSentence ? `${escapeHtml(reasonSentence)}<br>` : ''}
-      Statistics and settlements are based on completed holes only.<br>
-      Unplayed holes were not counted or estimated.<br>
+      Only completed holes are included. Unplayed holes are not estimated.<br>
       ${escapeHtml(finality)}
     </div>`;
 }
@@ -3977,8 +4074,7 @@ function buildRoundStatusSummary(match, metrics) {
   const completion = getRoundCompletionState(match, metrics);
   const selectedHoleCount = Number(completion.selectedHoleCount || getPlayableHoleCount(match, metrics?.tee) || 0);
   const completedHoleCount = Number(completion.completedHoleCount || metrics?.completed || 0);
-  const lastHole = getLastFullyCompletedHole(match, metrics);
-  const lastHoleText = lastHole ? `Hole ${lastHole}` : `${completedHoleCount} of ${selectedHoleCount} holes`;
+  const scopeText = `${completedHoleCount} of ${selectedHoleCount} holes completed`;
   if (!completion.isIncomplete) {
     return {
       badge: 'Complete Round',
@@ -3993,14 +4089,14 @@ function buildRoundStatusSummary(match, metrics) {
     return {
       badge: 'Clinched Early',
       tone: 'clinched',
-      headline: `Match clinched early — final through ${lastHoleText}`,
+      headline: `Match clinched early — final after ${completedHoleCount} completed holes`,
       detail: `${reasonSentence ? `${reasonSentence} ` : ''}Result is final based on completed holes; remaining holes were not required to determine the selected game outcomes.`.trim()
     };
   }
   return {
     badge: 'Incomplete Round — Provisional',
     tone: 'provisional',
-    headline: `Round incomplete — showing results through ${lastHoleText}`,
+    headline: `Round incomplete — ${scopeText}`,
     detail: `${reasonSentence ? `${reasonSentence} ` : ''}Remaining holes were not completed. Settlement is provisional unless a selected game was already decided.`.trim()
   };
 }
@@ -4091,9 +4187,17 @@ function buildRoundSnapshot(match, metrics) {
   const lowGross = getLowRows(players, 'grossTotal');
   const lowNet = getLowRows(players, 'leaderboardNetTotal');
   const featured = getFeaturedCompetitionResult(match, metrics);
+  const timing = getRoundElapsedTimeState(match, metrics);
+  const weather = formatRoundWeatherDisplay(match);
   const keyDetails = [];
+  const currentResult = biggest.rows.length && biggest.value > 0
+    ? formatAwardWinners(biggest.rows.map(r => r.name), formatMoneyAccounting(biggest.value))
+    : 'All square — no current net payment';
+  keyDetails.push(['Round Status', completion.isIncomplete ? `${completion.completedHoleCount} of ${completion.selectedHoleCount} holes completed · Provisional` : `${completion.completedHoleCount} of ${completion.selectedHoleCount} holes completed · Final`]);
+  if (completion.isIncomplete && !completion.isSequential && completion.completedHolesLabel) keyDetails.push(['Completed Holes', completion.completedHolesLabel]);
+  if (timing.available) keyDetails.push(['Round Timing', escapeHtml(timing.label)]);
+  if (weather) keyDetails.push(['Weather', escapeHtml(weather.replace(/^Weather:\s*/i, ''))]);
   if (featured?.result) keyDetails.push(['Featured Competition', `${escapeHtml(featured.label)} — ${escapeHtml(featured.result)}`]);
-  if (biggest.rows.length && biggest.value > 0) keyDetails.push(['Final Settlement', `${formatAwardWinners(biggest.rows.map(r => r.name), formatMoneyAccounting(biggest.value))}${completion.isIncomplete && !areAllGamesFinal(match, metrics) ? ' provisional' : ''}`]);
   if (lowGross.rows.length) keyDetails.push([completion.isIncomplete ? 'Low Gross Leader' : 'Low Gross', `${formatAwardWinners(lowGross.rows.map(r => r.player?.name), lowGross.value)}${formatIncompleteScopeSuffix(completion)}`]);
   if (lowNet.rows.length) keyDetails.push([completion.isIncomplete ? 'Low Net Leader' : 'Low Net', `${formatAwardWinners(lowNet.rows.map(r => r.player?.name), lowNet.value)}${formatIncompleteScopeSuffix(completion)}`]);
   (ctx.payoutGames || []).slice(0, 4).forEach(game => {
@@ -4104,28 +4208,31 @@ function buildRoundSnapshot(match, metrics) {
   const awards = buildRoundAwardsRows(match, metrics);
   const metaBits = [metrics?.course?.name || getCourse(match?.courseId)?.name || 'Course', metrics?.tee?.teeName || getTee(match?.courseId, match?.teeId)?.teeName || 'Tee', match?.date || todayIso()].filter(Boolean);
   const playerNames = players.map(p => p?.player?.name).filter(Boolean).join(' · ');
-  const recap = getStoredRoundRecap(match);
-  const recapTeaser = recap ? splitRoundRecapParagraphs(recap)[0] || '' : '';
   const uniqueAwardKeys = new Set(keyDetails.map(([label]) => String(label).replace(/ Leader$/,'').toLowerCase()));
   const compactAwards = awards.filter(([label]) => !uniqueAwardKeys.has(String(label).replace(/ Leader$/,'').toLowerCase())).slice(0, 8);
+  const takeaways = [];
+  if (featured?.result) takeaways.push(`${featured.label}: ${featured.result}`);
+  if (biggest.rows.length && biggest.value > 0) takeaways.push(`${biggest.rows.map(row => row.name).join(', ')} lead the money result at ${formatMoneyAccounting(biggest.value)}.`);
+  if (lowNet.rows.length) takeaways.push(`${lowNet.rows.map(row => row.player?.name).filter(Boolean).join(', ')} ${lowNet.rows.length > 1 ? 'share' : 'leads'} low net at ${formatToPar(Number(lowNet.rows[0]?.leaderboardNetDiff || 0))}.`);
+  if (completion.isIncomplete) takeaways.push('Only completed holes are included; unplayed holes are not estimated.');
   return `
     <section class="export-section export-section-round-snapshot print-keep-together">
       <div class="export-section-head round-snapshot-head">
         <div>
-          <h2>Round Snapshot</h2>
-          <div class="export-section-sub">Premium round summary, awards, and status.</div>
+          <h2>Executive Round Summary</h2>
+          <div class="export-section-sub">Result, economic drivers, timing, and audit scope.</div>
         </div>
         <span class="round-snapshot-badge round-snapshot-badge-${escapeHtml(status.tone)}">${escapeHtml(status.badge)}</span>
       </div>
       <div class="round-snapshot-hero">
-        <div class="round-snapshot-kicker">${escapeHtml(metaBits.join(' · '))}</div>
-        <div class="round-snapshot-title">${escapeHtml(status.headline)}</div>
-        <div class="round-snapshot-detail">${escapeHtml(status.detail)}</div>
+        <div class="round-snapshot-kicker">Current Result · ${escapeHtml(metaBits.join(' · '))}</div>
+        <div class="round-snapshot-title">${escapeHtml(currentResult)}${completion.isIncomplete && !areAllGamesFinal(match, metrics) ? ' · Provisional' : ''}</div>
+        <div class="round-snapshot-detail"><strong>${escapeHtml(status.headline)}</strong> · ${escapeHtml(status.detail)}</div>
         ${playerNames ? `<div class="round-snapshot-players">${escapeHtml(playerNames)}</div>` : ''}
       </div>
       ${keyDetails.length ? `<div class="round-snapshot-grid">${keyDetails.map(([label, value]) => `<div class="round-snapshot-row"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`).join('')}</div>` : `<div class="export-empty empty-state-card">No round highlights available yet.</div>`}
+      ${takeaways.length ? `<div class="round-snapshot-takeaways"><div class="round-snapshot-awards-title">Key Takeaways</div><ul>${takeaways.slice(0, 5).map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul></div>` : ''}
       ${compactAwards.length ? `<div class="round-snapshot-awards"><div class="round-snapshot-awards-title">Round Awards</div><div class="round-snapshot-awards-grid">${compactAwards.map(([label, value]) => `<div class="round-snapshot-award"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`).join('')}</div></div>` : ''}
-      ${recapTeaser ? `<div class="round-snapshot-recap-teaser"><span>AI Recap Teaser</span>${escapeHtml(recapTeaser)}</div>` : ''}
     </section>`;
 }
 
@@ -4425,7 +4532,7 @@ function buildRoundRecapPayload(match, metrics) {
       roundTiming: {
         startedAt: match?.roundTiming?.startedAt || null,
         endedAt: match?.roundTiming?.endedAt || match?.completedAt || null,
-        elapsedLabel: getRoundElapsedTimeState(match).label,
+        elapsedLabel: getRoundElapsedTimeState(match, metrics).label,
       },
     },
     featuredCompetition: {
@@ -4435,7 +4542,7 @@ function buildRoundRecapPayload(match, metrics) {
       result: getFeaturedCompetitionResult(match, metrics).result,
     },
     memories: getRoundMemories(match).map(m => ({ text: m.text, category: m.category, holeNumber: m.holeNumber, createdAt: m.createdAt })),
-    recapInstructions: 'Write a polished, private-club style golf recap with short sections: Round Story, Featured Competition, Turning Points, Player Highlights, Game Story, Statistical Notes, Memorable Moments, and Closing Note or Fun Awards when supported. Center the Featured Competition first, distinguish it from Low Gross, Low Net, Money Winner, game winners, and awards, and use Round Notes and Memories for personality. If roundContext.weather.summary is present, you may reference the weather naturally where it helps explain the round, but do not force a weather mention or recite raw weather metrics awkwardly. Do not fabricate shots, weather, holes, or emotions not supported by data or notes. If the round is incomplete, explicitly describe the recap as provisional unless all selected games are already clinched/final. If clinched early, explain that the featured competition was decided before all holes were played. Keep the tone professional, fun, golf-aware, specific, and concise on mobile.',
+    recapInstructions: 'Write a polished, private-club style golf recap with short sections: Round Story, Featured Competition, Turning Points, Player Highlights, Game Story, Statistical Notes, Memorable Moments, and Closing Note or Fun Awards when supported. Center the Featured Competition first, distinguish it from Low Gross, Low Net, Money Winner, game winners, and awards, and use Round Notes and Memories for personality. If roundContext.weather.summary is present, you may reference the weather naturally where it helps explain the round, but do not force a weather mention or recite raw weather metrics awkwardly. Do not fabricate shots, weather, holes, or emotions not supported by data or notes. For an incomplete round, say completed holes and use the supplied completed-hole list; never say opening holes or front nine unless that exact sequential range is complete. Treat incomplete-round money as provisional unless the relevant game is mathematically decided. If clinched early, explain that the featured competition was decided before all holes were played. Do not fabricate untracked statistics. Keep the tone professional, fun, golf-aware, specific, and concise on mobile.',
     players: playerSummaries,
     games: summarizeSelectedGamesForRecap(match, metrics),
     finalSettlement,
@@ -4574,7 +4681,13 @@ function buildSharedLedgerReportNote(match) {
 function buildSneakySandyPoleyExportSummary(match, metrics) {
   if (!isSneakySandyPoleyEnabled(match)) return '';
   const ledger = buildSneakySandyPoleyLedger(match, { metrics });
-  if (!ledger.enabled || (ledger.teams || []).length !== 2) return '';
+  const countedHoles = Object.values(ledger?.holes || {}).filter(hole => hole?.counted);
+  if (!ledger?.enabled || (ledger.teams || []).length !== 2 || !countedHoles.length) {
+    return `<section class="export-section export-section-ssp-summary export-section-ssp-pending">
+      <div class="export-section-head"><h2>Sneaky / Sandy / Poley</h2></div>
+      <div class="ssp-momentum-empty"><strong>SSP selected — momentum pending.</strong><br>Momentum will appear after the first completed SSP hole. Earlier holes without valid SSP ledger data are not backfilled or estimated.</div>
+    </section>`;
+  }
   const teams = ledger.teams || [];
   const leader = ledger.finalLeader || {};
   const leaderText = leader.tied
@@ -4586,7 +4699,7 @@ function buildSneakySandyPoleyExportSummary(match, metrics) {
       <div class="game-summary-value">${Number(ledger.finalTotalsByTeam?.[team.id] || 0)} pts</div>
       <div class="game-summary-sub">Base ${Number(ledger.baseTotalsByTeam?.[team.id] || 0)} pts</div>
     </div>`).join('');
-  const holeRows = Object.values(ledger.holes || {}).filter(hole => hole.counted).map(hole => {
+  const holeRows = countedHoles.map(hole => {
     const base = teams.map(team => `${team.name} ${Number(hole.pointsAfterTakeKeepByTeam?.[team.id] || 0)}`).join(' / ');
     const final = teams.map(team => `${team.name} ${Number(hole.finalPointsByTeam?.[team.id] || 0)}`).join(' / ');
     const takeKeep = hole.takeKeep?.teamId ? `${formatSneakySandyPoleyTeamName(ledger, match, hole.takeKeep.teamId)} ${hole.takeKeep.type === 'take' ? 'Take +2' : 'Keep +1'}` : '-';
@@ -4605,19 +4718,27 @@ function buildSneakySandyPoleyExportSummary(match, metrics) {
   const pointValue = Number(ledger.settlement?.pointValue || ledger.settings?.pointValue || 0);
   const momentum = buildSneakySandyPoleyMomentumData(match, { ledger });
   const momentumHtml = momentum.length ? (() => {
-    const width = 640, height = 180, pad = 28;
+    const width = 680, height = 230, padLeft = 54, padRight = 28, padTop = 28, padBottom = 42;
     const max = Math.max(1, ...momentum.map(row => Math.abs(row.cumulative)));
-    const x = i => momentum.length === 1 ? width / 2 : pad + (i * (width - pad * 2) / (momentum.length - 1));
-    const y = value => height / 2 - (value / max) * (height / 2 - pad);
+    const chartHeight = height - padTop - padBottom;
+    const zeroY = padTop + chartHeight / 2;
+    const x = i => momentum.length === 1 ? (padLeft + width - padRight) / 2 : padLeft + (i * (width - padLeft - padRight) / (momentum.length - 1));
+    const y = value => zeroY - (value / max) * (chartHeight / 2);
     const points = momentum.map((row, i) => `${x(i)},${y(row.cumulative)}`).join(' ');
-    const labels = momentum.map((row, i) => `<text x="${x(i)}" y="${height - 6}" text-anchor="middle">${row.holeNumber}</text>`).join('');
-    return `<div class="ssp-momentum print-keep-together"><h3>SSP Momentum</h3><div class="export-section-sub">Cumulative final SSP point margin by hole.</div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="SSP cumulative point margin"><line x1="${pad}" y1="${height / 2}" x2="${width - pad}" y2="${height / 2}" class="ssp-momentum-zero"/><polyline points="${points}" class="ssp-momentum-line"/>${labels}</svg></div>`;
+    const xLabels = momentum.map((row, i) => `<text x="${x(i)}" y="${height - 14}" text-anchor="middle">H${row.holeNumber}</text>`).join('');
+    const dots = momentum.map((row, i) => `<circle cx="${x(i)}" cy="${y(row.cumulative)}" r="4.5" class="ssp-momentum-dot"><title>Hole ${row.holeNumber}: ${row.cumulative > 0 ? teams[0].name : row.cumulative < 0 ? teams[1].name : 'Tied'} ${row.cumulative ? `+${Math.abs(row.cumulative)}` : ''}</title></circle>`).join('');
+    const last = momentum[momentum.length - 1];
+    const finalText = last.cumulative === 0 ? 'Tied' : `${last.cumulative > 0 ? teams[0].name : teams[1].name} +${Math.abs(last.cumulative)}`;
+    const finalLabel = `<div class="ssp-momentum-result"><strong>Final:</strong> ${escapeHtml(finalText)}</div>`;
+    const biggest = momentum.slice().sort((a, b) => Math.abs(b.margin) - Math.abs(a.margin)).slice(0, 3).filter(row => row.margin);
+    const swings = biggest.length ? `<div class="ssp-momentum-swings"><strong>${biggest.length === 1 ? 'Largest swing' : 'Key swings'}:</strong> ${biggest.map(row => `H${row.holeNumber} — ${Math.abs(row.margin)}-point swing to ${escapeHtml(row.margin > 0 ? teams[0].name : teams[1].name)}`).join(' · ')}</div>` : '';
+    return `<div class="ssp-momentum print-keep-together"><div class="ssp-momentum-heading"><h3>SSP Momentum</h3>${finalLabel}</div><div class="export-section-sub">Cumulative SSP point margin by completed SSP hole. Above zero favors ${escapeHtml(teams[0].name)} · below zero favors ${escapeHtml(teams[1].name)}.</div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="SSP cumulative point margin"><line x1="${padLeft}" y1="${zeroY}" x2="${width - padRight}" y2="${zeroY}" class="ssp-momentum-zero"/><line x1="${padLeft}" y1="${padTop}" x2="${padLeft}" y2="${height - padBottom}" class="ssp-momentum-axis"/><text x="${padLeft - 8}" y="${padTop + 4}" text-anchor="end">+${max}</text><text x="${padLeft - 8}" y="${zeroY + 4}" text-anchor="end">0</text><text x="${padLeft - 8}" y="${height - padBottom + 4}" text-anchor="end">−${max}</text><polyline points="${points}" class="ssp-momentum-line" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${dots}${xLabels}</svg>${swings}</div>`;
   })() : '<div class="ssp-momentum-empty">SSP Momentum will appear after holes are scored.</div>';
   return `
     <section class="export-section export-section-ssp-summary">
       <div class="export-section-head">
         <h2>Sneaky / Sandy / Poley</h2>
-        <div class="export-section-sub">Final SSP team points, stakes, settlement, and hole-by-hole audit trail.</div>
+        <div class="export-section-sub">${getRoundCompletionState(match, metrics).isIncomplete ? 'Provisional' : 'Final'} SSP team points, stakes, settlement, and hole-by-hole audit trail.</div>
       </div>
       <div class="game-summary-grid">
         ${totalRows}
@@ -4642,15 +4763,24 @@ function buildSneakySandyPoleyExportSummary(match, metrics) {
         </div>
       </div>
       ${momentumHtml}
-      <div class="fit-stage top-gap" data-fit="width" data-fit-min="0.72">
-        <div class="fit-box">
-          <table class="export-table ssp-export-table">
-            <thead><tr><th>Hole</th><th>Points Before Multiplier</th><th>Take/Keep</th><th>Multiplier</th><th>Umbee</th><th>Final Hole Total</th><th>Match</th></tr></thead>
-            <tbody>${holeRows || '<tr><td colspan="7">No SSP holes counted yet.</td></tr>'}</tbody>
-          </table>
-        </div>
-      </div>
     </section>`;
+}
+
+function buildSneakySandyPoleyAuditDetail(match, metrics) {
+  if (!isSneakySandyPoleyEnabled(match)) return '';
+  const ledger = buildSneakySandyPoleyLedger(match, { metrics });
+  const teams = ledger?.teams || [];
+  const countedHoles = Object.values(ledger?.holes || {}).filter(hole => hole?.counted);
+  if (!ledger?.enabled || teams.length !== 2 || !countedHoles.length) return '';
+  const rows = countedHoles.map(hole => {
+    const base = teams.map(team => `${team.name} ${Number(hole.pointsAfterTakeKeepByTeam?.[team.id] || 0)}`).join(' / ');
+    const final = teams.map(team => `${team.name} ${Number(hole.finalPointsByTeam?.[team.id] || 0)}`).join(' / ');
+    const takeKeep = hole.takeKeep?.teamId ? `${formatSneakySandyPoleyTeamName(ledger, match, hole.takeKeep.teamId)} ${hole.takeKeep.type === 'take' ? 'Take +2' : 'Keep +1'}` : '—';
+    const umbee = hole.umbee?.active ? `${formatSneakySandyPoleyTeamName(ledger, match, hole.umbee.teamId)} ${hole.umbee.reason}` : '—';
+    const running = hole.runningLeader?.tied ? 'Tied' : `${formatSneakySandyPoleyTeamName(ledger, match, hole.runningLeader?.teamId)} +${Number(hole.runningLeader?.margin || 0)}`;
+    return `<tr><td>${Number(hole.holeNumber) || ''}</td><td>${escapeHtml(base)}</td><td>${escapeHtml(takeKeep)}</td><td>${escapeHtml(hole.bridge?.label || '1x')}</td><td>${escapeHtml(umbee)}</td><td>${escapeHtml(final)}</td><td>${escapeHtml(running)}</td></tr>`;
+  }).join('');
+  return `<section class="export-section export-section-ssp-audit"><div class="export-section-head"><h2>SSP Hole-by-Hole Audit</h2><div class="export-section-sub">Counted SSP holes only; missing or pre-SSP holes are not fabricated.</div></div><div class="fit-stage" data-fit="width" data-fit-min="0.72"><div class="fit-box"><table class="export-table ssp-export-table"><thead><tr><th>Hole</th><th>Points Before Multiplier</th><th>Take/Keep</th><th>Multiplier</th><th>Umbee</th><th>Final Hole Total</th><th>Match</th></tr></thead><tbody>${rows}</tbody></table></div></div></section>`;
 }
 
 function buildSummaryExportBody(match, metrics) {
@@ -4663,6 +4793,7 @@ function buildSummaryExportBody(match, metrics) {
   const exportProvisionalLabelHtml = buildMissingScoreWarning(match, metrics, { exportMode: true });
   const exportSharedLedgerNoteHtml = buildSharedLedgerReportNote(match);
   const exportSspSummaryHtml = buildSneakySandyPoleyExportSummary(match, metrics);
+  const exportSspAuditHtml = buildSneakySandyPoleyAuditDetail(match, metrics);
   const showNinePoint = (match.selectedGames || []).some(g => g.key === 'nine_point');
   const exportNinePointScorecardHtml = showNinePoint ? `
     <section class="export-section export-section-nine-point export-section-nine-point-scorecard">
@@ -4678,13 +4809,12 @@ function buildSummaryExportBody(match, metrics) {
     </section>` : '';
   return `
     ${exportRoundSnapshotHtml}
-    ${exportRoundRecapHtml}
     ${exportProvisionalLabelHtml}
     ${exportSharedLedgerNoteHtml}
 
     <section class="export-section export-section-net-payout">
       <div class="export-section-head">
-        <h2>${getRoundCompletionState(match, metrics).isIncomplete ? (areAllGamesFinal(match, metrics) ? 'Final Net Settlement' : 'Final Net Settlement — Provisional') : 'Final Net Settlement — Efficient Cash Payments'}</h2>
+        <h2>${getRoundCompletionState(match, metrics).isIncomplete ? (areAllGamesFinal(match, metrics) ? 'Final Net Settlement' : 'Net Settlement — Provisional') : 'Final Net Settlement'}</h2>
         ${getRoundCompletionState(match, metrics).isIncomplete ? `<div class="export-section-sub">${areAllGamesFinal(match, metrics) ? 'All selected games are mathematically determined despite unplayed holes.' : 'Based on completed holes only. Some game outcomes may still change.'}</div>` : ''}
       </div>
       ${buildExportFinalNetSettlementSummary(match, metrics)}
@@ -4693,30 +4823,15 @@ function buildSummaryExportBody(match, metrics) {
 
     <section class="export-section export-section-games-summary">
       <div class="export-section-head">
-        <h2>Games Summary</h2>
+        <h2>Game Drivers</h2>
+        <div class="export-section-sub">Competition status, stakes, and current economic contribution.</div>
       </div>
       ${buildSelectedGamesSummary(match, metrics)}
     </section>
 
     ${exportSspSummaryHtml}
 
-    <section class="export-section export-section-player-leaderboard">
-      <div class="export-section-head">
-        <h2>Player leaderboard</h2>
-        ${getRoundCompletionState(match, metrics).isIncomplete ? `<div class="export-section-sub">Through ${getRoundCompletionState(match, metrics).completedHoleCount} of ${getRoundCompletionState(match, metrics).selectedHoleCount} holes.</div>` : ''}
-      </div>
-      ${buildExportPlayerLeaderboard(match, metrics)}
-    </section>
-
-    ${hasMultiPlayerTeam(metrics) ? `<section class="export-section export-section-team-leaderboard">
-      <div class="export-section-head">
-        <h2>Team leaderboard</h2>
-        ${getRoundCompletionState(match, metrics).isIncomplete ? `<div class="export-section-sub">Through ${getRoundCompletionState(match, metrics).completedHoleCount} of ${getRoundCompletionState(match, metrics).selectedHoleCount} holes.</div>` : ''}
-      </div>
-      ${buildExportTeamLeaderboard(match, metrics)}
-    </section>` : ''}
-
-
+    ${exportMomentumHtml}
 
     <section class="export-section export-section-classic export-section-classic-summary">
       <div class="export-section-head">
@@ -4732,7 +4847,18 @@ function buildSummaryExportBody(match, metrics) {
 
     ${exportNinePointScorecardHtml}
 
-    ${exportMomentumHtml}
+    ${exportRoundRecapHtml}
+
+    <div class="export-appendix-label">Appendix / Audit Detail</div>
+
+    <section class="export-section export-section-leaderboards">
+      <div class="export-section-head"><h2>Leaderboards</h2><div class="export-section-sub">Full player and team tables supporting the executive highlights.</div></div>
+      <h3>Player leaderboard</h3>
+      ${buildExportPlayerLeaderboard(match, metrics)}
+      ${hasMultiPlayerTeam(metrics) ? `<div class="leaderboard-team-block"><h3>Team leaderboard</h3>${buildExportTeamLeaderboard(match, metrics)}</div>` : ''}
+    </section>
+
+    ${exportSspAuditHtml}
 
     <section class="export-section export-section-score-distribution">
       <div class="export-section-head">
@@ -4752,10 +4878,9 @@ function buildSummaryExportBody(match, metrics) {
     </section>` : ''}
 
     ${exportGrossGameDetailHtml ? `
-    <div class="export-page-break export-page-break-before-gross-game-detail"></div>
     <section class="export-section export-section-gross-game-detail">
       <div class="export-section-head">
-        <h2>Gross Game Detail</h2>
+        <h2>Game Payout Detail</h2>
       </div>
       ${exportGrossGameDetailHtml}
     </section>` : ''}
@@ -4928,8 +5053,23 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     .round-snapshot-row strong, .round-snapshot-award strong { font-size: 12px; line-height: 1.25; overflow-wrap: anywhere; }
     .round-snapshot-awards { margin-top: 11px; border-top: 1px solid var(--border); padding-top: 10px; }
     .round-snapshot-awards-title { font-size: 11px; font-weight: 900; color: #243247; margin-bottom: 7px; text-transform: uppercase; letter-spacing: .05em; }
+    .round-snapshot-takeaways { margin-top: 10px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 13px; background: #f8fbf9; }
+    .round-snapshot-takeaways ul { margin: 5px 0 0; padding-left: 17px; display: grid; gap: 3px; font-size: 11px; }
     .round-snapshot-awards-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
     .round-snapshot-recap-teaser, .empty-state-card { margin-top: 10px; border: 1px dashed var(--border-strong); border-radius: 13px; padding: 10px; background: #fbfcfd; color: var(--muted); font-size: 11px; line-height: 1.38; }
+    .ssp-momentum { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 13px; background: #fff; color: var(--accent); break-inside: avoid; page-break-inside: avoid; }
+    .ssp-momentum-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .ssp-momentum h3 { margin: 0; color: var(--text); }
+    .ssp-momentum-result { color: var(--text); font-size: 12px; white-space: nowrap; }
+    .ssp-momentum svg { display: block; width: 100%; max-height: 210px; margin-top: 7px; overflow: visible; }
+    .ssp-momentum text { font-size: 11px; fill: var(--muted); }
+    .ssp-momentum-zero { stroke: #7b8794; stroke-width: 1; stroke-dasharray: 4 4; }
+    .ssp-momentum-axis { stroke: #c8d2cc; stroke-width: 1; }
+    .ssp-momentum-line { fill: none !important; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    .ssp-momentum-dot { fill: #fff; stroke: var(--accent); stroke-width: 3; }
+    .ssp-momentum-swings { margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.4; }
+    .ssp-momentum-empty { margin-top: 12px; padding: 10px; border: 1px dashed var(--border); border-radius: 10px; color: var(--muted); }
+    .leaderboard-team-block { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
     .print-keep-together { break-inside: avoid; page-break-inside: avoid; }
     .export-note-block {
       font-size: 12px;
@@ -5041,6 +5181,8 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     .export-pill.team2 { background: var(--pill-team2); }
     .export-pill.tied { background: var(--pill-tied); }
     .export-pill.pending { background: var(--pill-pending); }
+    .export-momentum-pending { margin-top: 9px; color: var(--muted); font-size: 11px; }
+    .export-appendix-label { margin: 16px 0 8px; padding-top: 10px; border-top: 2px solid var(--border-strong); color: var(--muted); font-size: 11px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; break-after: avoid-page; page-break-after: avoid; }
     .match-status-head { margin-bottom: 10px; }
     .match-status-head .tiny { text-transform: uppercase; letter-spacing: 0.05em; }
     .match-status-grid, .game-summary-grid, .stat-summary-grid {
@@ -5223,12 +5365,7 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       break-before: page !important;
       page-break-before: always !important;
     }
-    .export-section-round-recap {
-      break-before: avoid-page;
-      page-break-before: avoid;
-      break-inside: avoid-page;
-      page-break-inside: avoid;
-    }
+    .export-section-round-recap { break-inside: auto; page-break-inside: auto; }
     .nine-point-scorecard-table th:nth-child(2),
     .nine-point-scorecard-table td:nth-child(2) {
       position: static !important;
@@ -5323,6 +5460,31 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
         break-inside: auto;
         page-break-inside: auto;
       }
+      .export-section-round-recap,
+      .export-section-ssp-summary,
+      .export-section-ssp-audit,
+      .export-section-leaderboards,
+      .export-section-score-distribution,
+      .export-section-stat-tracking,
+      .export-section-gross-game-detail {
+        break-inside: auto;
+        page-break-inside: auto;
+      }
+      .export-section-classic-summary {
+        break-before: page;
+        page-break-before: always;
+        break-after: page;
+        page-break-after: always;
+      }
+      .export-section-round-recap {
+        break-before: page;
+        page-break-before: always;
+      }
+      .round-snapshot-recap-teaser { display: none !important; }
+      .ssp-momentum-line { fill: none !important; stroke: #0b5d3b !important; }
+      .ssp-momentum-dot { fill: #fff !important; stroke: #0b5d3b !important; }
+      .export-section-ssp-audit { break-before: page; page-break-before: always; }
+      .export-section-leaderboards h3 { break-after: avoid; page-break-after: avoid; }
       .export-section-head h2 { font-size: 13px; }
       .export-section-sub, .match-status-meta, .game-summary-sub, .tiny, .scorecard-sub { font-size: 9px; }
       .match-status-grid, .game-summary-grid, .stat-summary-grid, .round-snapshot-grid, .round-snapshot-awards-grid { gap: 6px; }
@@ -5669,7 +5831,7 @@ function createEmptyMatch(overrides = {}) {
     selectedGames: Array.isArray(overrides.selectedGames) ? overrides.selectedGames : [],
     status: 'active',
     completedAt: null,
-    roundTiming: overrides.roundTiming || { startedAt: new Date().toISOString(), endedAt: null },
+    roundTiming: overrides.roundTiming || { startedAt: null, endedAt: null },
     players: Array.isArray(overrides.players) ? overrides.players : [],
     greeniesWinners: {},
     storageMode: 'local',
@@ -5736,7 +5898,7 @@ function normalizeMatch(match) {
   match.status = match.status || 'active';
   match.completedAt = match.completedAt || null;
   match.roundTiming = match.roundTiming && typeof match.roundTiming === 'object' ? match.roundTiming : {};
-  match.roundTiming.startedAt = match.roundTiming.startedAt || match.roundStartedAt || match.createdAt || new Date().toISOString();
+  match.roundTiming.startedAt = match.roundTiming.startedAt || match.roundStartedAt || null;
   match.roundTiming.endedAt = match.roundTiming.endedAt || match.roundEndedAt || match.completedAt || null;
   match.scoringAccessMode = normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device');
   match.scoreEntryMode = getLegacyScoreEntryMode(match.scoringAccessMode);
@@ -6653,12 +6815,12 @@ function buildClassicScorecard(match, metrics, opts = {}) {
   const holeHeader = holes.map(h => `<th class="scorecard-hole-col">H${h.holeNumber}</th>`).join('');
   const sum = arr => arr.reduce((s,h)=>s+(Number(h)||0),0);
   const totalColumns = holeCount > 9 ? '<th>Out</th><th>In</th><th>Total</th>' : '<th>Out</th><th>Total</th>';
-  const scorecardMetaRow = (label, extractor) => {
+  const scorecardMetaRow = (label, extractor, { showTotals = true } = {}) => {
     const holeValues = holes.map((h, idx) => extractor(h, idx));
     const outTotal = sum(front.map((h, idx) => extractor(h, idx)));
     const inTotal = back.length ? sum(back.map((h, idx) => extractor(h, idx + front.length))) : null;
     const total = sum(holes.map((h, idx) => extractor(h, idx)));
-    return `<tr><td class="scorecard-sticky-name"><strong>${label}</strong></td>${hideTeamColumn ? '' : `<td class="scorecard-sticky-team">${blankCourseTeamCell ? '' : 'Course'}</td>`}${holeValues.map(v => `<td class="scorecard-hole-col">${v ?? '—'}</td>`).join('')}<td><strong>${outTotal || '—'}</strong></td>${back.length ? `<td><strong>${inTotal || '—'}</strong></td>` : ''}<td><strong>${total || '—'}</strong></td></tr>`;
+    return `<tr><td class="scorecard-sticky-name"><strong>${label}</strong></td>${hideTeamColumn ? '' : `<td class="scorecard-sticky-team">${blankCourseTeamCell ? '' : 'Course'}</td>`}${holeValues.map(v => `<td class="scorecard-hole-col">${v ?? '—'}</td>`).join('')}<td><strong>${showTotals ? (outTotal || '—') : '—'}</strong></td>${back.length ? `<td><strong>${showTotals ? (inTotal || '—') : '—'}</strong></td>` : ''}<td><strong>${showTotals ? (total || '—') : '—'}</strong></td></tr>`;
   };
   const dotMarkup = count => count > 0 ? `<span class="score-dots">${'•'.repeat(Math.min(count,3))}${count>3?`<sup>${count}</sup>`:''}</span>` : '';
   const visiblePlayers = selectedPlayerId ? metrics.players.filter(p => String(p.playerId) === selectedPlayerId) : metrics.players;
@@ -6670,7 +6832,7 @@ function buildClassicScorecard(match, metrics, opts = {}) {
     return Number.isFinite(yardage) && yardage > 0 ? formatYardageValue(yardage) : null;
   });
   const parRow = scorecardMetaRow('Par', h => Number(h.par) || 0);
-  const siRow = scorecardMetaRow('Handicap', h => Number(h.strokeIndex) || 0);
+  const siRow = scorecardMetaRow('Handicap', h => Number(h.strokeIndex) || 0, { showTotals: false });
   const summarizePlayerScorecardRange = (p, startIdx, endIdx) => {
     let gross = 0;
     let net = 0;
@@ -6710,10 +6872,11 @@ function buildClassicScorecard(match, metrics, opts = {}) {
     const playerTeeName = p.tee?.teeName || tee?.teeName || 'Tee';
     return `<tr><td class="scorecard-sticky-name"><strong>${escapeHtml(p.player.name)}</strong><div class="tiny">Tee: ${escapeHtml(playerTeeName)}</div></td>${hideTeamColumn ? '' : `<td class="scorecard-sticky-team">${escapeHtml(getTeamLabel(match,p.team))}</td>`}${cells}${totals}</tr>`;
   }).join('');
-  const teeLegend = visiblePlayers.map(p => `${p.player.name}: ${p.tee?.teeName || tee?.teeName || 'Tee'}`).join(' · ');
   const completion = getRoundCompletionState(match, metrics);
-  const partialNote = completion.isIncomplete ? ' Totals reflect completed/scored holes only; unplayed holes are shown as dashes and are not counted.' : '';
-  return `<div class="scorecard-sub tiny">Per-hole cells show gross on top and net below, with notation wrapped around the score and dots for strokes received. Course rows include yardage, par, and handicap. Player tees: ${escapeHtml(teeLegend)}${escapeHtml(partialNote)}</div><div class="scorecard-wrap"><table class="scorecard-table ${hideTeamColumn ? 'scorecard-no-team-col' : ''}"><thead><tr><th class="scorecard-sticky-name">${blankPlayerHeader ? '' : 'Player'}</th>${hideTeamColumn ? '' : '<th class="scorecard-sticky-team">Team</th>'}${holeHeader}${totalColumns}</tr></thead><tbody>${yardageRow}${parRow}${siRow}${playerRows}</tbody></table></div>`;
+  const teeNames = [...new Set(visiblePlayers.map(p => p.tee?.teeName || tee?.teeName || 'Tee'))];
+  const teeNote = teeNames.length === 1 ? ` All players: ${teeNames[0]} tee.` : ' Player tees are shown in each row.';
+  const partialNote = completion.isIncomplete ? ' Unplayed holes are shown as dashes and excluded from totals.' : '';
+  return `<div class="scorecard-sub tiny">Gross score shown above net score. Dots indicate strokes received.${escapeHtml(teeNote)}${escapeHtml(partialNote)}</div><div class="scorecard-wrap"><table class="scorecard-table ${hideTeamColumn ? 'scorecard-no-team-col' : ''}"><thead><tr><th class="scorecard-sticky-name">${blankPlayerHeader ? '' : 'Player'}</th>${hideTeamColumn ? '' : '<th class="scorecard-sticky-team">Team</th>'}${holeHeader}${totalColumns}</tr></thead><tbody>${yardageRow}${parRow}${siRow}${playerRows}</tbody></table></div>`;
 }
 
 
@@ -6845,7 +7008,7 @@ function buildSettleUpList(settlements) {
   if (!settlements.length) return '<div class="tiny">No payments needed.</div>';
   return `<div class="settle-up-list">${settlements.map(row => `
     <div class="settle-up-row">
-      <div class="settle-up-route"><strong>${escapeHtml(getPlayer(row.from)?.name || 'Unknown')}</strong><span aria-hidden="true">→</span><strong>${escapeHtml(getPlayer(row.to)?.name || 'Unknown')}</strong></div>
+      <div class="settle-up-route"><strong>${escapeHtml(getPlayer(row.from)?.name || 'Unknown')}</strong><span aria-hidden="true">&nbsp;→&nbsp;</span><strong>${escapeHtml(getPlayer(row.to)?.name || 'Unknown')}</strong></div>
       <div class="settle-up-amount"><strong>${formatMoneyAccounting(row.amount)}</strong></div>
     </div>`).join('')}</div>`;
 }
@@ -6865,7 +7028,7 @@ function buildFinalNetSettlementSection(players, totals) {
   const settlements = optimalSettlementRows(totals || {});
   return `
     <div class="final-net-settlement-card top-gap">
-      <div class="payout-settlement-head"><strong>Final Net Settlement — Efficient Cash Payments</strong></div>
+      <div class="payout-settlement-head"><strong>Efficient Cash Payments</strong></div>
       <div class="final-net-settlement-list">${rows}</div>
       <div class="final-net-settlement-crossfoot ${crossFootClass}">Cross-foot: ${formatMoneyAccounting(crossFoot)}</div>
       <div class="settle-up-card">
@@ -6893,12 +7056,12 @@ function buildPlayerGrossSummaryCards(players, games) {
     return `<div class="gross-game-player-card">
       <div class="gross-game-player-name">${escapeHtml(player.name)}</div>
       <div class="gross-game-card-lines">${lines}</div>
-      <div class="gross-game-card-total"><span>Gross Total</span><strong class="${totalCls}">${formatGrossGameAmount(total)}</strong></div>
+      <div class="gross-game-card-total"><span>Game Total</span><strong class="${totalCls}">${formatGrossGameAmount(total)}</strong></div>
     </div>`;
   }).join('')}</div>`;
 }
 function buildGrossGamePaymentDetail(players, games) {
-  if (!games.length) return '<div class="tiny">No gross game detail available.</div>';
+  if (!games.length) return '<div class="tiny">No game payout detail available.</div>';
   return `<div class="gross-game-detail-list">${games.map(game => {
     const rows = Array.isArray(game.paymentLines) && game.paymentLines.length
       ? game.paymentLines
@@ -6907,9 +7070,9 @@ function buildGrossGamePaymentDetail(players, games) {
       ? rows.map(row => `<div class="gross-game-payment-row"><span><strong>${escapeHtml(getPlayer(row.to)?.name || 'Unknown')}</strong> receives ${formatMoneyAccounting(row.amount)} from <strong>${escapeHtml(getPlayer(row.from)?.name || 'Unknown')}</strong></span></div>`).join('')
       : (game?.meta?.noWagerConfigured ? '<div class="tiny">Nassau enabled with no wager configured.</div>' : '<div class="tiny">No payout.</div>');
     const gameTotal = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
-    const totalLine = gameTotal > 0.0001 ? `<div class="gross-game-section-total">Gross movement: ${formatMoneyAccounting(gameTotal)}</div>` : '';
+    const totalLine = gameTotal > 0.0001 ? `<div class="gross-game-section-total">Total transferred: ${formatMoneyAccounting(gameTotal)}</div>` : '';
     return `<div class="gross-game-section">
-      <div class="gross-game-section-title">${escapeHtml(game.key === 'nine_point' ? '9-Point Gross Result' : game.label)}</div>
+      <div class="gross-game-section-title">${escapeHtml(game.key === 'nine_point' ? '9-Point Result' : game.label)}</div>
       <div class="gross-game-section-lines">${body}</div>
       ${totalLine}
     </div>`;
@@ -6918,12 +7081,12 @@ function buildGrossGamePaymentDetail(players, games) {
 function buildGrossGameDetailSection(match, players, games) {
   const matchId = String(match?.id || 'active');
   const open = !!uiState.grossGameDetailOpenByMatch[matchId];
-  const label = open ? 'Hide Gross Game Detail ▲' : 'Show Gross Game Detail ▼';
+  const label = open ? 'Hide Game Payout Detail ▲' : 'Show Game Payout Detail ▼';
   const detail = open ? `
     <div class="gross-game-detail-body" id="grossGameDetailBody">
-      <div class="payout-summary-intro"><strong>Player Gross Summary</strong><br><span class="tiny">Gross game results by player before the final efficient settlement.</span></div>
+      <div class="payout-summary-intro"><strong>Player Game Summary</strong><br><span class="tiny">Game results by player before efficient settlement.</span></div>
       ${buildPlayerGrossSummaryCards(players, games)}
-      <div class="payout-summary-intro top-gap"><strong>Game-by-Game Payout Detail</strong><br><span class="tiny">Audit trail of the gross payment lines that reconcile to the final net settlement above.</span></div>
+      <div class="payout-summary-intro top-gap"><strong>Game-by-Game Payout Detail</strong><br><span class="tiny">Pre-settlement audit trail that reconciles to the net settlement above.</span></div>
       ${buildGrossGamePaymentDetail(players, games)}
     </div>` : '';
   return `<div class="gross-game-detail-card top-gap">
@@ -6956,14 +7119,14 @@ function buildExportFinalNetSettlementSummary(match, metrics) {
   if (!ctx.selected.length) return '<div><strong>Net payout (live):</strong> No gambling games selected.</div>';
   if (!ctx.payoutGames.length) return '<div><strong>Net payout (live):</strong> No payout-producing games selected.</div>';
   const settlementFinal = areAllGamesFinal(match, metrics);
-  const note = completion.isIncomplete ? `<div class="export-provisional-label">${settlementFinal ? 'Final Net Settlement — all selected games are mathematically determined despite unplayed holes.' : `Provisional Net Settlement — based on ${completion.completedHoleCount} of ${completion.selectedHoleCount} holes completed. Some game outcomes may still change.`}</div>` : '';
+  const note = completion.isIncomplete ? `<div class="export-provisional-label">${settlementFinal ? 'Final Net Settlement — all selected games are mathematically determined despite unplayed holes.' : `Net Settlement — Provisional · based on ${completion.completedHoleCount} completed holes. Some game outcomes may still change.`}</div>` : '';
   return `<div class="payout-summary-stack">${note}${buildFinalNetSettlementSection(ctx.players, ctx.finalTotals)}</div>`;
 }
 
 function buildExportGrossGameDetailSummary(match, metrics) {
   const ctx = getPayoutReportContext(match, metrics);
   if (!ctx.selected.length) return '';
-  if (!ctx.payoutGames.length) return '<div class="export-empty">No gross game detail available.</div>';
+  if (!ctx.payoutGames.length) return '<div class="export-empty">No game payout detail available.</div>';
   return `
     <div class="gross-game-detail-body export-gross-game-detail-body">
       <div class="payout-summary-intro"><strong>Player Gross Summary</strong><br><span class="tiny">Gross game results by player before the final efficient settlement.</span></div>
@@ -7552,6 +7715,7 @@ function renderLeaderboard() {
   const playerBody = document.getElementById('playerLeaderboardBody');
   const teamBody = document.getElementById('teamLeaderboardBody');
   const matchStatus = document.getElementById('matchStatusSummary');
+  const executiveSummary = document.getElementById('roundExecutiveSummary');
   const matchStatusGameSelect = document.getElementById('matchStatusGameSelect');
   const gamesSummary = document.getElementById('gamesSummary');
   const classicScorecard = document.getElementById('classicScorecard');
@@ -7569,6 +7733,7 @@ function renderLeaderboard() {
     syncFinishRoundUi(null);
     empty.classList.remove('hidden');
     wrap.classList.add('hidden');
+    if (executiveSummary) executiveSummary.innerHTML = '';
     return;
   }
 
@@ -7582,6 +7747,7 @@ function renderLeaderboard() {
 
   empty.classList.add('hidden');
   wrap.classList.remove('hidden');
+  if (executiveSummary) executiveSummary.innerHTML = buildRoundSnapshot(match, metrics);
   completedSummaryBanner?.classList.toggle('hidden', !isCompletedSummarySession(match));
   syncFinishRoundUi(match);
   const missingScoreEl = document.getElementById('missingScoreWarning');
@@ -7677,7 +7843,7 @@ function renderLeaderboard() {
     }
   }
   matchStatus.innerHTML = buildFeaturedMatchStatus(match, metrics, match.matchStatusGame || statusOptions[0]?.key || 'team_match');
-  gamesSummary.innerHTML = buildSelectedGamesSummary(match, metrics);
+  gamesSummary.innerHTML = `${buildSelectedGamesSummary(match, metrics)}${buildSneakySandyPoleyExportSummary(match, metrics)}`;
   if (classicScorecard) {
     classicScorecard.innerHTML = buildClassicScorecard(match, metrics);
   }
@@ -7736,7 +7902,7 @@ function renderLeaderboard() {
       } else {
         cls = 'tied';
       }
-      const txt = outcome === 'pending' ? '•' : formatPerspectiveStatus(running, perspectiveTeam);
+      const txt = outcome === 'pending' ? 'Not played' : formatPerspectiveStatus(running, perspectiveTeam);
       return `<div class="momentum-pill ${cls}">H${h.holeNumber}<span>${txt}</span></div>`;
     }).join('');
   } else if (holeMomentum) {
@@ -8803,7 +8969,7 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
     status: match.status || 'active',
     course_id: match.courseId || '',
     reference_tee_id: match.teeId || '',
-    course_snapshot: { ...courseSnapshot, sharedMatchMeta: { scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device'), matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || ''), hostDeviceId: match.sharedHostDeviceId || getSharedDeviceId(), hostParticipantId: match.sharedHostParticipantId || getCurrentSharedParticipantId(match), devices: Array.isArray(match.sharedDevices) ? match.sharedDevices : [], participants: getSharedAssignmentParticipants(match), playerAssignments: match.sharedPlayerAssignments || {}, memories: getRoundMemories(match), memoriesUpdatedAt: new Date().toISOString(), roundContext: normalizeRoundContext(match.roundContext), sspFacts: buildSharedSspFacts(match) } },
+    course_snapshot: { ...courseSnapshot, sharedMatchMeta: { scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device'), matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || ''), hostDeviceId: match.sharedHostDeviceId || getSharedDeviceId(), hostParticipantId: match.sharedHostParticipantId || getCurrentSharedParticipantId(match), devices: Array.isArray(match.sharedDevices) ? match.sharedDevices : [], participants: getSharedAssignmentParticipants(match), playerAssignments: match.sharedPlayerAssignments || {}, memories: getRoundMemories(match), memoriesUpdatedAt: new Date().toISOString(), roundContext: normalizeRoundContext(match.roundContext), roundTiming: match.roundTiming || { startedAt: null, endedAt: null }, holeFirstCompletedAt: match.holeFirstCompletedAt || {}, sspFacts: buildSharedSspFacts(match) } },
     format: match.format || 'teams',
     allowance: Number(match.allowance) || 100,
     hole_count: getRequestedHoleCount(match),
@@ -9073,9 +9239,10 @@ function hydrateMatchFromCloudBundle(bundle) {
     sharedPlayerAssignments: sharedMeta.playerAssignments && typeof sharedMeta.playerAssignments === 'object' ? sharedMeta.playerAssignments : {},
     memories: Array.isArray(sharedMeta.memories) ? sharedMeta.memories.map(m => normalizeRoundMemory(m)).filter(Boolean) : [],
     roundContext: normalizeRoundContext(sharedMeta.roundContext || {}),
+    roundTiming: sharedMeta.roundTiming && typeof sharedMeta.roundTiming === 'object' ? { ...sharedMeta.roundTiming } : { startedAt: null, endedAt: null },
     sneakySandyPoleyInputs: JSON.parse(JSON.stringify(sharedMeta.sspFacts?.inputs || {})),
     playedHoleOrder: Array.isArray(sharedMeta.sspFacts?.playedHoleOrder) ? [...sharedMeta.sspFacts.playedHoleOrder] : [],
-    holeFirstCompletedAt: { ...(sharedMeta.sspFacts?.holeFirstCompletedAt || {}) },
+    holeFirstCompletedAt: { ...(sharedMeta.holeFirstCompletedAt || sharedMeta.sspFacts?.holeFirstCompletedAt || {}) },
     sharedSspBaseline: sharedMeta.sspFacts ? JSON.parse(JSON.stringify(sharedMeta.sspFacts)) : null,
     sharedSspSyncState: sharedMeta.sspFacts ? 'synced' : 'not-applicable',
     sharedSspConflicts: [],
@@ -10777,6 +10944,7 @@ function renderMatches() {
     const tee = getTee(match.courseId, match.teeId);
     const metrics = computeMatchMetrics(match);
     const status = match.status === 'complete' ? 'Complete' : (state.activeMatchId === match.id ? 'Active' : 'Saved');
+    const timing = getRoundElapsedTimeState(match, metrics);
     const storage = match.storageMode === 'shared' ? 'Shared' : 'Local';
     const cloudMeta = match.storageMode === 'shared' ? `${storage} · ${match.cloudSyncState || 'local-cache'}${match.sharedMatchRef ? ` · ID ${match.sharedMatchRef}` : ''}` : storage;
     return `
@@ -10784,7 +10952,7 @@ function renderMatches() {
         <div class="item-header compact-item-header">
           <div>
             <div class="item-title">${escapeHtml(match.name || 'Round')} · ${escapeHtml(match.date)}</div>
-            <div class="muted">${escapeHtml(course?.name || 'No course')} · ${escapeHtml(tee?.teeName || 'No tee')} · ${escapeHtml(getHoleSegmentLabel(match, tee))} · ${status}</div>
+            <div class="muted">${escapeHtml(course?.name || 'No course')} · ${escapeHtml(tee?.teeName || 'No tee')} · ${escapeHtml(getHoleSegmentLabel(match, tee))} · ${status}${timing.available ? ` · ${escapeHtml(match.status === 'complete' ? formatRoundDuration(timing.elapsedMs) : `elapsed ${formatRoundDuration(timing.elapsedMs)}`)}` : ''}</div>
             <div class="tiny">${metrics ? `${metrics.completed}/${getPlayableHoleCount(match, metrics.tee)} holes completed` : ''}</div>
             <div class="tiny">${escapeHtml(cloudMeta)}</div>
           </div>
@@ -10972,6 +11140,8 @@ function buildNextRoundDraft(prior) {
   draft.roundRecapFinal = '';
   draft.completedAt = null;
   draft.status = 'active';
+  draft.roundTiming = { startedAt: null, endedAt: null };
+  draft.holeFirstCompletedAt = {};
   return draft;
 }
 
@@ -11574,7 +11744,7 @@ function completeActiveRound() {
     match.completedAt = new Date().toISOString();
     match.roundTiming = match.roundTiming && typeof match.roundTiming === 'object' ? match.roundTiming : {};
     match.roundTiming.startedAt = match.roundTiming.startedAt || match.roundStartedAt || match.createdAt || match.completedAt;
-    match.roundTiming.endedAt = match.completedAt;
+    ensureRoundTimingEnded(match, match.completedAt, { overwrite: wasReopened });
     const finishMetrics = computeMatchMetrics(match);
     const finishCompletion = getRoundCompletionState(match, finishMetrics);
     if (!match.roundEndReason) match.roundEndReason = finishCompletion.isComplete ? 'completed' : 'endedEarly';
@@ -11658,7 +11828,8 @@ function renderCurrentMatch() {
   const reopenedNote = match.previousCompletedAt
     ? ' · Reopened from completed round (Finish Round will overwrite the saved round)'
     : '';
-  metaEl.textContent = `${getSessionRoundLabel(match)} · ${match.date} · ${match.name || 'Round'} · ${course?.name || ''} · ${getHoleSegmentLabel(match, tee)} · ${metrics?.completed || 0}/${holeCount} holes completed${metrics?.teeFallbackUsed ? ` · Tee fallback: ${tee?.teeName || 'first saved tee'}` : ''}${match.storageMode === 'shared' ? ` · Shared ID ${match.sharedMatchRef || match.sharedMatchId || match.id}` : ''}${reopenedNote}`;
+  const timing = getRoundElapsedTimeState(match, metrics);
+  metaEl.textContent = `${getSessionRoundLabel(match)} · ${match.date} · ${match.name || 'Round'} · ${course?.name || ''} · ${getHoleSegmentLabel(match, tee)} · ${metrics?.completed || 0}/${holeCount} holes completed${timing.available ? ` · ${timing.label}` : ''}${metrics?.teeFallbackUsed ? ` · Tee fallback: ${tee?.teeName || 'first saved tee'}` : ''}${match.storageMode === 'shared' ? ` · Shared ID ${match.sharedMatchRef || match.sharedMatchId || match.id}` : ''}${reopenedNote}`;
   emptyEl.classList.add('hidden');
   wrapEl.classList.remove('hidden');
   currentHole = Math.min(holeCount, Math.max(1, currentHole));
@@ -12855,6 +13026,8 @@ function computeLivePayoutGames(match, metrics) {
 function buildSelectedGamesSummary(match, metrics) {
   const completion = getRoundCompletionState(match, metrics);
   const selected = getOrderedSelectedGames(match);
+  const payoutGames = getPayoutReportContext(match, metrics).payoutGames || [];
+  const payoutByKey = new Map(payoutGames.map(game => [game.key, game]));
   if (!selected.length) {
     return `<div class="game-summary-grid"><div class="game-summary-card empty-state-card"><div class="game-summary-title">No payout games selected</div><div class="game-summary-value">No payout games were selected for this round.</div><div class="game-summary-sub">${metrics.completed}/${getPlayableHoleCount(match, metrics.tee)} holes completed · ${getHoleSegmentLabel(match, metrics.tee)}</div></div></div>`;
   }
@@ -12941,9 +13114,14 @@ function buildSelectedGamesSummary(match, metrics) {
       value = !leader.thru ? 'Not started' : (leader.tied ? `Tied thru ${leader.thru}` : `${formatSneakySandyPoleyTeamName(ledger, match, leader.teamId)} +${leader.margin} thru ${leader.thru}`);
       sub = `${formatPositiveCurrency(Number(ledger.settings?.pointValue || 0), 2)} per point · ${ledger.settlement?.label || 'SSP: tied, no payment'}`;
     }
-    return `<div class="game-summary-card"><div class="game-summary-title">${escapeHtml(title)}</div><div class="game-summary-value">${escapeHtml(value)}</div>${sub ? `<div class="game-summary-sub">${escapeHtml(sub)}</div>` : ''}</div>`;
+    const payoutGame = payoutByKey.get(cfg.key) || payoutGames.find(game => String(game.key || '').startsWith(`${cfg.key}_`));
+    const payoutRows = Object.entries(payoutGame?.amounts || {}).map(([id, amount]) => ({ name: getPlayer(id)?.name || id, amount: Number(amount || 0) }));
+    const winners = payoutRows.filter(row => row.amount > 0.0001).sort((a, b) => b.amount - a.amount);
+    const economic = winners.length
+      ? `Current payout: ${winners.map(row => `${row.name} ${formatMoneyAccounting(row.amount)}`).join(' · ')}`
+      : 'Current payout: $0.00';
+    return `<div class="game-summary-card"><div class="game-summary-title">${escapeHtml(title)}</div><div class="game-summary-value">${escapeHtml(value)}</div>${sub ? `<div class="game-summary-sub">${escapeHtml(sub)}</div>` : ''}<div class="game-summary-sub game-summary-economic">${escapeHtml(economic)} · ${completion.isIncomplete ? 'Provisional' : 'Final'}</div></div>`;
   });
-  cards.push(`<div class="game-summary-card game-summary-card-accent"><div class="game-summary-title">Round pace</div><div class="game-summary-value">${metrics.completed ? `${Math.round((metrics.completed / Math.max(1, getPlayableHoleCount(match, metrics.tee))) * 100)}% complete` : 'Not started'}</div><div class="game-summary-sub">${metrics.completed}/${getPlayableHoleCount(match, metrics.tee)} holes completed · ${getHoleSegmentLabel(match, metrics.tee)}</div></div>`);
   return `<div class="game-summary-grid">${cards.join('')}</div>`;
 }
 
@@ -15642,6 +15820,10 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (e.target.closest('[data-start-shared-scoring]')) {
       const match = getActiveMatch();
       if (!match) return;
+      if (ensureRoundTimingStarted(match)) {
+        persist({ skipRender: true });
+        scheduleSharedMatchSync(match, { immediate: true, silent: true });
+      }
       activateTab('score');
       return;
     }
@@ -15912,6 +16094,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       roundRecapStatus: existing?.roundRecapStatus || '',
       roundRecapNotes: mergeRoundNoteText(existing?.roundRecapNotes, existing?.notes || state.notes || ''),
       roundContext: normalizeRoundContext(existing?.roundContext || {}),
+      roundTiming: existing?.roundTiming || { startedAt: null, endedAt: null },
+      holeFirstCompletedAt: existing?.holeFirstCompletedAt || {},
     };
     if (!editingMatchId && pendingNextRoundSessionContext) {
       match.sessionId = pendingNextRoundSessionContext.sessionId;
@@ -15967,6 +16151,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       startSharedConnectionFastRefresh({ reason: 'host-created-shared-match' });
     }
     currentHole = Math.min(getRequestedHoleCount(match), Math.max(1, completedHoles(match) || 1));
+    if (!editingMatchId && match.storageMode !== 'shared') ensureRoundTimingStarted(match);
     persist({ skipRender: true });
     loadMatchEditor(null);
     renderAll();
@@ -16038,9 +16223,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       match.playedHoleOrder = Array.isArray(match.playedHoleOrder) ? match.playedHoleOrder : [];
       match.holeFirstCompletedAt = match.holeFirstCompletedAt && typeof match.holeFirstCompletedAt === 'object' ? match.holeFirstCompletedAt : {};
       const nowCompleteAfterSave = (match.players || []).length > 0 && (match.players || []).every(mp => Number(mp?.scores?.[currentHole - 1]?.gross) > 0);
-      if (nowCompleteAfterSave && !match.playedHoleOrder.map(Number).includes(Number(actualHoleNumber))) {
-        match.playedHoleOrder.push(Number(actualHoleNumber));
-        match.holeFirstCompletedAt[String(actualHoleNumber)] = new Date().toISOString();
+      if (nowCompleteAfterSave) {
+        if (!match.playedHoleOrder.map(Number).includes(Number(actualHoleNumber))) match.playedHoleOrder.push(Number(actualHoleNumber));
+        recordHoleFirstCompletedAt(match, actualHoleNumber);
       }
     } catch (orderErr) {
       recordAppError(orderErr, 'Actual Play Order Tracking');
@@ -16853,6 +17038,11 @@ function installDyeLedgerLiveEngineAdapter() {
     buildSneakySandyPoleyRunningText,
     buildQuickScoreboardView,
     buildSneakySandyPoleyExportSummary,
+    buildSneakySandyPoleyAuditDetail,
+    buildExportMomentum,
+    buildRoundSnapshot,
+    buildSelectedGamesSummary,
+    buildSummaryExportBody,
     resolveSneakySandyPoleyProxSelection,
     buildSharedSspFacts,
     reconcileSharedSspFacts,
@@ -16870,6 +17060,16 @@ function installDyeLedgerLiveEngineAdapter() {
     getScorecardImportSaveGuard,
     updateScorecardImportStatus,
     isCompletedSummarySession,
+    formatRoundDuration,
+    ensureRoundTimingStarted,
+    ensureRoundTimingEnded,
+    recordHoleFirstCompletedAt,
+    getRoundElapsedTimeState,
+    formatRoundWeatherDisplay,
+    getRoundCompletionState,
+    buildRoundStatusSummary,
+    getFeaturedCompetitionResult,
+    buildClassicScorecard,
   };
   return window.__DYE_LEDGER_LIVE_ENGINE__;
 }

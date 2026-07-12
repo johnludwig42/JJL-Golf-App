@@ -844,3 +844,9 @@ When uncertain, preserve the current local-first, offline-first, iPhone-first ar
 - Saved tee authoring remains 18-hole-first; 9-hole rounds select a segment from that data. Dedicated 9-hole course authoring/import compatibility remains future work.
 - AI scorecard extraction still requires manual review for ambiguous layouts, combo tees, and incomplete par/SI/yardage panels.
 - Multi-file import depends on the deployed scorecard-import service supporting the documented `files` array. The client combines files into one request/review workflow but does not independently merge multiple backend course objects.
+## v30.3.61 timing and report follow-ups
+
+Automatic timing intentionally has no pause model. `holeFirstCompletedAt` is backward-compatible optional metadata and should remain merge-safe for older Shared Match clients. A future version may derive active-play intervals, but must not rewrite original first-completion timestamps. Browser/PDF pagination remains dependent on WebKit/Chromium print engines and needs representative iPhone manual QA.
+## Deferred — Match Summary v2 / Analyst Report Layout
+
+A dedicated future release should separate executive and full-detail report modes, add compact/full PDF options, establish a refined report design system and narrative hierarchy, evaluate a dedicated PDF generation pipeline, strengthen weather capture reliability, and expand pace-of-play analytics. v30.3.61 intentionally limits work to release-blocking polish and pagination fixes.

@@ -234,11 +234,12 @@ test('pace projection suppresses implausibly short rounds and weather display is
   const metrics = engine.computeMatchMetrics(match);
   const tooShort = engine.getRoundElapsedTimeState(match, metrics, Date.parse('2026-07-11T13:01:00.000Z'));
   assert.equal(tooShort.projectionAvailable, false);
-  assert.match(tooShort.label, /Pace projection available after more playing time/);
+  assert.equal(tooShort.valid, false);
+  assert.equal(tooShort.label, 'Timing unavailable');
   const plausible = engine.getRoundElapsedTimeState(match, metrics, Date.parse('2026-07-11T13:42:00.000Z'));
   assert.equal(plausible.projectionAvailable, true);
   assert.match(plausible.label, /Projected pace 4h 12m/);
   assert.equal(engine.formatRoundWeatherDisplay({}), '');
   assert.equal(engine.formatRoundWeatherDisplay(match), 'Weather: 72°F · Wind 12 mph southwest · Partly cloudy');
-  assert.match(engine.buildRoundSnapshot(match, metrics), /<span>Weather<\/span><strong>72°F · Wind 12 mph southwest · Partly cloudy<\/strong>/);
+  assert.equal(engine.buildRoundRecord(match, metrics).notes.weather.temperature, 72);
 });

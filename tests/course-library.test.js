@@ -156,3 +156,89 @@ test('scorecard import status safely no-ops when import DOM is absent', () => {
   const engine = loadLiveEngine();
   assert.doesNotThrow(() => engine.updateScorecardImportStatus());
 });
+
+test('round timing starts once, formats elapsed time, and projects from completed-hole count', () => {
+  const engine = loadLiveEngine();
+  const match = { id: 'timed', status: 'active', holeCount: 18, roundTiming: { startedAt: null, endedAt: null } };
+  assert.equal(engine.ensureRoundTimingStarted(match, '2026-07-11T13:00:00.000Z'), true);
+  assert.equal(engine.ensureRoundTimingStarted(match, '2026-07-11T14:00:00.000Z'), false);
+  assert.equal(match.roundTiming.startedAt, '2026-07-11T13:00:00.000Z');
+  assert.equal(engine.ensureRoundTimingEnded(match, '2026-07-11T17:07:00.000Z'), true);
+  assert.equal(engine.ensureRoundTimingEnded(match, '2026-07-11T18:00:00.000Z'), false);
+  assert.equal(match.roundTiming.endedAt, '2026-07-11T17:07:00.000Z');
+  match.roundTiming.endedAt = null;
+  const beforeProjection = engine.getRoundElapsedTimeState(match, { holeResults: [], players: [], tee: { holes: Array.from({ length: 18 }, (_, idx) => ({ holeNumber: idx + 1 })) } }, Date.parse('2026-07-11T14:00:00.000Z'));
+  assert.equal(beforeProjection.projectionAvailable, false);
+  assert.match(beforeProjection.label, /Pace available after 3 completed holes/);
+  assert.equal(engine.formatRoundDuration(4 * 3600000 + 7 * 60000), '4h 7m');
+});
+
+test('projection and incomplete copy use completed-hole count for out-of-sequence play', () => {
+  const engine = loadLiveEngine();
+  const row = course();
+  const scores = Array.from({ length: 18 }, (_, idx) => ({ holeNumber: idx + 1, gross: [0, 1, 2, 5, 7].includes(idx) ? 4 : null }));
+  const state = engine.seedState(seedMatch(row, {
+    roundTiming: { startedAt: '2026-07-11T13:00:00.000Z', endedAt: null },
+    players: [{ playerId: 'p1', team: 1, slot: 0, teeId: row.tees[0].id, scores }],
+  }));
+  const match = state.matches[0];
+  const metrics = engine.computeMatchMetrics(match);
+  const completion = engine.getRoundCompletionState(match, metrics);
+  assert.equal(completion.completedHoleCount, 5);
+  assert.equal(completion.completedHolesLabel, '1, 2, 3, 6, 8');
+  assert.equal(completion.isSequential, false);
+  assert.doesNotMatch(engine.buildRoundStatusSummary(match, metrics).headline, /through Hole 8/i);
+  const timing = engine.getRoundElapsedTimeState(match, metrics, Date.parse('2026-07-11T14:00:00.000Z'));
+  assert.equal(timing.projectionAvailable, true);
+  assert.equal(Math.round(timing.projectedTotalMs / 60000), 216);
+});
+
+test('first hole completion timestamp is immutable and Handicap row has no totals', () => {
+  const engine = loadLiveEngine();
+  const match = { holeFirstCompletedAt: {} };
+  assert.equal(engine.recordHoleFirstCompletedAt(match, 6, '2026-07-11T13:30:00.000Z'), true);
+  assert.equal(engine.recordHoleFirstCompletedAt(match, 6, '2026-07-11T14:30:00.000Z'), false);
+  assert.equal(match.holeFirstCompletedAt['6'], '2026-07-11T13:30:00.000Z');
+  const row = course();
+  const state = engine.seedState(seedMatch(row));
+  const html = engine.buildClassicScorecard(state.matches[0], engine.computeMatchMetrics(state.matches[0]));
+  const handicapRow = html.match(/<tr><td[^>]*><strong>Handicap<\/strong>[\s\S]*?<\/tr>/)?.[0] || '';
+  assert.equal((handicapRow.match(/<strong>—<\/strong>/g) || []).length, 3);
+});
+
+test('nine-hole projection uses the selected nine-hole denominator', () => {
+  const engine = loadLiveEngine();
+  const row = course();
+  const scores = Array.from({ length: 9 }, (_, idx) => ({ holeNumber: idx + 1, gross: idx < 3 ? 4 : null }));
+  const state = engine.seedState(seedMatch(row, {
+    holeCount: 9,
+    roundTiming: { startedAt: '2026-07-11T13:00:00.000Z', endedAt: null },
+    players: [{ playerId: 'p1', team: 1, slot: 0, teeId: row.tees[0].id, scores }],
+  }));
+  const match = state.matches[0];
+  const timing = engine.getRoundElapsedTimeState(match, engine.computeMatchMetrics(match), Date.parse('2026-07-11T14:00:00.000Z'));
+  assert.equal(timing.selectedHoleCount, 9);
+  assert.equal(Math.round(timing.projectedTotalMs / 60000), 180);
+});
+
+test('pace projection suppresses implausibly short rounds and weather display is best-effort', () => {
+  const engine = loadLiveEngine();
+  const row = course();
+  const scores = Array.from({ length: 18 }, (_, idx) => ({ holeNumber: idx + 1, gross: idx < 3 ? 4 : null }));
+  const state = engine.seedState(seedMatch(row, {
+    roundTiming: { startedAt: '2026-07-11T13:00:00.000Z', endedAt: null },
+    roundContext: { weather: { temperature: 72, windSpeed: 12, windDirection: 225, conditionsText: 'partly cloudy' } },
+    players: [{ playerId: 'p1', team: 1, slot: 0, teeId: row.tees[0].id, scores }],
+  }));
+  const match = state.matches[0];
+  const metrics = engine.computeMatchMetrics(match);
+  const tooShort = engine.getRoundElapsedTimeState(match, metrics, Date.parse('2026-07-11T13:01:00.000Z'));
+  assert.equal(tooShort.projectionAvailable, false);
+  assert.match(tooShort.label, /Pace projection available after more playing time/);
+  const plausible = engine.getRoundElapsedTimeState(match, metrics, Date.parse('2026-07-11T13:42:00.000Z'));
+  assert.equal(plausible.projectionAvailable, true);
+  assert.match(plausible.label, /Projected pace 4h 12m/);
+  assert.equal(engine.formatRoundWeatherDisplay({}), '');
+  assert.equal(engine.formatRoundWeatherDisplay(match), 'Weather: 72°F · Wind 12 mph southwest · Partly cloudy');
+  assert.match(engine.buildRoundSnapshot(match, metrics), /<span>Weather<\/span><strong>72°F · Wind 12 mph southwest · Partly cloudy<\/strong>/);
+});

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
 
 function emptyScores(values = []) {
@@ -588,6 +589,7 @@ test('featured SSP status uses latest saved state, explicit live basis, and sepa
   liveMatch.matchStatusGame = 'nassau';
   const liveMetrics = engine.computeMatchMetrics(liveMatch);
   assert.match(engine.getPrimaryMatchStatusLine(liveMatch, liveMetrics), /^SSP Match: Alpha \+/);
+  assert.match(engine.getFeaturedCompetitionResult(liveMatch, liveMetrics).result, /^Alpha \+.*SSP hole/);
   assert.match(engine.getPrimaryMatchStatusLine(liveMatch, liveMetrics, { includesDraft: true }), /^Live SSP: Alpha \+/);
   assert.match(engine.getSneakySandyPoleyHonorsLine(liveMatch, liveMetrics), /^Honors for Hole 1: /);
 
@@ -628,4 +630,79 @@ test('Nassau featured status basis is independent of SSP activation', () => {
   const savedOnly = engine.getPrimaryMatchStatusLine(nassau, engine.computeMatchMetrics(nassau));
   assert.equal(engine.getPrimaryMatchStatusLine(combo, engine.computeMatchMetrics(combo)), savedOnly);
   assert.match(engine.getPrimaryMatchStatusLine(combo, engine.computeMatchMetrics(combo), { includesDraft: true }), /^Live Nassau:/);
+});
+
+test('Play SSP entry renderer has no dependency on Scores executive summary state', () => {
+  const source = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+  const start = source.indexOf('function renderSneakySandyPoleyEntry');
+  const end = source.indexOf('\nfunction ', start + 1);
+  const renderer = source.slice(start, end > start ? end : undefined);
+  assert.ok(renderer.includes('sneakySandyPoleyEntryWrap'));
+  assert.doesNotMatch(renderer, /\bexecutiveSummary\b|roundExecutiveSummary/);
+  const leaderboardStart = source.indexOf('function renderLeaderboard');
+  const leaderboardEnd = source.indexOf('\nfunction ', leaderboardStart + 1);
+  const leaderboard = source.slice(leaderboardStart, leaderboardEnd > leaderboardStart ? leaderboardEnd : undefined);
+  assert.match(leaderboard, /roundExecutiveSummary/);
+  assert.match(leaderboard, /buildRoundSnapshot\(match, metrics\)/);
+});
+
+test('SSP report inclusion distinguishes valid, pending, and unselected states', () => {
+  const engine = loadLiveEngine();
+  const validState = engine.seedState(buildSeed({
+    scores: { p1: [4], p2: [4], p3: [5], p4: [5] },
+    inputs: { 1: { players: { p1: { sneaky: true } } } },
+  }));
+  const validMatch = validState.matches[0];
+  const validHtml = engine.buildSneakySandyPoleyExportSummary(validMatch, engine.computeMatchMetrics(validMatch));
+  assert.match(validHtml, /SSP Momentum/);
+  assert.match(validHtml, /SSP Settlement/);
+  assert.match(validHtml, /<polyline[^>]*fill="none"/);
+  assert.match(validHtml, /class="ssp-momentum-dot"/);
+  assert.match(validHtml, /<strong>Final:<\/strong>/);
+  assert.doesNotMatch(validHtml, /<polygon|<path[^>]*fill=/);
+  assert.doesNotMatch(validHtml, /momentum pending/i);
+
+  const pendingState = engine.seedState(buildSeed());
+  const pendingMatch = pendingState.matches[0];
+  const pendingHtml = engine.buildSneakySandyPoleyExportSummary(pendingMatch, engine.computeMatchMetrics(pendingMatch));
+  assert.match(pendingHtml, /SSP selected — momentum pending/);
+  assert.match(pendingHtml, /not backfilled or estimated/);
+
+  const plainState = engine.seedState(buildSeed({ selectedGames: [{ key: 'nassau' }] }));
+  const plainMatch = plainState.matches[0];
+  assert.equal(engine.buildSneakySandyPoleyExportSummary(plainMatch, engine.computeMatchMetrics(plainMatch)), '');
+});
+
+test('summary export follows analyst hierarchy and preserves classic scorecard audit detail', () => {
+  const engine = loadLiveEngine();
+  const state = engine.seedState(buildSeed({
+    selectedGames: [{ key: 'nassau', stakesFront: 1, stakesBack: 1, stakesOverall: 1 }],
+    scores: { p1: [4, 4], p2: [4, 4], p3: [5, 4], p4: [5, 4] },
+  }));
+  const match = state.matches[0];
+  const html = engine.buildSummaryExportBody(match, engine.computeMatchMetrics(match));
+  const headings = ['Executive Round Summary', 'Net Settlement — Provisional', 'Game Drivers', 'Hole-by-hole momentum', 'Classic scorecard', 'AI Round Recap', 'Appendix / Audit Detail', 'Score Distribution'];
+  headings.forEach(heading => assert.match(html, new RegExp(heading)));
+  headings.slice(1).forEach((heading, idx) => assert.ok(html.indexOf(heading) > html.indexOf(headings[idx])));
+  assert.match(html, /Gross score shown above net score/);
+  assert.doesNotMatch(html, /Round pace/);
+  assert.doesNotMatch(engine.buildRoundSnapshot(match, engine.computeMatchMetrics(match)), /AI Recap Teaser/);
+});
+
+test('SSP audit is isolated in the appendix rather than sharing the leaderboard or chart container', () => {
+  const engine = loadLiveEngine();
+  const state = engine.seedState(buildSeed({
+    scores: { p1: [4], p2: [4], p3: [5], p4: [5] },
+    inputs: { 1: { players: { p1: { sneaky: true } } } },
+  }));
+  const match = state.matches[0];
+  const metrics = engine.computeMatchMetrics(match);
+  const summary = engine.buildSneakySandyPoleyExportSummary(match, metrics);
+  const audit = engine.buildSneakySandyPoleyAuditDetail(match, metrics);
+  const report = engine.buildSummaryExportBody(match, metrics);
+  assert.doesNotMatch(summary, /ssp-export-table/);
+  assert.match(audit, /SSP Hole-by-Hole Audit/);
+  assert.match(audit, /ssp-export-table/);
+  assert.ok(report.indexOf('Appendix / Audit Detail') < report.indexOf('SSP Hole-by-Hole Audit'));
+  assert.notEqual(report.indexOf('export-section-leaderboards'), report.indexOf('export-section-ssp-audit'));
 });

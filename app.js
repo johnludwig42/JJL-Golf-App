@@ -1,11 +1,11 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.62',
-  versionNumber: '30.3.62',
-  cacheName: 'the-dye-ledger-v30.3.62',
+  version: 'v30.3.63',
+  versionNumber: '30.3.63',
+  cacheName: 'the-dye-ledger-v30.3.63',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Match Summary v2 / Analyst Report Layout'
+  buildLabel: 'Trip Ledger Architecture Prep'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -14,6 +14,8 @@ const APP_CACHE_NAME = BUILD_INFO.cacheName;
 const APP_VERSION_NUMBER = BUILD_INFO.versionNumber;
 
 const MATCH_TEMPLATES_STORAGE_KEY = 'dyeLedger.matchTemplates.v1';
+const PLAYER_REGISTRY_SCHEMA_VERSION = 1;
+const SAVED_ROSTER_SCHEMA_VERSION = 1;
 const DEFAULT_SMART_SCORE_ADVANCE = true;
 const SMART_SCORE_ADVANCE_PRESETS = {
   fast: { label: 'Fast', delay: 500 },
@@ -2185,7 +2187,7 @@ function setCourseExpanded(courseId, expanded) {
   else uiState.expandedCourses.delete(courseId);
 }
 function loadState() {
-  const fallback = { players: [], courses: [], matches: [], activeMatchId: null, notes: '', sharedMatchIds: [], lastOpenedSharedMatchId: null };
+  const fallback = { players: [], playerRegistry: { schemaVersion: 1, players: [] }, savedRosters: { schemaVersion: 1, rosters: [] }, courses: [], matches: [], activeMatchId: null, notes: '', sharedMatchIds: [], lastOpenedSharedMatchId: null };
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
       || localStorage.getItem('golf-matchbook-v9')
@@ -4290,11 +4292,53 @@ function buildRoundRecord(match, metrics) {
   const crossFoot = Object.values(ctx.finalTotals || {}).reduce((sum, amount) => sum + Number(amount || 0), 0);
   return {
     schemaVersion: ROUND_RECORD_SCHEMA_VERSION,
-    meta: { roundId: String(match?.id || ''), tripId: match?.tripId || null, courseSnapshot: clonePlain(match?.courseSnapshot || metrics?.course || null), teeSnapshot: clonePlain(metrics?.tee || null), date: match?.date || null, holesPlanned: completion.selectedHoleCount, holesCompleted: completion.completedHoleCount, completedHoleNumbers: completion.completedHoles.slice(), status: completion.isIncomplete ? 'provisional' : 'final', endReason: match?.roundEndReason || (completion.isComplete ? 'completed' : null), timing: { valid: !!timing.valid, available: !!timing.available, elapsedMs: timing.valid ? timing.elapsedMs : null, label: timing.valid ? timing.label : null }, handicapConvention: match?.handicapConvention || 'low_man', lowManPlayerId: playerRecords.filter(player => player.courseHandicap != null).sort((a, b) => a.courseHandicap - b.courseHandicap)[0]?.playerId || null },
+    meta: { roundId: String(match?.id || ''), tripId: match?.tripId || null, eventId: match?.eventId || null, ownerUserId: match?.ownerUserId || match?.sharedOwnerUserId || null, createdBy: match?.createdBy || null, deviceId: match?.deviceId || null, hostDeviceId: match?.hostDeviceId || match?.sharedHostDeviceId || null, courseSnapshot: clonePlain(match?.courseSnapshot || metrics?.course || null), teeSnapshot: clonePlain(metrics?.tee || null), date: match?.date || null, holesPlanned: completion.selectedHoleCount, holesCompleted: completion.completedHoleCount, completedHoleNumbers: completion.completedHoles.slice(), status: completion.isIncomplete ? 'provisional' : 'final', endReason: match?.roundEndReason || (completion.isComplete ? 'completed' : null), timing: { valid: !!timing.valid, available: !!timing.available, elapsedMs: timing.valid ? timing.elapsedMs : null, label: timing.valid ? timing.label : null }, handicapConvention: match?.handicapConvention || 'low_man', lowManPlayerId: playerRecords.filter(player => player.courseHandicap != null).sort((a, b) => a.courseHandicap - b.courseHandicap)[0]?.playerId || null },
     players: playerRecords, holes, games, events, transactions,
     settlement: { netPositions: Object.fromEntries(Object.entries(ctx.finalTotals || {}).map(([id, amount]) => [String(id), Number(amount || 0)])), payments: transactions, crossFoot: Number(crossFoot.toFixed(2)) },
     notes: { hostLog: String(match?.roundRecapNotes || ''), photos: clonePlain(match?.roundPhotos || []), weather: clonePlain(match?.roundContext?.weather || null) }
   };
+}
+function isFrozenRoundRecord(record) {
+  return !!(record && record.schemaVersion && record.isFrozen === true && record.frozenAt && record.meta?.roundId);
+}
+function validateFrozenTransactions(record) {
+  if (!isFrozenRoundRecord(record) || !Array.isArray(record.transactions)) return false;
+  const playerIds = new Set((record.players || []).map(player => String(player.playerId || '')));
+  const transactionIds = new Set();
+  return record.transactions.every(row => {
+    const amount = Number(row?.amount);
+    const id = String(row?.transactionId || '');
+    if (!id || transactionIds.has(id) || !Number.isFinite(amount) || amount <= 0) return false;
+    transactionIds.add(id);
+    return playerIds.has(String(row?.payerId || '')) && playerIds.has(String(row?.payeeId || '')) && row.payerId !== row.payeeId;
+  });
+}
+function canFreezeRoundRecord(match, metrics) {
+  if (!match || match.status !== 'complete' || !match.completedAt || (match.storageMode === 'shared' && !isCurrentDeviceMatchHost(match))) return false;
+  const completion = getRoundCompletionState(match, metrics);
+  return completion.isComplete || areAllGamesFinal(match, metrics);
+}
+function buildFrozenRoundRecord(match, metrics, frozenAt = new Date().toISOString()) {
+  const record = buildRoundRecord(match, metrics);
+  record.isFrozen = true;
+  record.frozenAt = frozenAt;
+  record.settledAt = match.completedAt || frozenAt;
+  record.source = { appVersion: APP_VERSION, schema: 'RoundRecord', derivation: 'trusted-final-settlement' };
+  record.meta.status = 'final';
+  return record;
+}
+function freezeRoundRecordIfEligible(match, metrics = null) {
+  const effectiveMetrics = metrics || computeMatchMetrics(match);
+  if (!canFreezeRoundRecord(match, effectiveMetrics)) return null;
+  if (isFrozenRoundRecord(match.roundRecordSnapshot)) return match.roundRecordSnapshot;
+  const frozen = buildFrozenRoundRecord(match, effectiveMetrics);
+  if (!validateFrozenTransactions(frozen) && frozen.transactions.length) throw new Error('Frozen RoundRecord contains invalid settlement transactions.');
+  match.roundRecordSnapshot = clonePlain(frozen);
+  return match.roundRecordSnapshot;
+}
+function getEffectiveRoundRecord(match, metrics = null) {
+  if (isFrozenRoundRecord(match?.roundRecordSnapshot)) return clonePlain(match.roundRecordSnapshot);
+  return buildRoundRecord(match, metrics || computeMatchMetrics(match));
 }
 function buildLegacyRoundSnapshot(match, metrics) {
   if (!metrics) return '';
@@ -5018,7 +5062,7 @@ function decorateReportSections(html) {
 }
 
 function buildSummaryExportBody(match, metrics) {
-  const roundRecord = buildRoundRecord(match, metrics);
+  const roundRecord = getEffectiveRoundRecord(match, metrics);
   const completion = getRoundCompletionState(match, metrics);
   const unavailableStatPlayers = isStatTrackingEnabled(match) ? roundRecord.players.filter(player => !player.statLines) : [];
   const exportScoreDistributionHtml = buildExportScoreDistributionSummary(match, metrics);
@@ -6124,6 +6168,14 @@ function createEmptyMatch(overrides = {}) {
     selectedGames: Array.isArray(overrides.selectedGames) ? overrides.selectedGames : [],
     status: 'active',
     completedAt: null,
+    tripId: overrides.tripId || null,
+    eventId: overrides.eventId || null,
+    ownerUserId: overrides.ownerUserId || null,
+    createdBy: overrides.createdBy || null,
+    deviceId: overrides.deviceId || null,
+    hostDeviceId: overrides.hostDeviceId || null,
+    roundRecordSnapshot: null,
+    roundRecordSnapshotHistory: [],
     roundTiming: overrides.roundTiming || { startedAt: null, endedAt: null },
     players: Array.isArray(overrides.players) ? overrides.players : [],
     greeniesWinners: {},
@@ -6190,6 +6242,14 @@ function normalizeMatch(match) {
   match.customStartHole = Math.max(1, Math.min(10, Number(match.customStartHole) || 1));
   match.status = match.status || 'active';
   match.completedAt = match.completedAt || null;
+  match.tripId = match.tripId || null;
+  match.eventId = match.eventId || null;
+  match.ownerUserId = match.ownerUserId || match.sharedOwnerUserId || null;
+  match.createdBy = match.createdBy || null;
+  match.deviceId = match.deviceId || null;
+  match.hostDeviceId = match.hostDeviceId || match.sharedHostDeviceId || null;
+  match.roundRecordSnapshot = match.roundRecordSnapshot && typeof match.roundRecordSnapshot === 'object' ? match.roundRecordSnapshot : null;
+  match.roundRecordSnapshotHistory = Array.isArray(match.roundRecordSnapshotHistory) ? match.roundRecordSnapshotHistory : [];
   match.roundTiming = match.roundTiming && typeof match.roundTiming === 'object' ? match.roundTiming : {};
   match.roundTiming.startedAt = match.roundTiming.startedAt || match.roundStartedAt || null;
   match.roundTiming.endedAt = match.roundTiming.endedAt || match.roundEndedAt || match.completedAt || null;
@@ -6206,7 +6266,7 @@ function normalizeMatch(match) {
   match.smartScoreAdvancePreset = normalizeSmartScoreAdvancePreset(match.smartScoreAdvancePreset);
   match.players = Array.isArray(match.players) ? match.players : [];
   match.players = match.players.map((mp, idx) => ({
-    playerId: mp.playerId,
+    playerId: String(mp.playerId || mp.id || `round:${match.id}:player:${idx + 1}`),
     team: Number(mp.team) || 1,
     slot: Number.isFinite(Number(mp.slot)) ? Number(mp.slot) : idx,
     teeId: mp.teeId || match.teeId || '',
@@ -6281,11 +6341,13 @@ function normalizeState() {
   state.notes = typeof state.notes === 'string' ? state.notes : '';
   state.sharedMatchIds = Array.isArray(state.sharedMatchIds) ? [...new Set(state.sharedMatchIds.filter(Boolean))] : [];
   state.lastOpenedSharedMatchId = typeof state.lastOpenedSharedMatchId === 'string' && state.lastOpenedSharedMatchId.trim() ? state.lastOpenedSharedMatchId.trim() : null;
-  state.players.forEach(p => {
-    p.id = p.id || uid();
+  state.players.forEach((p, index) => {
+    p.id = p.id || `legacy:player:${index + 1}`;
     p.name = p.name || '';
     p.index = Number(p.index) || 0;
   });
+  state.playerRegistry = normalizePlayerRegistry(state.playerRegistry, state.players);
+  state.savedRosters = normalizeSavedRosters(state.savedRosters);
   state.courses.forEach(c => {
     c.id = c.id || uid();
     c.name = c.name || 'Untitled Course';
@@ -7336,6 +7398,27 @@ function buildFinalNetSettlementSection(players, totals) {
       </div>
       <div class="final-net-settlement-crossfoot ${crossFootClass}">Cross-foot: ${formatMoneyAccounting(crossFoot)}</div>
     </div>`;
+}
+function normalizePlayerRegistry(registry, knownPlayers = []) {
+  const rows = Array.isArray(registry?.players) ? registry.players : [];
+  const byId = new Map(rows.filter(row => row?.playerId).map(row => [String(row.playerId), { ...row, playerId: String(row.playerId) }]));
+  knownPlayers.forEach(player => {
+    const playerId = String(player?.id || '');
+    if (!playerId) return;
+    const existing = byId.get(playerId);
+    if (existing) {
+      existing.displayName = player.name || existing.displayName || '';
+      existing.normalizedName = String(existing.displayName).trim().toLocaleLowerCase();
+      existing.updatedAt = existing.updatedAt || null;
+    } else {
+      byId.set(playerId, { playerId, displayName: player.name || '', normalizedName: String(player.name || '').trim().toLocaleLowerCase(), aliases: [], createdAt: player.createdAt || null, updatedAt: null, ownerUserId: null, createdBy: null, deviceId: null, source: 'local-player', archived: false });
+    }
+  });
+  return { schemaVersion: PLAYER_REGISTRY_SCHEMA_VERSION, players: [...byId.values()] };
+}
+function normalizeSavedRosters(savedRosters) {
+  const rows = Array.isArray(savedRosters?.rosters) ? savedRosters.rosters : [];
+  return { schemaVersion: SAVED_ROSTER_SCHEMA_VERSION, rosters: rows.filter(row => row?.rosterId).map(row => ({ ...row, rosterId: String(row.rosterId), playerIds: [...new Set((Array.isArray(row.playerIds) ? row.playerIds : []).map(String).filter(Boolean))], tripId: row.tripId || null, eventId: row.eventId || null, ownerUserId: row.ownerUserId || null, createdBy: row.createdBy || null, deviceId: row.deviceId || null })) };
 }
 function formatGrossGameAmount(amount) {
   const value = Number(amount) || 0;
@@ -9268,7 +9351,7 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
     status: match.status || 'active',
     course_id: match.courseId || '',
     reference_tee_id: match.teeId || '',
-    course_snapshot: { ...courseSnapshot, sharedMatchMeta: { scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device'), matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || ''), hostDeviceId: match.sharedHostDeviceId || getSharedDeviceId(), hostParticipantId: match.sharedHostParticipantId || getCurrentSharedParticipantId(match), devices: Array.isArray(match.sharedDevices) ? match.sharedDevices : [], participants: getSharedAssignmentParticipants(match), playerAssignments: match.sharedPlayerAssignments || {}, memories: getRoundMemories(match), memoriesUpdatedAt: new Date().toISOString(), roundContext: normalizeRoundContext(match.roundContext), roundTiming: match.roundTiming || { startedAt: null, endedAt: null }, holeFirstCompletedAt: match.holeFirstCompletedAt || {}, sspFacts: buildSharedSspFacts(match) } },
+    course_snapshot: { ...courseSnapshot, sharedMatchMeta: { tripId: match.tripId || null, eventId: match.eventId || null, scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device'), matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || ''), hostDeviceId: match.sharedHostDeviceId || getSharedDeviceId(), hostParticipantId: match.sharedHostParticipantId || getCurrentSharedParticipantId(match), devices: Array.isArray(match.sharedDevices) ? match.sharedDevices : [], participants: getSharedAssignmentParticipants(match), playerAssignments: match.sharedPlayerAssignments || {}, memories: getRoundMemories(match), memoriesUpdatedAt: new Date().toISOString(), roundContext: normalizeRoundContext(match.roundContext), roundTiming: match.roundTiming || { startedAt: null, endedAt: null }, holeFirstCompletedAt: match.holeFirstCompletedAt || {}, sspFacts: buildSharedSspFacts(match), roundRecordSnapshot: isCurrentDeviceMatchHost(match) && isFrozenRoundRecord(match.roundRecordSnapshot) ? clonePlain(match.roundRecordSnapshot) : null } },
     format: match.format || 'teams',
     allowance: Number(match.allowance) || 100,
     hole_count: getRequestedHoleCount(match),
@@ -9550,6 +9633,14 @@ function hydrateMatchFromCloudBundle(bundle) {
     selectedGames: normalizeSelectedGamesOrder(matchRow?.selected_games || []),
     status: matchRow?.status || 'active',
     completedAt: matchRow?.completed_at || null,
+    tripId: sharedMeta.tripId || null,
+    eventId: sharedMeta.eventId || null,
+    ownerUserId: matchRow?.created_by || null,
+    createdBy: matchRow?.created_by || null,
+    deviceId: null,
+    hostDeviceId: sharedMeta.hostDeviceId || null,
+    roundRecordSnapshot: isFrozenRoundRecord(sharedMeta.roundRecordSnapshot) ? clonePlain(sharedMeta.roundRecordSnapshot) : null,
+    roundRecordSnapshotHistory: [],
     players: (players || []).map((row, idx) => ({
       playerId: row.player_id,
       team: Number(row.team_number) || 1,
@@ -11590,6 +11681,13 @@ function hasActiveNewMatchConflict(match) {
 
 function markRoundReopenedForEditing(match) {
   if (!match || match.status !== 'complete') return false;
+  if (isFrozenRoundRecord(match.roundRecordSnapshot)) {
+    const superseded = clonePlain(match.roundRecordSnapshot);
+    superseded.supersededAt = new Date().toISOString();
+    superseded.supersededReason = 'round-reopened-for-editing';
+    match.roundRecordSnapshotHistory = [...(match.roundRecordSnapshotHistory || []), superseded];
+    match.roundRecordSnapshot = null;
+  }
   match.previousCompletedAt = match.completedAt || match.previousCompletedAt || null;
   match.reopenedAt = new Date().toISOString();
   match.status = 'active';
@@ -12050,6 +12148,7 @@ function completeActiveRound() {
     match.roundCompletionState = finishCompletion;
     match.completedHoleCount = finishCompletion.completedHoleCount;
     match.remainingHoleNumbers = finishCompletion.remainingHoleNumbers;
+    freezeRoundRecordIfEligible(match, finishMetrics);
     delete match.reopenedAt;
     delete match.previousCompletedAt;
     const progress = computeMatchProgress(match);
@@ -16363,6 +16462,14 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       featuredCompetition: normalizeFeaturedCompetition(fd.get('featuredCompetition') || existing?.featuredCompetition || 'auto'),
       status: existing?.status || 'active',
       completedAt: existing?.completedAt || null,
+      tripId: existing?.tripId || null,
+      eventId: existing?.eventId || null,
+      ownerUserId: existing?.ownerUserId || existing?.sharedOwnerUserId || null,
+      createdBy: existing?.createdBy || null,
+      deviceId: existing?.deviceId || null,
+      hostDeviceId: existing?.hostDeviceId || existing?.sharedHostDeviceId || null,
+      roundRecordSnapshot: existing?.roundRecordSnapshot || null,
+      roundRecordSnapshotHistory: existing?.roundRecordSnapshotHistory || [],
       previousCompletedAt: existing?.previousCompletedAt || null,
       reopenedAt: existing?.reopenedAt || null,
       players: selectedPlayers.map(sp => {
@@ -17316,6 +17423,8 @@ function installDyeLedgerLiveEngineAdapter() {
       state.players = Array.isArray(seed.players) ? seed.players : [];
       state.courses = Array.isArray(seed.courses) ? seed.courses : [];
       state.matches = Array.isArray(seed.matches) ? seed.matches : [];
+      state.playerRegistry = seed.playerRegistry || { schemaVersion: 1, players: [] };
+      state.savedRosters = seed.savedRosters || { schemaVersion: 1, rosters: [] };
       state.activeMatchId = seed.activeMatchId || state.matches[0]?.id || null;
       normalizeState();
       return state;
@@ -17343,6 +17452,13 @@ function installDyeLedgerLiveEngineAdapter() {
     buildSneakySandyPoleyAuditDetail,
     buildExportMomentum,
     buildRoundRecord,
+    buildFrozenRoundRecord,
+    freezeRoundRecordIfEligible,
+    getEffectiveRoundRecord,
+    isFrozenRoundRecord,
+    validateFrozenTransactions,
+    normalizePlayerRegistry,
+    normalizeSavedRosters,
     buildRoundRecordEvents,
     buildRoundRecordStory,
     buildRoundSnapshot,

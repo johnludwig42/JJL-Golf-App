@@ -157,6 +157,31 @@ function normalizeSettlementRows(rows = []) {
   return rows.map(row => ({ from: row.from, to: row.to, amount: roundMoney(row.amount) })).sort((a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to) || a.amount - b.amount);
 }
 
+function settlementBalances(rows = []) {
+  const balances = {};
+  rows.forEach(row => {
+    const amount = roundMoney(row.amount);
+    balances[row.from] = roundMoney((balances[row.from] || 0) - amount);
+    balances[row.to] = roundMoney((balances[row.to] || 0) + amount);
+  });
+  return normalizeAmounts(balances);
+}
+
+function settlementAudit(rows = []) {
+  const normalized = normalizeSettlementRows(rows);
+  const balances = settlementBalances(normalized);
+  const totalTransferred = roundMoney(normalized.reduce((sum, row) => sum + row.amount, 0));
+  const expectedTransferred = roundMoney(Object.values(balances).filter(amount => amount > 0.0001).reduce((sum, amount) => sum + amount, 0));
+  const participants = Object.values(balances).filter(amount => Math.abs(amount) > 0.0001).length;
+  return {
+    balances,
+    totalTransferred,
+    validRows: normalized.every(row => row.from && row.to && row.from !== row.to && row.amount > 0),
+    fullyAllocated: totalTransferred === expectedTransferred,
+    efficient: normalized.length <= Math.max(0, participants - 1),
+  };
+}
+
 function normalizeLiveGameKey(game = {}) {
   if (game.key === 'team_match' || game.sourceKey === 'team_match') return 'match_play';
   if (game.sourceKey === 'skins') return 'skins';
@@ -200,9 +225,15 @@ function diffJson(label, a, b) {
 export function compareRoundWithLiveEngine(roundInput, options = {}) {
   const mirror = validateRound(roundInput);
   const live = evaluateRoundWithLiveEngine(roundInput, options);
+  const mirrorSettlementRows = normalizeSettlementRows(mirror.payout.settlementRows);
+  const liveSettlementRows = normalizeSettlementRows(live.settlementRows);
+  const mirrorSettlementAudit = settlementAudit(mirrorSettlementRows);
+  const liveSettlementAudit = settlementAudit(liveSettlementRows);
   const differences = [
     ...diffJson('Final totals', normalizeAmounts(mirror.payout.finalTotals), live.finalTotals),
-    ...diffJson('Final settlement rows', normalizeSettlementRows(mirror.payout.settlementRows), live.settlementRows),
+    ...diffJson('Final settlement audit', mirrorSettlementAudit, liveSettlementAudit),
+    ...(!mirrorSettlementAudit.validRows || !mirrorSettlementAudit.fullyAllocated || !mirrorSettlementAudit.efficient ? ['Mirror settlement audit failed.'] : []),
+    ...(!liveSettlementAudit.validRows || !liveSettlementAudit.fullyAllocated || !liveSettlementAudit.efficient ? ['Live settlement audit failed.'] : []),
   ];
   const mirrorGames = Object.fromEntries(mirror.payout.games.map(game => [game.key, normalizeAmounts(game.amounts || {})]));
   const liveGames = Object.fromEntries(live.games.map(game => [game.key, normalizeAmounts(game.amounts || {})]));

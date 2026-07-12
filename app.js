@@ -1,11 +1,11 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.61',
-  versionNumber: '30.3.61',
-  cacheName: 'the-dye-ledger-v30.3.61',
+  version: 'v30.3.62',
+  versionNumber: '30.3.62',
+  cacheName: 'the-dye-ledger-v30.3.62',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Analyst-Style Match Summary, SSP Momentum and Round Timing'
+  buildLabel: 'Match Summary v2 / Analyst Report Layout'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -3362,11 +3362,17 @@ function getRoundElapsedTimeState(match, metrics = null, nowMs = Date.now()) {
   const end = isComplete ? (match?.roundTiming?.endedAt || match?.completedAt || match?.roundEndedAt || '') : '';
   const startMs = start ? Date.parse(start) : NaN;
   const effectiveEndMs = isComplete ? Date.parse(end) : Number(nowMs);
-  if (!Number.isFinite(startMs) || !Number.isFinite(effectiveEndMs) || effectiveEndMs < startMs) return { available: false, label: 'Timing unavailable' };
+  if (!Number.isFinite(startMs) || !Number.isFinite(effectiveEndMs) || effectiveEndMs < startMs) return { available: false, valid: false, label: 'Timing unavailable' };
   const elapsedMs = effectiveEndMs - startMs;
   const completion = metrics ? getRoundCompletionState(match, metrics) : null;
   const completedHoleCount = Number(completion?.completedHoleCount || 0);
   const selectedHoleCount = Number(completion?.selectedHoleCount || getRequestedHoleCount(match) || 0);
+  const minutes = elapsedMs / 60000;
+  const minutesPerCompletedHole = completedHoleCount ? minutes / completedHoleCount : null;
+  const valid = elapsedMs > 0
+    && !(completedHoleCount >= 9 && minutes < 90)
+    && !(completedHoleCount > 0 && minutesPerCompletedHole < 8);
+  if (!valid) return { available: false, valid: false, isComplete, elapsedMs, minutes: Math.round(minutes), completedHoleCount, selectedHoleCount, projectionAvailable: false, projectedTotalMs: null, projectedFinishMs: null, label: 'Timing unavailable' };
   const projectionCandidate = !isComplete && completedHoleCount >= 3 && selectedHoleCount > completedHoleCount;
   const candidateTotalMs = projectionCandidate ? elapsedMs / completedHoleCount * selectedHoleCount : null;
   const minimumProjectedMs = selectedHoleCount <= 9
@@ -3392,7 +3398,7 @@ function getRoundElapsedTimeState(match, metrics = null, nowMs = Date.now()) {
   if (projectionAvailable) bits.push(`Projected pace ${formatRoundDuration(projectedTotalMs)}`, `Est. finish ${formatRoundClockTime(projectedFinishMs)}`);
   else if (!isComplete && completedHoleCount < 3) bits.push('Pace available after 3 completed holes');
   else if (projectionCandidate) bits.push('Pace projection available after more playing time');
-  return { available: true, isComplete, elapsedMs, minutes: Math.round(elapsedMs / 60000), completedHoleCount, selectedHoleCount, projectionAvailable, projectedTotalMs, projectedFinishMs, label: bits.filter(Boolean).join(' · ') };
+  return { available: true, valid: true, isComplete, elapsedMs, minutes: Math.round(elapsedMs / 60000), completedHoleCount, selectedHoleCount, projectionAvailable, projectedTotalMs, projectedFinishMs, label: bits.filter(Boolean).join(' · ') };
 }
 function getTeamStrokeStanding(metrics, basis = 'net', scoringMode = 'best_ball') {
   const teams = (metrics?.teams || []).map(t => ({ team: t.team, total: 0, completeHoles: 0 }));
@@ -3796,6 +3802,7 @@ function formatRoundRecapHtml(text) {
 }
 function buildRoundRecapExport(match, metrics = null) {
   const recap = getStoredRoundRecap(match);
+  if (!recap) return '';
   const completion = metrics ? getRoundCompletionState(match, metrics) : null;
   const incompleteNote = completion?.isIncomplete
     ? `<div class="export-provisional-label">${areAllGamesFinal(match, metrics) ? 'Clinched Early — recap reflects completed holes.' : 'Incomplete Round — recap should be read as provisional.'}</div>`
@@ -3807,9 +3814,7 @@ function buildRoundRecapExport(match, metrics = null) {
         <div class="export-section-sub">Story-driven recap centered on the Featured Competition, round notes, memories, scores, games, and stats.</div>
       </div>
       ${incompleteNote}
-      ${recap
-        ? `<div class="export-round-recap-text">${formatRoundRecapHtml(recap)}</div>`
-        : '<div class="export-empty empty-state-card"><strong>No AI recap generated yet.</strong><br>Add Round Notes for AI Recap to give the story more context.</div>'}
+      <div class="export-round-recap-text">${formatRoundRecapHtml(recap)}</div>
     </section>`;
 }
 
@@ -3956,7 +3961,8 @@ function getRoundEndReasonLabel(reason) {
     injury: 'injury',
     conceded: 'concession',
     endedEarly: 'the group ending early',
-    other: 'another reason'
+    time: 'time constraints',
+    other: 'early'
   };
   return map[String(reason || '').trim()] || '';
 }
@@ -3964,6 +3970,7 @@ function buildRoundEndReasonSentence(match) {
   const reason = String(match?.roundEndReason || '').trim();
   if (!reason || reason === 'completed') return '';
   if (reason === 'conceded') return 'Match was conceded before all holes were completed.';
+  if (reason === 'other' || reason === 'endedEarly') return 'Round ended early.';
   const label = getRoundEndReasonLabel(reason);
   return label ? `Round ended due to ${label}.` : '';
 }
@@ -4137,6 +4144,7 @@ function getPartialNineLeaderRows(match, metrics, startIdx, endIdx) {
 function buildRoundAwardsRows(match, metrics) {
   if (!metrics) return [];
   const completion = getRoundCompletionState(match, metrics);
+  if (completion.completedHoleCount < 6) return [];
   const players = metrics.players || [];
   const dist = computeScoreDistributionSummary(match, metrics);
   const stats = computeStatTrackingSummary(match, metrics);
@@ -4151,7 +4159,7 @@ function buildRoundAwardsRows(match, metrics) {
   if (frontComplete) {
     const bestFront = getLowRows(frontRows.map(p => ({ name: p.player?.name, value: p.fb.front })).filter(r => r.value != null), 'value');
     if (bestFront.rows.length) awards.push(['Best Front Nine', formatAwardWinners(bestFront.rows.map(r => r.name), bestFront.value)]);
-  } else if (completion.isIncomplete && frontSpan > 0) {
+  } else if (completion.isIncomplete && getCompletedHoleCountInRange(match, metrics, 0, frontSpan) >= 7) {
     const partial = getPartialNineLeaderRows(match, metrics, 0, frontSpan);
     if (partial.leaders.length) awards.push(['Front Nine Leader', `${formatAwardWinners(partial.leaders.map(r => r.name), partial.value)} through ${partial.completedCount} of ${partial.span} holes — provisional`]);
   }
@@ -4161,7 +4169,7 @@ function buildRoundAwardsRows(match, metrics) {
     const backCandidates = frontRows.filter(p => p.fb.back != null).map(p => ({ name: p.player?.name, value: p.fb.back }));
     const bestBack = getLowRows(backCandidates, 'value');
     if (bestBack.rows.length) awards.push(['Best Back Nine', formatAwardWinners(bestBack.rows.map(r => r.name), bestBack.value)]);
-  } else if (backExists && completion.isIncomplete) {
+  } else if (backExists && completion.isIncomplete && getCompletedHoleCountInRange(match, metrics, 9, metrics.holeResults.length) >= 7) {
     const partial = getPartialNineLeaderRows(match, metrics, 9, metrics.holeResults.length);
     if (partial.leaders.length) awards.push(['Back Nine Leader', `${formatAwardWinners(partial.leaders.map(r => r.name), partial.value)} through ${partial.completedCount} of ${partial.span} holes — provisional`]);
   }
@@ -4175,7 +4183,120 @@ function buildRoundAwardsRows(match, metrics) {
   if (putts.rows.length) awards.push(['Fewest Putts', `${formatAwardWinners(putts.rows.map(r => r.name), putts.value)}${formatIncompleteScopeSuffix(completion)}`]);
   return awards;
 }
-function buildRoundSnapshot(match, metrics) {
+function buildExecutiveDriverRows(match, metrics, ctx = getPayoutReportContext(match, metrics)) {
+  const completion = getRoundCompletionState(match, metrics);
+  const selected = getOrderedSelectedGames(match);
+  const payoutGames = ctx.payoutGames || [];
+  const rows = selected.map(cfg => {
+    const game = payoutGames.find(row => row.key === cfg.key || row.sourceKey === cfg.key || (cfg.key === 'nassau' && String(row.key || '').startsWith('nassau_')));
+    const amounts = Object.entries(game?.amounts || {}).map(([id, amount]) => ({ name: getPlayer(id)?.name || id, amount: Number(amount || 0) }));
+    const winners = amounts.filter(row => row.amount > 0.0001).sort((a, b) => b.amount - a.amount);
+    let result = 'Pending more completed holes';
+    let stakes = '';
+    if (cfg.key === 'sneaky_sandy_poley') {
+      const ledger = buildSneakySandyPoleyLedger(match, { metrics });
+      const leader = ledger?.finalLeader || {};
+      result = !Number(leader.thru) ? 'Selected · momentum pending' : leader.tied ? `Tied through ${leader.thru} SSP holes` : `${formatSneakySandyPoleyTeamName(ledger, match, leader.teamId)} +${Number(leader.margin || 0)} points`;
+      stakes = `${formatPositiveCurrency(Number(ledger?.settings?.pointValue || cfg.pointValue || 0), 2)}/point`;
+    } else if (cfg.key === 'nassau' || cfg.key === 'team_match') {
+      const diffs = computeTeamGameDiffs(match, metrics, cfg.key);
+      result = completion.isIncomplete ? formatTeamGameStatusScoped(match, metrics, diffs.overall, completion) : formatTeamGameStatus(match, metrics, diffs.overall);
+      if (cfg.key === 'nassau') stakes = [cfg.stakesFront, cfg.stakesBack, cfg.stakesOverall].some(Number) ? `${formatMoneyAccounting(Number(cfg.stakesFront || 0))} front · ${formatMoneyAccounting(Number(cfg.stakesBack || 0))} back · ${formatMoneyAccounting(Number(cfg.stakesOverall || 0))} overall` : 'No wager configured';
+    } else if (game?.label) {
+      result = winners.length ? winners.map(row => `${row.name} ${formatMoneyAccounting(row.amount)}`).join(' · ') : 'No current payout';
+    }
+    const impact = winners.length ? winners.map(row => `${row.name} +${formatMoneyAccounting(row.amount)}`).join(' · ') : 'No current payout';
+    return { key: cfg.key, label: getFeaturedGameLabel(match, cfg.key), result, stakes, impact };
+  });
+  return rows.slice(0, 5);
+}
+
+const ROUND_RECORD_SCHEMA_VERSION = 1;
+function getRoundRecordPlayerId(match, playerMetric, index) {
+  return String(playerMetric?.playerId || playerMetric?.player?.id || match?.players?.[index]?.playerId || `round:${match?.id || 'legacy'}:player:${index + 1}`);
+}
+function buildRoundRecordEvents(match, metrics) {
+  const events = [];
+  const push = event => events.push({ salience: 1, ...event, sourceRef: event.sourceRef || event.auditRef || '' });
+  if (isSneakySandyPoleyEnabled(match)) {
+    const ledger = buildSneakySandyPoleyLedger(match, { metrics });
+    const teams = ledger?.teams || [];
+    const momentum = buildSneakySandyPoleyMomentumData(match, { ledger });
+    momentum.forEach((row, index) => {
+      const hole = ledger?.holes?.[String(row.holeNumber)] || {};
+      const winnerTeam = row.margin > 0 ? teams[0] : row.margin < 0 ? teams[1] : null;
+      const before = index ? momentum[index - 1].cumulative : 0;
+      const bridgeLabel = String(hole?.bridge?.label || '');
+      const multiplier = Number(hole?.bridge?.multiplier || bridgeLabel.match(/(\d+)x/i)?.[1] || 1);
+      const auditRef = `ssp-hole-${row.holeNumber}`;
+      if (row.margin) push({ type: 'swing', gameId: 'sneaky_sandy_poley', holeNumber: row.holeNumber, teamId: winnerTeam?.id || null, magnitude: Math.abs(row.margin), unit: 'points', description: `${Math.abs(row.margin)}-point swing to ${winnerTeam?.name || 'the leading team'}`, auditRef, salience: 50 + Math.abs(row.margin) });
+      if (multiplier > 1) push({ type: 'multiplier', gameId: 'sneaky_sandy_poley', holeNumber: row.holeNumber, teamId: winnerTeam?.id || null, magnitude: multiplier, unit: 'multiplier', description: `${bridgeLabel || `${multiplier}x`} multiplier`, auditRef, salience: 70 + multiplier });
+      if (before && row.cumulative && Math.sign(before) !== Math.sign(row.cumulative)) push({ type: 'lead_change', gameId: 'sneaky_sandy_poley', holeNumber: row.holeNumber, teamId: row.leaderTeamId, magnitude: Math.abs(row.margin), unit: 'points', description: `${winnerTeam?.name || 'The match leader'} flipped the SSP lead`, auditRef, salience: 100 + Math.abs(row.margin) });
+    });
+    const final = momentum[momentum.length - 1];
+    if (final) push({ type: 'final_margin', gameId: 'sneaky_sandy_poley', holeNumber: final.holeNumber, teamId: final.leaderTeamId, magnitude: Math.abs(final.cumulative), unit: 'points', description: final.cumulative ? `${final.cumulative > 0 ? teams[0]?.name : teams[1]?.name} ${Math.abs(final.cumulative)} points ahead` : 'SSP finished tied', auditRef: 'ssp-summary', salience: 25 });
+  }
+  (metrics?.holeResults || []).forEach(hole => {
+    if (!hole?.completed) return;
+    (hole.playerScores || []).forEach(score => {
+      const gross = Number(score?.gross);
+      const par = Number(hole?.par);
+      if (!Number.isFinite(gross) || !Number.isFinite(par)) return;
+      if (gross <= par - 1) push({ type: 'signature_score', gameId: null, holeNumber: Number(hole.holeNumber), playerId: String(score.playerId), magnitude: par - gross, unit: 'strokes', description: gross <= par - 2 ? 'Eagle or better' : 'Birdie', auditRef: `scorecard-hole-${hole.holeNumber}`, salience: gross <= par - 2 ? 65 : 35 });
+      if (gross >= par + 4) push({ type: 'blowup', gameId: null, holeNumber: Number(hole.holeNumber), playerId: String(score.playerId), magnitude: gross - par, unit: 'strokes', description: `${gross - par} over par`, auditRef: `scorecard-hole-${hole.holeNumber}`, salience: 20 + gross - par });
+    });
+  });
+  const ctx = getPayoutReportContext(match, metrics);
+  (ctx.payoutGames || []).forEach(game => {
+    const rows = Object.entries(game.amounts || {}).map(([playerId, amount]) => ({ playerId, amount: Number(amount || 0) })).filter(row => row.amount > 0.0001).sort((a, b) => b.amount - a.amount);
+    if (rows[0]) push({ type: 'payout_driver', gameId: game.sourceKey || game.key, playerId: rows[0].playerId, magnitude: rows[0].amount, unit: 'dollars', description: `${game.label || getGameLabel(game.key)} moved ${formatMoneyAccounting(rows[0].amount)} to ${getPlayer(rows[0].playerId)?.name || rows[0].playerId}`, auditRef: `game-${game.sourceKey || game.key}`, salience: 40 + Math.min(50, rows[0].amount) });
+  });
+  return events.sort((a, b) => Number(b.salience || 0) - Number(a.salience || 0) || Number(a.holeNumber || 999) - Number(b.holeNumber || 999));
+}
+function buildPlayerSignatureStat(playerMetric, events, completion) {
+  const playerId = String(playerMetric?.playerId || '');
+  const signature = events.find(event => String(event.playerId || '') === playerId && event.type === 'signature_score');
+  if (signature) return `${signature.description} on H${signature.holeNumber}`;
+  const scores = (playerMetric?.scores || []).filter(score => Number(score?.gross) > 0);
+  const pars = scores.filter((score, index) => Number(score.gross) === Number(playerMetric?.holePars?.[index] || 0)).length;
+  if (pars > 0) return `${pars} par${pars === 1 ? '' : 's'} in ${completion.completedHoleCount} completed hole${completion.completedHoleCount === 1 ? '' : 's'}`;
+  return null;
+}
+function buildRoundRecord(match, metrics) {
+  const completion = getRoundCompletionState(match, metrics);
+  const ctx = getPayoutReportContext(match, metrics);
+  const timing = getRoundElapsedTimeState(match, metrics);
+  const events = buildRoundRecordEvents(match, metrics);
+  const paymentRows = optimalSettlementRows(ctx.finalTotals || {});
+  const playerRecords = (metrics?.players || []).map((playerMetric, index) => ({
+    playerId: getRoundRecordPlayerId(match, playerMetric, index), displayName: playerMetric?.player?.name || `Player ${index + 1}`,
+    index: Number.isFinite(Number(playerMetric?.player?.index)) ? Number(playerMetric.player.index) : null,
+    courseHandicap: Number.isFinite(Number(playerMetric?.courseHdcp ?? playerMetric?.courseHandicap)) ? Number(playerMetric.courseHdcp ?? playerMetric.courseHandicap) : null,
+    teeId: match?.players?.[index]?.teeId || match?.teeId || null, teamId: playerMetric?.team ?? match?.players?.[index]?.team ?? null,
+    statLines: isPlayerStatTrackingEnabled(match, playerMetric.playerId) ? (computeStatTrackingSummary(match, metrics).find(row => String(row.playerMetric?.playerId) === String(playerMetric.playerId))?.totals || null) : null,
+    scoreDistribution: completion.completedHoleCount >= 6 ? (computeScoreDistributionSummary(match, metrics).find(row => String(row.playerMetric?.playerId) === String(playerMetric.playerId))?.totals || null) : null,
+    grossTotal: Number(playerMetric?.grossTotal || 0), netTotal: Number(playerMetric?.leaderboardNetTotal || 0), netToPar: Number(playerMetric?.leaderboardNetDiff || 0), postable: Number(playerMetric?.postableTotal || 0),
+    signatureStat: null
+  }));
+  playerRecords.forEach((record, index) => { record.signatureStat = buildPlayerSignatureStat(metrics.players[index], events, completion); });
+  const holes = (metrics?.holeResults || []).map((hole, index) => ({
+    holeNumber: Number(hole?.holeNumber || index + 1), par: Number(hole?.par || 0) || null, yards: Number(hole?.yardage || 0) || null, strokeIndex: Number(hole?.strokeIndex || 0) || null,
+    scores: (hole?.playerScores || []).map(score => ({ playerId: String(score.playerId), gross: Number(score.gross) || null, net: Number.isFinite(Number(score.net)) ? Number(score.net) : null, strokesReceived: Number(score.strokes || score.strokesReceived || 0) }))
+  }));
+  const games = getOrderedSelectedGames(match).map(config => ({ gameId: config.key, type: config.key, config: clonePlain(config), result: buildExecutiveDriverRows(match, metrics, ctx).find(row => row.key === config.key) || null, auditRef: `game-${config.key}` }));
+  const contributingGameIds = (ctx.payoutGames || []).filter(game => Object.values(game.amounts || {}).some(amount => Math.abs(Number(amount || 0)) > 0.0001)).map(game => String(game.sourceKey || game.key));
+  const transactionGameId = contributingGameIds.length === 1 ? contributingGameIds[0] : 'combined_settlement';
+  const transactions = paymentRows.map((row, index) => ({ transactionId: `${match?.id || 'round'}:settlement:${index + 1}`, payerId: String(row.from), payeeId: String(row.to), amount: Number(row.amount || 0), gameId: transactionGameId, sourceGameIds: contributingGameIds.slice(), roundId: String(match?.id || ''), status: completion.isIncomplete && !areAllGamesFinal(match, metrics) ? 'provisional' : 'final', auditRef: 'final-net-settlement' }));
+  const crossFoot = Object.values(ctx.finalTotals || {}).reduce((sum, amount) => sum + Number(amount || 0), 0);
+  return {
+    schemaVersion: ROUND_RECORD_SCHEMA_VERSION,
+    meta: { roundId: String(match?.id || ''), tripId: match?.tripId || null, courseSnapshot: clonePlain(match?.courseSnapshot || metrics?.course || null), teeSnapshot: clonePlain(metrics?.tee || null), date: match?.date || null, holesPlanned: completion.selectedHoleCount, holesCompleted: completion.completedHoleCount, completedHoleNumbers: completion.completedHoles.slice(), status: completion.isIncomplete ? 'provisional' : 'final', endReason: match?.roundEndReason || (completion.isComplete ? 'completed' : null), timing: { valid: !!timing.valid, available: !!timing.available, elapsedMs: timing.valid ? timing.elapsedMs : null, label: timing.valid ? timing.label : null }, handicapConvention: match?.handicapConvention || 'low_man', lowManPlayerId: playerRecords.filter(player => player.courseHandicap != null).sort((a, b) => a.courseHandicap - b.courseHandicap)[0]?.playerId || null },
+    players: playerRecords, holes, games, events, transactions,
+    settlement: { netPositions: Object.fromEntries(Object.entries(ctx.finalTotals || {}).map(([id, amount]) => [String(id), Number(amount || 0)])), payments: transactions, crossFoot: Number(crossFoot.toFixed(2)) },
+    notes: { hostLog: String(match?.roundRecapNotes || ''), photos: clonePlain(match?.roundPhotos || []), weather: clonePlain(match?.roundContext?.weather || null) }
+  };
+}
+function buildLegacyRoundSnapshot(match, metrics) {
   if (!metrics) return '';
   const completion = getRoundCompletionState(match, metrics);
   const ctx = getPayoutReportContext(match, metrics);
@@ -4189,6 +4310,7 @@ function buildRoundSnapshot(match, metrics) {
   const featured = getFeaturedCompetitionResult(match, metrics);
   const timing = getRoundElapsedTimeState(match, metrics);
   const weather = formatRoundWeatherDisplay(match);
+  const drivers = buildExecutiveDriverRows(match, metrics, ctx);
   const keyDetails = [];
   const currentResult = biggest.rows.length && biggest.value > 0
     ? formatAwardWinners(biggest.rows.map(r => r.name), formatMoneyAccounting(biggest.value))
@@ -4216,7 +4338,7 @@ function buildRoundSnapshot(match, metrics) {
   if (lowNet.rows.length) takeaways.push(`${lowNet.rows.map(row => row.player?.name).filter(Boolean).join(', ')} ${lowNet.rows.length > 1 ? 'share' : 'leads'} low net at ${formatToPar(Number(lowNet.rows[0]?.leaderboardNetDiff || 0))}.`);
   if (completion.isIncomplete) takeaways.push('Only completed holes are included; unplayed holes are not estimated.');
   return `
-    <section class="export-section export-section-round-snapshot print-keep-together">
+    <section class="export-section export-section-round-snapshot report-section--major print-keep-together">
       <div class="export-section-head round-snapshot-head">
         <div>
           <h2>Executive Round Summary</h2>
@@ -4230,10 +4352,111 @@ function buildRoundSnapshot(match, metrics) {
         <div class="round-snapshot-detail"><strong>${escapeHtml(status.headline)}</strong> · ${escapeHtml(status.detail)}</div>
         ${playerNames ? `<div class="round-snapshot-players">${escapeHtml(playerNames)}</div>` : ''}
       </div>
-      ${keyDetails.length ? `<div class="round-snapshot-grid">${keyDetails.map(([label, value]) => `<div class="round-snapshot-row"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`).join('')}</div>` : `<div class="export-empty empty-state-card">No round highlights available yet.</div>`}
-      ${takeaways.length ? `<div class="round-snapshot-takeaways"><div class="round-snapshot-awards-title">Key Takeaways</div><ul>${takeaways.slice(0, 5).map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul></div>` : ''}
-      ${compactAwards.length ? `<div class="round-snapshot-awards"><div class="round-snapshot-awards-title">Round Awards</div><div class="round-snapshot-awards-grid">${compactAwards.map(([label, value]) => `<div class="round-snapshot-award"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`).join('')}</div></div>` : ''}
+      <div class="round-snapshot-body">
+        <div class="round-snapshot-primary">
+          <div class="round-snapshot-section-title">Primary Drivers</div>
+          ${drivers.length ? `<div class="executive-driver-list">${drivers.map(row => `<div class="executive-driver-row"><div><strong>${escapeHtml(row.label)}</strong><span>${escapeHtml(row.result)}</span></div><div class="executive-driver-impact">${escapeHtml(row.impact)}</div>${row.stakes ? `<small>${escapeHtml(row.stakes)}</small>` : ''}</div>`).join('')}</div>` : '<div class="export-empty">No payout games have moved yet.</div>'}
+          ${takeaways.length ? `<div class="round-snapshot-takeaways"><div class="round-snapshot-awards-title">Key Takeaways</div><ul>${takeaways.slice(0, 5).map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul></div>` : ''}
+        </div>
+        <div class="round-snapshot-secondary">
+          ${keyDetails.length ? `<div class="round-snapshot-grid">${keyDetails.map(([label, value]) => `<div class="round-snapshot-row"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`).join('')}</div>` : `<div class="export-empty empty-state-card">No round highlights available yet.</div>`}
+          ${compactAwards.length ? `<div class="round-snapshot-awards"><div class="round-snapshot-awards-title">Leaders & Awards</div><div class="round-snapshot-awards-grid">${compactAwards.slice(0, 4).map(([label, value]) => `<div class="round-snapshot-award"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`).join('')}</div></div>` : ''}
+        </div>
+      </div>
     </section>`;
+}
+
+function buildRoundRecordResultLine(record) {
+  const positions = Object.entries(record?.settlement?.netPositions || {}).map(([playerId, amount]) => ({ playerId, amount: Number(amount || 0) }));
+  const winners = positions.filter(row => row.amount > 0.0001).sort((a, b) => b.amount - a.amount);
+  if (!winners.length) return record?.meta?.holesCompleted ? 'All square — no current settlement' : 'No settlement yet';
+  const top = winners[0].amount;
+  const names = winners.filter(row => Math.abs(row.amount - top) < 0.0001).map(row => record.players.find(player => player.playerId === row.playerId)?.displayName || row.playerId);
+  const verb = record.meta.status === 'provisional' ? (names.length === 1 ? 'leads' : 'lead') : (names.length === 1 ? 'takes it' : 'take it');
+  return `${names.join(' and ')} ${verb}, +${formatMoneyAccounting(top)}${record.meta.status === 'provisional' ? ' provisional' : ''}`;
+}
+function describeRoundRecordEvent(record, event) {
+  if (!event) return '';
+  const teamName = event.teamId != null ? (record.games.find(game => game.gameId === event.gameId)?.result?.result?.match(/^[^+]+/)?.[0]?.trim() || `Team ${event.teamId}`) : '';
+  if (event.type === 'lead_change') return `${teamName || 'The match leader'} flipped the ${event.gameId === 'sneaky_sandy_poley' ? 'SSP ' : ''}match on H${event.holeNumber} with a ${event.magnitude}-point swing.`;
+  if (event.type === 'swing') return `H${event.holeNumber} produced a ${event.magnitude}-point swing${teamName ? ` to ${teamName}` : ''}.`;
+  if (event.type === 'multiplier') return `The ${event.magnitude}x multiplier on H${event.holeNumber} changed the shape of the match.`;
+  if (event.type === 'payout_driver') return `${event.description}.`;
+  if (event.type === 'signature_score') return `${record.players.find(player => player.playerId === event.playerId)?.displayName || 'A player'} recorded ${String(event.description).toLowerCase()} on H${event.holeNumber}.`;
+  return event.description ? `${event.description}.` : '';
+}
+function buildRoundRecordStory(record) {
+  const turningPoint = record.events.find(event => ['lead_change', 'swing', 'multiplier'].includes(event.type)) || record.events.find(event => Number(event.holeNumber)) || null;
+  const resultLine = buildRoundRecordResultLine(record);
+  const storyLine = describeRoundRecordEvent(record, turningPoint) || describeRoundRecordEvent(record, record.events[0]) || `${record.meta.holesCompleted} completed hole${record.meta.holesCompleted === 1 ? '' : 's'} define the current result.`;
+  const headline = turningPoint?.holeNumber && Number(turningPoint.magnitude) ? `The ${Number(turningPoint.magnitude)}-Point ${turningPoint.holeNumber === 3 ? 'Third' : `H${turningPoint.holeNumber}`}` : (record.meta.status === 'provisional' ? 'The Round So Far' : 'How the Round Turned');
+  const provisional = record.meta.status === 'provisional' ? `Only ${record.meta.holesCompleted} of ${record.meta.holesPlanned} holes were completed, so the round record remains provisional.` : '';
+  const consequence = record.transactions.length ? `${record.transactions.length} payment${record.transactions.length === 1 ? '' : 's'} settle the current game ledger.` : 'No payment is currently required.';
+  const secondaryEvent = record.events.map(event => describeRoundRecordEvent(record, event)).find(description => description && description !== storyLine) || '';
+  const resultSentence = `${resultLine}.`;
+  const narrative = [resultSentence, secondaryEvent || consequence, provisional || (secondaryEvent ? consequence : '')].filter(Boolean).slice(0, 3).join(' ');
+  return { headline: headline.split(/\s+/).slice(0, 8).join(' '), dek: resultSentence.split(/\s+/).slice(0, 25).join(' '), storyLine, narrative, turningPoint };
+}
+function buildRoundRecordMomentum(match, metrics, record) {
+  if (!isSneakySandyPoleyEnabled(match)) return '';
+  const ledger = buildSneakySandyPoleyLedger(match, { metrics });
+  const data = buildSneakySandyPoleyMomentumData(match, { ledger });
+  if (!data.length) return '<div class="round-record-momentum-pending">SSP selected — momentum pending.</div>';
+  const width = 680, height = 170, left = 46, right = 28, top = 22, bottom = 34;
+  const max = Math.max(1, ...data.map(row => Math.abs(row.cumulative)));
+  const zero = top + (height - top - bottom) / 2;
+  const x = index => data.length === 1 ? (left + width - right) / 2 : left + index * (width - left - right) / (data.length - 1);
+  const y = value => zero - value / max * ((height - top - bottom) / 2);
+  const points = data.map((row, index) => `${x(index)},${y(row.cumulative)}`).join(' ');
+  const annotations = data.map((row, index) => {
+    const multiplier = record.events.find(event => event.type === 'multiplier' && event.holeNumber === row.holeNumber);
+    return `<circle cx="${x(index)}" cy="${y(row.cumulative)}" r="4" class="ssp-momentum-dot"/>${multiplier ? `<text x="${x(index)}" y="${Math.max(12, y(row.cumulative) - 10)}" text-anchor="middle">H${row.holeNumber} ${multiplier.magnitude}x</text>` : `<text x="${x(index)}" y="${height - 10}" text-anchor="middle">H${row.holeNumber}</text>`}`;
+  }).join('');
+  const final = data[data.length - 1];
+  const teams = ledger.teams || [];
+  const finalLabel = final.cumulative ? `${final.cumulative > 0 ? teams[0]?.name : teams[1]?.name} +${Math.abs(final.cumulative)}` : 'Tied';
+  return `<div class="round-record-momentum"><div class="round-record-momentum-head"><strong>SSP Momentum</strong><span>Final: ${escapeHtml(finalLabel)}</span></div><div class="tiny">Above zero favors ${escapeHtml(teams[0]?.name || 'Team 1')}; below zero favors ${escapeHtml(teams[1]?.name || 'Team 2')}.</div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="SSP cumulative point margin"><line x1="${left}" y1="${zero}" x2="${width - right}" y2="${zero}" class="ssp-momentum-zero"/><polyline points="${points}" class="ssp-momentum-line" fill="none"/>${annotations}</svg></div>`;
+}
+function buildRoundSnapshot(match, metrics, roundRecord = null) {
+  if (!metrics) return '';
+  const record = roundRecord || buildRoundRecord(match, metrics);
+  const story = buildRoundRecordStory(record);
+  const course = metrics?.course?.name || 'Course';
+  const tee = metrics?.tee?.teeName || 'Tee';
+  const status = record.meta.status === 'provisional' ? `Provisional · ${record.meta.holesCompleted} of ${record.meta.holesPlanned}` : 'Final';
+  const paymentChips = record.transactions.map(row => {
+    const payer = record.players.find(player => player.playerId === row.payerId)?.displayName || row.payerId;
+    const payee = record.players.find(player => player.playerId === row.payeeId)?.displayName || row.payeeId;
+    return `<span class="settle-up-chip">${escapeHtml(payer)} → ${escapeHtml(payee)} <strong>${formatMoneyAccounting(row.amount)}</strong></span>`;
+  }).join('');
+  const turning = story.turningPoint;
+  const turningHole = record.holes.find(hole => hole.holeNumber === turning?.holeNumber);
+  const heroStoryLine = turning
+    ? (record.transactions.length ? `${record.transactions.length} payment${record.transactions.length === 1 ? '' : 's'} reconcile the current game ledger.` : 'The turning point below defines the current match position.')
+    : story.storyLine;
+  const footer = record.players.map(player => `<span><strong>${escapeHtml(player.displayName)}</strong> · Course HCP ${player.courseHandicap == null ? '—' : escapeHtml(player.courseHandicap)}</span>`).join('');
+  return `<section class="export-section export-section-round-snapshot report-layer report-layer--hero report-section--major print-keep-together" data-round-record-schema="${record.schemaVersion}">
+    <div class="round-record-masthead"><div><div class="round-record-brand">The Dye Ledger</div><div>${escapeHtml(course)} · ${escapeHtml(tee)} · ${escapeHtml(record.meta.date || '')}</div></div><span class="round-snapshot-badge round-snapshot-badge-${record.meta.status === 'provisional' ? 'provisional' : 'complete'}">${escapeHtml(status)}</span></div>
+    <div class="round-record-result">${escapeHtml(buildRoundRecordResultLine(record))}</div>
+    <div class="round-record-storyline">${escapeHtml(heroStoryLine)}</div>
+    ${buildRoundRecordMomentum(match, metrics, record)}
+    ${turning ? `<div class="round-record-turning"><span>Turning Point · H${escapeHtml(turning.holeNumber || '—')}${turningHole?.par ? ` · Par ${escapeHtml(turningHole.par)}` : ''}${turningHole?.yards ? ` · ${escapeHtml(turningHole.yards)} yds` : ''}</span><strong>${escapeHtml(describeRoundRecordEvent(record, turning))}</strong></div>` : ''}
+    <div class="round-record-settle">${paymentChips || '<span class="settle-up-chip settle-up-chip--even">No payment required</span>'}</div>
+    <div class="round-record-reconcile">${record.transactions.length} payment${record.transactions.length === 1 ? '' : 's'} settle all games · ${Math.abs(record.settlement.crossFoot) <= 0.0001 ? 'reconciled' : 'review required'}</div>
+    <div class="round-record-footer">${footer}</div>
+  </section>`;
+}
+
+function buildRoundStorySection(match, metrics, record) {
+  const story = buildRoundRecordStory(record);
+  const capsules = record.players.filter(player => player.signatureStat).map(player => `<li><strong>${escapeHtml(player.displayName)}</strong> — ${escapeHtml(player.signatureStat)}</li>`).join('');
+  const awards = buildRoundAwardsRows(match, metrics);
+  return `<section class="export-section export-section-round-story report-layer report-layer--story">
+    <div class="round-story-heading"><div class="section-label">Round Story</div><h2>${escapeHtml(story.headline)}</h2><div class="round-story-dek">${escapeHtml(story.dek)}</div><div class="export-section-sub">Generated from scoring, games, settlement, and round events.</div></div>
+    <div class="round-story-copy"><p>${escapeHtml(story.narrative)}</p></div>
+    ${capsules ? `<div class="round-story-capsules"><h3>Player Capsules</h3><ul>${capsules}</ul></div>` : ''}
+    ${awards.length ? `<div class="round-story-awards"><h3>Leaders & Awards</h3>${awards.slice(0, 4).map(([label, value]) => `<span><strong>${escapeHtml(label)}</strong> ${value}</span>`).join('')}</div>` : ''}
+  </section>`;
 }
 
 function formatTimestampET(timestamp, { includeDate = true } = {}) {
@@ -4783,16 +5006,26 @@ function buildSneakySandyPoleyAuditDetail(match, metrics) {
   return `<section class="export-section export-section-ssp-audit"><div class="export-section-head"><h2>SSP Hole-by-Hole Audit</h2><div class="export-section-sub">Counted SSP holes only; missing or pre-SSP holes are not fabricated.</div></div><div class="fit-stage" data-fit="width" data-fit-min="0.72"><div class="fit-box"><table class="export-table ssp-export-table"><thead><tr><th>Hole</th><th>Points Before Multiplier</th><th>Take/Keep</th><th>Multiplier</th><th>Umbee</th><th>Final Hole Total</th><th>Match</th></tr></thead><tbody>${rows}</tbody></table></div></div></section>`;
 }
 
+function decorateReportSections(html) {
+  const appendixClasses = ['export-section-classic', 'export-section-leaderboards', 'export-section-ssp-audit', 'export-section-score-distribution', 'export-section-stat-tracking', 'export-section-gross-game-detail', 'export-section-settlement-audit', 'export-section-nine-point'];
+  const denseClasses = ['export-section-leaderboards', 'export-section-ssp-audit', 'export-section-score-distribution', 'export-section-stat-tracking', 'export-section-gross-game-detail', 'export-section-classic'];
+  return String(html || '').replace(/<section class="([^"]*\bexport-section\b[^"]*)"/g, (full, className) => {
+    const appendix = appendixClasses.some(name => className.includes(name));
+    const dense = denseClasses.some(name => className.includes(name));
+    const classes = `${className} report-section report-section--${appendix ? 'appendix' : 'main'} report-section--${dense ? 'dense report-section--allow-break' : 'summary report-section--avoid-break'}`;
+    return `<section class="${classes}" data-report-section-type="${appendix ? 'appendix' : 'main'}" data-report-section-density="${dense ? 'detail' : 'summary'}" data-report-print-priority="${appendix ? '2' : '1'}"`;
+  });
+}
+
 function buildSummaryExportBody(match, metrics) {
+  const roundRecord = buildRoundRecord(match, metrics);
+  const completion = getRoundCompletionState(match, metrics);
+  const unavailableStatPlayers = isStatTrackingEnabled(match) ? roundRecord.players.filter(player => !player.statLines) : [];
   const exportScoreDistributionHtml = buildExportScoreDistributionSummary(match, metrics);
   const exportStatTrackingHtml = buildExportStatTrackingSummary(match, metrics);
   const exportGrossGameDetailHtml = buildExportGrossGameDetailSummary(match, metrics);
-  const exportMomentumHtml = buildExportMomentum(match, metrics);
-  const exportRoundRecapHtml = buildRoundRecapExport(match, metrics);
-  const exportRoundSnapshotHtml = buildRoundSnapshot(match, metrics);
-  const exportProvisionalLabelHtml = buildMissingScoreWarning(match, metrics, { exportMode: true });
+  const exportRoundSnapshotHtml = buildRoundSnapshot(match, metrics, roundRecord);
   const exportSharedLedgerNoteHtml = buildSharedLedgerReportNote(match);
-  const exportSspSummaryHtml = buildSneakySandyPoleyExportSummary(match, metrics);
   const exportSspAuditHtml = buildSneakySandyPoleyAuditDetail(match, metrics);
   const showNinePoint = (match.selectedGames || []).some(g => g.key === 'nine_point');
   const exportNinePointScorecardHtml = showNinePoint ? `
@@ -4807,17 +5040,16 @@ function buildSummaryExportBody(match, metrics) {
         </div>
       </div>
     </section>` : '';
-  return `
+  const html = `
     ${exportRoundSnapshotHtml}
-    ${exportProvisionalLabelHtml}
-    ${exportSharedLedgerNoteHtml}
+    ${buildRoundStorySection(match, metrics, roundRecord)}
 
     <section class="export-section export-section-net-payout">
       <div class="export-section-head">
         <h2>${getRoundCompletionState(match, metrics).isIncomplete ? (areAllGamesFinal(match, metrics) ? 'Final Net Settlement' : 'Net Settlement — Provisional') : 'Final Net Settlement'}</h2>
         ${getRoundCompletionState(match, metrics).isIncomplete ? `<div class="export-section-sub">${areAllGamesFinal(match, metrics) ? 'All selected games are mathematically determined despite unplayed holes.' : 'Based on completed holes only. Some game outcomes may still change.'}</div>` : ''}
       </div>
-      ${buildExportFinalNetSettlementSummary(match, metrics)}
+      ${roundRecord.transactions.length ? `<div class="round-record-settle round-record-settle--section">${roundRecord.transactions.map(row => `<span class="settle-up-chip">${escapeHtml(roundRecord.players.find(player => player.playerId === row.payerId)?.displayName || row.payerId)} → ${escapeHtml(roundRecord.players.find(player => player.playerId === row.payeeId)?.displayName || row.payeeId)} <strong>${formatMoneyAccounting(row.amount)}</strong></span>`).join('')}</div>` : '<div class="export-empty">No settlement yet.</div>'}
     </section>
 
 
@@ -4829,10 +5061,9 @@ function buildSummaryExportBody(match, metrics) {
       ${buildSelectedGamesSummary(match, metrics)}
     </section>
 
-    ${exportSspSummaryHtml}
-
-    ${exportMomentumHtml}
-
+    <div class="export-appendix-label">Ledger / Audit Detail</div>
+    <div class="report-layer report-layer--ledger">
+    ${exportSharedLedgerNoteHtml}
     <section class="export-section export-section-classic export-section-classic-summary">
       <div class="export-section-head">
         <h2>Classic scorecard</h2>
@@ -4847,10 +5078,6 @@ function buildSummaryExportBody(match, metrics) {
 
     ${exportNinePointScorecardHtml}
 
-    ${exportRoundRecapHtml}
-
-    <div class="export-appendix-label">Appendix / Audit Detail</div>
-
     <section class="export-section export-section-leaderboards">
       <div class="export-section-head"><h2>Leaderboards</h2><div class="export-section-sub">Full player and team tables supporting the executive highlights.</div></div>
       <h3>Player leaderboard</h3>
@@ -4860,13 +5087,13 @@ function buildSummaryExportBody(match, metrics) {
 
     ${exportSspAuditHtml}
 
-    <section class="export-section export-section-score-distribution">
+    ${completion.completedHoleCount >= 6 ? `<section class="export-section export-section-score-distribution">
       <div class="export-section-head">
         <h2>Score Distribution</h2>
         <div class="export-section-sub">Gross scores only; completed holes only. Missing holes are skipped, not estimated.</div>
       </div>
       ${exportScoreDistributionHtml}
-    </section>
+    </section>` : ''}
 
     ${exportStatTrackingHtml ? `
     <section class="export-section export-section-stat-tracking">
@@ -4876,6 +5103,7 @@ function buildSummaryExportBody(match, metrics) {
       </div>
       ${exportStatTrackingHtml}
     </section>` : ''}
+    ${unavailableStatPlayers.length ? `<div class="export-audit-footnote">${unavailableStatPlayers.map(player => `${escapeHtml(player.displayName)} stat line unavailable and excluded from totals.`).join(' ')}</div>` : ''}
 
     ${exportGrossGameDetailHtml ? `
     <section class="export-section export-section-gross-game-detail">
@@ -4885,7 +5113,14 @@ function buildSummaryExportBody(match, metrics) {
       ${exportGrossGameDetailHtml}
     </section>` : ''}
 
-    ${buildExportNotes()}`;
+    <section class="export-section export-section-settlement-audit">
+      <div class="export-section-head"><h2>Settlement Reconciliation</h2><div class="export-section-sub">Canonical balances, payments, and cross-foot audit.</div></div>
+      ${buildExportFinalNetSettlementSummary(match, metrics)}
+    </section>
+
+    ${buildExportNotes()}
+    </div>`;
+  return decorateReportSections(html);
 }
 
 function buildClassicOnlyExportBody(match, metrics) {
@@ -5047,7 +5282,16 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     .round-snapshot-kicker { color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
     .round-snapshot-title { margin-top: 5px; color: #172033; font-weight: 900; font-size: 17px; line-height: 1.16; letter-spacing: -.015em; }
     .round-snapshot-detail, .round-snapshot-players { margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.35; }
-    .round-snapshot-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+    .round-snapshot-body { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(260px, .85fr); gap: 12px; align-items: start; }
+    .round-snapshot-primary, .round-snapshot-secondary { min-width: 0; }
+    .round-snapshot-section-title { margin-bottom: 7px; color: #243247; font-size: 11px; font-weight: 900; letter-spacing: .05em; text-transform: uppercase; }
+    .executive-driver-list { display: grid; gap: 6px; }
+    .executive-driver-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 12px; padding: 8px 9px; border-left: 3px solid var(--accent); background: #f8fbf9; border-radius: 0 10px 10px 0; }
+    .executive-driver-row strong, .executive-driver-row span { display: block; }
+    .executive-driver-row span, .executive-driver-row small { color: var(--muted); font-size: 10px; line-height: 1.3; }
+    .executive-driver-impact { color: #243247; font-size: 11px; font-weight: 800; text-align: right; }
+    .executive-driver-row small { grid-column: 1 / -1; }
+    .round-snapshot-grid { display: grid; grid-template-columns: 1fr; gap: 7px; }
     .round-snapshot-row, .round-snapshot-award { border: 1px solid var(--border); background: #fff; border-radius: 13px; padding: 9px 10px; min-width: 0; }
     .round-snapshot-row span, .round-snapshot-award span, .round-snapshot-recap-teaser span { display: block; color: var(--muted); font-weight: 850; font-size: 10px; text-transform: uppercase; letter-spacing: .045em; margin-bottom: 4px; }
     .round-snapshot-row strong, .round-snapshot-award strong { font-size: 12px; line-height: 1.25; overflow-wrap: anywhere; }
@@ -5217,6 +5461,10 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     }
     .payout-summary-intro strong, .payout-settlement-head strong { color: #243247; }
     .final-net-settlement-card { border: 1px solid var(--border); border-radius: 14px; background: #fbfcfd; padding: 10px; display: grid; gap: 8px; }
+    .settlement-balance-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .settlement-balance-group { min-width: 0; }
+    .settlement-balance-title { margin-bottom: 6px; color: var(--muted); font-size: 10px; font-weight: 900; letter-spacing: .06em; text-transform: uppercase; }
+    .settlement-even-line { color: var(--muted); font-size: 10px; }
     .final-net-settlement-list { display: grid; gap: 5px; }
     .final-net-settlement-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 7px 9px; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
     .final-net-settlement-player { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -5325,6 +5573,11 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     .payout-total-positive { color: #0b6b3e; }
     .payout-total-negative { color: #9f1d1d; }
     strong { font-weight: 800; }
+    .report-section--main { border-left-color: rgba(11,93,59,.28); }
+    .report-section--appendix { box-shadow: none; background: #fcfdff; }
+    .report-section--avoid-break { break-inside: avoid-page; page-break-inside: avoid; }
+    .report-section--allow-break { break-inside: auto; page-break-inside: auto; }
+    .report-section--major { break-before: auto; }
 
     .export-section-round-snapshot,
     .export-section-games-summary,
@@ -5378,6 +5631,36 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     .nine-point-scorecard-wrap::after {
       display: none !important;
     }
+    .report-layer { position: relative; }
+    .report-layer--hero { background: linear-gradient(145deg, #0b3325 0%, #0b5d3b 62%, #174b38 100%); color: #fff; border: 0; padding: 22px; overflow: hidden; }
+    .round-record-masthead { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; font-size:11px; color:rgba(255,255,255,.78); }
+    .round-record-brand { font-size:14px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; color:#fff; margin-bottom:4px; }
+    .round-record-result { margin-top:22px; font-size:30px; line-height:1.05; font-weight:900; letter-spacing:-.035em; max-width:760px; }
+    .round-record-storyline { margin-top:9px; max-width:780px; font-size:14px; line-height:1.45; color:rgba(255,255,255,.9); }
+    .round-record-momentum { margin-top:16px; background:rgba(255,255,255,.96); color:var(--text); border-radius:14px; padding:11px 13px 4px; }
+    .round-record-momentum-head { display:flex; justify-content:space-between; gap:12px; font-size:12px; }
+    .round-record-momentum svg { width:100%; height:145px; display:block; }
+    .round-record-momentum text { font-size:10px; fill:#526071; }
+    .round-record-momentum-pending { margin-top:16px; padding:12px; border:1px solid rgba(255,255,255,.25); border-radius:12px; color:rgba(255,255,255,.86); }
+    .round-record-turning { margin-top:12px; display:grid; gap:4px; padding:10px 12px; border-left:3px solid #bfe8cf; background:rgba(255,255,255,.1); border-radius:0 10px 10px 0; }
+    .round-record-turning span { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:rgba(255,255,255,.7); }
+    .round-record-settle { display:flex; flex-wrap:wrap; gap:7px; margin-top:13px; }
+    .settle-up-chip { display:inline-flex; align-items:center; gap:4px; border:1px solid rgba(255,255,255,.28); background:rgba(255,255,255,.12); color:inherit; padding:7px 10px; border-radius:999px; font-size:11px; white-space:nowrap; }
+    .round-record-settle--section .settle-up-chip { color:var(--text); background:var(--accent-soft); border-color:#c8dfd1; }
+    .round-record-reconcile { margin-top:7px; font-size:10px; color:rgba(255,255,255,.65); }
+    .round-record-footer { margin-top:16px; padding-top:10px; border-top:1px solid rgba(255,255,255,.18); display:flex; flex-wrap:wrap; gap:6px 16px; font-size:10px; color:rgba(255,255,255,.78); }
+    .export-section-round-story { padding:20px; }
+    .round-story-heading h2 { margin:3px 0 5px; font-size:27px; letter-spacing:-.035em; }
+    .round-story-dek { font-size:14px; font-weight:650; color:#344258; max-width:780px; }
+    .round-story-copy { font-family:Georgia, serif; font-size:14px; line-height:1.6; max-width:820px; }
+    .round-story-capsules ul { margin:8px 0 0; padding-left:18px; columns:2; column-gap:28px; }
+    .round-story-capsules li { break-inside:avoid; margin-bottom:5px; font-size:11px; }
+    .round-story-awards { display:flex; flex-wrap:wrap; gap:7px; margin-top:12px; }
+    .round-story-awards h3 { width:100%; margin:0; }
+    .round-story-awards span { padding:6px 8px; background:var(--ink-soft); border:1px solid var(--border); border-radius:8px; font-size:10px; }
+    .report-layer--ledger { break-before:page; page-break-before:always; }
+    .export-section-net-payout { padding:12px 14px; }
+    .export-section-net-payout .export-section-head { margin-bottom:4px; }
     @media print {
       .export-page-break-before-gross-game-detail {
         display: block !important;
@@ -5391,6 +5674,12 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       .export-section-gross-game-detail {
         break-before: auto;
         page-break-before: auto;
+        break-inside: auto !important;
+        page-break-inside: auto !important;
+      }
+      .export-section-settlement-audit {
+        break-before: page !important;
+        page-break-before: always !important;
       }
       .export-section-head {
         break-after: avoid;
@@ -5398,6 +5687,7 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       }
       .gross-game-player-card,
       .gross-game-section,
+      .gross-game-payment-row,
       .final-net-settlement-row,
       .game-summary-card,
       .export-pill {
@@ -5410,7 +5700,8 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     }
 
     @media (max-width: 760px) {
-      .export-pill-grid, .match-status-grid, .game-summary-grid, .stat-summary-grid, .round-snapshot-grid, .round-snapshot-awards-grid, .export-header-players { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .export-pill-grid, .match-status-grid, .game-summary-grid, .stat-summary-grid, .round-snapshot-awards-grid, .export-header-players { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .round-snapshot-body, .settlement-balance-grid { grid-template-columns: 1fr; }
       .round-snapshot-head { display: grid; }
       .round-snapshot-badge { justify-self: start; }
       .export-toolbar { justify-content: stretch; }
@@ -5489,6 +5780,8 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       .export-section-sub, .match-status-meta, .game-summary-sub, .tiny, .scorecard-sub { font-size: 9px; }
       .match-status-grid, .game-summary-grid, .stat-summary-grid, .round-snapshot-grid, .round-snapshot-awards-grid { gap: 6px; }
       .round-snapshot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .round-snapshot-body { grid-template-columns: minmax(0, 1.35fr) minmax(230px, .85fr); gap: 8px; }
+      .round-snapshot-secondary .round-snapshot-grid { grid-template-columns: 1fr; }
       .round-snapshot-awards-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .round-snapshot-hero { padding: 9px; }
       .round-snapshot-title { font-size: 13px; }
@@ -7014,28 +7307,34 @@ function buildSettleUpList(settlements) {
 }
 
 function buildFinalNetSettlementSection(players, totals) {
-  const rows = players.map(player => {
-    const amount = totals[player.id] || 0;
+  const balanceRows = players.map(player => ({ player, amount: Number(totals[player.id] || 0) }));
+  const buildBalanceGroup = (title, groupRows, emptyText) => `<div class="settlement-balance-group"><div class="settlement-balance-title">${title}</div><div class="final-net-settlement-list">${groupRows.length ? groupRows.map(({ player, amount }) => {
     const cls = amount > 0.0001 ? 'payout-total-positive' : amount < -0.0001 ? 'payout-total-negative' : '';
     return `
       <div class="final-net-settlement-row">
         <div class="final-net-settlement-player"><strong>${escapeHtml(player.name)}</strong></div>
         <div class="final-net-settlement-amount ${cls}"><strong>${formatFinalNetSettlementMoney(amount)}</strong></div>
       </div>`;
-  }).join('');
+  }).join('') : `<div class="tiny">${emptyText}</div>`}</div></div>`;
+  const winners = balanceRows.filter(row => row.amount > 0.0001).sort((a, b) => b.amount - a.amount);
+  const owers = balanceRows.filter(row => row.amount < -0.0001).sort((a, b) => a.amount - b.amount);
+  const even = balanceRows.filter(row => Math.abs(row.amount) <= 0.0001);
   const crossFoot = players.reduce((sum, player) => sum + (totals[player.id] || 0), 0);
   const crossFootClass = Math.abs(crossFoot) <= 0.0001 ? '' : 'payout-total-negative';
   const settlements = optimalSettlementRows(totals || {});
   return `
     <div class="final-net-settlement-card top-gap">
-      <div class="payout-settlement-head"><strong>Efficient Cash Payments</strong></div>
-      <div class="final-net-settlement-list">${rows}</div>
-      <div class="final-net-settlement-crossfoot ${crossFootClass}">Cross-foot: ${formatMoneyAccounting(crossFoot)}</div>
+      <div class="settlement-balance-grid">
+        ${buildBalanceGroup('Winners', winners, 'No positive balances yet.')}
+        ${buildBalanceGroup('Owers', owers, 'No amounts owed.')}
+      </div>
+      ${even.length ? `<div class="settlement-even-line"><strong>Even:</strong> ${escapeHtml(even.map(row => row.player.name).join(', '))}</div>` : ''}
       <div class="settle-up-card">
         <div class="payout-settlement-head"><strong>Settle Up</strong></div>
         <div class="tiny">Minimum payments needed to settle all games.</div>
         ${buildSettleUpList(settlements)}
       </div>
+      <div class="final-net-settlement-crossfoot ${crossFootClass}">Cross-foot: ${formatMoneyAccounting(crossFoot)}</div>
     </div>`;
 }
 function formatGrossGameAmount(amount) {
@@ -13112,7 +13411,10 @@ function buildSelectedGamesSummary(match, metrics) {
       const ledger = buildSneakySandyPoleyLedger(match, { metrics });
       const leader = ledger.finalLeader || {};
       value = !leader.thru ? 'Not started' : (leader.tied ? `Tied thru ${leader.thru}` : `${formatSneakySandyPoleyTeamName(ledger, match, leader.teamId)} +${leader.margin} thru ${leader.thru}`);
-      sub = `${formatPositiveCurrency(Number(ledger.settings?.pointValue || 0), 2)} per point · ${ledger.settlement?.label || 'SSP: tied, no payment'}`;
+      const biggestSwing = buildSneakySandyPoleyMomentumData(match, { ledger }).slice().sort((a, b) => Math.abs(b.margin) - Math.abs(a.margin))[0];
+      const swingTeam = biggestSwing?.margin > 0 ? ledger.teams?.[0]?.id : ledger.teams?.[1]?.id;
+      const swingText = biggestSwing?.margin ? ` · Primary swing: H${biggestSwing.holeNumber}, ${Math.abs(biggestSwing.margin)} points to ${formatSneakySandyPoleyTeamName(ledger, match, swingTeam)}` : '';
+      sub = `${formatPositiveCurrency(Number(ledger.settings?.pointValue || 0), 2)} per point · ${ledger.settlement?.label || 'SSP: tied, no payment'}${swingText}`;
     }
     const payoutGame = payoutByKey.get(cfg.key) || payoutGames.find(game => String(game.key || '').startsWith(`${cfg.key}_`));
     const payoutRows = Object.entries(payoutGame?.amounts || {}).map(([id, amount]) => ({ name: getPlayer(id)?.name || id, amount: Number(amount || 0) }));
@@ -17040,9 +17342,14 @@ function installDyeLedgerLiveEngineAdapter() {
     buildSneakySandyPoleyExportSummary,
     buildSneakySandyPoleyAuditDetail,
     buildExportMomentum,
+    buildRoundRecord,
+    buildRoundRecordEvents,
+    buildRoundRecordStory,
     buildRoundSnapshot,
+    buildExecutiveDriverRows,
     buildSelectedGamesSummary,
     buildSummaryExportBody,
+    decorateReportSections,
     resolveSneakySandyPoleyProxSelection,
     buildSharedSspFacts,
     reconcileSharedSspFacts,

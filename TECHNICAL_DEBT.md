@@ -850,3 +850,15 @@ Automatic timing intentionally has no pause model. `holeFirstCompletedAt` is bac
 ## Deferred — Match Summary v2 / Analyst Report Layout
 
 A dedicated future release should separate executive and full-detail report modes, add compact/full PDF options, establish a refined report design system and narrative hierarchy, evaluate a dedicated PDF generation pipeline, strengthen weather capture reliability, and expand pace-of-play analytics. v30.3.61 intentionally limits work to release-blocking polish and pagination fixes.
+## v30.3.62 Match Summary v2 follow-ups
+
+The report now exposes main/appendix, summary/detail, and print-priority metadata, but only Full Detail is user-facing. Future work should add compact/full composition without duplicating builders, introduce browser-rendered pagination assertions or a dedicated PDF pipeline, and add real historical saved-match fixtures. Device-specific print headers, footers, font metrics, and page breaking remain outside deterministic helper tests.
+
+## v30.3.63 Trip Ledger architecture prep
+
+- Persist/freeze `RoundRecord` only after defining explicit schema migrations, immutable settlement snapshots, and legacy recovery rules.
+- Add a local player registry and saved-roster model so trip aggregation does not depend on display names or round-scoped fallback IDs.
+- Promote structured settlement transactions into an append-only ledger with stable game, round, event/trip, and source/audit references.
+- Add trip/event aggregation above immutable round transactions; never parse report HTML or narrative text.
+- Add historical RoundRecord migration fixtures before migrating existing saved matches.
+- Add 1080Ã—1350 shareable Hero image export, compact/full composition modes, and browser-level PDF pagination assertions.

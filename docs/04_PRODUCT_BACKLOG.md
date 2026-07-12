@@ -201,3 +201,13 @@ FUTURE:
 - Consider explicit pause/resume only if real-world round timing proves materially distorted by weather or long delays.
 - Consider richer pace analytics (front/back splits and per-hole delay flags) after `holeFirstCompletedAt` has sufficient production data.
 - Continue the deferred separation of active working round state from viewed historical Match Summary state before broader report editing features.
+# Post-v30.3.62 Match Summary roadmap
+
+- Add a low-risk user-facing Compact Summary versus Full Detail export toggle using the v30.3.62 section metadata.
+- Evaluate a dedicated PDF generation pipeline with automated browser-level pagination and collision assertions.
+- Add report themes/branding and shareable web-report links.
+- Expand historical saved-match fixtures and two-device Shared Match browser automation.
+- Continue richer weather capture and pace-of-play analytics without making either required for report rendering.
+- Trip Ledger Architecture Prep: define immutable RoundRecord persistence, schema migration, trip/event aggregation, and append-only settlement transactions.
+- Add a local player registry and reusable saved-roster model with stable identity across rounds.
+- Add a 1080Ã—1350 Hero-card image export after the report Hero has completed cross-browser PDF QA.

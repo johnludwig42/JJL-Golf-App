@@ -24,7 +24,11 @@ function seed(match = buildMatch()) {
 
 test('press configuration and records normalize additively and survive reload', () => {
   const { engine } = seed();
-  assert.deepEqual(JSON.parse(JSON.stringify(engine.normalizePressConfig())), { pressesEnabled: false, pressType: 'MANUAL', pressAvailabilityRule: 'OPEN_SEGMENT_ONLY', maxPressesPerSegment: 3, pressValueRule: 'INHERIT_PARENT', pressAuthorityRule: 'HOST_ONLY', autoPressThreshold: null });
+  const defaults = engine.normalizePressConfig();
+  assert.equal(defaults.pressesEnabled, false);
+  assert.equal(defaults.maxPressesPerRootGame, 3);
+  assert.equal(defaults.maxPressDepth, 1);
+  assert.equal(defaults.pressValueRule, 'INHERIT_ROOT_STAKE');
   const invalid = engine.normalizePressConfig({ pressesEnabled: true, pressType: 'bad', pressAvailabilityRule: 'bad', maxPressesPerSegment: -4, pressAuthorityRule: 'ANYONE', autoPressThreshold: -1 });
   assert.equal(invalid.pressType, 'MANUAL');
   assert.equal(invalid.pressAvailabilityRule, 'OPEN_SEGMENT_ONLY');
@@ -46,7 +50,7 @@ test('press eligibility locks availability, authority, limits, wager, and starti
   assert.equal(eligible.remainingEligibleHoles, 3);
   assert.equal(open.engine.buildPressRecordDraft(open.match, open.metrics, 'FRONT').endingHole, 9);
   assert.equal(open.engine.getPressEligibility({ ...open.match, pressConfig: { pressesEnabled: false } }, open.metrics, 'FRONT').reasonCode, 'PRESSES_DISABLED');
-  assert.equal(open.engine.getPressEligibility({ ...open.match, selectedGames: [] }, open.metrics, 'FRONT').reasonCode, 'NO_NASSAU_PARENT');
+  assert.equal(open.engine.getPressEligibility({ ...open.match, selectedGames: [] }, open.metrics, 'FRONT').reasonCode, 'INVALID_PARENT_GAME');
   assert.equal(open.engine.getPressEligibility(open.match, open.metrics, 'FRONT', { isHost: false }).reasonCode, 'HOST_ONLY');
 
   const clinched = seed(buildMatch({ scores: scoredThrough(6) }));
@@ -102,7 +106,7 @@ test('press lifecycle covers pending, active, final, halved, incomplete, voided,
   assert.equal(base.engine.getPressStatus(base.match, base.metrics, { ...press, status: 'SUPERSEDED' }).status, 'SUPERSEDED');
 });
 
-test('settlement shape inherits parent identity and wager without entering production totals', () => {
+test('settlement shape inherits parent identity and enters production totals exactly once', () => {
   const fixture = seed(buildMatch({ scores: scoredThrough(9) }));
   const press = fixture.engine.normalizePressRecord({ pressId: 'stable-press', parentGameId: 'nassau_net', parentSegmentId: 'nassau_net:front', parentSegmentType: 'FRONT', startingHole: 7, endingHole: 9, wagerAmount: 5, scoringMode: 'net', status: 'ACTIVE' }, fixture.match);
   const before = JSON.stringify({ match: fixture.match, metrics: fixture.metrics });
@@ -116,7 +120,9 @@ test('settlement shape inherits parent identity and wager without entering produ
   assert.ok(shape.transactions.every(row => row.pressId === 'stable-press' && row.payerId.startsWith('p') && row.payeeId.startsWith('p')));
   assert.equal(JSON.stringify({ match: fixture.match, metrics: fixture.metrics }), before);
   const production = fixture.engine.getPayoutReportContext(fixture.match, fixture.metrics);
-  assert.ok(production.payoutGames.every(game => !String(game.key).includes('press')));
+  fixture.match.presses = [press, structuredClone(press)];
+  const withPress = fixture.engine.getPayoutReportContext(fixture.match, fixture.metrics);
+  assert.equal(withPress.payoutGames.filter(game => game.key === 'press:stable-press').length, 1);
 });
 
 test('press preparation preserves frozen RoundRecords and report viewing remains non-mutating', () => {
@@ -129,5 +135,43 @@ test('press preparation preserves frozen RoundRecords and report viewing remains
   const legacy = seed(buildMatch({ pressConfig: undefined, presses: undefined }));
   assert.equal(legacy.match.pressConfig.pressesEnabled, false);
   assert.deepEqual(Array.from(legacy.match.presses), []);
+});
+
+test('Quick Scoreboard presents base Nassau components before nested presses and factual disclosures', () => {
+  const fixture = seed(buildMatch({ scores: scoredThrough(9), selectedGames: [{ key: 'nassau', basis: 'net', stakesFront: 5, stakesBack: 5, stakesOverall: 10, pressesEnabled: true }], presses: [{ pressId: 'front-press', parentGameId: 'nassau_net', rootGameId: 'nassau_net', parentSegmentId: 'nassau_net:front', parentSegmentType: 'FRONT', startingHole: 8, endingHole: 9, declaredForHole: 8, initiatedByTeamId: '2', wagerAmount: 5, scoringMode: 'net', status: 'FINAL' }] }));
+  const hierarchy = fixture.engine.buildQuickNassauResults(fixture.match, fixture.metrics);
+  assert.match(hierarchy, /data-nassau-component="front"/);
+  assert.match(hierarchy, /data-nassau-component="back"/);
+  assert.match(hierarchy, /data-nassau-component="overall"/);
+  assert.match(hierarchy, /data-press-parent="FRONT"/);
+  assert.ok(hierarchy.indexOf('data-nassau-component="front"') < hierarchy.indexOf('data-press-parent="FRONT"'));
+  const html = fixture.engine.buildQuickScoreboardView(fixture.match, fixture.metrics);
+  assert.ok(html.indexOf('Final Settlement') < html.indexOf('Game Summary'));
+  assert.ok(html.indexOf('Game Summary') < html.indexOf('Player Score Summary'));
+  assert.ok(html.indexOf('Player Score Summary') < html.indexOf('Classic Scorecard'));
+  assert.ok(html.indexOf('Classic Scorecard') < html.indexOf('Momentum Charts'));
+  assert.match(html, /<details[^>]*quick-classic-scorecard/);
+  assert.doesNotMatch(html, /quick-classic-scorecard[^>]*open/);
+});
+
+test('Quick settlement uses pays grammar and correct singular/plural reconciliation copy', () => {
+  const fixture = seed(buildMatch({ scores: scoredThrough(2) }));
+  const singular = fixture.engine.buildQuickSettlementHero(fixture.match, fixture.metrics, { finalTotals: { p1: 10, p3: -10 } });
+  assert.match(singular, /Phil<\/strong> pays <strong>John/);
+  assert.match(singular, /\$10/);
+  assert.match(singular, /1 payment · All games reconciled/);
+  const plural = fixture.engine.buildQuickSettlementHero(fixture.match, fixture.metrics, { finalTotals: { p1: 10.5, p2: 4, p3: -10.5, p4: -4 } });
+  assert.match(plural, /2 payments · All games reconciled/);
+  assert.match(plural, /\$10\.50/);
+});
+
+test('Nassau momentum renders visible signed point labels and an explicit orientation', () => {
+  const leading = seed(buildMatch({ scores: scoredThrough(3) }));
+  const chart = leading.engine.renderMomentumChart(leading.match, leading.metrics, 'nassau_front', { compact: true });
+  assert.match(chart, /Positive = .* ahead/);
+  assert.match(chart, /data-momentum-value="1">\+1</);
+  assert.match(chart, /data-momentum-value="2">\+2</);
+  const tied = seed(buildMatch({ scores: scoredThrough(2, { tie: true }) }));
+  assert.match(tied.engine.renderMomentumChart(tied.match, tied.metrics, 'nassau_front', { compact: true }), /data-momentum-value="0">E</);
 });
 

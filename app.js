@@ -1,9 +1,9 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.65',
-  versionNumber: '30.3.65',
-  cacheName: 'the-dye-ledger-v30.3.65',
+  version: 'v30.3.66',
+  versionNumber: '30.3.66',
+  cacheName: 'the-dye-ledger-v30.3.66',
   buildDate: new Date().toISOString(),
   buildLabel: 'Press Engine Design and Nassau Extension Prep'
 };
@@ -15,7 +15,12 @@ const APP_VERSION_NUMBER = BUILD_INFO.versionNumber;
 
 const MATCH_TEMPLATES_STORAGE_KEY = 'dyeLedger.matchTemplates.v1';
 const PRESS_SCHEMA_VERSION = 1;
-const PRESS_CONFIG_DEFAULTS = Object.freeze({ pressesEnabled: false, pressType: 'MANUAL', pressAvailabilityRule: 'OPEN_SEGMENT_ONLY', maxPressesPerSegment: 3, pressValueRule: 'INHERIT_PARENT', pressAuthorityRule: 'HOST_ONLY', autoPressThreshold: null });
+const PRESS_CONFIG_DEFAULTS = Object.freeze({ pressesEnabled: false, pressType: 'MANUAL', pressAvailabilityRule: 'OPEN_SEGMENT_ONLY', maxPressesPerSegment: 3, maxPressesPerRootGame: 3, maxPressDepth: 1, pressValueRule: 'INHERIT_ROOT_STAKE', pressAuthorityRule: 'HOST_ONLY', autoPressThreshold: 2, declaringSideRule: 'LOSING_SIDE_ONLY', declarationWindow: 'BEFORE_HOLE_STARTED', nassauFrontEnabled: true, nassauBackEnabled: true, nassauOverallEnabled: true });
+const GAME_ESCALATION_CAPABILITIES = Object.freeze({ nassau: 'PRESS', singles_match: 'PRESS', team_match: 'PRESS', skins: 'CARRYOVER', net_skins: 'CARRYOVER', sneaky_sandy_poley: 'BRIDGE' });
+function getGameEscalationCapability(gameOrKey) {
+  const key = typeof gameOrKey === 'string' ? gameOrKey : gameOrKey?.key;
+  return GAME_ESCALATION_CAPABILITIES[key] || 'NONE';
+}
 const PLAYER_REGISTRY_SCHEMA_VERSION = 1;
 const SAVED_ROSTER_SCHEMA_VERSION = 1;
 const DEFAULT_SMART_SCORE_ADVANCE = true;
@@ -3266,19 +3271,31 @@ function computeNassauDiffsForBasis(metrics, basis = 'net') {
 
 function normalizePressConfig(config = {}) {
   const source = config && typeof config === 'object' ? config : {};
-  const pressType = ['MANUAL', 'AUTO', 'MANUAL_AND_AUTO'].includes(source.pressType) ? source.pressType : PRESS_CONFIG_DEFAULTS.pressType;
+  const triggerSource = source.pressType || source.triggerMode;
+  const pressType = ['MANUAL', 'PROMPT_AT_THRESHOLD'].includes(triggerSource) ? triggerSource : PRESS_CONFIG_DEFAULTS.pressType;
   const pressAvailabilityRule = ['OPEN_SEGMENT_ONLY', 'FUTURE_HOLES_REMAIN'].includes(source.pressAvailabilityRule) ? source.pressAvailabilityRule : PRESS_CONFIG_DEFAULTS.pressAvailabilityRule;
-  const maxRaw = Number(source.maxPressesPerSegment);
+  const maxRaw = Number(source.maxPressesPerRootGame ?? source.maxPressesPerSegment);
   const maxPressesPerSegment = Number.isInteger(maxRaw) && maxRaw > 0 ? Math.min(10, maxRaw) : PRESS_CONFIG_DEFAULTS.maxPressesPerSegment;
+  const depthRaw = Number(source.maxPressDepth);
+  const maxPressDepth = Number.isInteger(depthRaw) && depthRaw >= 1 ? Math.min(5, depthRaw) : PRESS_CONFIG_DEFAULTS.maxPressDepth;
+  const valueRule = ['INHERIT_ROOT_STAKE', 'INHERIT_PARENT_STAKE'].includes(source.pressValueRule || source.stakeRule) ? (source.pressValueRule || source.stakeRule) : (source.pressValueRule === 'INHERIT_PARENT' ? 'INHERIT_PARENT_STAKE' : PRESS_CONFIG_DEFAULTS.pressValueRule);
   return {
     ...source,
     pressesEnabled: source.pressesEnabled === true,
     pressType,
     pressAvailabilityRule,
     maxPressesPerSegment,
-    pressValueRule: source.pressValueRule === 'INHERIT_PARENT' ? source.pressValueRule : PRESS_CONFIG_DEFAULTS.pressValueRule,
+    maxPressesPerRootGame: maxPressesPerSegment,
+    maxPressDepth,
+    pressValueRule: valueRule,
+    stakeRule: valueRule,
     pressAuthorityRule: source.pressAuthorityRule === 'HOST_ONLY' ? source.pressAuthorityRule : PRESS_CONFIG_DEFAULTS.pressAuthorityRule,
-    autoPressThreshold: Number.isFinite(Number(source.autoPressThreshold)) && Number(source.autoPressThreshold) > 0 ? Number(source.autoPressThreshold) : null,
+    autoPressThreshold: Number.isFinite(Number(source.autoPressThreshold ?? source.promptThreshold)) && Number(source.autoPressThreshold ?? source.promptThreshold) > 0 ? Number(source.autoPressThreshold ?? source.promptThreshold) : PRESS_CONFIG_DEFAULTS.autoPressThreshold,
+    declaringSideRule: ['LOSING_SIDE_ONLY', 'EITHER_SIDE'].includes(source.declaringSideRule) ? source.declaringSideRule : PRESS_CONFIG_DEFAULTS.declaringSideRule,
+    declarationWindow: ['BEFORE_HOLE_STARTED', 'BEFORE_HOLE_COMPLETED'].includes(source.declarationWindow) ? source.declarationWindow : PRESS_CONFIG_DEFAULTS.declarationWindow,
+    nassauFrontEnabled: source.nassauFrontEnabled !== false,
+    nassauBackEnabled: source.nassauBackEnabled !== false,
+    nassauOverallEnabled: source.nassauOverallEnabled !== false,
   };
 }
 function getPressSegmentRange(match, metrics, segmentType) {
@@ -3309,21 +3326,54 @@ function normalizePressRecord(record, match = null) {
   const pressId = String(record.pressId || '');
   if (!pressId || !Number.isInteger(startingHole) || !Number.isInteger(endingHole) || startingHole > endingHole) return null;
   const statuses = ['PENDING', 'ACTIVE', 'FINAL', 'HALVED', 'INCOMPLETE', 'VOIDED', 'SUPERSEDED'];
-  return { ...record, schemaVersion: PRESS_SCHEMA_VERSION, pressId, roundId: String(record.roundId || match?.id || ''), parentGameId: String(record.parentGameId || ''), parentSegmentId: String(record.parentSegmentId || ''), parentSegmentType: segment, startingHole, endingHole, triggerType: ['MANUAL', 'AUTO'].includes(record.triggerType) ? record.triggerType : 'MANUAL', initiatedByPlayerId: record.initiatedByPlayerId || null, initiatedByTeamId: record.initiatedByTeamId == null ? null : String(record.initiatedByTeamId), againstTeamId: record.againstTeamId == null ? null : String(record.againstTeamId), wagerAmount: Math.max(0, Number(record.wagerAmount) || 0), scoringMode: record.scoringMode === 'gross' ? 'gross' : 'net', teamMode: record.teamMode || 'TEAM', status: statuses.includes(record.status) ? record.status : 'PENDING', createdAt: record.createdAt || null, resolvedAt: record.resolvedAt || null, voidedAt: record.voidedAt || null, sourceDeviceId: record.sourceDeviceId || null, hostDeviceId: record.hostDeviceId || match?.sharedHostDeviceId || null, createdBy: record.createdBy || null };
+  const parentGameId = String(record.parentGameId || '');
+  const gameId = String(record.gameId || pressId);
+  const rootGameId = String(record.rootGameId || parentGameId);
+  const pressDepth = Math.max(1, Number(record.pressDepth) || 1);
+  return { ...record, schemaVersion: PRESS_SCHEMA_VERSION, gameId, pressId, roundId: String(record.roundId || match?.id || ''), parentGameId, rootGameId, pressDepth, parentSegmentId: String(record.parentSegmentId || ''), parentSegmentType: segment, startingHole, endingHole, holeStart: startingHole, holeEnd: endingHole, declaredForHole: Number(record.declaredForHole || startingHole), declaredAtHole: Number(record.declaredAtHole || record.declaredForHole || startingHole), triggerType: record.triggerType === 'PROMPT_AT_THRESHOLD' ? record.triggerType : 'MANUAL', initiatedByPlayerId: record.initiatedByPlayerId || record.declaredByPlayerId || null, initiatedByTeamId: record.initiatedByTeamId == null ? (record.declaredByTeamId == null ? null : String(record.declaredByTeamId)) : String(record.initiatedByTeamId), againstTeamId: record.againstTeamId == null ? null : String(record.againstTeamId), wagerAmount: Math.max(0, Number(record.wagerAmount ?? record.stake) || 0), stake: Math.max(0, Number(record.wagerAmount ?? record.stake) || 0), stakeRule: record.stakeRule || 'INHERIT_ROOT_STAKE', scoringMode: record.scoringMode === 'gross' ? 'gross' : 'net', outcomeGameKey: record.outcomeGameKey || (parentGameId.startsWith('nassau_') ? 'nassau' : rootGameId), teamMode: record.teamMode || 'TEAM', status: statuses.includes(record.status) ? record.status : 'PENDING', createdAt: record.createdAt || null, resolvedAt: record.resolvedAt || null, voidedAt: record.voidedAt || null, supersededAt: record.supersededAt || null, sourceDeviceId: record.sourceDeviceId || null, hostDeviceId: record.hostDeviceId || match?.sharedHostDeviceId || null, createdBy: record.createdBy || null };
 }
 function dedupePressRecords(records = []) {
   const byId = new Map();
   records.forEach(record => { if (record?.pressId && !byId.has(record.pressId)) byId.set(record.pressId, record); });
-  return [...byId.values()];
+  return [...byId.values()].sort((a, b) => Number(a.pressDepth || 1) - Number(b.pressDepth || 1) || Number(a.startingHole || a.holeStart || 0) - Number(b.startingHole || b.holeStart || 0) || String(a.parentGameId || '').localeCompare(String(b.parentGameId || '')) || String(a.pressId).localeCompare(String(b.pressId)));
+}
+const PRESS_LIFECYCLE_PRECEDENCE = Object.freeze({ PENDING: 1, ACTIVE: 2, INCOMPLETE: 3, HALVED: 4, FINAL: 4, VOIDED: 5, SUPERSEDED: 6 });
+function mergeAuthoritativePressRecords(localRecords = [], incomingRecords = [], options = {}) {
+  const hostDeviceId = String(options.hostDeviceId || '');
+  const map = new Map();
+  const consider = raw => {
+    const row = raw && typeof raw === 'object' ? clonePlain(raw) : null;
+    if (!row?.pressId) return;
+    const current = map.get(row.pressId);
+    if (!current) { map.set(row.pressId, row); return; }
+    const rowHost = hostDeviceId && String(row.hostDeviceId || '') === hostDeviceId;
+    const currentHost = hostDeviceId && String(current.hostDeviceId || '') === hostDeviceId;
+    if (rowHost !== currentHost) { if (rowHost) map.set(row.pressId, row); return; }
+    const rowRank = PRESS_LIFECYCLE_PRECEDENCE[row.status] || 0;
+    const currentRank = PRESS_LIFECYCLE_PRECEDENCE[current.status] || 0;
+    if (rowRank > currentRank || (rowRank === currentRank && String(row.resolvedAt || row.voidedAt || row.supersededAt || row.createdAt || '') > String(current.resolvedAt || current.voidedAt || current.supersededAt || current.createdAt || ''))) map.set(row.pressId, { ...current, ...row });
+  };
+  [...localRecords, ...incomingRecords].forEach(consider);
+  const rows = dedupePressRecords([...map.values()]);
+  const opportunity = new Map();
+  rows.forEach(row => {
+    const key = `${row.parentGameId}|${row.pressDepth || 1}|${row.declaredForHole || row.startingHole}`;
+    const existing = opportunity.get(key);
+    if (!existing || String(row.hostDeviceId || '') === hostDeviceId || String(row.pressId) < String(existing.pressId)) opportunity.set(key, row);
+  });
+  return dedupePressRecords([...opportunity.values()]);
 }
 function getPressEligibility(match, metrics, segmentType, options = {}) {
-  const config = normalizePressConfig(options.pressConfig || match?.pressConfig);
+  const requestedGameKey = String(options.gameKey || 'nassau');
+  const gameConfig = (match?.selectedGames || []).find(game => game.key === requestedGameKey);
+  const config = normalizePressConfig(options.pressConfig || (requestedGameKey === 'nassau' ? match?.pressConfig : gameConfig) || gameConfig || match?.pressConfig);
   const segment = String(segmentType || '').toUpperCase();
   const base = { eligible: false, reasonCode: 'INVALID', reasonText: 'Press configuration is invalid.', nextStartingHole: null, remainingEligibleHoles: 0, currentPressCount: 0, maxPressesPerSegment: config.maxPressesPerSegment };
   if (!match || !metrics) return base;
   if (!config.pressesEnabled) return { ...base, reasonCode: 'PRESSES_DISABLED', reasonText: 'Presses are disabled for this match.' };
-  const parent = getPressParentReference(match, segment, options.scoringMode);
-  if (!parent) return { ...base, reasonCode: 'NO_NASSAU_PARENT', reasonText: 'A selected Nassau game is required.' };
+  if (getGameEscalationCapability(requestedGameKey) !== 'PRESS') return { ...base, reasonCode: 'GAME_NOT_PRESSABLE', reasonText: 'This game does not support presses.' };
+  const parent = requestedGameKey === 'nassau' ? getPressParentReference(match, segment, options.scoringMode) : gameConfig ? { parentGameId: requestedGameKey, parentSegmentId: `${requestedGameKey}:overall`, parentSegmentType: 'OVERALL', scoringMode: String(gameConfig.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net', teamMode: requestedGameKey === 'singles_match' ? 'SINGLES' : 'TEAM', wagerAmount: Number(gameConfig.stake || 0), config: gameConfig } : null;
+  if (!parent) return { ...base, reasonCode: 'INVALID_PARENT_GAME', reasonText: 'A selected pressable match-play game is required.' };
   if (parent.invalidReason) return { ...base, reasonCode: parent.invalidReason, reasonText: 'Choose the gross or net Nassau parent for this press.' };
   const range = getPressSegmentRange(match, metrics, segment);
   if (!range) return { ...base, reasonCode: 'INVALID_SEGMENT', reasonText: 'This Nassau segment is not available for the selected round.' };
@@ -3345,20 +3395,62 @@ function getPressEligibility(match, metrics, segmentType, options = {}) {
   if (!futurePositions.length) return { ...resultBase, reasonCode: 'NO_FUTURE_HOLES', reasonText: 'No eligible future hole remains in this segment.' };
   if (currentPressCount >= config.maxPressesPerSegment) return { ...resultBase, reasonCode: 'PRESS_LIMIT_REACHED', reasonText: 'The maximum presses for this segment has been reached.' };
   if (existing.some(record => Number(record.startingHole) === nextStartingHole)) return { ...resultBase, reasonCode: 'DUPLICATE_STARTING_HOLE', reasonText: 'A press already starts on the next eligible hole.' };
-  const diffs = computeNassauDiffsForBasis(metrics, parent.scoringMode);
+  const diffs = requestedGameKey === 'nassau' ? computeNassauDiffsForBasis(metrics, parent.scoringMode) : computeTeamGameDiffs(match, metrics, requestedGameKey);
   const diff = segment === 'FRONT' ? diffs.front : segment === 'BACK' ? diffs.back : diffs.overall;
   const playedInSegment = Math.max(0, currentPosition - range.startPosition + 1);
   const remainingInSegment = Math.max(0, range.endPosition - Math.max(currentPosition, range.startPosition - 1));
   const clinch = getMatchClinchState({ margin: diff, holesRemaining: remainingInSegment });
   if (config.pressAvailabilityRule === 'OPEN_SEGMENT_ONLY' && clinch.isClinched) return { ...resultBase, reasonCode: 'PARENT_SEGMENT_DECIDED', reasonText: 'The parent Nassau segment is already mathematically decided.' };
-  return { ...resultBase, eligible: true, reasonCode: 'ELIGIBLE', reasonText: `Press may start on Hole ${nextStartingHole}.`, parentGameId: parent.parentGameId, parentSegmentId: parent.parentSegmentId, parentSegmentType: segment, parentSegmentOpen: !clinch.isClinched, parentSegmentClinched: !!clinch.isClinched, parentDiff: Number(diff || 0), parentPlayedHoles: playedInSegment, wagerAmount: parent.wagerAmount, scoringMode: parent.scoringMode };
+  const declaringSideId = options.declaringSideId == null ? null : String(options.declaringSideId);
+  const trailingSideId = diff > 0 ? '2' : diff < 0 ? '1' : null;
+  if (Object.prototype.hasOwnProperty.call(options, 'declaringSideId') && config.declaringSideRule === 'LOSING_SIDE_ONLY' && (!declaringSideId || !trailingSideId || declaringSideId !== trailingSideId)) return { ...resultBase, reasonCode: 'DECLARING_SIDE_NOT_ALLOWED', reasonText: trailingSideId ? 'Only the currently trailing side may declare this press.' : 'A press cannot be declared while the parent match is all square.' };
+  return { ...resultBase, eligible: true, reasonCode: 'ELIGIBLE', reasonText: `Press may start on Hole ${nextStartingHole}.`, parentGameId: parent.parentGameId, rootGameId: parent.parentGameId, parentSegmentId: parent.parentSegmentId, parentSegmentType: segment, parentSegmentOpen: !clinch.isClinched, parentSegmentClinched: !!clinch.isClinched, parentDiff: Number(diff || 0), trailingSideId: diff > 0 ? '2' : diff < 0 ? '1' : null, promptRecommended: config.pressType === 'PROMPT_AT_THRESHOLD' && Math.abs(diff) >= config.autoPressThreshold, parentPlayedHoles: playedInSegment, wagerAmount: parent.wagerAmount, scoringMode: parent.scoringMode, outcomeGameKey: requestedGameKey };
 }
 function buildPressRecordDraft(match, metrics, segmentType, options = {}) {
   const eligibility = getPressEligibility(match, metrics, segmentType, options);
   if (!eligibility.eligible) return null;
   const ordinal = eligibility.currentPressCount + 1;
   const range = getPressSegmentRange(match, metrics, segmentType);
-  return normalizePressRecord({ pressId: `${match.id}:${eligibility.parentSegmentId}:press:${eligibility.nextStartingHole}:${ordinal}`, roundId: match.id, parentGameId: eligibility.parentGameId, parentSegmentId: eligibility.parentSegmentId, parentSegmentType: eligibility.parentSegmentType, startingHole: eligibility.nextStartingHole, endingHole: range.endingHole, triggerType: options.triggerType === 'AUTO' ? 'AUTO' : 'MANUAL', initiatedByPlayerId: options.initiatedByPlayerId || null, initiatedByTeamId: options.initiatedByTeamId ?? null, againstTeamId: options.againstTeamId ?? null, wagerAmount: eligibility.wagerAmount, scoringMode: eligibility.scoringMode, teamMode: 'TEAM', status: 'PENDING', createdAt: options.createdAt || null, sourceDeviceId: options.sourceDeviceId || null, hostDeviceId: match.sharedHostDeviceId || null, createdBy: options.createdBy || null }, match);
+  return normalizePressRecord({ pressId: `${match.id}:${eligibility.parentSegmentId}:press:${eligibility.nextStartingHole}:${ordinal}`, roundId: match.id, parentGameId: eligibility.parentGameId, rootGameId: eligibility.rootGameId, parentSegmentId: eligibility.parentSegmentId, parentSegmentType: eligibility.parentSegmentType, startingHole: eligibility.nextStartingHole, endingHole: range.endingHole, triggerType: options.triggerType === 'PROMPT_AT_THRESHOLD' ? 'PROMPT_AT_THRESHOLD' : 'MANUAL', initiatedByPlayerId: options.initiatedByPlayerId || null, initiatedByTeamId: options.initiatedByTeamId ?? eligibility.trailingSideId, againstTeamId: options.againstTeamId ?? (eligibility.trailingSideId === '1' ? '2' : eligibility.trailingSideId === '2' ? '1' : null), wagerAmount: eligibility.wagerAmount, scoringMode: eligibility.scoringMode, outcomeGameKey: eligibility.outcomeGameKey, teamMode: options.gameKey === 'singles_match' ? 'SINGLES' : 'TEAM', status: 'PENDING', createdAt: options.createdAt || null, sourceDeviceId: options.sourceDeviceId || null, hostDeviceId: match.sharedHostDeviceId || null, createdBy: options.createdBy || null }, match);
+}
+function getPressPromptOpportunity(eligibility, config = {}, match = null) {
+  if (!eligibility?.eligible || !eligibility.trailingSideId) return null;
+  const pc = normalizePressConfig(config);
+  const baseKey = [eligibility.rootGameId, eligibility.parentGameId, eligibility.parentSegmentId, eligibility.trailingSideId, pc.autoPressThreshold, eligibility.proposedDepth || 1].join('|');
+  let generation = 1;
+  if (match) {
+    match.pressPromptThresholdState = match.pressPromptThresholdState && typeof match.pressPromptThresholdState === 'object' ? match.pressPromptThresholdState : {};
+    const prior = match.pressPromptThresholdState[baseKey] || { above: false, generation: 0 };
+    if (!eligibility.promptRecommended) { match.pressPromptThresholdState[baseKey] = { ...prior, above: false }; return null; }
+    generation = prior.above ? Math.max(1, Number(prior.generation) || 1) : Math.max(1, Number(prior.generation || 0) + 1);
+    match.pressPromptThresholdState[baseKey] = { above: true, generation };
+  } else if (!eligibility.promptRecommended) return null;
+  const fingerprint = `${Math.sign(eligibility.parentDiff)}:${Math.abs(eligibility.parentDiff) >= pc.autoPressThreshold ? 'at-or-over' : 'below'}`;
+  const key = [eligibility.rootGameId, eligibility.parentGameId, eligibility.parentSegmentId, eligibility.nextStartingHole, eligibility.trailingSideId, pc.autoPressThreshold, eligibility.proposedDepth || 1, generation, fingerprint].join('|');
+  return { key, rootGameId: eligibility.rootGameId, parentGameId: eligibility.parentGameId, declaredForHole: eligibility.nextStartingHole, trailingSideId: eligibility.trailingSideId, threshold: pc.autoPressThreshold, pressDepth: eligibility.proposedDepth || 1, scoreStateFingerprint: fingerprint };
+}
+function setPressPromptOpportunityState(match, opportunity, status) {
+  if (!match || !opportunity?.key || !['AVAILABLE', 'DISMISSED', 'CONFIRMED', 'STALE'].includes(status)) return false;
+  match.pressPromptState = match.pressPromptState && typeof match.pressPromptState === 'object' ? match.pressPromptState : {};
+  match.pressPromptThresholdState = match.pressPromptThresholdState && typeof match.pressPromptThresholdState === 'object' ? match.pressPromptThresholdState : {};
+  match.pressPromptState[opportunity.key] = { ...clonePlain(opportunity), status, updatedAt: new Date().toISOString() };
+  return true;
+}
+function isPressPromptOpportunitySuppressed(match, opportunity) {
+  if (!opportunity?.key) return true;
+  if ((match?.presses || []).some(row => row.parentGameId === opportunity.parentGameId && Number(row.declaredForHole || row.startingHole) === Number(opportunity.declaredForHole) && String(row.initiatedByTeamId || '') === String(opportunity.trailingSideId))) return true;
+  return ['DISMISSED', 'CONFIRMED'].includes(match?.pressPromptState?.[opportunity.key]?.status);
+}
+function createPressFromConfirmation(match, metrics, request = {}, options = {}) {
+  if (!match || !metrics) return { created: false, reasonCode: 'INVALID_PARENT_STATE', reasonText: 'The current match state is unavailable.' };
+  const eligibility = getPressEligibility(match, metrics, request.segment, { gameKey: request.gameKey, pressConfig: request.pressConfig, currentPosition: options.currentPosition, declaringSideId: request.declaringSideId, isHost: options.isHost });
+  if (!eligibility.eligible) return { created: false, reasonCode: eligibility.reasonCode, reasonText: eligibility.reasonText };
+  if (request.parentGameId && request.parentGameId !== eligibility.parentGameId) return { created: false, reasonCode: 'PARENT_STATE_CHANGED', reasonText: 'The parent match changed while confirmation was open.' };
+  if (Number(request.declaredForHole) !== Number(eligibility.nextStartingHole)) return { created: false, reasonCode: 'DECLARATION_WINDOW_CLOSED', reasonText: 'The eligible starting hole changed while confirmation was open.' };
+  const draft = buildPressRecordDraft(match, metrics, request.segment, { gameKey: request.gameKey, pressConfig: request.pressConfig, currentPosition: options.currentPosition, declaringSideId: request.declaringSideId, initiatedByTeamId: request.declaringSideId, triggerType: request.triggerType, createdAt: options.createdAt || new Date().toISOString(), sourceDeviceId: options.sourceDeviceId });
+  if (!draft) return { created: false, reasonCode: 'PARENT_STATE_CHANGED', reasonText: 'The press opportunity is no longer valid.' };
+  match.presses = mergeAuthoritativePressRecords(match.presses || [], [draft], { hostDeviceId: match.sharedHostDeviceId || options.sourceDeviceId });
+  return { created: true, press: draft, eligibility };
 }
 function getPressStatus(match, metrics, press) {
   const record = normalizePressRecord(press, match);
@@ -3366,7 +3458,12 @@ function getPressStatus(match, metrics, press) {
   if (record.status === 'VOIDED' || record.status === 'SUPERSEDED') return { status: record.status, diff: 0, completedHoles: 0, remainingHoles: 0, leaderTeamId: null };
   const holes = (metrics?.holeResults || []).filter(hole => Number(hole.holeNumber) >= record.startingHole && Number(hole.holeNumber) <= record.endingHole);
   let diff = 0, completedHoles = 0;
-  holes.forEach(hole => { const outcome = computeMomentumOutcome(match, metrics, hole, 'nassau'); if (outcome === 'pending') return; completedHoles += 1; diff += outcome === 'team1' ? 1 : outcome === 'team2' ? -1 : 0; });
+  holes.forEach(hole => {
+    const outcome = record.outcomeGameKey === 'singles_match'
+      ? computeMomentumOutcome(match, metrics, hole, 'singles_match')
+      : getHeadToHeadOutcome(getTeamHoleScore(hole, 1, record.scoringMode, 'best_ball'), getTeamHoleScore(hole, 2, record.scoringMode, 'best_ball'));
+    if (outcome === 'pending') return; completedHoles += 1; diff += outcome === 'team1' ? 1 : outcome === 'team2' ? -1 : 0;
+  });
   const remainingHoles = Math.max(0, holes.length - completedHoles);
   const clinch = getMatchClinchState({ margin: diff, holesRemaining: remainingHoles });
   let status = completedHoles ? 'ACTIVE' : 'PENDING';
@@ -3388,6 +3485,27 @@ function buildPressSettlementShape(match, metrics, press) {
   }
   const transactions = optimalSettlementRows(amounts).map((row, index) => ({ transactionId: `${record?.pressId || 'invalid'}:settlement:${index + 1}`, roundId: String(match?.id || ''), gameId: record?.parentGameId || '', pressId: record?.pressId || '', parentGameId: record?.parentGameId || '', parentSegmentId: record?.parentSegmentId || '', payerId: String(row.from), payeeId: String(row.to), amount: Number(row.amount), category: 'nassau_press', gameType: 'press', status: result.status }));
   return { schemaVersion: PRESS_SCHEMA_VERSION, pressId: record?.pressId || '', parentGameId: record?.parentGameId || '', parentSegmentId: record?.parentSegmentId || '', status: result.status, wagerAmount: record?.wagerAmount || 0, scoringMode: record?.scoringMode || null, amounts, transactions, crossFoot: Number(Object.values(amounts).reduce((sum, amount) => sum + Number(amount || 0), 0).toFixed(2)) };
+}
+function getPressTree(match) {
+  const records = dedupePressRecords((match?.presses || []).map(row => normalizePressRecord(row, match)).filter(Boolean));
+  const byParent = new Map();
+  records.forEach(record => {
+    const key = record.parentGameId;
+    if (!byParent.has(key)) byParent.set(key, []);
+    byParent.get(key).push(record);
+  });
+  byParent.forEach(rows => rows.sort((a, b) => a.pressDepth - b.pressDepth || a.startingHole - b.startingHole || a.pressId.localeCompare(b.pressId)));
+  return { records, byParent };
+}
+function voidPressRecord(match, pressId, reason, options = {}) {
+  if (!match || !String(reason || '').trim() || !(options.isHost ?? isCurrentDeviceMatchHost(match))) return false;
+  const record = (match.presses || []).find(row => row.pressId === pressId);
+  if (!record || ['VOIDED', 'SUPERSEDED'].includes(record.status)) return false;
+  record.status = options.supersede ? 'SUPERSEDED' : 'VOIDED';
+  record[options.supersede ? 'supersededAt' : 'voidedAt'] = options.at || new Date().toISOString();
+  record.auditReason = String(reason).trim();
+  match.pressEvents = [...(match.pressEvents || []), { eventId: `${pressId}:${record.status.toLowerCase()}`, eventType: options.supersede ? 'press_superseded' : 'press_voided', pressId, reason: record.auditReason, createdAt: record[options.supersede ? 'supersededAt' : 'voidedAt'] }];
+  return true;
 }
 function formatStrokesDisplay(strokes) {
   const n = Number(strokes) || 0;
@@ -4402,6 +4520,12 @@ function getRoundRecordPlayerId(match, playerMetric, index) {
 function buildRoundRecordEvents(match, metrics) {
   const events = [];
   const push = event => events.push({ salience: 1, ...event, sourceRef: event.sourceRef || event.auditRef || '' });
+  (match?.pressEvents || []).forEach(event => push({ ...clonePlain(event), type: event.type || event.eventType, salience: event.eventType === 'press_declared' ? 55 : 45, auditRef: `press-${event.pressId}` }));
+  getPressTree(match).records.forEach(press => {
+    const result = getPressStatus(match, metrics, press);
+    if (!['FINAL', 'HALVED'].includes(result.status)) return;
+    push({ eventId: `${press.pressId}:${result.status.toLowerCase()}`, type: result.status === 'HALVED' ? 'press_halved' : 'press_won', pressId: press.pressId, gameId: press.gameId, parentGameId: press.parentGameId, rootGameId: press.rootGameId, pressDepth: press.pressDepth, holeNumber: press.endingHole, teamId: result.leaderTeamId, magnitude: Math.abs(result.diff), unit: 'holes', description: result.status === 'HALVED' ? `Press over Holes ${press.startingHole}–${press.endingHole} halved` : `${getTeamLabel(match, Number(result.leaderTeamId))} won the press over Holes ${press.startingHole}–${press.endingHole}`, auditRef: `press-${press.pressId}`, salience: 65 });
+  });
   if (isSneakySandyPoleyEnabled(match)) {
     const ledger = buildSneakySandyPoleyLedger(match, { metrics });
     const teams = ledger?.teams || [];
@@ -4467,7 +4591,9 @@ function buildRoundRecord(match, metrics) {
     holeNumber: Number(hole?.holeNumber || index + 1), par: Number(hole?.par || 0) || null, yards: Number(hole?.yardage || 0) || null, strokeIndex: Number(hole?.strokeIndex || 0) || null,
     scores: (hole?.playerScores || []).map(score => ({ playerId: String(score.playerId), gross: Number(score.gross) || null, net: Number.isFinite(Number(score.net)) ? Number(score.net) : null, strokesReceived: Number(score.strokes || score.strokesReceived || 0) }))
   }));
-  const games = getOrderedSelectedGames(match).map(config => ({ gameId: config.key, type: config.key, config: clonePlain(config), result: buildExecutiveDriverRows(match, metrics, ctx).find(row => row.key === config.key) || null, auditRef: `game-${config.key}` }));
+  const games = getOrderedSelectedGames(match).map(config => { const amounts = {}; (ctx.payoutGames || []).filter(game => game.sourceKey === config.key || game.key === config.key).forEach(game => addAmounts(amounts, game.amounts || {})); return ({ gameId: config.key, type: config.key, config: clonePlain(config), amounts, result: buildExecutiveDriverRows(match, metrics, ctx).find(row => row.key === config.key) || null, componentResults: config.key === 'nassau' ? ['front', 'back', 'overall'].map(component => getQuickNassauComponentState(match, metrics, config, component)) : null, auditRef: `game-${config.key}` }); });
+  const pressGames = getPressTree(match).records.map(press => { const result = getPressStatus(match, metrics, press); return ({ gameId: press.gameId, type: 'press', parentGameId: press.parentGameId, rootGameId: press.rootGameId, pressDepth: press.pressDepth, holeStart: press.startingHole, holeEnd: press.endingHole, declaredForHole: press.declaredForHole, declaredByTeamId: press.initiatedByTeamId, stake: press.wagerAmount, status: result.status, result: clonePlain(result), config: clonePlain(press), auditRef: `press-${press.pressId}` }); });
+  games.push(...pressGames);
   const contributingGameIds = (ctx.payoutGames || []).filter(game => Object.values(game.amounts || {}).some(amount => Math.abs(Number(amount || 0)) > 0.0001)).map(game => String(game.sourceKey || game.key));
   const transactionGameId = contributingGameIds.length === 1 ? contributingGameIds[0] : 'combined_settlement';
   const transactions = paymentRows.map((row, index) => ({ transactionId: `${match?.id || 'round'}:settlement:${index + 1}`, payerId: String(row.from), payeeId: String(row.to), amount: Number(row.amount || 0), gameId: transactionGameId, sourceGameIds: contributingGameIds.slice(), roundId: String(match?.id || ''), status: completion.isIncomplete && !areAllGamesFinal(match, metrics) ? 'provisional' : 'final', auditRef: 'final-net-settlement' }));
@@ -4476,6 +4602,7 @@ function buildRoundRecord(match, metrics) {
     schemaVersion: ROUND_RECORD_SCHEMA_VERSION,
     meta: { roundId: String(match?.id || ''), tripId: match?.tripId || null, eventId: match?.eventId || null, ownerUserId: match?.ownerUserId || match?.sharedOwnerUserId || null, createdBy: match?.createdBy || null, deviceId: match?.deviceId || null, hostDeviceId: match?.hostDeviceId || match?.sharedHostDeviceId || null, courseSnapshot: clonePlain(match?.courseSnapshot || metrics?.course || null), teeSnapshot: clonePlain(metrics?.tee || null), date: match?.date || null, holesPlanned: completion.selectedHoleCount, holesCompleted: completion.completedHoleCount, completedHoleNumbers: completion.completedHoles.slice(), status: completion.isIncomplete ? 'provisional' : 'final', endReason: match?.roundEndReason || (completion.isComplete ? 'completed' : null), timing: { valid: !!timing.valid, available: !!timing.available, elapsedMs: timing.valid ? timing.elapsedMs : null, label: timing.valid ? timing.label : null }, handicapConvention: match?.handicapConvention || 'low_man', lowManPlayerId: playerRecords.filter(player => player.courseHandicap != null).sort((a, b) => a.courseHandicap - b.courseHandicap)[0]?.playerId || null },
     players: playerRecords, holes, games, events, transactions,
+    pressTransactions: (ctx.payoutGames || []).filter(game => game.meta?.press).flatMap(game => (game.meta.settlement?.transactions || []).map(row => ({ ...clonePlain(row), rootGameId: game.meta.press.rootGameId, pressDepth: game.meta.press.pressDepth }))),
     settlement: { netPositions: Object.fromEntries(Object.entries(ctx.finalTotals || {}).map(([id, amount]) => [String(id), Number(amount || 0)])), payments: transactions, crossFoot: Number(crossFoot.toFixed(2)) },
     notes: { hostLog: String(match?.roundRecapNotes || ''), photos: clonePlain(match?.roundPhotos || []), weather: clonePlain(match?.roundContext?.weather || null) }
   };
@@ -4658,7 +4785,7 @@ function buildRoundSnapshot(match, metrics, roundRecord = null) {
   const turning = story.turningPoint;
   const turningHole = record.holes.find(hole => hole.holeNumber === turning?.holeNumber);
   const heroStoryLine = turning
-    ? (record.transactions.length ? `${record.transactions.length} payment${record.transactions.length === 1 ? '' : 's'} reconcile the current game ledger.` : 'The turning point below defines the current match position.')
+    ? (record.transactions.length ? `${record.transactions.length} payment${record.transactions.length === 1 ? '' : 's'} · All games reconciled.` : 'The turning point below defines the current match position.')
     : story.storyLine;
   const footer = record.players.map(player => `<span><strong>${escapeHtml(player.displayName)}</strong> · Course HCP ${player.courseHandicap == null ? '—' : escapeHtml(player.courseHandicap)}</span>`).join('');
   return `<section class="export-section export-section-round-snapshot report-layer report-layer--hero report-section--major print-keep-together" data-round-record-schema="${record.schemaVersion}">
@@ -5286,6 +5413,7 @@ function buildSummaryExportBody(match, metrics) {
       </div>
       ${buildSelectedGamesSummary(match, metrics)}
     </section>
+    ${buildPressAuditSection(match, metrics, roundRecord)}
 
     <div class="export-appendix-label">Ledger / Audit Detail</div>
     <div class="report-layer report-layer--ledger">
@@ -6450,6 +6578,7 @@ function normalizeMatch(match) {
   match.smartScoreAdvancePreset = normalizeSmartScoreAdvancePreset(match.smartScoreAdvancePreset);
   match.pressConfig = normalizePressConfig(match.pressConfig);
   match.presses = dedupePressRecords(Array.isArray(match.presses) ? match.presses.map(record => normalizePressRecord(record, match)).filter(Boolean) : []);
+  match.pressPromptState = match.pressPromptState && typeof match.pressPromptState === 'object' ? match.pressPromptState : {};
   match.players = Array.isArray(match.players) ? match.players : [];
   match.players = match.players.map((mp, idx) => ({
     playerId: String(mp.playerId || mp.id || `round:${match.id}:player:${idx + 1}`),
@@ -8195,6 +8324,94 @@ function closePlayerDetailView() {
   document.body.classList.remove('player-detail-open');
 }
 
+function formatCompactCurrency(amount, { signed = false } = {}) {
+  const value = Number(amount) || 0;
+  const absolute = Math.abs(value);
+  const money = `$${Number.isInteger(absolute) ? absolute.toFixed(0) : absolute.toFixed(2)}`;
+  if (!signed || Math.abs(value) < 0.0001) return money;
+  return value < 0 ? `-${money}` : `+${money}`;
+}
+function buildQuickSettlementHero(match, metrics, payout = getPayoutReportContext(match, metrics), record = null) {
+  const frozen = record && isFrozenRoundRecord(record);
+  const payments = frozen ? (record.transactions || []).map(row => ({ from: row.payerId, to: row.payeeId, amount: row.amount })) : optimalSettlementRows(payout.finalTotals || {});
+  const playerName = id => frozen ? (record.players || []).find(player => player.playerId === id)?.displayName || id : getPlayer(id)?.name || id;
+  const lines = payments.map(row => `<div class="quick-settlement-payment"><strong>${escapeHtml(playerName(row.from))}</strong> pays <strong>${escapeHtml(playerName(row.to))}</strong> <b>${formatCompactCurrency(row.amount)}</b></div>`).join('');
+  return `<section class="quick-scoreboard-section quick-settlement-hero"><h4>Final Settlement</h4>${lines || '<div class="quick-settlement-payment"><strong>No payment required</strong></div>'}<div class="quick-settlement-reconcile">${payments.length} payment${payments.length === 1 ? '' : 's'} · All games reconciled</div></section>`;
+}
+function getQuickNassauComponentState(match, metrics, cfg, component) {
+  const diffs = computeNassauDiffsForBasis(metrics, String(cfg.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net');
+  const diff = Number(diffs[component] || 0);
+  const holes = metrics.holeResults || [];
+  const range = component === 'front' ? [0, Math.min(9, holes.length)] : component === 'back' ? [9, holes.length] : [0, holes.length];
+  const span = Math.max(0, range[1] - range[0]);
+  const played = getCompletedHoleCountInRange(match, metrics, range[0], range[1]);
+  const remaining = Math.max(0, span - played);
+  const clinch = getMatchClinchState({ margin: diff, holesRemaining: remaining });
+  const final = span > 0 && remaining === 0;
+  const status = final ? (diff ? 'Final' : 'Halved') : clinch.isClinched ? 'Clinched' : (match.status === 'complete' || match.roundEndReason) ? 'Incomplete' : played ? 'Live' : 'Not started';
+  const leader = diff ? getTeamLabel(match, diff > 0 ? 1 : 2) : '';
+  const result = !diff ? 'All square' : final ? `${leader} won ${Math.abs(diff)} up` : clinch.isClinched ? `${leader} won ${Math.abs(diff)} & ${remaining}` : `${leader} +${Math.abs(diff)} thru ${played}`;
+  const stake = Number(component === 'front' ? cfg.stakesFront : component === 'back' ? cfg.stakesBack : cfg.stakesOverall) || 0;
+  const losingTeam = diff > 0 ? 2 : diff < 0 ? 1 : 0;
+  const loserCount = losingTeam ? ((metrics.teams || []).find(team => Number(team.team) === losingTeam)?.members || []).length : 0;
+  return { component, diff, status, result, stake, contribution: diff ? stake * loserCount : 0, played, remaining };
+}
+function buildQuickNassauResults(match, metrics, record = null) {
+  const cfg = (match.selectedGames || []).find(game => game.key === 'nassau');
+  if (!cfg) return '';
+  const frozen = record && isFrozenRoundRecord(record);
+  const frozenNassau = frozen ? (record.games || []).find(game => game.type === 'nassau') : null;
+  const components = (frozenNassau?.componentResults || ['front', 'back', 'overall'].filter(component => component !== 'back' || (metrics.holeResults || []).length > 9).map(component => getQuickNassauComponentState(match, metrics, cfg, component))).filter(component => component.stake > 0);
+  if (!components.length) return '';
+  const presses = frozen ? (record.games || []).filter(game => game.type === 'press').map(game => ({ ...clonePlain(game.config || {}), ...clonePlain(game), startingHole: game.holeStart, endingHole: game.holeEnd })) : getPressTree(match).records;
+  const rows = components.map(component => {
+    const segment = component.component.toUpperCase();
+    const children = presses.filter(press => String(press.parentSegmentType || '').toUpperCase() === segment).map((press, index) => {
+      const state = frozen ? (press.result || { status: press.status, diff: 0 }) : getPressStatus(match, metrics, press);
+      const settlement = frozen ? null : buildPressSettlementShape(match, metrics, press);
+      const transactions = frozen ? (record.pressTransactions || []).filter(row => row.pressId === (press.pressId || press.gameId)) : (settlement.transactions || []);
+      const impact = transactions.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+      const result = state.diff ? `${getTeamLabel(match, state.diff > 0 ? 1 : 2)} +${Math.abs(state.diff)}` : state.status === 'HALVED' ? 'Halved' : 'All square';
+      const declarer = press.initiatedByPlayerId ? (getPlayer(press.initiatedByPlayerId)?.name || press.initiatedByPlayerId) : press.initiatedByTeamId ? getTeamLabel(match, Number(press.initiatedByTeamId)) : 'Not recorded';
+      return `<div class="quick-nassau-press" data-press-parent="${segment}" style="--press-depth:${Math.min(3, Number(press.pressDepth || 1))}"><div><strong>${Number(press.pressDepth || 1) > 1 ? 'Press on ' : ''}Press ${index + 1}</strong><small>Holes ${press.startingHole}–${press.endingHole} · Declared by ${escapeHtml(declarer)} · ${formatCompactCurrency(press.wagerAmount)}</small></div><div class="quick-nassau-values"><strong>${escapeHtml(result)}</strong><span>${escapeHtml(state.status)} · ${formatCompactCurrency(impact, { signed: impact > 0 })}</span></div></div>`;
+    }).join('');
+    const label = component.component === 'overall' ? 'Overall / 18' : component.component[0].toUpperCase() + component.component.slice(1);
+    return `<div class="quick-nassau-component" data-nassau-component="${component.component}"><div class="quick-nassau-base"><div><strong>${label}</strong><small>Base wager ${formatCompactCurrency(component.stake)} · ${component.status}</small></div><div class="quick-nassau-values"><strong>${escapeHtml(component.result)}</strong><span>${formatCompactCurrency(component.contribution, { signed: component.contribution > 0 })}</span></div></div>${children}</div>`;
+  }).join('');
+  return `<section class="quick-scoreboard-section quick-game-results"><h4>Game Summary</h4><div class="quick-game-parent"><div class="quick-game-parent-title">Nassau</div>${rows}</div></section>`;
+}
+function buildQuickGameSummary(match, metrics, record = null) {
+  const selected = getOrderedSelectedGames(match);
+  const frozen = record && isFrozenRoundRecord(record);
+  const payout = getPayoutReportContext(match, metrics);
+  const nassau = buildQuickNassauResults(match, metrics, record);
+  const cards = selected.filter(cfg => cfg.key !== 'nassau').map(cfg => {
+    const frozenGame = frozen ? (record.games || []).find(game => game.gameId === cfg.key) : null;
+    const sspLedger = cfg.key === 'sneaky_sandy_poley' ? buildSneakySandyPoleyLedger(match, { metrics }) : null;
+    const status = frozenGame?.result?.result || sspLedger?.settlement?.label || getTruthfulGameStatus(match, metrics, cfg.key, cfg);
+    if (!status) return '';
+    const games = (payout.payoutGames || []).filter(game => game.sourceKey === cfg.key || game.key === cfg.key);
+    const contribution = frozen ? Object.values(frozenGame?.amounts || {}).filter(amount => Number(amount) > 0).reduce((sum, amount) => sum + Number(amount), 0) : games.reduce((sum, game) => sum + Object.values(game.amounts || {}).filter(amount => Number(amount) > 0).reduce((part, amount) => part + Number(amount), 0), 0);
+    const children = (frozen ? (record.games || []).filter(game => game.type === 'press').map(game => ({ ...game.config, ...game })) : getPressTree(match).records).filter(press => press.rootGameId === cfg.key || press.parentGameId === cfg.key).map((press, index) => {
+      const result = frozen ? (press.result || { status: press.status, diff: 0 }) : getPressStatus(match, metrics, press);
+      const impact = frozen ? (record.pressTransactions || []).filter(row => row.pressId === (press.pressId || press.gameId)).reduce((sum, row) => sum + Number(row.amount || 0), 0) : buildPressSettlementShape(match, metrics, press).transactions.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+      return `<div class="quick-nassau-press" style="--press-depth:${Math.min(3, Number(press.pressDepth || 1))}"><div><strong>${Number(press.pressDepth || 1) > 1 ? 'Press on ' : ''}Press ${index + 1}</strong><small>Holes ${press.startingHole || press.holeStart}–${press.endingHole || press.holeEnd}</small></div><div class="quick-nassau-values"><strong>${escapeHtml(result.diff ? `${getTeamLabel(match, result.diff > 0 ? 1 : 2)} +${Math.abs(result.diff)}` : result.status === 'HALVED' ? 'Halved' : 'All square')}</strong><span>${formatCompactCurrency(impact, { signed: impact > 0 })}</span></div></div>`;
+    }).join('');
+    const sspDetail = sspLedger?.settlement?.valid && !sspLedger.settlement.tied ? `<small>${escapeHtml(sspLedger.settlement.payerLabel || '')} · ${escapeHtml(sspLedger.settlement.payeeLabel || '')}</small>` : '';
+    return `<div class="quick-game-parent quick-native-game" data-game-summary-key="${escapeHtml(cfg.key)}"><div class="quick-native-game-row"><div><strong>${escapeHtml(cfg.key === 'sneaky_sandy_poley' ? 'SSP' : getGameLabel(cfg.key))}</strong><small>${escapeHtml(status)}</small>${sspDetail}</div><div class="quick-nassau-values"><span>${formatCompactCurrency(contribution, { signed: contribution > 0 })}</span></div></div>${children}</div>`;
+  }).filter(Boolean).join('');
+  if (nassau) return cards ? nassau.replace('</section>', `<div class="quick-native-game-list">${cards}</div></section>`) : nassau;
+  return cards ? `<section class="quick-scoreboard-section quick-game-results"><h4>Game Summary</h4><div class="quick-native-game-list">${cards}</div></section>` : '';
+}
+function buildQuickPlayerScoreSummary(match, metrics, record = null) {
+  const frozen = record && isFrozenRoundRecord(record);
+  if (!frozen && !(metrics?.completed > 0)) return '';
+  const rows = frozen ? (record.players || []).map(player => ({ id: player.playerId, name: player.displayName, gross: player.grossTotal, net: player.netTotal, diff: player.netToPar })) : (metrics.players || []).map(player => ({ id: player.playerId, name: player.player?.name || 'Player', gross: player.grossTotal, net: player.leaderboardNetTotal, diff: player.leaderboardNetDiff }));
+  rows.sort((a, b) => Number(a.diff || 0) - Number(b.diff || 0) || Number(a.net || 0) - Number(b.net || 0) || String(a.id).localeCompare(String(b.id)));
+  if (!rows.length) return '';
+  return `<section class="quick-scoreboard-section quick-player-score-summary"><h4>Player Score Summary</h4><div class="quick-table-wrap"><table class="quick-scoreboard-table quick-player-table"><thead><tr><th>#</th><th>Player</th><th>Gross</th><th>Net</th><th>Net +/-</th></tr></thead><tbody>${rows.map((row, index) => `<tr data-player-id="${escapeHtml(row.id)}"><td>${index + 1}</td><td title="${escapeHtml(row.name)}">${escapeHtml(row.name)}</td><td>${Number(row.gross) || '—'}</td><td>${Number(row.net) || '—'}</td><td>${formatToPar(Number(row.diff) || 0)}</td></tr>`).join('')}</tbody></table></div></section>`;
+}
+
 function buildQuickScoreboardView(match, metrics) {
   if (!match || !metrics) return '<div class="player-detail-empty">Scoreboard is unavailable.</div>';
   const sortedPlayers = (metrics.players || []).slice().sort((a, b) => a.leaderboardNetDiff - b.leaderboardNetDiff || a.toPar - b.toPar || String(a.player?.name || '').localeCompare(String(b.player?.name || '')));
@@ -8228,26 +8445,24 @@ function buildQuickScoreboardView(match, metrics) {
     .slice(0, 4)
     .map(row => `<div class="quick-money-row"><span>${escapeHtml(row.name)}</span><strong>${formatFinalNetSettlementMoney(row.amount)}</strong></div>`)
     .join('');
+  const record = getEffectiveRoundRecord(match, metrics);
+  const story = buildRoundRecordStory(record);
+  const turning = story.turningPoint;
+  const highlightHtml = turning ? `<section class="quick-scoreboard-section quick-round-highlight"><h4>Round Highlight</h4><span>Turning Point · H${escapeHtml(turning.holeNumber || '—')}</span><strong>${escapeHtml(describeRoundRecordEvent(record, turning))}</strong></section>` : '';
+  const playerContext = sortedPlayers.map(player => `<span><strong>${escapeHtml(player.player?.name || 'Player')}</strong> · Course HCP ${player.courseHdcp ?? player.courseHandicap ?? '—'}</span>`).join('');
+  const gameSummaryHtml = buildQuickGameSummary(match, metrics, record);
   return `
-    <div class="quick-scoreboard-meta">${escapeHtml(completion.label)}${match.status === 'complete' ? ' · Final' : ' · Live'}${elapsed.available ? ` · ${escapeHtml(elapsed.label.replace(/^Round elapsed time:\s*/i, ''))}` : ''}</div>
-    ${gameStatusRows}
-    <section class="quick-scoreboard-section">
-      <h4>Players</h4>
-      <div class="quick-table-wrap">
-        <table class="quick-scoreboard-table quick-player-table">
-          <thead><tr><th>#</th><th>Player</th><th>Gross</th><th>Net</th><th>Net +/-</th></tr></thead>
-          <tbody>${playerRows || '<tr><td colspan="5">No player standings yet.</td></tr>'}</tbody>
-        </table>
+    <div class="quick-scoreboard-shell">
+      <div class="quick-scoreboard-meta">${escapeHtml(completion.label)}${match.status === 'complete' ? ' · Final' : ' · Live'}${elapsed.available ? ` · ${escapeHtml(elapsed.label.replace(/^Round elapsed time:\s*/i, ''))}` : ''}</div>
+      ${buildQuickSettlementHero(match, metrics, payout, record)}
+      <div class="quick-scoreboard-facts">
+        <div>${gameSummaryHtml || gameStatusRows}${!gameSummaryHtml ? `<section class="quick-scoreboard-section"><h4>Game Contributions</h4>${gameMoneyHtml}${sspMoneyHtml}</section>` : ''}</div>
       </div>
-    </section>
-    ${showTeams ? `<section class="quick-scoreboard-section"><h4>Teams</h4><div class="quick-table-wrap"><table class="quick-scoreboard-table quick-team-table"><thead><tr><th>Team</th><th>Gross</th><th>Net</th><th>Net +/-</th></tr></thead><tbody>${teamRows}</tbody></table></div></section>` : ''}
-    <section class="quick-scoreboard-section">
-      <h4>Money</h4>
-      ${sspMoneyHtml}
-      ${gameMoneyHtml}
-      ${moneyRows ? `<div class="quick-money-list">${moneyRows}</div>` : '<div class="tiny">No money summary available yet.</div>'}
-    </section>
-    ${buildQuickScoreboardMomentumCharts(match, metrics)}`;
+      ${buildQuickPlayerScoreSummary(match, metrics, record)}
+      <details class="quick-scoreboard-section quick-disclosure quick-classic-scorecard"><summary>Classic Scorecard</summary><div class="quick-scroll-panel">${buildClassicScorecard(match, metrics, { readOnly: true })}</div></details>
+      ${buildQuickScoreboardMomentumCharts(match, metrics)}
+      ${highlightHtml}
+    </div>`;
 }
 
 function buildGameMoneyContributionRows(match, metrics, payout = getPayoutReportContext(match, metrics)) {
@@ -8422,7 +8637,7 @@ function renderLeaderboard() {
     }
   }
   matchStatus.innerHTML = buildFeaturedMatchStatus(match, metrics, match.matchStatusGame || statusOptions[0]?.key || 'team_match');
-  gamesSummary.innerHTML = `${buildSelectedGamesSummary(match, metrics)}${buildSneakySandyPoleyExportSummary(match, metrics)}`;
+  gamesSummary.innerHTML = `${buildSelectedGamesSummary(match, metrics)}${buildPressAuditSection(match, metrics, getEffectiveRoundRecord(match, metrics))}${buildSneakySandyPoleyExportSummary(match, metrics)}`;
   if (classicScorecard) {
     classicScorecard.innerHTML = buildClassicScorecard(match, metrics);
   }
@@ -9647,6 +9862,8 @@ async function uploadSharedMatch(match) {
       if (!isCurrentDeviceMatchHost(match) && liveMeta.playerAssignments && typeof liveMeta.playerAssignments === 'object') {
         payloadMeta.playerAssignments = liveMeta.playerAssignments;
       }
+      payloadMeta.presses = mergeAuthoritativePressRecords(liveMeta.presses || [], payloadMeta.presses || [], { hostDeviceId: match.sharedHostDeviceId || liveMeta.hostDeviceId });
+      match.presses = mergeAuthoritativePressRecords(match.presses || [], payloadMeta.presses, { hostDeviceId: match.sharedHostDeviceId || liveMeta.hostDeviceId });
       if (payloadMeta.sspFacts || liveMeta.sspFacts) {
         if ((match.sharedSspConflicts || []).length) {
           payloadMeta.sspFacts = liveMeta.sspFacts || payloadMeta.sspFacts;
@@ -9669,8 +9886,11 @@ async function uploadSharedMatch(match) {
   } catch (err) {
     console.warn('Could not merge live shared metadata before upload; proceeding with local snapshot.', err);
   }
-  let response = await client.from('matches').upsert(payload.matchRow, { onConflict: 'id' });
-  if (response.error) throw response.error;
+  let response = { error: null };
+  if (isCurrentDeviceMatchHost(match)) {
+    response = await client.from('matches').upsert(payload.matchRow, { onConflict: 'id' });
+    if (response.error) throw response.error;
+  }
   if (payload.membership) {
     response = await client.from('match_memberships').upsert(payload.membership, { onConflict: 'id' });
     if (response.error) throw response.error;
@@ -9969,7 +10189,7 @@ function setLastOpenedSharedMatch(matchOrId = null) {
 
 async function fetchSharedMatchMetadata(matchId, match = null) {
   const client = await ensureSupabaseClient();
-  if (!client) return { devices: [], playerAssignments: null, memories: [], sspFacts: null };
+  if (!client) return { devices: [], playerAssignments: null, memories: [], sspFacts: null, presses: [] };
   const [{ data: matchRow, error: matchError }, { data: memberships, error: membershipsError }] = await Promise.all([
     client.from('matches').select('id,course_snapshot,updated_at').eq('id', matchId).maybeSingle(),
     client.from('match_memberships').select('*').eq('match_id', matchId).eq('status', 'active').order('joined_at'),
@@ -10000,6 +10220,7 @@ async function fetchSharedMatchMetadata(matchId, match = null) {
     playerAssignments,
     memories: Array.isArray(meta.memories) ? meta.memories : [],
     sspFacts: meta.sspFacts && typeof meta.sspFacts === 'object' ? meta.sspFacts : null,
+    presses: Array.isArray(meta.presses) ? clonePlain(meta.presses) : [],
   };
 }
 async function fetchSharedParticipantDevices(matchId, match = null) {
@@ -10071,6 +10292,11 @@ async function mergeCloudSharedMetadata(match, { includeAssignments = false, inc
       match.lastSharedSspPullAt = new Date().toISOString();
     }
     }
+  }
+  if (Array.isArray(meta.presses)) {
+    const beforePresses = JSON.stringify(match.presses || []);
+    match.presses = mergeAuthoritativePressRecords(match.presses || [], meta.presses, { hostDeviceId: match.sharedHostDeviceId });
+    if (JSON.stringify(match.presses) !== beforePresses) changed = true;
   }
   console.debug('[SharedAssignmentMap]', 'mergeCloudSharedMetadata', {
     includeAssignments,
@@ -12382,6 +12608,111 @@ function ensurePlayInputState(match) {
   if (changed) console.debug?.('[PlayInputInit]', { players: match.players?.length || 0, holeCount, currentHole });
   return changed;
 }
+let pendingPressConfirmation = null;
+function isHoleStartedForPress(match, position) {
+  const index = Math.max(0, Number(position) - 1);
+  if ((match?.players || []).some(player => {
+    const stat = player.stats?.[index] || {};
+    return Number(player.scores?.[index]?.gross) > 0 || Number(stat.penaltyStrokes || stat.penalties || 0) > 0 || !!stat.fairway || !!stat.green || !!stat.upAndDown || !!stat.sandy || stat.puttsSource === 'user';
+  })) return true;
+  const holeNo = getSelectedScoringHoles(match, getMatchTee(match, match.teeId))[index]?.holeNumber || position;
+  return !!(match?.sneakySandyPoleyInputs?.[holeNo] || match?.greenies?.[holeNo]);
+}
+function isActiveHoleTouchedForPress(match, position) {
+  if (isHoleStartedForPress(match, position)) return true;
+  if (Number(position) !== Number(currentHole) || typeof document === 'undefined') return false;
+  if (Array.from(document.querySelectorAll('#score input[data-score-player]')).some(input => String(input.value || '').trim() !== '')) return true;
+  return Array.from(document.querySelectorAll('#score [data-stat-player]')).some(input => input.type === 'checkbox' ? input.checked : (input.dataset.statKey === 'putts' ? input.dataset.puttsSource === 'user' : Number(input.value || 0) > 0));
+}
+function getActiveScoringPosition(match) {
+  if (!match || match.status === 'complete' || match.completedAt || match.roundEndReason) return null;
+  const limit = getRequestedHoleCount(match);
+  const position = computeMatchProgress(match).lastFullyCompletedHole + 1;
+  return position >= 1 && position <= limit ? position : null;
+}
+function getCurrentPressOpportunities(match, metrics, options = {}) {
+  const activePosition = getActiveScoringPosition(match);
+  const viewedPosition = Number(options.viewedPosition ?? currentHole);
+  if (!activePosition || viewedPosition !== activePosition || !(options.isHost ?? isCurrentDeviceMatchHost(match))) return [];
+  const configs = (match.selectedGames || []).filter(game => getGameEscalationCapability(game.key) === 'PRESS' && normalizePressConfig(game).pressesEnabled);
+  const started = isActiveHoleTouchedForPress(match, activePosition);
+  const completed = !!metrics.holeResults?.[activePosition - 1]?.completed;
+  if (completed) return [];
+  const opportunities = configs.flatMap((cfg, gameIndex) => {
+    const pc = normalizePressConfig(cfg);
+    if (started && pc.declarationWindow === 'BEFORE_HOLE_STARTED') return [];
+    const eligibilityPosition = activePosition - 1;
+    const lanes = cfg.key === 'nassau' ? ['FRONT', 'BACK', 'OVERALL'].filter(segment => pc[`nassau${segment[0]}${segment.slice(1).toLowerCase()}Enabled`] !== false) : ['OVERALL'];
+    return lanes.flatMap((segment, laneIndex) => {
+      const initial = getPressEligibility(match, metrics, segment, { gameKey: cfg.key, pressConfig: pc, currentPosition: eligibilityPosition });
+      if (!initial.eligible || Number(initial.nextStartingHole) !== Number(getSelectedScoringHoles(match, metrics.tee)[activePosition - 1]?.holeNumber || activePosition)) return [];
+      const sides = pc.declaringSideRule === 'EITHER_SIDE' ? ['1', '2'] : initial.trailingSideId ? [String(initial.trailingSideId)] : [];
+      return sides.map(declaringSideId => {
+        const eligibility = getPressEligibility(match, metrics, segment, { gameKey: cfg.key, pressConfig: pc, currentPosition: eligibilityPosition, declaringSideId });
+        return { gameKey: cfg.key, gameIndex, laneIndex, segment, activePosition, currentPosition: eligibilityPosition, pressConfig: pc, declaringSideId, partialHole: started && !completed, eligibility, opportunity: getPressPromptOpportunity(eligibility, pc, match) };
+      }).filter(row => row.eligibility.eligible && (!row.opportunity || !isPressPromptOpportunitySuppressed(match, row.opportunity)));
+    });
+  });
+  return opportunities.sort((a, b) => a.gameIndex - b.gameIndex || a.laneIndex - b.laneIndex || String(a.declaringSideId).localeCompare(String(b.declaringSideId)));
+}
+function renderPressActions(match, metrics) {
+  const button = document.getElementById('playPressBtn');
+  if (!button) return;
+  const visible = getCurrentPressOpportunities(match, metrics).length > 0;
+  button.classList.toggle('hidden', !visible);
+  button.disabled = !visible;
+  button.setAttribute('aria-hidden', visible ? 'false' : 'true');
+}
+function openPressOpportunityCard() {
+  const match = getActiveMatch();
+  if (!match) return;
+  const metrics = computeMatchMetrics(match);
+  const rows = getCurrentPressOpportunities(match, metrics);
+  if (!rows.length) { renderPressActions(match, metrics); return; }
+  const dialog = document.getElementById('pressConfirmDialog');
+  document.getElementById('pressConfirmTitle').textContent = 'Create a Press';
+  document.getElementById('pressConfirmBody').innerHTML = `<div class="press-opportunity-list">${rows.map((row, index) => { const e = row.eligibility; const parent = row.gameKey === 'nassau' ? `${row.segment[0] + row.segment.slice(1).toLowerCase()} Nassau` : getGameLabel(row.gameKey); return `<button type="button" class="press-opportunity-row" data-press-opportunity="${index}"><strong>${escapeHtml(parent)}</strong><span>${escapeHtml(getTeamLabel(match, Number(row.declaringSideId)))} is ${Math.abs(e.parentDiff)} down</span><small>${formatCompactCurrency(e.wagerAmount)} · Hole${e.nextStartingHole === getPressSegmentRange(match, metrics, row.segment)?.endingHole ? '' : 's'} ${e.nextStartingHole}${e.nextStartingHole === getPressSegmentRange(match, metrics, row.segment)?.endingHole ? ' only' : `–${getPressSegmentRange(match, metrics, row.segment)?.endingHole}`}</small></button>`; }).join('')}</div>`;
+  const confirm = document.getElementById('pressConfirmBtn'); if (confirm) confirm.classList.add('hidden');
+  const cancel = document.getElementById('pressCancelBtn'); if (cancel) cancel.textContent = 'Close';
+  dialog.classList.remove('hidden'); dialog.setAttribute('aria-hidden', 'false');
+  dialog.querySelectorAll('[data-press-opportunity]').forEach(button => button.addEventListener('click', () => { const row = rows[Number(button.dataset.pressOpportunity)]; openPressConfirmation(match, metrics, row.segment, row); }));
+  setTimeout(() => dialog.querySelector('[data-press-opportunity]')?.focus({ preventScroll: true }), 0);
+}
+function openPressConfirmation(match, metrics, segment, context) {
+  const cfg = (match.selectedGames || []).find(game => game.key === context.gameKey) || {};
+  const pc = normalizePressConfig(cfg);
+  const draft = buildPressRecordDraft(match, metrics, segment, { gameKey: context.gameKey, pressConfig: pc, currentPosition: context.currentPosition, declaringSideId: context.declaringSideId, initiatedByTeamId: context.declaringSideId, triggerType: pc.pressType, createdAt: new Date().toISOString(), sourceDeviceId: getSharedDeviceId() });
+  if (!draft) return toast('That press is no longer available.');
+  const eligibility = getPressEligibility(match, metrics, segment, { gameKey: context.gameKey, pressConfig: pc, currentPosition: context.currentPosition });
+  pendingPressConfirmation = { matchId: match.id, gameKey: context.gameKey, segment, activePosition: context.activePosition, parentGameId: draft.parentGameId, declaredForHole: draft.declaredForHole, declaringSideId: draft.initiatedByTeamId, triggerType: draft.triggerType, opportunity: getPressPromptOpportunity(eligibility, pc, match), partialHole: context.partialHole };
+  const dialog = document.getElementById('pressConfirmDialog');
+  document.getElementById('pressConfirmTitle').textContent = 'Confirm Press';
+  const parent = context.gameKey === 'nassau' ? `${segment[0] + segment.slice(1).toLowerCase()} Nassau` : getGameLabel(context.gameKey);
+  document.getElementById('pressConfirmBody').innerHTML = `<strong>${escapeHtml(parent)}</strong><div>Declared by ${escapeHtml(getTeamLabel(match, Number(draft.initiatedByTeamId)))}</div><div>${formatCompactCurrency(draft.wagerAmount)} · Hole${draft.startingHole === draft.endingHole ? '' : 's'} ${draft.startingHole}${draft.startingHole === draft.endingHole ? ' only' : `–${draft.endingHole}`}</div>${draft.startingHole === draft.endingHole ? '<div class="warning-text">This is a one-hole press.</div>' : ''}${context.partialHole ? `<div class="warning-text">This press starts on Hole ${draft.startingHole}.<br>Some Hole ${draft.startingHole} information has already been entered.</div>` : ''}`;
+  const confirm = document.getElementById('pressConfirmBtn'); if (confirm) confirm.classList.remove('hidden');
+  const cancel = document.getElementById('pressCancelBtn'); if (cancel) cancel.textContent = 'Cancel';
+  dialog.classList.remove('hidden'); dialog.setAttribute('aria-hidden', 'false');
+  setTimeout(() => confirm?.focus({ preventScroll: true }), 0);
+}
+function closePressConfirmation() { pendingPressConfirmation = null; const dialog = document.getElementById('pressConfirmDialog'); dialog?.classList.add('hidden'); dialog?.setAttribute('aria-hidden', 'true'); const button = document.getElementById('playPressBtn'); if (button && !button.classList.contains('hidden')) button.focus({ preventScroll: true }); }
+function confirmPendingPress() {
+  const pending = pendingPressConfirmation;
+  const match = getActiveMatch();
+  if (!pending || !match || match.id !== pending.matchId) return closePressConfirmation();
+  const metrics = computeMatchMetrics(match);
+  const cfg = (match.selectedGames || []).find(game => game.key === pending.gameKey) || {};
+  const pc = normalizePressConfig(cfg);
+  const activePosition = getActiveScoringPosition(match);
+  if (!activePosition || activePosition !== pending.activePosition || currentHole !== activePosition) { closePressConfirmation(); return toast('The active scoring hole changed. Review the current press opportunity.'); }
+  const started = isActiveHoleTouchedForPress(match, activePosition);
+  if (started && pc.declarationWindow === 'BEFORE_HOLE_STARTED') { closePressConfirmation(); return toast('The active hole now has entered information. This press was not created.'); }
+  const result = createPressFromConfirmation(match, metrics, { ...pending, pressConfig: pc }, { currentPosition: activePosition - 1, isHost: isCurrentDeviceMatchHost(match), createdAt: new Date().toISOString(), sourceDeviceId: getSharedDeviceId() });
+  if (!result.created) { if (pending.opportunity) setPressPromptOpportunityState(match, pending.opportunity, 'STALE'); closePressConfirmation(); return toast(result.reasonText || 'That press is no longer available.'); }
+  const draft = result.press;
+  if (pending.opportunity) setPressPromptOpportunityState(match, pending.opportunity, 'CONFIRMED');
+  match.pressEvents = [...(match.pressEvents || []), { eventId: `${draft.pressId}:declared`, eventType: 'press_declared', pressId: draft.pressId, parentGameId: draft.parentGameId, rootGameId: draft.rootGameId, hole: activePosition, declaredForHole: draft.startingHole, declaringSideId: draft.initiatedByTeamId, againstSideId: draft.againstTeamId, stake: draft.wagerAmount, pressDepth: draft.pressDepth, createdAt: draft.createdAt }];
+  closePressConfirmation(); persistCurrentMatch({ applyDom: false, immediateShared: true }); renderCurrentMatch(); toast('Press created.');
+}
 
 function renderCurrentMatch() {
   const match = getActiveMatch();
@@ -12419,6 +12750,7 @@ function renderCurrentMatch() {
   const hole = scoringHoles[currentHole - 1];
   renderHoleSelector(match, scoringHoles);
   renderCatchUpScoringBar(match, metrics);
+  renderPressActions(match, metrics);
   const teamText = metrics?.teams?.length === 2 ? `${formatMatchDiff(metrics.matchDiff, match)} overall` : 'Singles leaderboard';
   const teeYardages = hole ? [...new Map((metrics?.players || []).map(p => {
     const playerTee = p.tee || tee;
@@ -12649,22 +12981,27 @@ function getMomentumTeamLabels(match, metrics, gameKey) {
   });
 }
 function buildMomentumPresentation(match, metrics, gameKey) {
-  if (!match || !metrics || !['nassau', 'team_match', 'singles_match', 'sneaky_sandy_poley'].includes(gameKey)) return null;
+  const isNassauComponent = /^nassau_(front|back|overall)$/.test(String(gameKey));
+  const baseGameKey = isNassauComponent ? 'nassau' : gameKey;
+  if (!match || !metrics || !['nassau', 'team_match', 'singles_match', 'sneaky_sandy_poley'].includes(baseGameKey)) return null;
   let series = [];
-  let labels = getMomentumTeamLabels(match, metrics, gameKey);
-  if (gameKey === 'sneaky_sandy_poley') {
+  let labels = getMomentumTeamLabels(match, metrics, baseGameKey);
+  if (baseGameKey === 'sneaky_sandy_poley') {
     const ledger = buildSneakySandyPoleyLedger(match, { metrics });
     const teams = ledger?.teams || [];
     if (!ledger?.enabled || teams.length !== 2) return null;
     labels = teams.map((team, index) => getMomentumTeamLabels(match, metrics, gameKey)[index] || team.name);
     series = buildSneakySandyPoleyMomentumData(match, { ledger }).map(row => ({ holeNumber: row.holeNumber, value: Number(row.cumulative) }));
-  } else if (gameKey === 'singles_match') {
+  } else if (baseGameKey === 'singles_match') {
     const result = computeSinglesMatchPlayResult(match, metrics, getSinglesMatchConfig(match));
     series = (result.holes || []).filter(row => row.completed).map(row => ({ holeNumber: Number(row.holeNumber), value: Number(row.runningDiff) }));
   } else {
     let running = 0;
-    series = getMomentumHoleResults(match, metrics, gameKey).map(hole => {
-      const outcome = computeMomentumOutcome(match, metrics, hole, gameKey);
+    let holes = getMomentumHoleResults(match, metrics, baseGameKey);
+    if (isNassauComponent && gameKey === 'nassau_front') holes = holes.slice(0, 9);
+    if (isNassauComponent && gameKey === 'nassau_back') holes = holes.slice(9);
+    series = holes.map(hole => {
+      const outcome = computeMomentumOutcome(match, metrics, hole, baseGameKey);
       if (outcome === 'pending') return null;
       running += outcome === 'team1' ? 1 : outcome === 'team2' ? -1 : 0;
       return { holeNumber: Number(hole.holeNumber), value: running };
@@ -12674,7 +13011,7 @@ function buildMomentumPresentation(match, metrics, gameKey) {
   const last = Number(series[series.length - 1].value) || 0;
   const perspective = last > 0 ? 1 : last < 0 ? 2 : (Number(match.momentumPerspective || 1) === 2 ? 2 : 1);
   const oriented = series.map(row => ({ ...row, value: perspective === 1 ? row.value : -row.value }));
-  return { gameKey, sourceSeries: series, series: oriented, perspective, upperLabel: labels[perspective - 1], lowerLabel: labels[perspective === 1 ? 1 : 0], tied: last === 0 };
+  return { gameKey, baseGameKey, sourceSeries: series, series: oriented, perspective, upperLabel: labels[perspective - 1], lowerLabel: labels[perspective === 1 ? 1 : 0], tied: last === 0 };
 }
 function getMomentumYAxisScale(values, { compact = false } = {}) {
   const finite = (Array.isArray(values) ? values : []).map(Number).filter(Number.isFinite);
@@ -12705,23 +13042,28 @@ function renderMomentumChart(match, metrics, gameKey, { compact = false } = {}) 
   const points = model.series.map((row, index) => `${x(index)},${y(row.value)}`).join(' ');
   const labels = model.series.map((row, index) => `<text x="${x(index)}" y="${height - 8}" text-anchor="middle">H${row.holeNumber}</text>`).join('');
   const dots = model.series.map((row, index) => `<circle cx="${x(index)}" cy="${y(row.value)}" r="${compact ? 3 : 4}" class="momentum-chart-dot"/>`).join('');
+  const valueLabels = model.baseGameKey === 'nassau' ? model.series.map((row, index) => {
+    const label = row.value === 0 ? 'E' : row.value > 0 ? `+${row.value}` : String(row.value);
+    const labelY = Math.max(12, Math.min(height - bottom - 7, y(row.value) + (row.value > 0 ? -9 : 15)));
+    return `<text x="${x(index)}" y="${labelY}" text-anchor="middle" class="momentum-point-value" data-momentum-value="${row.value}">${label}</text>`;
+  }).join('') : '';
   const tickMarkup = scale.ticks.map(value => {
     const tickY = y(value);
     const label = value > 0 ? `+${value}` : String(value);
     return `${value === 0 ? '' : `<line x1="${left}" y1="${tickY}" x2="${width - right + 8}" y2="${tickY}" class="momentum-gridline"/>`}<text x="${left - 7}" y="${tickY + 4}" text-anchor="end" class="momentum-axis-tick" data-momentum-tick="${value}" data-tick-y="${tickY}">${label}</text>`;
   }).join('');
   const unit = gameKey === 'sneaky_sandy_poley' ? 'points' : 'holes';
-  return `<div class="momentum-chart ${compact ? 'momentum-chart--compact' : 'momentum-chart--full'}" data-momentum-game="${escapeHtml(gameKey)}" data-momentum-perspective="${model.perspective}" data-momentum-y-bound="${scale.bound}" data-momentum-y-step="${scale.step}"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(gameKey)} momentum from ${escapeHtml(model.upperLabel)} perspective"><line x1="${left}" y1="${top}" x2="${left}" y2="${height - bottom}" class="momentum-y-axis"/>${tickMarkup}<line x1="${left}" y1="${zero}" x2="${width - right + 8}" y2="${zero}" class="momentum-zero-baseline" data-zero-y="${zero}"/><text x="4" y="12" class="momentum-axis-unit">${unit}</text><polyline points="${points}" class="momentum-chart-line"/>${dots}${labels}<text x="${width - 4}" y="${top + 5}" text-anchor="end" class="momentum-side-label momentum-side-label--upper">${escapeHtml(model.upperLabel)}</text><text x="${width - 4}" y="${height - bottom}" text-anchor="end" class="momentum-side-label momentum-side-label--lower">${escapeHtml(model.lowerLabel)}</text></svg></div>`;
+  return `<div class="momentum-chart ${compact ? 'momentum-chart--compact' : 'momentum-chart--full'}" data-momentum-game="${escapeHtml(gameKey)}" data-momentum-perspective="${model.perspective}" data-momentum-y-bound="${scale.bound}" data-momentum-y-step="${scale.step}"><div class="momentum-orientation">Positive = ${escapeHtml(model.upperLabel)} ahead</div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(gameKey)} momentum; positive values mean ${escapeHtml(model.upperLabel)} ahead"><line x1="${left}" y1="${top}" x2="${left}" y2="${height - bottom}" class="momentum-y-axis"/>${tickMarkup}<line x1="${left}" y1="${zero}" x2="${width - right + 8}" y2="${zero}" class="momentum-zero-baseline" data-zero-y="${zero}"/><text x="4" y="12" class="momentum-axis-unit">${unit}</text><polyline points="${points}" class="momentum-chart-line"/>${dots}${valueLabels}${labels}<text x="${width - 4}" y="${top + 5}" text-anchor="end" class="momentum-side-label momentum-side-label--upper">${escapeHtml(model.upperLabel)}</text><text x="${width - 4}" y="${height - bottom}" text-anchor="end" class="momentum-side-label momentum-side-label--lower">${escapeHtml(model.lowerLabel)}</text></svg></div>`;
 }
 function buildQuickScoreboardMomentumCharts(match, metrics) {
-  const eligible = getOrderedSelectedGames(match).map(game => game.key).filter(key => ['nassau', 'team_match', 'singles_match', 'sneaky_sandy_poley'].includes(key));
+  const eligible = getOrderedSelectedGames(match).flatMap(game => game.key === 'nassau' ? ['nassau_front', ...((metrics.holeResults || []).length > 9 ? ['nassau_back'] : []), 'nassau_overall'] : [game.key]).filter(key => ['nassau_front', 'nassau_back', 'nassau_overall', 'team_match', 'singles_match', 'sneaky_sandy_poley'].includes(key));
   const cards = [...new Set(eligible)].map(key => {
     const chart = renderMomentumChart(match, metrics, key, { compact: true });
     if (!chart) return '';
-    const label = key === 'sneaky_sandy_poley' ? 'SSP' : getGameLabel(key);
+    const label = key === 'sneaky_sandy_poley' ? 'SSP' : key.startsWith('nassau_') ? `${key.split('_')[1][0].toUpperCase() + key.split('_')[1].slice(1)} Nassau Momentum` : getGameLabel(key);
     return `<div class="quick-momentum-card"><strong>${escapeHtml(label)}</strong>${chart}</div>`;
-  }).filter(Boolean).slice(0, 3).join('');
-  return cards ? `<section class="quick-scoreboard-section quick-scoreboard-momentum"><h4>Momentum</h4><div class="quick-momentum-list">${cards}</div></section>` : '';
+  }).filter(Boolean).slice(0, 4).join('');
+  return cards ? `<details class="quick-scoreboard-section quick-scoreboard-momentum quick-disclosure" open><summary>Momentum Charts</summary><div class="quick-momentum-list">${cards}</div></details>` : '';
 }
 function getTruthfulGameStatus(match, metrics, gameKey, cfg = null) {
   const status = getCompactGameStatus(match, metrics, gameKey, cfg);
@@ -12740,7 +13082,13 @@ function buildQuickScoreboardGameStatusRows(match, metrics) {
     const status = getTruthfulGameStatus(match, metrics, cfg.key, cfg);
     const label = cfg.key === 'sneaky_sandy_poley' ? 'SSP' : getGameLabel(cfg.key);
     const trend = cfg.key === 'sneaky_sandy_poley' ? getSneakySandyPoleySmartTrend(match, { metrics }) : '';
-    return status ? `<div class="quick-game-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(status)}</strong>${trend ? `<small>${escapeHtml(trend)}</small>` : ''}</div>` : '';
+    const roots = cfg.key === 'nassau' ? [`nassau_net`, `nassau_gross`] : [cfg.key];
+    const children = getPressTree(match).records.filter(press => roots.includes(press.rootGameId) || roots.includes(press.parentGameId)).map((press, index) => {
+      const result = getPressStatus(match, metrics, press);
+      const state = result.diff ? `${getTeamLabel(match, result.diff > 0 ? 1 : 2)} +${Math.abs(result.diff)}` : result.status === 'HALVED' ? 'Halved' : 'All square';
+      return `<div class="quick-game-row press-child-row" style="padding-left:${Math.min(3, press.pressDepth) * 14}px"><span>↳ Press ${index + 1} · H${press.startingHole}–${press.endingHole} · ${formatMoneyAccounting(press.wagerAmount)}</span><strong>${escapeHtml(state)}</strong><small>${escapeHtml(press.status === 'VOIDED' ? 'Voided' : result.status)}</small></div>`;
+    }).join('');
+    return status ? `<div class="quick-game-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(status)}</strong>${trend ? `<small>${escapeHtml(trend)}</small>` : ''}</div>${children}` : '';
   }).filter(Boolean).join('');
   return rows ? `<section class="quick-scoreboard-section"><h4>Active Games</h4><div class="quick-game-list">${rows}</div></section>` : '';
 }
@@ -13189,6 +13537,8 @@ function handleLiveScoreInputFocus(inputEl) {
 function handleLiveScoreInputEvent(inputEl) {
   if (!inputEl || inputEl.disabled) return;
   updateLiveNetForScoreInput(inputEl);
+  const match = getActiveMatch();
+  if (match) renderPressActions(match, computeMatchMetrics(match));
   schedulePendingScoreAutoAdvance(inputEl);
 }
 
@@ -13703,6 +14053,11 @@ function computeLivePayoutGames(match, metrics) {
       return;
     }
     pushGame(cfg.key, getGameLabel(cfg.key), {});
+  });
+  getPressTree(match).records.forEach((press, index) => {
+    const settlement = buildPressSettlementShape(match, metrics, press);
+    if (!['FINAL', 'HALVED'].includes(settlement.status)) return;
+    pushGame(`press:${press.pressId}`, `Press ${index + 1} · Holes ${press.startingHole}–${press.endingHole}`, settlement.amounts, 'team', settlement.transactions.map(row => ({ from: row.payerId, to: row.payeeId, amount: row.amount })), press.outcomeGameKey || (String(press.rootGameId).startsWith('nassau_') ? 'nassau' : press.rootGameId || press.parentGameId), { press: clonePlain(press), settlement });
   });
   return games;
 }
@@ -14865,6 +15220,46 @@ function preserveMatchSetupUi() {
   populateMatchPlayerPicker(currentSelections);
   renderGamesPicker(currentGames);
 }
+function buildPressAuditSection(match, metrics, recordOverride = null) {
+  const frozen = recordOverride && isFrozenRoundRecord(recordOverride) ? clonePlain(recordOverride) : (isFrozenRoundRecord(match?.roundRecordSnapshot) ? clonePlain(match.roundRecordSnapshot) : null);
+  const nodes = frozen
+    ? (frozen.games || []).filter(game => game.type === 'press').map(game => ({ ...clonePlain(game.config || {}), ...clonePlain(game), status: game.status || game.config?.status }))
+    : getPressTree(match).records.map(press => ({ ...clonePlain(press), status: getPressStatus(match, metrics, press).status }));
+  if (!nodes.length) return '';
+  const frozenTransactions = frozen?.pressTransactions || [];
+  const rows = nodes.sort((a, b) => Number(a.pressDepth || 1) - Number(b.pressDepth || 1) || Number(a.startingHole || a.holeStart || 0) - Number(b.startingHole || b.holeStart || 0)).map((press, index) => {
+    const start = Number(press.startingHole || press.holeStart);
+    const end = Number(press.endingHole || press.holeEnd);
+    const status = String(press.status || 'PENDING');
+    const current = frozen ? null : buildPressSettlementShape(match, metrics, press);
+    const transactions = frozen ? frozenTransactions.filter(row => row.pressId === press.pressId) : (current?.transactions || []);
+    const transferred = transactions.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const declarer = press.initiatedByPlayerId ? (getPlayer(press.initiatedByPlayerId)?.name || press.initiatedByPlayerId) : press.initiatedByTeamId ? getTeamLabel(match, Number(press.initiatedByTeamId)) : 'Not recorded';
+    const result = status === 'VOIDED' || status === 'SUPERSEDED' ? status[0] + status.slice(1).toLowerCase() : status === 'HALVED' ? 'Halved' : status === 'FINAL' ? `${getTeamLabel(match, Number((current || {}).leaderTeamId || press.leaderTeamId)) || 'Winner recorded'} won` : status[0] + status.slice(1).toLowerCase();
+    const parentLabel = String(press.parentSegmentId || press.parentGameId || '').replaceAll('_', ' ');
+    return `<div class="press-audit-row" style="margin-left:${Math.min(3, Number(press.pressDepth || 1) - 1) * 16}px"><div class="game-summary-title">${Number(press.pressDepth || 1) > 1 ? 'Press on ' : ''}Press ${index + 1}</div><div class="game-summary-sub">Parent: ${escapeHtml(parentLabel)} · Depth ${Number(press.pressDepth || 1)}</div><div class="game-summary-sub">Declared by ${escapeHtml(declarer)} · Declared for H${Number(press.declaredForHole || start)} · Holes ${start}${start === end ? '' : `–${end}`}</div><div class="game-summary-sub">Stake: ${formatMoneyAccounting(Number(press.wagerAmount ?? press.stake ?? 0))} · Result: ${escapeHtml(result)} · Ledger impact: ${formatMoneyAccounting(transferred)}</div>${press.auditReason ? `<div class="game-summary-sub warning-text">Reason: ${escapeHtml(press.auditReason)}</div>` : ''}</div>`;
+  }).join('');
+  return `<section class="export-section export-section-press-audit"><div class="export-section-head"><h2>Presses</h2><div class="export-section-sub">Child-game declaration, result, and accounting audit.</div></div><div class="press-audit-list">${rows}</div></section>`;
+}
+function buildPressSetupControls(gameKey, cfg = {}) {
+  if (getGameEscalationCapability(gameKey) !== 'PRESS') return '';
+  const pc = normalizePressConfig(cfg.pressConfig || cfg);
+  return `<details class="press-setup top-gap" ${pc.pressesEnabled ? 'open' : ''}>
+    <summary>Presses · ${pc.pressesEnabled ? 'On' : 'Off'}</summary>
+    <div class="grid two compact-grid top-gap">
+      <label class="inline-check span-2"><input type="checkbox" data-game-config="${gameKey}" data-field="pressesEnabled" ${pc.pressesEnabled ? 'checked' : ''}><span>Allow presses</span></label>
+      ${gameKey === 'nassau' ? `<label class="inline-check"><input type="checkbox" data-game-config="${gameKey}" data-field="nassauFrontEnabled" ${pc.nassauFrontEnabled ? 'checked' : ''}><span>Front</span></label><label class="inline-check"><input type="checkbox" data-game-config="${gameKey}" data-field="nassauBackEnabled" ${pc.nassauBackEnabled ? 'checked' : ''}><span>Back</span></label><label class="inline-check"><input type="checkbox" data-game-config="${gameKey}" data-field="nassauOverallEnabled" ${pc.nassauOverallEnabled ? 'checked' : ''}><span>Overall</span></label>` : ''}
+      <label><span>Trigger</span><select data-game-config="${gameKey}" data-field="pressType"><option value="MANUAL" ${pc.pressType === 'MANUAL' ? 'selected' : ''}>Manual</option><option value="PROMPT_AT_THRESHOLD" ${pc.pressType === 'PROMPT_AT_THRESHOLD' ? 'selected' : ''}>Prompt at threshold</option></select></label>
+      <label><span>Prompt when down</span><input type="number" min="1" max="9" data-game-config="${gameKey}" data-field="autoPressThreshold" value="${pc.autoPressThreshold}"></label>
+      <label><span>Who may declare</span><select data-game-config="${gameKey}" data-field="declaringSideRule"><option value="LOSING_SIDE_ONLY" ${pc.declaringSideRule === 'LOSING_SIDE_ONLY' ? 'selected' : ''}>Losing side only</option><option value="EITHER_SIDE" ${pc.declaringSideRule === 'EITHER_SIDE' ? 'selected' : ''}>Either side</option></select></label>
+      <label><span>Parent availability</span><select data-game-config="${gameKey}" data-field="pressAvailabilityRule"><option value="OPEN_SEGMENT_ONLY" ${pc.pressAvailabilityRule === 'OPEN_SEGMENT_ONLY' ? 'selected' : ''}>Open match only</option><option value="FUTURE_HOLES_REMAIN" ${pc.pressAvailabilityRule === 'FUTURE_HOLES_REMAIN' ? 'selected' : ''}>Any time holes remain</option></select></label>
+      <label><span>Declaration timing</span><select data-game-config="${gameKey}" data-field="declarationWindow"><option value="BEFORE_HOLE_STARTED" ${pc.declarationWindow === 'BEFORE_HOLE_STARTED' ? 'selected' : ''}>Before hole starts</option><option value="BEFORE_HOLE_COMPLETED" ${pc.declarationWindow === 'BEFORE_HOLE_COMPLETED' ? 'selected' : ''}>Before hole completes</option></select></label>
+      <label><span>Press stake</span><select data-game-config="${gameKey}" data-field="pressValueRule"><option value="INHERIT_ROOT_STAKE" ${pc.pressValueRule === 'INHERIT_ROOT_STAKE' ? 'selected' : ''}>Same as original wager</option><option value="INHERIT_PARENT_STAKE" ${pc.pressValueRule === 'INHERIT_PARENT_STAKE' ? 'selected' : ''}>Same as immediate parent</option></select></label>
+      <label><span>Maximum presses</span><input type="number" min="1" max="10" data-game-config="${gameKey}" data-field="maxPressesPerRootGame" value="${pc.maxPressesPerRootGame}"></label>
+      <label><span>Maximum depth</span><input type="number" min="1" max="5" data-game-config="${gameKey}" data-field="maxPressDepth" value="${pc.maxPressDepth}"></label>
+      <div class="tiny span-2">Open match only requires an undecided parent. Before hole starts means no score, stat, or game input may already exist.</div>
+    </div></details>`;
+}
 function renderGamesPicker(existing = []) {
   const picker = document.getElementById('gamesPicker');
   const configsWrap = document.getElementById('gameConfigs');
@@ -14897,7 +15292,7 @@ function renderGamesPicker(existing = []) {
           <label><span>$ Front</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stakesFront" value="${cfg.stakesFront ?? 5}" /></label>
           <label><span>$ Back</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stakesBack" value="${cfg.stakesBack ?? 5}" /></label>
           <label><span>$ 18</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stakesOverall" value="${cfg.stakesOverall ?? 5}" /></label>
-        </div>
+        </div>${buildPressSetupControls(game.key, cfg)}
       </div>`;
     }
     if (game.key === 'team_stroke') {
@@ -14913,7 +15308,7 @@ function renderGamesPicker(existing = []) {
             <option value="best_ball" ${resolveTeamStrokeScoringMode(cfg.scoringMode) === 'best_ball' ? 'selected' : ''}>Best Team Ball</option>
           </select></label>
           <label><span>$ Stake</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stake" value="${cfg.stake ?? 5}" /></label>
-        </div>
+        </div>${buildPressSetupControls(game.key, cfg)}
       </div>`;
     }
     if (game.key === 'skins') {
@@ -14999,7 +15394,7 @@ function renderGamesPicker(existing = []) {
             <option value="per_hole" ${String(cfg.stakeType || '') === 'per_hole' ? 'selected' : ''}>Per-Hole Stakes</option>
           </select></label>
           <label><span>$ Amount</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stake" value="${cfg.stake ?? 5}" /></label>
-        </div>
+        </div>${buildPressSetupControls(game.key, cfg)}
       </div>`;
     }
     if (game.key === 'individual_match') {
@@ -15048,7 +15443,7 @@ function renderGamesPicker(existing = []) {
           <option value="net" ${cfg.basis === 'net' ? 'selected' : ''}>Net</option>
         </select></label>
         <label><span>$ Stake</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stake" value="${cfg.stake ?? 5}" /></label>
-      </div>
+      </div>${buildPressSetupControls(game.key, cfg)}
     </div>`;
   }).join('');
   syncSmartScoreAdvancePresetUi({ selectedGames: normalizedExisting });
@@ -15065,6 +15460,7 @@ function collectSelectedGames() {
       cfg.stakeType = String(cfg.stakeType || 'match').toLowerCase() === 'per_hole' ? 'per_hole' : 'match';
       cfg.stake = Number(cfg.stake || 0) || 0;
     }
+    if (getGameEscalationCapability(key) === 'PRESS') Object.assign(cfg, normalizePressConfig(cfg));
     if (key === 'greenies') {
       const allowed = new Set(getCurrentAssignablePlayers().map(p => p.id));
       cfg.participants = Array.from(document.querySelectorAll('[data-greenie-player]:checked')).map(el => el.dataset.greeniePlayer).filter(id => allowed.has(id));
@@ -17077,7 +17473,10 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('playerDetailCloseBtn')?.addEventListener('click', closePlayerDetailView);
   document.getElementById('playerDetailDialog')?.addEventListener('click', e => { if (e.target?.id === 'playerDetailDialog') closePlayerDetailView(); });
   document.getElementById('quickScoreboardBtn')?.addEventListener('click', openQuickScoreboardView);
+  document.getElementById('playPressBtn')?.addEventListener('click', openPressOpportunityCard);
   document.getElementById('quickScoreboardCloseBtn')?.addEventListener('click', closeQuickScoreboardView);
+  document.getElementById('pressCancelBtn')?.addEventListener('click', closePressConfirmation);
+  document.getElementById('pressConfirmBtn')?.addEventListener('click', confirmPendingPress);
   document.getElementById('quickScoreboardDialog')?.addEventListener('click', e => { if (e.target?.id === 'quickScoreboardDialog') closeQuickScoreboardView(); });
   document.getElementById('score')?.addEventListener('click', async e => {
     const playerDetailBtn = e.target.closest('[data-player-detail]');
@@ -17746,15 +18145,23 @@ function installDyeLedgerLiveEngineAdapter() {
     optimalSettlementRows,
     computeTeamGameDiffs,
     computeNassauDiffsForBasis,
+    getGameEscalationCapability,
     normalizePressConfig,
     normalizePressRecord,
     dedupePressRecords,
+    mergeAuthoritativePressRecords,
     getPressSegmentRange,
     getPressParentReference,
     getPressEligibility,
     buildPressRecordDraft,
+    createPressFromConfirmation,
+    getPressPromptOpportunity,
+    setPressPromptOpportunityState,
+    isPressPromptOpportunitySuppressed,
     getPressStatus,
     buildPressSettlementShape,
+    getPressTree,
+    voidPressRecord,
     computeSkinResults,
     computeNinePointResults,
     buildSneakySandyPoleyLedger,
@@ -17766,6 +18173,12 @@ function installDyeLedgerLiveEngineAdapter() {
     getSneakySandyPoleyHonorsLine,
     buildSneakySandyPoleyRunningText,
     buildQuickScoreboardView,
+    buildQuickSettlementHero,
+    buildQuickNassauResults,
+    buildQuickGameSummary,
+    buildQuickPlayerScoreSummary,
+    getActiveScoringPosition,
+    getCurrentPressOpportunities,
     buildQuickScoreboardGameStatusRows,
     buildGameMoneyContributionRows,
     buildQuickScoreboardMomentumCharts,
@@ -17791,6 +18204,7 @@ function installDyeLedgerLiveEngineAdapter() {
     buildRoundSnapshot,
     buildExecutiveDriverRows,
     buildSelectedGamesSummary,
+    buildPressAuditSection,
     buildSummaryExportBody,
     decorateReportSections,
     resolveSneakySandyPoleyProxSelection,

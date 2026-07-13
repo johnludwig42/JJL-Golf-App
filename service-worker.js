@@ -1,17 +1,17 @@
 const BUILD_INFO = {
-  version: 'v30.3.65',
-  versionNumber: '30.3.65',
-  cacheName: 'the-dye-ledger-v30.3.65',
+  version: 'v30.3.66',
+  versionNumber: '30.3.66',
+  cacheName: 'the-dye-ledger-v30.3.66',
   buildDate: '2026-07-12T00:00:00Z'
 };
 const CACHE_NAME = BUILD_INFO.cacheName;
 const ASSETS = [
   './',
   './index.html',
-  './style.css?v=30.3.65',
-  './app.js?v=30.3.65',
-  './supabase-config.js?v=30.3.65',
-  './manifest.json?v=30.3.65',
+  './style.css?v=30.3.66',
+  './app.js?v=30.3.66',
+  './supabase-config.js?v=30.3.66',
+  './manifest.json?v=30.3.66',
   './apple-touch-icon.png',
   './favicon-32x32.png',
   './favicon-16x16.png',

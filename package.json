@@ -1,12 +1,12 @@
 {
   "name": "the-dye-ledger",
-  "version": "30.3.63",
+  "version": "30.3.64",
   "private": true,
   "type": "module",
   "scripts": {
     "lint": "eslint app.js service-worker.js scripts/**/*.js",
     "validate": "node scripts/validate-release.js",
-    "test": "node --test tests/simulation-lab.test.js tests/live-engine-adapter.test.js tests/shared-match-ledger.test.js tests/ssp-ledger.test.js tests/ssp-shared-match.test.js tests/course-library.test.js tests/report-layout.test.js tests/trip-ledger-architecture.test.js",
+    "test": "node --test tests/simulation-lab.test.js tests/live-engine-adapter.test.js tests/shared-match-ledger.test.js tests/ssp-ledger.test.js tests/ssp-shared-match.test.js tests/course-library.test.js tests/report-layout.test.js tests/trip-ledger-architecture.test.js tests/mobile-scoring-ux.test.js",
     "test:money": "node --test tests/money-math.test.js",
     "test:run": "npm run test",
     "simulate": "node scripts/simulate-rounds.js",

@@ -7,12 +7,12 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=30.3.63" />
+  <link rel="manifest" href="manifest.json?v=30.3.64" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
   <link rel="shortcut icon" href="./favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
-  <link rel="stylesheet" href="style.css?v=30.3.63" />
+  <link rel="stylesheet" href="style.css?v=30.3.64" />
 </head>
 <body>
   <div class="app-chrome"><header class="app-header compact-header">
@@ -307,6 +307,7 @@
             <div id="currentHoleBadge" class="badge big-badge">Hole 1</div>
             <button id="nextHoleBtn" type="button" class="secondary">Next ▶</button>
           </div>
+          <div id="catchUpScoringBar" class="catch-up-scoring-bar hidden" aria-live="polite"></div>
           <div id="holeSummary" class="tiny top-gap"></div>
           <div id="sharedAssignmentDiagnosticsPlay" class="top-gap hidden"></div>
           <div id="greeniesEntryWrap" class="top-gap hidden"></div>
@@ -324,7 +325,7 @@
                   <th>Player</th>
                   <th>Team</th>
                   <th>Gross</th>
-                  <th>Str</th>
+                  <th>Stroke</th>
                   <th>Net</th>
                 </tr>
               </thead>
@@ -743,7 +744,7 @@
       <div class="card tight-card app-updates-card">
         <h2>App Updates</h2>
         <div class="app-update-summary">
-          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.63</strong></div>
+          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.64</strong></div>
           <div><span class="muted-label">Build Date</span><strong id="appBuildTimestamp">loading…</strong></div>
           <div><span class="muted-label">Cache</span><span id="appActiveCacheName" class="break-word">checking…</span></div>
           <div><span class="muted-label">Update Available</span><strong id="appUpdateAvailableStatus">checking…</strong></div>
@@ -775,6 +776,7 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
+          <li>v30.3.64 polishes mobile scoring, adds intentional Catch-Up Scoring, makes featured game status concrete, and upgrades Quick Scoreboard money and momentum presentation.</li>
           <li>v30.3.63 prepares durable frozen RoundRecords, stable player identity, and optional Trip Ledger grouping hooks without adding Trip Ledger UI or login.</li>
           <li>v30.3.62 adds Match Summary v2 with an executive-first analyst report layout and deterministic report fixtures.</li>
           <li>Classic Scorecard and settlement math remain intact.</li>
@@ -797,7 +799,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.3.63</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
+    <span id="appVersionFooter">v30.3.64</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
   <div id="toast" class="toast hidden"></div>
@@ -808,7 +810,7 @@
         <div>
           <h3 id="playerDetailTitle">Player Detail</h3>
         </div>
-        <button id="playerDetailCloseBtn" type="button" class="secondary">Close</button>
+        <button id="playerDetailCloseBtn" type="button" class="secondary modal-close-btn" aria-label="Close player detail">Done</button>
       </div>
       <div id="playerDetailBody" class="player-detail-body"></div>
     </div>
@@ -925,7 +927,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=30.3.63"></script>
-  <script src="app.js?v=30.3.63"></script>
+  <script src="supabase-config.js?v=30.3.64"></script>
+  <script src="app.js?v=30.3.64"></script>
 </body>
 </html>

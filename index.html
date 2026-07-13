@@ -7,12 +7,12 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=30.3.67&amp;rev=3" />
+  <link rel="manifest" href="manifest.json?v=30.3.68&amp;rev=1" />
   <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
   <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
   <link rel="shortcut icon" href="./favicon-32x32.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon-v4.png" />
-  <link rel="stylesheet" href="style.css?v=30.3.67&amp;rev=3" />
+  <link rel="stylesheet" href="style.css?v=30.3.68&amp;rev=1" />
 </head>
 <body>
   <div class="app-chrome"><header class="app-header compact-header">
@@ -683,8 +683,63 @@
         <div class="tiny">Administration, utilities, settings, and diagnostics.</div>
       </div>
 
+      <section class="card tight-card player-preferences-card" aria-labelledby="playerPreferencesTitle">
+        <h2 id="playerPreferencesTitle">Player Preferences</h2>
+        <div class="tiny">Personal defaults for future matches and Quick Scoreboard views on this device.</div>
+        <form id="playerPreferencesForm" class="player-preferences-form top-gap">
+          <div class="section-label">Scoring</div>
+          <fieldset class="preference-row" aria-describedby="smartScoreAdvancePreferenceHelp">
+            <legend>Smart Score Advance</legend>
+            <div class="preference-segments preference-segments-three" data-preference-control="scoring.smartScoreAdvancePreset">
+              <label><input type="radio" name="scoring.smartScoreAdvancePreset" value="FAST" /><span>Fast</span></label>
+              <label><input type="radio" name="scoring.smartScoreAdvancePreset" value="NORMAL" /><span>Normal</span></label>
+              <label><input type="radio" name="scoring.smartScoreAdvancePreset" value="RELAXED" /><span>Relaxed</span></label>
+            </div>
+            <div id="smartScoreAdvancePreferenceHelp" class="tiny">Controls how quickly the app advances after a score is entered when Stat Tracking is off.</div>
+          </fieldset>
+          <fieldset class="preference-row" aria-describedby="hapticPreferenceHelp">
+            <legend>Haptic confirmation</legend>
+            <div class="preference-segments" data-preference-control="scoring.hapticsEnabled">
+              <label><input type="radio" name="scoring.hapticsEnabled" value="true" /><span>On</span></label>
+              <label><input type="radio" name="scoring.hapticsEnabled" value="false" /><span>Off</span></label>
+            </div>
+            <div id="hapticPreferenceHelp" class="tiny">Provides a brief vibration when supported after a score is committed.</div>
+          </fieldset>
+          <fieldset class="preference-row" aria-describedby="statTrackingPreferenceHelp">
+            <legend>Stat Tracking default</legend>
+            <div class="preference-segments" data-preference-control="scoring.statTrackingDefault">
+              <label><input type="radio" name="scoring.statTrackingDefault" value="true" /><span>On</span></label>
+              <label><input type="radio" name="scoring.statTrackingDefault" value="false" /><span>Off</span></label>
+            </div>
+            <div id="statTrackingPreferenceHelp" class="tiny">Sets the starting Stat Tracking choice for new matches. It can still be changed for an individual match.</div>
+          </fieldset>
 
-
+          <div class="section-label preference-group-label">Quick Scoreboard</div>
+          <div class="tiny">Choose which Quick Scoreboard sections open automatically.</div>
+          <fieldset class="preference-row">
+            <legend>Classic Scorecard</legend>
+            <div class="preference-segments" data-preference-control="quickScoreboard.classicScorecardExpanded">
+              <label><input type="radio" name="quickScoreboard.classicScorecardExpanded" value="true" /><span>Expanded</span></label>
+              <label><input type="radio" name="quickScoreboard.classicScorecardExpanded" value="false" /><span>Collapsed</span></label>
+            </div>
+          </fieldset>
+          <fieldset class="preference-row">
+            <legend>Score Distribution</legend>
+            <div class="preference-segments" data-preference-control="quickScoreboard.scoreDistributionExpanded">
+              <label><input type="radio" name="quickScoreboard.scoreDistributionExpanded" value="true" /><span>Expanded</span></label>
+              <label><input type="radio" name="quickScoreboard.scoreDistributionExpanded" value="false" /><span>Collapsed</span></label>
+            </div>
+          </fieldset>
+          <fieldset class="preference-row">
+            <legend>Momentum Charts</legend>
+            <div class="preference-segments" data-preference-control="quickScoreboard.momentumExpanded">
+              <label><input type="radio" name="quickScoreboard.momentumExpanded" value="true" /><span>Expanded</span></label>
+              <label><input type="radio" name="quickScoreboard.momentumExpanded" value="false" /><span>Collapsed</span></label>
+            </div>
+          </fieldset>
+          <div class="actions top-gap"><button id="resetPlayerPreferencesBtn" type="button" class="secondary danger-lite">Reset to Defaults</button></div>
+        </form>
+      </section>
 
       <div class="card tight-card">
         <h2>Handicap calculator</h2>
@@ -729,7 +784,7 @@
       <div class="card tight-card app-updates-card">
         <h2>App Updates</h2>
         <div class="app-update-summary">
-          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.67</strong></div>
+          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.68</strong></div>
           <div><span class="muted-label">Build Date</span><strong id="appBuildTimestamp">loading…</strong></div>
           <div><span class="muted-label">Cache</span><span id="appActiveCacheName" class="break-word">checking…</span></div>
           <div><span class="muted-label">Update Available</span><strong id="appUpdateAvailableStatus">checking…</strong></div>
@@ -761,6 +816,7 @@
       <div class="card tight-card">
         <h2>App notes</h2>
         <ul class="tight-list">
+          <li>v30.3.68 introduces Player Preferences so The Dye Ledger can remember scoring rhythm, haptic feedback, Stat Tracking defaults, and Quick Scoreboard opening states for future matches.</li>
           <li>v30.3.67 fixes Press-button visibility, clarifies provisional versus final settlement, standardizes fallback team names, updates the app-header logo, and improves Quick Scoreboard and desktop Play consistency.</li>
           <li>v30.3.64 polishes mobile scoring, adds intentional Catch-Up Scoring, makes featured game status concrete, and upgrades Quick Scoreboard money and momentum presentation.</li>
           <li>v30.3.63 prepares durable frozen RoundRecords, stable player identity, and optional Trip Ledger grouping hooks without adding Trip Ledger UI or login.</li>
@@ -785,10 +841,10 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.3.67</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
+    <span id="appVersionFooter">v30.3.68</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
-  <div id="toast" class="toast hidden"></div>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
   <div id="playerDetailDialog" class="modal-backdrop player-detail-backdrop hidden" aria-hidden="true">
     <div class="modal-card player-detail-modal" role="dialog" aria-modal="true" aria-labelledby="playerDetailTitle">
@@ -818,6 +874,19 @@
   <div id="pressConfirmDialog" class="modal-backdrop hidden" aria-hidden="true">
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="pressConfirmTitle">
       <div class="modal-body"><h3 id="pressConfirmTitle">Confirm Press</h3><div id="pressConfirmBody" class="top-gap"></div><div class="actions wrap top-gap"><button id="pressConfirmBtn" type="button">Confirm Press</button><button id="pressCancelBtn" type="button" class="secondary">Cancel</button></div></div>
+    </div>
+  </div>
+
+  <div id="resetPlayerPreferencesDialog" class="modal-backdrop hidden" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="resetPlayerPreferencesTitle" aria-describedby="resetPlayerPreferencesBody">
+      <div class="modal-body">
+        <h3 id="resetPlayerPreferencesTitle">Reset Player Preferences?</h3>
+        <div id="resetPlayerPreferencesBody" class="tiny top-gap">This restores the default scoring and Quick Scoreboard settings. Saved matches will not be changed.</div>
+        <div class="actions wrap top-gap">
+          <button id="cancelResetPlayerPreferencesBtn" type="button" class="secondary">Cancel</button>
+          <button id="confirmResetPlayerPreferencesBtn" type="button">Reset Preferences</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -918,7 +987,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=30.3.67&amp;rev=3"></script>
-  <script src="app.js?v=30.3.67&amp;rev=3"></script>
+  <script src="supabase-config.js?v=30.3.68&amp;rev=1"></script>
+  <script src="app.js?v=30.3.68&amp;rev=1"></script>
 </body>
 </html>

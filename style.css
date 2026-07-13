@@ -2910,6 +2910,24 @@ body {
 body {
   touch-action: auto;
 }
+
+/* v30.3.68 Player Preferences */
+.player-preferences-form{display:grid;gap:12px;min-width:0}
+.player-preferences-form fieldset{min-width:0;margin:0}
+.preference-group-label{margin-top:5px}
+.preference-row{display:grid;gap:7px;padding:11px;border:1px solid var(--border);border-radius:12px;background:#fbfdfc}
+.preference-row legend{padding:0 4px;font-weight:750;color:var(--text)}
+.preference-segments{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;min-width:0}
+.preference-segments-three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.preference-segments label{position:relative;display:block;min-width:0}
+.preference-segments input{position:absolute;opacity:0;pointer-events:none}
+.preference-segments span{display:flex;align-items:center;justify-content:center;min-height:44px;padding:7px 8px;border:1px solid var(--border);border-radius:10px;background:#fff;color:var(--text);font-weight:700;text-align:center;cursor:pointer}
+.preference-segments input:checked+span{border-color:var(--accent);background:var(--accent);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)}
+.preference-segments input:focus-visible+span{outline:3px solid rgba(11,93,59,.24);outline-offset:2px}
+@media (max-width:360px){
+  .preference-row{padding:9px}
+  .preference-segments span{padding-left:5px;padding-right:5px;font-size:.83rem}
+}
 .app-header,
 .tabs,
 main,

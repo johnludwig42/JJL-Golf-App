@@ -1,11 +1,11 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.67',
-  versionNumber: '30.3.67',
-  cacheName: 'the-dye-ledger-v30.3.67',
+  version: 'v30.3.68',
+  versionNumber: '30.3.68',
+  cacheName: 'the-dye-ledger-v30.3.68',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Press and Quick Scoreboard Cleanup Hotfix'
+  buildLabel: 'Player Preferences Foundation'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -30,6 +30,131 @@ const SMART_SCORE_ADVANCE_PRESETS = {
   relaxed: { label: 'Relaxed', delay: 1000 }
 };
 const DEFAULT_SMART_SCORE_ADVANCE_PRESET = 'normal';
+const PLAYER_PREFERENCES_STORAGE_KEY = 'dyeLedger.playerPreferences';
+const PLAYER_PREFERENCES_SCHEMA_VERSION = 1;
+const PLAYER_PREFERENCE_PATHS = new Set([
+  'scoring.smartScoreAdvancePreset',
+  'scoring.hapticsEnabled',
+  'scoring.statTrackingDefault',
+  'quickScoreboard.classicScorecardExpanded',
+  'quickScoreboard.scoreDistributionExpanded',
+  'quickScoreboard.momentumExpanded',
+]);
+
+function isPlainPreferenceObject(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function getDefaultPlayerPreferences() {
+  return {
+    schemaVersion: PLAYER_PREFERENCES_SCHEMA_VERSION,
+    scoring: {
+      smartScoreAdvancePreset: 'NORMAL',
+      hapticsEnabled: true,
+      statTrackingDefault: false,
+    },
+    quickScoreboard: {
+      classicScorecardExpanded: false,
+      scoreDistributionExpanded: false,
+      momentumExpanded: false,
+    },
+  };
+}
+
+function normalizePlayerPreferences(raw) {
+  const source = isPlainPreferenceObject(raw) ? raw : {};
+  const scoring = isPlainPreferenceObject(source.scoring) ? source.scoring : {};
+  const quickScoreboard = isPlainPreferenceObject(source.quickScoreboard) ? source.quickScoreboard : {};
+  const preset = String(scoring.smartScoreAdvancePreset || '').trim().toUpperCase();
+  return {
+    ...source,
+    schemaVersion: PLAYER_PREFERENCES_SCHEMA_VERSION,
+    scoring: {
+      ...scoring,
+      smartScoreAdvancePreset: ['FAST', 'NORMAL', 'RELAXED'].includes(preset) ? preset : 'NORMAL',
+      hapticsEnabled: typeof scoring.hapticsEnabled === 'boolean' ? scoring.hapticsEnabled : true,
+      statTrackingDefault: typeof scoring.statTrackingDefault === 'boolean' ? scoring.statTrackingDefault : false,
+    },
+    quickScoreboard: {
+      ...quickScoreboard,
+      classicScorecardExpanded: typeof quickScoreboard.classicScorecardExpanded === 'boolean' ? quickScoreboard.classicScorecardExpanded : false,
+      scoreDistributionExpanded: typeof quickScoreboard.scoreDistributionExpanded === 'boolean' ? quickScoreboard.scoreDistributionExpanded : false,
+      momentumExpanded: typeof quickScoreboard.momentumExpanded === 'boolean' ? quickScoreboard.momentumExpanded : false,
+    },
+  };
+}
+
+function savePlayerPreferences(preferences, storage = localStorage) {
+  const normalized = normalizePlayerPreferences(preferences);
+  try {
+    storage.setItem(PLAYER_PREFERENCES_STORAGE_KEY, JSON.stringify(normalized));
+    return normalized;
+  } catch (err) {
+    if (typeof recordAppError === 'function') recordAppError(err, 'Save Player Preferences');
+    return null;
+  }
+}
+
+function getPlayerPreferences(storage = localStorage) {
+  try {
+    const raw = storage.getItem(PLAYER_PREFERENCES_STORAGE_KEY);
+    if (raw == null) {
+      const defaults = getDefaultPlayerPreferences();
+      savePlayerPreferences(defaults, storage);
+      return defaults;
+    }
+    return normalizePlayerPreferences(JSON.parse(raw));
+  } catch (err) {
+    if (typeof recordAppError === 'function') recordAppError(err, 'Read Player Preferences');
+    return getDefaultPlayerPreferences();
+  }
+}
+
+function updatePlayerPreference(path, value, storage = localStorage) {
+  const normalizedPath = Array.isArray(path) ? path.join('.') : String(path || '');
+  if (!PLAYER_PREFERENCE_PATHS.has(normalizedPath)) return null;
+  const current = getPlayerPreferences(storage);
+  const next = normalizePlayerPreferences(current);
+  const [group, field] = normalizedPath.split('.');
+  next[group] = { ...next[group], [field]: value };
+  return savePlayerPreferences(next, storage);
+}
+
+function resetPlayerPreferences(storage = localStorage) {
+  const current = getPlayerPreferences(storage);
+  const defaults = getDefaultPlayerPreferences();
+  return savePlayerPreferences({
+    ...current,
+    schemaVersion: defaults.schemaVersion,
+    scoring: { ...current.scoring, ...defaults.scoring },
+    quickScoreboard: { ...current.quickScoreboard, ...defaults.quickScoreboard },
+  }, storage);
+}
+
+function getPlayerPreferencesDiagnostics(storage = localStorage) {
+  try {
+    const raw = storage.getItem(PLAYER_PREFERENCES_STORAGE_KEY);
+    return { schemaVersion: getPlayerPreferences(storage).schemaVersion, storageAvailable: true, source: raw == null ? 'defaults' : 'stored' };
+  } catch (err) {
+    return { schemaVersion: PLAYER_PREFERENCES_SCHEMA_VERSION, storageAvailable: false, source: 'defaults' };
+  }
+}
+
+function getNewMatchDefaultsFromPreferences(preferences = getPlayerPreferences()) {
+  const normalized = normalizePlayerPreferences(preferences);
+  return {
+    smartScoreAdvancePreset: normalized.scoring.smartScoreAdvancePreset.toLowerCase(),
+    statTrackingEnabled: normalized.scoring.statTrackingDefault,
+  };
+}
+
+function mergeNewMatchDefaults(explicitValues = {}, preferences = getPlayerPreferences()) {
+  const defaults = getNewMatchDefaultsFromPreferences(preferences);
+  return {
+    smartScoreAdvancePreset: explicitValues.smartScoreAdvancePreset == null ? defaults.smartScoreAdvancePreset : normalizeSmartScoreAdvancePreset(explicitValues.smartScoreAdvancePreset),
+    statTrackingEnabled: explicitValues.statTrackingEnabled == null ? defaults.statTrackingEnabled : !!explicitValues.statTrackingEnabled,
+  };
+}
 const WEATHER_CAPTURE_SOURCE = 'open-meteo';
 const WEATHER_CAPTURE_TIMEOUT_MS = 5000;
 const WEATHER_GEOLOCATION_MAX_AGE_MS = 10 * 60 * 1000;
@@ -151,6 +276,7 @@ function getMatchSetupDiagnosticsText() {
 
 function getAppDiagnosticsText() {
   const errors = readRecentAppErrors().slice(0, 5);
+  const preferenceDiagnostics = getPlayerPreferencesDiagnostics();
   const lines = [
     'The Dye Ledger Diagnostics',
     `App Version: ${APP_VERSION}`,
@@ -159,6 +285,7 @@ function getAppDiagnosticsText() {
     `Cache Name: ${APP_CACHE_NAME}`,
     `URL: ${getSafeUrl()}`,
     `User Agent: ${getSafeUserAgent()}`,
+    `Player Preferences: schema v${preferenceDiagnostics.schemaVersion} · ${preferenceDiagnostics.storageAvailable ? preferenceDiagnostics.source : 'storage unavailable'}`,
     '',
     getMatchSetupDiagnosticsText(),
     '',
@@ -7973,18 +8100,19 @@ function buildScoreDistributionSummary(match, metrics) {
     </div>`;
 }
 
-function buildQuickScoreDistribution(match, metrics, record = null) {
+function buildQuickScoreDistribution(match, metrics, record = null, expanded = false) {
+  const open = expanded === true ? ' open' : '';
   const frozen = record && isFrozenRoundRecord(record);
   if (!frozen) {
     const rows = computeScoreDistributionSummary(match, metrics);
     if (!rows.some(row => Object.values(row.totals || {}).some(value => Number(value) > 0))) return '';
-    return `<details class="quick-scoreboard-section quick-disclosure quick-score-distribution"><summary>Score Distribution</summary><div class="quick-scroll-panel">${buildScoreDistributionSummary(match, metrics)}</div></details>`;
+    return `<details class="quick-scoreboard-section quick-disclosure quick-score-distribution"${open}><summary>Score Distribution</summary><div class="quick-scroll-panel">${buildScoreDistributionSummary(match, metrics)}</div></details>`;
   }
   const rows = (record.players || []).filter(player => player.scoreDistribution).map(player => ({ name: player.displayName || player.playerId, totals: player.scoreDistribution }));
   if (!rows.some(row => Object.values(row.totals || {}).some(value => Number(value) > 0))) return '';
   const body = rows.map(({ name, totals }) => `<tr><td><strong>${escapeHtml(name)}</strong></td><td>${totals.eagle}</td><td>${totals.birdie}</td><td>${totals.par}</td><td>${totals.bogey}</td><td>${totals.doubleBogey}</td><td>${totals.other}</td></tr>`).join('');
   const presentation = `<div class="score-distribution-wrap top-gap"><div class="section-subhead">Score distribution</div><div class="tiny">Gross scores only; completed holes only. Hole-in-ones, albatrosses, and triple bogeys or worse are included in Other.</div><div class="score-distribution-scroll top-gap"><table class="score-distribution-table"><thead><tr><th>Player</th><th>Eagle</th><th>Birdie</th><th>Par</th><th>Bogey</th><th>Double Bogey</th><th>Other</th></tr></thead><tbody>${body}</tbody></table></div></div>`;
-  return `<details class="quick-scoreboard-section quick-disclosure quick-score-distribution"><summary>Score Distribution</summary><div class="quick-scroll-panel">${presentation}</div></details>`;
+  return `<details class="quick-scoreboard-section quick-disclosure quick-score-distribution"${open}><summary>Score Distribution</summary><div class="quick-scroll-panel">${presentation}</div></details>`;
 }
 
 
@@ -8495,8 +8623,9 @@ function buildQuickPlayerScoreSummary(match, metrics, record = null) {
   return `<section class="quick-scoreboard-section quick-player-score-summary"><h4>Player Score Summary</h4>${buildPlayerSummaryTable(rows, 'Player Score Summary')}</section>`;
 }
 
-function buildQuickScoreboardView(match, metrics) {
+function buildQuickScoreboardView(match, metrics, preferences = getPlayerPreferences()) {
   if (!match || !metrics) return '<div class="player-detail-empty">Scoreboard is unavailable.</div>';
+  const quickPreferences = normalizePlayerPreferences(preferences).quickScoreboard;
   const sortedPlayers = (metrics.players || []).slice().sort((a, b) => a.leaderboardNetDiff - b.leaderboardNetDiff || a.toPar - b.toPar || String(a.player?.name || '').localeCompare(String(b.player?.name || '')));
   const playerRows = sortedPlayers.map((p, idx) => `
     <tr>
@@ -8542,9 +8671,9 @@ function buildQuickScoreboardView(match, metrics) {
         <div>${gameSummaryHtml || gameStatusRows}${!gameSummaryHtml ? `<section class="quick-scoreboard-section"><h4>Game Contributions</h4>${gameMoneyHtml}${sspMoneyHtml}</section>` : ''}</div>
       </div>
       ${buildQuickPlayerScoreSummary(match, metrics, record)}
-      ${buildQuickScoreDistribution(match, metrics, record)}
-      <details class="quick-scoreboard-section quick-disclosure quick-classic-scorecard"><summary>Classic Scorecard</summary>${buildClassicScorecard(match, metrics, { readOnly: true })}</details>
-      ${buildQuickScoreboardMomentumCharts(match, metrics)}
+      ${buildQuickScoreDistribution(match, metrics, record, quickPreferences.scoreDistributionExpanded)}
+      <details class="quick-scoreboard-section quick-disclosure quick-classic-scorecard"${quickPreferences.classicScorecardExpanded ? ' open' : ''}><summary>Classic Scorecard</summary>${buildClassicScorecard(match, metrics, { readOnly: true })}</details>
+      ${buildQuickScoreboardMomentumCharts(match, metrics, quickPreferences.momentumExpanded)}
       ${highlightHtml}
     </div>`;
 }
@@ -11361,6 +11490,7 @@ function renderAll() {
   renderMatchSetupState();
   renderSharedAssignmentDiagnosticsMore();
   renderRecentAppErrorsDiagnostics();
+  renderPlayerPreferences();
   populateCourseSelects();
   populateCalcPlayers();
   populateCalcCourses();
@@ -11890,7 +12020,8 @@ function syncNewMatchConflictUi() {
   setNewMatchDialogButton(finishBtn, { visible: false });
 }
 
-function createBlankSetupDraft() {
+function createBlankSetupDraft(preferences = getPlayerPreferences()) {
+  const preferenceDefaults = getNewMatchDefaultsFromPreferences(preferences);
   return createEmptyMatch({
     id: uid(),
     date: todayIso(),
@@ -11907,9 +12038,9 @@ function createBlankSetupDraft() {
     scoringAccessMode: 'team_codes',
     scoreEntryMode: 'team',
     officialScorerName: 'Official scorer',
-    statTrackingEnabled: false,
+    statTrackingEnabled: preferenceDefaults.statTrackingEnabled,
     smartScoreAdvanceEnabled: DEFAULT_SMART_SCORE_ADVANCE,
-    smartScoreAdvancePreset: DEFAULT_SMART_SCORE_ADVANCE_PRESET,
+    smartScoreAdvancePreset: preferenceDefaults.smartScoreAdvancePreset,
     selectedGames: [],
     players: [],
   });
@@ -13026,6 +13157,35 @@ function getMomentumTeamLabels(match, metrics, gameKey) {
   }
   return [1, 2].map(teamNo => getTeamLabel(match, teamNo));
 }
+
+function renderPlayerPreferences(preferences = getPlayerPreferences()) {
+  const form = document.getElementById('playerPreferencesForm');
+  if (!form) return;
+  const normalized = normalizePlayerPreferences(preferences);
+  PLAYER_PREFERENCE_PATHS.forEach(path => {
+    const [group, field] = path.split('.');
+    const value = String(normalized[group][field]);
+    form.querySelectorAll(`input[name="${path}"]`).forEach(input => {
+      input.checked = input.value === value;
+    });
+  });
+}
+
+function openResetPlayerPreferencesDialog() {
+  const dialog = document.getElementById('resetPlayerPreferencesDialog');
+  if (!dialog) return;
+  dialog.classList.remove('hidden');
+  dialog.setAttribute('aria-hidden', 'false');
+  document.getElementById('cancelResetPlayerPreferencesBtn')?.focus();
+}
+
+function closeResetPlayerPreferencesDialog() {
+  const dialog = document.getElementById('resetPlayerPreferencesDialog');
+  if (!dialog) return;
+  dialog.classList.add('hidden');
+  dialog.setAttribute('aria-hidden', 'true');
+  document.getElementById('resetPlayerPreferencesBtn')?.focus();
+}
 function buildMomentumPresentation(match, metrics, gameKey) {
   const isNassauComponent = /^nassau_(front|back|overall)$/.test(String(gameKey));
   const baseGameKey = isNassauComponent ? 'nassau' : gameKey;
@@ -13101,7 +13261,7 @@ function renderMomentumChart(match, metrics, gameKey, { compact = false } = {}) 
   const unit = gameKey === 'sneaky_sandy_poley' ? 'points' : 'holes';
   return `<div class="momentum-chart ${compact ? 'momentum-chart--compact' : 'momentum-chart--full'}" data-momentum-game="${escapeHtml(gameKey)}" data-momentum-perspective="${model.perspective}" data-momentum-y-bound="${scale.bound}" data-momentum-y-step="${scale.step}"><div class="momentum-orientation">Positive = ${escapeHtml(model.upperLabel)} ahead</div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(gameKey)} momentum; positive values mean ${escapeHtml(model.upperLabel)} ahead"><line x1="${left}" y1="${top}" x2="${left}" y2="${height - bottom}" class="momentum-y-axis"/>${tickMarkup}<line x1="${left}" y1="${zero}" x2="${width - right + 8}" y2="${zero}" class="momentum-zero-baseline" data-zero-y="${zero}"/><text x="4" y="12" class="momentum-axis-unit">${unit}</text><polyline points="${points}" class="momentum-chart-line"/>${dots}${valueLabels}${labels}<text x="${width - 4}" y="${top + 5}" text-anchor="end" class="momentum-side-label momentum-side-label--upper">${escapeHtml(model.upperLabel)}</text><text x="${width - 4}" y="${height - bottom}" text-anchor="end" class="momentum-side-label momentum-side-label--lower">${escapeHtml(model.lowerLabel)}</text></svg></div>`;
 }
-function buildQuickScoreboardMomentumCharts(match, metrics) {
+function buildQuickScoreboardMomentumCharts(match, metrics, expanded = false) {
   const eligible = getOrderedSelectedGames(match).flatMap(game => game.key === 'nassau' ? ['nassau_front', ...((metrics.holeResults || []).length > 9 ? ['nassau_back'] : []), 'nassau_overall'] : [game.key]).filter(key => ['nassau_front', 'nassau_back', 'nassau_overall', 'team_match', 'singles_match', 'sneaky_sandy_poley'].includes(key));
   const cards = [...new Set(eligible)].map(key => {
     const chart = renderMomentumChart(match, metrics, key, { compact: true });
@@ -13109,7 +13269,7 @@ function buildQuickScoreboardMomentumCharts(match, metrics) {
     const label = key === 'sneaky_sandy_poley' ? 'SSP' : key.startsWith('nassau_') ? `${key.split('_')[1][0].toUpperCase() + key.split('_')[1].slice(1)} Nassau Momentum` : getGameLabel(key);
     return `<div class="quick-momentum-card"><strong>${escapeHtml(label)}</strong>${chart}</div>`;
   }).filter(Boolean).slice(0, 4).join('');
-  return cards ? `<details class="quick-scoreboard-section quick-scoreboard-momentum quick-disclosure" open><summary>Momentum Charts</summary><div class="quick-momentum-list">${cards}</div></details>` : '';
+  return cards ? `<details class="quick-scoreboard-section quick-scoreboard-momentum quick-disclosure"${expanded === true ? ' open' : ''}><summary>Momentum Charts</summary><div class="quick-momentum-list">${cards}</div></details>` : '';
 }
 function getTruthfulGameStatus(match, metrics, gameKey, cfg = null) {
   const status = getCompactGameStatus(match, metrics, gameKey, cfg);
@@ -13471,10 +13631,19 @@ function isGrossScoreValidValue(value) {
   return Number.isFinite(numeric) && numeric > 0;
 }
 
-function triggerSmartScoreHaptic() {
-  // v30.3.40: intentionally no-op on iPhone/PWA. navigator.vibrate is not
-  // supported reliably by iOS Safari, and scoring confirmation should not rely on haptics.
-  return false;
+function shouldTriggerHapticConfirmation(preferences, deviceCapabilities = {}) {
+  const enabled = normalizePlayerPreferences(preferences).scoring.hapticsEnabled;
+  return enabled && typeof deviceCapabilities.vibrate === 'function';
+}
+
+function triggerSmartScoreHaptic(preferences = getPlayerPreferences(), deviceCapabilities = navigator) {
+  if (!shouldTriggerHapticConfirmation(preferences, deviceCapabilities)) return false;
+  try {
+    deviceCapabilities.vibrate(18);
+    return true;
+  } catch (err) {
+    return false;
+  }
 }
 
 function flashCompletedScoreInput(inputEl) {
@@ -14881,7 +15050,11 @@ function buildTemplateFromCurrentSetup(nameOverride = '') {
 function applyMatchTemplate(templateId) {
   const template = readMatchTemplates().find(t => t.id === templateId);
   if (!template) return toast('Template not found.');
-  const draft = createEmptyMatch();
+  const preferenceDefaults = mergeNewMatchDefaults({
+    smartScoreAdvancePreset: template.smartScoreAdvancePreset,
+    statTrackingEnabled: template.statTrackingEnabled,
+  });
+  const draft = createEmptyMatch(preferenceDefaults);
   Object.assign(draft, {
     id: uid(),
     date: todayIso(),
@@ -14899,9 +15072,9 @@ function applyMatchTemplate(templateId) {
     featuredCompetition: normalizeFeaturedCompetition(template.featuredCompetition || 'auto'),
     scoringAccessMode: normalizeScoringAccessMode(template.scoringAccessMode || 'single_device'),
     officialScorerName: template.officialScorerName || 'Official scorer',
-    statTrackingEnabled: !!template.statTrackingEnabled,
+    statTrackingEnabled: preferenceDefaults.statTrackingEnabled,
     smartScoreAdvanceEnabled: template.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!template.smartScoreAdvanceEnabled,
-    smartScoreAdvancePreset: normalizeSmartScoreAdvancePreset(template.smartScoreAdvancePreset),
+    smartScoreAdvancePreset: preferenceDefaults.smartScoreAdvancePreset,
     statTrackingPlayerIds: Array.isArray(template.statTrackingPlayerIds) ? template.statTrackingPlayerIds.slice() : [],
     players: sanitizeTemplatePlayers(template.players).map((p, idx) => ({
       ...p,
@@ -16070,7 +16243,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
   updateSetupActionButtonStates();
   activateTab('setup');
   if (!matchId) {
-    const draft = draftMatch || createEmptyMatch();
+    const draft = draftMatch || createBlankSetupDraft();
     form.reset();
     form.elements.namedItem('date').value = draft.date || todayIso();
     form.elements.namedItem('name').value = draft.name === 'Round' ? '' : (draft.name || '');
@@ -16548,6 +16721,7 @@ function installHandlers() {
     if (e.key === 'Escape' && !document.getElementById('playerDetailDialog')?.classList.contains('hidden')) closePlayerDetailView();
     if (e.key === 'Escape' && !document.getElementById('quickScoreboardDialog')?.classList.contains('hidden')) closeQuickScoreboardView();
     if (e.key === 'Escape' && !document.getElementById('playerSearchSheet')?.classList.contains('hidden')) closePlayerSearchSheet();
+    if (e.key === 'Escape' && !document.getElementById('resetPlayerPreferencesDialog')?.classList.contains('hidden')) closeResetPlayerPreferencesDialog();
   });
   document.getElementById('gamesPicker').addEventListener('change', e => {
     if (!e.target.matches('[data-game-key]')) return;
@@ -17587,6 +17761,32 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   });
 
   document.getElementById('exportBtn').addEventListener('click', exportJson);
+  document.getElementById('playerPreferencesForm')?.addEventListener('change', event => {
+    const input = event.target.closest('input[type="radio"][name]');
+    if (!input || !PLAYER_PREFERENCE_PATHS.has(input.name)) return;
+    const value = input.value === 'true' ? true : input.value === 'false' ? false : input.value;
+    const saved = updatePlayerPreference(input.name, value);
+    if (!saved) {
+      renderPlayerPreferences();
+      toast('Could not save that preference on this device.');
+      return;
+    }
+    renderPlayerPreferences(saved);
+    toast('Preference saved');
+  });
+  document.getElementById('resetPlayerPreferencesBtn')?.addEventListener('click', openResetPlayerPreferencesDialog);
+  document.getElementById('cancelResetPlayerPreferencesBtn')?.addEventListener('click', closeResetPlayerPreferencesDialog);
+  document.getElementById('resetPlayerPreferencesDialog')?.addEventListener('click', event => { if (event.target?.id === 'resetPlayerPreferencesDialog') closeResetPlayerPreferencesDialog(); });
+  document.getElementById('confirmResetPlayerPreferencesBtn')?.addEventListener('click', () => {
+    const reset = resetPlayerPreferences();
+    if (!reset) {
+      toast('Could not reset preferences on this device.');
+      return;
+    }
+    renderPlayerPreferences(reset);
+    closeResetPlayerPreferencesDialog();
+    toast('Preferences reset');
+  });
   document.getElementById('importFile').addEventListener('change', async e => {
     const file = e.target.files?.[0]; if (!file) return;
     try {
@@ -18183,6 +18383,20 @@ function installDyeLedgerLiveEngineAdapter() {
       normalizeState();
       return state;
     },
+    getDefaultPlayerPreferences,
+    normalizePlayerPreferences,
+    getPlayerPreferences,
+    savePlayerPreferences,
+    updatePlayerPreference,
+    resetPlayerPreferences,
+    getPlayerPreferencesDiagnostics,
+    getNewMatchDefaultsFromPreferences,
+    mergeNewMatchDefaults,
+    createBlankSetupDraft,
+    buildNextRoundDraft,
+    getSmartScoreAdvanceDelay,
+    shouldTriggerHapticConfirmation,
+    triggerSmartScoreHaptic,
     createEmptyMatch,
     normalizeMatch,
     computeMatchMetrics,

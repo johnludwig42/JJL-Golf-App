@@ -206,14 +206,14 @@ test('Quick Scoreboard reuses the native bounded scorecard scroller and Play Gre
   const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
   const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   assert.match(css, /body\s*\{\s*touch-action:\s*auto;/);
-  assert.match(app, /quick-classic-scorecard"><summary>Classic Scorecard<\/summary>\$\{buildClassicScorecard\(match, metrics, \{ readOnly: true \}\)\}<\/details>/);
+  assert.match(app, /quick-classic-scorecard"\$\{quickPreferences\.classicScorecardExpanded \? ' open' : ''\}><summary>Classic Scorecard<\/summary>\$\{buildClassicScorecard\(match, metrics, \{ readOnly: true \}\)\}<\/details>/);
   assert.doesNotMatch(app, /quick-classic-scorecard[^\n]*quick-scroll-panel/);
   assert.match(app, /class="scorecard-wrap" tabindex="0" role="region" aria-label="Classic scorecard; scroll horizontally to view all holes"/);
   assert.match(css, /\.scorecard-wrap\{position:relative;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;/);
   assert.match(css, /@media \(max-width:760px\)\{\.scorecard-table\{min-width:920px\}\}/);
   assert.match(css, /\.quick-classic-scorecard>\.scorecard-wrap\{width:calc\(100% - 24px\);max-width:calc\(100% - 24px\);/);
-  assert.match(html, /style\.css\?v=30\.3\.67&amp;rev=3/);
-  assert.match(app, /cacheName: 'the-dye-ledger-v30\.3\.67'/);
+  assert.match(html, /style\.css\?v=30\.3\.68&amp;rev=1/);
+  assert.match(app, /cacheName: 'the-dye-ledger-v30\.3\.68'/);
   assert.match(css, /#greeniesEntryWrap \.greenies-check\{min-height:44px;padding:4px 9px;gap:7px\}/);
   assert.match(css, /#greeniesEntryWrap \.greenies-check input\[type="checkbox"\]\{width:20px;height:20px;min-height:20px;padding:0\}/);
   assert.match(html, /id="greeniesEntryWrap" class="top-gap hidden"/);

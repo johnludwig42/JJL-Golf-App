@@ -18,10 +18,10 @@
       "type": "image/png"
     },
     {
-      "src": "./apple-touch-icon.png",
+      "src": "./apple-touch-icon-v4.png",
       "sizes": "180x180",
       "type": "image/png"
     }
   ],
-  "version": "v30.3.66"
+  "version": "v30.3.67"
 }

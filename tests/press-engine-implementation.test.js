@@ -160,6 +160,44 @@ test('Player Score Summary is compact, stable-ID keyed, and precedes the scoreca
   assert.equal(JSON.stringify(f.match), before);
 });
 
+test('shared player summary reuses trusted Postable values, stable ranking, accessible compact markup, and frozen data', () => {
+  const active = fixture(undefined, 5);
+  active.metrics.players[0].player.name = 'Alexandria Very Long Duplicate Player Name';
+  const before = JSON.stringify({ match: active.match, metrics: active.metrics });
+  const rows = active.engine.buildPlayerSummaryRows(active.match, active.metrics);
+  assert.equal(rows.length, active.metrics.players.length);
+  rows.forEach(row => {
+    const metric = active.metrics.players.find(player => String(player.playerId) === row.playerId);
+    assert.equal(row.postableScore, metric.postableTotal);
+    assert.equal(row.gross, metric.grossTotal);
+    assert.equal(row.net, metric.leaderboardNetTotal);
+    assert.equal(row.netToPar, metric.leaderboardNetDiff);
+  });
+  assert.equal(new Set(rows.map(row => row.playerId)).size, rows.length);
+  const table = active.engine.buildPlayerSummaryTable(rows, 'Player Leaderboard');
+  assert.match(table, /aria-label="Player Leaderboard"/);
+  assert.match(table, /aria-label="Postable Score"/);
+  assert.match(table, />Post\.<\/span>/);
+  assert.match(table, /title="Alexandria Very Long Duplicate Player Name"/);
+  const quick = active.engine.buildQuickPlayerScoreSummary(active.match, active.metrics);
+  assert.match(quick, /Player Score Summary/);
+  assert.match(quick, /player-summary-table/);
+  assert.equal(JSON.stringify({ match: active.match, metrics: active.metrics }), before);
+
+  const blank = fixture(undefined, 0);
+  const blankTable = blank.engine.buildPlayerSummaryTable(blank.engine.buildPlayerSummaryRows(blank.match, blank.metrics));
+  assert.match(blankTable, /<td>—<\/td>/);
+
+  const completed = fixture(undefined, 18);
+  completed.match.status = 'complete'; completed.match.completedAt = '2026-07-12T20:00:00Z';
+  const frozen = completed.engine.buildFrozenRoundRecord(completed.match, completed.metrics, completed.match.completedAt);
+  const frozenBefore = JSON.stringify(frozen);
+  const frozenRows = completed.engine.buildPlayerSummaryRows(completed.match, completed.metrics, frozen);
+  frozenRows.forEach(row => assert.equal(row.postableScore, frozen.players.find(player => String(player.playerId) === row.playerId).postable));
+  assert.match(completed.engine.buildQuickPlayerScoreSummary(completed.match, completed.metrics, frozen), /Postable Score/);
+  assert.equal(JSON.stringify(frozen), frozenBefore);
+});
+
 test('Game Summary uses native selected-game labels and omits unselected games', () => {
   const f = fixture({ key: 'team_match', basis: 'net', stake: 10, pressesEnabled: false }, 5);
   const html = f.engine.buildQuickGameSummary(f.match, f.metrics);
@@ -168,4 +206,145 @@ test('Game Summary uses native selected-game labels and omits unselected games',
   assert.doesNotMatch(html, />Nassau</);
   assert.doesNotMatch(html, />SSP</);
   assert.doesNotMatch(html, /Base Game Results/);
+});
+
+test('local Nassau visibility resolves legacy match config and survives normalization reload', () => {
+  const game = { key: 'nassau', basis: 'net', stakesFront: 10, stakesBack: 10, stakesOverall: 10 };
+  const match = { id: 'legacy-nassau', date: '2026-07-12', courseId: 'c', teeId: 't', holeCount: 18, format: 'teams', teamCount: 2, playersPerTeam: 2, status: 'active', storageMode: 'local', selectedGames: [game], pressConfig: { pressesEnabled: true, nassauFrontEnabled: true, declarationWindow: 'BEFORE_HOLE_STARTED', pressAvailabilityRule: 'FUTURE_HOLES_REMAIN' }, presses: [], players: players.map((p, i) => ({ playerId: p.id, team: i < 2 ? 1 : 2, slot: i, scores: scores(5, i < 2 ? 4 : 5) })) };
+  const engine = loadLiveEngine();
+  const state = engine.seedState({ players: structuredClone(players), courses: [structuredClone(course)], matches: [structuredClone(match)], activeMatchId: match.id });
+  const live = state.matches[0];
+  const before = JSON.stringify(live.selectedGames);
+  assert.equal(engine.getPressConfigForGame(live, live.selectedGames[0]).pressesEnabled, true);
+  assert.ok(engine.getCurrentPressOpportunities(live, engine.computeMatchMetrics(live), { viewedPosition: 6, isHost: true }).some(row => row.segment === 'FRONT'));
+  const reloaded = structuredClone(live);
+  engine.normalizeMatch(reloaded);
+  assert.equal(engine.getPressConfigForGame(reloaded, reloaded.selectedGames[0]).pressesEnabled, true);
+  assert.ok(engine.getCurrentPressOpportunities(reloaded, engine.computeMatchMetrics(reloaded), { viewedPosition: 6, isHost: true }).length > 0);
+  assert.equal(JSON.stringify(live.selectedGames), before);
+});
+
+test('active Nassau press shows projected Quick Scoreboard impact without creating settlement transactions', () => {
+  const f = fixture({ key: 'nassau', basis: 'net', stakesFront: 5, stakesBack: 5, stakesOverall: 5, pressesEnabled: true }, 5);
+  f.match.players = [f.match.players[0], f.match.players[2]];
+  f.match.playersPerTeam = 1;
+  f.metrics = f.engine.computeMatchMetrics(f.match);
+  const press = f.engine.normalizePressRecord({ pressId: 'press-live', parentGameId: 'nassau', rootGameId: 'nassau', parentSegmentId: 'nassau:front', parentSegmentType: 'FRONT', startingHole: 3, endingHole: 9, wagerAmount: 5, status: 'ACTIVE', initiatedByPlayerId: 'c' }, f.match);
+  f.match.presses = [press];
+  const settlement = f.engine.buildPressSettlementShape(f.match, f.metrics, press);
+  assert.equal(settlement.status, 'ACTIVE');
+  assert.equal(settlement.transactions.length, 0);
+  const html = f.engine.buildQuickNassauResults(f.match, f.metrics);
+  assert.match(html, /ACTIVE[^<]*\+\$5/);
+  assert.equal(settlement.transactions.length, 0);
+});
+
+test('complete payout context includes active and final Press contributions exactly once before hero netting', () => {
+  const f = fixture({ key: 'nassau', basis: 'net', stakesFront: 5, stakesBack: 0, stakesOverall: 0, pressesEnabled: true }, 5);
+  f.match.players = [f.match.players[0], f.match.players[2]];
+  f.match.playersPerTeam = 1;
+  f.metrics = f.engine.computeMatchMetrics(f.match);
+  const press = f.engine.normalizePressRecord({ pressId: 'hero-press', parentGameId: 'nassau_net', rootGameId: 'nassau_net', parentSegmentId: 'nassau_net:front', parentSegmentType: 'FRONT', startingHole: 3, endingHole: 9, wagerAmount: 5, status: 'ACTIVE' }, f.match);
+  const base = f.engine.getPayoutReportContext(f.match, f.metrics);
+  f.match.presses = [press, structuredClone(press)];
+  const before = JSON.stringify(f.match);
+  const previewShape = f.engine.buildPressSettlementShape(f.match, f.metrics, press, { includeActivePreview: true });
+  assert.equal(previewShape.status, 'ACTIVE');
+  assert.ok(previewShape.transactions.length > 0);
+  const complete = f.engine.getPayoutReportContext(f.match, f.metrics);
+  assert.equal(complete.payoutGames.filter(game => game.key === 'press:hero-press').length, 1);
+  Object.keys(complete.finalTotals).forEach(playerId => {
+    assert.equal(Number(complete.finalTotals[playerId] || 0) - Number(base.finalTotals[playerId] || 0), Number(previewShape.amounts[playerId] || 0));
+  });
+  const obligations = f.engine.optimalSettlementRows(complete.finalTotals);
+  const positiveLedger = Object.values(complete.finalTotals).filter(amount => Number(amount) > 0).reduce((sum, amount) => sum + Number(amount), 0);
+  assert.equal(obligations.reduce((sum, row) => sum + Number(row.amount), 0), positiveLedger);
+  const provisional = f.engine.buildQuickSettlementHero(f.match, f.metrics, complete);
+  assert.match(provisional, /Provisional Settlement/);
+  assert.match(provisional, /would pay/);
+  assert.match(provisional, /\$10/);
+  assert.deepEqual(JSON.parse(JSON.stringify(f.engine.getPayoutReportContext(f.match, f.metrics).finalTotals)), JSON.parse(JSON.stringify(complete.finalTotals)));
+  assert.equal(JSON.stringify(f.match), before);
+
+  f.match.players.forEach(player => { for (let index = 5; index < 9; index += 1) player.scores[index].gross = player.team === 1 ? 4 : 5; });
+  f.metrics = f.engine.computeMatchMetrics(f.match);
+  f.match.status = 'complete'; f.match.completedAt = '2026-07-12T20:00:00Z';
+  const finalContext = f.engine.getPayoutReportContext(f.match, f.metrics);
+  assert.equal(finalContext.payoutGames.filter(game => game.key === 'press:hero-press').length, 1);
+  const finalHero = f.engine.buildQuickSettlementHero(f.match, f.metrics, finalContext);
+  assert.match(finalHero, /Final Settlement/);
+  assert.match(finalHero, / pays /);
+  const frozen = f.engine.buildFrozenRoundRecord(f.match, f.metrics, f.match.completedAt);
+  const frozenBefore = JSON.stringify(frozen);
+  const frozenHero = f.engine.buildQuickSettlementHero(f.match, f.metrics, finalContext, frozen);
+  assert.match(frozenHero, /Final Settlement/);
+  assert.match(frozenHero, / pays /);
+  assert.equal(JSON.stringify(frozen), frozenBefore);
+});
+
+test('Press-inclusive context handles multiple, standalone, halved, incomplete, voided, and superseded records', () => {
+  const multiple = fixture({ key: 'nassau', basis: 'net', stakesFront: 5, stakesBack: 5, stakesOverall: 5, pressesEnabled: true }, 9);
+  const front = multiple.engine.normalizePressRecord({ pressId: 'front-final', parentGameId: 'nassau_net', rootGameId: 'nassau_net', parentSegmentId: 'nassau_net:front', parentSegmentType: 'FRONT', startingHole: 7, endingHole: 9, wagerAmount: 5, status: 'ACTIVE' }, multiple.match);
+  const overall = multiple.engine.normalizePressRecord({ pressId: 'overall-live', parentGameId: 'nassau_net', rootGameId: 'nassau_net', parentSegmentId: 'nassau_net:overall', parentSegmentType: 'OVERALL', startingHole: 7, endingHole: 18, wagerAmount: 5, status: 'ACTIVE' }, multiple.match);
+  multiple.match.presses = [front, overall, structuredClone(front)];
+  const multipleContext = multiple.engine.getPayoutReportContext(multiple.match, multiple.metrics);
+  assert.equal(JSON.stringify(multipleContext.payoutGames.filter(game => game.meta?.press).map(game => game.key).sort()), JSON.stringify(['press:front-final', 'press:overall-live']));
+
+  const standalone = fixture({ key: 'team_match', basis: 'net', stake: 10, pressesEnabled: true }, 9);
+  const matchPress = standalone.engine.normalizePressRecord({ pressId: 'match-press', parentGameId: 'team_match', rootGameId: 'team_match', parentSegmentId: 'team_match:overall', parentSegmentType: 'OVERALL', startingHole: 7, endingHole: 9, wagerAmount: 10, outcomeGameKey: 'team_match', status: 'ACTIVE' }, standalone.match);
+  standalone.match.presses = [matchPress];
+  const standaloneContext = standalone.engine.getPayoutReportContext(standalone.match, standalone.metrics);
+  assert.equal(standaloneContext.payoutGames.filter(game => game.key === 'press:match-press').length, 1);
+  assert.equal(Object.values(standaloneContext.payoutGames.find(game => game.key === 'press:match-press').amounts).reduce((sum, amount) => sum + Number(amount), 0), 0);
+
+  const excluded = fixture({ key: 'nassau', basis: 'net', stakesFront: 5, stakesBack: 0, stakesOverall: 0, pressesEnabled: true }, 5);
+  const raw = { parentGameId: 'nassau_net', rootGameId: 'nassau_net', parentSegmentId: 'nassau_net:front', parentSegmentType: 'FRONT', startingHole: 3, endingHole: 9, wagerAmount: 5 };
+  excluded.match.presses = [
+    excluded.engine.normalizePressRecord({ ...raw, pressId: 'voided', status: 'VOIDED' }, excluded.match),
+    excluded.engine.normalizePressRecord({ ...raw, pressId: 'superseded', status: 'SUPERSEDED' }, excluded.match),
+  ];
+  assert.equal(excluded.engine.getPayoutReportContext(excluded.match, excluded.metrics).payoutGames.filter(game => game.meta?.press).length, 0);
+  excluded.match.status = 'complete'; excluded.match.completedAt = '2026-07-12T20:00:00Z';
+  excluded.match.presses = [excluded.engine.normalizePressRecord({ ...raw, pressId: 'incomplete', status: 'ACTIVE' }, excluded.match)];
+  assert.equal(excluded.engine.getPayoutReportContext(excluded.match, excluded.metrics).payoutGames.filter(game => game.meta?.press).length, 0);
+
+  const halved = fixture({ key: 'nassau', basis: 'net', stakesFront: 5, stakesBack: 0, stakesOverall: 0, pressesEnabled: true }, 9);
+  halved.match.players.forEach(player => { player.scores = scores(9, 4); });
+  halved.metrics = halved.engine.computeMatchMetrics(halved.match);
+  halved.match.presses = [halved.engine.normalizePressRecord({ ...raw, pressId: 'halved', endingHole: 9, status: 'ACTIVE' }, halved.match)];
+  const halvedGame = halved.engine.getPayoutReportContext(halved.match, halved.metrics).payoutGames.find(game => game.key === 'press:halved');
+  assert.ok(halvedGame);
+  assert.ok(Object.values(halvedGame.amounts).every(amount => Number(amount) === 0));
+});
+
+test('shared Classic Scorecard scroller preserves 18-hole and 9-hole final columns without source mutation', () => {
+  const full = fixture(undefined, 5);
+  const fullBefore = JSON.stringify(full.match);
+  const fullHtml = full.engine.buildQuickScoreboardView(full.match, full.metrics);
+  assert.match(fullHtml, /<details class="[^"]*quick-classic-scorecard"><summary>Classic Scorecard<\/summary><div class="scorecard-sub tiny">/);
+  assert.match(fullHtml, /<div class="scorecard-wrap" tabindex="0" role="region"/);
+  assert.match(fullHtml, />H18<\/th>/);
+  assert.match(fullHtml, /<th>Out<\/th><th>In<\/th><th>Total<\/th>/);
+  assert.doesNotMatch(fullHtml, /quick-classic-scorecard[^]*quick-scroll-panel/);
+  assert.equal(JSON.stringify(full.match), fullBefore);
+
+  const short = fixture(undefined, 5);
+  short.match.holeCount = 9;
+  short.metrics = short.engine.computeMatchMetrics(short.match);
+  const shortBefore = JSON.stringify(short.match);
+  const shortHtml = short.engine.buildQuickScoreboardView(short.match, short.metrics);
+  assert.match(shortHtml, />H9<\/th>/);
+  assert.doesNotMatch(shortHtml, />H10<\/th>/);
+  assert.match(shortHtml, /<th>Out<\/th><th>Total<\/th>/);
+  assert.equal(JSON.stringify(short.match), shortBefore);
+});
+
+test('nested legacy config normalizes safely and local authority is not treated as joined denial', () => {
+  const engine = loadLiveEngine();
+  const normalized = engine.normalizePressConfig({ pressConfig: { pressesEnabled: true, nassauFrontEnabled: false }, nassauOverallEnabled: true });
+  assert.equal(normalized.pressesEnabled, true);
+  assert.equal(normalized.nassauFrontEnabled, false);
+  assert.equal(normalized.nassauOverallEnabled, true);
+  const local = fixture({ key: 'team_match', basis: 'net', stake: 10, pressConfig: { pressesEnabled: true }, pressAvailabilityRule: 'FUTURE_HOLES_REMAIN' }, 5);
+  assert.ok(local.engine.getCurrentPressOpportunities(local.match, local.metrics, { viewedPosition: 6 }).length > 0);
 });

@@ -2246,6 +2246,57 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
   }
 }
 
+/* v30.3.64 — focused mobile scoring, catch-up, momentum, and Quick Scoreboard polish */
+.catch-up-scoring-bar{
+  margin-top:10px;padding:10px 11px;border:1px solid rgba(154,91,0,.28);border-radius:13px;
+  background:#fff8e8;display:flex;align-items:center;justify-content:space-between;gap:10px;
+}
+.catch-up-copy{min-width:0}.catch-up-actions{display:flex;gap:7px;flex:0 0 auto}.catch-up-actions button{min-height:40px;padding:7px 10px}
+.modal-close-btn{min-width:68px;font-weight:850}
+#score .score-player-name{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+#score .score-player-tee{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#score .score-strokes-cell,#score .score-grid td:last-child{font-variant-numeric:tabular-nums;text-align:center;font-weight:800}
+.momentum-chart{width:100%;min-width:0;color:var(--accent)}
+.momentum-chart svg{display:block;width:100%;height:auto;overflow:visible}
+.momentum-zero-baseline{stroke:#5d6b64;stroke-width:2.5}
+.momentum-y-axis{stroke:#9aa7a0;stroke-width:1}
+.momentum-gridline{stroke:#dce3df;stroke-width:1}
+.momentum-axis-tick{fill:#53615a!important;font-size:11px!important;font-weight:750;font-variant-numeric:tabular-nums}
+.momentum-axis-unit{fill:#68756e!important;font-size:9px!important;font-weight:800;letter-spacing:.03em}
+.momentum-chart-line{fill:none;stroke:var(--accent);stroke-width:3.25;stroke-linecap:round;stroke-linejoin:round}
+.momentum-chart-dot{fill:#fff;stroke:var(--accent);stroke-width:2.5}
+.momentum-chart text{fill:var(--muted);font-size:10px}
+.momentum-chart .momentum-side-label{fill:var(--text);font-size:13px;font-weight:900;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}
+.momentum-chart--compact .momentum-side-label{font-size:12px}.momentum-chart--compact .momentum-chart-line{stroke-width:3}
+.momentum-chart--compact .momentum-axis-tick{font-size:10px!important}.momentum-chart--compact .momentum-axis-unit{font-size:8px!important}
+.quick-game-money-list,.quick-momentum-list{display:grid;gap:8px}
+.quick-game-money-card,.quick-momentum-card{border:1px solid var(--border);border-radius:11px;background:#fff;padding:9px 10px;min-width:0}
+.quick-game-money-title{font-weight:900;margin-bottom:5px}
+.quick-game-money-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:3px 0;font-size:.84rem}
+.quick-game-money-row span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.quick-game-money-row strong{font-variant-numeric:tabular-nums}
+.quick-game-money-total{margin:9px 0 7px;padding-top:8px;border-top:2px solid var(--border);font-size:.72rem;font-weight:900;text-transform:uppercase;color:var(--muted);letter-spacing:.04em}
+.quick-momentum-card>strong{display:block;margin-bottom:2px}.quick-scoreboard-status{display:none}
+.match-status-tile-primary{grid-column:span 2}.match-status-lifecycle .match-status-value{font-size:.92rem;color:var(--muted)}
+@media(max-width:430px){
+  #score .score-grid{table-layout:fixed;width:100%}
+  #score .score-grid th:first-child,#score .score-grid td:first-child{width:25%!important}
+  #score .score-grid th:nth-child(2),#score .score-grid td:nth-child(2){width:11%!important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #score .score-grid th:nth-child(3),#score .score-grid td:nth-child(3){width:38%!important}
+  #score .score-grid th:nth-child(4),#score .score-grid td:nth-child(4),#score .score-grid th:nth-child(5),#score .score-grid td:nth-child(5){width:13%!important;text-align:center}
+  #score .gross-score-stepper{width:94px!important;max-width:94px!important;gap:2px!important}
+  #score .gross-score-stepper .score-input{width:34px!important;min-width:34px!important;max-width:34px!important;height:34px!important;min-height:34px!important}
+  #score .score-step-btn{width:28px!important;min-width:28px!important;height:32px!important;font-size:16px!important}
+  .catch-up-scoring-bar{align-items:stretch;flex-direction:column}.catch-up-actions{display:grid;grid-template-columns:1fr 1fr}.catch-up-actions button{width:100%}
+  .quick-scoreboard-body{gap:14px}.quick-game-row{grid-template-columns:minmax(0,.7fr) minmax(0,1.8fr)}
+  .quick-player-table th:first-child,.quick-player-table td:first-child{width:8%}.quick-player-table th:nth-child(2),.quick-player-table td:nth-child(2){width:38%}
+  .quick-player-table th:nth-child(3),.quick-player-table td:nth-child(3),.quick-player-table th:nth-child(4),.quick-player-table td:nth-child(4),.quick-player-table th:nth-child(5),.quick-player-table td:nth-child(5){width:18%}
+  .match-status-tile-primary{grid-column:auto}
+  .round-record-hero{padding:15px 13px}.round-record-result{font-size:clamp(22px,8vw,31px);line-height:1.05}
+  .round-record-settle{gap:7px}.settle-up-chip{white-space:normal;line-height:1.25}
+  .round-record-player-strip{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px}
+  .round-record-momentum{margin-top:13px;padding:12px 9px 5px}.round-record-momentum-head{display:grid;gap:3px}
+}
+
 /* v30.3.62 Round Record layers */
 .report-layer--hero{background:linear-gradient(145deg,#0b3325,#0b5d3b 62%,#174b38);color:#fff;border:0;overflow:hidden;}
 .round-record-masthead,.round-record-momentum-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;}
@@ -5446,4 +5497,16 @@ html.quick-scoreboard-open,body.quick-scoreboard-open{overflow:hidden!important;
   #score .score-step-btn{width:25px!important;min-width:25px!important;height:25px!important;}
   .quick-scoreboard-body{padding:10px;}
   .quick-scoreboard-table{font-size:.78rem;}
+}
+
+/* v30.3.64 final narrow-score-row precedence */
+@media (max-width:430px){
+  #score .score-grid{table-layout:fixed;width:100%}
+  #score .score-grid th:first-child,#score .score-grid td:first-child{width:25%!important}
+  #score .score-grid th:nth-child(2),#score .score-grid td:nth-child(2){width:11%!important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #score .score-grid th:nth-child(3),#score .score-grid td:nth-child(3){width:38%!important}
+  #score .score-grid th:nth-child(4),#score .score-grid td:nth-child(4),#score .score-grid th:nth-child(5),#score .score-grid td:nth-child(5){width:13%!important;text-align:center}
+  #score .gross-score-stepper{width:94px!important;max-width:94px!important;gap:2px!important}
+  #score .gross-score-stepper .score-input{width:34px!important;min-width:34px!important;max-width:34px!important;height:34px!important;min-height:34px!important}
+  #score .score-step-btn{width:28px!important;min-width:28px!important;height:32px!important;font-size:16px!important}
 }

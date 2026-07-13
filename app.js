@@ -1,11 +1,11 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.63',
-  versionNumber: '30.3.63',
-  cacheName: 'the-dye-ledger-v30.3.63',
+  version: 'v30.3.64',
+  versionNumber: '30.3.64',
+  cacheName: 'the-dye-ledger-v30.3.64',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Trip Ledger Architecture Prep'
+  buildLabel: 'Mobile Scoring UX Polish, Status Truthfulness, and Quick Scoreboard Upgrade'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -1790,6 +1790,7 @@ let editingCourseId = null;
 let editingTeeRef = null;
 let editingMatchId = null;
 let currentHole = 1;
+let catchUpScoringState = null;
 let currentHoleSequenceStart = 1;
 let finishConfirmArmed = false;
 let roundCompletePromptShownForMatchId = null;
@@ -3857,6 +3858,59 @@ function getMissingScoreEntries(match, metrics) {
     });
   });
   return missing;
+}
+function getCatchUpMissingHoleQueue(match, metrics, { editableOnly = true } = {}) {
+  if (!match || !metrics) return [];
+  const scoringHoles = getSelectedScoringHoles(match, metrics.tee);
+  const positionByHole = new Map(scoringHoles.map((hole, index) => [Number(hole.holeNumber), index + 1]));
+  const byHole = new Map();
+  getMissingScoreEntries(match, metrics).forEach(row => {
+    const playerMetric = (metrics.players || []).find(player => String(player.playerId) === String(row.playerId));
+    if (editableOnly && (!playerMetric || !canEditPlayerScore(match, playerMetric.team, playerMetric.playerId))) return;
+    const position = positionByHole.get(Number(row.holeNumber));
+    if (!position) return;
+    if (!byHole.has(position)) byHole.set(position, { position, holeNumber: Number(row.holeNumber), missingPlayerIds: [], missingPlayerNames: [] });
+    const item = byHole.get(position);
+    item.missingPlayerIds.push(String(row.playerId));
+    item.missingPlayerNames.push(String(row.playerName || 'Player'));
+  });
+  return [...byHole.values()].sort((a, b) => a.position - b.position);
+}
+function startCatchUpScoring(match = getActiveMatch()) {
+  if (!match) return false;
+  const metrics = computeMatchMetrics(match);
+  const queue = getCatchUpMissingHoleQueue(match, metrics);
+  if (!queue.length) {
+    toast(match.storageMode === 'shared' ? 'No missing scores assigned to this device.' : 'No missing scores to catch up.');
+    return false;
+  }
+  catchUpScoringState = { matchId: match.id, returnHole: currentHole };
+  currentHole = queue[0].position;
+  activateTab('score');
+  renderCurrentMatch();
+  toast(`Catch-Up Scoring started on Hole ${queue[0].holeNumber}.`);
+  return true;
+}
+function exitCatchUpScoring({ restore = true } = {}) {
+  const match = getActiveMatch();
+  const returnHole = catchUpScoringState?.matchId === match?.id ? catchUpScoringState.returnHole : currentHole;
+  catchUpScoringState = null;
+  if (restore && match) currentHole = Math.max(1, Math.min(getRequestedHoleCount(match), Number(returnHole) || 1));
+  renderCurrentMatch();
+}
+function renderCatchUpScoringBar(match, metrics) {
+  const bar = document.getElementById('catchUpScoringBar');
+  if (!bar) return;
+  const active = catchUpScoringState?.matchId === match?.id;
+  bar.classList.toggle('hidden', !active);
+  if (!active) { bar.innerHTML = ''; return; }
+  const queue = getCatchUpMissingHoleQueue(match, metrics);
+  if (!queue.length) {
+    bar.innerHTML = `<div><strong>Catch-Up complete</strong><div class="tiny">All scores assigned to this device are entered.</div></div><button type="button" class="secondary" data-catch-up-exit>Return to live hole</button>`;
+    return;
+  }
+  const current = queue.find(item => item.position === currentHole) || queue[0];
+  bar.innerHTML = `<div class="catch-up-copy"><strong>Catch-Up Scoring · Hole ${escapeHtml(current.holeNumber)}</strong><div class="tiny">${queue.length} hole${queue.length === 1 ? '' : 's'} remain · Missing: ${escapeHtml(current.missingPlayerNames.join(', '))}. Scores stay blank until entered.</div></div><div class="catch-up-actions"><button type="button" class="secondary" data-catch-up-next>Save &amp; next missing</button><button type="button" class="secondary" data-catch-up-exit>Exit</button></div>`;
 }
 
 function isHoleComplete(holeNumberOrResult, activePlayers = [], scoresOrMetrics = null) {
@@ -7152,7 +7206,12 @@ function buildFeaturedMatchStatus(match, metrics, gameKey) {
     const leaders = nine.leaderboard.map(row => `${escapeHtml(row.name)} (${row.total})`).join(' · ');
     return `<div class="match-status-head"><strong>9-Point Game</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Basis</div><div class="match-status-value">${escapeHtml(formatBasisLabel(nine.basis || cfg.basis))}</div></div><div class="match-status-tile"><div class="tiny">Leaders</div><div class="match-status-value">${leaders || 'Select 3 players'}</div></div><div class="match-status-tile"><div class="tiny">$ / point</div><div class="match-status-value">${formatMoneyAccounting(nine.stakePerPoint || cfg.stakePerPoint || 0)}</div></div></div><div class="nine-point-settlement-note top-gap">Hole scoring remains 9 points per hole. Payouts settle final point differentials head-to-head × the stake.</div>`;
   }
-  return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-tile"><div class="tiny">Status</div><div class="match-status-value">Live</div></div>`;
+  const concreteStatus = getTruthfulGameStatus(match, metrics, gameKey, cfg);
+  const basis = ['nassau', 'team_match', 'singles_match', 'individual_match'].includes(gameKey) && cfg?.basis ? ` · ${formatBasisLabel(cfg.basis)}` : '';
+  const completion = getRoundCompletionState(match, metrics);
+  const lifecycle = match.status === 'complete' || completion.isComplete || areAllGamesFinal(match, metrics) ? 'Final' : completion.completedHoleCount ? (completion.isIncomplete && match.status === 'complete' ? 'Incomplete' : 'In progress') : 'Not started';
+  const statusValue = concreteStatus && concreteStatus !== 'Active' ? concreteStatus : lifecycle;
+  return `<div class="match-status-head"><strong>${escapeHtml(title)}${escapeHtml(basis)}</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid"><div class="match-status-tile match-status-tile-primary"><div class="tiny">Competition</div><div class="match-status-value">${escapeHtml(statusValue)}</div></div><div class="match-status-tile match-status-lifecycle"><div class="tiny">Round state</div><div class="match-status-value">${escapeHtml(lifecycle)}</div></div></div>`;
 }
 
 function buildClassicScorecard(match, metrics, opts = {}) {
@@ -8025,16 +8084,11 @@ function buildQuickScoreboardView(match, metrics) {
     </tr>`).join('') : '';
   const completion = getRoundCompletionState(match, metrics);
   const elapsed = getRoundElapsedTimeState(match);
-  const primaryStatus = getPrimaryMatchStatusLine(match, metrics);
   const gameStatusRows = buildQuickScoreboardGameStatusRows(match, metrics);
   const payout = getPayoutReportContext(match, metrics);
+  const gameMoneyHtml = buildGameMoneyContributionRows(match, metrics, payout);
   const sspSettlement = isSneakySandyPoleyEnabled(match) ? buildSneakySandyPoleyLedger(match, { metrics }).settlement : null;
-  const sspMoneyHtml = sspSettlement?.valid && !sspSettlement.tied && sspSettlement.amount > 0 ? `
-    <div class="quick-ssp-money">
-      <strong>${escapeHtml(sspSettlement.label)}</strong>
-      <span>${escapeHtml(sspSettlement.payerLabel)}</span>
-      <span>${escapeHtml(sspSettlement.payeeLabel)}</span>
-    </div>` : '';
+  const sspMoneyHtml = sspSettlement?.valid && !sspSettlement.tied && sspSettlement.amount > 0 ? `<div class="quick-ssp-money"><strong>${escapeHtml(sspSettlement.label)}</strong><span>${escapeHtml(sspSettlement.payerLabel)}</span><span>${escapeHtml(sspSettlement.payeeLabel)}</span></div>` : '';
   const moneyRows = Object.entries(payout.finalTotals || {})
     .map(([id, amount]) => ({ name: getPlayer(id)?.name || id, amount: Number(amount) || 0 }))
     .filter(row => Math.abs(row.amount) > 0.0001)
@@ -8044,7 +8098,7 @@ function buildQuickScoreboardView(match, metrics) {
     .join('');
   return `
     <div class="quick-scoreboard-meta">${escapeHtml(completion.label)}${match.status === 'complete' ? ' · Final' : ' · Live'}${elapsed.available ? ` · ${escapeHtml(elapsed.label.replace(/^Round elapsed time:\s*/i, ''))}` : ''}</div>
-    ${primaryStatus ? `<div class="quick-scoreboard-status">${escapeHtml(primaryStatus)}</div>` : ''}
+    ${gameStatusRows}
     <section class="quick-scoreboard-section">
       <h4>Players</h4>
       <div class="quick-table-wrap">
@@ -8055,12 +8109,23 @@ function buildQuickScoreboardView(match, metrics) {
       </div>
     </section>
     ${showTeams ? `<section class="quick-scoreboard-section"><h4>Teams</h4><div class="quick-table-wrap"><table class="quick-scoreboard-table quick-team-table"><thead><tr><th>Team</th><th>Gross</th><th>Net</th><th>Net +/-</th></tr></thead><tbody>${teamRows}</tbody></table></div></section>` : ''}
-    ${gameStatusRows}
     <section class="quick-scoreboard-section">
       <h4>Money</h4>
       ${sspMoneyHtml}
+      ${gameMoneyHtml}
       ${moneyRows ? `<div class="quick-money-list">${moneyRows}</div>` : '<div class="tiny">No money summary available yet.</div>'}
-    </section>`;
+    </section>
+    ${buildQuickScoreboardMomentumCharts(match, metrics)}`;
+}
+
+function buildGameMoneyContributionRows(match, metrics, payout = getPayoutReportContext(match, metrics)) {
+  const games = (payout?.payoutGames || []).map(game => {
+    const rows = Object.entries(game?.amounts || {}).map(([playerId, amount]) => ({ playerId: String(playerId), amount: Number(amount) })).filter(row => Number.isFinite(row.amount) && Math.abs(row.amount) > 0.0001);
+    if (!rows.length) return null;
+    return { label: game.label || getGameLabel(game.sourceKey || game.key), rows };
+  }).filter(Boolean);
+  if (!games.length) return '';
+  return `<div class="quick-game-money-list">${games.map(game => `<div class="quick-game-money-card"><div class="quick-game-money-title">${escapeHtml(game.label)}</div>${game.rows.sort((a, b) => b.amount - a.amount || a.playerId.localeCompare(b.playerId)).map(row => `<div class="quick-game-money-row"><span>${escapeHtml(getPlayer(row.playerId)?.name || row.playerId)}</span><strong>${formatFinalNetSettlementMoney(row.amount)}</strong></div>`).join('')}</div>`).join('')}<div class="quick-game-money-total">Current combined total</div></div>`;
 }
 
 function openQuickScoreboardView() {
@@ -8268,25 +8333,7 @@ function renderLeaderboard() {
     momentumMeta.textContent = describeMomentumMeta(match, metrics, activeMomentumGame);
   }
   if (showMomentum && holeMomentum) {
-    let running = 0;
-    const perspectiveTeam = getMomentumPerspectiveTeam(match);
-    holeMomentum.innerHTML = getMomentumHoleResults(match, metrics, activeMomentumGame).map(h => {
-      const outcome = computeMomentumOutcome(match, metrics, h, activeMomentumGame);
-      let cls = 'tied';
-      if (outcome === 'team1') {
-        running += 1;
-        cls = perspectiveTeam === 1 ? 'team1' : 'team2';
-      } else if (outcome === 'team2') {
-        running -= 1;
-        cls = perspectiveTeam === 1 ? 'team2' : 'team1';
-      } else if (outcome === 'pending') {
-        cls = 'pending';
-      } else {
-        cls = 'tied';
-      }
-      const txt = outcome === 'pending' ? 'Not played' : formatPerspectiveStatus(running, perspectiveTeam);
-      return `<div class="momentum-pill ${cls}">H${h.holeNumber}<span>${txt}</span></div>`;
-    }).join('');
+    holeMomentum.innerHTML = renderMomentumChart(match, metrics, activeMomentumGame) || '<div class="tiny">Momentum will appear after a valid completed hole.</div>';
   } else if (holeMomentum) {
     holeMomentum.innerHTML = '';
     if (momentumMeta) momentumMeta.textContent = 'Momentum is shown when a Nassau or match play game is in the round.';
@@ -12231,8 +12278,13 @@ function renderCurrentMatch() {
   emptyEl.classList.add('hidden');
   wrapEl.classList.remove('hidden');
   currentHole = Math.min(holeCount, Math.max(1, currentHole));
+  if (catchUpScoringState?.matchId === match.id) {
+    const catchUpQueue = getCatchUpMissingHoleQueue(match, metrics);
+    if (catchUpQueue.length && !catchUpQueue.some(item => item.position === currentHole)) currentHole = catchUpQueue[0].position;
+  }
   const hole = scoringHoles[currentHole - 1];
   renderHoleSelector(match, scoringHoles);
+  renderCatchUpScoringBar(match, metrics);
   const teamText = metrics?.teams?.length === 2 ? `${formatMatchDiff(metrics.matchDiff, match)} overall` : 'Singles leaderboard';
   const teeYardages = hole ? [...new Map((metrics?.players || []).map(p => {
     const playerTee = p.tee || tee;
@@ -12448,11 +12500,110 @@ function getCompactGameStatus(match, metrics, gameKey, cfg = null) {
   return 'Active';
 }
 
+function getMomentumTeamLabels(match, metrics, gameKey) {
+  if (gameKey === 'singles_match') {
+    const result = computeSinglesMatchPlayResult(match, metrics, getSinglesMatchConfig(match));
+    return [result.playerAName, result.playerBName].map(name => String(name || 'Player').trim().split(/\s+/)[0]);
+  }
+  const configured = Array.isArray(match?.teamNames) ? match.teamNames : [];
+  return [1, 2].map(teamNo => {
+    const custom = String(configured[teamNo - 1] || '').trim();
+    if (custom && !/^Team\s*\d+$/i.test(custom)) return custom;
+    const team = (metrics?.teams || []).find(row => Number(row.team) === teamNo);
+    const firstNames = (team?.members || []).map(member => String(member?.player?.name || '').trim().split(/\s+/)[0]).filter(Boolean);
+    return firstNames.length ? firstNames.join(' / ') : `Team ${teamNo}`;
+  });
+}
+function buildMomentumPresentation(match, metrics, gameKey) {
+  if (!match || !metrics || !['nassau', 'team_match', 'singles_match', 'sneaky_sandy_poley'].includes(gameKey)) return null;
+  let series = [];
+  let labels = getMomentumTeamLabels(match, metrics, gameKey);
+  if (gameKey === 'sneaky_sandy_poley') {
+    const ledger = buildSneakySandyPoleyLedger(match, { metrics });
+    const teams = ledger?.teams || [];
+    if (!ledger?.enabled || teams.length !== 2) return null;
+    labels = teams.map((team, index) => getMomentumTeamLabels(match, metrics, gameKey)[index] || team.name);
+    series = buildSneakySandyPoleyMomentumData(match, { ledger }).map(row => ({ holeNumber: row.holeNumber, value: Number(row.cumulative) }));
+  } else if (gameKey === 'singles_match') {
+    const result = computeSinglesMatchPlayResult(match, metrics, getSinglesMatchConfig(match));
+    series = (result.holes || []).filter(row => row.completed).map(row => ({ holeNumber: Number(row.holeNumber), value: Number(row.runningDiff) }));
+  } else {
+    let running = 0;
+    series = getMomentumHoleResults(match, metrics, gameKey).map(hole => {
+      const outcome = computeMomentumOutcome(match, metrics, hole, gameKey);
+      if (outcome === 'pending') return null;
+      running += outcome === 'team1' ? 1 : outcome === 'team2' ? -1 : 0;
+      return { holeNumber: Number(hole.holeNumber), value: running };
+    }).filter(Boolean);
+  }
+  if (!series.length || series.some(row => !Number.isFinite(row.value))) return null;
+  const last = Number(series[series.length - 1].value) || 0;
+  const perspective = last > 0 ? 1 : last < 0 ? 2 : (Number(match.momentumPerspective || 1) === 2 ? 2 : 1);
+  const oriented = series.map(row => ({ ...row, value: perspective === 1 ? row.value : -row.value }));
+  return { gameKey, sourceSeries: series, series: oriented, perspective, upperLabel: labels[perspective - 1], lowerLabel: labels[perspective === 1 ? 1 : 0], tied: last === 0 };
+}
+function getMomentumYAxisScale(values, { compact = false } = {}) {
+  const finite = (Array.isArray(values) ? values : []).map(Number).filter(Number.isFinite);
+  if (!finite.length) return null;
+  const maxAbs = Math.max(0, ...finite.map(Math.abs));
+  const targetIntervals = 3;
+  const rawStep = Math.max(1, maxAbs * 1.1) / targetIntervals;
+  const magnitude = 10 ** Math.floor(Math.log10(Math.max(1, rawStep)));
+  const normalized = rawStep / magnitude;
+  const nice = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  const step = Math.max(1, Math.round(nice * magnitude));
+  let bound = Math.max(step, Math.ceil(maxAbs / step) * step);
+  if (maxAbs > 0 && Math.abs(bound - maxAbs) < 0.0001 && (bound / step) < 3) bound += step;
+  const fullTicks = [];
+  for (let value = -bound; value <= bound; value += step) fullTicks.push(value === 0 ? 0 : value);
+  const ticks = compact ? [-bound, 0, bound] : fullTicks;
+  return { maxAbs, bound, step, ticks };
+}
+function renderMomentumChart(match, metrics, gameKey, { compact = false } = {}) {
+  const model = buildMomentumPresentation(match, metrics, gameKey);
+  if (!model) return '';
+  const scale = getMomentumYAxisScale(model.series.map(row => row.value), { compact });
+  if (!scale) return '';
+  const width = 520, height = compact ? 150 : 205, left = compact ? 42 : 46, right = 88, top = 24, bottom = 28;
+  const zero = top + (height - top - bottom) / 2;
+  const x = index => model.series.length === 1 ? (left + width - right) / 2 : left + index * (width - left - right) / (model.series.length - 1);
+  const y = value => zero - (Number(value) / scale.bound) * ((height - top - bottom) / 2);
+  const points = model.series.map((row, index) => `${x(index)},${y(row.value)}`).join(' ');
+  const labels = model.series.map((row, index) => `<text x="${x(index)}" y="${height - 8}" text-anchor="middle">H${row.holeNumber}</text>`).join('');
+  const dots = model.series.map((row, index) => `<circle cx="${x(index)}" cy="${y(row.value)}" r="${compact ? 3 : 4}" class="momentum-chart-dot"/>`).join('');
+  const tickMarkup = scale.ticks.map(value => {
+    const tickY = y(value);
+    const label = value > 0 ? `+${value}` : String(value);
+    return `${value === 0 ? '' : `<line x1="${left}" y1="${tickY}" x2="${width - right + 8}" y2="${tickY}" class="momentum-gridline"/>`}<text x="${left - 7}" y="${tickY + 4}" text-anchor="end" class="momentum-axis-tick" data-momentum-tick="${value}" data-tick-y="${tickY}">${label}</text>`;
+  }).join('');
+  const unit = gameKey === 'sneaky_sandy_poley' ? 'points' : 'holes';
+  return `<div class="momentum-chart ${compact ? 'momentum-chart--compact' : 'momentum-chart--full'}" data-momentum-game="${escapeHtml(gameKey)}" data-momentum-perspective="${model.perspective}" data-momentum-y-bound="${scale.bound}" data-momentum-y-step="${scale.step}"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(gameKey)} momentum from ${escapeHtml(model.upperLabel)} perspective"><line x1="${left}" y1="${top}" x2="${left}" y2="${height - bottom}" class="momentum-y-axis"/>${tickMarkup}<line x1="${left}" y1="${zero}" x2="${width - right + 8}" y2="${zero}" class="momentum-zero-baseline" data-zero-y="${zero}"/><text x="4" y="12" class="momentum-axis-unit">${unit}</text><polyline points="${points}" class="momentum-chart-line"/>${dots}${labels}<text x="${width - 4}" y="${top + 5}" text-anchor="end" class="momentum-side-label momentum-side-label--upper">${escapeHtml(model.upperLabel)}</text><text x="${width - 4}" y="${height - bottom}" text-anchor="end" class="momentum-side-label momentum-side-label--lower">${escapeHtml(model.lowerLabel)}</text></svg></div>`;
+}
+function buildQuickScoreboardMomentumCharts(match, metrics) {
+  const eligible = getOrderedSelectedGames(match).map(game => game.key).filter(key => ['nassau', 'team_match', 'singles_match', 'sneaky_sandy_poley'].includes(key));
+  const cards = [...new Set(eligible)].map(key => {
+    const chart = renderMomentumChart(match, metrics, key, { compact: true });
+    if (!chart) return '';
+    const label = key === 'sneaky_sandy_poley' ? 'SSP' : getGameLabel(key);
+    return `<div class="quick-momentum-card"><strong>${escapeHtml(label)}</strong>${chart}</div>`;
+  }).filter(Boolean).slice(0, 3).join('');
+  return cards ? `<section class="quick-scoreboard-section quick-scoreboard-momentum"><h4>Momentum</h4><div class="quick-momentum-list">${cards}</div></section>` : '';
+}
+function getTruthfulGameStatus(match, metrics, gameKey, cfg = null) {
+  const status = getCompactGameStatus(match, metrics, gameKey, cfg);
+  if (!status || status === 'Active') return status || '';
+  const completion = getRoundCompletionState(match, metrics);
+  const final = match?.status === 'complete' && (completion.isComplete || areAllGamesFinal(match, metrics));
+  if (final && !/^Final:/i.test(status) && !/^(Not started|None yet)$/i.test(status)) return `Final: ${status}`;
+  if (match?.status === 'complete' && completion.isIncomplete && !areAllGamesFinal(match, metrics) && !/^Incomplete/i.test(status)) return `Incomplete: ${status}`;
+  return status;
+}
+
 function buildQuickScoreboardGameStatusRows(match, metrics) {
   const selected = getOrderedSelectedGames(match);
   if (!selected.length) return '';
   const rows = selected.map(cfg => {
-    const status = getCompactGameStatus(match, metrics, cfg.key, cfg);
+    const status = getTruthfulGameStatus(match, metrics, cfg.key, cfg);
     const label = cfg.key === 'sneaky_sandy_poley' ? 'SSP' : getGameLabel(cfg.key);
     const trend = cfg.key === 'sneaky_sandy_poley' ? getSneakySandyPoleySmartTrend(match, { metrics }) : '';
     return status ? `<div class="quick-game-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(status)}</strong>${trend ? `<small>${escapeHtml(trend)}</small>` : ''}</div>` : '';
@@ -12782,6 +12933,7 @@ function getHoleParForScoreInput(inputEl) {
 
 function isSmartScoreAdvanceEnabled(match = getActiveMatch()) {
   if (!match) return false;
+  if (catchUpScoringState?.matchId === match.id) return false;
   if (isSneakySandyPoleyEnabled(match)) return false;
   return match.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!match.smartScoreAdvanceEnabled;
 }
@@ -15482,8 +15634,29 @@ function installHandlers() {
     const jump = e.target.closest?.('[data-jump-missing-score]');
     if (jump) {
       e.preventDefault();
-      activateTab('score');
-      toast('Review the highlighted missing scores on the Play tab.');
+      startCatchUpScoring();
+      return;
+    }
+    const catchUpNext = e.target.closest?.('[data-catch-up-next]');
+    if (catchUpNext) {
+      e.preventDefault();
+      const match = getActiveMatch();
+      if (!match || catchUpScoringState?.matchId !== match.id) return;
+      if (typeof applyCurrentHoleDomToMatch === 'function') applyCurrentHoleDomToMatch(match);
+      const queue = getCatchUpMissingHoleQueue(match, computeMatchMetrics(match));
+      const currentIndex = queue.findIndex(item => item.position === currentHole);
+      const target = queue[currentIndex >= 0 ? currentIndex + 1 : 0] || queue[0];
+      if (target) currentHole = target.position;
+      persist({ skipRender: true });
+      if (match.storageMode === 'shared') scheduleSharedMatchSync(match, { immediate: true, silent: true });
+      renderCurrentMatch();
+      if (!target) toast('Catch-Up Scoring complete.');
+      return;
+    }
+    const catchUpExit = e.target.closest?.('[data-catch-up-exit]');
+    if (catchUpExit) {
+      e.preventDefault();
+      exitCatchUpScoring();
       return;
     }
   });
@@ -17448,6 +17621,15 @@ function installDyeLedgerLiveEngineAdapter() {
     getSneakySandyPoleyHonorsLine,
     buildSneakySandyPoleyRunningText,
     buildQuickScoreboardView,
+    buildQuickScoreboardGameStatusRows,
+    buildGameMoneyContributionRows,
+    buildQuickScoreboardMomentumCharts,
+    getTruthfulGameStatus,
+    getCatchUpMissingHoleQueue,
+    buildMomentumPresentation,
+    getMomentumYAxisScale,
+    renderMomentumChart,
+    getMomentumTeamLabels,
     buildSneakySandyPoleyExportSummary,
     buildSneakySandyPoleyAuditDetail,
     buildExportMomentum,

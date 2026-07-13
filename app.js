@@ -1,11 +1,11 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.64',
-  versionNumber: '30.3.64',
-  cacheName: 'the-dye-ledger-v30.3.64',
+  version: 'v30.3.65',
+  versionNumber: '30.3.65',
+  cacheName: 'the-dye-ledger-v30.3.65',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Mobile Scoring UX Polish, Status Truthfulness, and Quick Scoreboard Upgrade'
+  buildLabel: 'Press Engine Design and Nassau Extension Prep'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -14,6 +14,8 @@ const APP_CACHE_NAME = BUILD_INFO.cacheName;
 const APP_VERSION_NUMBER = BUILD_INFO.versionNumber;
 
 const MATCH_TEMPLATES_STORAGE_KEY = 'dyeLedger.matchTemplates.v1';
+const PRESS_SCHEMA_VERSION = 1;
+const PRESS_CONFIG_DEFAULTS = Object.freeze({ pressesEnabled: false, pressType: 'MANUAL', pressAvailabilityRule: 'OPEN_SEGMENT_ONLY', maxPressesPerSegment: 3, pressValueRule: 'INHERIT_PARENT', pressAuthorityRule: 'HOST_ONLY', autoPressThreshold: null });
 const PLAYER_REGISTRY_SCHEMA_VERSION = 1;
 const SAVED_ROSTER_SCHEMA_VERSION = 1;
 const DEFAULT_SMART_SCORE_ADVANCE = true;
@@ -3261,6 +3263,132 @@ function computeNassauDiffsForBasis(metrics, basis = 'net') {
   });
   return { front, back, overall };
 }
+
+function normalizePressConfig(config = {}) {
+  const source = config && typeof config === 'object' ? config : {};
+  const pressType = ['MANUAL', 'AUTO', 'MANUAL_AND_AUTO'].includes(source.pressType) ? source.pressType : PRESS_CONFIG_DEFAULTS.pressType;
+  const pressAvailabilityRule = ['OPEN_SEGMENT_ONLY', 'FUTURE_HOLES_REMAIN'].includes(source.pressAvailabilityRule) ? source.pressAvailabilityRule : PRESS_CONFIG_DEFAULTS.pressAvailabilityRule;
+  const maxRaw = Number(source.maxPressesPerSegment);
+  const maxPressesPerSegment = Number.isInteger(maxRaw) && maxRaw > 0 ? Math.min(10, maxRaw) : PRESS_CONFIG_DEFAULTS.maxPressesPerSegment;
+  return {
+    ...source,
+    pressesEnabled: source.pressesEnabled === true,
+    pressType,
+    pressAvailabilityRule,
+    maxPressesPerSegment,
+    pressValueRule: source.pressValueRule === 'INHERIT_PARENT' ? source.pressValueRule : PRESS_CONFIG_DEFAULTS.pressValueRule,
+    pressAuthorityRule: source.pressAuthorityRule === 'HOST_ONLY' ? source.pressAuthorityRule : PRESS_CONFIG_DEFAULTS.pressAuthorityRule,
+    autoPressThreshold: Number.isFinite(Number(source.autoPressThreshold)) && Number(source.autoPressThreshold) > 0 ? Number(source.autoPressThreshold) : null,
+  };
+}
+function getPressSegmentRange(match, metrics, segmentType) {
+  const segment = String(segmentType || '').toUpperCase();
+  const holes = getSelectedScoringHoles(match, metrics?.tee || getTee(match?.courseId, match?.teeId));
+  const midpoint = Math.min(9, holes.length);
+  const rows = segment === 'FRONT' ? holes.slice(0, midpoint) : segment === 'BACK' ? holes.slice(midpoint) : segment === 'OVERALL' ? holes : [];
+  if (!rows.length) return null;
+  const positions = rows.map(hole => holes.findIndex(item => Number(item.holeNumber) === Number(hole.holeNumber)) + 1);
+  return { segmentType: segment, startPosition: positions[0], endPosition: positions[positions.length - 1], startingHole: Number(rows[0].holeNumber), endingHole: Number(rows[rows.length - 1].holeNumber), holeNumbers: rows.map(hole => Number(hole.holeNumber)) };
+}
+function getPressParentReference(match, segmentType, basisOverride = '') {
+  const nassau = (match?.selectedGames || []).find(game => game.key === 'nassau');
+  if (!nassau) return null;
+  const configuredBasis = String(nassau.basis || 'net').toLowerCase();
+  const basis = configuredBasis === 'both' ? String(basisOverride || '').toLowerCase() : configuredBasis === 'gross' ? 'gross' : 'net';
+  if (!['gross', 'net'].includes(basis)) return { invalidReason: 'BASIS_REQUIRED', config: nassau };
+  const segment = String(segmentType || '').toUpperCase();
+  const wagerBySegment = { FRONT: Number(nassau.stakesFront || 0), BACK: Number(nassau.stakesBack || 0), OVERALL: Number(nassau.stakesOverall || 0) };
+  return { parentGameId: `nassau_${basis}`, parentSegmentId: `nassau_${basis}:${segment.toLowerCase()}`, parentSegmentType: segment, scoringMode: basis, teamMode: 'TEAM', wagerAmount: wagerBySegment[segment], config: nassau };
+}
+function normalizePressRecord(record, match = null) {
+  if (!record || typeof record !== 'object') return null;
+  const segment = String(record.parentSegmentType || '').toUpperCase();
+  if (!['FRONT', 'BACK', 'OVERALL'].includes(segment)) return null;
+  const startingHole = Number(record.startingHole);
+  const endingHole = Number(record.endingHole);
+  const pressId = String(record.pressId || '');
+  if (!pressId || !Number.isInteger(startingHole) || !Number.isInteger(endingHole) || startingHole > endingHole) return null;
+  const statuses = ['PENDING', 'ACTIVE', 'FINAL', 'HALVED', 'INCOMPLETE', 'VOIDED', 'SUPERSEDED'];
+  return { ...record, schemaVersion: PRESS_SCHEMA_VERSION, pressId, roundId: String(record.roundId || match?.id || ''), parentGameId: String(record.parentGameId || ''), parentSegmentId: String(record.parentSegmentId || ''), parentSegmentType: segment, startingHole, endingHole, triggerType: ['MANUAL', 'AUTO'].includes(record.triggerType) ? record.triggerType : 'MANUAL', initiatedByPlayerId: record.initiatedByPlayerId || null, initiatedByTeamId: record.initiatedByTeamId == null ? null : String(record.initiatedByTeamId), againstTeamId: record.againstTeamId == null ? null : String(record.againstTeamId), wagerAmount: Math.max(0, Number(record.wagerAmount) || 0), scoringMode: record.scoringMode === 'gross' ? 'gross' : 'net', teamMode: record.teamMode || 'TEAM', status: statuses.includes(record.status) ? record.status : 'PENDING', createdAt: record.createdAt || null, resolvedAt: record.resolvedAt || null, voidedAt: record.voidedAt || null, sourceDeviceId: record.sourceDeviceId || null, hostDeviceId: record.hostDeviceId || match?.sharedHostDeviceId || null, createdBy: record.createdBy || null };
+}
+function dedupePressRecords(records = []) {
+  const byId = new Map();
+  records.forEach(record => { if (record?.pressId && !byId.has(record.pressId)) byId.set(record.pressId, record); });
+  return [...byId.values()];
+}
+function getPressEligibility(match, metrics, segmentType, options = {}) {
+  const config = normalizePressConfig(options.pressConfig || match?.pressConfig);
+  const segment = String(segmentType || '').toUpperCase();
+  const base = { eligible: false, reasonCode: 'INVALID', reasonText: 'Press configuration is invalid.', nextStartingHole: null, remainingEligibleHoles: 0, currentPressCount: 0, maxPressesPerSegment: config.maxPressesPerSegment };
+  if (!match || !metrics) return base;
+  if (!config.pressesEnabled) return { ...base, reasonCode: 'PRESSES_DISABLED', reasonText: 'Presses are disabled for this match.' };
+  const parent = getPressParentReference(match, segment, options.scoringMode);
+  if (!parent) return { ...base, reasonCode: 'NO_NASSAU_PARENT', reasonText: 'A selected Nassau game is required.' };
+  if (parent.invalidReason) return { ...base, reasonCode: parent.invalidReason, reasonText: 'Choose the gross or net Nassau parent for this press.' };
+  const range = getPressSegmentRange(match, metrics, segment);
+  if (!range) return { ...base, reasonCode: 'INVALID_SEGMENT', reasonText: 'This Nassau segment is not available for the selected round.' };
+  const isHost = options.isHost == null ? isCurrentDeviceMatchHost(match) : !!options.isHost;
+  if (config.pressAuthorityRule === 'HOST_ONLY' && !isHost) return { ...base, reasonCode: 'HOST_ONLY', reasonText: 'Only the Shared Match host can create an authoritative press.' };
+  if (match.status === 'complete' || match.completedAt || isFrozenRoundRecord(match.roundRecordSnapshot)) return { ...base, reasonCode: 'ROUND_SETTLED', reasonText: 'A completed or settled round cannot accept a new press.' };
+  if (match.previousCompletedAt || match.reopenedAt) return { ...base, reasonCode: 'ROUND_REOPENED', reasonText: 'Press creation is disabled while a completed round is reopened.' };
+  if (match.roundEndReason && match.roundEndReason !== 'completed') return { ...base, reasonCode: 'ROUND_ENDED_EARLY', reasonText: 'An early-ended round cannot accept a new press.' };
+  if (!(parent.wagerAmount > 0)) return { ...base, reasonCode: 'ZERO_PARENT_WAGER', reasonText: 'The parent Nassau segment must have a positive wager.' };
+  const allHoles = getSelectedScoringHoles(match, metrics.tee);
+  const completedPositions = (metrics.holeResults || []).map((hole, index) => hole?.completed ? index + 1 : 0).filter(Boolean);
+  const currentPosition = Number.isInteger(Number(options.currentPosition)) ? Number(options.currentPosition) : Math.max(0, ...completedPositions);
+  const futurePositions = Array.from({ length: range.endPosition - range.startPosition + 1 }, (_, index) => range.startPosition + index).filter(position => position > currentPosition);
+  const nextPosition = futurePositions[0] || null;
+  const nextStartingHole = nextPosition ? Number(allHoles[nextPosition - 1]?.holeNumber) : null;
+  const existing = (match.presses || []).filter(record => record.parentSegmentId === parent.parentSegmentId && !['VOIDED', 'SUPERSEDED'].includes(record.status));
+  const currentPressCount = existing.length;
+  const resultBase = { ...base, nextStartingHole, remainingEligibleHoles: futurePositions.length, currentPressCount };
+  if (!futurePositions.length) return { ...resultBase, reasonCode: 'NO_FUTURE_HOLES', reasonText: 'No eligible future hole remains in this segment.' };
+  if (currentPressCount >= config.maxPressesPerSegment) return { ...resultBase, reasonCode: 'PRESS_LIMIT_REACHED', reasonText: 'The maximum presses for this segment has been reached.' };
+  if (existing.some(record => Number(record.startingHole) === nextStartingHole)) return { ...resultBase, reasonCode: 'DUPLICATE_STARTING_HOLE', reasonText: 'A press already starts on the next eligible hole.' };
+  const diffs = computeNassauDiffsForBasis(metrics, parent.scoringMode);
+  const diff = segment === 'FRONT' ? diffs.front : segment === 'BACK' ? diffs.back : diffs.overall;
+  const playedInSegment = Math.max(0, currentPosition - range.startPosition + 1);
+  const remainingInSegment = Math.max(0, range.endPosition - Math.max(currentPosition, range.startPosition - 1));
+  const clinch = getMatchClinchState({ margin: diff, holesRemaining: remainingInSegment });
+  if (config.pressAvailabilityRule === 'OPEN_SEGMENT_ONLY' && clinch.isClinched) return { ...resultBase, reasonCode: 'PARENT_SEGMENT_DECIDED', reasonText: 'The parent Nassau segment is already mathematically decided.' };
+  return { ...resultBase, eligible: true, reasonCode: 'ELIGIBLE', reasonText: `Press may start on Hole ${nextStartingHole}.`, parentGameId: parent.parentGameId, parentSegmentId: parent.parentSegmentId, parentSegmentType: segment, parentSegmentOpen: !clinch.isClinched, parentSegmentClinched: !!clinch.isClinched, parentDiff: Number(diff || 0), parentPlayedHoles: playedInSegment, wagerAmount: parent.wagerAmount, scoringMode: parent.scoringMode };
+}
+function buildPressRecordDraft(match, metrics, segmentType, options = {}) {
+  const eligibility = getPressEligibility(match, metrics, segmentType, options);
+  if (!eligibility.eligible) return null;
+  const ordinal = eligibility.currentPressCount + 1;
+  const range = getPressSegmentRange(match, metrics, segmentType);
+  return normalizePressRecord({ pressId: `${match.id}:${eligibility.parentSegmentId}:press:${eligibility.nextStartingHole}:${ordinal}`, roundId: match.id, parentGameId: eligibility.parentGameId, parentSegmentId: eligibility.parentSegmentId, parentSegmentType: eligibility.parentSegmentType, startingHole: eligibility.nextStartingHole, endingHole: range.endingHole, triggerType: options.triggerType === 'AUTO' ? 'AUTO' : 'MANUAL', initiatedByPlayerId: options.initiatedByPlayerId || null, initiatedByTeamId: options.initiatedByTeamId ?? null, againstTeamId: options.againstTeamId ?? null, wagerAmount: eligibility.wagerAmount, scoringMode: eligibility.scoringMode, teamMode: 'TEAM', status: 'PENDING', createdAt: options.createdAt || null, sourceDeviceId: options.sourceDeviceId || null, hostDeviceId: match.sharedHostDeviceId || null, createdBy: options.createdBy || null }, match);
+}
+function getPressStatus(match, metrics, press) {
+  const record = normalizePressRecord(press, match);
+  if (!record) return { status: 'INCOMPLETE', diff: 0, completedHoles: 0, remainingHoles: 0, leaderTeamId: null };
+  if (record.status === 'VOIDED' || record.status === 'SUPERSEDED') return { status: record.status, diff: 0, completedHoles: 0, remainingHoles: 0, leaderTeamId: null };
+  const holes = (metrics?.holeResults || []).filter(hole => Number(hole.holeNumber) >= record.startingHole && Number(hole.holeNumber) <= record.endingHole);
+  let diff = 0, completedHoles = 0;
+  holes.forEach(hole => { const outcome = computeMomentumOutcome(match, metrics, hole, 'nassau'); if (outcome === 'pending') return; completedHoles += 1; diff += outcome === 'team1' ? 1 : outcome === 'team2' ? -1 : 0; });
+  const remainingHoles = Math.max(0, holes.length - completedHoles);
+  const clinch = getMatchClinchState({ margin: diff, holesRemaining: remainingHoles });
+  let status = completedHoles ? 'ACTIVE' : 'PENDING';
+  if (clinch.isClinched || remainingHoles === 0) status = diff === 0 ? 'HALVED' : 'FINAL';
+  else if (match?.status === 'complete' || (match?.roundEndReason && match.roundEndReason !== 'completed')) status = 'INCOMPLETE';
+  return { status, diff, completedHoles, remainingHoles, leaderTeamId: diff > 0 ? '1' : diff < 0 ? '2' : null, isClinched: !!clinch.isClinched };
+}
+function buildPressSettlementShape(match, metrics, press) {
+  const record = normalizePressRecord(press, match);
+  const result = getPressStatus(match, metrics, record);
+  const amounts = Object.fromEntries((metrics?.players || []).map(player => [String(player.playerId), 0]));
+  if (record && result.status === 'FINAL' && result.leaderTeamId && record.wagerAmount > 0) {
+    const winnerIds = (metrics.teams || []).find(team => String(team.team) === result.leaderTeamId)?.members?.map(member => String(member.playerId)) || [];
+    const loserIds = (metrics.teams || []).find(team => String(team.team) !== result.leaderTeamId)?.members?.map(member => String(member.playerId)) || [];
+    const total = record.wagerAmount * loserIds.length;
+    const winnerShare = winnerIds.length ? total / winnerIds.length : 0;
+    winnerIds.forEach(id => { amounts[id] += winnerShare; });
+    loserIds.forEach(id => { amounts[id] -= record.wagerAmount; });
+  }
+  const transactions = optimalSettlementRows(amounts).map((row, index) => ({ transactionId: `${record?.pressId || 'invalid'}:settlement:${index + 1}`, roundId: String(match?.id || ''), gameId: record?.parentGameId || '', pressId: record?.pressId || '', parentGameId: record?.parentGameId || '', parentSegmentId: record?.parentSegmentId || '', payerId: String(row.from), payeeId: String(row.to), amount: Number(row.amount), category: 'nassau_press', gameType: 'press', status: result.status }));
+  return { schemaVersion: PRESS_SCHEMA_VERSION, pressId: record?.pressId || '', parentGameId: record?.parentGameId || '', parentSegmentId: record?.parentSegmentId || '', status: result.status, wagerAmount: record?.wagerAmount || 0, scoringMode: record?.scoringMode || null, amounts, transactions, crossFoot: Number(Object.values(amounts).reduce((sum, amount) => sum + Number(amount || 0), 0).toFixed(2)) };
+}
 function formatStrokesDisplay(strokes) {
   const n = Number(strokes) || 0;
   return n > 0 ? String(n) : '—';
@@ -6220,6 +6348,8 @@ function createEmptyMatch(overrides = {}) {
     smartScoreAdvancePreset: normalizeSmartScoreAdvancePreset(overrides.smartScoreAdvancePreset),
     statTrackingPlayerIds: Array.isArray(overrides.statTrackingPlayerIds) ? overrides.statTrackingPlayerIds.map(String) : null,
     selectedGames: Array.isArray(overrides.selectedGames) ? overrides.selectedGames : [],
+    pressConfig: normalizePressConfig(overrides.pressConfig),
+    presses: Array.isArray(overrides.presses) ? overrides.presses : [],
     status: 'active',
     completedAt: null,
     tripId: overrides.tripId || null,
@@ -6318,6 +6448,8 @@ function normalizeMatch(match) {
   match.statTrackingEnabled = !!match.statTrackingEnabled;
   match.smartScoreAdvanceEnabled = match.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!match.smartScoreAdvanceEnabled;
   match.smartScoreAdvancePreset = normalizeSmartScoreAdvancePreset(match.smartScoreAdvancePreset);
+  match.pressConfig = normalizePressConfig(match.pressConfig);
+  match.presses = dedupePressRecords(Array.isArray(match.presses) ? match.presses.map(record => normalizePressRecord(record, match)).filter(Boolean) : []);
   match.players = Array.isArray(match.players) ? match.players : [];
   match.players = match.players.map((mp, idx) => ({
     playerId: String(mp.playerId || mp.id || `round:${match.id}:player:${idx + 1}`),
@@ -9398,7 +9530,7 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
     status: match.status || 'active',
     course_id: match.courseId || '',
     reference_tee_id: match.teeId || '',
-    course_snapshot: { ...courseSnapshot, sharedMatchMeta: { tripId: match.tripId || null, eventId: match.eventId || null, scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device'), matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || ''), hostDeviceId: match.sharedHostDeviceId || getSharedDeviceId(), hostParticipantId: match.sharedHostParticipantId || getCurrentSharedParticipantId(match), devices: Array.isArray(match.sharedDevices) ? match.sharedDevices : [], participants: getSharedAssignmentParticipants(match), playerAssignments: match.sharedPlayerAssignments || {}, memories: getRoundMemories(match), memoriesUpdatedAt: new Date().toISOString(), roundContext: normalizeRoundContext(match.roundContext), roundTiming: match.roundTiming || { startedAt: null, endedAt: null }, holeFirstCompletedAt: match.holeFirstCompletedAt || {}, sspFacts: buildSharedSspFacts(match), roundRecordSnapshot: isCurrentDeviceMatchHost(match) && isFrozenRoundRecord(match.roundRecordSnapshot) ? clonePlain(match.roundRecordSnapshot) : null } },
+    course_snapshot: { ...courseSnapshot, sharedMatchMeta: { tripId: match.tripId || null, eventId: match.eventId || null, scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device'), matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || ''), hostDeviceId: match.sharedHostDeviceId || getSharedDeviceId(), hostParticipantId: match.sharedHostParticipantId || getCurrentSharedParticipantId(match), devices: Array.isArray(match.sharedDevices) ? match.sharedDevices : [], participants: getSharedAssignmentParticipants(match), playerAssignments: match.sharedPlayerAssignments || {}, memories: getRoundMemories(match), memoriesUpdatedAt: new Date().toISOString(), roundContext: normalizeRoundContext(match.roundContext), roundTiming: match.roundTiming || { startedAt: null, endedAt: null }, holeFirstCompletedAt: match.holeFirstCompletedAt || {}, sspFacts: buildSharedSspFacts(match), pressConfig: normalizePressConfig(match.pressConfig), presses: isCurrentDeviceMatchHost(match) ? clonePlain(match.presses || []) : [], roundRecordSnapshot: isCurrentDeviceMatchHost(match) && isFrozenRoundRecord(match.roundRecordSnapshot) ? clonePlain(match.roundRecordSnapshot) : null } },
     format: match.format || 'teams',
     allowance: Number(match.allowance) || 100,
     hole_count: getRequestedHoleCount(match),
@@ -9688,6 +9820,8 @@ function hydrateMatchFromCloudBundle(bundle) {
     hostDeviceId: sharedMeta.hostDeviceId || null,
     roundRecordSnapshot: isFrozenRoundRecord(sharedMeta.roundRecordSnapshot) ? clonePlain(sharedMeta.roundRecordSnapshot) : null,
     roundRecordSnapshotHistory: [],
+    pressConfig: normalizePressConfig(sharedMeta.pressConfig),
+    presses: Array.isArray(sharedMeta.presses) ? clonePlain(sharedMeta.presses) : [],
     players: (players || []).map((row, idx) => ({
       playerId: row.player_id,
       team: Number(row.team_number) || 1,
@@ -16643,6 +16777,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       hostDeviceId: existing?.hostDeviceId || existing?.sharedHostDeviceId || null,
       roundRecordSnapshot: existing?.roundRecordSnapshot || null,
       roundRecordSnapshotHistory: existing?.roundRecordSnapshotHistory || [],
+      pressConfig: normalizePressConfig(existing?.pressConfig),
+      presses: existing?.presses || [],
       previousCompletedAt: existing?.previousCompletedAt || null,
       reopenedAt: existing?.reopenedAt || null,
       players: selectedPlayers.map(sp => {
@@ -17610,6 +17746,15 @@ function installDyeLedgerLiveEngineAdapter() {
     optimalSettlementRows,
     computeTeamGameDiffs,
     computeNassauDiffsForBasis,
+    normalizePressConfig,
+    normalizePressRecord,
+    dedupePressRecords,
+    getPressSegmentRange,
+    getPressParentReference,
+    getPressEligibility,
+    buildPressRecordDraft,
+    getPressStatus,
+    buildPressSettlementShape,
     computeSkinResults,
     computeNinePointResults,
     buildSneakySandyPoleyLedger,

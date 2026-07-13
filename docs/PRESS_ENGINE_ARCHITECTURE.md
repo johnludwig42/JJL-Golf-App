@@ -2,7 +2,41 @@
 
 ## 1. Purpose
 
-v30.3.65 defines the Press Engine contract without enabling production press wagering. v30.3.66 should implement UI and production integration by using these schemas and pure helpers rather than inventing rules.
+v30.3.65 defined a dormant, Nassau-only, direct-child contract. v30.3.66 supersedes those two constraints and enables deliberate production presses for trusted match-play nodes. Presses are child games, never multipliers.
+
+## v30.3.66 production contract
+
+Game escalation capabilities are `PRESS`, `CARRYOVER`, `BRIDGE`, `HAMMER`, or `NONE`. Nassau components, Singles Match Play, and Team/Best-Ball Match Play are `PRESS`; Skins remains `CARRYOVER`; SSP remains `BRIDGE`; stroke games remain `NONE`. This prevents incompatible escalation mechanics from stacking.
+
+Every press keeps stable `gameId`/`pressId`, `parentGameId`, `rootGameId`, `pressDepth`, hole range, declaration identity, inherited stake/basis, lifecycle timestamps, and authority metadata. The schema supports press-of-press trees; production defaults cap roots at three presses and depth one. Legacy games have presses off.
+
+Production triggers are manual and prompt-at-threshold; neither creates money without explicit confirmation. Shared Match creation, voiding, and supersession are host-authoritative. Final presses enter the trusted payout pipeline once, and frozen RoundRecords retain child nodes, events, and component press transactions. `transactions` remains the authoritative net settlement; `pressTransactions` is the auditable component layer. A future Trip Ledger must consume frozen records and must not add both layers together.
+
+Current limitations: joined devices cannot request approval; automatic, custom, double-stake, Hammer, and unlimited-depth behavior are deferred. The initial Play declaration surface is intentionally compact and host-focused.
+
+## Completion safeguards
+
+Confirmation is authoritative, not the dialog preview. The host reruns eligibility against current scores, the current declaration window, parent availability, press limits, duplicate start-hole rules, and the exact stable declaring-side ID shown when the dialog opened. Under `LOSING_SIDE_ONLY`, a tie, lead reversal, final parent, changed start hole, or newly conflicting press rejects the stale confirmation; the app never substitutes a new trailing side.
+
+Threshold prompts use a deterministic identity comprising root, parent and component, declared-for hole, trailing side, threshold, depth, and threshold-state fingerprint. Local `pressPromptState` stores `DISMISSED`, `CONFIRMED`, or `STALE` handling across rerenders and reloads without entering frozen RoundRecords. A different hole, side, parent, depth, or later threshold crossing is a new opportunity.
+
+Shared Match metadata treats the host press collection as authoritative. Merge uses stable press IDs, host-device identity, lifecycle precedence, and timestamps; missing joined-device arrays cannot erase host records, terminal void/supersede state cannot be downgraded, and same-parent/same-depth/same-declared-hole duplicates collapse deterministically without mutating inputs.
+
+Scores and Match Summary include a dedicated Presses audit below game drivers. It preserves parent/depth hierarchy, declarer IDs, declaration and hole ranges, stake, lifecycle, reason, and component ledger impact. Live reports use current authoritative records; settled historical reports clone and render frozen `games[]` and `pressTransactions` without recalculation or mutation.
+
+Live press-of-press declaration UI and broad void/supersede management UI remain deferred, along with joined-device request/approval, automatic creation, custom/double stakes, Hammer, and unlimited depth.
+
+## Parent-first Quick Scoreboard presentation
+
+The Quick Scoreboard explains the base competition before its children. Nassau is presented as explicit Front, Back, and Overall/18 component results, with each press nested beneath its recorded parent component and deeper stored depth shown through restrained indentation. The compact Final Settlement remains the accounting hero, but component wagers, results, lifecycle, and ledger contributions provide the audit path beneath it.
+
+The factual Classic Scorecard is a read-only, collapsed disclosure before Momentum Charts. Nassau charts show visible `+N`, `-N`, and `E` point states with an explicit positive-side orientation. Round Highlight narrative follows the scorecard and charts so narrative never precedes the scoring and momentum evidence that supports it.
+
+## Contextual Play action
+
+Press creation is separated from Quick Scoreboard reporting. Play shows one contextual `Press` button beside `Scoreboard` only when the host is viewing the authoritative active scoring position and at least one opportunity passes the shared eligibility engine. One tap opens a `Create a Press` card listing every currently valid opportunity; selection then opens the existing explicit confirmation.
+
+The active scoring position is the first sequential hole not fully complete, using the existing round-progress model rather than the viewed hole. An untouched active hole is included in the child range. Under `BEFORE_HOLE_STARTED`, any entered score, penalty, user-entered stat, SSP fact, or game input suppresses the opportunity; the engine never advances it silently to the following hole. Under `BEFORE_HOLE_COMPLETED`, a partially entered active hole remains eligible and confirmation names that hole and warns that information already exists. Backward and premature-forward browsing never exposes the action. Multiple opportunities retain configured game order and Nassau Front, Back, Overall order.
 
 ## 2. Terminology
 

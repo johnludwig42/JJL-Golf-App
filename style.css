@@ -5322,7 +5322,7 @@ body.keyboard-open .app-chrome{
 }
 html.quick-scoreboard-open,body.quick-scoreboard-open{overflow:hidden!important;overscroll-behavior:none;}
 .quick-scoreboard-modal{
-  width:min(680px,100%);
+  width:min(1160px,100%);
   max-height:calc(100dvh - var(--app-chrome-height, 0px) - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   overflow:auto;
   padding:0;
@@ -5343,6 +5343,26 @@ html.quick-scoreboard-open,body.quick-scoreboard-open{overflow:hidden!important;
 }
 .quick-scoreboard-topbar h3{margin:0;}
 .quick-scoreboard-body{padding:12px 14px 14px;display:grid;gap:12px;}
+.quick-scoreboard-shell{width:100%;max-width:1120px;margin:0 auto;display:grid;gap:14px;min-width:0}
+.quick-scoreboard-shell>.quick-scoreboard-section,.quick-scoreboard-facts>.quick-scoreboard-section,.quick-scoreboard-facts>div>.quick-scoreboard-section{padding:14px;border:1px solid var(--border);border-radius:14px;background:#fff;min-width:0}
+.quick-settlement-hero{background:linear-gradient(135deg,#f4fbf7,#fff)!important;border-color:rgba(11,93,59,.28)!important}
+.quick-settlement-payment{font-size:1.08rem;line-height:1.35}.quick-settlement-payment b{white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--accent)}
+.quick-settlement-reconcile{color:var(--muted);font-size:.8rem;font-weight:750}
+.quick-scoreboard-facts{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;min-width:0}
+.quick-game-parent{display:grid;gap:9px}.quick-game-parent-title{font-size:1rem;font-weight:900;color:var(--accent)}
+.quick-nassau-component{border:1px solid var(--border);border-radius:12px;background:#fafcfb;overflow:hidden}
+.quick-nassau-base,.quick-nassau-press{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start;padding:10px 12px}
+.quick-nassau-base>div:first-child,.quick-nassau-press>div:first-child{display:grid;gap:2px;min-width:0}.quick-nassau-base small,.quick-nassau-press small{color:var(--muted);font-size:.76rem;overflow-wrap:anywhere}
+.quick-nassau-values{display:grid;gap:2px;text-align:right;font-variant-numeric:tabular-nums}.quick-nassau-values span{font-size:.78rem;color:var(--muted);white-space:nowrap}
+.quick-nassau-press{margin-left:min(calc(var(--press-depth,1) * 18px),42px);border-top:1px solid var(--border);border-left:3px solid var(--accent);background:#fff}
+.quick-disclosure{padding:0!important;overflow:hidden}.quick-disclosure>summary{padding:13px 14px;font-weight:900;cursor:pointer;min-height:44px;display:flex;align-items:center}.quick-disclosure[open]>summary{border-bottom:1px solid var(--border)}
+.quick-scroll-panel{max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain;padding:12px;-webkit-overflow-scrolling:touch}
+.quick-scoreboard-momentum .quick-momentum-list{padding:12px}.quick-momentum-card{overflow-x:auto}.quick-momentum-card .momentum-chart{min-width:500px}
+.momentum-orientation{margin:2px 0 5px;color:var(--muted);font-size:.72rem;font-weight:750}.momentum-point-value{font-size:10px;fill:var(--text);font-weight:900;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round;font-variant-numeric:tabular-nums}
+.quick-round-highlight{display:grid;gap:5px}.quick-round-highlight span{color:var(--muted);font-size:.78rem;font-weight:800}.quick-player-context>div{display:flex;flex-wrap:wrap;gap:7px 14px}.quick-player-context span{font-size:.82rem}
+.play-report-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}.play-report-actions .compact-icon-btn{min-height:40px;margin:0}
+.press-opportunity-list{display:grid;gap:9px}.press-opportunity-row{display:grid;width:100%;grid-template-columns:minmax(0,1fr);gap:3px;text-align:left;padding:11px 12px;border:1px solid var(--border);border-radius:11px;background:#fff;color:var(--text)}.press-opportunity-row:hover,.press-opportunity-row:focus-visible{border-color:var(--accent);background:#f5faf7}.press-opportunity-row span,.press-opportunity-row small{font-size:.8rem;color:var(--muted)}
+.quick-native-game-list{display:grid;gap:9px;margin-top:9px}.quick-native-game{border:1px solid var(--border);border-radius:12px;background:#fafcfb;overflow:hidden}.quick-native-game-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;padding:10px 12px}.quick-native-game-row>div:first-child{display:grid;gap:3px}.quick-native-game-row small{color:var(--muted);font-size:.78rem;overflow-wrap:anywhere}
 .quick-scoreboard-meta,.quick-scoreboard-status{
   border:1px solid rgba(11,93,59,.14);
   border-radius:10px;
@@ -5497,6 +5517,15 @@ html.quick-scoreboard-open,body.quick-scoreboard-open{overflow:hidden!important;
   #score .score-step-btn{width:25px!important;min-width:25px!important;height:25px!important;}
   .quick-scoreboard-body{padding:10px;}
   .quick-scoreboard-table{font-size:.78rem;}
+  .quick-scoreboard-backdrop{padding-left:6px;padding-right:6px}
+  .quick-scoreboard-topbar{padding:10px 11px}.quick-scoreboard-body{padding:8px}
+  .quick-scoreboard-shell{gap:10px}.quick-scoreboard-shell>.quick-scoreboard-section,.quick-scoreboard-facts>div>.quick-scoreboard-section{padding:11px}
+  .quick-nassau-base,.quick-nassau-press{grid-template-columns:1fr;padding:9px 10px}.quick-nassau-values{text-align:left;grid-template-columns:minmax(0,1fr) auto;align-items:baseline}
+  .quick-nassau-press{margin-left:min(calc(var(--press-depth,1) * 9px),20px)}
+  .quick-settlement-payment{font-size:1rem}.quick-momentum-card .momentum-chart{min-width:500px}
+  .quick-player-context>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px}
+  .play-report-actions{gap:6px}.play-report-actions .compact-icon-btn{padding-left:10px;padding-right:10px;min-width:0}
+  .quick-native-game-row{grid-template-columns:1fr}.quick-player-score-summary .quick-player-table th:nth-child(2),.quick-player-score-summary .quick-player-table td:nth-child(2){width:40%}
 }
 
 /* v30.3.64 final narrow-score-row precedence */

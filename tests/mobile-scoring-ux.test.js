@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
 
 const players = [
@@ -95,16 +96,22 @@ test('momentum y-axis uses deterministic symmetric integer scales for full and c
   assert.equal(empty.engine.renderMomentumChart(empty.match, empty.metrics, 'team_match'), '');
 });
 
-test('Quick Scoreboard prioritizes Active Games, reconciles trusted money, removes redundant status, and renders eligible charts', () => {
+test('Quick Scoreboard prioritizes settlement and base games, preserves trusted money, and renders factual disclosures', () => {
   const fixture = render(buildMatch({ selectedGames: [{ key: 'nassau', basis: 'net', stakesFront: 5, stakesBack: 5, stakesOverall: 5 }, { key: 'team_match', basis: 'net', stake: 5 }], scores: winningScores, status: 'complete' }));
   const frozen = fixture.engine.buildFrozenRoundRecord(fixture.match, fixture.metrics, '2026-07-12T20:00:00Z');
   fixture.match.roundRecordSnapshot = structuredClone(frozen);
   const before = JSON.stringify(fixture.match.roundRecordSnapshot);
   const html = fixture.engine.buildQuickScoreboardView(fixture.match, fixture.metrics);
-  assert.ok(html.indexOf('Active Games') < html.indexOf('<h4>Players</h4>'));
+  assert.ok(html.indexOf('Final Settlement') < html.indexOf('Game Summary'));
+  assert.ok(html.indexOf('Game Summary') < html.indexOf('Player Score Summary'));
+  assert.ok(html.indexOf('Player Score Summary') < html.indexOf('Classic Scorecard'));
+  assert.ok(html.indexOf('Classic Scorecard') < html.indexOf('Momentum Charts'));
+  assert.ok(html.indexOf('Classic Scorecard') < html.indexOf('Momentum Charts'));
   assert.doesNotMatch(html, /quick-scoreboard-status/);
-  assert.match(html, /quick-game-money-card/);
-  assert.match(html, /Current combined total/);
+  assert.match(html, /quick-settlement-hero/);
+  assert.match(html, /All games reconciled/);
+  assert.match(html, /quick-nassau-component/);
+  assert.doesNotMatch(html, /data-scorecard-edit/);
   assert.match(html, /quick-momentum-card/);
   assert.equal(JSON.stringify(fixture.match.roundRecordSnapshot), before);
   const payout = fixture.engine.getPayoutReportContext(fixture.match, fixture.metrics);
@@ -123,4 +130,10 @@ test('Catch-Up queue identifies only explicit missing holes and never fills blan
   assert.equal(JSON.stringify(fixture.match.players.map(player => player.scores)), before);
   const complete = render(buildMatch({ scores: winningScores }));
   assert.equal(complete.engine.getCatchUpMissingHoleQueue(complete.match, complete.metrics).length, 0);
+});
+
+test('Play places the contextual Press action directly beside Scoreboard without a permanent opportunity card', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(html, /id="quickScoreboardBtn"[^>]*>Scoreboard<\/button><button id="playPressBtn"[^>]*aria-label="Press"[^>]*>Press<\/button>/);
+  assert.doesNotMatch(html, /id="pressActionsWrap"/);
 });

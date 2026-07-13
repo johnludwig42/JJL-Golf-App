@@ -1,11 +1,11 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.66',
-  versionNumber: '30.3.66',
-  cacheName: 'the-dye-ledger-v30.3.66',
+  version: 'v30.3.67',
+  versionNumber: '30.3.67',
+  cacheName: 'the-dye-ledger-v30.3.67',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Press Engine Design and Nassau Extension Prep'
+  buildLabel: 'Press and Quick Scoreboard Cleanup Hotfix'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -1764,11 +1764,45 @@ function showTeamMatchMetric(match, metrics) {
   return (match?.selectedGames || []).some(g => ['nassau', 'team_match'].includes(g.key));
 }
 function getTeamName(match, teamNo) {
-  return match?.teamNames?.[teamNo - 1] || `Team ${teamNo}`;
+  return String(match?.teamNames?.[teamNo - 1] || '').trim();
+}
+
+function getTeamDisplayName(match, teamNo) {
+  const explicit = getTeamName(match, teamNo);
+  if (explicit) return explicit;
+  const members = (match?.players || [])
+    .map((member, index) => ({ member, index }))
+    .filter(({ member }) => Number(member?.team) === Number(teamNo))
+    .sort((a, b) => Number(a.member?.slot ?? a.index) - Number(b.member?.slot ?? b.index) || a.index - b.index)
+    .map(({ member }) => ({ name: String(getPlayer(member.playerId)?.name || member.displayName || '').trim() }))
+    .filter(member => member.name);
+  if (!members.length) return `Team ${teamNo}`;
+  const parsed = members.map(member => {
+    const parts = member.name.split(/\s+/).filter(Boolean);
+    return { ...member, first: parts[0] || member.name, last: parts.slice(1).join(' ') };
+  });
+  const firstCounts = new Map();
+  parsed.forEach(member => firstCounts.set(member.first.toLocaleLowerCase(), (firstCounts.get(member.first.toLocaleLowerCase()) || 0) + 1));
+  let labels = parsed.map(member => firstCounts.get(member.first.toLocaleLowerCase()) > 1
+    ? `${member.first}${member.last ? ` ${member.last[0].toUpperCase()}.` : ''}`
+    : member.first);
+  const duplicateLabels = new Set(labels.filter((label, index) => labels.findIndex(item => item.toLocaleLowerCase() === label.toLocaleLowerCase()) !== index).map(label => label.toLocaleLowerCase()));
+  labels = labels.map((label, index) => duplicateLabels.has(label.toLocaleLowerCase()) && parsed[index].last ? `${parsed[index].first} ${parsed[index].last}` : label);
+  const exactCounts = new Map();
+  labels.forEach(label => exactCounts.set(label.toLocaleLowerCase(), (exactCounts.get(label.toLocaleLowerCase()) || 0) + 1));
+  const seen = new Map();
+  labels = labels.map(label => {
+    const key = label.toLocaleLowerCase();
+    if ((exactCounts.get(key) || 0) < 2) return label;
+    const ordinal = (seen.get(key) || 0) + 1;
+    seen.set(key, ordinal);
+    return `${label} ${ordinal}`;
+  });
+  return labels.join('/');
 }
 
 function getTeamLabel(match, teamNo, fallback = true) {
-  const name = String(getTeamName(match, teamNo) || '').trim();
+  const name = getTeamDisplayName(match, teamNo);
   return name || (fallback ? `Team ${teamNo}` : '');
 }
 function getMomentumPerspectiveTeam(match) {
@@ -3270,7 +3304,9 @@ function computeNassauDiffsForBasis(metrics, basis = 'net') {
 }
 
 function normalizePressConfig(config = {}) {
-  const source = config && typeof config === 'object' ? config : {};
+  const raw = config && typeof config === 'object' ? config : {};
+  const nested = raw.pressConfig && typeof raw.pressConfig === 'object' ? raw.pressConfig : {};
+  const source = { ...nested, ...raw };
   const triggerSource = source.pressType || source.triggerMode;
   const pressType = ['MANUAL', 'PROMPT_AT_THRESHOLD'].includes(triggerSource) ? triggerSource : PRESS_CONFIG_DEFAULTS.pressType;
   const pressAvailabilityRule = ['OPEN_SEGMENT_ONLY', 'FUTURE_HOLES_REMAIN'].includes(source.pressAvailabilityRule) ? source.pressAvailabilityRule : PRESS_CONFIG_DEFAULTS.pressAvailabilityRule;
@@ -3297,6 +3333,12 @@ function normalizePressConfig(config = {}) {
     nassauBackEnabled: source.nassauBackEnabled !== false,
     nassauOverallEnabled: source.nassauOverallEnabled !== false,
   };
+}
+function getPressConfigForGame(match, gameConfig = null) {
+  const game = gameConfig || {};
+  const legacy = game.key === 'nassau' && match?.pressConfig && typeof match.pressConfig === 'object' ? match.pressConfig : {};
+  const nested = game.pressConfig && typeof game.pressConfig === 'object' ? game.pressConfig : {};
+  return normalizePressConfig({ ...legacy, ...nested, ...game });
 }
 function getPressSegmentRange(match, metrics, segmentType) {
   const segment = String(segmentType || '').toUpperCase();
@@ -3366,7 +3408,7 @@ function mergeAuthoritativePressRecords(localRecords = [], incomingRecords = [],
 function getPressEligibility(match, metrics, segmentType, options = {}) {
   const requestedGameKey = String(options.gameKey || 'nassau');
   const gameConfig = (match?.selectedGames || []).find(game => game.key === requestedGameKey);
-  const config = normalizePressConfig(options.pressConfig || (requestedGameKey === 'nassau' ? match?.pressConfig : gameConfig) || gameConfig || match?.pressConfig);
+  const config = options.pressConfig ? normalizePressConfig(options.pressConfig) : getPressConfigForGame(match, gameConfig || { key: requestedGameKey });
   const segment = String(segmentType || '').toUpperCase();
   const base = { eligible: false, reasonCode: 'INVALID', reasonText: 'Press configuration is invalid.', nextStartingHole: null, remainingEligibleHoles: 0, currentPressCount: 0, maxPressesPerSegment: config.maxPressesPerSegment };
   if (!match || !metrics) return base;
@@ -3471,11 +3513,12 @@ function getPressStatus(match, metrics, press) {
   else if (match?.status === 'complete' || (match?.roundEndReason && match.roundEndReason !== 'completed')) status = 'INCOMPLETE';
   return { status, diff, completedHoles, remainingHoles, leaderTeamId: diff > 0 ? '1' : diff < 0 ? '2' : null, isClinched: !!clinch.isClinched };
 }
-function buildPressSettlementShape(match, metrics, press) {
+function buildPressSettlementShape(match, metrics, press, options = {}) {
   const record = normalizePressRecord(press, match);
   const result = getPressStatus(match, metrics, record);
   const amounts = Object.fromEntries((metrics?.players || []).map(player => [String(player.playerId), 0]));
-  if (record && result.status === 'FINAL' && result.leaderTeamId && record.wagerAmount > 0) {
+  const contributes = result.status === 'FINAL' || (options.includeActivePreview === true && result.status === 'ACTIVE');
+  if (record && contributes && result.leaderTeamId && record.wagerAmount > 0) {
     const winnerIds = (metrics.teams || []).find(team => String(team.team) === result.leaderTeamId)?.members?.map(member => String(member.playerId)) || [];
     const loserIds = (metrics.teams || []).find(team => String(team.team) !== result.leaderTeamId)?.members?.map(member => String(member.playerId)) || [];
     const total = record.wagerAmount * loserIds.length;
@@ -7381,7 +7424,7 @@ function describeMomentumMeta(match, metrics, gameKey) {
   }
   const cfg = (match.selectedGames || []).find(g => g.key === gameKey) || {};
   const perspectiveTeam = getMomentumPerspectiveTeam(match);
-  const teamName = getTeamName(match, perspectiveTeam);
+  const teamName = getTeamLabel(match, perspectiveTeam);
   const members = metrics?.teams?.find(t => t.team === perspectiveTeam)?.members?.map(m => m.player.name).join(', ') || '';
   const basis = cfg.key === 'team_stroke'
     ? `${formatBasisLabel(cfg.basis)} · ${formatScoringModeLabel(cfg.scoringMode)}`
@@ -7551,7 +7594,7 @@ function buildClassicScorecard(match, metrics, opts = {}) {
   const teeNames = [...new Set(visiblePlayers.map(p => p.tee?.teeName || tee?.teeName || 'Tee'))];
   const teeNote = teeNames.length === 1 ? ` All players: ${teeNames[0]} tee.` : ' Player tees are shown in each row.';
   const partialNote = completion.isIncomplete ? ' Unplayed holes are shown as dashes and excluded from totals.' : '';
-  return `<div class="scorecard-sub tiny">Gross score shown above net score. Dots indicate strokes received.${escapeHtml(teeNote)}${escapeHtml(partialNote)}</div><div class="scorecard-wrap"><table class="scorecard-table ${hideTeamColumn ? 'scorecard-no-team-col' : ''}"><thead><tr><th class="scorecard-sticky-name">${blankPlayerHeader ? '' : 'Player'}</th>${hideTeamColumn ? '' : '<th class="scorecard-sticky-team">Team</th>'}${holeHeader}${totalColumns}</tr></thead><tbody>${yardageRow}${parRow}${siRow}${playerRows}</tbody></table></div>`;
+  return `<div class="scorecard-sub tiny">Gross score shown above net score. Dots indicate strokes received.${escapeHtml(teeNote)}${escapeHtml(partialNote)}</div><div class="scorecard-wrap" tabindex="0" role="region" aria-label="Classic scorecard; scroll horizontally to view all holes"><table class="scorecard-table ${hideTeamColumn ? 'scorecard-no-team-col' : ''}"><thead><tr><th class="scorecard-sticky-name">${blankPlayerHeader ? '' : 'Player'}</th>${hideTeamColumn ? '' : '<th class="scorecard-sticky-team">Team</th>'}${holeHeader}${totalColumns}</tr></thead><tbody>${yardageRow}${parRow}${siRow}${playerRows}</tbody></table></div>`;
 }
 
 
@@ -7928,6 +7971,20 @@ function buildScoreDistributionSummary(match, metrics) {
         </table>
       </div>
     </div>`;
+}
+
+function buildQuickScoreDistribution(match, metrics, record = null) {
+  const frozen = record && isFrozenRoundRecord(record);
+  if (!frozen) {
+    const rows = computeScoreDistributionSummary(match, metrics);
+    if (!rows.some(row => Object.values(row.totals || {}).some(value => Number(value) > 0))) return '';
+    return `<details class="quick-scoreboard-section quick-disclosure quick-score-distribution"><summary>Score Distribution</summary><div class="quick-scroll-panel">${buildScoreDistributionSummary(match, metrics)}</div></details>`;
+  }
+  const rows = (record.players || []).filter(player => player.scoreDistribution).map(player => ({ name: player.displayName || player.playerId, totals: player.scoreDistribution }));
+  if (!rows.some(row => Object.values(row.totals || {}).some(value => Number(value) > 0))) return '';
+  const body = rows.map(({ name, totals }) => `<tr><td><strong>${escapeHtml(name)}</strong></td><td>${totals.eagle}</td><td>${totals.birdie}</td><td>${totals.par}</td><td>${totals.bogey}</td><td>${totals.doubleBogey}</td><td>${totals.other}</td></tr>`).join('');
+  const presentation = `<div class="score-distribution-wrap top-gap"><div class="section-subhead">Score distribution</div><div class="tiny">Gross scores only; completed holes only. Hole-in-ones, albatrosses, and triple bogeys or worse are included in Other.</div><div class="score-distribution-scroll top-gap"><table class="score-distribution-table"><thead><tr><th>Player</th><th>Eagle</th><th>Birdie</th><th>Par</th><th>Bogey</th><th>Double Bogey</th><th>Other</th></tr></thead><tbody>${body}</tbody></table></div></div>`;
+  return `<details class="quick-scoreboard-section quick-disclosure quick-score-distribution"><summary>Score Distribution</summary><div class="quick-scroll-panel">${presentation}</div></details>`;
 }
 
 
@@ -8333,10 +8390,13 @@ function formatCompactCurrency(amount, { signed = false } = {}) {
 }
 function buildQuickSettlementHero(match, metrics, payout = getPayoutReportContext(match, metrics), record = null) {
   const frozen = record && isFrozenRoundRecord(record);
+  const final = frozen || (!!match && match.status === 'complete' && !!match.completedAt);
   const payments = frozen ? (record.transactions || []).map(row => ({ from: row.payerId, to: row.payeeId, amount: row.amount })) : optimalSettlementRows(payout.finalTotals || {});
   const playerName = id => frozen ? (record.players || []).find(player => player.playerId === id)?.displayName || id : getPlayer(id)?.name || id;
-  const lines = payments.map(row => `<div class="quick-settlement-payment"><strong>${escapeHtml(playerName(row.from))}</strong> pays <strong>${escapeHtml(playerName(row.to))}</strong> <b>${formatCompactCurrency(row.amount)}</b></div>`).join('');
-  return `<section class="quick-scoreboard-section quick-settlement-hero"><h4>Final Settlement</h4>${lines || '<div class="quick-settlement-payment"><strong>No payment required</strong></div>'}<div class="quick-settlement-reconcile">${payments.length} payment${payments.length === 1 ? '' : 's'} · All games reconciled</div></section>`;
+  const verb = final ? 'pays' : 'would pay';
+  const lines = payments.map(row => `<div class="quick-settlement-payment"><strong>${escapeHtml(playerName(row.from))}</strong> ${verb} <strong>${escapeHtml(playerName(row.to))}</strong> <b>${formatCompactCurrency(row.amount)}</b></div>`).join('');
+  const support = final ? `${payments.length} payment${payments.length === 1 ? '' : 's'} · All games reconciled` : 'Based on scores currently entered';
+  return `<section class="quick-scoreboard-section quick-settlement-hero" data-settlement-state="${final ? 'final' : 'provisional'}"><h4>${final ? 'Final' : 'Provisional'} Settlement</h4>${lines || '<div class="quick-settlement-payment"><strong>No payment required</strong></div>'}<div class="quick-settlement-reconcile">${support}</div></section>`;
 }
 function getQuickNassauComponentState(match, metrics, cfg, component) {
   const diffs = computeNassauDiffsForBasis(metrics, String(cfg.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net');
@@ -8368,7 +8428,7 @@ function buildQuickNassauResults(match, metrics, record = null) {
     const segment = component.component.toUpperCase();
     const children = presses.filter(press => String(press.parentSegmentType || '').toUpperCase() === segment).map((press, index) => {
       const state = frozen ? (press.result || { status: press.status, diff: 0 }) : getPressStatus(match, metrics, press);
-      const settlement = frozen ? null : buildPressSettlementShape(match, metrics, press);
+      const settlement = frozen ? null : buildPressSettlementShape(match, metrics, press, { includeActivePreview: true });
       const transactions = frozen ? (record.pressTransactions || []).filter(row => row.pressId === (press.pressId || press.gameId)) : (settlement.transactions || []);
       const impact = transactions.reduce((sum, row) => sum + Number(row.amount || 0), 0);
       const result = state.diff ? `${getTeamLabel(match, state.diff > 0 ? 1 : 2)} +${Math.abs(state.diff)}` : state.status === 'HALVED' ? 'Halved' : 'All square';
@@ -8394,7 +8454,7 @@ function buildQuickGameSummary(match, metrics, record = null) {
     const contribution = frozen ? Object.values(frozenGame?.amounts || {}).filter(amount => Number(amount) > 0).reduce((sum, amount) => sum + Number(amount), 0) : games.reduce((sum, game) => sum + Object.values(game.amounts || {}).filter(amount => Number(amount) > 0).reduce((part, amount) => part + Number(amount), 0), 0);
     const children = (frozen ? (record.games || []).filter(game => game.type === 'press').map(game => ({ ...game.config, ...game })) : getPressTree(match).records).filter(press => press.rootGameId === cfg.key || press.parentGameId === cfg.key).map((press, index) => {
       const result = frozen ? (press.result || { status: press.status, diff: 0 }) : getPressStatus(match, metrics, press);
-      const impact = frozen ? (record.pressTransactions || []).filter(row => row.pressId === (press.pressId || press.gameId)).reduce((sum, row) => sum + Number(row.amount || 0), 0) : buildPressSettlementShape(match, metrics, press).transactions.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+      const impact = frozen ? (record.pressTransactions || []).filter(row => row.pressId === (press.pressId || press.gameId)).reduce((sum, row) => sum + Number(row.amount || 0), 0) : buildPressSettlementShape(match, metrics, press, { includeActivePreview: true }).transactions.reduce((sum, row) => sum + Number(row.amount || 0), 0);
       return `<div class="quick-nassau-press" style="--press-depth:${Math.min(3, Number(press.pressDepth || 1))}"><div><strong>${Number(press.pressDepth || 1) > 1 ? 'Press on ' : ''}Press ${index + 1}</strong><small>Holes ${press.startingHole || press.holeStart}–${press.endingHole || press.holeEnd}</small></div><div class="quick-nassau-values"><strong>${escapeHtml(result.diff ? `${getTeamLabel(match, result.diff > 0 ? 1 : 2)} +${Math.abs(result.diff)}` : result.status === 'HALVED' ? 'Halved' : 'All square')}</strong><span>${formatCompactCurrency(impact, { signed: impact > 0 })}</span></div></div>`;
     }).join('');
     const sspDetail = sspLedger?.settlement?.valid && !sspLedger.settlement.tied ? `<small>${escapeHtml(sspLedger.settlement.payerLabel || '')} · ${escapeHtml(sspLedger.settlement.payeeLabel || '')}</small>` : '';
@@ -8403,13 +8463,36 @@ function buildQuickGameSummary(match, metrics, record = null) {
   if (nassau) return cards ? nassau.replace('</section>', `<div class="quick-native-game-list">${cards}</div></section>`) : nassau;
   return cards ? `<section class="quick-scoreboard-section quick-game-results"><h4>Game Summary</h4><div class="quick-native-game-list">${cards}</div></section>` : '';
 }
-function buildQuickPlayerScoreSummary(match, metrics, record = null) {
+function buildPlayerSummaryRows(match, metrics, record = null) {
   const frozen = record && isFrozenRoundRecord(record);
-  if (!frozen && !(metrics?.completed > 0)) return '';
-  const rows = frozen ? (record.players || []).map(player => ({ id: player.playerId, name: player.displayName, gross: player.grossTotal, net: player.netTotal, diff: player.netToPar })) : (metrics.players || []).map(player => ({ id: player.playerId, name: player.player?.name || 'Player', gross: player.grossTotal, net: player.leaderboardNetTotal, diff: player.leaderboardNetDiff }));
-  rows.sort((a, b) => Number(a.diff || 0) - Number(b.diff || 0) || Number(a.net || 0) - Number(b.net || 0) || String(a.id).localeCompare(String(b.id)));
+  const plannedHoles = frozen ? Number(record.meta?.holesPlanned || 0) : getPlayableHoleCount(match, metrics?.tee);
+  const frozenHoleStats = playerId => {
+    const scored = (record.holes || []).filter(hole => (hole.scores || []).some(score => String(score.playerId) === String(playerId) && Number(score.gross) > 0));
+    return {
+      holesPlayed: scored.length,
+      grossToPar: scored.reduce((sum, hole) => {
+        const score = (hole.scores || []).find(row => String(row.playerId) === String(playerId));
+        return sum + Number(score?.gross || 0) - Number(hole.par || 0);
+      }, 0),
+    };
+  };
+  const rows = frozen ? (record.players || []).map((player, sourceOrder) => {
+    const holeStats = frozenHoleStats(player.playerId);
+    return { playerId: String(player.playerId), rank: 0, displayName: player.displayName || 'Player', gross: player.grossTotal, net: player.netTotal, netToPar: player.netToPar, grossToPar: holeStats.grossToPar, postableScore: player.postable, isComplete: plannedHoles > 0 && holeStats.holesPlayed >= plannedHoles, hasMissingScores: holeStats.holesPlayed < plannedHoles, hasTrustedScore: holeStats.holesPlayed > 0, sourceOrder };
+  }) : (metrics?.players || []).map((player, sourceOrder) => ({ playerId: String(player.playerId), rank: 0, displayName: player.player?.name || 'Player', gross: player.grossTotal, net: player.leaderboardNetTotal, netToPar: player.leaderboardNetDiff, grossToPar: player.toPar, postableScore: player.postableTotal, isComplete: plannedHoles > 0 && Number(player.holesPlayed || 0) >= plannedHoles, hasMissingScores: Number(player.holesPlayed || 0) < plannedHoles, hasTrustedScore: Number(player.holesPlayed || 0) > 0, sourceOrder }));
+  rows.sort((a, b) => Number(a.netToPar || 0) - Number(b.netToPar || 0) || Number(a.grossToPar || 0) - Number(b.grossToPar || 0) || Number(a.sourceOrder) - Number(b.sourceOrder) || a.playerId.localeCompare(b.playerId));
+  rows.forEach((row, index) => { row.rank = index + 1; });
+  return rows;
+}
+function buildPlayerSummaryTable(rows, accessibleLabel = 'Player Score Summary') {
   if (!rows.length) return '';
-  return `<section class="quick-scoreboard-section quick-player-score-summary"><h4>Player Score Summary</h4><div class="quick-table-wrap"><table class="quick-scoreboard-table quick-player-table"><thead><tr><th>#</th><th>Player</th><th>Gross</th><th>Net</th><th>Net +/-</th></tr></thead><tbody>${rows.map((row, index) => `<tr data-player-id="${escapeHtml(row.id)}"><td>${index + 1}</td><td title="${escapeHtml(row.name)}">${escapeHtml(row.name)}</td><td>${Number(row.gross) || '—'}</td><td>${Number(row.net) || '—'}</td><td>${formatToPar(Number(row.diff) || 0)}</td></tr>`).join('')}</tbody></table></div></section>`;
+  const score = (row, field) => row.hasTrustedScore && Number.isFinite(Number(row[field])) ? Number(row[field]) : '—';
+  return `<div class="player-summary-scroll"><table class="quick-scoreboard-table quick-player-table player-summary-table" aria-label="${escapeHtml(accessibleLabel)}"><thead><tr><th>#</th><th>Player</th><th>Gross</th><th>Net</th><th>Net +/-</th><th aria-label="Postable Score"><span aria-hidden="true">Post.</span><span class="sr-only">Postable Score</span></th></tr></thead><tbody>${rows.map(row => `<tr data-player-id="${escapeHtml(row.playerId)}"><td>${row.rank}</td><td title="${escapeHtml(row.displayName)}">${escapeHtml(row.displayName)}</td><td>${score(row, 'gross')}</td><td>${score(row, 'net')}</td><td>${row.hasTrustedScore ? formatToPar(Number(row.netToPar) || 0) : '—'}</td><td>${score(row, 'postableScore')}</td></tr>`).join('')}</tbody></table></div>`;
+}
+function buildQuickPlayerScoreSummary(match, metrics, record = null) {
+  const rows = buildPlayerSummaryRows(match, metrics, record);
+  if (!rows.some(row => row.hasTrustedScore)) return '';
+  return `<section class="quick-scoreboard-section quick-player-score-summary"><h4>Player Score Summary</h4>${buildPlayerSummaryTable(rows, 'Player Score Summary')}</section>`;
 }
 
 function buildQuickScoreboardView(match, metrics) {
@@ -8459,7 +8542,8 @@ function buildQuickScoreboardView(match, metrics) {
         <div>${gameSummaryHtml || gameStatusRows}${!gameSummaryHtml ? `<section class="quick-scoreboard-section"><h4>Game Contributions</h4>${gameMoneyHtml}${sspMoneyHtml}</section>` : ''}</div>
       </div>
       ${buildQuickPlayerScoreSummary(match, metrics, record)}
-      <details class="quick-scoreboard-section quick-disclosure quick-classic-scorecard"><summary>Classic Scorecard</summary><div class="quick-scroll-panel">${buildClassicScorecard(match, metrics, { readOnly: true })}</div></details>
+      ${buildQuickScoreDistribution(match, metrics, record)}
+      <details class="quick-scoreboard-section quick-disclosure quick-classic-scorecard"><summary>Classic Scorecard</summary>${buildClassicScorecard(match, metrics, { readOnly: true })}</details>
       ${buildQuickScoreboardMomentumCharts(match, metrics)}
       ${highlightHtml}
     </div>`;
@@ -8506,7 +8590,7 @@ function renderLeaderboard() {
   const empty = document.getElementById('leaderboardEmpty');
   const wrap = document.getElementById('leaderboardWrap');
   const completedSummaryBanner = document.getElementById('completedSummarySessionBanner');
-  const playerBody = document.getElementById('playerLeaderboardBody');
+  const playerSummaryHost = document.getElementById('playerLeaderboardSummary');
   const teamBody = document.getElementById('teamLeaderboardBody');
   const matchStatus = document.getElementById('matchStatusSummary');
   const executiveSummary = document.getElementById('roundExecutiveSummary');
@@ -8554,36 +8638,7 @@ function renderLeaderboard() {
     missingScoreEl.setAttribute('aria-hidden', warning ? 'false' : 'true');
   }
 
-  const sortedPlayers = metrics.players.slice().sort((a, b) => a.leaderboardNetDiff - b.leaderboardNetDiff || a.toPar - b.toPar);
-  const showPlayerTeamColumn = hasMultiPlayerTeam(metrics);
-  const playerLeaderboardCard = playerBody?.closest('details');
-  if (playerLeaderboardCard) playerLeaderboardCard.classList.toggle('hide-player-team-column', !showPlayerTeamColumn);
-  playerBody.innerHTML = sortedPlayers.map(p => `
-    <tr>
-      <td>${escapeHtml(p.player.name)}</td>
-      <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
-      <td>${p.grossTotal || 0}</td>
-      <td>${p.postableTotal || 0}</td>
-      <td>${formatToPar(p.toPar || 0)}</td>
-      <td>${p.leaderboardNetTotal || 0}</td>
-      <td>${formatToPar(p.leaderboardNetDiff || 0)}</td>
-    </tr>
-  `).join('');
-  const playerMobile = document.getElementById('playerLeaderboardMobile');
-  if (playerMobile) {
-    playerMobile.innerHTML = sortedPlayers.map(p => `
-      <div class="leader-mobile-card">
-        <div><strong>${escapeHtml(p.player.name)}</strong>${showPlayerTeamColumn ? ` <span class="tiny">· ${escapeHtml(getTeamLabel(match, p.team))}</span>` : ''}</div>
-        <div class="leader-mobile-grid">
-          <div><div class="leader-mobile-label">Gross</div><div>${p.grossTotal || 0}</div></div>
-          <div><div class="leader-mobile-label">Postable</div><div>${p.postableTotal || 0}</div></div>
-          <div><div class="leader-mobile-label">Gross to Par</div><div>${formatToPar(p.toPar || 0)}</div></div>
-          <div><div class="leader-mobile-label">Net</div><div>${p.leaderboardNetTotal || 0}</div></div>
-          <div><div class="leader-mobile-label">Net to Par</div><div>${formatToPar(p.leaderboardNetDiff || 0)}</div></div>
-        </div>
-      </div>
-    `).join('');
-  }
+  if (playerSummaryHost) playerSummaryHost.innerHTML = buildPlayerSummaryTable(buildPlayerSummaryRows(match, metrics), 'Player Leaderboard');
 
   const sortedTeams = metrics.teams.slice().sort((a, b) => (a.netTotal - b.netTotal) || (a.grossTotal - b.grossTotal) || (a.team - b.team));
   const showTeamLeaderboard = hasMultiPlayerTeam(metrics);
@@ -12634,12 +12689,12 @@ function getCurrentPressOpportunities(match, metrics, options = {}) {
   const activePosition = getActiveScoringPosition(match);
   const viewedPosition = Number(options.viewedPosition ?? currentHole);
   if (!activePosition || viewedPosition !== activePosition || !(options.isHost ?? isCurrentDeviceMatchHost(match))) return [];
-  const configs = (match.selectedGames || []).filter(game => getGameEscalationCapability(game.key) === 'PRESS' && normalizePressConfig(game).pressesEnabled);
+  const configs = (match.selectedGames || []).filter(game => getGameEscalationCapability(game.key) === 'PRESS' && getPressConfigForGame(match, game).pressesEnabled);
   const started = isActiveHoleTouchedForPress(match, activePosition);
   const completed = !!metrics.holeResults?.[activePosition - 1]?.completed;
   if (completed) return [];
   const opportunities = configs.flatMap((cfg, gameIndex) => {
-    const pc = normalizePressConfig(cfg);
+    const pc = getPressConfigForGame(match, cfg);
     if (started && pc.declarationWindow === 'BEFORE_HOLE_STARTED') return [];
     const eligibilityPosition = activePosition - 1;
     const lanes = cfg.key === 'nassau' ? ['FRONT', 'BACK', 'OVERALL'].filter(segment => pc[`nassau${segment[0]}${segment.slice(1).toLowerCase()}Enabled`] !== false) : ['OVERALL'];
@@ -12680,7 +12735,7 @@ function openPressOpportunityCard() {
 }
 function openPressConfirmation(match, metrics, segment, context) {
   const cfg = (match.selectedGames || []).find(game => game.key === context.gameKey) || {};
-  const pc = normalizePressConfig(cfg);
+  const pc = getPressConfigForGame(match, cfg);
   const draft = buildPressRecordDraft(match, metrics, segment, { gameKey: context.gameKey, pressConfig: pc, currentPosition: context.currentPosition, declaringSideId: context.declaringSideId, initiatedByTeamId: context.declaringSideId, triggerType: pc.pressType, createdAt: new Date().toISOString(), sourceDeviceId: getSharedDeviceId() });
   if (!draft) return toast('That press is no longer available.');
   const eligibility = getPressEligibility(match, metrics, segment, { gameKey: context.gameKey, pressConfig: pc, currentPosition: context.currentPosition });
@@ -12701,7 +12756,7 @@ function confirmPendingPress() {
   if (!pending || !match || match.id !== pending.matchId) return closePressConfirmation();
   const metrics = computeMatchMetrics(match);
   const cfg = (match.selectedGames || []).find(game => game.key === pending.gameKey) || {};
-  const pc = normalizePressConfig(cfg);
+  const pc = getPressConfigForGame(match, cfg);
   const activePosition = getActiveScoringPosition(match);
   if (!activePosition || activePosition !== pending.activePosition || currentHole !== activePosition) { closePressConfirmation(); return toast('The active scoring hole changed. Review the current press opportunity.'); }
   const started = isActiveHoleTouchedForPress(match, activePosition);
@@ -12750,7 +12805,6 @@ function renderCurrentMatch() {
   const hole = scoringHoles[currentHole - 1];
   renderHoleSelector(match, scoringHoles);
   renderCatchUpScoringBar(match, metrics);
-  renderPressActions(match, metrics);
   const teamText = metrics?.teams?.length === 2 ? `${formatMatchDiff(metrics.matchDiff, match)} overall` : 'Singles leaderboard';
   const teeYardages = hole ? [...new Map((metrics?.players || []).map(p => {
     const playerTee = p.tee || tee;
@@ -12775,6 +12829,14 @@ function renderCurrentMatch() {
   renderScoreAccessCard(match);
   renderMemoryQuickCapture(match);
   renderScoreGrid(match, tee, metrics, scoringHoles);
+  // Render Press after the current-hole inputs so stale values from the prior hole
+  // cannot make an untouched active hole appear started.
+  renderPressActions(match, metrics);
+  const playMatchSummary = document.getElementById('playMatchSummary');
+  if (playMatchSummary) {
+    const statusOptions = getMatchStatusOptions(match);
+    playMatchSummary.innerHTML = buildFeaturedMatchStatus(match, metrics, match.matchStatusGame || statusOptions[0]?.key || 'team_match');
+  }
   renderSneakySandyPoleyEntry(match, hole, metrics);
   renderStatTrackingEntry(match, hole, metrics);
   renderSneakySandyPoleyNote(match, hole, metrics);
@@ -12798,16 +12860,7 @@ function getShortStatusName(name, maxLen = 10) {
 function getConciseTeamName(match, teamNo, metrics, maxLen = 12) {
   // v28.21.1: Preserve custom team names and player-derived team labels.
   // The live status line is styled to wrap instead of forcing truncation.
-  const custom = String(match?.teamNames?.[Number(teamNo) - 1] || '').trim();
-  if (custom) return custom;
-  const members = (metrics?.teams || []).find(t => Number(t.team) === Number(teamNo))?.members || [];
-  if (members.length) {
-    const names = members.map(m => getShortStatusName(m?.player?.name || '')).filter(Boolean);
-    if (names.length === 1) return names[0];
-    const joined = names.join('/');
-    return joined || `Team ${teamNo}`;
-  }
-  return `Team ${teamNo}`;
+  return getTeamLabel(match, teamNo);
 }
 
 function formatConciseTeamDiff(match, metrics, diff) {
@@ -12971,14 +13024,7 @@ function getMomentumTeamLabels(match, metrics, gameKey) {
     const result = computeSinglesMatchPlayResult(match, metrics, getSinglesMatchConfig(match));
     return [result.playerAName, result.playerBName].map(name => String(name || 'Player').trim().split(/\s+/)[0]);
   }
-  const configured = Array.isArray(match?.teamNames) ? match.teamNames : [];
-  return [1, 2].map(teamNo => {
-    const custom = String(configured[teamNo - 1] || '').trim();
-    if (custom && !/^Team\s*\d+$/i.test(custom)) return custom;
-    const team = (metrics?.teams || []).find(row => Number(row.team) === teamNo);
-    const firstNames = (team?.members || []).map(member => String(member?.player?.name || '').trim().split(/\s+/)[0]).filter(Boolean);
-    return firstNames.length ? firstNames.join(' / ') : `Team ${teamNo}`;
-  });
+  return [1, 2].map(teamNo => getTeamLabel(match, teamNo));
 }
 function buildMomentumPresentation(match, metrics, gameKey) {
   const isNassauComponent = /^nassau_(front|back|overall)$/.test(String(gameKey));
@@ -14055,8 +14101,8 @@ function computeLivePayoutGames(match, metrics) {
     pushGame(cfg.key, getGameLabel(cfg.key), {});
   });
   getPressTree(match).records.forEach((press, index) => {
-    const settlement = buildPressSettlementShape(match, metrics, press);
-    if (!['FINAL', 'HALVED'].includes(settlement.status)) return;
+    const settlement = buildPressSettlementShape(match, metrics, press, { includeActivePreview: true });
+    if (!['ACTIVE', 'FINAL', 'HALVED'].includes(settlement.status)) return;
     pushGame(`press:${press.pressId}`, `Press ${index + 1} · Holes ${press.startingHole}–${press.endingHole}`, settlement.amounts, 'team', settlement.transactions.map(row => ({ from: row.payerId, to: row.payeeId, amount: row.amount })), press.outcomeGameKey || (String(press.rootGameId).startsWith('nassau_') ? 'nassau' : press.rootGameId || press.parentGameId), { press: clonePlain(press), settlement });
   });
   return games;
@@ -18147,6 +18193,7 @@ function installDyeLedgerLiveEngineAdapter() {
     computeNassauDiffsForBasis,
     getGameEscalationCapability,
     normalizePressConfig,
+    getPressConfigForGame,
     normalizePressRecord,
     dedupePressRecords,
     mergeAuthoritativePressRecords,
@@ -18177,6 +18224,10 @@ function installDyeLedgerLiveEngineAdapter() {
     buildQuickNassauResults,
     buildQuickGameSummary,
     buildQuickPlayerScoreSummary,
+    buildPlayerSummaryRows,
+    buildPlayerSummaryTable,
+    buildQuickScoreDistribution,
+    getTeamDisplayName,
     getActiveScoringPosition,
     getCurrentPressOpportunities,
     buildQuickScoreboardGameStatusRows,

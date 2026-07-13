@@ -154,13 +154,17 @@ test('Quick Scoreboard presents base Nassau components before nested presses and
   assert.doesNotMatch(html, /quick-classic-scorecard[^>]*open/);
 });
 
-test('Quick settlement uses pays grammar and correct singular/plural reconciliation copy', () => {
+test('Quick settlement uses lifecycle grammar and correct singular/plural reconciliation copy', () => {
   const fixture = seed(buildMatch({ scores: scoredThrough(2) }));
   const singular = fixture.engine.buildQuickSettlementHero(fixture.match, fixture.metrics, { finalTotals: { p1: 10, p3: -10 } });
-  assert.match(singular, /Phil<\/strong> pays <strong>John/);
+  assert.match(singular, /Provisional Settlement/);
+  assert.match(singular, /Phil<\/strong> would pay <strong>John/);
   assert.match(singular, /\$10/);
-  assert.match(singular, /1 payment · All games reconciled/);
+  assert.match(singular, /Based on scores currently entered/);
+  fixture.match.status = 'complete'; fixture.match.completedAt = '2026-07-12T20:00:00Z';
   const plural = fixture.engine.buildQuickSettlementHero(fixture.match, fixture.metrics, { finalTotals: { p1: 10.5, p2: 4, p3: -10.5, p4: -4 } });
+  assert.match(plural, /Final Settlement/);
+  assert.match(plural, / pays /);
   assert.match(plural, /2 payments · All games reconciled/);
   assert.match(plural, /\$10\.50/);
 });

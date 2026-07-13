@@ -10,7 +10,7 @@ Game escalation capabilities are `PRESS`, `CARRYOVER`, `BRIDGE`, `HAMMER`, or `N
 
 Every press keeps stable `gameId`/`pressId`, `parentGameId`, `rootGameId`, `pressDepth`, hole range, declaration identity, inherited stake/basis, lifecycle timestamps, and authority metadata. The schema supports press-of-press trees; production defaults cap roots at three presses and depth one. Legacy games have presses off.
 
-Production triggers are manual and prompt-at-threshold; neither creates money without explicit confirmation. Shared Match creation, voiding, and supersession are host-authoritative. Final presses enter the trusted payout pipeline once, and frozen RoundRecords retain child nodes, events, and component press transactions. `transactions` remains the authoritative net settlement; `pressTransactions` is the auditable component layer. A future Trip Ledger must consume frozen records and must not add both layers together.
+Production triggers are manual and prompt-at-threshold; neither creates money without explicit confirmation. Shared Match creation, voiding, and supersession are host-authoritative. Final presses enter the trusted payout pipeline once, and active Presses may enter the same pipeline as provisional preview contributions. Frozen RoundRecords retain child nodes, events, and component press transactions. `transactions` remains the authoritative net settlement; `pressTransactions` is the auditable component layer. A future Trip Ledger must consume frozen records and must not add both layers together.
 
 Current limitations: joined devices cannot request approval; automatic, custom, double-stake, Hammer, and unlimited-depth behavior are deferred. The initial Play declaration surface is intentionally compact and host-focused.
 
@@ -37,6 +37,12 @@ The factual Classic Scorecard is a read-only, collapsed disclosure before Moment
 Press creation is separated from Quick Scoreboard reporting. Play shows one contextual `Press` button beside `Scoreboard` only when the host is viewing the authoritative active scoring position and at least one opportunity passes the shared eligibility engine. One tap opens a `Create a Press` card listing every currently valid opportunity; selection then opens the existing explicit confirmation.
 
 The active scoring position is the first sequential hole not fully complete, using the existing round-progress model rather than the viewed hole. An untouched active hole is included in the child range. Under `BEFORE_HOLE_STARTED`, any entered score, penalty, user-entered stat, SSP fact, or game input suppresses the opportunity; the engine never advances it silently to the following hole. Under `BEFORE_HOLE_COMPLETED`, a partially entered active hole remains eligible and confirmation names that hole and warns that information already exists. Backward and premature-forward browsing never exposes the action. Multiple opportunities retain configured game order and Nassau Front, Back, Overall order.
+
+### v30.3.67 visibility correction
+
+Press configuration is resolved through one compatibility path: the selected game's top-level fields take precedence, nested legacy `pressConfig` fields are accepted, and legacy match-level Nassau configuration remains readable. Local matches are authoritative by default; `HOST_ONLY` denies creation only when a Shared Match identifies the current device as joined.
+
+The Play render path now evaluates contextual visibility after current-hole inputs are rendered. This prevents stale DOM values from the previously completed hole from making the newly active untouched hole appear started. The button remains removed from interaction unless at least one opportunity passes full eligibility. First tap still opens `Create a Press`, creates nothing, and confirmation still reruns authority, active-hole, declaration-window, trailing-side, wager, parent, duplicate, count, and lifecycle checks.
 
 ## 2. Terminology
 
@@ -122,19 +128,23 @@ A press is independent match play across its own range. The dormant lifecycle he
 
 ## 11. Settlement
 
-`buildPressSettlementShape()` is not connected to production totals. It prepares stable press/parent metadata, per-player amounts, deterministic payer/payee transaction IDs, and zero-sum cross-foot validation. It mirrors the existing Nassau convention: every losing-team player pays the inherited per-person stake and the pot is divided equally across winning-team players. Halved, incomplete, pending, voided, and superseded presses contribute zero.
+`buildPressSettlementShape()` prepares stable press/parent metadata, per-player amounts, deterministic payer/payee transaction IDs, and zero-sum cross-foot validation. It mirrors the existing Nassau convention: every losing-team player pays the inherited per-person stake and the pot is divided equally across winning-team players. Its default path remains finalized-only; the complete live payout pipeline may explicitly request an `ACTIVE` preview contribution. Halved, incomplete, pending, voided, and superseded presses contribute zero.
 
-v30.3.66 must add each final press as a separate payout-game contribution. It must not hide press money inside the parent Nassau row or derive it from prose.
+Each eligible Press is added as a separate payout-game contribution keyed by stable Press ID before the existing net-settlement reconciliation step. `getPressTree()` deduplicates repeated synchronized records by stable Press ID, so repeated render, derivation, or Shared Match replay does not add the contribution twice. Quick Scoreboard's Provisional/Final Settlement hero consumes the same complete `finalTotals` ledger as Scores and reports; it does not add Press money to an already-netted payment.
 
 ## 12. Shared Match authority
 
 Only the host may create, void, confirm, or finalize authoritative presses. Joined devices may display host-synchronized configuration/records but receive `HOST_ONLY` for creation. Existing Shared Match metadata carries the dormant structures; no new distributed protocol exists.
+
+The v30.3.67 Shared Match Press capability remains subject to a later focused end-to-end iteration. Host creation, joined-device receipt, repeated synchronization, lifecycle precedence, and complete settlement reconciliation have automated coverage, but the full two-device workflow still requires dedicated end-to-end validation and follow-up.
 
 For offline/stale/simultaneous attempts, the host determines the authoritative current position and ID. Duplicate parent/start validation runs again at host acceptance. Host disconnect leaves presses displayable but blocks mutation. Conflicts are surfaced or rejected; they are never silently merged. Future request/approval is deferred.
 
 ## 13. Frozen RoundRecord behavior
 
 Current production freezing is unchanged in v30.3.65. v30.3.66 must freeze stable press transaction records alongside other game contributions. Report viewing must consume, not regenerate, frozen transactions. Reopened records remain in snapshot history and corrected completion creates an auditable replacement.
+
+For v30.3.67, a newly frozen record's authoritative `transactions` already reflects the complete net ledger, including final eligible Press payout games exactly once. The separate `pressTransactions` collection remains component audit detail only. Historical Quick Scoreboard settlement reads frozen `transactions`; it never combines or re-nets `pressTransactions`, and rendering clones rather than mutates the snapshot.
 
 ## 14. Trip Ledger aggregation
 

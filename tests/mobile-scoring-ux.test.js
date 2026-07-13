@@ -44,13 +44,13 @@ test('truthful game status covers concrete live, final, tied, incomplete, and no
 });
 
 test('shared momentum presentation orients leader positive, labels sides, and preserves source data', () => {
-  const fixture = render(buildMatch({ selectedGames: [{ key: 'team_match', basis: 'net', stake: 5 }], scores: winningScores, status: 'complete' }));
+  const fixture = render(buildMatch({ selectedGames: [{ key: 'team_match', basis: 'net', stake: 5 }], scores: winningScores, status: 'complete', teamNames: ['', ''] }));
   const before = JSON.stringify(fixture.match);
   const model = fixture.engine.buildMomentumPresentation(fixture.match, fixture.metrics, 'team_match');
   assert.equal(model.perspective, 1);
   assert.ok(model.series.at(-1).value > 0);
-  assert.equal(model.upperLabel, 'John / John');
-  assert.equal(model.lowerLabel, 'Phil / Steve');
+  assert.equal(model.upperLabel, 'John S./John J.');
+  assert.equal(model.lowerLabel, 'Phil/Steve');
   const full = fixture.engine.renderMomentumChart(fixture.match, fixture.metrics, 'team_match');
   const compact = fixture.engine.renderMomentumChart(fixture.match, fixture.metrics, 'team_match', { compact: true });
   assert.match(full, /momentum-zero-baseline/);
@@ -136,4 +136,87 @@ test('Play places the contextual Press action directly beside Scoreboard without
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   assert.match(html, /id="quickScoreboardBtn"[^>]*>Scoreboard<\/button><button id="playPressBtn"[^>]*aria-label="Press"[^>]*>Press<\/button>/);
   assert.doesNotMatch(html, /id="pressActionsWrap"/);
+});
+
+test('settlement hero follows formal lifecycle without changing settlement amounts', () => {
+  const active = render(buildMatch({ scores: Object.fromEntries(Object.entries(winningScores).map(([id, rows]) => [id, rows.slice(0, 3)])), status: 'active' }));
+  const payout = active.engine.getPayoutReportContext(active.match, active.metrics);
+  const before = JSON.stringify(payout.finalTotals);
+  const provisional = active.engine.buildQuickSettlementHero(active.match, active.metrics, payout, active.engine.getEffectiveRoundRecord(active.match, active.metrics));
+  assert.match(provisional, /Provisional Settlement/);
+  assert.match(provisional, /would pay/);
+  assert.match(provisional, /Based on scores currently entered/);
+  assert.equal(JSON.stringify(payout.finalTotals), before);
+
+  const complete = render(buildMatch({ scores: winningScores, status: 'complete' }));
+  const frozen = complete.engine.buildFrozenRoundRecord(complete.match, complete.metrics, '2026-07-12T20:00:00Z');
+  const final = complete.engine.buildQuickSettlementHero(complete.match, complete.metrics, complete.engine.getPayoutReportContext(complete.match, complete.metrics), frozen);
+  assert.match(final, /Final Settlement/);
+  assert.match(final, / pays /);
+  assert.match(final, /All games reconciled/);
+
+  complete.match.status = 'active'; complete.match.previousCompletedAt = complete.match.completedAt; complete.match.completedAt = null; complete.match.roundRecordSnapshot = null;
+  const reopened = complete.engine.buildQuickSettlementHero(complete.match, complete.metrics, complete.engine.getPayoutReportContext(complete.match, complete.metrics), complete.engine.getEffectiveRoundRecord(complete.match, complete.metrics));
+  assert.match(reopened, /Provisional Settlement/);
+});
+
+test('team fallback helper is deterministic, distinguishes duplicate names, and never mutates saved names', () => {
+  const fixture = render(buildMatch({ teamNames: ['  ', 'Champions'] }));
+  const before = JSON.stringify(fixture.match.teamNames);
+  assert.equal(fixture.engine.getTeamDisplayName(fixture.match, 1), 'John S./John J.');
+  assert.equal(fixture.engine.getTeamDisplayName(fixture.match, 2), 'Champions');
+  assert.equal(JSON.stringify(fixture.match.teamNames), before);
+  fixture.match.teamNames[1] = '';
+  assert.equal(fixture.engine.getTeamDisplayName(fixture.match, 2), 'Phil/Steve');
+  fixture.match.players.push({ ...fixture.match.players[3], team: 2, slot: 4 });
+  assert.equal(fixture.engine.getTeamDisplayName(fixture.match, 2), 'Phil/Steve 1/Steve 2');
+  fixture.match.players = fixture.match.players.slice(0, 1);
+  assert.equal(fixture.engine.getTeamDisplayName(fixture.match, 1), 'John');
+});
+
+test('Quick Scoreboard inserts collapsed Score Distribution in order and preserves frozen data', () => {
+  const fixture = render(buildMatch({ scores: winningScores, status: 'complete' }));
+  const frozen = fixture.engine.buildFrozenRoundRecord(fixture.match, fixture.metrics, '2026-07-12T20:00:00Z');
+  fixture.match.roundRecordSnapshot = structuredClone(frozen);
+  const before = JSON.stringify(fixture.match.roundRecordSnapshot);
+  const html = fixture.engine.buildQuickScoreboardView(fixture.match, fixture.metrics);
+  assert.ok(html.indexOf('Player Score Summary') < html.indexOf('Score Distribution'));
+  assert.ok(html.indexOf('Score Distribution') < html.indexOf('Classic Scorecard'));
+  assert.match(html, /<details class="quick-scoreboard-section quick-disclosure quick-score-distribution"><summary>Score Distribution/);
+  assert.match(html, /score-distribution-scroll/);
+  assert.equal(JSON.stringify(fixture.match.roundRecordSnapshot), before);
+});
+
+test('responsive source paths contain internal scrolling, width-fit momentum, desktop summary reuse, and canonical v4 logo', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+  assert.match(html, /src="\.\/apple-touch-icon-v4\.png" alt="The Dye Ledger"/);
+  assert.match(html, /id="playMatchSummary"[^>]*aria-label="Match Summary"/);
+  assert.match(css, /\.quick-scroll-panel\{[^}]*overflow-x:auto/);
+  assert.match(css, /\.quick-scoreboard-modal\{[^}]*overflow-x:hidden/s);
+  assert.match(css, /\.quick-momentum-card \.momentum-chart\{[^}]*min-width:0[^}]*max-width:100%/);
+  const renderCurrentMatch = app.slice(app.indexOf('function renderCurrentMatch()'), app.indexOf('function getShortStatusName'));
+  assert.ok(renderCurrentMatch.indexOf('renderScoreGrid(match, tee, metrics, scoringHoles);') < renderCurrentMatch.indexOf('renderPressActions(match, metrics);'));
+  assert.match(app, /playMatchSummary\.innerHTML = buildFeaturedMatchStatus/);
+});
+
+test('Quick Scoreboard reuses the native bounded scorecard scroller and Play Greenies stay compact without changing controls', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+  assert.match(css, /body\s*\{\s*touch-action:\s*auto;/);
+  assert.match(app, /quick-classic-scorecard"><summary>Classic Scorecard<\/summary>\$\{buildClassicScorecard\(match, metrics, \{ readOnly: true \}\)\}<\/details>/);
+  assert.doesNotMatch(app, /quick-classic-scorecard[^\n]*quick-scroll-panel/);
+  assert.match(app, /class="scorecard-wrap" tabindex="0" role="region" aria-label="Classic scorecard; scroll horizontally to view all holes"/);
+  assert.match(css, /\.scorecard-wrap\{position:relative;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;/);
+  assert.match(css, /@media \(max-width:760px\)\{\.scorecard-table\{min-width:920px\}\}/);
+  assert.match(css, /\.quick-classic-scorecard>\.scorecard-wrap\{width:calc\(100% - 24px\);max-width:calc\(100% - 24px\);/);
+  assert.match(html, /style\.css\?v=30\.3\.67&amp;rev=3/);
+  assert.match(app, /cacheName: 'the-dye-ledger-v30\.3\.67'/);
+  assert.match(css, /#greeniesEntryWrap \.greenies-check\{min-height:44px;padding:4px 9px;gap:7px\}/);
+  assert.match(css, /#greeniesEntryWrap \.greenies-check input\[type="checkbox"\]\{width:20px;height:20px;min-height:20px;padding:0\}/);
+  assert.match(html, /id="greeniesEntryWrap" class="top-gap hidden"/);
+  assert.match(app, /class="mini-check greenies-check/);
+  assert.match(app, /type="checkbox" data-greenies-winner=/);
 });

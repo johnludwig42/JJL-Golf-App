@@ -19,8 +19,10 @@ test('preference defaults and normalization are complete, deterministic, immutab
   const engine = loadLiveEngine();
   const defaults = engine.getDefaultPlayerPreferences();
   assert.deepEqual(structuredClone(defaults), {
-    schemaVersion: 1,
+    schemaVersion: 2,
     scoring: { smartScoreAdvancePreset: 'NORMAL', hapticsEnabled: true, statTrackingDefault: false },
+    press: structuredClone(engine.normalizePressConfig({})),
+    roundDefaults: { sharedMatchEnabled: false },
     quickScoreboard: { classicScorecardExpanded: false, scoreDistributionExpanded: false, momentumExpanded: false },
   });
   for (const raw of [undefined, null, {}, { scoring: {} }, { schemaVersion: 'bad', scoring: { smartScoreAdvancePreset: 'turbo', hapticsEnabled: 'yes', statTrackingDefault: 1 }, quickScoreboard: { classicScorecardExpanded: null, scoreDistributionExpanded: 'no', momentumExpanded: 1 } }]) {
@@ -42,7 +44,7 @@ test('preference storage reads, saves, reloads, updates nested fields, survives 
   const engine = loadLiveEngine();
   const storage = makeStorage({ unrelated: 'keep' });
   const first = engine.getPlayerPreferences(storage);
-  assert.equal(JSON.parse(storage.snapshot()[key]).schemaVersion, 1);
+  assert.equal(JSON.parse(storage.snapshot()[key]).schemaVersion, 2);
   const saved = engine.savePlayerPreferences({ ...first, scoring: { ...first.scoring, hapticsEnabled: false } }, storage);
   assert.equal(saved.scoring.hapticsEnabled, false);
   assert.equal(engine.getPlayerPreferences(storage).scoring.hapticsEnabled, false);
@@ -63,21 +65,42 @@ test('reset restores only known values while preserving unknown fields and unrel
   const storage = makeStorage({ unrelated: 'saved-match-data' });
   engine.savePlayerPreferences({ schemaVersion: 7, futureTop: 1, scoring: { smartScoreAdvancePreset: 'RELAXED', hapticsEnabled: false, statTrackingDefault: true, future: 'keep' }, quickScoreboard: { classicScorecardExpanded: true, scoreDistributionExpanded: true, momentumExpanded: true, future: 'keep' } }, storage);
   const reset = engine.resetPlayerPreferences(storage);
-  assert.deepEqual(structuredClone({ scoring: reset.scoring, quickScoreboard: reset.quickScoreboard }), structuredClone({ scoring: { smartScoreAdvancePreset: 'NORMAL', hapticsEnabled: true, statTrackingDefault: false, future: 'keep' }, quickScoreboard: { classicScorecardExpanded: false, scoreDistributionExpanded: false, momentumExpanded: false, future: 'keep' } }));
+  assert.deepEqual(structuredClone({ scoring: reset.scoring, roundDefaults: reset.roundDefaults, quickScoreboard: reset.quickScoreboard }), structuredClone({ scoring: { smartScoreAdvancePreset: 'NORMAL', hapticsEnabled: true, statTrackingDefault: false, future: 'keep' }, roundDefaults: { sharedMatchEnabled: false }, quickScoreboard: { classicScorecardExpanded: false, scoreDistributionExpanded: false, momentumExpanded: false, future: 'keep' } }));
   assert.equal(reset.futureTop, 1);
   assert.equal(storage.snapshot().unrelated, 'saved-match-data');
 });
 
 test('new-match defaults use preferences while explicit source, template, and current-match values win', () => {
   const engine = loadLiveEngine();
-  const preferences = engine.normalizePlayerPreferences({ scoring: { smartScoreAdvancePreset: 'RELAXED', statTrackingDefault: true } });
-  assert.deepEqual(structuredClone(engine.getNewMatchDefaultsFromPreferences(preferences)), { smartScoreAdvancePreset: 'relaxed', statTrackingEnabled: true });
-  assert.deepEqual(structuredClone(engine.mergeNewMatchDefaults({}, preferences)), { smartScoreAdvancePreset: 'relaxed', statTrackingEnabled: true });
-  assert.deepEqual(structuredClone(engine.mergeNewMatchDefaults({ smartScoreAdvancePreset: 'fast', statTrackingEnabled: false }, preferences)), { smartScoreAdvancePreset: 'fast', statTrackingEnabled: false });
+  const preferences = engine.normalizePlayerPreferences({ scoring: { smartScoreAdvancePreset: 'RELAXED', statTrackingDefault: true }, press: { pressesEnabled: true, pressType: 'PROMPT_AT_THRESHOLD', autoPressThreshold: 3, maxPressesPerRound: 4, maxRePresses: 2 }, roundDefaults: { sharedMatchEnabled: true } });
+  const defaults = engine.getNewMatchDefaultsFromPreferences(preferences);
+  assert.equal(defaults.smartScoreAdvancePreset, 'relaxed');
+  assert.equal(defaults.statTrackingEnabled, true);
+  assert.equal(defaults.pressConfig.pressesEnabled, true);
+  assert.equal(defaults.pressConfig.maxPressesPerRound, 4);
+  assert.equal(defaults.pressConfig.maxRePresses, 2);
+  assert.equal(defaults.sharedMatchEnabled, true);
+  const merged = engine.mergeNewMatchDefaults({}, preferences);
+  assert.equal(merged.smartScoreAdvancePreset, 'relaxed');
+  assert.equal(merged.statTrackingEnabled, true);
+  assert.equal(merged.pressConfig.pressType, 'PROMPT_AT_THRESHOLD');
+  const explicit = engine.mergeNewMatchDefaults({ smartScoreAdvancePreset: 'fast', statTrackingEnabled: false, pressConfig: { pressesEnabled: false, maxPressesPerRound: 7 }, sharedMatchEnabled: false }, preferences);
+  assert.equal(explicit.smartScoreAdvancePreset, 'fast');
+  assert.equal(explicit.statTrackingEnabled, false);
+  assert.equal(explicit.pressConfig.pressesEnabled, false);
+  assert.equal(explicit.pressConfig.maxPressesPerRound, 7);
+  assert.equal(explicit.sharedMatchEnabled, false);
   const blank = engine.createBlankSetupDraft(preferences);
   assert.equal(blank.smartScoreAdvancePreset, 'relaxed');
   assert.equal(blank.statTrackingEnabled, true);
-  const source = engine.createEmptyMatch({ smartScoreAdvancePreset: 'fast', statTrackingEnabled: false });
+  assert.equal(blank.pressConfig.pressesEnabled, true);
+  assert.equal(blank.pressConfig.maxRePresses, 2);
+  assert.equal(blank.storageMode, 'shared');
+  const preferencesBeforeRoundOverride = JSON.stringify(preferences);
+  blank.pressConfig.maxPressesPerRound = 9;
+  blank.pressConfig.pressesEnabled = false;
+  assert.equal(JSON.stringify(preferences), preferencesBeforeRoundOverride);
+  const source = engine.createEmptyMatch({ smartScoreAdvancePreset: 'fast', statTrackingEnabled: false, storageMode: 'local' });
   const before = JSON.stringify(source);
   engine.normalizePlayerPreferences({ scoring: { smartScoreAdvancePreset: 'RELAXED', statTrackingDefault: true } });
   assert.equal(source.smartScoreAdvancePreset, 'fast');
@@ -86,6 +109,7 @@ test('new-match defaults use preferences while explicit source, template, and cu
   const nextRound = engine.buildNextRoundDraft(source);
   assert.equal(nextRound.smartScoreAdvancePreset, 'fast');
   assert.equal(nextRound.statTrackingEnabled, false);
+  assert.equal(nextRound.storageMode, 'local');
 });
 
 test('Smart Score Advance timing and haptic capability gates follow saved choices safely', () => {
@@ -124,13 +148,15 @@ test('Quick Scoreboard disclosure defaults are personal, deterministic, and do n
   assert.doesNotMatch(JSON.stringify(live), /quickScoreboard|playerPreferences/);
 });
 
-test('More UI exposes exactly six supported preferences, feedback, reset confirmation, and no cloud controls in the card', () => {
+test('More UI exposes scoring, Press, and Quick Scoreboard preferences with feedback and reset confirmation', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   const card = html.slice(html.indexOf('class="card tight-card player-preferences-card"'), html.indexOf('</section>', html.indexOf('class="card tight-card player-preferences-card"')));
   assert.match(card, /Player Preferences/);
-  assert.equal((card.match(/data-preference-control=/g) || []).length, 6);
-  for (const label of ['Smart Score Advance', 'Haptic confirmation', 'Stat Tracking default', 'Classic Scorecard', 'Score Distribution', 'Momentum Charts', 'Reset to Defaults']) assert.match(card, new RegExp(label));
+  assert.equal((card.match(/data-preference-control=/g) || []).length, 12);
+  for (const label of ['Scoring Preferences', 'Smart Score Advance', 'Stat Tracking', 'Haptics', 'Press Preferences', 'Presses', 'Trigger', 'Prompt When Down', 'Who May Declare', 'Parent Availability', 'Declaration Timing', 'Maximum Presses', 'Maximum Re-Presses', 'Round Defaults', 'Shared Match default', 'Classic Scorecard', 'Score Distribution', 'Momentum Charts', 'Reset to Defaults']) assert.match(card, new RegExp(label));
+  assert.doesNotMatch(card, /Press Stake|Root Stake|Parent Stake/);
+  assert.match(card, /These settings become the default for new rounds\. Any round may override them during Round Setup\./);
   assert.doesNotMatch(card, /custom|milliseconds|login|cloud/i);
   assert.match(html, /Reset Player Preferences\?/);
   assert.match(html, /Saved matches will not be changed/);

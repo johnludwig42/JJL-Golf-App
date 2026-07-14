@@ -1,5 +1,15 @@
 # Press Engine Architecture
 
+## v30.3.69 Product Acceptance semantics
+
+Player Preferences own all default Press settings. A new round copies those values into Round Setup; later round-specific edits do not mutate the saved preferences.
+
+`Maximum Presses` is the maximum total number of active Press wagers in the entire round. Original Presses and every Re-Press consume the same pool, regardless of parent game or Nassau segment. `Maximum Re-Presses` separately limits the number of descendants in one Press chain; it does not add wagers to the round-wide pool. Compatibility aliases for the former per-segment and depth fields remain readable, but new UI and persisted configuration use `maxPressesPerRound` and `maxRePresses`.
+
+The Play `Press` action opens a chooser and never creates a wager immediately. The chooser includes every root Press and Re-Press that passes the same host, declaration-window, parent-availability, trailing-side, future-hole, duplicate-start, round-total, and chain-limit checks. Selection still requires explicit confirmation and authoritative revalidation. Settlement math and frozen historical records are unchanged.
+
+All newly created Presses and Re-Presses use the original wager of the root game or Nassau segment. No stake-policy selector is exposed in Player Preferences, Round Setup, or the chooser. The legacy `pressValueRule` / `stakeRule` schema is retained for compatibility: existing active Press records keep their stored wager, frozen RoundRecords and transactions are never rewritten, and historical settlement is never recalculated. A newly created Re-Press beneath a legacy Press still resolves its wager from the selected root game or segment rather than copying the legacy parent amount.
+
 ## 1. Purpose
 
 v30.3.65 defined a dormant, Nassau-only, direct-child contract. v30.3.66 supersedes those two constraints and enables deliberate production presses for trusted match-play nodes. Presses are child games, never multipliers.
@@ -8,7 +18,7 @@ v30.3.65 defined a dormant, Nassau-only, direct-child contract. v30.3.66 superse
 
 Game escalation capabilities are `PRESS`, `CARRYOVER`, `BRIDGE`, `HAMMER`, or `NONE`. Nassau components, Singles Match Play, and Team/Best-Ball Match Play are `PRESS`; Skins remains `CARRYOVER`; SSP remains `BRIDGE`; stroke games remain `NONE`. This prevents incompatible escalation mechanics from stacking.
 
-Every press keeps stable `gameId`/`pressId`, `parentGameId`, `rootGameId`, `pressDepth`, hole range, declaration identity, inherited stake/basis, lifecycle timestamps, and authority metadata. The schema supports press-of-press trees; production defaults cap roots at three presses and depth one. Legacy games have presses off.
+Every press keeps stable `gameId`/`pressId`, `parentGameId`, `rootGameId`, `pressDepth`, hole range, declaration identity, inherited stake/basis, lifecycle timestamps, and authority metadata. The schema supports press-of-press trees; production defaults cap the entire round at three Presses and allow zero Re-Presses. Legacy games have presses off.
 
 Production triggers are manual and prompt-at-threshold; neither creates money without explicit confirmation. Shared Match creation, voiding, and supersession are host-authoritative. Final presses enter the trusted payout pipeline once, and active Presses may enter the same pipeline as provisional preview contributions. Frozen RoundRecords retain child nodes, events, and component press transactions. `transactions` remains the authoritative net settlement; `pressTransactions` is the auditable component layer. A future Trip Ledger must consume frozen records and must not add both layers together.
 
@@ -24,7 +34,7 @@ Shared Match metadata treats the host press collection as authoritative. Merge u
 
 Scores and Match Summary include a dedicated Presses audit below game drivers. It preserves parent/depth hierarchy, declarer IDs, declaration and hole ranges, stake, lifecycle, reason, and component ledger impact. Live reports use current authoritative records; settled historical reports clone and render frozen `games[]` and `pressTransactions` without recalculation or mutation.
 
-Live press-of-press declaration UI and broad void/supersede management UI remain deferred, along with joined-device request/approval, automatic creation, custom/double stakes, Hammer, and unlimited depth.
+Broad void/supersede management UI remains deferred, along with joined-device request/approval, automatic creation, custom/double stakes, Hammer, and unlimited Re-Press chains.
 
 ## Parent-first Quick Scoreboard presentation
 
@@ -34,7 +44,7 @@ The factual Classic Scorecard is a read-only, collapsed disclosure before Moment
 
 ## Contextual Play action
 
-Press creation is separated from Quick Scoreboard reporting. Play shows one contextual `Press` button beside `Scoreboard` only when the host is viewing the authoritative active scoring position and at least one opportunity passes the shared eligibility engine. One tap opens a `Create a Press` card listing every currently valid opportunity; selection then opens the existing explicit confirmation.
+Press creation is separated from Quick Scoreboard reporting. Play shows one contextual `Press` button beside `Scoreboard` only when the host is viewing the authoritative active scoring position and at least one opportunity passes the shared eligibility engine. One tap opens a `Choose a Press` card listing every currently valid root Press and Re-Press opportunity; selection then opens explicit confirmation.
 
 The active scoring position is the first sequential hole not fully complete, using the existing round-progress model rather than the viewed hole. An untouched active hole is included in the child range. Under `BEFORE_HOLE_STARTED`, any entered score, penalty, user-entered stat, SSP fact, or game input suppresses the opportunity; the engine never advances it silently to the following hole. Under `BEFORE_HOLE_COMPLETED`, a partially entered active hole remains eligible and confirmation names that hole and warns that information already exists. Backward and premature-forward browsing never exposes the action. Multiple opportunities retain configured game order and Nassau Front, Back, Overall order.
 
@@ -42,7 +52,7 @@ The active scoring position is the first sequential hole not fully complete, usi
 
 Press configuration is resolved through one compatibility path: the selected game's top-level fields take precedence, nested legacy `pressConfig` fields are accepted, and legacy match-level Nassau configuration remains readable. Local matches are authoritative by default; `HOST_ONLY` denies creation only when a Shared Match identifies the current device as joined.
 
-The Play render path now evaluates contextual visibility after current-hole inputs are rendered. This prevents stale DOM values from the previously completed hole from making the newly active untouched hole appear started. The button remains removed from interaction unless at least one opportunity passes full eligibility. First tap still opens `Create a Press`, creates nothing, and confirmation still reruns authority, active-hole, declaration-window, trailing-side, wager, parent, duplicate, count, and lifecycle checks.
+The Play render path now evaluates contextual visibility after current-hole inputs are rendered. This prevents stale DOM values from the previously completed hole from making the newly active untouched hole appear started. The button remains removed from interaction unless at least one opportunity passes full eligibility. First tap opens `Choose a Press`, creates nothing, and confirmation still reruns authority, active-hole, declaration-window, trailing-side, wager, parent, duplicate, count, and lifecycle checks.
 
 ## 2. Terminology
 
@@ -54,15 +64,15 @@ The Play render path now evaluates contextual visibility after current-hole inpu
 - **Future holes:** parent-segment holes after the current scoring position.
 - **Settled round:** completed or carrying a frozen RoundRecord.
 
-## 3. Locked v1 product decisions
+## 3. Historical v1 product decisions (superseded where noted above)
 
 - Presses belong directly to a Nassau parent segment; they are not a generic new game.
 - They inherit the parent basis, teams, handicap application, and per-person segment wager.
 - Manual creation is the only initial production trigger. Automatic values are schema-ready but dormant.
 - No retroactive press: the start is the next future segment hole.
-- Multiple independent presses are allowed, default maximum three per segment.
+- Multiple independent presses are allowed; v30.3.69 applies the default maximum three to the entire round.
 - Duplicate parent-segment/start-hole presses are rejected.
-- No recursive press-on-press tree, custom amounts, doubles, or escalating values.
+- Re-Press chains are supported within Maximum Re-Presses; custom amounts, doubles, and escalating values remain deferred.
 - Shared Match host authority is mandatory.
 - A `basis: both` Nassau has two stable parent lanes, `nassau_gross` and `nassau_net`; the creation request must explicitly choose one.
 
@@ -75,14 +85,15 @@ The Play render path now evaluates contextual visibility after current-hole inpu
   pressesEnabled: false,
   pressType: 'MANUAL',
   pressAvailabilityRule: 'OPEN_SEGMENT_ONLY',
-  maxPressesPerSegment: 3,
-  pressValueRule: 'INHERIT_PARENT',
+  maxPressesPerRound: 3,
+  maxRePresses: 0,
+  pressValueRule: 'INHERIT_ROOT_STAKE', // compatibility only; new creation always uses the original wager
   pressAuthorityRule: 'HOST_ONLY',
   autoPressThreshold: null
 }
 ```
 
-The maximum is bounded to 1–10. `AUTO` and `MANUAL_AND_AUTO` are schema values only. No controls are exposed in v30.3.65 because that would imply production functionality.
+The round-wide maximum is bounded to 1–10 and Maximum Re-Presses to 0–4. Legacy aliases normalize additively for old rounds.
 
 ## 5. Availability policies
 

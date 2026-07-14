@@ -1,14 +1,16 @@
-# The Dye Ledger v30.3.14
+# The Dye Ledger v30.3.69
 
-Focused reliability release fixing four shared-match / scoring defects:
-1. Joined devices are now assignable almost immediately (no ~30s wait).
-2. The Play-tab score keypad opens on the first tap (no warm-up tap needed).
-3. The header tabs (Match/Play/Scores/Library/Insights/More) stay pinned and visible while scoring.
-4. Memories captured on a joined device are no longer overwritten by the host's sync.
+The Dye Ledger is an offline-first match-and-games ledger for golf groups.
 
-See `BUILD_NOTES_v30.3.14.md` for the current release notes.
+- Match prepares the round.
+- Play records the round.
+- Scores reviews the round.
+- Library manages rounds, courses, and players.
+- Insights learns from rounds.
+- More configures the application.
 
+The header tabs (Match/Play/Scores/Library/Insights/More) remain pinned and visible while scoring.
 
-## v30.3.14
+The header's **Install App** control uses the browser's native install prompt where supported. On iPhone Safari it explains Share → Add to Home Screen and remembers dismissal for approximately 30 days.
 
-Adds visible build/cache diagnostics and restores normal desktop mouse-wheel scrolling. Build timestamp: 2026-06-20 23:52 UTC.
+See [`BUILD_NOTES_v30.3.69.md`](BUILD_NOTES_v30.3.69.md) for release notes. Canonical brand assets and replacement guidance live in [`branding/`](branding/) and [`docs/BRANDING.md`](docs/BRANDING.md).

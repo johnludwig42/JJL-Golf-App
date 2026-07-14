@@ -1,9 +1,9 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
 const BUILD_INFO = {
-  version: 'v30.3.68',
-  versionNumber: '30.3.68',
-  cacheName: 'the-dye-ledger-v30.3.68',
+  version: 'v30.3.69',
+  versionNumber: '30.3.69',
+  cacheName: 'the-dye-ledger-v30.3.69',
   buildDate: new Date().toISOString(),
   buildLabel: 'Player Preferences Foundation'
 };
@@ -15,7 +15,7 @@ const APP_VERSION_NUMBER = BUILD_INFO.versionNumber;
 
 const MATCH_TEMPLATES_STORAGE_KEY = 'dyeLedger.matchTemplates.v1';
 const PRESS_SCHEMA_VERSION = 1;
-const PRESS_CONFIG_DEFAULTS = Object.freeze({ pressesEnabled: false, pressType: 'MANUAL', pressAvailabilityRule: 'OPEN_SEGMENT_ONLY', maxPressesPerSegment: 3, maxPressesPerRootGame: 3, maxPressDepth: 1, pressValueRule: 'INHERIT_ROOT_STAKE', pressAuthorityRule: 'HOST_ONLY', autoPressThreshold: 2, declaringSideRule: 'LOSING_SIDE_ONLY', declarationWindow: 'BEFORE_HOLE_STARTED', nassauFrontEnabled: true, nassauBackEnabled: true, nassauOverallEnabled: true });
+const PRESS_CONFIG_DEFAULTS = Object.freeze({ pressesEnabled: false, pressType: 'MANUAL', pressAvailabilityRule: 'OPEN_SEGMENT_ONLY', maxPressesPerRound: 3, maxPressesPerSegment: 3, maxPressesPerRootGame: 3, maxRePresses: 0, maxPressDepth: 1, pressValueRule: 'INHERIT_ROOT_STAKE', pressAuthorityRule: 'HOST_ONLY', autoPressThreshold: 2, declaringSideRule: 'LOSING_SIDE_ONLY', declarationWindow: 'BEFORE_HOLE_STARTED', nassauFrontEnabled: true, nassauBackEnabled: true, nassauOverallEnabled: true });
 const GAME_ESCALATION_CAPABILITIES = Object.freeze({ nassau: 'PRESS', singles_match: 'PRESS', team_match: 'PRESS', skins: 'CARRYOVER', net_skins: 'CARRYOVER', sneaky_sandy_poley: 'BRIDGE' });
 function getGameEscalationCapability(gameOrKey) {
   const key = typeof gameOrKey === 'string' ? gameOrKey : gameOrKey?.key;
@@ -31,11 +31,20 @@ const SMART_SCORE_ADVANCE_PRESETS = {
 };
 const DEFAULT_SMART_SCORE_ADVANCE_PRESET = 'normal';
 const PLAYER_PREFERENCES_STORAGE_KEY = 'dyeLedger.playerPreferences';
-const PLAYER_PREFERENCES_SCHEMA_VERSION = 1;
+const PLAYER_PREFERENCES_SCHEMA_VERSION = 2;
 const PLAYER_PREFERENCE_PATHS = new Set([
   'scoring.smartScoreAdvancePreset',
   'scoring.hapticsEnabled',
   'scoring.statTrackingDefault',
+  'press.pressesEnabled',
+  'press.pressType',
+  'press.autoPressThreshold',
+  'press.declaringSideRule',
+  'press.pressAvailabilityRule',
+  'press.declarationWindow',
+  'press.maxPressesPerRound',
+  'press.maxRePresses',
+  'roundDefaults.sharedMatchEnabled',
   'quickScoreboard.classicScorecardExpanded',
   'quickScoreboard.scoreDistributionExpanded',
   'quickScoreboard.momentumExpanded',
@@ -53,6 +62,10 @@ function getDefaultPlayerPreferences() {
       hapticsEnabled: true,
       statTrackingDefault: false,
     },
+    press: normalizePressConfig(PRESS_CONFIG_DEFAULTS),
+    roundDefaults: {
+      sharedMatchEnabled: false,
+    },
     quickScoreboard: {
       classicScorecardExpanded: false,
       scoreDistributionExpanded: false,
@@ -65,6 +78,8 @@ function normalizePlayerPreferences(raw) {
   const source = isPlainPreferenceObject(raw) ? raw : {};
   const scoring = isPlainPreferenceObject(source.scoring) ? source.scoring : {};
   const quickScoreboard = isPlainPreferenceObject(source.quickScoreboard) ? source.quickScoreboard : {};
+  const press = isPlainPreferenceObject(source.press) ? source.press : {};
+  const roundDefaults = isPlainPreferenceObject(source.roundDefaults) ? source.roundDefaults : {};
   const preset = String(scoring.smartScoreAdvancePreset || '').trim().toUpperCase();
   return {
     ...source,
@@ -74,6 +89,11 @@ function normalizePlayerPreferences(raw) {
       smartScoreAdvancePreset: ['FAST', 'NORMAL', 'RELAXED'].includes(preset) ? preset : 'NORMAL',
       hapticsEnabled: typeof scoring.hapticsEnabled === 'boolean' ? scoring.hapticsEnabled : true,
       statTrackingDefault: typeof scoring.statTrackingDefault === 'boolean' ? scoring.statTrackingDefault : false,
+    },
+    press: normalizePressConfig(press),
+    roundDefaults: {
+      ...roundDefaults,
+      sharedMatchEnabled: typeof roundDefaults.sharedMatchEnabled === 'boolean' ? roundDefaults.sharedMatchEnabled : false,
     },
     quickScoreboard: {
       ...quickScoreboard,
@@ -127,6 +147,8 @@ function resetPlayerPreferences(storage = localStorage) {
     ...current,
     schemaVersion: defaults.schemaVersion,
     scoring: { ...current.scoring, ...defaults.scoring },
+    press: { ...current.press, ...defaults.press },
+    roundDefaults: { ...current.roundDefaults, ...defaults.roundDefaults },
     quickScoreboard: { ...current.quickScoreboard, ...defaults.quickScoreboard },
   }, storage);
 }
@@ -145,6 +167,8 @@ function getNewMatchDefaultsFromPreferences(preferences = getPlayerPreferences()
   return {
     smartScoreAdvancePreset: normalized.scoring.smartScoreAdvancePreset.toLowerCase(),
     statTrackingEnabled: normalized.scoring.statTrackingDefault,
+    pressConfig: normalizePressConfig(normalized.press),
+    sharedMatchEnabled: normalized.roundDefaults.sharedMatchEnabled,
   };
 }
 
@@ -153,6 +177,8 @@ function mergeNewMatchDefaults(explicitValues = {}, preferences = getPlayerPrefe
   return {
     smartScoreAdvancePreset: explicitValues.smartScoreAdvancePreset == null ? defaults.smartScoreAdvancePreset : normalizeSmartScoreAdvancePreset(explicitValues.smartScoreAdvancePreset),
     statTrackingEnabled: explicitValues.statTrackingEnabled == null ? defaults.statTrackingEnabled : !!explicitValues.statTrackingEnabled,
+    pressConfig: normalizePressConfig(explicitValues.pressConfig == null ? defaults.pressConfig : explicitValues.pressConfig),
+    sharedMatchEnabled: explicitValues.sharedMatchEnabled == null ? defaults.sharedMatchEnabled : !!explicitValues.sharedMatchEnabled,
   };
 }
 const WEATHER_CAPTURE_SOURCE = 'open-meteo';
@@ -369,6 +395,11 @@ const GAME_LIBRARY = [
   { key: 'sneaky_sandy_poley', label: 'Sneaky / Sandy / Poley' },
   { key: 'nine_point', label: '9-Point Game' },
 ];
+const GAME_SELECTION_GROUPS = Object.freeze([
+  { label: 'Nassau & Match Play', keys: ['nassau', 'singles_match', 'individual_match', 'team_match'] },
+  { label: 'Stroke & Hole Games', keys: ['team_stroke', 'skins', 'net_skins', 'greenies'] },
+  { label: 'Specialty Games', keys: ['sneaky_sandy_poley', 'nine_point'] },
+]);
 
 const GAME_LABELS = Object.fromEntries(GAME_LIBRARY.map(g => [g.key, g.label]));
 const CLOUD_MATCH_CACHE_PREFIX = 'the-dye-ledger-cloud-match:';
@@ -1953,6 +1984,55 @@ function formatPerspectiveStatus(diff, perspectiveTeam = 1) {
   return oriented > 0 ? `Up ${Math.abs(oriented)}` : `Down ${Math.abs(oriented)}`;
 }
 let deferredPrompt = null;
+const IOS_INSTALL_DISMISSAL_KEY = 'dyeLedgerIosInstallDismissedAt';
+const IOS_INSTALL_DISMISSAL_MS = 30 * 24 * 60 * 60 * 1000;
+
+function isAppInstalled() {
+  return window.matchMedia?.('(display-mode: standalone)')?.matches || navigator.standalone === true;
+}
+
+function isIphoneSafari() {
+  const ua = String(navigator.userAgent || '');
+  const isiOS = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && Number(navigator.maxTouchPoints) > 1);
+  return isiOS && /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua);
+}
+
+function isIosInstallDismissed() {
+  try {
+    const dismissedAt = Number(localStorage.getItem(IOS_INSTALL_DISMISSAL_KEY) || 0);
+    return dismissedAt > 0 && (Date.now() - dismissedAt) < IOS_INSTALL_DISMISSAL_MS;
+  } catch {
+    return false;
+  }
+}
+
+function updateInstallControl() {
+  const button = document.getElementById('installBtn');
+  if (!button) return;
+  const show = !isAppInstalled() && (deferredPrompt || (isIphoneSafari() && !isIosInstallDismissed()));
+  button.classList.toggle('hidden', !show);
+  button.textContent = 'Install App';
+}
+
+function openIosInstallInstructions() {
+  const dialog = document.getElementById('iosInstallDialog');
+  if (!dialog) return;
+  dialog.classList.remove('hidden');
+  dialog.setAttribute('aria-hidden', 'false');
+  window.setTimeout(() => document.getElementById('closeIosInstallBtn')?.focus({ preventScroll: true }), 0);
+}
+
+function closeIosInstallInstructions({ remember = true } = {}) {
+  const dialog = document.getElementById('iosInstallDialog');
+  if (!dialog) return;
+  dialog.classList.add('hidden');
+  dialog.setAttribute('aria-hidden', 'true');
+  if (remember) {
+    try { localStorage.setItem(IOS_INSTALL_DISMISSAL_KEY, String(Date.now())); } catch {}
+  }
+  updateInstallControl();
+  document.getElementById('installBtn')?.focus({ preventScroll: true });
+}
 let editingPlayerId = null;
 let editingCourseId = null;
 let editingTeeRef = null;
@@ -2291,7 +2371,10 @@ function getPlayerIndexText(player) {
 }
 function getPlayerLookupLabel(player) {
   if (!player) return '';
-  return `${player.name}  ${getPlayerIndexText(player)}`;
+  const base = `${player.name}  ${getPlayerIndexText(player)}`;
+  const exactDuplicates = (state.players || []).filter(candidate => String(candidate.name || '').trim().toLowerCase() === String(player.name || '').trim().toLowerCase() && getPlayerIndexText(candidate) === getPlayerIndexText(player));
+  if (exactDuplicates.length < 2) return base;
+  return `${base} · Player ${exactDuplicates.findIndex(candidate => String(candidate.id) === String(player.id)) + 1}`;
 }
 function getPlayerDisplayHtml(player, { wrapperClass = '', nameClass = '', indexClass = '' } = {}) {
   if (!player) return '';
@@ -3437,19 +3520,21 @@ function normalizePressConfig(config = {}) {
   const triggerSource = source.pressType || source.triggerMode;
   const pressType = ['MANUAL', 'PROMPT_AT_THRESHOLD'].includes(triggerSource) ? triggerSource : PRESS_CONFIG_DEFAULTS.pressType;
   const pressAvailabilityRule = ['OPEN_SEGMENT_ONLY', 'FUTURE_HOLES_REMAIN'].includes(source.pressAvailabilityRule) ? source.pressAvailabilityRule : PRESS_CONFIG_DEFAULTS.pressAvailabilityRule;
-  const maxRaw = Number(source.maxPressesPerRootGame ?? source.maxPressesPerSegment);
-  const maxPressesPerSegment = Number.isInteger(maxRaw) && maxRaw > 0 ? Math.min(10, maxRaw) : PRESS_CONFIG_DEFAULTS.maxPressesPerSegment;
-  const depthRaw = Number(source.maxPressDepth);
-  const maxPressDepth = Number.isInteger(depthRaw) && depthRaw >= 1 ? Math.min(5, depthRaw) : PRESS_CONFIG_DEFAULTS.maxPressDepth;
+  const maxRaw = Number(source.maxPressesPerRound ?? source.maxPressesPerRootGame ?? source.maxPressesPerSegment);
+  const maxPressesPerRound = Number.isInteger(maxRaw) && maxRaw > 0 ? Math.min(10, maxRaw) : PRESS_CONFIG_DEFAULTS.maxPressesPerRound;
+  const rePressRaw = source.maxRePresses == null ? Number(source.maxPressDepth) - 1 : Number(source.maxRePresses);
+  const maxRePresses = Number.isInteger(rePressRaw) && rePressRaw >= 0 ? Math.min(4, rePressRaw) : PRESS_CONFIG_DEFAULTS.maxRePresses;
   const valueRule = ['INHERIT_ROOT_STAKE', 'INHERIT_PARENT_STAKE'].includes(source.pressValueRule || source.stakeRule) ? (source.pressValueRule || source.stakeRule) : (source.pressValueRule === 'INHERIT_PARENT' ? 'INHERIT_PARENT_STAKE' : PRESS_CONFIG_DEFAULTS.pressValueRule);
   return {
     ...source,
     pressesEnabled: source.pressesEnabled === true,
     pressType,
     pressAvailabilityRule,
-    maxPressesPerSegment,
-    maxPressesPerRootGame: maxPressesPerSegment,
-    maxPressDepth,
+    maxPressesPerRound,
+    maxPressesPerSegment: maxPressesPerRound,
+    maxPressesPerRootGame: maxPressesPerRound,
+    maxRePresses,
+    maxPressDepth: maxRePresses + 1,
     pressValueRule: valueRule,
     stakeRule: valueRule,
     pressAuthorityRule: source.pressAuthorityRule === 'HOST_ONLY' ? source.pressAuthorityRule : PRESS_CONFIG_DEFAULTS.pressAuthorityRule,
@@ -3463,7 +3548,7 @@ function normalizePressConfig(config = {}) {
 }
 function getPressConfigForGame(match, gameConfig = null) {
   const game = gameConfig || {};
-  const legacy = game.key === 'nassau' && match?.pressConfig && typeof match.pressConfig === 'object' ? match.pressConfig : {};
+  const legacy = match?.pressConfig && typeof match.pressConfig === 'object' ? match.pressConfig : {};
   const nested = game.pressConfig && typeof game.pressConfig === 'object' ? game.pressConfig : {};
   return normalizePressConfig({ ...legacy, ...nested, ...game });
 }
@@ -3537,7 +3622,7 @@ function getPressEligibility(match, metrics, segmentType, options = {}) {
   const gameConfig = (match?.selectedGames || []).find(game => game.key === requestedGameKey);
   const config = options.pressConfig ? normalizePressConfig(options.pressConfig) : getPressConfigForGame(match, gameConfig || { key: requestedGameKey });
   const segment = String(segmentType || '').toUpperCase();
-  const base = { eligible: false, reasonCode: 'INVALID', reasonText: 'Press configuration is invalid.', nextStartingHole: null, remainingEligibleHoles: 0, currentPressCount: 0, maxPressesPerSegment: config.maxPressesPerSegment };
+  const base = { eligible: false, reasonCode: 'INVALID', reasonText: 'Press configuration is invalid.', nextStartingHole: null, remainingEligibleHoles: 0, currentPressCount: 0, maxPressesPerRound: config.maxPressesPerRound, maxPressesPerSegment: config.maxPressesPerRound };
   if (!match || !metrics) return base;
   if (!config.pressesEnabled) return { ...base, reasonCode: 'PRESSES_DISABLED', reasonText: 'Presses are disabled for this match.' };
   if (getGameEscalationCapability(requestedGameKey) !== 'PRESS') return { ...base, reasonCode: 'GAME_NOT_PRESSABLE', reasonText: 'This game does not support presses.' };
@@ -3558,11 +3643,12 @@ function getPressEligibility(match, metrics, segmentType, options = {}) {
   const futurePositions = Array.from({ length: range.endPosition - range.startPosition + 1 }, (_, index) => range.startPosition + index).filter(position => position > currentPosition);
   const nextPosition = futurePositions[0] || null;
   const nextStartingHole = nextPosition ? Number(allHoles[nextPosition - 1]?.holeNumber) : null;
-  const existing = (match.presses || []).filter(record => record.parentSegmentId === parent.parentSegmentId && !['VOIDED', 'SUPERSEDED'].includes(record.status));
-  const currentPressCount = existing.length;
+  const activePresses = (match.presses || []).filter(record => !['VOIDED', 'SUPERSEDED'].includes(record.status));
+  const existing = activePresses.filter(record => record.parentSegmentId === parent.parentSegmentId && Number(record.pressDepth || 1) === 1);
+  const currentPressCount = activePresses.length;
   const resultBase = { ...base, nextStartingHole, remainingEligibleHoles: futurePositions.length, currentPressCount };
   if (!futurePositions.length) return { ...resultBase, reasonCode: 'NO_FUTURE_HOLES', reasonText: 'No eligible future hole remains in this segment.' };
-  if (currentPressCount >= config.maxPressesPerSegment) return { ...resultBase, reasonCode: 'PRESS_LIMIT_REACHED', reasonText: 'The maximum presses for this segment has been reached.' };
+  if (currentPressCount >= config.maxPressesPerRound) return { ...resultBase, reasonCode: 'PRESS_LIMIT_REACHED', reasonText: 'The maximum total Press wagers for the entire round has been reached.' };
   if (existing.some(record => Number(record.startingHole) === nextStartingHole)) return { ...resultBase, reasonCode: 'DUPLICATE_STARTING_HOLE', reasonText: 'A press already starts on the next eligible hole.' };
   const diffs = requestedGameKey === 'nassau' ? computeNassauDiffsForBasis(metrics, parent.scoringMode) : computeTeamGameDiffs(match, metrics, requestedGameKey);
   const diff = segment === 'FRONT' ? diffs.front : segment === 'BACK' ? diffs.back : diffs.overall;
@@ -3575,12 +3661,55 @@ function getPressEligibility(match, metrics, segmentType, options = {}) {
   if (Object.prototype.hasOwnProperty.call(options, 'declaringSideId') && config.declaringSideRule === 'LOSING_SIDE_ONLY' && (!declaringSideId || !trailingSideId || declaringSideId !== trailingSideId)) return { ...resultBase, reasonCode: 'DECLARING_SIDE_NOT_ALLOWED', reasonText: trailingSideId ? 'Only the currently trailing side may declare this press.' : 'A press cannot be declared while the parent match is all square.' };
   return { ...resultBase, eligible: true, reasonCode: 'ELIGIBLE', reasonText: `Press may start on Hole ${nextStartingHole}.`, parentGameId: parent.parentGameId, rootGameId: parent.parentGameId, parentSegmentId: parent.parentSegmentId, parentSegmentType: segment, parentSegmentOpen: !clinch.isClinched, parentSegmentClinched: !!clinch.isClinched, parentDiff: Number(diff || 0), trailingSideId: diff > 0 ? '2' : diff < 0 ? '1' : null, promptRecommended: config.pressType === 'PROMPT_AT_THRESHOLD' && Math.abs(diff) >= config.autoPressThreshold, parentPlayedHoles: playedInSegment, wagerAmount: parent.wagerAmount, scoringMode: parent.scoringMode, outcomeGameKey: requestedGameKey };
 }
+function getOriginalPressWager(match, press) {
+  const record = normalizePressRecord(press, match);
+  if (!record) return 0;
+  if (record.outcomeGameKey === 'nassau') return Number(getPressParentReference(match, record.parentSegmentType, record.scoringMode)?.wagerAmount || 0);
+  const game = (match?.selectedGames || []).find(row => row.key === record.outcomeGameKey);
+  return Math.max(0, Number(game?.stake || 0));
+}
+function getRePressEligibility(match, metrics, parentPress, options = {}) {
+  const parent = normalizePressRecord(parentPress, match);
+  const requestedGameKey = String(options.gameKey || parent?.outcomeGameKey || 'nassau');
+  const gameConfig = (match?.selectedGames || []).find(game => game.key === requestedGameKey);
+  const config = options.pressConfig ? normalizePressConfig(options.pressConfig) : getPressConfigForGame(match, gameConfig || { key: requestedGameKey });
+  const base = { eligible: false, reasonCode: 'INVALID', reasonText: 'Re-Press configuration is invalid.', nextStartingHole: null, remainingEligibleHoles: 0, currentPressCount: 0, maxPressesPerRound: config.maxPressesPerRound, maxRePresses: config.maxRePresses };
+  if (!match || !metrics || !parent) return base;
+  if (!config.pressesEnabled) return { ...base, reasonCode: 'PRESSES_DISABLED', reasonText: 'Presses are disabled for this match.' };
+  if (['VOIDED', 'SUPERSEDED', 'FINAL', 'HALVED', 'INCOMPLETE'].includes(parent.status)) return { ...base, reasonCode: 'PARENT_PRESS_CLOSED', reasonText: 'This Press is no longer open for a Re-Press.' };
+  const isHost = options.isHost == null ? isCurrentDeviceMatchHost(match) : !!options.isHost;
+  if (config.pressAuthorityRule === 'HOST_ONLY' && !isHost) return { ...base, reasonCode: 'HOST_ONLY', reasonText: 'Only the Shared Match host can create an authoritative Re-Press.' };
+  if (match.status === 'complete' || match.completedAt || isFrozenRoundRecord(match.roundRecordSnapshot)) return { ...base, reasonCode: 'ROUND_SETTLED', reasonText: 'A completed or settled round cannot accept a new Re-Press.' };
+  const allHoles = getSelectedScoringHoles(match, metrics.tee);
+  const completedPositions = (metrics.holeResults || []).map((hole, index) => hole?.completed ? index + 1 : 0).filter(Boolean);
+  const currentPosition = Number.isInteger(Number(options.currentPosition)) ? Number(options.currentPosition) : Math.max(0, ...completedPositions);
+  const endingPosition = allHoles.findIndex(hole => Number(hole.holeNumber) === Number(parent.endingHole)) + 1;
+  const futurePositions = endingPosition > 0 ? Array.from({ length: endingPosition }, (_, index) => index + 1).filter(position => position > currentPosition && position <= endingPosition) : [];
+  const nextPosition = futurePositions[0] || null;
+  const nextStartingHole = nextPosition ? Number(allHoles[nextPosition - 1]?.holeNumber) : null;
+  const activePresses = (match.presses || []).filter(record => !['VOIDED', 'SUPERSEDED'].includes(record.status));
+  const currentPressCount = activePresses.length;
+  const proposedDepth = Number(parent.pressDepth || 1) + 1;
+  const resultBase = { ...base, nextStartingHole, remainingEligibleHoles: futurePositions.length, currentPressCount, proposedDepth };
+  if (!futurePositions.length) return { ...resultBase, reasonCode: 'NO_FUTURE_HOLES', reasonText: 'No eligible future hole remains in this Press.' };
+  if (currentPressCount >= config.maxPressesPerRound) return { ...resultBase, reasonCode: 'PRESS_LIMIT_REACHED', reasonText: 'The maximum total Press wagers for the entire round has been reached.' };
+  if (proposedDepth > config.maxRePresses + 1) return { ...resultBase, reasonCode: 'RE_PRESS_LIMIT_REACHED', reasonText: 'The Maximum Re-Presses limit for this Press has been reached.' };
+  if (activePresses.some(record => record.parentGameId === parent.pressId && Number(record.startingHole) === nextStartingHole)) return { ...resultBase, reasonCode: 'DUPLICATE_STARTING_HOLE', reasonText: 'A Re-Press already starts on the next eligible hole.' };
+  const status = getPressStatus(match, metrics, parent);
+  if (config.pressAvailabilityRule === 'OPEN_SEGMENT_ONLY' && status.isClinched) return { ...resultBase, reasonCode: 'PARENT_PRESS_DECIDED', reasonText: 'The parent Press is already mathematically decided.' };
+  const declaringSideId = options.declaringSideId == null ? null : String(options.declaringSideId);
+  const trailingSideId = status.diff > 0 ? '2' : status.diff < 0 ? '1' : null;
+  if (Object.prototype.hasOwnProperty.call(options, 'declaringSideId') && config.declaringSideRule === 'LOSING_SIDE_ONLY' && (!declaringSideId || !trailingSideId || declaringSideId !== trailingSideId)) return { ...resultBase, reasonCode: 'DECLARING_SIDE_NOT_ALLOWED', reasonText: trailingSideId ? 'Only the currently trailing side may declare this Re-Press.' : 'A Re-Press cannot be declared while the parent Press is all square.' };
+  const wagerAmount = getOriginalPressWager(match, parent);
+  return { ...resultBase, eligible: true, reasonCode: 'ELIGIBLE', reasonText: `Re-Press may start on Hole ${nextStartingHole}.`, parentGameId: parent.pressId, rootGameId: parent.rootGameId || parent.pressId, parentSegmentId: parent.parentSegmentId, parentSegmentType: parent.parentSegmentType, parentDiff: Number(status.diff || 0), trailingSideId, wagerAmount, scoringMode: parent.scoringMode, outcomeGameKey: parent.outcomeGameKey, endingHole: parent.endingHole, parentPress: parent };
+}
 function buildPressRecordDraft(match, metrics, segmentType, options = {}) {
-  const eligibility = getPressEligibility(match, metrics, segmentType, options);
+  const parentPress = options.parentPressId ? (match?.presses || []).find(row => row.pressId === options.parentPressId) : null;
+  const eligibility = parentPress ? getRePressEligibility(match, metrics, parentPress, options) : getPressEligibility(match, metrics, segmentType, options);
   if (!eligibility.eligible) return null;
   const ordinal = eligibility.currentPressCount + 1;
   const range = getPressSegmentRange(match, metrics, segmentType);
-  return normalizePressRecord({ pressId: `${match.id}:${eligibility.parentSegmentId}:press:${eligibility.nextStartingHole}:${ordinal}`, roundId: match.id, parentGameId: eligibility.parentGameId, rootGameId: eligibility.rootGameId, parentSegmentId: eligibility.parentSegmentId, parentSegmentType: eligibility.parentSegmentType, startingHole: eligibility.nextStartingHole, endingHole: range.endingHole, triggerType: options.triggerType === 'PROMPT_AT_THRESHOLD' ? 'PROMPT_AT_THRESHOLD' : 'MANUAL', initiatedByPlayerId: options.initiatedByPlayerId || null, initiatedByTeamId: options.initiatedByTeamId ?? eligibility.trailingSideId, againstTeamId: options.againstTeamId ?? (eligibility.trailingSideId === '1' ? '2' : eligibility.trailingSideId === '2' ? '1' : null), wagerAmount: eligibility.wagerAmount, scoringMode: eligibility.scoringMode, outcomeGameKey: eligibility.outcomeGameKey, teamMode: options.gameKey === 'singles_match' ? 'SINGLES' : 'TEAM', status: 'PENDING', createdAt: options.createdAt || null, sourceDeviceId: options.sourceDeviceId || null, hostDeviceId: match.sharedHostDeviceId || null, createdBy: options.createdBy || null }, match);
+  return normalizePressRecord({ pressId: `${match.id}:${eligibility.parentSegmentId}:press:${eligibility.nextStartingHole}:${ordinal}`, roundId: match.id, parentGameId: eligibility.parentGameId, rootGameId: eligibility.rootGameId, pressDepth: eligibility.proposedDepth || 1, parentSegmentId: eligibility.parentSegmentId, parentSegmentType: eligibility.parentSegmentType, startingHole: eligibility.nextStartingHole, endingHole: eligibility.endingHole || range.endingHole, triggerType: options.triggerType === 'PROMPT_AT_THRESHOLD' ? 'PROMPT_AT_THRESHOLD' : 'MANUAL', initiatedByPlayerId: options.initiatedByPlayerId || null, initiatedByTeamId: options.initiatedByTeamId ?? eligibility.trailingSideId, againstTeamId: options.againstTeamId ?? (eligibility.trailingSideId === '1' ? '2' : eligibility.trailingSideId === '2' ? '1' : null), wagerAmount: eligibility.wagerAmount, scoringMode: eligibility.scoringMode, outcomeGameKey: eligibility.outcomeGameKey, teamMode: options.gameKey === 'singles_match' ? 'SINGLES' : 'TEAM', status: 'PENDING', createdAt: options.createdAt || null, sourceDeviceId: options.sourceDeviceId || null, hostDeviceId: match.sharedHostDeviceId || null, createdBy: options.createdBy || null }, match);
 }
 function getPressPromptOpportunity(eligibility, config = {}, match = null) {
   if (!eligibility?.eligible || !eligibility.trailingSideId) return null;
@@ -3612,11 +3741,12 @@ function isPressPromptOpportunitySuppressed(match, opportunity) {
 }
 function createPressFromConfirmation(match, metrics, request = {}, options = {}) {
   if (!match || !metrics) return { created: false, reasonCode: 'INVALID_PARENT_STATE', reasonText: 'The current match state is unavailable.' };
-  const eligibility = getPressEligibility(match, metrics, request.segment, { gameKey: request.gameKey, pressConfig: request.pressConfig, currentPosition: options.currentPosition, declaringSideId: request.declaringSideId, isHost: options.isHost });
+  const parentPress = request.parentPressId ? (match.presses || []).find(row => row.pressId === request.parentPressId) : null;
+  const eligibility = parentPress ? getRePressEligibility(match, metrics, parentPress, { gameKey: request.gameKey, pressConfig: request.pressConfig, currentPosition: options.currentPosition, declaringSideId: request.declaringSideId, isHost: options.isHost }) : getPressEligibility(match, metrics, request.segment, { gameKey: request.gameKey, pressConfig: request.pressConfig, currentPosition: options.currentPosition, declaringSideId: request.declaringSideId, isHost: options.isHost });
   if (!eligibility.eligible) return { created: false, reasonCode: eligibility.reasonCode, reasonText: eligibility.reasonText };
   if (request.parentGameId && request.parentGameId !== eligibility.parentGameId) return { created: false, reasonCode: 'PARENT_STATE_CHANGED', reasonText: 'The parent match changed while confirmation was open.' };
   if (Number(request.declaredForHole) !== Number(eligibility.nextStartingHole)) return { created: false, reasonCode: 'DECLARATION_WINDOW_CLOSED', reasonText: 'The eligible starting hole changed while confirmation was open.' };
-  const draft = buildPressRecordDraft(match, metrics, request.segment, { gameKey: request.gameKey, pressConfig: request.pressConfig, currentPosition: options.currentPosition, declaringSideId: request.declaringSideId, initiatedByTeamId: request.declaringSideId, triggerType: request.triggerType, createdAt: options.createdAt || new Date().toISOString(), sourceDeviceId: options.sourceDeviceId });
+  const draft = buildPressRecordDraft(match, metrics, request.segment, { gameKey: request.gameKey, parentPressId: request.parentPressId, pressConfig: request.pressConfig, currentPosition: options.currentPosition, declaringSideId: request.declaringSideId, initiatedByTeamId: request.declaringSideId, triggerType: request.triggerType, createdAt: options.createdAt || new Date().toISOString(), sourceDeviceId: options.sourceDeviceId });
   if (!draft) return { created: false, reasonCode: 'PARENT_STATE_CHANGED', reasonText: 'The press opportunity is no longer valid.' };
   match.presses = mergeAuthoritativePressRecords(match.presses || [], [draft], { hostDeviceId: match.sharedHostDeviceId || options.sourceDeviceId });
   return { created: true, press: draft, eligibility };
@@ -6661,10 +6791,10 @@ function createEmptyMatch(overrides = {}) {
     roundTiming: overrides.roundTiming || { startedAt: null, endedAt: null },
     players: Array.isArray(overrides.players) ? overrides.players : [],
     greeniesWinners: {},
-    storageMode: 'local',
+    storageMode: overrides.storageMode === 'shared' || overrides.sharedMatchEnabled === true ? 'shared' : 'local',
     sharedMatchId: '',
     sharedMatchRef: '',
-    cloudSyncState: 'local-only',
+    cloudSyncState: overrides.storageMode === 'shared' || overrides.sharedMatchEnabled === true ? (overrides.cloudSyncState || 'pending') : 'local-only',
     notes: '',
     roundRecapNotes: '',
     roundContext: normalizeRoundContext(overrides.roundContext || {}),
@@ -7172,13 +7302,12 @@ function renderSetupHandicapPreview() {
       const teamLabel = getTeamLabel({ teamNames }, row.team);
       const strokes = Math.max(0, row.playHdcp - lowPlaying);
       return `<div class="handicap-preview-cardline">
-        <div class="handicap-preview-name">${escapeHtml(row.player.name)} <span class="tiny">· ${escapeHtml(teamLabel)}</span></div>
         <div class="handicap-preview-meta">
-          <div><span class="tiny">Tee</span><strong>${escapeHtml(row.tee?.teeName || tee.teeName)}</strong></div>
-          <div><span class="tiny">Index</span><strong>${Number(row.playerIndex || 0).toFixed(1)}</strong></div>
-          <div><span class="tiny">Course HCP</span><strong>${row.courseHdcp}</strong></div>
-          <div><span class="tiny">Playing</span><strong>${row.playHdcp}</strong></div>
-          <div><span class="tiny">Gets</span><strong>${strokes}</strong></div>
+          <div class="handicap-preview-description"><span class="tiny">Player / Team / Tee</span><strong>${escapeHtml(row.player.name)}</strong><small>${escapeHtml(teamLabel)} · ${escapeHtml(row.tee?.teeName || tee.teeName)}</small></div>
+          <div class="handicap-preview-number"><span class="tiny">Index</span><strong>${Number(row.playerIndex || 0).toFixed(1)}</strong></div>
+          <div class="handicap-preview-number"><span class="tiny">Course HCP</span><strong>${row.courseHdcp}</strong></div>
+          <div class="handicap-preview-number"><span class="tiny">Playing</span><strong>${row.playHdcp}</strong></div>
+          <div class="handicap-preview-number"><span class="tiny">Gets</span><strong>${strokes}</strong></div>
         </div>
       </div>`;
     }).join('')}</div>`;
@@ -11722,7 +11851,6 @@ function renderCourses() {
   const el = document.getElementById('coursesList');
   const cloudStatus = document.getElementById('cloudCoursesStatus');
   const setupCloudStatus = document.getElementById('setupCourseLibraryStatus');
-  const moreCloudStatus = document.getElementById('cloudCoursesStatusMore');
   const cloudBtn = document.getElementById('refreshCloudCoursesBtn');
   const syncLocalCoursesBtn = document.getElementById('syncLocalCoursesBtn');
   const syncLocalCoursesMoreBtn = document.getElementById('syncLocalCoursesMoreBtn');
@@ -11736,7 +11864,7 @@ function renderCourses() {
   const statusDisplayMessage = getCourseLibraryStatusDisplayMessage(statusMessage);
   const statusClass = getCourseLibraryStatusClass(statusMessage);
   const cloudReachable = isCourseCloudReachableStatus(statusMessage);
-  [cloudStatus, setupCloudStatus, moreCloudStatus].filter(Boolean).forEach(node => {
+  [cloudStatus, setupCloudStatus].filter(Boolean).forEach(node => {
     node.textContent = statusDisplayMessage;
     node.className = `course-library-status tiny top-gap ${statusClass}`;
   });
@@ -11790,7 +11918,7 @@ function renderCourses() {
           <button class="secondary" data-delete-course-local="${c.id}">Delete Local</button>
           <button class="secondary" data-delete-course-cloud="${c.id}" ${c.cloudCourseId ? '' : 'disabled title="Publish this course before cloud deletion is available."'}>Delete Cloud</button>
           <button class="secondary" data-delete-course-all="${c.id}" ${c.cloudCourseId ? '' : 'disabled title="Publish this course before cloud deletion is available."'}>Delete Local + Cloud</button>
-          <button class="secondary" data-new-tee="${c.id}">Add tee</button>
+          <button class="secondary" data-new-tee="${c.id}">Add Tee Manually</button>
         </div>
       </div>
       <div class="top-gap ${expanded ? '' : 'hidden'}" data-course-tee-panel="${c.id}">
@@ -12035,12 +12163,14 @@ function createBlankSetupDraft(preferences = getPlayerPreferences()) {
     teamCount: 1,
     playersPerTeam: 1,
     teamNames: [],
-    scoringAccessMode: 'team_codes',
-    scoreEntryMode: 'team',
+    scoringAccessMode: 'single_device',
+    scoreEntryMode: 'single_device',
     officialScorerName: 'Official scorer',
     statTrackingEnabled: preferenceDefaults.statTrackingEnabled,
     smartScoreAdvanceEnabled: DEFAULT_SMART_SCORE_ADVANCE,
     smartScoreAdvancePreset: preferenceDefaults.smartScoreAdvancePreset,
+    pressConfig: preferenceDefaults.pressConfig,
+    storageMode: preferenceDefaults.sharedMatchEnabled ? 'shared' : 'local',
     selectedGames: [],
     players: [],
   });
@@ -12224,12 +12354,15 @@ function startAnotherRoundWithSameGroup() {
 
 function renderSessionSummary() {
   const el = document.getElementById('sessionSummary');
+  const card = document.getElementById('sessionSummaryCard');
   if (!el) return;
   const active = getActiveMatch();
   if (!active) {
-    el.innerHTML = '<div class="tiny">No active session.</div>';
+    el.innerHTML = '';
+    card?.classList.add('hidden');
     return;
   }
+  card?.classList.remove('hidden');
   const rounds = getSessionRounds(active.sessionId || active.id);
   el.innerHTML = `
     <div class="item-header compact-item-header">
@@ -12829,7 +12962,7 @@ function getCurrentPressOpportunities(match, metrics, options = {}) {
     if (started && pc.declarationWindow === 'BEFORE_HOLE_STARTED') return [];
     const eligibilityPosition = activePosition - 1;
     const lanes = cfg.key === 'nassau' ? ['FRONT', 'BACK', 'OVERALL'].filter(segment => pc[`nassau${segment[0]}${segment.slice(1).toLowerCase()}Enabled`] !== false) : ['OVERALL'];
-    return lanes.flatMap((segment, laneIndex) => {
+    const rootRows = lanes.flatMap((segment, laneIndex) => {
       const initial = getPressEligibility(match, metrics, segment, { gameKey: cfg.key, pressConfig: pc, currentPosition: eligibilityPosition });
       if (!initial.eligible || Number(initial.nextStartingHole) !== Number(getSelectedScoringHoles(match, metrics.tee)[activePosition - 1]?.holeNumber || activePosition)) return [];
       const sides = pc.declaringSideRule === 'EITHER_SIDE' ? ['1', '2'] : initial.trailingSideId ? [String(initial.trailingSideId)] : [];
@@ -12838,6 +12971,16 @@ function getCurrentPressOpportunities(match, metrics, options = {}) {
         return { gameKey: cfg.key, gameIndex, laneIndex, segment, activePosition, currentPosition: eligibilityPosition, pressConfig: pc, declaringSideId, partialHole: started && !completed, eligibility, opportunity: getPressPromptOpportunity(eligibility, pc, match) };
       }).filter(row => row.eligibility.eligible && (!row.opportunity || !isPressPromptOpportunitySuppressed(match, row.opportunity)));
     });
+    const rePressRows = (match.presses || []).map(row => normalizePressRecord(row, match)).filter(parent => parent && parent.outcomeGameKey === cfg.key && !['VOIDED', 'SUPERSEDED', 'FINAL', 'HALVED', 'INCOMPLETE'].includes(parent.status)).flatMap((parent, parentIndex) => {
+      const initial = getRePressEligibility(match, metrics, parent, { gameKey: cfg.key, pressConfig: pc, currentPosition: eligibilityPosition });
+      if (!initial.eligible || Number(initial.nextStartingHole) !== Number(getSelectedScoringHoles(match, metrics.tee)[activePosition - 1]?.holeNumber || activePosition)) return [];
+      const sides = pc.declaringSideRule === 'EITHER_SIDE' ? ['1', '2'] : initial.trailingSideId ? [String(initial.trailingSideId)] : [];
+      return sides.map(declaringSideId => {
+        const eligibility = getRePressEligibility(match, metrics, parent, { gameKey: cfg.key, pressConfig: pc, currentPosition: eligibilityPosition, declaringSideId });
+        return { gameKey: cfg.key, gameIndex, laneIndex: lanes.length + parentIndex, segment: parent.parentSegmentType, parentPressId: parent.pressId, parentPress: parent, activePosition, currentPosition: eligibilityPosition, pressConfig: pc, declaringSideId, partialHole: started && !completed, eligibility, opportunity: getPressPromptOpportunity(eligibility, pc, match) };
+      }).filter(row => row.eligibility.eligible && (!row.opportunity || !isPressPromptOpportunitySuppressed(match, row.opportunity)));
+    });
+    return [...rootRows, ...rePressRows];
   });
   return opportunities.sort((a, b) => a.gameIndex - b.gameIndex || a.laneIndex - b.laneIndex || String(a.declaringSideId).localeCompare(String(b.declaringSideId)));
 }
@@ -12856,8 +12999,8 @@ function openPressOpportunityCard() {
   const rows = getCurrentPressOpportunities(match, metrics);
   if (!rows.length) { renderPressActions(match, metrics); return; }
   const dialog = document.getElementById('pressConfirmDialog');
-  document.getElementById('pressConfirmTitle').textContent = 'Create a Press';
-  document.getElementById('pressConfirmBody').innerHTML = `<div class="press-opportunity-list">${rows.map((row, index) => { const e = row.eligibility; const parent = row.gameKey === 'nassau' ? `${row.segment[0] + row.segment.slice(1).toLowerCase()} Nassau` : getGameLabel(row.gameKey); return `<button type="button" class="press-opportunity-row" data-press-opportunity="${index}"><strong>${escapeHtml(parent)}</strong><span>${escapeHtml(getTeamLabel(match, Number(row.declaringSideId)))} is ${Math.abs(e.parentDiff)} down</span><small>${formatCompactCurrency(e.wagerAmount)} · Hole${e.nextStartingHole === getPressSegmentRange(match, metrics, row.segment)?.endingHole ? '' : 's'} ${e.nextStartingHole}${e.nextStartingHole === getPressSegmentRange(match, metrics, row.segment)?.endingHole ? ' only' : `–${getPressSegmentRange(match, metrics, row.segment)?.endingHole}`}</small></button>`; }).join('')}</div>`;
+  document.getElementById('pressConfirmTitle').textContent = 'Choose a Press';
+  document.getElementById('pressConfirmBody').innerHTML = `<div class="press-opportunity-list">${rows.map((row, index) => { const e = row.eligibility; const segmentLabel = row.segment[0] + row.segment.slice(1).toLowerCase(); const parent = row.parentPressId ? `Re-Press ${segmentLabel} Press` : row.gameKey === 'nassau' ? `${segmentLabel} Nassau` : getGameLabel(row.gameKey); const endingHole = e.endingHole || getPressSegmentRange(match, metrics, row.segment)?.endingHole; return `<button type="button" class="press-opportunity-row" data-press-opportunity="${index}"><strong>${escapeHtml(parent)}</strong><span>${escapeHtml(getTeamLabel(match, Number(row.declaringSideId)))} is ${Math.abs(e.parentDiff)} down</span><small>${formatCompactCurrency(e.wagerAmount)} · Hole${e.nextStartingHole === endingHole ? '' : 's'} ${e.nextStartingHole}${e.nextStartingHole === endingHole ? ' only' : `–${endingHole}`}</small></button>`; }).join('')}</div>`;
   const confirm = document.getElementById('pressConfirmBtn'); if (confirm) confirm.classList.add('hidden');
   const cancel = document.getElementById('pressCancelBtn'); if (cancel) cancel.textContent = 'Close';
   dialog.classList.remove('hidden'); dialog.setAttribute('aria-hidden', 'false');
@@ -12867,13 +13010,13 @@ function openPressOpportunityCard() {
 function openPressConfirmation(match, metrics, segment, context) {
   const cfg = (match.selectedGames || []).find(game => game.key === context.gameKey) || {};
   const pc = getPressConfigForGame(match, cfg);
-  const draft = buildPressRecordDraft(match, metrics, segment, { gameKey: context.gameKey, pressConfig: pc, currentPosition: context.currentPosition, declaringSideId: context.declaringSideId, initiatedByTeamId: context.declaringSideId, triggerType: pc.pressType, createdAt: new Date().toISOString(), sourceDeviceId: getSharedDeviceId() });
+  const draft = buildPressRecordDraft(match, metrics, segment, { gameKey: context.gameKey, parentPressId: context.parentPressId, pressConfig: pc, currentPosition: context.currentPosition, declaringSideId: context.declaringSideId, initiatedByTeamId: context.declaringSideId, triggerType: pc.pressType, createdAt: new Date().toISOString(), sourceDeviceId: getSharedDeviceId() });
   if (!draft) return toast('That press is no longer available.');
-  const eligibility = getPressEligibility(match, metrics, segment, { gameKey: context.gameKey, pressConfig: pc, currentPosition: context.currentPosition });
-  pendingPressConfirmation = { matchId: match.id, gameKey: context.gameKey, segment, activePosition: context.activePosition, parentGameId: draft.parentGameId, declaredForHole: draft.declaredForHole, declaringSideId: draft.initiatedByTeamId, triggerType: draft.triggerType, opportunity: getPressPromptOpportunity(eligibility, pc, match), partialHole: context.partialHole };
+  const eligibility = context.parentPressId ? getRePressEligibility(match, metrics, context.parentPress, { gameKey: context.gameKey, pressConfig: pc, currentPosition: context.currentPosition }) : getPressEligibility(match, metrics, segment, { gameKey: context.gameKey, pressConfig: pc, currentPosition: context.currentPosition });
+  pendingPressConfirmation = { matchId: match.id, gameKey: context.gameKey, segment, parentPressId: context.parentPressId || null, activePosition: context.activePosition, parentGameId: draft.parentGameId, declaredForHole: draft.declaredForHole, declaringSideId: draft.initiatedByTeamId, triggerType: draft.triggerType, opportunity: getPressPromptOpportunity(eligibility, pc, match), partialHole: context.partialHole };
   const dialog = document.getElementById('pressConfirmDialog');
   document.getElementById('pressConfirmTitle').textContent = 'Confirm Press';
-  const parent = context.gameKey === 'nassau' ? `${segment[0] + segment.slice(1).toLowerCase()} Nassau` : getGameLabel(context.gameKey);
+  const parent = context.parentPressId ? `Re-Press ${segment[0] + segment.slice(1).toLowerCase()} Press` : context.gameKey === 'nassau' ? `${segment[0] + segment.slice(1).toLowerCase()} Nassau` : getGameLabel(context.gameKey);
   document.getElementById('pressConfirmBody').innerHTML = `<strong>${escapeHtml(parent)}</strong><div>Declared by ${escapeHtml(getTeamLabel(match, Number(draft.initiatedByTeamId)))}</div><div>${formatCompactCurrency(draft.wagerAmount)} · Hole${draft.startingHole === draft.endingHole ? '' : 's'} ${draft.startingHole}${draft.startingHole === draft.endingHole ? ' only' : `–${draft.endingHole}`}</div>${draft.startingHole === draft.endingHole ? '<div class="warning-text">This is a one-hole press.</div>' : ''}${context.partialHole ? `<div class="warning-text">This press starts on Hole ${draft.startingHole}.<br>Some Hole ${draft.startingHole} information has already been entered.</div>` : ''}`;
   const confirm = document.getElementById('pressConfirmBtn'); if (confirm) confirm.classList.remove('hidden');
   const cancel = document.getElementById('pressCancelBtn'); if (cancel) cancel.textContent = 'Cancel';
@@ -13165,8 +13308,10 @@ function renderPlayerPreferences(preferences = getPlayerPreferences()) {
   PLAYER_PREFERENCE_PATHS.forEach(path => {
     const [group, field] = path.split('.');
     const value = String(normalized[group][field]);
-    form.querySelectorAll(`input[name="${path}"]`).forEach(input => {
-      input.checked = input.value === value;
+    form.querySelectorAll(`[name="${path}"]`).forEach(input => {
+      if (input.type === 'radio') input.checked = input.value === value;
+      else if (input.type === 'checkbox') input.checked = value === 'true';
+      else input.value = value;
     });
   });
 }
@@ -14570,7 +14715,6 @@ function renderScoreAccessCard(match) {
   const sync = getSharedSyncStatus(match);
   const indicator = sync.tone === 'good' ? '🟢' : sync.tone === 'warning' ? '🟡' : sync.tone === 'working' ? '🟡' : '🔴';
   const shortLabel = sync.label.replace('All changes synced', 'Synced').replace('Offline — changes will sync later', 'Offline — saved locally');
-  if (titleSync) titleSync.innerHTML = `<span class="shared-title-sync-pill" title="${escapeHtml(sync.detail)}">${indicator} ${escapeHtml(shortLabel)}</span>`;
   const showToggles = isAssignedPlayersMode(match) && hasSharedAssignedPlayerFocus(match);
   const showOtherScores = shouldShowOtherSharedPlayers(match, { stats: false });
   const showOtherStats = shouldShowOtherSharedPlayers(match, { stats: true });
@@ -14587,7 +14731,6 @@ function renderScoreAccessCard(match) {
   const parityLabel = parity?.status === 'confirmed' ? 'Confirmed' : parity?.status === 'conflict' ? 'Conflict detected' : parity?.status === 'warning' ? 'Warning' : 'Not confirmed';
   const sspConflicts = Array.isArray(match.sharedSspConflicts) ? match.sharedSspConflicts : [];
   const sspLabel = sspConflicts.length ? `Conflict on Hole ${sspConflicts[0].holeNumber || '?'}` : match.sharedSspSyncState === 'pending' ? 'Pending sync' : match.sharedSspSyncState === 'synced' ? 'Synced' : 'Final pull needed';
-  card.classList.remove('hidden');
   card.classList.add('shared-score-compact-card', 'shared-secondary-controls-card');
   card.innerHTML = `
     <div class="tiny shared-secondary-helper">${escapeHtml(helper)}</div>
@@ -14613,7 +14756,9 @@ function renderScoreAccessCard(match) {
     <div class="tiny top-gap"><strong>${escapeHtml(assignmentLine)}</strong></div>
     ${!isCurrentDeviceMatchHost(match) && isAssignedPlayersMode(match) && !assignedNames.length ? '<div class="joined-assignment-waiting top-gap"><strong>Waiting for the host to assign players to this device.</strong><div class="tiny top-gap">Scores are saved on this phone once you are assigned.</div><button type="button" class="secondary top-gap" data-check-shared-assignment="1">Check Assignment</button></div>' : ''}
     <div class="tiny top-gap">${escapeHtml(sync.detail)}</div>`;
-  card.innerHTML = statusHtml + (showToggles ? card.innerHTML : '');
+  if (titleSync) titleSync.innerHTML = `<details class="shared-title-sync-details"><summary class="shared-title-sync-pill" title="${escapeHtml(sync.detail)}">${indicator} ${escapeHtml(shortLabel)} <span aria-hidden="true">â–¾</span></summary><div class="shared-title-sync-diagnostics">${statusHtml}</div></details>`;
+  card.classList.toggle('hidden', !showToggles);
+  if (!showToggles) card.innerHTML = '';
 }
 
 
@@ -14787,7 +14932,7 @@ function getNextIncompletePlayerSetupSlot(completedSlot = -1) {
 function focusPlayerSetupSlot(slot) {
   const row = document.querySelector(`#matchPlayersPicker [data-assignment-slot="${slot}"]`);
   if (!row) return false;
-  const target = row.querySelector('[data-open-player-sheet], [data-player-tee-slot], input, select, button');
+  const target = row.querySelector('[data-player-combobox-slot], [data-player-tee-slot], input, select, button');
   try {
     row.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
     setTimeout(() => {
@@ -14830,21 +14975,25 @@ function populateMatchPlayerPicker(selected = []) {
     const current = selectedBySlot[idx] || '';
     const currentPlayer = getPlayer(current);
     const currentTeeId = teeBySlot[idx] || defaultTeeId || '';
-    const buttonLabel = currentPlayer ? getPlayerDisplayHtml(currentPlayer, { wrapperClass: 'player-label-inline', nameClass: 'player-label-name', indexClass: 'player-label-index' }) : 'Tap to select player';
-    const buttonClass = currentPlayer ? 'player-card-trigger has-selection' : 'player-card-trigger';
-    const selectablePlayers = getSelectablePlayersForSlot(idx);
+    const selectablePlayers = state.players;
     const hasSavedPlayers = state.players.length > 0;
+    const inputId = `playerCombobox_${idx}`;
+    const listId = `playerComboboxList_${idx}`;
     const teeSelect = teeOptions.length
       ? `<label class="tiny player-tee-select"><span>Handicap tee</span><select data-player-tee-slot="${idx}" data-slot-team="${teamNo}"><option value="">Select tee</option>${teeOptions.map(t => `<option value="${t.id}" ${t.id === currentTeeId ? 'selected' : ''}>${t.label}</option>`).join('')}</select></label>`
       : '<div class="tiny">Select a course first to choose tees.</div>';
     return `
-      <div class="picker-row picker-row-stack picker-card-row" data-assignment-slot="${idx}">
-        <div class="tiny"><strong>${escapeHtml(teamNames[teamNo - 1] || `Team ${teamNo}`)}</strong> · Player ${slotNo}</div>
+      <div class="picker-row picker-row-stack lookup-picker-row" data-assignment-slot="${idx}">
+        <div class="player-assignment-slot-heading"><strong>${escapeHtml(teamNames[teamNo - 1] || `Team ${teamNo}`)}</strong><span>Player ${slotNo}</span></div>
         <input type="hidden" data-player-slot="${idx}" data-slot-team="${teamNo}" value="${current}">
-        <button type="button" class="${buttonClass}" data-open-player-sheet="${idx}" data-slot-team="${teamNo}" aria-label="Select player for ${escapeHtml(teamNames[teamNo - 1] || `Team ${teamNo}`)} player ${slotNo}" ${hasSavedPlayers ? '' : 'disabled'}>
-          <span class="player-card-label">${buttonLabel}</span>
-          <span class="player-card-hint">${hasSavedPlayers ? (currentPlayer ? 'Change player' : 'Search saved players') : 'Add players on the Players tab'}</span>
-        </button>
+        <div class="player-combobox-shell">
+          <label class="lookup-field" for="${inputId}"><span class="tiny">Player ${slotNo}</span></label>
+          <div class="player-combobox-control">
+            <input id="${inputId}" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="${listId}" data-player-combobox-slot="${idx}" data-slot-team="${teamNo}" placeholder="Search saved players" value="${escapeHtml(currentPlayer ? getPlayerLookupLabel(currentPlayer) : '')}" autocomplete="off" ${hasSavedPlayers ? '' : 'disabled'} />
+            ${currentPlayer ? `<button type="button" class="player-combobox-clear" data-clear-player-slot="${idx}" aria-label="Clear Player ${slotNo} assignment">×</button>` : ''}
+          </div>
+          <div id="${listId}" class="player-combobox-list hidden" role="listbox" data-player-combobox-list="${idx}">${selectablePlayers.map((player, optionIndex) => `<button type="button" id="${listId}_option_${optionIndex}" class="player-combobox-option" role="option" aria-selected="${player.id === current ? 'true' : 'false'}" data-player-combobox-option="${idx}" data-player-id="${escapeHtml(player.id)}" data-player-label="${escapeHtml(getPlayerLookupLabel(player).toLowerCase())}"><span>${getPlayerDisplayHtml(player, { wrapperClass: 'player-label-inline', nameClass: 'player-label-name', indexClass: 'player-label-index' })}</span></button>`).join('')}<div class="player-combobox-empty tiny hidden" data-player-combobox-empty="${idx}">No saved players match.</div></div>
+        </div>
         ${teeSelect}
       </div>
     `;
@@ -14852,20 +15001,95 @@ function populateMatchPlayerPicker(selected = []) {
   if (summary) {
     const base = `${slotCount} slots · ${teamCount} teams · ${playersPerTeam} player(s) per team`;
     const teeMsg = teeOptions.length ? ' · player tees enabled' : ' · select a course to enable player tees';
-    const playerMsg = state.players.length ? ' · tap a player card to search saved players' : ' · add saved players on the Players tab to fill these slots';
+    const playerMsg = state.players.length ? ' · search or choose a saved player in each slot' : ' · add saved players on the Players tab to fill these slots';
     summary.textContent = `${base}${teeMsg}${playerMsg}`;
   }
-  bindPlayerPickerTriggers();
   renderStatTrackingPlayerSelector();
 }
 
+function closePlayerCombobox(inputEl, { restoreInvalid = true } = {}) {
+  if (!inputEl) return false;
+  const slot = Number(inputEl.dataset.playerComboboxSlot);
+  const hidden = document.querySelector(`[data-player-slot="${slot}"]`);
+  if (!hidden) return false;
+  const match = getPlayerByLookupLabel(inputEl.value, state.players);
+  if (match) assignPlayerToSlot(slot, match.id, { preserveFocus: true });
+  else if (restoreInvalid) {
+    const current = getPlayer(hidden.value);
+    inputEl.value = current ? getPlayerLookupLabel(current) : '';
+  }
+  document.querySelector(`[data-player-combobox-list="${slot}"]`)?.classList.add('hidden');
+  inputEl.setAttribute('aria-expanded', 'false');
+  inputEl.removeAttribute('aria-activedescendant');
+  return !!match;
+}
 
-function bindPlayerPickerTriggers() {
-  const container = document.getElementById('matchPlayersPicker');
-  if (!container) return;
-  container.querySelectorAll('[data-open-player-sheet]').forEach(btn => {
-    btn.setAttribute('type', 'button');
+function filterPlayerCombobox(inputEl, { open = true } = {}) {
+  if (!inputEl) return [];
+  const slot = Number(inputEl.dataset.playerComboboxSlot);
+  const list = document.querySelector(`[data-player-combobox-list="${slot}"]`);
+  if (!list) return [];
+  const query = String(inputEl.value || '').trim().toLowerCase();
+  const visible = Array.from(list.querySelectorAll('[data-player-combobox-option]')).filter(option => {
+    const show = !query || String(option.dataset.playerLabel || '').includes(query);
+    option.classList.toggle('hidden', !show);
+    option.classList.remove('is-active');
+    return show;
   });
+  list.querySelector(`[data-player-combobox-empty="${slot}"]`)?.classList.toggle('hidden', visible.length > 0);
+  list.classList.toggle('hidden', !open);
+  inputEl.setAttribute('aria-expanded', open ? 'true' : 'false');
+  inputEl.removeAttribute('aria-activedescendant');
+  inputEl.dataset.activeOptionIndex = '-1';
+  return visible;
+}
+
+function selectPlayerComboboxOption(option, assign = assignPlayerToSlot) {
+  if (!option || option.dataset.playerSelectionHandled === 'true') return false;
+  const slot = Number(option.dataset.playerComboboxOption);
+  const playerId = String(option.dataset.playerId || '');
+  const row = option.closest?.('[data-assignment-slot]');
+  if (!Number.isInteger(slot) || slot < 0 || !playerId || Number(row?.dataset.assignmentSlot) !== slot) return false;
+  option.dataset.playerSelectionHandled = 'true';
+  assign(slot, playerId, { preserveFocus: true });
+  return true;
+}
+
+function handlePlayerComboboxOptionPointerDown(event, assign = assignPlayerToSlot) {
+  const option = event.target.closest?.('[data-player-combobox-option]');
+  if (!option || (event.pointerType === 'mouse' && event.button !== 0)) return false;
+  event.preventDefault();
+  return selectPlayerComboboxOption(option, assign);
+}
+
+function handlePlayerComboboxKeydown(event) {
+  const input = event.target.closest('[data-player-combobox-slot]');
+  if (!input) return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closePlayerCombobox(input, { restoreInvalid: true });
+    return;
+  }
+  if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) return;
+  event.preventDefault();
+  let index = Number(input.dataset.activeOptionIndex || -1);
+  if (event.key === 'Enter') {
+    const list = document.querySelector(`[data-player-combobox-list="${Number(input.dataset.playerComboboxSlot)}"]`);
+    const visible = list ? Array.from(list.querySelectorAll('[data-player-combobox-option]')).filter(option => !option.classList.contains('hidden')) : [];
+    const exact = getPlayerByLookupLabel(input.value, state.players);
+    const option = visible[index] || (exact ? visible.find(row => row.dataset.playerId === exact.id) : null);
+    if (option) selectPlayerComboboxOption(option);
+    else closePlayerCombobox(input, { restoreInvalid: true });
+    return;
+  }
+  const visible = filterPlayerCombobox(input, { open: true });
+  index = event.key === 'ArrowDown' ? Math.min(visible.length - 1, index + 1) : Math.max(0, index < 0 ? visible.length - 1 : index - 1);
+  visible.forEach((option, optionIndex) => option.classList.toggle('is-active', optionIndex === index));
+  if (visible[index]) {
+    input.dataset.activeOptionIndex = String(index);
+    input.setAttribute('aria-activedescendant', visible[index].id);
+    visible[index].scrollIntoView({ block: 'nearest' });
+  }
 }
 
 function getCurrentSetupPlayerIds() {
@@ -14951,31 +15175,33 @@ function getSmartScoreAdvancePresetFromSetup() {
 
 function renderTodaysMatchSummary() {
   const wrap = document.getElementById('todaysMatchSummary');
-  if (!wrap) return;
+  if (!wrap) { renderRoundReadiness(); return; }
   const courseId = document.getElementById('matchCourseSelect')?.value || '';
-  const teeId = document.getElementById('matchTeeSelect')?.value || getReferenceFallbackTeeId(courseId) || '';
   const course = getCourse(courseId);
-  const tee = course ? getTee(courseId, teeId) : null;
   const selectedPlayers = getSelectedPlayersFromSetup();
   const teamCount = getCurrentSetupTeamCount();
   const selectedGames = collectSelectedGames();
-  const hasSsp = selectedGames.some(g => g.key === 'sneaky_sandy_poley');
-  const featuredCompetition = normalizeFeaturedCompetition(document.getElementById('featuredCompetitionSelect')?.value || 'auto');
   const gameNames = selectedGames.map(g => getGameLabel(g)).filter(Boolean);
-  const statEnabled = !!document.getElementById('enableStatTrackingInput')?.checked;
-  const smartAdvanceEnabled = !hasSsp && !!document.getElementById('smartScoreAdvanceInput')?.checked;
-  const smartAdvancePreset = getSmartScoreAdvancePresetFromSetup();
-  const statIds = statEnabled ? collectStatTrackingPlayerIdsFromSetup(selectedPlayers) : [];
-  const statNames = statIds.map(id => getPlayer(id)?.name || '').filter(Boolean);
+  const form = document.getElementById('matchForm');
+  const roundName = String(form?.elements?.namedItem('name')?.value || '').trim() || 'Untitled round';
+  const roundDate = String(form?.elements?.namedItem('date')?.value || '').trim() || 'Choose date';
+  const holeCount = Number(form?.elements?.namedItem('holeCount')?.value) === 9 ? 9 : 18;
+  const teamNames = Array.from({ length: teamCount }, (_, index) => String(document.querySelector(`[data-team-name="${index + 1}"]`)?.value || '').trim() || `Team ${index + 1}`);
+  const editingMatch = editingMatchId ? getMatch(editingMatchId) : null;
+  const status = editingMatch && matchHasStarted(editingMatch) ? 'In progress' : (selectedPlayers.length && course ? 'Ready to review' : 'Draft');
+  const statusEl = document.getElementById('todaysRoundStatus');
+  if (statusEl) {
+    statusEl.textContent = status;
+    statusEl.dataset.status = status === 'Draft' ? 'draft' : status === 'In progress' ? 'active' : 'ready';
+  }
   const rows = [
+    ['Round', roundName],
     ['Course', course?.name || 'Select course'],
-    ['Tee', tee?.teeName || 'Select tee'],
-    ['Players', selectedPlayers.length ? String(selectedPlayers.length) : 'Select players'],
-    ['Teams', String(teamCount)],
+    ['Date', roundDate],
+    ['Holes', `${holeCount} holes`],
+    ['Status', status],
+    ['Teams', selectedPlayers.length ? teamNames.join(', ') : `${teamCount} planned`],
     ['Games', gameNames.length ? gameNames.join(', ') : 'None selected'],
-    ['Featured Competition', getFeaturedCompetitionDisplayName({ selectedGames }, featuredCompetition === 'auto' ? resolveAutoFeaturedCompetition({ selectedGames }) : featuredCompetition)],
-    ['Stat Tracking', statEnabled ? (statNames.length ? statNames.join(', ') : 'No players selected') : 'Off'],
-    ['Smart Score Advance', hasSsp ? 'Disabled for Sneaky / Sandy / Poley' : smartAdvanceEnabled ? `${getSmartScoreAdvancePresetLabel(smartAdvancePreset)} (${SMART_SCORE_ADVANCE_PRESETS[smartAdvancePreset].delay} ms)` : 'Off'],
   ];
   wrap.innerHTML = rows.map(([label, value]) => `<div class="setup-summary-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('');
   renderRoundReadiness();
@@ -15043,7 +15269,8 @@ function buildTemplateFromCurrentSetup(nameOverride = '') {
     statTrackingEnabled: fd.get('enableStatTracking') === 'on',
     smartScoreAdvanceEnabled: selectedGames.some(g => g.key === 'sneaky_sandy_poley') ? false : fd.get('smartScoreAdvance') === 'on',
     smartScoreAdvancePreset: getSmartScoreAdvancePresetFromSetup(),
-    statTrackingPlayerIds: fd.get('enableStatTracking') === 'on' ? collectStatTrackingPlayerIdsFromSetup(selectedPlayers) : []
+    statTrackingPlayerIds: fd.get('enableStatTracking') === 'on' ? collectStatTrackingPlayerIdsFromSetup(selectedPlayers) : [],
+    sharedMatchEnabled: fd.get('sharedMatchEnabled') === 'on',
   };
 }
 
@@ -15053,6 +15280,9 @@ function applyMatchTemplate(templateId) {
   const preferenceDefaults = mergeNewMatchDefaults({
     smartScoreAdvancePreset: template.smartScoreAdvancePreset,
     statTrackingEnabled: template.statTrackingEnabled,
+    sharedMatchEnabled: Object.prototype.hasOwnProperty.call(template, 'sharedMatchEnabled')
+      ? template.sharedMatchEnabled
+      : (Object.prototype.hasOwnProperty.call(template, 'storageMode') ? template.storageMode === 'shared' : null),
   });
   const draft = createEmptyMatch(preferenceDefaults);
   Object.assign(draft, {
@@ -15076,6 +15306,7 @@ function applyMatchTemplate(templateId) {
     smartScoreAdvanceEnabled: template.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!template.smartScoreAdvanceEnabled,
     smartScoreAdvancePreset: preferenceDefaults.smartScoreAdvancePreset,
     statTrackingPlayerIds: Array.isArray(template.statTrackingPlayerIds) ? template.statTrackingPlayerIds.slice() : [],
+    storageMode: preferenceDefaults.sharedMatchEnabled ? 'shared' : 'local',
     players: sanitizeTemplatePlayers(template.players).map((p, idx) => ({
       ...p,
       slot: Number.isFinite(Number(p.slot)) ? Number(p.slot) : idx,
@@ -15170,42 +15401,75 @@ function renderMatchTemplatesPanel() {
   }).join('');
 }
 
-function getRoundReadinessState() {
-  const courseId = document.getElementById('matchCourseSelect')?.value || '';
-  const teeId = document.getElementById('matchTeeSelect')?.value || '';
+function getAuthoritativeMatchSetupDraftState({ fd = null, selectedPlayers = null, selectedGames = null, sharedMatchEnabled = null, scoringAccessMode = '' } = {}) {
+  const form = document.getElementById('matchForm');
+  const formData = fd || (form ? new FormData(form) : null);
+  const active = editingMatchId ? getMatch(editingMatchId) : (form ? null : getActiveMatch());
+  const teamCount = formData ? (Number(formData.get('teamCount')) || 1) : (Number(active?.teamCount) || 1);
+  const playersPerTeam = formData ? (Number(formData.get('playersPerTeam')) || 1) : (Number(active?.playersPerTeam) || 1);
+  const requiredSlotCount = Math.max(1, teamCount * playersPerTeam);
+  const courseId = String(formData?.get('courseId') || active?.courseId || '').trim();
+  const players = Array.isArray(selectedPlayers) ? selectedPlayers : (form ? getSelectedPlayersFromSetup() : (active?.players || []));
+  const games = Array.isArray(selectedGames) ? selectedGames : (form ? collectSelectedGames() : (active?.selectedGames || []));
+  const holeCount = formData ? (Number(formData.get('holeCount')) === 9 ? 9 : 18) : getRequestedHoleCount(active);
+  const nineHoleSegment = String(formData?.get('nineHoleSegment') || active?.nineHoleSegment || 'front');
+  const customStartHole = Number(formData?.get('customStartHole') || active?.customStartHole || 1);
   const course = getCourse(courseId);
-  const tee = course ? getTee(courseId, teeId) : null;
-  const selectedPlayers = getSelectedPlayersFromSetup();
-  const selectedGames = collectSelectedGames();
-  const featured = normalizeFeaturedCompetition(document.getElementById('featuredCompetitionSelect')?.value || 'auto');
+  const teeIds = players.map(player => String(player.teeId || '')).filter(Boolean);
+  const referenceTeeId = String(formData?.get('teeId') || document.getElementById('matchTeeSelect')?.value || active?.teeId || '').trim();
+  const applicableTeeIds = teeIds.length ? teeIds : (referenceTeeId ? [referenceTeeId] : []);
+  const tees = applicableTeeIds.map(teeId => getTee(courseId, teeId)).filter(Boolean);
+  const holeShape = { holeCount, nineHoleSegment, customStartHole };
+  const courseHolesLoaded = !!course && tees.length === applicableTeeIds.length && tees.length > 0 && tees.every(tee => getSelectedScoringHoles(holeShape, tee).length >= holeCount);
+  const teamNames = Array.from({ length: teamCount }, (_, index) => String(document.querySelector(`[data-team-name="${index + 1}"]`)?.value || active?.teamNames?.[index] || '').trim());
+  const featuredCompetition = normalizeFeaturedCompetition(formData?.get('featuredCompetition') || active?.featuredCompetition || 'auto');
+  const normalizedMode = normalizeScoringAccessMode(scoringAccessMode || formData?.get('scoreEntryMode') || active?.scoringAccessMode || 'single_device');
+  const shared = sharedMatchEnabled == null ? (!!document.getElementById('sharedMatchEnabled')?.checked || normalizedMode === 'assigned_players') : !!sharedMatchEnabled;
+  return { formData, active, teamCount, playersPerTeam, requiredSlotCount, courseId, course, players, games, holeCount, nineHoleSegment, customStartHole, referenceTeeId, applicableTeeIds, tees, courseHolesLoaded, teamNames, featuredCompetition, scoringAccessMode: normalizedMode, sharedMatchEnabled: shared };
+}
+
+function setSharedMatchDraftMode(draft, enabled) {
+  const next = clonePlain(draft || {});
+  next.storageMode = enabled ? 'shared' : 'local';
+  next.sharedMatchEnabled = !!enabled;
+  next.cloudSyncState = enabled ? (next.cloudSyncState === 'local-only' ? 'pending' : (next.cloudSyncState || 'pending')) : 'local-only';
+  return next;
+}
+
+function getRoundReadinessState() {
+  const draft = getAuthoritativeMatchSetupDraftState();
+  const validation = getMatchSetupValidationState({ draft });
+  const { players: selectedPlayers, games: selectedGames, featuredCompetition: featured } = draft;
   const checks = [];
   const add = (label, ok, warning = '') => checks.push({ label, ok: !!ok, warning });
-  add('Course selected', !!courseId && !!course, courseId ? 'Selected course is not available locally.' : 'No course selected yet.');
-  add('Tee selected', !!teeId && !!tee, teeId ? 'Selected tee is not available locally.' : 'No tee selected yet.');
-  add('Course holes loaded', !!tee && Array.isArray(tee.holes) && tee.holes.length >= 18, 'Course holes are not fully loaded.');
-  add('Players added', selectedPlayers.length > 0, 'No players selected yet.');
-  add('Teams configured', getCurrentSetupTeamCount() >= 1, 'Team setup needs attention.');
+  add('Course selected', !!draft.courseId && !!draft.course, draft.courseId ? 'Selected course is not available locally.' : 'No course selected yet.');
+  add('Tee selected', selectedPlayers.length === draft.requiredSlotCount && selectedPlayers.every(player => !!player.teeId && !!getTee(draft.courseId, player.teeId)), 'Every assigned player needs an available tee.');
+  add('Course holes loaded', draft.courseHolesLoaded, `The selected tees do not contain all ${draft.holeCount} required holes.`);
+  add('Players added', selectedPlayers.length === draft.requiredSlotCount, `Assign all ${draft.requiredSlotCount} player slots.`);
+  add('Teams configured', draft.teamCount >= 1 && draft.teamCount * draft.playersPerTeam === draft.requiredSlotCount, 'Team setup needs attention.');
   add('Handicaps assigned or intentionally blank', selectedPlayers.every(row => Number.isFinite(Number(getPlayer(row.playerId)?.index ?? 0))), 'One or more players may be missing a handicap index.');
-  add('Games selected', selectedGames.length > 0, 'No games selected for this round.');
+  add(selectedGames.length ? 'Games selected' : 'Games intentionally omitted', selectedGames.length <= 5, 'Select no more than 5 games.');
   add(`Featured Competition: ${getFeaturedCompetitionDisplayName({ selectedGames }, featured === 'auto' ? resolveAutoFeaturedCompetition({ selectedGames }) : featured) || 'Auto'}`, !!featured, 'No Featured Competition selected.');
   const selectedKeys = new Set(selectedGames.map(g => g.key));
   const featureMap = { nassau: 'nassau', singles_match: 'singles_match', skins: 'skins', net_skins: 'net_skins', nine_point: 'nine_point' };
   if (featureMap[featured]) add('Featured Competition matches selected games', selectedKeys.has(featureMap[featured]), 'Featured Competition references a game that is not selected.');
-  if (selectedKeys.has('singles_match')) add('Singles Match Play setup', getCurrentSetupTeamCount() === 2 && Number(document.getElementById('playersPerTeamSelect')?.value || 1) === 1, 'Singles Match Play is designed for exactly two teams with one player each.');
+  if (selectedKeys.has('singles_match')) add('Singles Match Play setup', draft.teamCount === 2 && draft.playersPerTeam === 1, 'Singles Match Play is designed for exactly two teams with one player each.');
   if (selectedKeys.has('nine_point')) {
     const cfg = selectedGames.find(g => g.key === 'nine_point');
     add('9-Point players selected', Array.isArray(cfg?.playerIds) && new Set(cfg.playerIds.filter(Boolean)).size === 3, 'Select exactly 3 players for 9-Point.');
   }
   if (selectedKeys.has('sneaky_sandy_poley')) {
     const warnings = getSneakySandyPoleyTeamWarnings({
-      teamCount: getCurrentSetupTeamCount(),
-      playersPerTeam: getCurrentSetupPlayersPerTeam(),
+      teamCount: draft.teamCount,
+      playersPerTeam: draft.playersPerTeam,
       players: selectedPlayers,
     });
     add('Sneaky / Sandy / Poley team setup', warnings.length === 0, warnings[0] || 'Sneaky / Sandy / Poley requires two equal teams with an even number of players.');
   }
+  const coveredValidationPatterns = [/Course selection/i, /player slots/i, /valid tee/i, /course data/i, /Select up to 5/i, /9-Point/i, /Sneaky \/ Sandy \/ Poley/i];
+  validation.missingRequirements.filter(requirement => !coveredValidationPatterns.some(pattern => pattern.test(requirement))).forEach(requirement => add(requirement, false, requirement));
   const warnings = checks.filter(c => !c.ok);
-  return { checks, warnings, ready: warnings.length === 0 };
+  return { checks, warnings, ready: validation.ready && warnings.length === 0, validation, draft };
 }
 
 function buildRoundReadinessWeatherStatus() {
@@ -15222,14 +15486,18 @@ function renderRoundReadiness() {
   if (!wrap) return;
   const state = getRoundReadinessState();
   const statusTitle = state.ready ? 'Ready to Play' : 'Review Setup';
-  const statusText = state.ready ? 'Everything looks good.' : `${state.warnings.length} item${state.warnings.length === 1 ? '' : 's'} may need attention.`;
+  const completeChecks = state.checks.filter(check => check.ok);
+  const statusText = state.ready
+    ? `${completeChecks.length} check${completeChecks.length === 1 ? '' : 's'} complete`
+    : `${state.warnings.length} item${state.warnings.length === 1 ? '' : 's'} need attention`;
   wrap.innerHTML = `<div class="round-readiness-status ${state.ready ? 'ready' : 'review'}">
       <div><div class="section-label">${escapeHtml(statusTitle)}</div><div class="tiny">${escapeHtml(statusText)}</div></div>
-      <button type="submit" form="matchForm" class="setup-action-btn readiness-start-btn">${state.ready ? 'Start Round' : 'Continue Anyway'}</button>
     </div>
-    <div class="readiness-check-list top-gap">
-      ${state.checks.map(c => `<div class="readiness-check ${c.ok ? 'ok' : 'warn'}"><span>${c.ok ? '✓' : '⚠'}</span><div><strong>${escapeHtml(c.label)}</strong>${c.ok ? '' : `<div class="tiny">${escapeHtml(c.warning)}</div>`}</div></div>`).join('')}
-    </div>
+    ${state.warnings.length ? `<div class="readiness-check-list top-gap">${state.warnings.map(c => `<div class="readiness-check warn"><span>!</span><div><strong>${escapeHtml(c.label)}</strong><div class="tiny">${escapeHtml(c.warning)}</div></div></div>`).join('')}</div>` : ''}
+    <details class="readiness-complete-details top-gap">
+      <summary>${completeChecks.length} check${completeChecks.length === 1 ? '' : 's'} complete</summary>
+      <div class="readiness-check-list top-gap">${completeChecks.map(c => `<div class="readiness-check ok"><span>✓</span><div><strong>${escapeHtml(c.label)}</strong></div></div>`).join('')}</div>
+    </details>
     ${buildRoundReadinessWeatherStatus()}`;
 }
 
@@ -15313,7 +15581,7 @@ function updateMatchPlayerTee(slot, teeId = '') {
   const normalizedSlot = Number(slot);
   const scrollAnchor = captureSetupScrollAnchor(Number.isFinite(normalizedSlot) ? `#matchPlayersPicker [data-assignment-slot="${normalizedSlot}"]` : null);
   if (!Number.isFinite(normalizedSlot) || normalizedSlot < 0) return;
-  const fallbackTeam = Number(document.querySelector(`[data-player-slot="${normalizedSlot}"]`)?.dataset.slotTeam || document.querySelector(`[data-open-player-sheet="${normalizedSlot}"]`)?.dataset.slotTeam || 1) || 1;
+  const fallbackTeam = Number(document.querySelector(`[data-player-slot="${normalizedSlot}"]`)?.dataset.slotTeam || 1) || 1;
   const draft = syncMatchPlayerDraft(getCurrentMatchEditorSelectionsSnapshot());
   const row = draft[normalizedSlot] || { slot: normalizedSlot, team: fallbackTeam, playerId: '', teeId: '' };
   row.slot = normalizedSlot;
@@ -15328,44 +15596,26 @@ function updateMatchPlayerTee(slot, teeId = '') {
   document.querySelector(`[data-player-tee-slot="${normalizedSlot}"]`)?.closest('.picker-row')?.classList.remove('picker-row--error');
   renderGamesPicker(collectSelectedGames());
   renderSetupHandicapPreview();
+  renderTodaysMatchSummary();
   restoreSetupScrollAnchor(scrollAnchor);
 }
 
-function openPlayerSearchSheet(slot) {
-  const sheet = document.getElementById('playerSearchSheet');
-  const input = document.getElementById('playerSearchInput');
-  const meta = document.getElementById('playerSearchMeta');
-  if (!sheet || !input) return;
-  sheet.dataset.slot = String(slot);
-  const teamNo = Number(document.querySelector(`[data-player-slot="${slot}"]`)?.dataset.slotTeam || document.querySelector(`[data-open-player-sheet="${slot}"]`)?.dataset.slotTeam || 1);
-  const teamName = document.querySelector(`[data-team-name="${teamNo}"]`)?.value || `Team ${teamNo}`;
-  const slotWithinTeam = (slot % Math.max(1, Number(document.getElementById('playersPerTeamSelect')?.value || 1))) + 1;
-  if (meta) meta.textContent = `${teamName} · Player ${slotWithinTeam} · choose from saved players`;
-  input.value = '';
-  renderPlayerSearchResults(slot, '');
-  sheet.classList.remove('hidden');
-  sheet.setAttribute('aria-hidden', 'false');
-  document.body.classList.add('sheet-open');
-  setTimeout(() => input.focus(), 50);
-}
-function closePlayerSearchSheet() {
-  const sheet = document.getElementById('playerSearchSheet');
-  const input = document.getElementById('playerSearchInput');
-  if (!sheet) return;
-  sheet.classList.add('hidden');
-  sheet.setAttribute('aria-hidden', 'true');
-  sheet.dataset.slot = '';
-  if (input) input.value = '';
-  document.body.classList.remove('sheet-open');
-}
-
-window.openPlayerSearchSheet = openPlayerSearchSheet;
-window.closePlayerSearchSheet = closePlayerSearchSheet;
 window.assignPlayerToSlot = assignPlayerToSlot;
-window.bindPlayerPickerTriggers = bindPlayerPickerTriggers;
 
 function clearMatchTeeErrors() {
   document.querySelectorAll('#matchPlayersPicker .picker-row--error').forEach(el => el.classList.remove('picker-row--error'));
+}
+function updatePlayerDraftSlot(draftRows, slot, playerId = '', options = {}) {
+  const normalizedSlot = Number(slot);
+  const playersPerTeam = Math.max(1, Number(options.playersPerTeam || 1));
+  const next = clonePlain(Array.isArray(draftRows) ? draftRows : []);
+  if (!Number.isInteger(normalizedSlot) || normalizedSlot < 0) return next;
+  const requestedId = String(playerId || '');
+  if (requestedId && next.some((row, index) => index !== normalizedSlot && String(row?.playerId || '') === requestedId)) return next;
+  const fallbackTeam = Math.floor(normalizedSlot / playersPerTeam) + 1;
+  const row = next[normalizedSlot] || { slot: normalizedSlot, team: fallbackTeam, playerId: '', teeId: '' };
+  next[normalizedSlot] = { ...row, slot: normalizedSlot, team: Number(row.team || fallbackTeam) || fallbackTeam, playerId: requestedId, teeId: String(row.teeId || options.defaultTeeId || '') };
+  return next;
 }
 function markMissingTeeRows() {
   clearMatchTeeErrors();
@@ -15375,45 +15625,26 @@ function markMissingTeeRows() {
     }
   });
 }
-function renderPlayerSearchResults(slot, query = '') {
-  const results = document.getElementById('playerSearchResults');
-  if (!results) return;
-  const currentId = document.querySelector(`[data-player-slot="${slot}"]`)?.value || '';
-  const q = String(query || '').trim().toLowerCase();
-  const matches = getSelectablePlayersForSlot(slot)
-    .filter(player => !q || getPlayerLookupLabel(player).toLowerCase().includes(q) || String(player.name || '').toLowerCase().includes(q))
-    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
-  const selectedPlayer = getPlayer(currentId);
-  const clearHtml = selectedPlayer
-    ? `<button type="button" class="sheet-action danger" data-clear-player-slot="${slot}">Clear current player (${escapeHtml(selectedPlayer.name)})</button>`
-    : '';
-  const matchHtml = matches.length
-    ? matches.map(player => `
-      <button type="button" class="player-search-result ${player.id === currentId ? 'is-selected' : ''}" data-select-player-slot="${slot}" data-player-id="${escapeHtml(player.id)}">
-        ${getPlayerDisplayHtml(player, { wrapperClass: 'player-search-main player-label-inline', nameClass: 'player-label-name', indexClass: 'player-label-index' })}
-      </button>
-    `).join('')
-    : '<div class="tiny">No saved players match that search.</div>';
-  results.innerHTML = `${clearHtml}${matchHtml}`;
-}
-function assignPlayerToSlot(slot, playerId = '') {
+function assignPlayerToSlot(slot, playerId = '', options = {}) {
   const scrollAnchor = captureSetupScrollAnchor(`#matchPlayersPicker [data-assignment-slot="${Number(slot)}"]`);
   const draft = getMatchPlayerDraft();
   const playersPerTeam = Math.max(1, Number(document.getElementById('playersPerTeamSelect')?.value || 1));
-  const fallbackTeam = Number(document.querySelector(`[data-player-slot="${slot}"]`)?.dataset.slotTeam || document.querySelector(`[data-open-player-sheet="${slot}"]`)?.dataset.slotTeam || (Math.floor(Number(slot) / playersPerTeam) + 1)) || 1;
-  const row = draft[slot] || { slot, team: fallbackTeam, playerId: '', teeId: '' };
-  row.team = Number(row.team || fallbackTeam) || 1;
-  row.playerId = playerId || '';
-  if (!row.teeId) row.teeId = document.getElementById('matchTeeSelect')?.value || getDefaultMatchTeeId() || '';
-  draft[slot] = row;
-  uiState.matchPlayerDraft = draft;
-  syncReferenceTeeUi({ selections: draft });
-  populateMatchPlayerPicker(draft);
+  const nextDraft = updatePlayerDraftSlot(draft, slot, playerId, { playersPerTeam, defaultTeeId: document.getElementById('matchTeeSelect')?.value || getDefaultMatchTeeId() || '' });
+  uiState.matchPlayerDraft = nextDraft;
+  syncReferenceTeeUi({ selections: nextDraft });
+  populateMatchPlayerPicker(nextDraft);
   renderGamesPicker(collectSelectedGames());
   renderSetupHandicapPreview();
+  renderTodaysMatchSummary();
   clearMatchTeeErrors();
-  closePlayerSearchSheet();
   restoreSetupScrollAnchor(scrollAnchor);
+  if (options.preserveFocus) {
+    const input = document.querySelector(`[data-player-combobox-slot="${slot}"]`);
+    input?.focus({ preventScroll: true });
+    document.querySelector(`[data-player-combobox-list="${slot}"]`)?.classList.add('hidden');
+    input?.setAttribute('aria-expanded', 'false');
+    input?.removeAttribute('aria-activedescendant');
+  }
 }
 function refreshMatchPlayerSlots(options = {}) {
   const preserveSelections = options.preserveSelections !== false;
@@ -15462,7 +15693,9 @@ function buildPressAuditSection(match, metrics, recordOverride = null) {
 }
 function buildPressSetupControls(gameKey, cfg = {}) {
   if (getGameEscalationCapability(gameKey) !== 'PRESS') return '';
-  const pc = normalizePressConfig(cfg.pressConfig || cfg);
+  const preferenceDefaults = getNewMatchDefaultsFromPreferences().pressConfig;
+  const roundDefaults = editingMatchId ? getMatch(editingMatchId)?.pressConfig : preferenceDefaults;
+  const pc = normalizePressConfig({ ...roundDefaults, ...(cfg.pressConfig || {}), ...cfg });
   return `<details class="press-setup top-gap" ${pc.pressesEnabled ? 'open' : ''}>
     <summary>Presses · ${pc.pressesEnabled ? 'On' : 'Off'}</summary>
     <div class="grid two compact-grid top-gap">
@@ -15473,10 +15706,10 @@ function buildPressSetupControls(gameKey, cfg = {}) {
       <label><span>Who may declare</span><select data-game-config="${gameKey}" data-field="declaringSideRule"><option value="LOSING_SIDE_ONLY" ${pc.declaringSideRule === 'LOSING_SIDE_ONLY' ? 'selected' : ''}>Losing side only</option><option value="EITHER_SIDE" ${pc.declaringSideRule === 'EITHER_SIDE' ? 'selected' : ''}>Either side</option></select></label>
       <label><span>Parent availability</span><select data-game-config="${gameKey}" data-field="pressAvailabilityRule"><option value="OPEN_SEGMENT_ONLY" ${pc.pressAvailabilityRule === 'OPEN_SEGMENT_ONLY' ? 'selected' : ''}>Open match only</option><option value="FUTURE_HOLES_REMAIN" ${pc.pressAvailabilityRule === 'FUTURE_HOLES_REMAIN' ? 'selected' : ''}>Any time holes remain</option></select></label>
       <label><span>Declaration timing</span><select data-game-config="${gameKey}" data-field="declarationWindow"><option value="BEFORE_HOLE_STARTED" ${pc.declarationWindow === 'BEFORE_HOLE_STARTED' ? 'selected' : ''}>Before hole starts</option><option value="BEFORE_HOLE_COMPLETED" ${pc.declarationWindow === 'BEFORE_HOLE_COMPLETED' ? 'selected' : ''}>Before hole completes</option></select></label>
-      <label><span>Press stake</span><select data-game-config="${gameKey}" data-field="pressValueRule"><option value="INHERIT_ROOT_STAKE" ${pc.pressValueRule === 'INHERIT_ROOT_STAKE' ? 'selected' : ''}>Same as original wager</option><option value="INHERIT_PARENT_STAKE" ${pc.pressValueRule === 'INHERIT_PARENT_STAKE' ? 'selected' : ''}>Same as immediate parent</option></select></label>
-      <label><span>Maximum presses</span><input type="number" min="1" max="10" data-game-config="${gameKey}" data-field="maxPressesPerRootGame" value="${pc.maxPressesPerRootGame}"></label>
-      <label><span>Maximum depth</span><input type="number" min="1" max="5" data-game-config="${gameKey}" data-field="maxPressDepth" value="${pc.maxPressDepth}"></label>
-      <div class="tiny span-2">Open match only requires an undecided parent. Before hole starts means no score, stat, or game input may already exist.</div>
+      <div class="tiny span-2">All Presses and Re-Presses use the original wager for the game or Nassau segment.</div>
+      <label><span>Maximum Presses</span><input type="number" min="1" max="10" data-game-config="${gameKey}" data-field="maxPressesPerRound" aria-label="Maximum Presses for the entire round" value="${pc.maxPressesPerRound}"></label>
+      <label><span>Maximum Re-Presses</span><input type="number" min="0" max="4" data-game-config="${gameKey}" data-field="maxRePresses" aria-label="Maximum Re-Presses per individual Press" value="${pc.maxRePresses}"></label>
+      <div class="tiny span-2">Maximum Presses is the total for the entire round, including Re-Presses. Maximum Re-Presses limits each individual Press chain. Open match only requires an undecided parent.</div>
     </div></details>`;
 }
 function renderGamesPicker(existing = []) {
@@ -15486,14 +15719,14 @@ function renderGamesPicker(existing = []) {
   const normalizedExisting = normalizeSelectedGamesOrder(existing || []);
   const selectedKeys = normalizedExisting.map(g => g.key);
   const singlesEligibleInSetup = getCurrentSetupTeamCount() === 2 && Number(document.getElementById('playersPerTeamSelect')?.value || 1) === 1;
-  picker.innerHTML = GAME_LIBRARY.map(game => {
+  picker.innerHTML = GAME_SELECTION_GROUPS.map(group => `<section class="game-picker-group" aria-labelledby="game-group-${group.label.toLowerCase().replace(/[^a-z]+/g, '-')}"><div class="section-subhead" id="game-group-${group.label.toLowerCase().replace(/[^a-z]+/g, '-')}">${group.label}</div><div class="game-picker-group-options">${group.keys.map(key => GAME_LIBRARY.find(game => game.key === key)).filter(Boolean).map(game => {
     const singlesBlocked = game.key === 'singles_match' && !singlesEligibleInSetup;
     return `
     <label class="game-pill ${selectedKeys.includes(game.key) ? 'selected' : ''} ${singlesBlocked ? 'disabled' : ''}" ${singlesBlocked ? 'title="Singles Match Play requires two teams with one player on each team."' : ''}>
       <input type="checkbox" data-game-key="${game.key}" ${selectedKeys.includes(game.key) ? 'checked' : ''} ${singlesBlocked ? 'disabled' : ''} />
       <span>${getGameLabel(game.key)}</span>
     </label>`;
-  }).join('');
+  }).join('')}</div></section>`).join('');
   const selectedGames = normalizeSelectedGamesOrder(GAME_LIBRARY.filter(g => selectedKeys.includes(g.key)));
   renderFeaturedCompetitionSetup(normalizedExisting, document.getElementById('featuredCompetitionSelect')?.value || 'auto');
   configsWrap.innerHTML = selectedGames.map(game => {
@@ -15916,7 +16149,8 @@ function updateSetupActionButtonStates() {
     editBtn.textContent = editingActive ? "Editing Match" : "Edit Match";
   }
   finalizeBtns.forEach(btn => {
-    btn.textContent = editingMatchId ? "Update Match" : "Create Match";
+    btn.textContent = editingMatchId ? "Update Match" : "Start Round";
+    btn.setAttribute('aria-label', editingMatchId ? 'Update match' : 'Start round');
     btn.disabled = !!active && !hostCanEdit;
     if (!!active && !hostCanEdit) btn.classList.add('hidden');
   });
@@ -16119,9 +16353,11 @@ function loadPlayerEditor(playerId = null) {
 }
 function loadCourseEditor(courseId = null) {
   const form = document.getElementById('courseForm');
+  const card = document.getElementById('courseEditorCard');
+  if (courseId && card) card.open = true;
   editingCourseId = courseId;
   document.getElementById('cancelCourseEditBtn').classList.toggle('hidden', !courseId);
-  document.getElementById('courseFormTitle').textContent = courseId ? 'Edit course' : 'Add course';
+  document.getElementById('courseFormTitle').textContent = courseId ? 'Edit course' : 'Add Course Manually';
   document.getElementById('courseSubmitBtn').textContent = courseId ? 'Update Course' : 'Save Course';
   if (!courseId) { form.reset(); form.country.value = 'United States of America'; return; }
   const course = getCourse(courseId); if (!course) return;
@@ -16159,9 +16395,11 @@ function viewCompletedMatchSummary() {
 
 function loadTeeEditor(courseId = null, teeId = null) {
   const form = document.getElementById('teeForm');
+  const card = document.getElementById('teeEditorCard');
+  if ((courseId || teeId) && card) card.open = true;
   editingTeeRef = courseId && teeId ? { courseId, teeId } : null;
   document.getElementById('cancelTeeEditBtn').classList.toggle('hidden', !editingTeeRef);
-  document.getElementById('teeFormTitle').textContent = editingTeeRef ? 'Edit tee' : 'Add tee';
+  document.getElementById('teeFormTitle').textContent = editingTeeRef ? 'Edit tee' : 'Add Tee Manually';
   document.getElementById('teeSubmitBtn').textContent = editingTeeRef ? 'Update Tee' : 'Save Tee';
   activateTab('courses');
   if (!courseId || !teeId) {
@@ -16235,9 +16473,11 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
   if (topCreateBtn) topCreateBtn.classList.remove('hidden');
   if (topUpdateNote) topUpdateNote.classList.toggle('hidden', !matchId);
   const isNextRoundDraft = !matchId && draftMatch && Number(draftMatch.roundNumber) > 1;
-  document.getElementById('matchFormTitle').textContent = matchId ? 'Edit match setup' : (isNextRoundDraft ? 'Start Another Round' : 'Match setup');
-  const setupActionLabel = matchId ? 'Update Match' : (isNextRoundDraft ? 'Begin Round' : 'Create Match');
-  document.getElementById('matchSubmitBtn').textContent = setupActionLabel;
+  document.getElementById('matchFormTitle').textContent = matchId ? 'Edit Round Setup' : (isNextRoundDraft ? 'Start Another Round' : 'Round Setup');
+  const setupActionLabel = matchId ? 'Update Match' : 'Start Round';
+  const matchSubmitButton = document.getElementById('matchSubmitBtn');
+  matchSubmitButton.textContent = setupActionLabel;
+  matchSubmitButton.setAttribute('aria-label', setupActionLabel);
   if (topCreateBtn) topCreateBtn.textContent = setupActionLabel;
   if (topUpdateBtn) topUpdateBtn.textContent = 'Update Match';
   updateSetupActionButtonStates();
@@ -16471,8 +16711,17 @@ function installHandlers() {
   });
   if (analyzeScorecardImportBtn) analyzeScorecardImportBtn.addEventListener('click', analyzeSelectedScorecardImportFiles);
   if (clearScorecardImportBtn) clearScorecardImportBtn.addEventListener('click', clearScorecardImportFiles);
-  document.getElementById('importScorecardShortcutBtn')?.addEventListener('click', () => { document.getElementById('importScorecardBtn')?.click(); });
-  document.getElementById('addCourseShortcutBtn')?.addEventListener('click', () => { document.getElementById('courseFormTitle')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); document.querySelector('#courseForm input[name="name"]')?.focus(); });
+  document.getElementById('importScorecardShortcutBtn')?.addEventListener('click', () => {
+    const card = document.getElementById('scorecardImportCard');
+    if (card) card.open = true;
+    document.getElementById('importScorecardBtn')?.click();
+  });
+  document.getElementById('addCourseShortcutBtn')?.addEventListener('click', () => {
+    const card = document.getElementById('courseEditorCard');
+    if (card) card.open = true;
+    document.getElementById('courseFormTitle')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.querySelector('#courseForm input[name="name"]')?.focus();
+  });
   const scorecardImportSelection = document.getElementById('scorecardImportSelection');
   if (scorecardImportSelection) scorecardImportSelection.addEventListener('click', e => {
     const btn = e.target.closest('[data-remove-scorecard-file]');
@@ -16658,6 +16907,12 @@ function installHandlers() {
     renderTodaysMatchSummary();
   });
   document.getElementById('scoreEntryModeSelect').addEventListener('change', e => preserveSetupScrollDuring(() => { renderScoringControlConfig(); renderTodaysMatchSummary(); }, '#scoreEntryModeSelect'));
+  document.getElementById('sharedMatchEnabled')?.addEventListener('change', e => preserveSetupScrollDuring(() => {
+    const modeSelect = document.getElementById('scoreEntryModeSelect');
+    if (!e.target.checked && modeSelect?.value === 'assigned_players') modeSelect.value = 'single_device';
+    renderScoringControlConfig(editingMatchId ? getMatch(editingMatchId) : null);
+    renderRoundReadiness();
+  }, '#sharedMatchEnabled'));
   document.getElementById('matchTeeSelect').addEventListener('change', e => preserveSetupScrollDuring(() => { uiState.referenceTeeManual = true; uiState.referenceTeeAutoId = e.target.value || uiState.referenceTeeAutoId; const draft = normalizeDraftTeeAssignments({ forceDefault: false }).map(row => ({ ...row, teeId: row.teeId || e.target.value || '' })); syncMatchPlayerDraft(draft); normalizeDraftTeeAssignments({ forceDefault: false }); syncReferenceTeeUi({ selections: uiState.matchPlayerDraft, forceAuto: false }); populateMatchPlayerPicker(uiState.matchPlayerDraft); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); renderTodaysMatchSummary(); }, '#matchTeeSelect'));
   document.getElementById('teamNamesGrid').addEventListener('input', e => {
     // Keep team-name typing stable on mobile. Rebuilding the setup controls on every
@@ -16669,58 +16924,37 @@ function installHandlers() {
     preserveSetupScrollDuring(() => { renderTodaysMatchSummary(); }, '#teamNamesGrid');
   });
   const matchPlayersPickerEl = document.getElementById('matchPlayersPicker');
-  const handlePlayerPickerOpen = e => {
-    const trigger = e.target.closest('[data-open-player-sheet]');
-    if (trigger) {
-      e.preventDefault();
-      openPlayerSearchSheet(Number(trigger.dataset.openPlayerSheet));
-      return;
-    }
-  };
-  matchPlayersPickerEl.addEventListener('click', handlePlayerPickerOpen);
-  matchPlayersPickerEl.addEventListener('keydown', e => {
-    const trigger = e.target.closest('[data-open-player-sheet]');
-    if (trigger && (e.key === 'Enter' || e.key === ' ')) {
-      e.preventDefault();
-      openPlayerSearchSheet(Number(trigger.dataset.openPlayerSheet));
-    }
-  });
   const handleMatchPlayersPickerSelectionChange = e => {
-    if (e.target.matches('[data-player-select-slot]')) {
-      preserveSetupScrollDuring(() => assignPlayerToSlot(Number(e.target.dataset.playerSelectSlot), e.target.value || ''), `#matchPlayersPicker [data-assignment-slot="${Number(e.target.dataset.playerSelectSlot)}"]`);
-      return;
-    }
+    if (e.target.matches('[data-player-combobox-slot]')) { closePlayerCombobox(e.target, { restoreInvalid: true }); return; }
     if (e.target.matches('[data-player-tee-slot]')) {
       preserveSetupScrollDuring(() => updateMatchPlayerTee(Number(e.target.dataset.playerTeeSlot), e.target.value || ''), `#matchPlayersPicker [data-assignment-slot="${Number(e.target.dataset.playerTeeSlot)}"]`);
     }
   };
-  document.getElementById('matchPlayersPicker').addEventListener('change', handleMatchPlayersPickerSelectionChange);
-  document.getElementById('matchPlayersPicker').addEventListener('input', handleMatchPlayersPickerSelectionChange);
-  document.getElementById('playerSearchInput').addEventListener('input', e => {
-    const sheet = document.getElementById('playerSearchSheet');
-    const slot = Number(sheet?.dataset.slot || -1);
-    if (slot < 0) return;
-    renderPlayerSearchResults(slot, e.target.value || '');
-  });
-  document.getElementById('playerSearchResults').addEventListener('click', e => {
-    const selectBtn = e.target.closest('[data-select-player-slot]');
-    if (selectBtn) {
-      preserveSetupScrollDuring(() => assignPlayerToSlot(Number(selectBtn.dataset.selectPlayerSlot), selectBtn.dataset.playerId || ''), `#matchPlayersPicker [data-assignment-slot="${Number(selectBtn.dataset.selectPlayerSlot)}"]`);
+  matchPlayersPickerEl.addEventListener('change', handleMatchPlayersPickerSelectionChange);
+  matchPlayersPickerEl.addEventListener('focusin', e => { if (e.target.matches('[data-player-combobox-slot]')) filterPlayerCombobox(e.target, { open: true }); });
+  matchPlayersPickerEl.addEventListener('input', e => { if (e.target.matches('[data-player-combobox-slot]')) filterPlayerCombobox(e.target, { open: true }); });
+  matchPlayersPickerEl.addEventListener('keydown', handlePlayerComboboxKeydown);
+  matchPlayersPickerEl.addEventListener('pointerdown', handlePlayerComboboxOptionPointerDown);
+  matchPlayersPickerEl.addEventListener('click', e => {
+    const option = e.target.closest('[data-player-combobox-option]');
+    if (option) {
+      selectPlayerComboboxOption(option);
       return;
     }
-    const clearBtn = e.target.closest('[data-clear-player-slot]');
-    if (clearBtn) {
-      preserveSetupScrollDuring(() => assignPlayerToSlot(Number(clearBtn.dataset.clearPlayerSlot), ''), `#matchPlayersPicker [data-assignment-slot="${Number(clearBtn.dataset.clearPlayerSlot)}"]`);
-    }
+    const clear = e.target.closest('[data-clear-player-slot]');
+    if (clear) assignPlayerToSlot(Number(clear.dataset.clearPlayerSlot), '', { preserveFocus: true });
   });
-  document.getElementById('closePlayerSearchSheet').addEventListener('click', closePlayerSearchSheet);
-  document.getElementById('playerSearchSheet').addEventListener('click', e => {
-    if (e.target.id === 'playerSearchSheet') closePlayerSearchSheet();
+  matchPlayersPickerEl.addEventListener('focusout', e => {
+    const input = e.target.closest('[data-player-combobox-slot]');
+    if (!input) return;
+    window.setTimeout(() => {
+      const row = input.closest('[data-assignment-slot]');
+      if (row && !row.contains(document.activeElement)) closePlayerCombobox(input, { restoreInvalid: true });
+    }, 0);
   });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && !document.getElementById('playerDetailDialog')?.classList.contains('hidden')) closePlayerDetailView();
     if (e.key === 'Escape' && !document.getElementById('quickScoreboardDialog')?.classList.contains('hidden')) closeQuickScoreboardView();
-    if (e.key === 'Escape' && !document.getElementById('playerSearchSheet')?.classList.contains('hidden')) closePlayerSearchSheet();
     if (e.key === 'Escape' && !document.getElementById('resetPlayerPreferencesDialog')?.classList.contains('hidden')) closeResetPlayerPreferencesDialog();
   });
   document.getElementById('gamesPicker').addEventListener('change', e => {
@@ -16735,6 +16969,7 @@ function installHandlers() {
     const selectedKeys = checked.map(el => el.dataset.gameKey);
     const configs = selectedKeys.map(key => getGameConfig(key, existing));
     renderGamesPicker(configs);
+    renderTodaysMatchSummary();
   });
   
   if (window.visualViewport) {
@@ -16863,6 +17098,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
   document.getElementById('setup').addEventListener('change', e => {
+    if (e.target?.matches('[data-game-config][data-field="maxPressesPerRound"], [data-game-config][data-field="maxRePresses"]')) {
+      document.querySelectorAll(`[data-game-config][data-field="${e.target.dataset.field}"]`).forEach(input => { if (input !== e.target) input.value = e.target.value; });
+    }
     if (e.target && (e.target.id === 'enableStatTrackingInput' || e.target.matches('[data-player-slot], [data-stat-track-player]'))) renderStatTrackingPlayerSelector();
     if (e.target && (e.target.id === 'smartScoreAdvanceInput' || e.target.id === 'smartScoreAdvancePresetSelect')) syncSmartScoreAdvancePresetUi();
     if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #featuredCompetitionSelect, #scoreEntryModeSelect, #officialScorerNameInput, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-game-config], #enableStatTrackingInput, #smartScoreAdvanceInput, #smartScoreAdvancePresetSelect, [data-stat-track-player]')) {
@@ -17245,51 +17483,6 @@ document.getElementById('leaderboard').addEventListener('change', e => {
 
 
 
-  function getMatchSetupValidationState({ fd = null, selectedPlayers = null, selectedGames = null, existing = null, sharedMatchEnabled = false, scoringAccessMode = '' } = {}) {
-    const formData = fd || new FormData(document.getElementById('matchForm'));
-    const teamCount = Number(formData.get('teamCount')) || 1;
-    const playersPerTeam = Number(formData.get('playersPerTeam')) || 1;
-    const courseId = String(formData.get('courseId') || '').trim();
-    const players = Array.isArray(selectedPlayers) ? selectedPlayers : getSelectedPlayersFromSetup();
-    const games = Array.isArray(selectedGames) ? selectedGames : collectSelectedGames();
-    const requestedHoleCount = Number(formData.get('holeCount')) === 9 ? 9 : 18;
-    const teeId = String(formData.get('teeId') || document.getElementById('matchTeeSelect')?.value || players[0]?.teeId || '').trim();
-    const missing = [];
-    const warnings = [];
-    const uniqueIds = new Set(players.map(p => p.playerId).filter(Boolean));
-    if ((teamCount * playersPerTeam) > 32) missing.push('Limit is 32 total players');
-    if (!courseId) missing.push('Course selection');
-    if (!teeId && !players.some(p => p.teeId)) missing.push('Tee selection');
-    if (players.length < 1) missing.push('At least one player');
-    if (players.length !== uniqueIds.size) missing.push('Each player can only be selected once');
-    if (players.some(p => !p.teeId)) missing.push('A tee for each player');
-    if (![9, 18].includes(requestedHoleCount)) missing.push('Selected holes');
-    if (games.length > 5) missing.push('Select up to 5 gambling games');
-    if (games.some(g => g.key === 'nassau') && teamCount !== 2) missing.push('Nassau requires exactly 2 teams');
-    if (games.some(g => ['team_match','team_stroke'].includes(g.key)) && teamCount < 2) missing.push('Team games require at least 2 teams');
-    if (games.some(g => g.key === 'nine_point') && players.length < 3) missing.push('9-Point Game requires at least 3 assigned players');
-    if (games.some(g => g.key === 'nine_point' && (!Array.isArray(g.playerIds) || [...new Set(g.playerIds)].length !== 3))) missing.push('Select 3 players for the 9-Point Game');
-    if (games.some(g => g.key === 'sneaky_sandy_poley')) missing.push(...getSneakySandyPoleyTeamWarnings({ teamCount, playersPerTeam, players }));
-    if (sharedMatchEnabled && scoringAccessMode === 'assigned_players' && existing?.sharedPlayerAssignments) {
-      const unassigned = players.filter(p => !existing.sharedPlayerAssignments[p.playerId]);
-      if (unassigned.length && existing.sharedMatchId) warnings.push('Some Shared Match assignments will default to the host until changed');
-    }
-    return {
-      ready: missing.length === 0,
-      missingRequirements: [...new Set(missing)],
-      warnings,
-      summary: {
-        courseSelected: !!courseId,
-        teeSelected: !!teeId || players.every(p => p.teeId),
-        playerCount: players.length,
-        selectedHoles: requestedHoleCount,
-        sharedMatch: !!sharedMatchEnabled,
-        assignmentsComplete: sharedMatchEnabled ? (scoringAccessMode === 'assigned_players' ? 'Host default/managed' : 'N/A') : 'N/A',
-        roundStarted: !!getActiveMatch()?.players?.some(mp => (mp.scores || []).some(s => Number(s.gross) > 0)),
-      }
-    };
-  }
-
   function getUserFacingMissingRequirements(validationState) {
     const technicalPatterns = /\b(variable|undefined|null|referenceerror|typeerror|validationstate|matchstate|is not defined|cannot read|cannot access)\b/i;
     return (validationState?.missingRequirements || [])
@@ -17332,6 +17525,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('matchForm').addEventListener('submit', async e => {
     e.preventDefault();
     try {
+    const wasEditingMatch = !!editingMatchId;
     const fd = new FormData(e.target);
     const teamCount = Number(fd.get('teamCount')) || 1;
     const playersPerTeam = Number(fd.get('playersPerTeam')) || 1;
@@ -17357,7 +17551,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const scoreEntryMode = getLegacyScoreEntryMode(scoringAccessMode);
     const officialScorerName = String(fd.get('officialScorerName') || '').trim() || 'Official scorer';
     const sharedMatchEnabled = (scoringAccessMode === 'assigned_players' || fd.get('sharedMatchEnabled') === 'on') && hasSupabaseConfig();
-    logMatchFinalizationDiagnostics('pre-build', { selectedPlayers, selectedGames, existing, sharedMatchEnabled, scoringAccessMode, courseId: String(fd.get('courseId') || ''), teeId: String(fd.get('teeId') || ''), holeCount: Number(fd.get('holeCount')) === 9 ? 9 : 18 });
+    const validationState = getMatchSetupValidationState({ fd, selectedPlayers, selectedGames, sharedMatchEnabled, scoringAccessMode });
+    logMatchFinalizationDiagnostics('pre-build', { selectedPlayers, selectedGames, existing, sharedMatchEnabled, scoringAccessMode, courseId: String(fd.get('courseId') || ''), teeId: String(fd.get('teeId') || ''), holeCount: Number(fd.get('holeCount')) === 9 ? 9 : 18, validationState });
+    if (!validationState.ready) return toastMatchSetupFailure(validationState);
     const teamScorers = collectTeamScorerAssignments(teamCount, teamNames, existing?.teamScorers || []);
     const match = {
       id: editingMatchId || uid(),
@@ -17393,7 +17589,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       hostDeviceId: existing?.hostDeviceId || existing?.sharedHostDeviceId || null,
       roundRecordSnapshot: existing?.roundRecordSnapshot || null,
       roundRecordSnapshotHistory: existing?.roundRecordSnapshotHistory || [],
-      pressConfig: normalizePressConfig(existing?.pressConfig),
+      pressConfig: normalizePressConfig(selectedGames.find(game => getGameEscalationCapability(game.key) === 'PRESS') || existing?.pressConfig || getNewMatchDefaultsFromPreferences().pressConfig),
       presses: existing?.presses || [],
       previousCompletedAt: existing?.previousCompletedAt || null,
       reopenedAt: existing?.reopenedAt || null,
@@ -17408,7 +17604,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       momentumPerspective: Number(existing?.momentumPerspective || 1) === 2 ? 2 : 1,
       activeScoreRole: existing?.activeScoreRole || (scoringAccessMode === 'assigned_players' ? 'assigned_player_scorer' : 'official_scorer'),
       activeScoreTeam: Math.min(teamCount, Math.max(1, Number(existing?.activeScoreTeam) || 1)),
-      storageMode: sharedMatchEnabled ? 'shared' : (existing?.storageMode === 'shared' ? 'shared' : 'local'),
+      storageMode: sharedMatchEnabled ? 'shared' : 'local',
       sharedMatchId: existing?.sharedMatchId || null,
       sharedMatchRef: existing?.sharedMatchRef || existing?.sharedMatchId || null,
       sharedOwnerUserId: existing?.sharedOwnerUserId || null,
@@ -17418,7 +17614,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       sharedDevices: existing?.sharedDevices || [],
       sharedParticipants: existing?.sharedParticipants || [],
       sharedPlayerAssignments: existing?.sharedPlayerAssignments || {},
-      cloudSyncState: existing?.cloudSyncState || (sharedMatchEnabled ? 'pending' : 'local-only'),
+      cloudSyncState: sharedMatchEnabled ? (existing?.cloudSyncState || 'pending') : 'local-only',
       lastCloudSyncAt: existing?.lastCloudSyncAt || null,
       notes: mergeRoundNoteText(existing?.roundRecapNotes, existing?.notes || state.notes || ''),
       roundRecap: existing?.roundRecapFinal || existing?.roundRecapGenerated || existing?.roundRecap || '',
@@ -17497,7 +17693,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       activateTab('score');
     }
     if (!editingMatchId) scheduleWeatherCaptureForMatch(match.id);
-    toast(editingMatchId ? 'Match setup saved.' : (sharedMatchEnabled ? 'Shared match setup saved. Assign devices, then tap Start Scoring.' : 'Match setup saved.'));
+    toast(wasEditingMatch ? 'Round setup updated.' : (sharedMatchEnabled ? 'Shared round started. Assign devices, then tap Start Scoring.' : 'Round started. Open Play to record scores.'));
     } catch (err) {
       logMatchFinalizationDiagnostics('exception', { error: err });
       const diagnosticEntry = recordAppError(err, 'Match Finalization');
@@ -17762,9 +17958,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
 
   document.getElementById('exportBtn').addEventListener('click', exportJson);
   document.getElementById('playerPreferencesForm')?.addEventListener('change', event => {
-    const input = event.target.closest('input[type="radio"][name]');
+    const input = event.target.closest('[name]');
     if (!input || !PLAYER_PREFERENCE_PATHS.has(input.name)) return;
-    const value = input.value === 'true' ? true : input.value === 'false' ? false : input.value;
+    const value = input.type === 'number' ? Number(input.value) : input.value === 'true' ? true : input.value === 'false' ? false : input.value;
     const saved = updatePlayerPreference(input.name, value);
     if (!saved) {
       renderPlayerPreferences();
@@ -17803,11 +17999,31 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   });
 
   window.addEventListener('beforeinstallprompt', event => {
-    event.preventDefault(); deferredPrompt = event; document.getElementById('installBtn').classList.remove('hidden');
+    event.preventDefault();
+    deferredPrompt = event;
+    updateInstallControl();
   });
-  document.getElementById('installBtn').addEventListener('click', async () => {
-    if (!deferredPrompt) return; deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; document.getElementById('installBtn').classList.add('hidden');
+  document.getElementById('installBtn')?.addEventListener('click', async () => {
+    if (deferredPrompt) {
+      const prompt = deferredPrompt;
+      await prompt.prompt();
+      await prompt.userChoice;
+      deferredPrompt = null;
+      updateInstallControl();
+      return;
+    }
+    if (isIphoneSafari() && !isAppInstalled()) openIosInstallInstructions();
   });
+  window.addEventListener('appinstalled', () => {
+    deferredPrompt = null;
+    document.getElementById('iosInstallDialog')?.classList.add('hidden');
+    updateInstallControl();
+  });
+  document.getElementById('closeIosInstallBtn')?.addEventListener('click', () => closeIosInstallInstructions());
+  document.getElementById('dismissIosInstallBtn')?.addEventListener('click', () => closeIosInstallInstructions());
+  document.getElementById('iosInstallDialog')?.addEventListener('click', event => { if (event.target?.id === 'iosInstallDialog') closeIosInstallInstructions(); });
+  window.matchMedia?.('(display-mode: standalone)')?.addEventListener?.('change', updateInstallControl);
+  updateInstallControl();
 
   const updateNowBtn = document.getElementById('updateNowBtn');
   if (updateNowBtn) updateNowBtn.addEventListener('click', () => { triggerAppUpdate(); });
@@ -17914,28 +18130,18 @@ function getServiceWorkerDiagnosticSnapshot() {
 
 
 
-function getMatchSetupValidationState({ fd = null, selectedPlayers = null, selectedGames = null, existing = null, sharedMatchEnabled = false, scoringAccessMode = '' } = {}) {
-  const form = document.getElementById('matchForm');
-  const formData = fd || (form ? new FormData(form) : null);
-  const active = getActiveMatch();
-  const teamCount = formData ? (Number(formData.get('teamCount')) || 1) : (Number(active?.teamCount) || 1);
-  const playersPerTeam = formData ? (Number(formData.get('playersPerTeam')) || 1) : (Number(active?.playersPerTeam) || 1);
-  const courseId = String(formData?.get('courseId') || active?.courseId || '').trim();
-  const players = Array.isArray(selectedPlayers) ? selectedPlayers : (form ? getSelectedPlayersFromSetup() : (Array.isArray(active?.players) ? active.players : []));
-  const games = Array.isArray(selectedGames) ? selectedGames : (form ? collectSelectedGames() : (active?.selectedGames || []));
-  const requestedHoleCount = formData ? (Number(formData.get('holeCount')) === 9 ? 9 : 18) : (active ? getRequestedHoleCount(active) : 0);
-  const teeId = String(formData?.get('teeId') || document.getElementById('matchTeeSelect')?.value || active?.teeId || players[0]?.teeId || '').trim();
-  const normalizedMode = normalizeScoringAccessMode(scoringAccessMode || formData?.get('scoreEntryMode') || active?.scoringAccessMode || 'single_device');
-  const isShared = !!sharedMatchEnabled || active?.storageMode === 'shared' || normalizedMode === 'assigned_players';
+function getMatchSetupValidationState({ draft = null, fd = null, selectedPlayers = null, selectedGames = null, sharedMatchEnabled = null, scoringAccessMode = '' } = {}) {
+  const source = draft || getAuthoritativeMatchSetupDraftState({ fd, selectedPlayers, selectedGames, sharedMatchEnabled, scoringAccessMode });
+  const { teamCount, playersPerTeam, requiredSlotCount, courseId, course, players, games, holeCount: requestedHoleCount, courseHolesLoaded, scoringAccessMode: normalizedMode, sharedMatchEnabled: isShared } = source;
   const missing = [];
   const warnings = [];
   const uniqueIds = new Set(players.map(p => p.playerId).filter(Boolean));
   if ((teamCount * playersPerTeam) > 32) missing.push('Limit is 32 total players');
-  if (!courseId) missing.push('Course selection');
-  if (!teeId && !players.some(p => p.teeId)) missing.push('Tee selection');
-  if (players.length < 1) missing.push('At least one player');
+  if (!courseId || !course) missing.push('Course selection');
+  if (players.length !== requiredSlotCount) missing.push(`All ${requiredSlotCount} player slots`);
   if (players.length !== uniqueIds.size) missing.push('Each player can only be selected once');
-  if (players.some(p => !p.teeId)) missing.push('A tee for each player');
+  if (players.some(p => !p.teeId || !getTee(courseId, p.teeId))) missing.push('A valid tee for each player');
+  if (!courseHolesLoaded) missing.push(`Valid ${requestedHoleCount}-hole course data`);
   if (![9, 18].includes(Number(requestedHoleCount))) missing.push('Selected holes');
   if (games.length > 5) missing.push('Select up to 5 gambling games');
   if (games.some(g => g.key === 'nassau') && teamCount !== 2) missing.push('Nassau requires exactly 2 teams');
@@ -17949,12 +18155,14 @@ function getMatchSetupValidationState({ fd = null, selectedPlayers = null, selec
     warnings,
     summary: {
       courseSelected: !!courseId,
-      teeSelected: !!teeId || players.every(p => p.teeId),
+      teeSelected: players.length === requiredSlotCount && players.every(p => !!p.teeId && !!getTee(courseId, p.teeId)),
+      courseHolesLoaded,
       playerCount: players.length,
+      requiredPlayerCount: requiredSlotCount,
       selectedHoles: requestedHoleCount,
       sharedMatch: !!isShared,
       assignmentsComplete: isShared ? (normalizedMode === 'assigned_players' ? 'Host default/managed' : 'N/A') : 'N/A',
-      roundStarted: matchHasStarted(active)
+      roundStarted: matchHasStarted(source.active)
     }
   };
 }
@@ -18393,6 +18601,11 @@ function installDyeLedgerLiveEngineAdapter() {
     getNewMatchDefaultsFromPreferences,
     mergeNewMatchDefaults,
     createBlankSetupDraft,
+    updatePlayerDraftSlot,
+    selectPlayerComboboxOption,
+    handlePlayerComboboxOptionPointerDown,
+    setSharedMatchDraftMode,
+    getMatchSetupValidationState,
     buildNextRoundDraft,
     getSmartScoreAdvanceDelay,
     shouldTriggerHapticConfirmation,
@@ -18414,6 +18627,8 @@ function installDyeLedgerLiveEngineAdapter() {
     getPressSegmentRange,
     getPressParentReference,
     getPressEligibility,
+    getRePressEligibility,
+    getOriginalPressWager,
     buildPressRecordDraft,
     createPressFromConfirmation,
     getPressPromptOpportunity,

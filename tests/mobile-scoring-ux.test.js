@@ -187,11 +187,11 @@ test('Quick Scoreboard inserts collapsed Score Distribution in order and preserv
   assert.equal(JSON.stringify(fixture.match.roundRecordSnapshot), before);
 });
 
-test('responsive source paths contain internal scrolling, width-fit momentum, desktop summary reuse, and canonical v4 logo', () => {
+test('responsive source paths contain internal scrolling, width-fit momentum, desktop summary reuse, and canonical branding', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
   const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
-  assert.match(html, /src="\.\/apple-touch-icon-v4\.png" alt="The Dye Ledger"/);
+  assert.match(html, /src="\.\/branding\/app-icon-192\.png" alt="The Dye Ledger"/);
   assert.match(html, /id="playMatchSummary"[^>]*aria-label="Match Summary"/);
   assert.match(css, /\.quick-scroll-panel\{[^}]*overflow-x:auto/);
   assert.match(css, /\.quick-scoreboard-modal\{[^}]*overflow-x:hidden/s);
@@ -212,8 +212,8 @@ test('Quick Scoreboard reuses the native bounded scorecard scroller and Play Gre
   assert.match(css, /\.scorecard-wrap\{position:relative;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;/);
   assert.match(css, /@media \(max-width:760px\)\{\.scorecard-table\{min-width:920px\}\}/);
   assert.match(css, /\.quick-classic-scorecard>\.scorecard-wrap\{width:calc\(100% - 24px\);max-width:calc\(100% - 24px\);/);
-  assert.match(html, /style\.css\?v=30\.3\.68&amp;rev=1/);
-  assert.match(app, /cacheName: 'the-dye-ledger-v30\.3\.68'/);
+  assert.match(html, /style\.css\?v=30\.3\.69&amp;rev=1/);
+  assert.match(app, /cacheName: 'the-dye-ledger-v30\.3\.69'/);
   assert.match(css, /#greeniesEntryWrap \.greenies-check\{min-height:44px;padding:4px 9px;gap:7px\}/);
   assert.match(css, /#greeniesEntryWrap \.greenies-check input\[type="checkbox"\]\{width:20px;height:20px;min-height:20px;padding:0\}/);
   assert.match(html, /id="greeniesEntryWrap" class="top-gap hidden"/);

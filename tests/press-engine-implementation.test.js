@@ -160,6 +160,49 @@ test('Player Score Summary is compact, stable-ID keyed, and precedes the scoreca
   assert.equal(JSON.stringify(f.match), before);
 });
 
+test('Maximum Presses is enforced across the entire round and counts original Presses plus Re-Presses', () => {
+  const f = fixture({ key: 'team_match', basis: 'net', stake: 10, pressesEnabled: true, pressAvailabilityRule: 'FUTURE_HOLES_REMAIN', maxPressesPerRound: 4, declaringSideRule: 'EITHER_SIDE' }, 5);
+  f.match.presses = [
+    { pressId: 'front-1', parentGameId: 'nassau_net', parentSegmentId: 'nassau_net:front', parentSegmentType: 'FRONT', rootGameId: 'nassau_net', startingHole: 2, endingHole: 9, outcomeGameKey: 'nassau', status: 'ACTIVE' },
+    { pressId: 'back-1', parentGameId: 'nassau_net', parentSegmentId: 'nassau_net:back', parentSegmentType: 'BACK', rootGameId: 'nassau_net', startingHole: 10, endingHole: 18, outcomeGameKey: 'nassau', status: 'ACTIVE' },
+    { pressId: 'overall-1', parentGameId: 'team_match', parentSegmentId: 'team_match:overall', parentSegmentType: 'OVERALL', rootGameId: 'team_match', startingHole: 3, endingHole: 18, outcomeGameKey: 'team_match', status: 'ACTIVE' },
+    { pressId: 'overall-repress', parentGameId: 'overall-1', parentSegmentId: 'team_match:overall', parentSegmentType: 'OVERALL', rootGameId: 'team_match', pressDepth: 2, startingHole: 4, endingHole: 18, outcomeGameKey: 'team_match', status: 'ACTIVE' },
+  ].map(row => f.engine.normalizePressRecord({ ...row, wagerAmount: 10 }, f.match));
+  const eligibility = f.engine.getPressEligibility(f.match, f.metrics, 'OVERALL', { gameKey: 'team_match', pressConfig: f.match.selectedGames[0], currentPosition: 5, declaringSideId: '2', isHost: true });
+  assert.equal(eligibility.currentPressCount, 4);
+  assert.equal(eligibility.reasonCode, 'PRESS_LIMIT_REACHED');
+  assert.match(eligibility.reasonText, /entire round/i);
+});
+
+test('Maximum Re-Presses limits each Press chain without creating an additive wager pool', () => {
+  const f = fixture({ key: 'team_match', basis: 'net', stake: 10, pressesEnabled: true, pressAvailabilityRule: 'FUTURE_HOLES_REMAIN', maxPressesPerRound: 4, maxRePresses: 2, declaringSideRule: 'EITHER_SIDE' }, 5);
+  const root = f.engine.buildPressRecordDraft(f.match, f.metrics, 'OVERALL', { gameKey: 'team_match', pressConfig: f.match.selectedGames[0], currentPosition: 2, declaringSideId: '2' });
+  assert.ok(root);
+  f.match.presses = [root];
+  const first = f.engine.buildPressRecordDraft(f.match, f.metrics, 'OVERALL', { gameKey: 'team_match', parentPressId: root.pressId, pressConfig: f.match.selectedGames[0], currentPosition: 5, declaringSideId: '2' });
+  assert.equal(first.pressDepth, 2);
+  f.match.presses.push(first);
+  f.match.players.forEach((player, index) => { player.scores[5].gross = index < 2 ? 4 : 5; player.scores[6].gross = index < 2 ? 4 : 5; });
+  f.metrics = f.engine.computeMatchMetrics(f.match);
+  const second = f.engine.buildPressRecordDraft(f.match, f.metrics, 'OVERALL', { gameKey: 'team_match', parentPressId: first.pressId, pressConfig: f.match.selectedGames[0], currentPosition: 7, declaringSideId: '2' });
+  assert.equal(second.pressDepth, 3);
+  f.match.presses.push(second);
+  const blocked = f.engine.getRePressEligibility(f.match, f.metrics, second, { gameKey: 'team_match', pressConfig: f.match.selectedGames[0], currentPosition: 7, declaringSideId: '2', isHost: true });
+  assert.equal(blocked.reasonCode, 'RE_PRESS_LIMIT_REACHED');
+  assert.equal(f.match.presses.length, 3);
+});
+
+test('Press chooser exposes root and Re-Press opportunities without creating a wager', () => {
+  const f = fixture({ key: 'team_match', basis: 'net', stake: 10, pressesEnabled: true, pressAvailabilityRule: 'FUTURE_HOLES_REMAIN', maxPressesPerRound: 4, maxRePresses: 2, declaringSideRule: 'EITHER_SIDE' }, 5);
+  const root = f.engine.buildPressRecordDraft(f.match, f.metrics, 'OVERALL', { gameKey: 'team_match', pressConfig: f.match.selectedGames[0], currentPosition: 2, declaringSideId: '2' });
+  f.match.presses = [root];
+  const before = JSON.stringify(f.match.presses);
+  const opportunities = f.engine.getCurrentPressOpportunities(f.match, f.metrics, { viewedPosition: 6, isHost: true });
+  assert.ok(opportunities.some(row => !row.parentPressId));
+  assert.ok(opportunities.some(row => row.parentPressId === root.pressId));
+  assert.equal(JSON.stringify(f.match.presses), before);
+});
+
 test('shared player summary reuses trusted Postable values, stable ranking, accessible compact markup, and frozen data', () => {
   const active = fixture(undefined, 5);
   active.metrics.players[0].player.name = 'Alexandria Very Long Duplicate Player Name';

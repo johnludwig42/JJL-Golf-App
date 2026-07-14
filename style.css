@@ -2246,6 +2246,161 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
   }
 }
 
+/* v30.3.69 final Product Acceptance UI remediation */
+.percentage-input{display:flex;align-items:center;gap:8px;max-width:220px;font-weight:800}
+.percentage-input input{min-width:0;flex:1}
+.player-assignment-slot-heading{display:flex;align-items:baseline;gap:8px;text-align:left}
+.player-assignment-slot-heading strong{font-size:1rem;font-weight:800;color:var(--text)}
+.player-assignment-slot-heading span{font-size:.78rem;color:var(--muted)}
+.player-combobox-shell{position:relative;min-width:0}
+.player-combobox-control{position:relative;display:flex;align-items:center}
+.player-combobox-control input{width:100%;padding-right:44px;min-height:46px}
+.player-combobox-clear{position:absolute;right:5px;width:36px;min-width:36px;height:36px;padding:0;border-radius:10px;background:transparent;color:var(--muted);box-shadow:none}
+.player-combobox-list{position:absolute;z-index:45;top:calc(100% + 4px);left:0;right:0;max-height:240px;overflow:auto;padding:5px;border:1px solid var(--border);border-radius:12px;background:#fff;box-shadow:0 12px 28px rgba(20,44,31,.16)}
+.player-combobox-option{display:flex;width:100%;min-height:44px;align-items:center;justify-content:flex-start;padding:9px 10px;border:0;border-radius:9px;background:#fff;color:var(--text);box-shadow:none;text-align:left}
+.player-combobox-option:hover,.player-combobox-option.is-active{background:#e8f2ec;color:#0b5d3b}
+.player-combobox-empty{padding:10px}
+.handicap-preview-cardline{overflow:hidden}
+.handicap-preview-meta,#setup .persistent-preview-card .handicap-preview-meta{display:grid;grid-template-columns:minmax(100px,1.8fr) repeat(4,minmax(42px,.65fr));align-items:stretch;gap:6px;min-width:0;white-space:normal}
+.handicap-preview-meta>div,#setup .persistent-preview-card .handicap-preview-meta>div{min-width:0;white-space:normal}
+.handicap-preview-description{text-align:left}
+.handicap-preview-description strong,.handicap-preview-description small{display:block;overflow-wrap:anywhere}
+.handicap-preview-description small{margin-top:2px;color:var(--muted);font-size:.72rem}
+.handicap-preview-number{text-align:center}
+.handicap-preview-number span,.handicap-preview-number strong{text-align:center}
+.setup-start-round-card{display:block;padding:16px 18px;background:#fff;color:var(--text);border:1px solid var(--border);box-shadow:0 8px 22px rgba(20,44,31,.08)}
+.setup-start-round-card .preview-card-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;align-items:stretch}
+.setup-start-round-card .preview-card-actions .setup-action-btn,.setup-start-round-card .preview-card-actions .setup-cancel-btn{width:100%;min-height:50px;border-radius:12px;font-size:1rem;font-weight:800}
+.setup-start-round-card .setup-action-btn{background:#0b7a45!important;color:#fff!important;border-color:#0b7a45!important;box-shadow:0 8px 18px rgba(11,122,69,.2)!important}
+.setup-start-round-card .setup-cancel-btn{background:#fff;color:#0b5d3b;border:1px solid rgba(11,93,59,.35);box-shadow:none}
+.shared-title-sync-details{position:relative}
+.shared-title-sync-details>summary{cursor:pointer;list-style:none}
+.shared-title-sync-details>summary::-webkit-details-marker{display:none}
+.shared-title-sync-diagnostics{position:absolute;z-index:55;top:calc(100% + 7px);right:0;width:min(560px,calc(100vw - 32px));padding:12px;border:1px solid var(--border);border-radius:14px;background:#fff;box-shadow:0 14px 32px rgba(20,44,31,.18)}
+.library-section-disclosure>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;list-style:none;text-align:left}
+.library-section-disclosure>summary::-webkit-details-marker{display:none}
+.library-section-disclosure>summary h2{margin:0;font-size:1.15rem;font-weight:800;text-align:left;color:var(--text)}
+.library-section-disclosure>summary::after{content:'+';display:grid;place-items:center;width:28px;height:28px;flex:0 0 28px;border-radius:999px;background:#e8f2ec;color:#0b5d3b;font-size:1.15rem;font-weight:800}
+.library-section-disclosure[open]>summary::after{content:'−'}
+#libraryRoundsSection{order:1}
+#libraryCoursesSection{order:2}
+#courses>.library-course-actions-card{order:3}
+#courseEditorCard{order:4}
+#teeEditorCard{order:5}
+#libraryPlayersSection{order:6}
+#sessionSummaryCard{order:7}
+@media (max-width:560px){
+  .handicap-preview-meta,#setup .persistent-preview-card .handicap-preview-meta{grid-template-columns:minmax(86px,1.7fr) repeat(4,minmax(38px,.6fr));gap:3px;font-size:10px}
+  .handicap-preview-meta .tiny,#setup .persistent-preview-card .handicap-preview-meta .tiny{font-size:8px;white-space:normal}
+  .setup-start-round-card .preview-card-actions{grid-template-columns:1fr}
+  .shared-title-sync-diagnostics{position:fixed;top:calc(var(--app-chrome-height,100px) + 8px);left:10px;right:10px;width:auto;max-height:70vh;overflow:auto}
+}
+.game-picker-group{display:grid;gap:8px;align-content:start;padding:10px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.68)}
+.game-picker-group-options{display:grid;gap:8px}
+.game-picker-group .section-subhead{font-weight:800;color:var(--text)}
+.preference-field-label{font-weight:750;color:var(--text)}
+
+/* v30.3.69 — product experience polish */
+.section-kicker{
+  margin-bottom:4px;
+  color:var(--accent,#0b5d3b);
+  font-size:.7rem;
+  font-weight:850;
+  letter-spacing:.09em;
+  text-transform:uppercase;
+}
+.setup-round-hero{
+  padding:clamp(16px,3vw,24px)!important;
+  border:1px solid rgba(11,93,59,.22)!important;
+  border-left:5px solid var(--accent,#0b5d3b)!important;
+  background:linear-gradient(135deg,rgba(232,245,237,.98),rgba(255,255,255,.92))!important;
+  box-shadow:0 12px 30px rgba(11,93,59,.08)!important;
+}
+.setup-round-hero .section-label{font-size:clamp(1.18rem,2.4vw,1.5rem);}
+.setup-round-status,.readiness-count{
+  display:inline-flex;
+  align-items:center;
+  min-height:28px;
+  padding:5px 10px;
+  border-radius:999px;
+  background:#eef2f0;
+  color:#526159;
+  font-size:.76rem;
+  font-weight:800;
+  white-space:nowrap;
+}
+.setup-round-status[data-status="ready"],.readiness-count{background:#dff3e6;color:#11633b;}
+.setup-round-status[data-status="active"]{background:#fff0cc;color:#8a5400;}
+.setup-round-hero .setup-summary-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:0;overflow:hidden;border:1px solid rgba(11,93,59,.12);border-radius:14px;background:rgba(255,255,255,.72);}
+.setup-round-hero .setup-summary-row{display:grid;grid-template-columns:minmax(72px,.7fr) minmax(0,1.3fr);padding:10px 12px;border-bottom:1px solid rgba(11,93,59,.1);}
+.setup-round-hero .setup-summary-row:nth-last-child(-n+2){border-bottom:0;}
+.setup-round-hero .setup-summary-row strong{text-align:left;overflow-wrap:anywhere;}
+.match-templates-card{order:1;}
+.setup-advanced-card{order:2;}
+.round-readiness-card{order:3;}
+.setup-start-round-card{order:4;}
+.setup-advanced-card>summary,.setup-supporting-details>summary,.library-maintenance-card>summary,.library-import-details>summary{
+  cursor:pointer;
+  list-style:none;
+}
+.setup-advanced-card>summary::-webkit-details-marker,.setup-supporting-details>summary::-webkit-details-marker,.library-maintenance-card>summary::-webkit-details-marker,.library-import-details>summary::-webkit-details-marker{display:none;}
+.setup-advanced-card>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.setup-advanced-card>summary::after,.setup-supporting-details>summary::after,.library-maintenance-card>summary::after,.library-import-details>summary::after{content:'+';display:inline-grid;place-items:center;flex:0 0 28px;width:28px;height:28px;border-radius:999px;background:#e8f2ec;color:#0b5d3b;font-size:1.2rem;font-weight:800;}
+.setup-advanced-card[open]>summary::after,.setup-supporting-details[open]>summary::after,.library-maintenance-card[open]>summary::after,.library-import-details[open]>summary::after{content:'−';}
+.setup-advanced-card>summary .tiny,.library-maintenance-card>summary .tiny{display:block;margin-top:3px;font-weight:500;}
+.advanced-options-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.advanced-option-group{min-width:0;padding:14px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.6);}
+.setup-supporting-details{padding:12px 14px!important;border-left:0!important;background:rgba(248,250,249,.8)!important;box-shadow:none!important;}
+.setup-supporting-details>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:800;}
+.setup-start-round-card{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 20px;border-radius:18px;background:#0b5d3b;color:#fff;box-shadow:0 14px 28px rgba(11,93,59,.2);}
+.setup-start-round-card .setup-round-actions-heading{margin:0;color:#fff;font-size:clamp(1.25rem,2.5vw,1.5rem);font-weight:850;line-height:1.2;text-align:left;}
+.setup-start-round-card .tiny{color:rgba(255,255,255,.78);}
+.setup-start-round-card .actions{margin-top:0;}
+.setup-start-round-card .setup-action-btn{min-height:48px;background:#fff!important;color:#0b5d3b!important;border-color:#fff!important;box-shadow:none!important;}
+.round-readiness-card{border-left:4px solid #d49a28!important;}
+.round-readiness-status{padding:0 0 12px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent!important;}
+.readiness-check.warn{padding:11px 12px;border-color:rgba(180,83,9,.24);background:#fff8e8;}
+.readiness-check.warn>span{display:grid;place-items:center;flex:0 0 22px;width:22px;height:22px;border-radius:999px;background:#f7d99b;color:#74420a;}
+.readiness-complete-details{padding:9px 11px;border:1px solid rgba(22,163,74,.16);border-radius:12px;background:rgba(22,163,74,.05);}
+.readiness-complete-details>summary{cursor:pointer;color:#17633d;font-size:.82rem;font-weight:800;}
+.readiness-complete-details .readiness-check{padding:4px 2px;border:0;background:transparent;}
+
+#courses.panel.active{display:flex;flex-direction:column;gap:14px;}
+#courses.panel.active>.card,#courses.panel.active>details{margin:0;}
+#courses>:nth-child(1){order:0;}
+#courses>:nth-child(2){order:1;}
+#courses>.library-course-card:not(.library-course-actions-card):not(.library-maintenance-card){order:2;}
+#courses>.library-course-actions-card{order:3;}
+#courses>#courseEditorCard{order:4;}
+#courses>#teeEditorCard{order:5;}
+#courses>:nth-child(5),#courses>:nth-child(6){order:6;}
+#courses>:nth-child(9){order:7;}
+#courses>:nth-child(10){order:8;}
+.library-course-card{border-color:rgba(11,93,59,.18)!important;}
+.library-course-card:not(.library-maintenance-card){box-shadow:0 8px 24px rgba(20,44,31,.06);}
+.library-course-actions-card{background:linear-gradient(180deg,#f7fbf8,#fff);}
+.library-course-actions-card>h2{margin-bottom:2px;}
+#libraryCoursesSection>.library-course-card{margin-top:14px;}
+.library-maintenance-card{padding:0!important;background:#fbfcfb!important;box-shadow:none!important;}
+.library-maintenance-card>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;}
+.library-maintenance-card>summary h2{margin:0;font-size:1rem;}
+.library-maintenance-card>form{padding:0 16px 16px;}
+.library-import-details{padding:13px 14px;border:1px solid var(--border);border-radius:14px;background:#fff;}
+.library-import-details>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;font-weight:850;}
+.install-instructions-modal{width:min(420px,100%);}
+.install-instruction-steps{display:grid;gap:10px;padding:0;list-style:none;}
+.install-instruction-steps li{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--border);border-radius:14px;background:#f8faf9;}
+.install-step-icon{display:grid;place-items:center;flex:0 0 30px;width:30px;height:30px;border-radius:999px;background:#0b5d3b;color:#fff;font-weight:850;}
+
+@media (max-width:700px){
+  .setup-round-hero .setup-summary-list,.advanced-options-grid{grid-template-columns:1fr;}
+  .setup-round-hero .setup-summary-row,.setup-round-hero .setup-summary-row:nth-last-child(-n+2){border-bottom:1px solid rgba(11,93,59,.1);}
+  .setup-round-hero .setup-summary-row:last-child{border-bottom:0;}
+  .setup-start-round-card{align-items:stretch;flex-direction:column;}
+  .setup-start-round-card .actions,.setup-start-round-card button{width:100%;}
+  .library-course-actions{align-items:stretch;justify-content:stretch;}
+}
+
 /* v30.3.64 — focused mobile scoring, catch-up, momentum, and Quick Scoreboard polish */
 .catch-up-scoring-bar{
   margin-top:10px;padding:10px 11px;border:1px solid rgba(154,91,0,.28);border-radius:13px;
@@ -2739,6 +2894,9 @@ body.printing-scorecard .nine-point-scorecard-table td:nth-child(2){
 
 /* v28.12 Game Setup UX flow */
 .setup-flow-section { margin-bottom: -0.25rem; }
+.setup-major-heading{display:block;margin:0 0 10px;text-align:left;color:var(--text);font-size:clamp(1.25rem,2.2vw,1.5rem);font-weight:800;line-height:1.2;letter-spacing:-.01em}
+.setup-section-heading{display:block;margin:0 0 4px;text-align:left;color:var(--text);font-size:clamp(1.08rem,1.8vw,1.25rem);font-weight:800;line-height:1.25}
+.setup-advanced-card>summary .setup-major-heading{margin:0}
 .setup-summary-card { border-left: 4px solid var(--accent, #2f6f4e); }
 .setup-summary-list { display: grid; gap: 0.35rem; }
 .setup-summary-row { display: flex; justify-content: space-between; gap: 0.75rem; align-items: baseline; }

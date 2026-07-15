@@ -1,11 +1,23 @@
 const DYE_LEDGER_ADAPTER_MODE = typeof window !== 'undefined' && !!window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__;
 const STORAGE_KEY = 'the-dye-ledger-v20';
+const STATE_BACKUP_STORAGE_KEY = `${STORAGE_KEY}:last-known-good`;
+const FINISH_RECOVERY_STORAGE_KEY = `${STORAGE_KEY}:finish-recovery`;
+const SETUP_DRAFT_STORAGE_KEY = `${STORAGE_KEY}:setup-draft`;
+const STORAGE_FAILURE_MESSAGE = 'We couldn\'t save this change locally. Your current screen is still open—please keep the app open and try again.';
+const localPersistenceDiagnostics = {
+  storageAvailable: true,
+  loadedFrom: 'none',
+  recoveryStatus: 'none',
+  lastSuccessfulLocalSave: null,
+  lastFailedLocalSave: null,
+  lastFailureMessage: '',
+};
 const BUILD_INFO = {
-  version: 'v30.3.69',
-  versionNumber: '30.3.69',
-  cacheName: 'the-dye-ledger-v30.3.69',
+  version: 'v30.3.70',
+  versionNumber: '30.3.70',
+  cacheName: 'the-dye-ledger-v30.3.70',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Player Preferences Foundation'
+  buildLabel: 'Production Readiness & Stability'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -2387,9 +2399,23 @@ function getPlayerByLookupLabel(label = '', candidates = null) {
   const needle = String(label || '').trim().toLowerCase();
   const pool = Array.isArray(candidates) ? candidates : state.players;
   if (!needle) return null;
-  return pool.find(p => getPlayerLookupLabel(p).toLowerCase() === needle)
-    || pool.find(p => String(p.name || '').trim().toLowerCase() === needle)
-    || null;
+  const exactLabel = pool.find(p => getPlayerLookupLabel(p).toLowerCase() === needle);
+  if (exactLabel) return exactLabel;
+  const exactNames = pool.filter(p => String(p.name || '').trim().toLowerCase() === needle);
+  return exactNames.length === 1 ? exactNames[0] : null;
+}
+
+function getSelectablePlayersForDraftSlot(players = [], draftRows = [], slot = -1) {
+  const selectedElsewhere = new Set((draftRows || [])
+    .filter((row, index) => index !== Number(slot) && row?.playerId)
+    .map(row => String(row.playerId)));
+  return (players || []).filter(player => !selectedElsewhere.has(String(player.id)));
+}
+
+function getPlayerComboboxMatches(query = '', candidates = [], currentPlayer = null) {
+  const normalized = String(query || '').trim().toLowerCase();
+  const effectiveQuery = currentPlayer && normalized === getPlayerLookupLabel(currentPlayer).toLowerCase() ? '' : normalized;
+  return (candidates || []).filter(player => !effectiveQuery || getPlayerLookupLabel(player).toLowerCase().includes(effectiveQuery));
 }
 function getCourseSearchValue() {
   return String(uiState.courseSearch || document.getElementById('coursesSearchInput')?.value || '').trim().toLowerCase();
@@ -2438,30 +2464,221 @@ function setCourseExpanded(courseId, expanded) {
   if (expanded) uiState.expandedCourses.add(courseId);
   else uiState.expandedCourses.delete(courseId);
 }
-function loadState() {
-  const fallback = { players: [], playerRegistry: { schemaVersion: 1, players: [] }, savedRosters: { schemaVersion: 1, rosters: [] }, courses: [], matches: [], activeMatchId: null, notes: '', sharedMatchIds: [], lastOpenedSharedMatchId: null };
+function getEmptyPersistentState() {
+  return { players: [], playerRegistry: { schemaVersion: 1, players: [] }, savedRosters: { schemaVersion: 1, rosters: [] }, courses: [], matches: [], activeMatchId: null, notes: '', sharedMatchIds: [], lastOpenedSharedMatchId: null };
+}
+
+function getStorageErrorMessage(error) {
+  if (!error) return 'Storage is unavailable.';
+  if (error?.name === 'QuotaExceededError') return 'Local storage quota was exceeded.';
+  return String(error?.message || error || 'Storage is unavailable.').slice(0, 240);
+}
+
+function readJsonStorageRecord(storage, key) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-      || localStorage.getItem('golf-matchbook-v9')
-      || localStorage.getItem('golf-matchbook-v8')
-      || localStorage.getItem('golf-matchbook-v7')
-      || localStorage.getItem('golf-matchbook-v6')
-      || localStorage.getItem('golf-matchbook-v5')
-      || localStorage.getItem('golf-matchbook-v4');
-    const parsed = raw ? JSON.parse(raw) : fallback;
-    parsed.matches = Array.isArray(parsed.matches) ? parsed.matches : [];
-    parsed.activeMatchId = parsed.activeMatchId || null;
-    parsed.notes = typeof parsed.notes === 'string' ? parsed.notes : '';
-    parsed.sharedMatchIds = Array.isArray(parsed.sharedMatchIds) ? parsed.sharedMatchIds : [];
-    parsed.lastOpenedSharedMatchId = typeof parsed.lastOpenedSharedMatchId === 'string' && parsed.lastOpenedSharedMatchId.trim() ? parsed.lastOpenedSharedMatchId.trim() : null;
-    return parsed;
-  } catch {
-    return fallback;
+    const raw = storage.getItem(key);
+    if (!raw) return { ok: true, missing: true, value: null, raw: null };
+    try {
+      return { ok: true, missing: false, value: JSON.parse(raw), raw };
+    } catch (error) {
+      return { ok: false, missing: false, malformed: true, value: null, raw, error, errorMessage: getStorageErrorMessage(error) };
+    }
+  } catch (error) {
+    return { ok: false, missing: false, unavailable: true, value: null, raw: null, error, errorMessage: getStorageErrorMessage(error) };
   }
 }
+
+function sanitizePersistentState(input) {
+  const fallback = getEmptyPersistentState();
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return fallback;
+  const clean = { ...input };
+  clean.players = (Array.isArray(input.players) ? input.players : []).filter(row => row && typeof row === 'object' && !Array.isArray(row));
+  clean.courses = (Array.isArray(input.courses) ? input.courses : []).filter(row => row && typeof row === 'object' && !Array.isArray(row)).map(course => ({
+    ...course,
+    tees: (Array.isArray(course.tees) ? course.tees : []).filter(tee => tee && typeof tee === 'object' && !Array.isArray(tee)),
+  }));
+  const matches = (Array.isArray(input.matches) ? input.matches : []).filter(row => row && typeof row === 'object' && !Array.isArray(row)).map(match => ({
+    ...match,
+    players: (Array.isArray(match.players) ? match.players : []).filter(player => player && typeof player === 'object' && !Array.isArray(player)),
+  }));
+  const deduped = new Map();
+  const withoutId = [];
+  matches.forEach(match => {
+    const id = String(match.id || '').trim();
+    if (id) deduped.set(id, match);
+    else withoutId.push(match);
+  });
+  clean.matches = [...deduped.values(), ...withoutId];
+  clean.playerRegistry = input.playerRegistry && typeof input.playerRegistry === 'object' ? input.playerRegistry : fallback.playerRegistry;
+  clean.savedRosters = input.savedRosters && typeof input.savedRosters === 'object' ? input.savedRosters : fallback.savedRosters;
+  clean.activeMatchId = typeof input.activeMatchId === 'string' && input.activeMatchId.trim() ? input.activeMatchId.trim() : null;
+  if (clean.activeMatchId && !clean.matches.some(match => String(match.id || '') === clean.activeMatchId)) clean.activeMatchId = null;
+  clean.notes = typeof input.notes === 'string' ? input.notes : '';
+  clean.sharedMatchIds = Array.isArray(input.sharedMatchIds) ? [...new Set(input.sharedMatchIds.filter(Boolean).map(String))] : [];
+  clean.lastOpenedSharedMatchId = typeof input.lastOpenedSharedMatchId === 'string' && input.lastOpenedSharedMatchId.trim() ? input.lastOpenedSharedMatchId.trim() : null;
+  return clean;
+}
+
+function reconcileInterruptedFinishState(loadedState, marker) {
+  if (!marker || typeof marker !== 'object' || !marker.roundId) return { state: loadedState, status: 'none' };
+  const match = (loadedState.matches || []).find(row => String(row.id || '') === String(marker.roundId));
+  const completedDurably = !!match && match.status === 'complete' && !!match.completedAt && (marker.snapshotRequired !== true || isFrozenRoundRecord(match.roundRecordSnapshot));
+  return { state: loadedState, status: completedDurably ? 'completed-confirmed' : 'active-rollback' };
+}
+
+function loadStateFromStorage(storage = localStorage) {
+  const sources = [
+    [STORAGE_KEY, 'primary'],
+    [STATE_BACKUP_STORAGE_KEY, 'last-known-good'],
+    ['golf-matchbook-v9', 'legacy-v9'],
+    ['golf-matchbook-v8', 'legacy-v8'],
+    ['golf-matchbook-v7', 'legacy-v7'],
+    ['golf-matchbook-v6', 'legacy-v6'],
+    ['golf-matchbook-v5', 'legacy-v5'],
+    ['golf-matchbook-v4', 'legacy-v4'],
+  ];
+  let selected = null;
+  let sawUnavailable = false;
+  for (const [key, label] of sources) {
+    const result = readJsonStorageRecord(storage, key);
+    if (result.unavailable) sawUnavailable = true;
+    if (result.ok && !result.missing && result.value && typeof result.value === 'object' && !Array.isArray(result.value)) {
+      selected = { value: result.value, label };
+      break;
+    }
+  }
+  localPersistenceDiagnostics.storageAvailable = !sawUnavailable;
+  localPersistenceDiagnostics.loadedFrom = selected?.label || 'empty';
+  let loaded = sanitizePersistentState(selected?.value || getEmptyPersistentState());
+  const markerResult = readJsonStorageRecord(storage, FINISH_RECOVERY_STORAGE_KEY);
+  if (markerResult.ok && !markerResult.missing) {
+    const recovery = reconcileInterruptedFinishState(loaded, markerResult.value);
+    loaded = recovery.state;
+    localPersistenceDiagnostics.recoveryStatus = recovery.status;
+    try { storage.removeItem(FINISH_RECOVERY_STORAGE_KEY); } catch {}
+  } else {
+    localPersistenceDiagnostics.recoveryStatus = 'none';
+  }
+  return loaded;
+}
+
+function persistStateSnapshot(snapshot, storage = localStorage, options = {}) {
+  const savedAt = options.savedAt || new Date().toISOString();
+  let payload;
+  try {
+    payload = JSON.stringify(snapshot);
+  } catch (error) {
+    return { ok: false, savedAt, error, errorMessage: getStorageErrorMessage(error), stage: 'serialize' };
+  }
+  try {
+    storage.setItem(STORAGE_KEY, payload);
+  } catch (error) {
+    return { ok: false, savedAt, error, errorMessage: getStorageErrorMessage(error), stage: 'primary-write' };
+  }
+  let backupError = null;
+  if (options.writeBackup !== false) {
+    try { storage.setItem(STATE_BACKUP_STORAGE_KEY, payload); } catch (error) { backupError = getStorageErrorMessage(error); }
+  }
+  return { ok: true, savedAt, backupError };
+}
+
+function writeJsonStorageRecord(storage, key, value) {
+  try {
+    storage.setItem(key, JSON.stringify(value));
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error, errorMessage: getStorageErrorMessage(error) };
+  }
+}
+
+function sanitizeSetupDraft(input, preferences = getPlayerPreferences()) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const base = createBlankSetupDraft(preferences);
+  const draft = {
+    ...base,
+    ...input,
+    id: typeof input.id === 'string' && input.id ? input.id : base.id,
+    date: typeof input.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.date) ? input.date : base.date,
+    name: typeof input.name === 'string' ? input.name.slice(0, 120) : base.name,
+    courseId: typeof input.courseId === 'string' ? input.courseId : '',
+    teeId: typeof input.teeId === 'string' ? input.teeId : '',
+    courseSnapshot: input.courseSnapshot && typeof input.courseSnapshot === 'object' && !Array.isArray(input.courseSnapshot) ? clonePlain(input.courseSnapshot) : null,
+    allowance: Number.isFinite(Number(input.allowance)) ? Math.max(0, Math.min(100, Number(input.allowance))) : base.allowance,
+    holeCount: Number(input.holeCount) === 9 ? 9 : 18,
+    nineHoleSegment: ['front', 'back', 'custom'].includes(input.nineHoleSegment) ? input.nineHoleSegment : 'front',
+    customStartHole: Math.max(1, Math.min(10, Number(input.customStartHole) || 1)),
+    teamCount: Math.max(1, Math.min(8, Number(input.teamCount) || base.teamCount)),
+    playersPerTeam: Math.max(1, Math.min(4, Number(input.playersPerTeam) || base.playersPerTeam)),
+    teamNames: (Array.isArray(input.teamNames) ? input.teamNames : []).map(value => String(value || '').slice(0, 25)),
+    scoringAccessMode: normalizeScoringAccessMode(input.scoringAccessMode || input.scoreEntryMode || base.scoringAccessMode),
+    officialScorerName: String(input.officialScorerName || base.officialScorerName).slice(0, 80),
+    statTrackingEnabled: typeof input.statTrackingEnabled === 'boolean' ? input.statTrackingEnabled : base.statTrackingEnabled,
+    smartScoreAdvanceEnabled: typeof input.smartScoreAdvanceEnabled === 'boolean' ? input.smartScoreAdvanceEnabled : base.smartScoreAdvanceEnabled,
+    smartScoreAdvancePreset: normalizeSmartScoreAdvancePreset(input.smartScoreAdvancePreset || base.smartScoreAdvancePreset),
+    statTrackingPlayerIds: Array.isArray(input.statTrackingPlayerIds) ? input.statTrackingPlayerIds.map(String) : [],
+    selectedGames: (Array.isArray(input.selectedGames) ? input.selectedGames : []).filter(game => game && typeof game === 'object' && !Array.isArray(game)).map(clonePlain),
+    featuredCompetition: normalizeFeaturedCompetition(input.featuredCompetition || 'auto'),
+    pressConfig: normalizePressConfig(input.pressConfig || base.pressConfig),
+    players: (Array.isArray(input.players) ? input.players : []).filter(player => player && typeof player === 'object' && !Array.isArray(player)).map((player, index) => ({
+      playerId: String(player.playerId || ''),
+      team: Math.max(1, Number(player.team) || 1),
+      slot: Number.isFinite(Number(player.slot)) ? Number(player.slot) : index,
+      teeId: String(player.teeId || ''),
+    })).filter(player => player.playerId),
+    storageMode: input.storageMode === 'shared' ? 'shared' : 'local',
+    roundContext: normalizeRoundContext(input.roundContext || {}),
+    status: 'active',
+    completedAt: null,
+    roundRecordSnapshot: null,
+    roundRecordSnapshotHistory: [],
+    presses: [],
+  };
+  draft.scoreEntryMode = getLegacyScoreEntryMode(draft.scoringAccessMode);
+  return draft;
+}
+
+function loadSetupDraft(storage = localStorage, preferences = getPlayerPreferences()) {
+  const result = readJsonStorageRecord(storage, SETUP_DRAFT_STORAGE_KEY);
+  if (!result.ok || result.missing) return null;
+  return sanitizeSetupDraft(result.value, preferences);
+}
+
+function saveSetupDraft(draft, storage = localStorage) {
+  const normalized = sanitizeSetupDraft(draft);
+  if (!normalized) return { ok: false, errorMessage: 'Setup draft is invalid.' };
+  return writeJsonStorageRecord(storage, SETUP_DRAFT_STORAGE_KEY, normalized);
+}
+
+function clearSetupDraft(storage = localStorage) {
+  try { storage.removeItem(SETUP_DRAFT_STORAGE_KEY); return true; } catch { return false; }
+}
+
+let lastStorageFailureToastAt = 0;
+function notifyLocalSaveFailure() {
+  if (DYE_LEDGER_ADAPTER_MODE) return;
+  const now = Date.now();
+  if (now - lastStorageFailureToastAt < 5000) return;
+  lastStorageFailureToastAt = now;
+  toast(STORAGE_FAILURE_MESSAGE, 6200);
+}
+
+function loadState() {
+  return loadStateFromStorage(localStorage);
+}
 function persist({ skipRender = false } = {}) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  const result = persistStateSnapshot(state, localStorage);
+  if (!result.ok) {
+    localPersistenceDiagnostics.storageAvailable = false;
+    localPersistenceDiagnostics.lastFailedLocalSave = result.savedAt;
+    localPersistenceDiagnostics.lastFailureMessage = result.errorMessage;
+    notifyLocalSaveFailure();
+    return false;
+  }
+  localPersistenceDiagnostics.storageAvailable = true;
+  localPersistenceDiagnostics.lastSuccessfulLocalSave = result.savedAt;
+  localPersistenceDiagnostics.lastFailureMessage = result.backupError || '';
   if (!skipRender) renderAll();
+  return true;
 }
 function buildDefaultHoles(count = 18) {
   return Array.from({ length: count }, (_, i) => ({ holeNumber: i + 1, yardage: null, par: null, strokeIndex: i + 1 }));
@@ -2523,6 +2740,17 @@ function isSneakySandyPoleyEnabled(match) {
 function getSneakySandyPoleyConfig(match) {
   const cfg = (match?.selectedGames || []).find(g => g.key === 'sneaky_sandy_poley');
   return cfg ? normalizeSneakySandyPoleyConfig(cfg) : null;
+}
+
+function ensureSspValidationStatCoverage(match) {
+  const cfg = getSneakySandyPoleyConfig(match);
+  if (!match || !cfg?.validateGreenyProx) return false;
+  const playerIds = getMatchPlayerIds(match);
+  const changed = !match.statTrackingEnabled
+    || JSON.stringify((match.statTrackingPlayerIds || []).map(String)) !== JSON.stringify(playerIds);
+  match.statTrackingEnabled = true;
+  match.statTrackingPlayerIds = playerIds;
+  return changed;
 }
 
 function getDefaultSneakySandyPoleyHoleInput(match, holeNumber = 1) {
@@ -2677,8 +2905,11 @@ function getSneakySandyPoleyTeamWarnings({ teamCount = 1, playersPerTeam = 1, pl
 
 function getSneakySandyPoleyPlayerStat(match, playerId, holeIdx) {
   const playerRef = (match?.players || []).find(row => String(row.playerId) === String(playerId));
-  const available = !!(match && playerRef && isStatTrackingEnabled(match) && isPlayerStatTrackingEnabled(match, playerId) && Array.isArray(playerRef.stats) && playerRef.stats[holeIdx]);
-  return { available, stat: available ? normalizeHoleStat(playerRef.stats[holeIdx] || {}, holeIdx) : null };
+  const stat = playerRef && Array.isArray(playerRef.stats) && playerRef.stats[holeIdx]
+    ? normalizeHoleStat(playerRef.stats[holeIdx] || {}, holeIdx)
+    : null;
+  const available = !!(match && playerRef && stat && stat.puttsSource !== 'default' && isStatTrackingEnabled(match) && isPlayerStatTrackingEnabled(match, playerId));
+  return { available, stat: available ? stat : null };
 }
 
 function createSneakySandyPoleyTeamPointMap(teams = [], value = 0) {
@@ -6890,6 +7121,7 @@ function normalizeMatch(match) {
   }));
   match.selectedGames = normalizeSelectedGamesOrder(Array.isArray(match.selectedGames) ? match.selectedGames.map(game => game?.key === 'sneaky_sandy_poley' ? normalizeSneakySandyPoleyConfig(game) : game).filter(Boolean) : []);
   normalizeSneakySandyPoleyInputs(match);
+  ensureSspValidationStatCoverage(match);
   normalizeStatTrackingParticipants(match);
   match.greeniesWinners = match.greeniesWinners && typeof match.greeniesWinners === 'object' ? match.greeniesWinners : {};
   match.greeniesSuggestions = match.greeniesSuggestions && typeof match.greeniesSuggestions === 'object' ? match.greeniesSuggestions : {};
@@ -6948,6 +7180,7 @@ function normalizeMatch(match) {
   const progress = computeMatchProgress(match);
   match.lastTouchedHole = Number(match.lastTouchedHole) || progress.lastTouchedHole;
   match.lastFullyCompletedHole = Number(match.lastFullyCompletedHole) || progress.lastFullyCompletedHole;
+  match.currentHole = Math.max(1, Math.min(getRequestedHoleCount(match), Number(match.currentHole) || Math.max(1, progress.lastFullyCompletedHole || progress.lastTouchedHole || 1)));
 }
 function normalizeState() {
   state.players = Array.isArray(state.players) ? state.players : [];
@@ -12345,6 +12578,12 @@ function startAnotherRoundWithSameGroup() {
   roundCompletePromptShownForMatchId = null;
   resetMatchSetupFormDomToBlank();
   loadMatchEditor(null, draft);
+  const draftSave = saveSetupDraft(draft);
+  if (!draftSave.ok) {
+    localPersistenceDiagnostics.lastFailedLocalSave = new Date().toISOString();
+    localPersistenceDiagnostics.lastFailureMessage = draftSave.errorMessage || 'Setup draft save failed.';
+    notifyLocalSaveFailure();
+  }
   const title = document.getElementById('matchFormTitle');
   if (title) title.textContent = 'Start Another Round';
   renderMatchSetupState();
@@ -12419,7 +12658,6 @@ function markRoundReopenedForEditing(match) {
   match.status = 'active';
   match.completedAt = null;
   finishConfirmArmed = false;
-  toast('Round reopened for editing.');
   return true;
 }
 
@@ -12477,7 +12715,7 @@ function startCleanNewMatchSetup() {
     uiState.referenceTeeAutoId = '';
 
     resetMatchSetupFormDomToBlank();
-    const draft = createBlankSetupDraft();
+    const draft = loadSetupDraft() || createBlankSetupDraft();
     loadMatchEditor(null, draft);
     renderMatchSetupState();
     renderSetupHandicapPreview();
@@ -12554,7 +12792,7 @@ async function persistCurrentMatch({ applyDom = true, awaitShared = false, immed
   }
   normalizeMatch(match);
   if (match.storageMode === 'shared') setLastOpenedSharedMatch(match);
-  persist({ skipRender: true });
+  if (!persist({ skipRender: true })) return false;
   if (match.storageMode === 'shared') {
     scheduleSharedMatchSync(match, { immediate: immediateShared, silent });
     if (awaitShared && hasSupabaseConfig()) {
@@ -12855,53 +13093,94 @@ function armFinishRound() {
     : 'Tap Confirm Finish to lock this round to history.');
 }
 
+function buildFinishedMatchCandidate(match, completedAt = new Date().toISOString()) {
+  const candidate = clonePlain(match);
+  normalizeMatch(candidate);
+  const wasReopened = !!(candidate.reopenedAt || candidate.previousCompletedAt);
+  candidate.status = 'complete';
+  candidate.completedAt = completedAt;
+  candidate.roundTiming = candidate.roundTiming && typeof candidate.roundTiming === 'object' ? candidate.roundTiming : {};
+  candidate.roundTiming.startedAt = candidate.roundTiming.startedAt || candidate.roundStartedAt || candidate.createdAt || completedAt;
+  ensureRoundTimingEnded(candidate, completedAt, { overwrite: wasReopened });
+  const metrics = computeMatchMetrics(candidate);
+  const completion = getRoundCompletionState(candidate, metrics);
+  if (!candidate.roundEndReason) candidate.roundEndReason = completion.isComplete ? 'completed' : 'endedEarly';
+  candidate.roundCompletionState = completion;
+  candidate.completedHoleCount = completion.completedHoleCount;
+  candidate.remainingHoleNumbers = completion.remainingHoleNumbers;
+  freezeRoundRecordIfEligible(candidate, metrics);
+  delete candidate.reopenedAt;
+  delete candidate.previousCompletedAt;
+  const progress = computeMatchProgress(candidate);
+  candidate.lastTouchedHole = progress.lastTouchedHole;
+  candidate.lastFullyCompletedHole = progress.lastFullyCompletedHole;
+  return { candidate, metrics, completion, wasReopened };
+}
+
+function createFinishRecoveryMarker(candidate) {
+  return {
+    schemaVersion: 1,
+    roundId: candidate.id,
+    stage: 'prepared',
+    preparedAt: new Date().toISOString(),
+    candidateCompletedAt: candidate.completedAt,
+    snapshotRequired: isFrozenRoundRecord(candidate.roundRecordSnapshot),
+  };
+}
+
 function completeActiveRound() {
   const match = getActiveMatch();
-  if (!match || !finishConfirmArmed) return false;
+  if (!match) return false;
+  if (match.status === 'complete' && match.completedAt) {
+    finishConfirmArmed = false;
+    return true;
+  }
+  if (!finishConfirmArmed) return false;
   try {
     if (typeof applyCurrentHoleDomToMatch === 'function') {
       applyCurrentHoleDomToMatch(match);
     }
-    const wasReopened = !!(match.reopenedAt || match.previousCompletedAt);
-    match.status = 'complete';
-    match.completedAt = new Date().toISOString();
-    match.roundTiming = match.roundTiming && typeof match.roundTiming === 'object' ? match.roundTiming : {};
-    match.roundTiming.startedAt = match.roundTiming.startedAt || match.roundStartedAt || match.createdAt || match.completedAt;
-    ensureRoundTimingEnded(match, match.completedAt, { overwrite: wasReopened });
-    const finishMetrics = computeMatchMetrics(match);
-    const finishCompletion = getRoundCompletionState(match, finishMetrics);
-    if (!match.roundEndReason) match.roundEndReason = finishCompletion.isComplete ? 'completed' : 'endedEarly';
-    match.roundCompletionState = finishCompletion;
-    match.completedHoleCount = finishCompletion.completedHoleCount;
-    match.remainingHoleNumbers = finishCompletion.remainingHoleNumbers;
-    freezeRoundRecordIfEligible(match, finishMetrics);
-    delete match.reopenedAt;
-    delete match.previousCompletedAt;
-    const progress = computeMatchProgress(match);
-    match.lastTouchedHole = progress.lastTouchedHole;
-    match.lastFullyCompletedHole = progress.lastFullyCompletedHole;
+    normalizeMatch(match);
+    if (!persist({ skipRender: true })) throw new Error('ACTIVE_ROUND_SAVE_FAILED');
+    const { candidate, wasReopened } = buildFinishedMatchCandidate(match);
+    const marker = createFinishRecoveryMarker(candidate);
+    const markerWrite = writeJsonStorageRecord(localStorage, FINISH_RECOVERY_STORAGE_KEY, marker);
+    if (!markerWrite.ok) throw new Error(`FINISH_MARKER_WRITE_FAILED: ${markerWrite.errorMessage}`);
+    const candidateState = clonePlain(state);
+    candidateState.matches = (candidateState.matches || []).map(row => row.id === candidate.id ? candidate : row);
+    candidateState.activeMatchId = candidate.id;
+    const completedWrite = persistStateSnapshot(candidateState, localStorage);
+    if (!completedWrite.ok) {
+      localPersistenceDiagnostics.lastFailedLocalSave = completedWrite.savedAt;
+      localPersistenceDiagnostics.lastFailureMessage = completedWrite.errorMessage;
+      notifyLocalSaveFailure();
+      throw new Error(`COMPLETED_ROUND_SAVE_FAILED: ${completedWrite.errorMessage}`);
+    }
+    state.matches = state.matches.map(row => row.id === candidate.id ? candidate : row);
+    state.activeMatchId = candidate.id;
+    localPersistenceDiagnostics.storageAvailable = true;
+    localPersistenceDiagnostics.lastSuccessfulLocalSave = completedWrite.savedAt;
+    localPersistenceDiagnostics.lastFailureMessage = completedWrite.backupError || '';
+    try { localStorage.removeItem(FINISH_RECOVERY_STORAGE_KEY); } catch {}
     finishConfirmArmed = false;
     newMatchPromptFinishArmed = false;
-    state.activeMatchId = match.id;
-    // Note: for a reopened round, this overwrites both local and shared (Supabase) copies
-    // because match.id is preserved by markRoundReopenedForEditing. Shared sync is upsert-by-id.
-    persistCurrentMatch({ applyDom: false, awaitShared: false, immediateShared: true, silent: true });
-    syncFinishRoundUi(match);
+    if (candidate.storageMode === 'shared') scheduleSharedMatchSync(candidate, { immediate: true, silent: true });
+    syncFinishRoundUi(candidate);
     renderMatches();
     renderCurrentMatch();
     renderLeaderboard();
     renderMatchSetupState();
-    showPostRoundActions(match);
+    showPostRoundActions(candidate);
     toast(wasReopened
-      ? 'Saved round updated. Existing match record overwritten.'
+      ? 'Round updates saved. The prior frozen result remains in history.'
       : 'Round finished and saved.');
     return true;
   } catch (err) {
     console.error('Confirm Finish failed:', err);
     finishConfirmArmed = false;
     newMatchPromptFinishArmed = false;
-    syncFinishRoundUi(match);
-    toast('Could not finish round. Please try again.');
+    syncFinishRoundUi(getActiveMatch());
+    if (!String(err?.message || '').includes('SAVE_FAILED') && !String(err?.message || '').includes('WRITE_FAILED')) toast('Could not finish round. Your active round is still available—please try again.');
     return false;
   }
 }
@@ -13093,7 +13372,7 @@ function renderCurrentMatch() {
   if (holeSummaryEl) {
     if (hole) {
       const holeMeta = `Par ${hole.par || '-'} · SI ${hole.strokeIndex || '-'}`;
-      const statusItems = `${primaryStatusLine ? `<div class="score-primary-status">${escapeHtml(primaryStatusLine)}</div>` : ''}${honorsStatusLine ? `<div class="score-honors-status">${escapeHtml(honorsStatusLine)}</div>` : ''}`;
+      const statusItems = `${primaryStatusLine ? `<div class="score-primary-status">${escapeHtml(primaryStatusLine)}</div>` : ''}${honorsStatusLine ? `<div class="score-primary-status score-honors-status">${escapeHtml(honorsStatusLine)}</div>` : ''}`;
       holeSummaryEl.innerHTML = `<div class="score-hole-meta">${escapeHtml(holeMeta)}</div>${statusItems ? `<div class="score-status-row">${statusItems}</div>` : ''}`;
     } else {
       holeSummaryEl.innerHTML = '';
@@ -14761,6 +15040,64 @@ function renderScoreAccessCard(match) {
   if (!showToggles) card.innerHTML = '';
 }
 
+function captureCurrentSetupDraft() {
+  const form = document.getElementById('matchForm');
+  if (!form || editingMatchId || setupWorkflowMode !== 'create') return null;
+  const fd = new FormData(form);
+  const players = getSelectedPlayersFromSetup();
+  const selectedGames = collectSelectedGames();
+  const courseId = String(fd.get('courseId') || '');
+  const teeId = String(fd.get('teeId') || document.getElementById('matchTeeSelect')?.value || players[0]?.teeId || '');
+  const scoringAccessMode = normalizeScoringAccessMode(fd.get('scoreEntryMode') || 'single_device');
+  const shared = document.getElementById('sharedMatchEnabled')?.checked || scoringAccessMode === 'assigned_players';
+  return sanitizeSetupDraft({
+    id: String(form.dataset.setupDraftId || '') || uid(),
+    date: String(fd.get('date') || todayIso()),
+    name: String(fd.get('name') || ''),
+    courseId,
+    teeId,
+    courseSnapshot: courseId ? getCourseSnapshotForMatch({ courseId, teeId, players }) : null,
+    allowance: Number(fd.get('allowance')),
+    holeCount: Number(fd.get('holeCount')) === 9 ? 9 : 18,
+    nineHoleSegment: String(fd.get('nineHoleSegment') || 'front'),
+    customStartHole: Number(fd.get('customStartHole')) || 1,
+    teamCount: Number(fd.get('teamCount')) || 1,
+    playersPerTeam: Number(fd.get('playersPerTeam')) || 1,
+    teamNames: Array.from(document.querySelectorAll('[data-team-name]')).map(input => input.value || ''),
+    scoringAccessMode,
+    officialScorerName: String(fd.get('officialScorerName') || ''),
+    statTrackingEnabled: fd.get('enableStatTracking') === 'on',
+    smartScoreAdvanceEnabled: fd.get('smartScoreAdvance') === 'on',
+    smartScoreAdvancePreset: getSmartScoreAdvancePresetFromSetup(),
+    statTrackingPlayerIds: collectStatTrackingPlayerIdsFromSetup(players),
+    selectedGames,
+    featuredCompetition: String(fd.get('featuredCompetition') || 'auto'),
+    pressConfig: normalizePressConfig(selectedGames.find(game => getGameEscalationCapability(game.key) === 'PRESS') || getNewMatchDefaultsFromPreferences().pressConfig),
+    players,
+    storageMode: shared ? 'shared' : 'local',
+    roundContext: {},
+  });
+}
+
+let setupDraftSaveTimer = null;
+function scheduleSetupDraftSave() {
+  if (editingMatchId || setupWorkflowMode !== 'create') return;
+  if (setupDraftSaveTimer) window.clearTimeout(setupDraftSaveTimer);
+  setupDraftSaveTimer = window.setTimeout(() => {
+    setupDraftSaveTimer = null;
+    const draft = captureCurrentSetupDraft();
+    if (!draft) return;
+    const form = document.getElementById('matchForm');
+    if (form) form.dataset.setupDraftId = draft.id;
+    const result = saveSetupDraft(draft);
+    if (!result.ok) {
+      localPersistenceDiagnostics.lastFailedLocalSave = new Date().toISOString();
+      localPersistenceDiagnostics.lastFailureMessage = result.errorMessage || 'Setup draft save failed.';
+      notifyLocalSaveFailure();
+    }
+  }, 180);
+}
+
 
 
 function renderNineHoleConfigUi() {
@@ -14975,7 +15312,7 @@ function populateMatchPlayerPicker(selected = []) {
     const current = selectedBySlot[idx] || '';
     const currentPlayer = getPlayer(current);
     const currentTeeId = teeBySlot[idx] || defaultTeeId || '';
-    const selectablePlayers = state.players;
+    const selectablePlayers = getSelectablePlayersForDraftSlot(state.players, draftSelections, idx);
     const hasSavedPlayers = state.players.length > 0;
     const inputId = `playerCombobox_${idx}`;
     const listId = `playerComboboxList_${idx}`;
@@ -15012,15 +15349,20 @@ function closePlayerCombobox(inputEl, { restoreInvalid = true } = {}) {
   const slot = Number(inputEl.dataset.playerComboboxSlot);
   const hidden = document.querySelector(`[data-player-slot="${slot}"]`);
   if (!hidden) return false;
-  const match = getPlayerByLookupLabel(inputEl.value, state.players);
+  const match = getPlayerByLookupLabel(inputEl.value, getSelectablePlayersForDraftSlot(state.players, getMatchPlayerDraft(), slot));
   if (match) assignPlayerToSlot(slot, match.id, { preserveFocus: true });
   else if (restoreInvalid) {
     const current = getPlayer(hidden.value);
     inputEl.value = current ? getPlayerLookupLabel(current) : '';
   }
-  document.querySelector(`[data-player-combobox-list="${slot}"]`)?.classList.add('hidden');
+  const list = document.querySelector(`[data-player-combobox-list="${slot}"]`);
+  list?.classList.add('hidden');
+  list?.querySelectorAll('[data-player-combobox-option]').forEach(option => {
+    option.classList.remove('hidden', 'is-active');
+  });
   inputEl.setAttribute('aria-expanded', 'false');
   inputEl.removeAttribute('aria-activedescendant');
+  inputEl.dataset.activeOptionIndex = '-1';
   return !!match;
 }
 
@@ -15029,9 +15371,14 @@ function filterPlayerCombobox(inputEl, { open = true } = {}) {
   const slot = Number(inputEl.dataset.playerComboboxSlot);
   const list = document.querySelector(`[data-player-combobox-list="${slot}"]`);
   if (!list) return [];
-  const query = String(inputEl.value || '').trim().toLowerCase();
+  const hidden = document.querySelector(`[data-player-slot="${slot}"]`);
+  const currentPlayer = getPlayer(hidden?.value || '');
+  const optionPlayers = Array.from(list.querySelectorAll('[data-player-combobox-option]'))
+    .map(option => getPlayer(option.dataset.playerId))
+    .filter(Boolean);
+  const matchingIds = new Set(getPlayerComboboxMatches(inputEl.value, optionPlayers, currentPlayer).map(player => String(player.id)));
   const visible = Array.from(list.querySelectorAll('[data-player-combobox-option]')).filter(option => {
-    const show = !query || String(option.dataset.playerLabel || '').includes(query);
+    const show = matchingIds.has(String(option.dataset.playerId));
     option.classList.toggle('hidden', !show);
     option.classList.remove('is-active');
     return show;
@@ -15481,10 +15828,43 @@ function buildRoundReadinessWeatherStatus() {
   </div>`;
 }
 
+function syncSetupDisclosureAria(disclosure) {
+  const summary = disclosure?.querySelector(':scope > summary');
+  if (summary) summary.setAttribute('aria-expanded', disclosure.open ? 'true' : 'false');
+}
+
+function setSetupDisclosureOpen(id, open = true) {
+  const disclosure = document.getElementById(id);
+  if (!disclosure) return false;
+  disclosure.open = !!open;
+  syncSetupDisclosureAria(disclosure);
+  return true;
+}
+
+function initializeSetupDisclosures({ resetOpen = false } = {}) {
+  ['playersTeamsDisclosure', 'gamesDisclosure'].forEach(id => {
+    const disclosure = document.getElementById(id);
+    if (!disclosure) return;
+    if (resetOpen) disclosure.open = true;
+    if (disclosure.dataset.ariaSyncInstalled !== 'true') {
+      disclosure.addEventListener('toggle', () => syncSetupDisclosureAria(disclosure));
+      disclosure.dataset.ariaSyncInstalled = 'true';
+    }
+    syncSetupDisclosureAria(disclosure);
+  });
+}
+
+function expandSetupDisclosuresForWarnings(warnings = []) {
+  const labels = (warnings || []).map(row => `${row?.label || ''} ${row?.warning || ''}`);
+  if (labels.some(label => /tee|player|team|handicap|course holes/i.test(label))) setSetupDisclosureOpen('playersTeamsDisclosure', true);
+  if (labels.some(label => /game|featured competition|9-point|sneaky \/ sandy \/ poley/i.test(label))) setSetupDisclosureOpen('gamesDisclosure', true);
+}
+
 function renderRoundReadiness() {
   const wrap = document.getElementById('roundReadinessPanel');
   if (!wrap) return;
   const state = getRoundReadinessState();
+  expandSetupDisclosuresForWarnings(state.warnings);
   const statusTitle = state.ready ? 'Ready to Play' : 'Review Setup';
   const completeChecks = state.checks.filter(check => check.ok);
   const statusText = state.ready
@@ -16442,6 +16822,7 @@ function cancelMatchSetupChanges() {
   const active = getActiveMatch();
   const wasEditingExisting = !!(editingMatchId && active && editingMatchId === active.id);
   pendingNextRoundSessionContext = null;
+  clearSetupDraft();
   editingMatchId = null;
   setupWorkflowMode = 'landing';
 
@@ -16482,8 +16863,10 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
   if (topUpdateBtn) topUpdateBtn.textContent = 'Update Match';
   updateSetupActionButtonStates();
   activateTab('setup');
+  initializeSetupDisclosures({ resetOpen: !matchId });
   if (!matchId) {
     const draft = draftMatch || createBlankSetupDraft();
+    form.dataset.setupDraftId = draft.id || uid();
     form.reset();
     form.elements.namedItem('date').value = draft.date || todayIso();
     form.elements.namedItem('name').value = draft.name === 'Round' ? '' : (draft.name || '');
@@ -16516,6 +16899,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
     renderRoundReadiness();
     return;
   }
+  delete form.dataset.setupDraftId;
   const match = getMatch(matchId); if (!match) return;
   form.elements.namedItem('date').value = match.date;
   form.elements.namedItem('name').value = match.name || '';
@@ -16619,6 +17003,9 @@ function applySmartPuttsAdjustmentFromCheckbox(checkbox) {
 }
 
 function installHandlers() {
+  const setupDraftForm = document.getElementById('matchForm');
+  setupDraftForm?.addEventListener('input', scheduleSetupDraftSave);
+  setupDraftForm?.addEventListener('change', scheduleSetupDraftSave);
   document.addEventListener('click', e => {
     const jump = e.target.closest?.('[data-jump-missing-score]');
     if (jump) {
@@ -17504,6 +17891,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   }
 
   function logMatchFinalizationDiagnostics(stage, payload = {}) {
+    if (!payload.error && window.dyeLedgerDebugDiagnostics !== true) return;
     try {
       console.group('Match Finalization');
       console.log('Stage:', stage);
@@ -17663,16 +18051,11 @@ document.getElementById('leaderboard').addEventListener('change', e => {
         match.players.forEach(mp => { if (!match.sharedPlayerAssignments[mp.playerId]) match.sharedPlayerAssignments[mp.playerId] = hostParticipantId; });
         migrateSharedPlayerAssignmentsToParticipants(match);
       }
-      try {
-        await uploadSharedMatch(match);
-      } catch (cloudErr) {
-        console.error(cloudErr);
-        match.storageMode = 'shared';
-        match.cloudSyncState = 'local-cache';
-        toast('Shared match foundation saved locally, but Supabase sync failed.');
-      }
     }
-    if (editingMatchId) state.matches = state.matches.map(m => m.id === editingMatchId ? match : m); else state.matches.push(match);
+    const priorMatches = state.matches;
+    const priorActiveMatchId = state.activeMatchId;
+    const priorLastOpenedSharedMatchId = state.lastOpenedSharedMatchId;
+    if (editingMatchId) state.matches = state.matches.map(m => m.id === editingMatchId ? match : m); else state.matches = [...state.matches, match];
     pendingNextRoundSessionContext = null;
     state.activeMatchId = match.id;
     if (match.storageMode === 'shared') {
@@ -17682,7 +18065,23 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
     currentHole = Math.min(getRequestedHoleCount(match), Math.max(1, completedHoles(match) || 1));
     if (!editingMatchId && match.storageMode !== 'shared') ensureRoundTimingStarted(match);
-    persist({ skipRender: true });
+    if (!persist({ skipRender: true })) {
+      state.matches = priorMatches;
+      state.activeMatchId = priorActiveMatchId;
+      state.lastOpenedSharedMatchId = priorLastOpenedSharedMatchId;
+      return;
+    }
+    clearSetupDraft();
+    if (match.storageMode === 'shared') {
+      try {
+        await uploadSharedMatch(match);
+      } catch (cloudErr) {
+        console.error(cloudErr);
+        match.cloudSyncState = 'local-cache';
+        persist({ skipRender: true });
+        toast('Shared Match is offline. The round is saved locally and will sync when the connection returns.');
+      }
+    }
     loadMatchEditor(null);
     renderAll();
     if (match.storageMode === 'shared') {
@@ -17783,7 +18182,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     } else {
       currentHole = nextHoleInSequence || savedPosition;
     }
-    persist();
+    match.currentHole = currentHole;
+    if (!persist()) return false;
     scheduleSharedMatchSync(match, { immediate: true, silent: true });
     if (match.storageMode === 'shared') refreshActiveSharedScores({ silent: true, render: false });
     if (!silent) toast(hostOverridePlayers && hostOverridePlayers.length ? `Host updated Hole ${savedHole} score.` : `Hole ${savedHole} saved.`);
@@ -17804,7 +18204,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       const target = getMatch(loadId);
       state.activeMatchId = loadId;
       if (target?.storageMode === 'shared') setLastOpenedSharedMatch(target);
-      currentHole = Math.min(getRequestedHoleCount(target), Math.max(1, completedHoles(target) || 1));
+      currentHole = Math.min(getRequestedHoleCount(target), Math.max(1, Number(target?.currentHole) || completedHoles(target) || 1));
       persist();
       if (target && target.status === 'complete') {
         const reopen = window.confirm(
@@ -17816,9 +18216,15 @@ document.getElementById('leaderboard').addEventListener('change', e => {
           `Cancel = just view the leaderboard / scorecard.`
         );
         if (reopen) {
+          const completedBeforeReopen = clonePlain(target);
           markRoundReopenedForEditing(target);
-          persist({ skipRender: true });
-          activateTab('score');
+          if (persist({ skipRender: true })) {
+            activateTab('score');
+            toast('Round reopened for editing. The prior frozen result remains in history.');
+          } else {
+            state.matches = state.matches.map(row => row.id === completedBeforeReopen.id ? completedBeforeReopen : row);
+            activateTab('leaderboard');
+          }
         } else {
           activateTab('leaderboard');
         }
@@ -18217,6 +18623,8 @@ function renderMatchSetupDiagnosticsUi() {
 function renderBuildInfoUi() {
   const sw = getServiceWorkerDiagnosticSnapshot();
   renderMatchSetupDiagnosticsUi();
+  const diagnosticMatch = getActiveMatch();
+  const scoredHoleCount = diagnosticMatch ? new Set((diagnosticMatch.players || []).flatMap(player => (player.scores || []).filter(score => Number(score?.gross) > 0).map(score => Number(score.holeNumber)))).size : 0;
   const cacheName = APP_CACHE_NAME;
   const pageControl = sw.supported ? (sw.controller ? 'Controlled' : 'Not controlled yet') : 'Unsupported';
   const updateAvailable = !!(window.dyeLedgerUpdateAvailable || sw.waiting);
@@ -18231,6 +18639,16 @@ function renderBuildInfoUi() {
     appUrlVersionStatus: getUrlVersionDiagnostic() || 'Not used',
     appCacheMatchesStatus: 'Checking…',
     appVersionConsistencyStatus: 'Checking…',
+    appStorageAvailabilityStatus: localPersistenceDiagnostics.storageAvailable ? 'Available' : 'Unavailable / save failed',
+    appStorageLoadedFrom: localPersistenceDiagnostics.loadedFrom,
+    appFinishRecoveryStatus: localPersistenceDiagnostics.recoveryStatus,
+    appLastLocalSave: localPersistenceDiagnostics.lastSuccessfulLocalSave ? formatTimestampET(localPersistenceDiagnostics.lastSuccessfulLocalSave) : 'Not saved this session',
+    appLastLocalSaveFailure: localPersistenceDiagnostics.lastFailedLocalSave ? `${formatTimestampET(localPersistenceDiagnostics.lastFailedLocalSave)} · ${localPersistenceDiagnostics.lastFailureMessage || 'Unknown failure'}` : 'None',
+    appActiveRoundDiagnostic: diagnosticMatch ? `${diagnosticMatch.id} · ${diagnosticMatch.status}` : 'None',
+    appSharedMatchDiagnostic: diagnosticMatch?.storageMode === 'shared' ? `${isCurrentDeviceMatchHost(diagnosticMatch) ? 'Host' : 'Joined'} · ${diagnosticMatch.cloudSyncState || 'local-cache'} · pull ${diagnosticMatch.lastSharedScorePullAt || 'never'} · push ${diagnosticMatch.lastSharedScorePushAt || 'never'}` : 'Not active',
+    appScoredHoleDiagnostic: String(scoredHoleCount),
+    appPreferenceSchemaDiagnostic: String(PLAYER_PREFERENCES_SCHEMA_VERSION),
+    appRoundRecordDiagnostic: isFrozenRoundRecord(diagnosticMatch?.roundRecordSnapshot) ? 'Yes' : 'No',
     appUpdateAvailableStatus: updateAvailable ? 'Yes' : (pwaUpdateStatusMessage === 'Checking…' ? 'Checking…' : 'No'),
     appLastUpdateCheck: lastPwaUpdateCheckAt ? formatTimestampET(lastPwaUpdateCheckAt) : 'Not checked yet',
     appUpdateStatusMessage: pwaUpdateStatusMessage || 'Not checked yet',
@@ -18364,7 +18782,7 @@ function setUpdateBannerContent({ deferred = false } = {}) {
   if (deferred) {
     if (title) title.textContent = 'Update ready';
     if (copy) copy.textContent = 'Refresh when you are done with match setup or scoring.';
-    if (action) action.textContent = 'Refresh Now Anyway';
+    if (action) action.textContent = 'Refresh When Safe';
   } else {
     if (title) title.textContent = 'New version available';
     if (copy) copy.textContent = 'Refresh to update to the latest build.';
@@ -18505,7 +18923,7 @@ async function resetDyeLedgerAppCache() {
 }
 
 function triggerAppUpdate() {
-  refreshPwaNow({ force: pendingDeferredAppReload });
+  refreshPwaNow({ force: false });
 }
 
 function hookServiceWorkerRegistration(registration) {
@@ -18601,6 +19019,21 @@ function installDyeLedgerLiveEngineAdapter() {
     getNewMatchDefaultsFromPreferences,
     mergeNewMatchDefaults,
     createBlankSetupDraft,
+    getStorageErrorMessage,
+    readJsonStorageRecord,
+    sanitizePersistentState,
+    reconcileInterruptedFinishState,
+    loadStateFromStorage,
+    persistStateSnapshot,
+    writeJsonStorageRecord,
+    sanitizeSetupDraft,
+    loadSetupDraft,
+    saveSetupDraft,
+    clearSetupDraft,
+    getPlayerLookupLabel,
+    getPlayerByLookupLabel,
+    getSelectablePlayersForDraftSlot,
+    getPlayerComboboxMatches,
     updatePlayerDraftSlot,
     selectPlayerComboboxOption,
     handlePlayerComboboxOptionPointerDown,
@@ -18612,6 +19045,8 @@ function installDyeLedgerLiveEngineAdapter() {
     triggerSmartScoreHaptic,
     createEmptyMatch,
     normalizeMatch,
+    courseHandicap,
+    playingHandicap,
     computeMatchMetrics,
     computeLivePayoutGames,
     getPayoutReportContext,
@@ -18641,6 +19076,8 @@ function installDyeLedgerLiveEngineAdapter() {
     computeSkinResults,
     computeNinePointResults,
     buildSneakySandyPoleyLedger,
+    ensureSspValidationStatCoverage,
+    getSneakySandyPoleyPlayerStat,
     normalizeSneakySandyPoleyHoleInput,
     buildSneakySandyPoleyMomentumData,
     getSneakySandyPoleySmartTrend,
@@ -18682,6 +19119,9 @@ function installDyeLedgerLiveEngineAdapter() {
     buildRoundRecordEvents,
     buildRoundRecordStory,
     buildRoundSnapshot,
+    buildFinishedMatchCandidate,
+    createFinishRecoveryMarker,
+    markRoundReopenedForEditing,
     buildExecutiveDriverRows,
     buildSelectedGamesSummary,
     buildPressAuditSection,
@@ -18793,8 +19233,11 @@ if (!DYE_LEDGER_ADAPTER_MODE) {
   loadPlayerEditor(null);
   loadCourseEditor(null);
   loadTeeEditor(null, null);
-  loadMatchEditor(null);
-  setupWorkflowMode = getActiveMatch() ? 'create' : 'landing';
+  const startupActiveMatch = getActiveMatch();
+  const recoveredSetupDraft = startupActiveMatch ? null : loadSetupDraft();
+  if (startupActiveMatch) currentHole = Math.max(1, Math.min(getRequestedHoleCount(startupActiveMatch), Number(startupActiveMatch.currentHole) || completedHoles(startupActiveMatch) || 1));
+  setupWorkflowMode = startupActiveMatch || recoveredSetupDraft ? 'create' : 'landing';
+  loadMatchEditor(null, recoveredSetupDraft || undefined);
   updateVersionUi();
   renderAll();
   if (hasSupabaseConfig()) {

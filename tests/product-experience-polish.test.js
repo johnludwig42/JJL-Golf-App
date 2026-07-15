@@ -47,8 +47,8 @@ test('Library course tools are visually cohesive and maintenance is disclosed', 
   assert.match(css, /#courses\.panel\.active\{display:flex;flex-direction:column/);
 });
 
-test('canonical branding is shared by header, manifest, favicons, and offline cache', () => {
-  assert.match(html, /src="\.\/branding\/app-icon-192\.png" alt="The Dye Ledger"/);
+test('Home Screen branding is shared by the header while install assets remain complete', () => {
+  assert.match(html, /src="\.\/branding\/apple-touch-icon\.png" alt="The Dye Ledger"/);
   assert.match(html, /href="\.\/branding\/apple-touch-icon\.png"/);
   assert.deepEqual(manifest.icons.map(icon => icon.src), [
     './branding/app-icon-192.png',

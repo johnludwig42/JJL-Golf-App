@@ -1,17 +1,17 @@
 const BUILD_INFO = {
-  version: 'v30.3.69',
-  versionNumber: '30.3.69',
-  cacheName: 'the-dye-ledger-v30.3.69',
-  buildDate: '2026-07-13T00:00:00Z'
+  version: 'v30.3.70',
+  versionNumber: '30.3.70',
+  cacheName: 'the-dye-ledger-v30.3.70',
+  buildDate: '2026-07-14T00:00:00Z'
 };
 const CACHE_NAME = BUILD_INFO.cacheName;
 const ASSETS = [
   './',
   './index.html',
-  './style.css?v=30.3.69&rev=1',
-  './app.js?v=30.3.69&rev=1',
-  './supabase-config.js?v=30.3.69&rev=1',
-  './manifest.json?v=30.3.69&rev=1',
+  './style.css?v=30.3.70&rev=1',
+  './app.js?v=30.3.70&rev=1',
+  './supabase-config.js?v=30.3.70&rev=1',
+  './manifest.json?v=30.3.70&rev=1',
   './branding/apple-touch-icon.png',
   './branding/favicon-32.png',
   './branding/favicon-16.png',
@@ -26,7 +26,6 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', event => {
-  self.skipWaiting();
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
 });
 
@@ -45,9 +44,39 @@ self.addEventListener('message', event => {
   }
 });
 
+async function networkFirstNavigation(request) {
+  try {
+    const response = await fetch(request);
+    if (response && response.ok) {
+      try {
+        const cache = await caches.open(CACHE_NAME);
+        await cache.put('./index.html', response.clone());
+      } catch {}
+    }
+    return response;
+  } catch {
+    return (await caches.match('./index.html')) || caches.match('./');
+  }
+}
+
+async function cacheFirstStatic(request) {
+  const cached = await caches.match(request);
+  if (cached) return cached;
+  const response = await fetch(request);
+  if (response && response.ok && new URL(request.url).origin === self.location.origin) {
+    try {
+      const cache = await caches.open(CACHE_NAME);
+      await cache.put(request, response.clone());
+    } catch {}
+  }
+  return response;
+}
+
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
-  event.respondWith(
-    caches.match(event.request).then(cached => cached || fetch(event.request))
-  );
+  if (event.request.mode === 'navigate') {
+    event.respondWith(networkFirstNavigation(event.request));
+    return;
+  }
+  event.respondWith(cacheFirstStatic(event.request));
 });

@@ -2339,15 +2339,17 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
 .setup-advanced-card{order:2;}
 .round-readiness-card{order:3;}
 .setup-start-round-card{order:4;}
-.setup-advanced-card>summary,.setup-supporting-details>summary,.library-maintenance-card>summary,.library-import-details>summary{
+.setup-advanced-card>summary,.setup-section-disclosure>summary,.setup-supporting-details>summary,.library-maintenance-card>summary,.library-import-details>summary{
   cursor:pointer;
   list-style:none;
 }
-.setup-advanced-card>summary::-webkit-details-marker,.setup-supporting-details>summary::-webkit-details-marker,.library-maintenance-card>summary::-webkit-details-marker,.library-import-details>summary::-webkit-details-marker{display:none;}
-.setup-advanced-card>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;}
-.setup-advanced-card>summary::after,.setup-supporting-details>summary::after,.library-maintenance-card>summary::after,.library-import-details>summary::after{content:'+';display:inline-grid;place-items:center;flex:0 0 28px;width:28px;height:28px;border-radius:999px;background:#e8f2ec;color:#0b5d3b;font-size:1.2rem;font-weight:800;}
-.setup-advanced-card[open]>summary::after,.setup-supporting-details[open]>summary::after,.library-maintenance-card[open]>summary::after,.library-import-details[open]>summary::after{content:'−';}
+.setup-advanced-card>summary::-webkit-details-marker,.setup-section-disclosure>summary::-webkit-details-marker,.setup-supporting-details>summary::-webkit-details-marker,.library-maintenance-card>summary::-webkit-details-marker,.library-import-details>summary::-webkit-details-marker{display:none;}
+.setup-advanced-card>summary,.setup-section-disclosure>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.setup-advanced-card>summary::after,.setup-section-disclosure>summary::after,.setup-supporting-details>summary::after,.library-maintenance-card>summary::after,.library-import-details>summary::after{content:'+';display:inline-grid;place-items:center;flex:0 0 28px;width:28px;height:28px;border-radius:999px;background:#e8f2ec;color:#0b5d3b;font-size:1.2rem;font-weight:800;}
+.setup-advanced-card[open]>summary::after,.setup-section-disclosure[open]>summary::after,.setup-supporting-details[open]>summary::after,.library-maintenance-card[open]>summary::after,.library-import-details[open]>summary::after{content:'−';}
 .setup-advanced-card>summary .tiny,.library-maintenance-card>summary .tiny{display:block;margin-top:3px;font-weight:500;}
+.setup-section-disclosure>summary .tiny{display:block;margin-top:3px;font-weight:500;}
+.setup-section-disclosure-body{margin-top:12px;}
 .advanced-options-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
 .advanced-option-group{min-width:0;padding:14px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.6);}
 .setup-supporting-details{padding:12px 14px!important;border-left:0!important;background:rgba(248,250,249,.8)!important;box-shadow:none!important;}
@@ -4168,18 +4170,8 @@ main,
   text-align:center;
   overflow-wrap:anywhere;
 }
-#score #holeSummary .score-status-row{display:flex;justify-content:center;align-items:baseline;gap:4px 8px;flex-wrap:wrap;margin-top:4px;}
+#score #holeSummary .score-status-row{display:grid;justify-items:center;gap:4px;margin-top:4px;}
 #score #holeSummary .score-status-row .score-primary-status,#score #holeSummary .score-status-row .score-honors-status{margin-top:0;}
-#score #holeSummary .score-status-row .score-honors-status::before{content:'· ';}
-#score #holeSummary .score-honors-status{
-  margin-top:3px;
-  color:var(--muted);
-  font-size:11px;
-  font-weight:800;
-  line-height:1.2;
-  text-align:center;
-  overflow-wrap:anywhere;
-}
 .quick-ssp-money{display:grid;gap:3px;padding:8px 10px;border:1px solid rgba(11,93,59,.16);border-radius:10px;background:#f7fbf8;font-size:.8rem;}
 .quick-ssp-money span{color:var(--muted);font-weight:700;}
 .greenies-suggestion {
@@ -4233,14 +4225,12 @@ main,
   #score #holeSummary .score-hole-meta { font-size: 13px; }
   #score #holeSummary .score-live-status { font-size: 12px; }
   #score #holeSummary .score-primary-status { font-size: 11px; padding:4px 7px; }
-  #score #holeSummary .score-honors-status { font-size:10.5px; margin-top:2px; }
 }
 @media (max-width:390px){
   #score .score-hole-nav{gap:5px;padding:5px;}
   #score #holeSummary{margin-top:3px;}
   #score #holeSummary .score-primary-status{display:block;margin:3px auto 0;padding:4px 6px;}
-  #score #holeSummary .score-status-row{display:grid;gap:2px;}
-  #score #holeSummary .score-status-row .score-honors-status::before{content:'';}
+  #score #holeSummary .score-status-row{gap:2px;}
 }
 
 

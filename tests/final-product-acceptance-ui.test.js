@@ -28,11 +28,12 @@ test('team labels and handicap preview follow descriptive-left numeric-centered 
   assert.match(app, /player-assignment-slot-heading/);
   assert.match(css, /\.player-assignment-slot-heading strong\{[^}]*font-size:1rem[^}]*font-weight:800/);
   assert.match(app, /handicap-preview-description/);
-  assert.equal((app.match(/class="handicap-preview-number"/g) || []).length, 4);
-  for (const label of ['Index', 'Course HCP', 'Playing', 'Gets']) assert.match(app, new RegExp(`handicap-preview-number[^>]*><span class="tiny">${label}`));
+  assert.equal((app.match(/class="handicap-preview-number"/g) || []).length, 8);
+  for (const label of ['Index', 'Course HCP', 'Playing', 'Gets']) assert.match(app, new RegExp(`handicap-preview-number[^>]*>${label}`));
   assert.match(css, /\.handicap-preview-description\{text-align:left/);
   assert.match(css, /\.handicap-preview-number\{text-align:center/);
-  assert.match(css, /grid-template-columns:minmax\(100px,1\.8fr\) repeat\(4,minmax\(42px,\.65fr\)\)/);
+  assert.match(css, /--handicap-preview-columns:minmax\(100px,1\.8fr\) repeat\(4,minmax\(42px,\.65fr\)\)/);
+  assert.match(css, /grid-template-columns:var\(--handicap-preview-columns\)/);
 });
 
 test('Allowance communicates percent while round storage remains numeric', () => {

@@ -86,7 +86,7 @@
         </div>
         <div class="grid two compact-grid top-gap">
           <label class="span-2"><span>Device Name</span><input id="setupJoinDeviceNameInput" placeholder="Cart 2 – Mike / Steve" autocomplete="off" /></label>
-          <label class="span-2"><span>Match Code</span><input id="setupJoinMatchCodeInput" placeholder="DYE-382901" /></label>
+          <label class="span-2"><span>Match Code</span><input id="setupJoinMatchCodeInput" placeholder="DYE-532835" autocapitalize="characters" spellcheck="false" /></label>
         </div>
         <div class="actions wrap top-gap">
           <button id="setupJoinMatchBtn" type="button">Join Match</button>
@@ -433,6 +433,10 @@
                 <span>Perspective</span>
                 <select id="momentumPerspectiveSelect"></select>
               </label>
+              <label class="inline-select tiny">
+                <span>View</span>
+                <select id="momentumRangeSelect"></select>
+              </label>
             </div>
           </div>
           <div id="holeMomentum" class="hole-momentum"></div>
@@ -692,8 +696,16 @@
         <div class="tiny">Personal defaults for future matches and Quick Scoreboard views on this device.</div>
         <form id="playerPreferencesForm" class="player-preferences-form top-gap">
           <div class="section-label">Scoring Preferences</div>
-          <fieldset class="preference-row" aria-describedby="smartScoreAdvancePreferenceHelp">
+          <fieldset class="preference-row" aria-describedby="smartScoreAdvanceEnabledPreferenceHelp">
             <legend>Smart Score Advance</legend>
+            <div class="preference-segments" data-preference-control="scoring.smartScoreAdvanceEnabled">
+              <label><input type="radio" name="scoring.smartScoreAdvanceEnabled" value="true" /><span>On</span></label>
+              <label><input type="radio" name="scoring.smartScoreAdvanceEnabled" value="false" /><span>Off</span></label>
+            </div>
+            <div id="smartScoreAdvanceEnabledPreferenceHelp" class="tiny">Sets whether new matches advance automatically after a committed score.</div>
+          </fieldset>
+          <fieldset class="preference-row" aria-describedby="smartScoreAdvancePreferenceHelp">
+            <legend>Smart Score Advance timing</legend>
             <div class="preference-segments preference-segments-three" data-preference-control="scoring.smartScoreAdvancePreset">
               <label><input type="radio" name="scoring.smartScoreAdvancePreset" value="FAST" /><span>Fast</span></label>
               <label><input type="radio" name="scoring.smartScoreAdvancePreset" value="NORMAL" /><span>Normal</span></label>

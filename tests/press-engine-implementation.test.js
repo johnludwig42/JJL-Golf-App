@@ -114,7 +114,7 @@ test('press audit is explicit, omits empty state, and frozen rendering is non-mu
   const created = f.engine.createPressFromConfirmation(f.match, f.metrics, { gameKey: 'team_match', segment: 'OVERALL', parentGameId: 'team_match', declaredForHole: 6, declaringSideId: '2', pressConfig: f.match.selectedGames[0] }, { currentPosition: 5, isHost: true, sourceDeviceId: 'host' });
   assert.equal(created.created, true);
   const html = f.engine.buildPressAuditSection(f.match, f.metrics);
-  assert.match(html, /Presses/); assert.match(html, /Declared by/); assert.match(html, /Holes 6–18/); assert.match(html, /Stake:/); assert.match(html, /Ledger impact:/);
+  assert.match(html, /Press Activity/); assert.match(html, /Declared by/); assert.match(html, /Holes 6–18/); assert.match(html, /Original wager:/); assert.match(html, /Result:/);
   f.match.status = 'complete'; f.match.completedAt = '2026-07-12T20:00:00Z';
   const record = f.engine.buildRoundRecord(f.match, f.metrics); record.isFrozen = true; record.frozenAt = '2026-07-12T20:00:00Z';
   const before = JSON.stringify(record);
@@ -365,7 +365,7 @@ test('shared Classic Scorecard scroller preserves 18-hole and 9-hole final colum
   const fullBefore = JSON.stringify(full.match);
   const fullHtml = full.engine.buildQuickScoreboardView(full.match, full.metrics);
   assert.match(fullHtml, /<details class="[^"]*quick-classic-scorecard"><summary>Classic Scorecard<\/summary><div class="scorecard-sub tiny">/);
-  assert.match(fullHtml, /<div class="scorecard-wrap" tabindex="0" role="region"/);
+  assert.match(fullHtml, /<div class="scorecard-wrap table-scroll-region" data-scroll-table="classic-scorecard" tabindex="0" role="region"/);
   assert.match(fullHtml, />H18<\/th>/);
   assert.match(fullHtml, /<th>Out<\/th><th>In<\/th><th>Total<\/th>/);
   assert.doesNotMatch(fullHtml, /quick-classic-scorecard[^]*quick-scroll-panel/);

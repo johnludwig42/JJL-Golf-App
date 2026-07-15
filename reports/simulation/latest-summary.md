@@ -1,12 +1,12 @@
 # Simulation Lab Summary
 
 ## Run Metadata
-- Version: v30.3.70
-- Timestamp: 2026-07-15T01:23:13.701Z
-- Seed: dye-ledger-v30.3.70-default
+- Version: v30.3.71
+- Timestamp: 2026-07-15T14:57:18.447Z
+- Seed: dye-ledger-v30.3.71-default
 - Random rounds: 100
-- Fixtures run: 10
-- Total rounds simulated: 110
+- Fixtures run: 25
+- Total rounds simulated: 125
 - Adapter mode: compare
 - Games tested: match_play, nassau, net_skins, nine_point, skins
 
@@ -39,9 +39,9 @@
 
 ## Pass/Fail Summary
 - Failures: 0
-- Warnings: 86
-- Suspicious outcomes: 1
-- Live-vs-mirror exact matches: 110
+- Warnings: 96
+- Suspicious outcomes: 2
+- Live-vs-mirror exact matches: 125
 - Live-vs-mirror warnings/differences: 0
 
 ## Failures
@@ -60,88 +60,99 @@
 - Warning - net_skins_handicap_stroke: Match Play closed on hole 17; later entered scores should not change the recorded winner without intentional edit handling.
 - Warning - nine_point_tie_scenarios: Match Play closed on hole 17; later entered scores should not change the recorded winner without intentional edit handling.
 - Warning - incomplete_round_7_holes: Incomplete round has provisional Nassau and settlement output.
-- Warning - random_001: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - press_front_lane: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - press_back_lane: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - press_overall_lane: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - press_match_play: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - press_repress_chain_1: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - press_repress_chain_2: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - press_multiple_independent_chains: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - press_round_limit_exhausted: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - press_mid_round_enable: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - press_disable_after_use_blocked: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - press_limit_reduction_blocked: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - press_shared_sync_reconnect: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - press_reopen_refinish: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - press_frozen_history_reload: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - press_repeated_settlement: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_001: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
 - Warning - random_003: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_004: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
 - Warning - random_005: Match Play closed on hole 17; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_007: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_008: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_009: Match Play closed on hole 17; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_010: Match Play closed on hole 13; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_011: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_012: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_013: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_014: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_016: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_017: Incomplete round has provisional Nassau and settlement output.
-- Warning - random_018: Match Play closed on hole 13; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_019: Match Play closed on hole 8; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_020: Match Play closed on hole 7; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_021: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_022: Match Play closed on hole 17; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_023: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_024: Incomplete round has provisional Nassau and settlement output.
-- Warning - random_025: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_028: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_030: Match Play closed on hole 17; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_031: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_032: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_034: Match Play closed on hole 17; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_037: Match Play closed on hole 8; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_038: Match Play closed on hole 13; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_039: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_040: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_006: Match Play closed on hole 8; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_008: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_009: Match Play closed on hole 7; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_011: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_012: Match Play closed on hole 7; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_012: Incomplete round has provisional Nassau and settlement output.
+- Warning - random_013: Match Play closed on hole 17; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_015: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_016: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_017: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_018: Match Play closed on hole 8; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_020: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_021: Match Play closed on hole 13; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_022: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_024: Match Play closed on hole 7; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_025: Match Play closed on hole 17; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_026: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_027: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_028: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_030: Match Play closed on hole 13; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_031: Incomplete round has provisional Nassau and settlement output.
+- Warning - random_034: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_035: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_037: Match Play closed on hole 13; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_038: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_039: Match Play closed on hole 17; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_040: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_041: Incomplete round has provisional Nassau and settlement output.
 - Warning - random_042: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_043: Match Play closed on hole 17; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_044: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_048: Match Play closed on hole 17; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_050: Incomplete round has provisional Nassau and settlement output.
-- Warning - random_051: Match Play closed on hole 7; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_043: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_044: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_046: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_048: Match Play closed on hole 13; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_050: Match Play closed on hole 7; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_051: Match Play closed on hole 8; later entered scores should not change the recorded winner without intentional edit handling.
 - Warning - random_052: Match Play closed on hole 17; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_053: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_054: Incomplete round has provisional Nassau and settlement output.
-- Warning - random_055: Incomplete round has provisional Nassau and settlement output.
-- Warning - random_056: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_057: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_058: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_053: Match Play closed on hole 13; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_055: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_056: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_057: Incomplete round has provisional Nassau and settlement output.
 - Warning - random_058: Incomplete round has provisional Nassau and settlement output.
+- Warning - random_059: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_060: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
 - Warning - random_061: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
 - Warning - random_062: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_063: Incomplete round has provisional Nassau and settlement output.
-- Warning - random_065: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_063: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_064: Match Play closed on hole 13; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_065: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
 - Warning - random_067: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_068: Match Play closed on hole 13; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_070: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_071: Match Play closed on hole 17; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_072: Match Play closed on hole 8; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_073: Match Play closed on hole 17; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_074: Match Play closed on hole 6; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_075: Match Play closed on hole 17; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_076: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_076: Incomplete round has provisional Nassau and settlement output.
-- Warning - random_077: Incomplete round has provisional Nassau and settlement output.
-- Warning - random_078: Match Play closed on hole 17; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_079: Match Play closed on hole 8; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_080: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_081: Match Play closed on hole 13; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_082: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_083: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_069: Incomplete round has provisional Nassau and settlement output.
+- Warning - random_071: Match Play closed on hole 13; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_072: Incomplete round has provisional Nassau and settlement output.
+- Warning - random_073: Incomplete round has provisional Nassau and settlement output.
+- Warning - random_078: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_080: Match Play closed on hole 17; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_081: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_082: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_083: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
 - Warning - random_085: Incomplete round has provisional Nassau and settlement output.
-- Warning - random_086: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_087: Match Play closed on hole 17; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_088: Match Play closed on hole 13; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_089: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_090: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_091: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_092: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_093: Match Play closed on hole 17; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_094: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_095: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_097: Match Play closed on hole 8; later entered scores should not change the recorded winner without intentional edit handling.
-- Warning - random_099: Incomplete round has provisional Nassau and settlement output.
-- Warning - random_100: Incomplete round has provisional Nassau and settlement output.
+- Warning - random_086: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_087: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_089: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_090: Match Play closed on hole 8; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_091: Match Play closed on hole 14; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_092: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_093: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_094: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_096: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_097: Match Play closed on hole 13; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_098: Match Play closed on hole 16; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_099: Match Play closed on hole 15; later entered scores should not change the recorded winner without intentional edit handling.
+- Warning - random_100: Match Play closed on hole 12; later entered scores should not change the recorded winner without intentional edit handling.
 
 - Suspicious - blowout_match_play: A settlement row exceeds $100; confirm blowout/wager settings are intentional.
+- Suspicious - random_056: A settlement row exceeds $100; confirm blowout/wager settings are intentional.
 
 ## High-Risk Areas Still Not Covered
 - Browser-rendered Match Summary markup
@@ -157,8 +168,8 @@
 
 ## Interesting Rounds
 - blowout_match_play: 18/18 holes, 1 warning(s), 1 suspicious item(s), settlement Blake pays Alex $111.00; Blake pays Casey $40.00; Drew pays Casey $46.00
-- random_058: 17/18 holes, 2 warning(s), 0 suspicious item(s), settlement Alex pays Blake $65.00; Alex pays Drew $15.00; Casey pays Drew $5.00
-- random_076: 16/18 holes, 2 warning(s), 0 suspicious item(s), settlement Alex pays Casey $30.00; Alex pays Blake $20.00; Alex pays Drew $20.00
+- random_012: 8/9 holes, 2 warning(s), 0 suspicious item(s), settlement Alex pays Blake $33.00; Casey pays Blake $25.00; Drew pays Blake $1.00
+- random_056: 18/18 holes, 1 warning(s), 1 suspicious item(s), settlement Blake pays Casey $103.00; Drew pays Casey $29.00; Drew pays Alex $9.00
 - close_match_18: 18/18 holes, 1 warning(s), 0 suspicious item(s), settlement Casey pays Blake $48.00; Casey pays Drew $20.00; Casey pays Alex $1.00
 - nassau_front_back_split: 18/18 holes, 1 warning(s), 0 suspicious item(s), settlement Casey pays Alex $44.00; Casey pays Blake $12.00; Casey pays Drew $6.00
 - net_skins_handicap_stroke: 18/18 holes, 1 warning(s), 0 suspicious item(s), settlement Blake pays Alex $83.00; Casey pays Alex $54.00; Drew pays Alex $34.00
@@ -198,9 +209,24 @@
 - save_reload_mid_round
 - shared_match_two_device_assignment_model
 - host_correction_after_joiner_score
+- press_front_lane
+- press_back_lane
+- press_overall_lane
+- press_match_play
+- press_repress_chain_1
+- press_repress_chain_2
+- press_multiple_independent_chains
+- press_round_limit_exhausted
+- press_mid_round_enable
+- press_disable_after_use_blocked
+- press_limit_reduction_blocked
+- press_shared_sync_reconnect
+- press_reopen_refinish
+- press_frozen_history_reload
+- press_repeated_settlement
 
 ## Settlement Totals Across Run
-- p1: $-2606.00
-- p2: $199.00
-- p3: $679.00
-- p4: $1728.00
+- p1: $-1967.00
+- p2: $-250.00
+- p3: $481.00
+- p4: $1736.00

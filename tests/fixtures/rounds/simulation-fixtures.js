@@ -8,6 +8,12 @@ const players = [
   { id: 'p4', name: 'Drew', index: 18.6, team: 2 },
 ];
 const teams = [{ team: 1, name: 'North' }, { team: 2, name: 'South' }];
+const pressScores = {
+  p1: [4, 5, 3, 4, 4, 5, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 3, 4],
+  p2: [5, 6, 4, 5, 5, 6, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 4, 5],
+  p3: [5, 5, 4, 5, 5, 6, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 4, 5],
+  p4: [6, 6, 5, 6, 6, 7, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 5, 6],
+};
 
 function fixture(overrides) {
   return {
@@ -28,6 +34,19 @@ function fixture(overrides) {
     ],
     ...overrides,
   };
+}
+
+function pressFixture(scenario, purpose, pressRegression) {
+  return fixture({
+    scenario,
+    purpose,
+    scores: pressScores,
+    selectedGames: [
+      { key: 'match_play', basis: 'net', stake: 10, pressesEnabled: true, maxPressesPerRound: 6, maxRePresses: 2 },
+      { key: 'nassau', basis: 'net', stakesFront: 5, stakesBack: 5, stakesOverall: 5, pressesEnabled: true, maxPressesPerRound: 6, maxRePresses: 2 },
+    ],
+    pressRegression: { deterministic: true, ...pressRegression },
+  });
 }
 
 export const deterministicFixtures = [
@@ -141,4 +160,19 @@ export const deterministicFixtures = [
       p4: [5, 6, 4, 5, 5, 6, 5, 4, 5],
     },
   }),
+  pressFixture('press_front_lane', 'Deterministic Front Press eligibility and original-wager fixture.', { parent: 'nassau', segment: 'FRONT', chainDepth: 1 }),
+  pressFixture('press_back_lane', 'Deterministic Back Press eligibility and future-hole fixture.', { parent: 'nassau', segment: 'BACK', chainDepth: 1 }),
+  pressFixture('press_overall_lane', 'Deterministic Overall Press eligibility and final-settlement fixture.', { parent: 'nassau', segment: 'OVERALL', chainDepth: 1 }),
+  pressFixture('press_match_play', 'Deterministic standalone Match Play Press fixture.', { parent: 'match_play', segment: 'OVERALL', chainDepth: 1 }),
+  pressFixture('press_repress_chain_1', 'Deterministic Press to Re-Press hierarchy fixture.', { parent: 'match_play', chainDepth: 2 }),
+  pressFixture('press_repress_chain_2', 'Deterministic Press to two-level Re-Press hierarchy fixture.', { parent: 'match_play', chainDepth: 3 }),
+  pressFixture('press_multiple_independent_chains', 'Deterministic independent Front, Back, Overall, and Match Play chains.', { parent: 'mixed', chainDepth: 3, independentChains: 4 }),
+  pressFixture('press_round_limit_exhausted', 'Deterministic round-wide Maximum Presses exhaustion fixture.', { parent: 'mixed', existingCount: 6, maxPressesPerRound: 6 }),
+  pressFixture('press_mid_round_enable', 'Deterministic future-only mid-round Press enablement fixture.', { transition: 'OFF_TO_ON', completedHoles: 5 }),
+  pressFixture('press_disable_after_use_blocked', 'Deterministic disable-after-creation rejection fixture.', { transition: 'ON_TO_OFF', existingCount: 1, expectedReason: 'PRESS_DISABLE_BLOCKED_EXISTING_PRESS' }),
+  pressFixture('press_limit_reduction_blocked', 'Deterministic count/depth limit reduction rejection fixture.', { existingCount: 3, chainDepth: 2, expectedReasons: ['MAX_PRESSES_BELOW_EXISTING_COUNT', 'MAX_REPRESSES_BELOW_EXISTING_DEPTH'] }),
+  pressFixture('press_shared_sync_reconnect', 'Deterministic host transport, replay, disconnect, and reconnect fixture.', { shared: true, syncCycles: 3, disconnectReconnect: true }),
+  pressFixture('press_reopen_refinish', 'Deterministic Finish, reopen, and refinish history fixture.', { reopenCycles: 1, settlementDerivations: 2 }),
+  pressFixture('press_frozen_history_reload', 'Deterministic frozen RoundRecord reload and immutability fixture.', { frozen: true, reloads: 2 }),
+  pressFixture('press_repeated_settlement', 'Deterministic repeated Press settlement derivation fixture.', { settlementDerivations: 3, expectedDuplicateTransactions: 0 }),
 ];

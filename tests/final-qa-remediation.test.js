@@ -61,7 +61,7 @@ test('checklist and Start Round validation share one complete authoritative draf
   assert.equal((appSource.match(/function getMatchSetupValidationState\(/g) || []).length, 1);
 });
 
-test('all newly created Presses use the original game wager and no stake selector is exposed', () => {
+test('new root Presses use the game wager and descendants retain the stored root Press wager', () => {
   const engine = loadLiveEngine();
   const players = [{ id: 'a', name: 'A', index: 0 }, { id: 'b', name: 'B', index: 0 }];
   const holes = Array.from({ length: 18 }, (_, index) => ({ holeNumber: index + 1, par: 4, strokeIndex: index + 1 }));
@@ -80,9 +80,9 @@ test('all newly created Presses use the original game wager and no stake selecto
   metrics = engine.computeMatchMetrics(live);
   const secondRePress = engine.buildPressRecordDraft(live, metrics, 'OVERALL', { gameKey: 'team_match', parentPressId: rePress.pressId, pressConfig: live.selectedGames[0], currentPosition: 7, declaringSideId: '2' });
   assert.equal(root.wagerAmount, 25);
-  assert.equal(rePress.wagerAmount, 10);
-  assert.equal(secondRePress.wagerAmount, 10);
-  assert.equal(engine.getOriginalPressWager(live, root), 10);
+  assert.equal(rePress.wagerAmount, 25);
+  assert.equal(secondRePress.wagerAmount, 25);
+  assert.equal(engine.getOriginalPressWager(live, root), 25);
   assert.doesNotMatch(html, /Press Stake|Root Stake|Parent Stake/);
   assert.doesNotMatch(appSource, /data-field="pressValueRule"/);
   assert.match(html, /All Presses and Re-Presses use the original wager for the game or Nassau segment\./);

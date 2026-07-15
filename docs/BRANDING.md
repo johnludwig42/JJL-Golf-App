@@ -11,13 +11,19 @@ The master depicts the gold ledger/flag mark above the white **THE DYE LEDGER** 
 | Surface | Asset | Required size |
 | --- | --- | ---: |
 | Canonical source | `branding/app-icon-master.png` | 512 × 512 |
-| PWA / installed application | `branding/app-icon-512.png` | 512 × 512 |
-| PWA / header | `branding/app-icon-192.png` | 192 × 192 |
-| iPhone Home Screen | `branding/apple-touch-icon.png` | 180 × 180 |
+| Desktop PWA 512 icon | `branding/app-icon-512.png` | 512 × 512 |
+| Header / iPhone Home Screen | `branding/apple-touch-icon.png` | 180 × 180 |
+| Desktop PWA 192 icon | `branding/app-icon-192.png` | 192 × 192 |
 | Browser favicon | `branding/favicon-32.png` | 32 × 32 |
 | Small browser favicon | `branding/favicon-16.png` | 16 × 16 |
 
-`index.html` uses the 192 px asset in the header, the Apple Touch Icon for iOS, and both favicon sizes. `manifest.json` uses the 192 px, 512 px, and 180 px assets. `service-worker.js` caches the same set for offline-first startup.
+`index.html` uses `branding/apple-touch-icon.png` for both the top-left header artwork and its one authoritative Apple Touch Icon link. The header uses the PNG directly with `object-fit: contain`; there is no mask, background-image substitution, or runtime fallback to the 192 px asset.
+
+`branding/app-icon-512.png` is byte-for-byte identical to `branding/app-icon-master.png`. The 192 px desktop PWA file and 180 px Apple file are approved same-artwork derivatives at their required platform dimensions. `manifest.json` uses versioned v30.3.71 URLs for the 192 px and 512 px desktop icons so Chromium can detect the current icon resources without pointing a 512 px slot at the 180 px Apple file. `service-worker.js` precaches those exact versioned URLs and the Apple file.
+
+Existing Home Screen icons may remain cached until the user removes and re-adds the app from Safari.
+
+Existing Windows or other desktop PWA icons may remain in the operating system's installation, Start Menu, or taskbar cache even after the web app and service worker update. If the installed icon remains stale, uninstall and reinstall the desktop PWA. The favicon may remain cached separately because browsers maintain a separate site/icon cache; closing old tabs or clearing that cache may be necessary.
 
 The app has no separate hand-authored splash artwork. Installed-app splash presentation is derived from the canonical manifest icon together with the manifest background and theme colors (`#f3f6f4` and `#0b5d3b`).
 

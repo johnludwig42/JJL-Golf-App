@@ -1,6 +1,6 @@
 # Press Engine Architecture
 
-## v30.3.69 Product Acceptance semantics
+## v30.3.71 Press Completion semantics
 
 Player Preferences own all default Press settings. A new round copies those values into Round Setup; later round-specific edits do not mutate the saved preferences.
 
@@ -8,7 +8,31 @@ Player Preferences own all default Press settings. A new round copies those valu
 
 The Play `Press` action opens a chooser and never creates a wager immediately. The chooser includes every root Press and Re-Press that passes the same host, declaration-window, parent-availability, trailing-side, future-hole, duplicate-start, round-total, and chain-limit checks. Selection still requires explicit confirmation and authoritative revalidation. Settlement math and frozen historical records are unchanged.
 
-All newly created Presses and Re-Presses use the original wager of the root game or Nassau segment. No stake-policy selector is exposed in Player Preferences, Round Setup, or the chooser. The legacy `pressValueRule` / `stakeRule` schema is retained for compatibility: existing active Press records keep their stored wager, frozen RoundRecords and transactions are never rewritten, and historical settlement is never recalculated. A newly created Re-Press beneath a legacy Press still resolves its wager from the selected root game or segment rather than copying the legacy parent amount.
+All newly created Presses and Re-Presses use the original wager of the root game or Nassau segment. No stake-policy selector is exposed in Player Preferences, Round Setup, or the chooser. The legacy `pressValueRule` / `stakeRule` schema is retained for compatibility: existing active Press records keep their stored wager, frozen RoundRecords and transactions are never rewritten, and historical settlement is never recalculated. A Re-Press inherits the stored root Press wager so a later setup edit cannot rewrite an existing chain's economics; legacy data without a usable stored root wager falls back to the selected root game or segment.
+
+### Mid-round Press editing contract
+
+One validator, `validatePressEditContract()`, is shared by setup readiness, Update Match, draft normalization, active persistence, and Shared host authorization. It reports stable reason codes and never mutates an existing Press tree.
+
+| Edit | Before any Press | After a Press exists |
+| --- | --- | --- |
+| Presses Off → On | Allowed; future opportunities use current live state | Allowed for another supported parent; no retroactive Press |
+| Presses On → Off | Allowed | Blocked: `PRESS_DISABLE_BLOCKED_EXISTING_PRESS` |
+| Remove a parent game | Allowed | Blocked when that game owns Press activity: `PRESS_SETTING_LOCKED_AFTER_PRESS` |
+| Maximum Presses | 1–10 | May increase or equal created wager count; lower values are blocked |
+| Maximum Re-Presses | 0–4 | May increase or equal deepest existing chain; lower values are blocked |
+| Trigger / prompt threshold / declaring side / parent availability / declaration timing / Nassau lane toggles | Allowed | Allowed for future opportunities only |
+| Joined Shared device | Not authorized | Not authorized: `JOINED_DEVICE_NOT_AUTHORIZED` |
+
+Enabling Presses never creates a Press and never searches backward for a start hole. Eligibility is evaluated from the current authoritative scoring position, so only future eligible holes can be offered. Player Preferences remain defaults for new rounds and are not changed by round-specific edits.
+
+Existing Press records retain their stable IDs, parent/root IDs, depth, stored basis, hole range, wager, declaration facts, and lifecycle. Configuration edits affect future eligibility only. Press disablement, unsafe limit reductions, and removal of a used parent are enforced in the save path as well as the UI.
+
+### Authoritative availability matrix
+
+All supported parents—Nassau Front, Back, Overall, Singles Match Play, and Team/Best-Ball Match Play—use the same eligibility engine. A candidate requires Presses enabled, a positive original wager, a supported selected parent, host authority for Shared Match, an active non-reopened/non-frozen round, a future hole inside the parent range, remaining round-wide capacity, no duplicate parent/start, and an allowed declaring side. `OPEN_SEGMENT_ONLY` additionally requires an undecided parent; `FUTURE_HOLES_REMAIN` allows a clinched parent while future holes remain. Re-Presses also require an open parent Press and available chain depth.
+
+Chooser rendering and threshold prompting create no wager. Confirmation reruns the complete contract and appends one stable Press record. Stable IDs plus authoritative merge collapse repeated render, reload, and Shared synchronization replays.
 
 ## 1. Purpose
 
@@ -32,7 +56,7 @@ Threshold prompts use a deterministic identity comprising root, parent and compo
 
 Shared Match metadata treats the host press collection as authoritative. Merge uses stable press IDs, host-device identity, lifecycle precedence, and timestamps; missing joined-device arrays cannot erase host records, terminal void/supersede state cannot be downgraded, and same-parent/same-depth/same-declared-hole duplicates collapse deterministically without mutating inputs.
 
-Scores and Match Summary include a dedicated Presses audit below game drivers. It preserves parent/depth hierarchy, declarer IDs, declaration and hole ranges, stake, lifecycle, reason, and component ledger impact. Live reports use current authoritative records; settled historical reports clone and render frozen `games[]` and `pressTransactions` without recalculation or mutation.
+Scores and Match Summary include a concise **Press Activity** audit below game drivers. It shows the authoritative parent/segment, Press or Re-Press depth, declaration hole, range, original wager, final status, and winner or halved result. Live reports use current authoritative records; settled historical reports clone and render frozen `games[]` and `pressTransactions` without recalculation, mutation, or duplicate netting.
 
 Broad void/supersede management UI remains deferred, along with joined-device request/approval, automatic creation, custom/double stakes, Hammer, and unlimited Re-Press chains.
 

@@ -193,7 +193,7 @@ test('responsive source paths contain internal scrolling, width-fit momentum, de
   const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   assert.match(html, /src="\.\/branding\/apple-touch-icon\.png" alt="The Dye Ledger"/);
   assert.match(html, /id="playMatchSummary"[^>]*aria-label="Match Summary"/);
-  assert.match(css, /\.quick-scroll-panel\{[^}]*overflow-x:auto/);
+  assert.match(css, /\.table-scroll-region\{[^}]*overflow-x:auto[^}]*overflow-y:hidden/);
   assert.match(css, /\.quick-scoreboard-modal\{[^}]*overflow-x:hidden/s);
   assert.match(css, /\.quick-momentum-card \.momentum-chart\{[^}]*min-width:0[^}]*max-width:100%/);
   const renderCurrentMatch = app.slice(app.indexOf('function renderCurrentMatch()'), app.indexOf('function getShortStatusName'));
@@ -208,12 +208,12 @@ test('Quick Scoreboard reuses the native bounded scorecard scroller and Play Gre
   assert.match(css, /body\s*\{\s*touch-action:\s*auto;/);
   assert.match(app, /quick-classic-scorecard"\$\{quickPreferences\.classicScorecardExpanded \? ' open' : ''\}><summary>Classic Scorecard<\/summary>\$\{buildClassicScorecard\(match, metrics, \{ readOnly: true \}\)\}<\/details>/);
   assert.doesNotMatch(app, /quick-classic-scorecard[^\n]*quick-scroll-panel/);
-  assert.match(app, /class="scorecard-wrap" tabindex="0" role="region" aria-label="Classic scorecard; scroll horizontally to view all holes"/);
+  assert.match(app, /class="scorecard-wrap table-scroll-region" data-scroll-table="classic-scorecard" tabindex="0" role="region" aria-label="Classic scorecard; scroll horizontally to view all holes"/);
   assert.match(css, /\.scorecard-wrap\{position:relative;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;/);
   assert.match(css, /@media \(max-width:760px\)\{\.scorecard-table\{min-width:920px\}\}/);
-  assert.match(css, /\.quick-classic-scorecard>\.scorecard-wrap\{width:calc\(100% - 24px\);max-width:calc\(100% - 24px\);/);
-  assert.match(html, /style\.css\?v=30\.3\.70&amp;rev=1/);
-  assert.match(app, /cacheName: 'the-dye-ledger-v30\.3\.70'/);
+  assert.match(css, /\.quick-classic-scorecard>\.scorecard-wrap,\.quick-score-distribution>\.score-distribution-scroll\{width:calc\(100% - 24px\);max-width:calc\(100% - 24px\);/);
+  assert.match(html, /style\.css\?v=30\.3\.71&amp;rev=1/);
+  assert.match(app, /cacheName: 'the-dye-ledger-v30\.3\.71'/);
   assert.match(css, /#greeniesEntryWrap \.greenies-check\{min-height:44px;padding:4px 9px;gap:7px\}/);
   assert.match(css, /#greeniesEntryWrap \.greenies-check input\[type="checkbox"\]\{width:20px;height:20px;min-height:20px;padding:0\}/);
   assert.match(html, /id="greeniesEntryWrap" class="top-gap hidden"/);

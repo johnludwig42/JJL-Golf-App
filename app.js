@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.70',
-  versionNumber: '30.3.70',
-  cacheName: 'the-dye-ledger-v30.3.70',
+  version: 'v30.3.71',
+  versionNumber: '30.3.71',
+  cacheName: 'the-dye-ledger-v30.3.71',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Production Readiness & Stability'
+  buildLabel: 'Press Completion & Regression Hardening'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -2616,7 +2616,7 @@ function sanitizeSetupDraft(input, preferences = getPlayerPreferences()) {
     smartScoreAdvanceEnabled: typeof input.smartScoreAdvanceEnabled === 'boolean' ? input.smartScoreAdvanceEnabled : base.smartScoreAdvanceEnabled,
     smartScoreAdvancePreset: normalizeSmartScoreAdvancePreset(input.smartScoreAdvancePreset || base.smartScoreAdvancePreset),
     statTrackingPlayerIds: Array.isArray(input.statTrackingPlayerIds) ? input.statTrackingPlayerIds.map(String) : [],
-    selectedGames: (Array.isArray(input.selectedGames) ? input.selectedGames : []).filter(game => game && typeof game === 'object' && !Array.isArray(game)).map(clonePlain),
+    selectedGames: normalizePressEditDraft(null, (Array.isArray(input.selectedGames) ? input.selectedGames : []).filter(game => game && typeof game === 'object' && !Array.isArray(game)).map(clonePlain)).selectedGames,
     featuredCompetition: normalizeFeaturedCompetition(input.featuredCompetition || 'auto'),
     pressConfig: normalizePressConfig(input.pressConfig || base.pressConfig),
     players: (Array.isArray(input.players) ? input.players : []).filter(player => player && typeof player === 'object' && !Array.isArray(player)).map((player, index) => ({
@@ -2624,7 +2624,7 @@ function sanitizeSetupDraft(input, preferences = getPlayerPreferences()) {
       team: Math.max(1, Number(player.team) || 1),
       slot: Number.isFinite(Number(player.slot)) ? Number(player.slot) : index,
       teeId: String(player.teeId || ''),
-    })).filter(player => player.playerId),
+    })).filter(player => player.playerId || player.teeId),
     storageMode: input.storageMode === 'shared' ? 'shared' : 'local',
     roundContext: normalizeRoundContext(input.roundContext || {}),
     status: 'active',
@@ -3783,6 +3783,62 @@ function getPressConfigForGame(match, gameConfig = null) {
   const nested = game.pressConfig && typeof game.pressConfig === 'object' ? game.pressConfig : {};
   return normalizePressConfig({ ...legacy, ...nested, ...game });
 }
+
+function getPressEditFacts(match) {
+  const records = dedupePressRecords((match?.presses || []).map(record => normalizePressRecord(record, match)).filter(Boolean));
+  const rootGameKeys = [...new Set(records.map(record => String(record.outcomeGameKey || '')).filter(Boolean))];
+  return {
+    pressCount: records.length,
+    deepestRePressDepth: records.reduce((depth, record) => Math.max(depth, Math.max(0, Number(record.pressDepth || 1) - 1)), 0),
+    rootGameKeys,
+    pressIds: records.map(record => record.pressId),
+  };
+}
+
+function normalizePressEditDraft(existingMatch = null, proposedSelectedGames = [], options = {}) {
+  const normalizedSelectedGames = normalizeSelectedGamesOrder((proposedSelectedGames || []).map(game => {
+    if (!game || typeof game !== 'object') return game;
+    return getGameEscalationCapability(game.key) === 'PRESS' ? { ...game, ...normalizePressConfig(game) } : clonePlain(game);
+  }).filter(Boolean));
+  const validation = validatePressEditContract(existingMatch, normalizedSelectedGames, options);
+  return { ...validation, selectedGames: validation.valid || !existingMatch ? normalizedSelectedGames : clonePlain(existingMatch.selectedGames || []) };
+}
+
+function validatePressEditContract(existingMatch = null, proposedSelectedGames = [], options = {}) {
+  const rawProposedPressGames = new Map((proposedSelectedGames || []).filter(game => getGameEscalationCapability(game?.key) === 'PRESS').map(game => [String(game.key), game]));
+  const proposedGames = normalizeSelectedGamesOrder((proposedSelectedGames || []).map(game => getGameEscalationCapability(game?.key) === 'PRESS' ? { ...game, ...normalizePressConfig(game) } : clonePlain(game)).filter(Boolean));
+  const facts = getPressEditFacts(existingMatch);
+  const reasons = [];
+  const addReason = (code, message, field = '', gameKey = '') => {
+    if (!reasons.some(reason => reason.code === code && reason.field === field && reason.gameKey === gameKey)) reasons.push({ code, message, field, gameKey });
+  };
+  if (!existingMatch) return { valid: true, reasons, primaryReason: null, facts, proposedGames };
+  const isHost = options.isHost == null ? isCurrentDeviceMatchHost(existingMatch) : !!options.isHost;
+  if (existingMatch.storageMode === 'shared' && !isHost) addReason('JOINED_DEVICE_NOT_AUTHORIZED', 'Only the Shared Match host can change Press settings.');
+  if (!facts.pressCount) return { valid: reasons.length === 0, reasons, primaryReason: reasons[0] || null, facts, proposedGames };
+
+  const priorPressGames = new Map((existingMatch.selectedGames || []).filter(game => getGameEscalationCapability(game?.key) === 'PRESS').map(game => [String(game.key), getPressConfigForGame(existingMatch, game)]));
+  const proposedPressGames = new Map(proposedGames.filter(game => getGameEscalationCapability(game?.key) === 'PRESS').map(game => [String(game.key), normalizePressConfig(game)]));
+  facts.rootGameKeys.forEach(gameKey => {
+    if (!proposedPressGames.has(gameKey)) addReason('PRESS_SETTING_LOCKED_AFTER_PRESS', 'A game with existing Press activity cannot be removed from this round.', 'selectedGames', gameKey);
+  });
+  priorPressGames.forEach((priorConfig, gameKey) => {
+    const proposedConfig = proposedPressGames.get(gameKey);
+    if (priorConfig.pressesEnabled && (!proposedConfig || !proposedConfig.pressesEnabled)) {
+      addReason('PRESS_DISABLE_BLOCKED_EXISTING_PRESS', 'Presses cannot be turned off after a Press has been created in this round.', 'pressesEnabled', gameKey);
+    }
+  });
+  proposedPressGames.forEach((config, gameKey) => {
+    const raw = rawProposedPressGames.get(gameKey) || {};
+    const requestedMaximum = Number(raw.maxPressesPerRound ?? raw.maxPressesPerRootGame ?? raw.maxPressesPerSegment);
+    const requestedRePressMaximum = Number(raw.maxRePresses ?? (raw.maxPressDepth == null ? config.maxRePresses : Number(raw.maxPressDepth) - 1));
+    const maximum = Number.isFinite(requestedMaximum) ? requestedMaximum : config.maxPressesPerRound;
+    const rePressMaximum = Number.isFinite(requestedRePressMaximum) ? requestedRePressMaximum : config.maxRePresses;
+    if (maximum < facts.pressCount) addReason('MAX_PRESSES_BELOW_EXISTING_COUNT', `Maximum Presses cannot be lower than the ${facts.pressCount} Press wager${facts.pressCount === 1 ? '' : 's'} already created.`, 'maxPressesPerRound', gameKey);
+    if (rePressMaximum < facts.deepestRePressDepth) addReason('MAX_REPRESSES_BELOW_EXISTING_DEPTH', `Maximum Re-Presses cannot be lower than the existing chain depth of ${facts.deepestRePressDepth}.`, 'maxRePresses', gameKey);
+  });
+  return { valid: reasons.length === 0, reasons, primaryReason: reasons[0] || null, facts, proposedGames };
+}
 function getPressSegmentRange(match, metrics, segmentType) {
   const segment = String(segmentType || '').toUpperCase();
   const holes = getSelectedScoringHoles(match, metrics?.tee || getTee(match?.courseId, match?.teeId));
@@ -3895,6 +3951,14 @@ function getPressEligibility(match, metrics, segmentType, options = {}) {
 function getOriginalPressWager(match, press) {
   const record = normalizePressRecord(press, match);
   if (!record) return 0;
+  const byId = new Map((match?.presses || []).map(row => normalizePressRecord(row, match)).filter(Boolean).map(row => [row.pressId, row]));
+  let root = record;
+  const seen = new Set();
+  while (byId.has(root.parentGameId) && !seen.has(root.parentGameId)) {
+    seen.add(root.pressId);
+    root = byId.get(root.parentGameId);
+  }
+  if (Number(root.wagerAmount) > 0) return Number(root.wagerAmount);
   if (record.outcomeGameKey === 'nassau') return Number(getPressParentReference(match, record.parentSegmentType, record.scoringMode)?.wagerAmount || 0);
   const game = (match?.selectedGames || []).find(row => row.key === record.outcomeGameKey);
   return Math.max(0, Number(game?.stake || 0));
@@ -8083,7 +8147,7 @@ function buildClassicScorecard(match, metrics, opts = {}) {
   const teeNames = [...new Set(visiblePlayers.map(p => p.tee?.teeName || tee?.teeName || 'Tee'))];
   const teeNote = teeNames.length === 1 ? ` All players: ${teeNames[0]} tee.` : ' Player tees are shown in each row.';
   const partialNote = completion.isIncomplete ? ' Unplayed holes are shown as dashes and excluded from totals.' : '';
-  return `<div class="scorecard-sub tiny">Gross score shown above net score. Dots indicate strokes received.${escapeHtml(teeNote)}${escapeHtml(partialNote)}</div><div class="scorecard-wrap" tabindex="0" role="region" aria-label="Classic scorecard; scroll horizontally to view all holes"><table class="scorecard-table ${hideTeamColumn ? 'scorecard-no-team-col' : ''}"><thead><tr><th class="scorecard-sticky-name">${blankPlayerHeader ? '' : 'Player'}</th>${hideTeamColumn ? '' : '<th class="scorecard-sticky-team">Team</th>'}${holeHeader}${totalColumns}</tr></thead><tbody>${yardageRow}${parRow}${siRow}${playerRows}</tbody></table></div>`;
+  return `<div class="scorecard-sub tiny">Gross score shown above net score. Dots indicate strokes received.${escapeHtml(teeNote)}${escapeHtml(partialNote)}</div><div class="scorecard-wrap table-scroll-region" data-scroll-table="classic-scorecard" tabindex="0" role="region" aria-label="Classic scorecard; scroll horizontally to view all holes"><table class="scorecard-table ${hideTeamColumn ? 'scorecard-no-team-col' : ''}"><thead><tr><th class="scorecard-sticky-name">${blankPlayerHeader ? '' : 'Player'}</th>${hideTeamColumn ? '' : '<th class="scorecard-sticky-team">Team</th>'}${holeHeader}${totalColumns}</tr></thead><tbody>${yardageRow}${parRow}${siRow}${playerRows}</tbody></table></div>`;
 }
 
 
@@ -8440,16 +8504,20 @@ function buildScoreDistributionSummary(match, metrics) {
   if (!rows.length) return '<div class="tiny">No player scores available yet.</div>';
   const anyScores = rows.some(r => Object.values(r.totals || {}).some(v => Number(v) > 0));
   if (!anyScores) return '<div class="tiny">No completed holes yet.</div>';
+  return buildScoreDistributionPresentation(rows.map(({ playerMetric, totals }) => ({ name: playerMetric.player.name, totals })));
+}
+
+function buildScoreDistributionPresentation(rows = []) {
   return `
     <div class="score-distribution-wrap top-gap">
       <div class="section-subhead">Score distribution</div>
       <div class="tiny">Gross scores only; completed holes only. Hole-in-ones, albatrosses, and triple bogeys or worse are included in Other.</div>
-      <div class="score-distribution-scroll top-gap">
+      <div class="score-distribution-scroll table-scroll-region top-gap" data-scroll-table="score-distribution" tabindex="0" role="region" aria-label="Score distribution; scroll horizontally to view all statistics">
         <table class="score-distribution-table">
           <thead><tr><th>Player</th><th>Eagle</th><th>Birdie</th><th>Par</th><th>Bogey</th><th>Double Bogey</th><th>Other</th></tr></thead>
-          <tbody>${rows.map(({ playerMetric, totals }) => `
+          <tbody>${rows.map(({ name, totals }) => `
             <tr>
-              <td><strong>${escapeHtml(playerMetric.player.name)}</strong></td>
+              <td title="${escapeHtml(name)}"><strong>${escapeHtml(name)}</strong></td>
               <td>${totals.eagle}</td>
               <td>${totals.birdie}</td>
               <td>${totals.par}</td>
@@ -8468,13 +8536,11 @@ function buildQuickScoreDistribution(match, metrics, record = null, expanded = f
   if (!frozen) {
     const rows = computeScoreDistributionSummary(match, metrics);
     if (!rows.some(row => Object.values(row.totals || {}).some(value => Number(value) > 0))) return '';
-    return `<details class="quick-scoreboard-section quick-disclosure quick-score-distribution"${open}><summary>Score Distribution</summary><div class="quick-scroll-panel">${buildScoreDistributionSummary(match, metrics)}</div></details>`;
+    return `<details class="quick-scoreboard-section quick-disclosure quick-score-distribution"${open}><summary>Score Distribution</summary>${buildScoreDistributionSummary(match, metrics)}</details>`;
   }
   const rows = (record.players || []).filter(player => player.scoreDistribution).map(player => ({ name: player.displayName || player.playerId, totals: player.scoreDistribution }));
   if (!rows.some(row => Object.values(row.totals || {}).some(value => Number(value) > 0))) return '';
-  const body = rows.map(({ name, totals }) => `<tr><td><strong>${escapeHtml(name)}</strong></td><td>${totals.eagle}</td><td>${totals.birdie}</td><td>${totals.par}</td><td>${totals.bogey}</td><td>${totals.doubleBogey}</td><td>${totals.other}</td></tr>`).join('');
-  const presentation = `<div class="score-distribution-wrap top-gap"><div class="section-subhead">Score distribution</div><div class="tiny">Gross scores only; completed holes only. Hole-in-ones, albatrosses, and triple bogeys or worse are included in Other.</div><div class="score-distribution-scroll top-gap"><table class="score-distribution-table"><thead><tr><th>Player</th><th>Eagle</th><th>Birdie</th><th>Par</th><th>Bogey</th><th>Double Bogey</th><th>Other</th></tr></thead><tbody>${body}</tbody></table></div></div>`;
-  return `<details class="quick-scoreboard-section quick-disclosure quick-score-distribution"${open}><summary>Score Distribution</summary><div class="quick-scroll-panel">${presentation}</div></details>`;
+  return `<details class="quick-scoreboard-section quick-disclosure quick-score-distribution"${open}><summary>Score Distribution</summary>${buildScoreDistributionPresentation(rows)}</details>`;
 }
 
 
@@ -14920,7 +14986,7 @@ function normalizeDraftTeeAssignments({ courseId = null, forceDefault = false } 
   const draft = Array.isArray(uiState.matchPlayerDraft) ? uiState.matchPlayerDraft : [];
   const next = draft.map(row => {
     const teeId = String(row?.teeId || '');
-    const needsDefault = forceDefault || !teeId || (validTeeIds.size && !validTeeIds.has(teeId));
+    const needsDefault = forceDefault || (!!teeId && validTeeIds.size && !validTeeIds.has(teeId));
     return { ...row, teeId: needsDefault ? fallbackTeeId : teeId };
   });
   uiState.matchPlayerDraft = next;
@@ -15044,7 +15110,8 @@ function captureCurrentSetupDraft() {
   const form = document.getElementById('matchForm');
   if (!form || editingMatchId || setupWorkflowMode !== 'create') return null;
   const fd = new FormData(form);
-  const players = getSelectedPlayersFromSetup();
+  const slotSelections = getCurrentMatchEditorSelections();
+  const players = slotSelections.filter(row => row.playerId);
   const selectedGames = collectSelectedGames();
   const courseId = String(fd.get('courseId') || '');
   const teeId = String(fd.get('teeId') || document.getElementById('matchTeeSelect')?.value || players[0]?.teeId || '');
@@ -15073,7 +15140,7 @@ function captureCurrentSetupDraft() {
     selectedGames,
     featuredCompetition: String(fd.get('featuredCompetition') || 'auto'),
     pressConfig: normalizePressConfig(selectedGames.find(game => getGameEscalationCapability(game.key) === 'PRESS') || getNewMatchDefaultsFromPreferences().pressConfig),
-    players,
+    players: slotSelections,
     storageMode: shared ? 'shared' : 'local',
     roundContext: {},
   });
@@ -15133,35 +15200,63 @@ function getCurrentMatchEditorSelectionsSnapshot() {
     const draftRow = draft.find(row => Number(row?.slot) === idx) || draft[idx] || {};
     const domSlot = document.querySelector(`[data-player-slot="${idx}"]`);
     const domTee = document.querySelector(`[data-player-tee-slot="${idx}"]`);
+    const hasDraftTee = Object.prototype.hasOwnProperty.call(draftRow, 'teeId');
     return {
       slot: idx,
       team: Number(draftRow.team || domSlot?.dataset.slotTeam || (Math.floor(idx / playersPerTeam) + 1)) || 1,
       playerId: String(domSlot?.value || draftRow.playerId || ''),
-      teeId: String(domTee?.value || draftRow.teeId || fallbackTeeId || ''),
+      teeId: String(domTee ? (domTee.value || '') : (hasDraftTee ? (draftRow.teeId || '') : (fallbackTeeId || ''))),
     };
   });
 }
+
+function reconcilePlayerDraftSlots(draftRows = [], { teamCount = 1, playersPerTeam = 1, incomingRows = [], defaultTeeId = '', validTeeIds = null } = {}) {
+  const normalizedTeamCount = Math.max(1, Number(teamCount) || 1);
+  const normalizedPlayersPerTeam = Math.max(1, Number(playersPerTeam) || 1);
+  const slotCount = Math.min(32, normalizedTeamCount * normalizedPlayersPerTeam);
+  const current = Array.isArray(draftRows) ? draftRows : [];
+  const incoming = Array.isArray(incomingRows) ? incomingRows : [];
+  const validIds = validTeeIds == null ? null : new Set(Array.from(validTeeIds, String));
+  return Array.from({ length: slotCount }, (_, slot) => {
+    const prior = current.find(row => Number(row?.slot) === slot) || current[slot] || {};
+    const direct = incoming.find(row => Number(row?.slot) === slot) || {};
+    const hasDirectPlayer = Object.prototype.hasOwnProperty.call(direct, 'playerId');
+    const hasDirectTee = Object.prototype.hasOwnProperty.call(direct, 'teeId');
+    const hasPriorTee = Object.prototype.hasOwnProperty.call(prior, 'teeId');
+    let teeId = String(hasDirectTee ? (direct.teeId || '') : (hasPriorTee ? (prior.teeId || '') : (defaultTeeId || '')));
+    if (teeId && validIds && !validIds.has(teeId)) teeId = '';
+    return {
+      slot,
+      team: Math.floor(slot / normalizedPlayersPerTeam) + 1,
+      playerId: String(hasDirectPlayer ? (direct.playerId || '') : (prior.playerId || '')),
+      teeId,
+    };
+  });
+}
+
 function syncMatchPlayerDraft(selected = null) {
   const teamCount = Number(document.getElementById('teamCountSelect')?.value || 1);
   const playersPerTeam = Number(document.getElementById('playersPerTeamSelect')?.value || 1);
   const slotCount = teamCount * playersPerTeam;
   const defaultTeeId = getReferenceFallbackTeeId();
-  const incoming = Array.isArray(selected) ? selected : [];
+  const incoming = Array.isArray(selected) ? selected : Array.from({ length: slotCount }, (_, idx) => {
+    const player = document.querySelector(`[data-player-slot="${idx}"]`);
+    const tee = document.querySelector(`[data-player-tee-slot="${idx}"]`);
+    const row = { slot: idx };
+    if (player) row.playerId = player.value || '';
+    if (tee) row.teeId = tee.value || '';
+    return row;
+  });
   const currentDraft = Array.isArray(uiState.matchPlayerDraft) ? uiState.matchPlayerDraft : [];
   const suppressDomCarryover = cleanNewMatchSetupInProgress && Array.isArray(selected) && selected.length === 0;
-  const next = Array.from({ length: slotCount }, (_, idx) => {
-    const draft = currentDraft.find(s => Number(s.slot) === idx) || {};
-    const direct = incoming.find(s => Number(s.slot) === idx) || {};
-    const domPlayerId = suppressDomCarryover ? '' : (document.querySelector(`[data-player-slot="${idx}"]`)?.value || '');
-    const domTeeId = suppressDomCarryover ? '' : (document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '');
-    const hasDirectPlayer = Object.prototype.hasOwnProperty.call(direct, 'playerId');
-    const hasDirectTee = Object.prototype.hasOwnProperty.call(direct, 'teeId');
-    return {
-      slot: idx,
-      team: Math.floor(idx / playersPerTeam) + 1,
-      playerId: String(hasDirectPlayer ? (direct.playerId || '') : (draft.playerId || domPlayerId || '')),
-      teeId: String(hasDirectTee ? (direct.teeId || '') : (draft.teeId || domTeeId || defaultTeeId || '')),
-    };
+  const courseId = document.getElementById('matchCourseSelect')?.value || '';
+  const validTeeIds = new Set((getCourse(courseId)?.tees || []).map(tee => String(tee.id)));
+  const next = reconcilePlayerDraftSlots(suppressDomCarryover ? [] : currentDraft, {
+    teamCount,
+    playersPerTeam,
+    incomingRows: suppressDomCarryover ? [] : incoming,
+    defaultTeeId,
+    validTeeIds: validTeeIds.size ? validTeeIds : null,
   });
   uiState.matchPlayerDraft = next;
   return next;
@@ -15247,49 +15342,6 @@ function preserveSetupScrollDuring(callback, selector = null) {
   restoreSetupScrollAnchor(anchor);
   return result;
 }
-function getNextIncompletePlayerSetupSlot(completedSlot = -1) {
-  const rows = Array.from(document.querySelectorAll('#matchPlayersPicker [data-assignment-slot]'));
-  if (!rows.length) return null;
-  const start = Math.max(0, Number(completedSlot) + 1 || 0);
-  const isIncomplete = (row) => {
-    if (!row) return false;
-    const slot = Number(row.dataset.assignmentSlot);
-    const playerInput = document.querySelector(`[data-player-slot="${slot}"]`);
-    const teeSelect = document.querySelector(`[data-player-tee-slot="${slot}"]`);
-    if (!playerInput || !playerInput.value) return true;
-    if (teeSelect && !teeSelect.value) return true;
-    return false;
-  };
-  for (const row of rows) {
-    const slot = Number(row.dataset.assignmentSlot);
-    if (Number.isFinite(slot) && slot >= start && isIncomplete(row)) return slot;
-  }
-  return null;
-}
-function focusPlayerSetupSlot(slot) {
-  const row = document.querySelector(`#matchPlayersPicker [data-assignment-slot="${slot}"]`);
-  if (!row) return false;
-  const target = row.querySelector('[data-player-combobox-slot], [data-player-tee-slot], input, select, button');
-  try {
-    row.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
-    setTimeout(() => {
-      try { target?.focus?.({ preventScroll: true }); } catch (_) { try { target?.focus?.(); } catch (__) {} }
-    }, 260);
-    return true;
-  } catch (_) {
-    return false;
-  }
-}
-function scheduleAdvanceToNextIncompletePlayerSetupSlot(completedSlot = -1) {
-  const activeWrap = document.getElementById('matchSetupFormWrap');
-  if (!activeWrap || activeWrap.classList.contains('hidden')) return;
-  window.setTimeout(() => {
-    const nextSlot = getNextIncompletePlayerSetupSlot(completedSlot);
-    if (nextSlot === null || nextSlot === undefined) return;
-    focusPlayerSetupSlot(nextSlot);
-  }, 120);
-}
-
 function populateMatchPlayerPicker(selected = []) {
   const container = document.getElementById('matchPlayersPicker');
   const summary = document.getElementById('assignmentSummary');
@@ -15304,30 +15356,32 @@ function populateMatchPlayerPicker(selected = []) {
   const draftSelections = buildSetupSlotSelections(selected);
   uiState.matchPlayerDraft = draftSelections;
   const selectedBySlot = draftSelections.map(s => s.playerId || '');
-  const teeBySlot = draftSelections.map(s => s.teeId || defaultTeeId || '');
+  const teeBySlot = draftSelections.map(s => Object.prototype.hasOwnProperty.call(s, 'teeId') ? String(s.teeId || '') : String(defaultTeeId || ''));
   const teamNames = Array.from({ length: teamCount }, (_, i) => String(document.querySelector(`[data-team-name="${i + 1}"]`)?.value || '').trim().slice(0,25));
   container.innerHTML = Array.from({ length: slotCount }, (_, idx) => {
     const teamNo = Math.floor(idx / playersPerTeam) + 1;
     const slotNo = (idx % playersPerTeam) + 1;
     const current = selectedBySlot[idx] || '';
     const currentPlayer = getPlayer(current);
-    const currentTeeId = teeBySlot[idx] || defaultTeeId || '';
+    const currentTeeId = teeBySlot[idx] || '';
     const selectablePlayers = getSelectablePlayersForDraftSlot(state.players, draftSelections, idx);
     const hasSavedPlayers = state.players.length > 0;
+    const teamLabel = teamNames[teamNo - 1] || `Team ${teamNo}`;
+    const slotLabel = `${teamLabel}, Player ${slotNo}`;
     const inputId = `playerCombobox_${idx}`;
     const listId = `playerComboboxList_${idx}`;
     const teeSelect = teeOptions.length
-      ? `<label class="tiny player-tee-select"><span>Handicap tee</span><select data-player-tee-slot="${idx}" data-slot-team="${teamNo}"><option value="">Select tee</option>${teeOptions.map(t => `<option value="${t.id}" ${t.id === currentTeeId ? 'selected' : ''}>${t.label}</option>`).join('')}</select></label>`
+      ? `<label class="tiny player-tee-select"><span>${escapeHtml(slotLabel)} handicap tee</span><select data-player-tee-slot="${idx}" data-slot-team="${teamNo}"><option value="">Select tee</option>${teeOptions.map(t => `<option value="${t.id}" ${t.id === currentTeeId ? 'selected' : ''}>${t.label}</option>`).join('')}</select></label>`
       : '<div class="tiny">Select a course first to choose tees.</div>';
     return `
       <div class="picker-row picker-row-stack lookup-picker-row" data-assignment-slot="${idx}">
-        <div class="player-assignment-slot-heading"><strong>${escapeHtml(teamNames[teamNo - 1] || `Team ${teamNo}`)}</strong><span>Player ${slotNo}</span></div>
+        <div class="player-assignment-slot-heading"><strong>${escapeHtml(teamLabel)}</strong><span>Player ${slotNo}</span></div>
         <input type="hidden" data-player-slot="${idx}" data-slot-team="${teamNo}" value="${current}">
         <div class="player-combobox-shell">
-          <label class="lookup-field" for="${inputId}"><span class="tiny">Player ${slotNo}</span></label>
+          <label class="lookup-field" for="${inputId}"><span class="tiny">${escapeHtml(slotLabel)}</span></label>
           <div class="player-combobox-control">
             <input id="${inputId}" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="${listId}" data-player-combobox-slot="${idx}" data-slot-team="${teamNo}" placeholder="Search saved players" value="${escapeHtml(currentPlayer ? getPlayerLookupLabel(currentPlayer) : '')}" autocomplete="off" ${hasSavedPlayers ? '' : 'disabled'} />
-            ${currentPlayer ? `<button type="button" class="player-combobox-clear" data-clear-player-slot="${idx}" aria-label="Clear Player ${slotNo} assignment">×</button>` : ''}
+            ${currentPlayer ? `<button type="button" class="player-combobox-clear" data-clear-player-slot="${idx}" aria-label="Clear ${escapeHtml(slotLabel)} assignment">×</button>` : ''}
           </div>
           <div id="${listId}" class="player-combobox-list hidden" role="listbox" data-player-combobox-list="${idx}">${selectablePlayers.map((player, optionIndex) => `<button type="button" id="${listId}_option_${optionIndex}" class="player-combobox-option" role="option" aria-selected="${player.id === current ? 'true' : 'false'}" data-player-combobox-option="${idx}" data-player-id="${escapeHtml(player.id)}" data-player-label="${escapeHtml(getPlayerLookupLabel(player).toLowerCase())}"><span>${getPlayerDisplayHtml(player, { wrapperClass: 'player-label-inline', nameClass: 'player-label-name', indexClass: 'player-label-index' })}</span></button>`).join('')}<div class="player-combobox-empty tiny hidden" data-player-combobox-empty="${idx}">No saved players match.</div></div>
         </div>
@@ -15339,7 +15393,7 @@ function populateMatchPlayerPicker(selected = []) {
     const base = `${slotCount} slots · ${teamCount} teams · ${playersPerTeam} player(s) per team`;
     const teeMsg = teeOptions.length ? ' · player tees enabled' : ' · select a course to enable player tees';
     const playerMsg = state.players.length ? ' · search or choose a saved player in each slot' : ' · add saved players on the Players tab to fill these slots';
-    summary.textContent = `${base}${teeMsg}${playerMsg}`;
+    summary.textContent = `${base}${teeMsg}${playerMsg}. Assign players and tees in any order; every player needs a tee before the round can start.`;
   }
   renderStatTrackingPlayerSelector();
 }
@@ -15775,6 +15829,33 @@ function getAuthoritativeMatchSetupDraftState({ fd = null, selectedPlayers = nul
   return { formData, active, teamCount, playersPerTeam, requiredSlotCount, courseId, course, players, games, holeCount, nineHoleSegment, customStartHole, referenceTeeId, applicableTeeIds, tees, courseHolesLoaded, teamNames, featuredCompetition, scoringAccessMode: normalizedMode, sharedMatchEnabled: shared };
 }
 
+function getPlayerTeeSlotStates({ teamCount = 1, playersPerTeam = 1, requiredSlotCount = null, courseId = '', players = [] } = {}) {
+  const normalizedPlayersPerTeam = Math.max(1, Number(playersPerTeam) || 1);
+  const slotCount = Math.max(1, Number(requiredSlotCount) || (Math.max(1, Number(teamCount) || 1) * normalizedPlayersPerTeam));
+  const rows = Array.isArray(players) ? players : [];
+  return Array.from({ length: slotCount }, (_, slot) => {
+    const row = rows.find(player => Number(player?.slot) === slot) || rows[slot] || {};
+    const team = Math.floor(slot / normalizedPlayersPerTeam) + 1;
+    const position = (slot % normalizedPlayersPerTeam) + 1;
+    const playerId = String(row.playerId || '');
+    const teeId = String(row.teeId || '');
+    const assigned = !!playerId;
+    const teeValid = assigned && !!teeId && !!getTee(courseId, teeId);
+    return {
+      slot,
+      team,
+      position,
+      label: Number(teamCount) > 1 ? `Team ${team} Player ${position}` : `Player ${position}`,
+      playerId,
+      playerName: assigned ? (getPlayer(playerId)?.name || `Player ${position}`) : '',
+      teeId,
+      assigned,
+      teeValid,
+      complete: assigned && teeValid,
+    };
+  });
+}
+
 function setSharedMatchDraftMode(draft, enabled) {
   const next = clonePlain(draft || {});
   next.storageMode = enabled ? 'shared' : 'local';
@@ -15789,10 +15870,14 @@ function getRoundReadinessState() {
   const { players: selectedPlayers, games: selectedGames, featuredCompetition: featured } = draft;
   const checks = [];
   const add = (label, ok, warning = '') => checks.push({ label, ok: !!ok, warning });
+  const slotStates = validation.summary.playerSlotStates || getPlayerTeeSlotStates(draft);
+  const unassignedSlots = slotStates.filter(slot => !slot.assigned);
+  const invalidTeeSlots = slotStates.filter(slot => slot.assigned && !slot.teeValid);
   add('Course selected', !!draft.courseId && !!draft.course, draft.courseId ? 'Selected course is not available locally.' : 'No course selected yet.');
-  add('Tee selected', selectedPlayers.length === draft.requiredSlotCount && selectedPlayers.every(player => !!player.teeId && !!getTee(draft.courseId, player.teeId)), 'Every assigned player needs an available tee.');
   add('Course holes loaded', draft.courseHolesLoaded, `The selected tees do not contain all ${draft.holeCount} required holes.`);
-  add('Players added', selectedPlayers.length === draft.requiredSlotCount, `Assign all ${draft.requiredSlotCount} player slots.`);
+  add('Players added', unassignedSlots.length === 0, unassignedSlots.length ? `Assign ${unassignedSlots.map(slot => slot.label).join(', ')}.` : '');
+  if (invalidTeeSlots.length) invalidTeeSlots.forEach(slot => add(`${slot.label} tee`, false, `${slot.playerName} needs an available tee.`));
+  else add('Player tees assigned', unassignedSlots.length === 0, unassignedSlots.length ? 'Assign the remaining players; each player needs a tee before the round can start.' : '');
   add('Teams configured', draft.teamCount >= 1 && draft.teamCount * draft.playersPerTeam === draft.requiredSlotCount, 'Team setup needs attention.');
   add('Handicaps assigned or intentionally blank', selectedPlayers.every(row => Number.isFinite(Number(getPlayer(row.playerId)?.index ?? 0))), 'One or more players may be missing a handicap index.');
   add(selectedGames.length ? 'Games selected' : 'Games intentionally omitted', selectedGames.length <= 5, 'Select no more than 5 games.');
@@ -15915,7 +16000,7 @@ function getCurrentMatchEditorSelections() {
     playerId: row.playerId || document.querySelector(`[data-player-slot="${idx}"]`)?.value || '',
     team: row.team || Number(document.querySelector(`[data-player-slot="${idx}"]`)?.dataset.slotTeam) || 1,
     slot: idx,
-    teeId: row.teeId || document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '',
+    teeId: Object.prototype.hasOwnProperty.call(row, 'teeId') ? String(row.teeId || '') : String(document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || ''),
   }));
 }
 function getSelectedPlayersFromSetup() {
@@ -15932,7 +16017,7 @@ function getSelectedPlayersFromSetup() {
       playerId: String(row.playerId || domSlot?.value || ''),
       team,
       slot: idx,
-      teeId: String(row.teeId || domTee?.value || getDefaultMatchTeeId() || ''),
+      teeId: String(Object.prototype.hasOwnProperty.call(row, 'teeId') ? (row.teeId || '') : (domTee?.value || '')),
     };
   }).filter(row => row.playerId);
 }
@@ -15969,7 +16054,8 @@ function updateMatchPlayerTee(slot, teeId = '') {
   row.playerId = String(row.playerId || document.querySelector(`[data-player-slot="${normalizedSlot}"]`)?.value || '');
   row.teeId = String(teeId || '');
   draft[normalizedSlot] = row;
-  uiState.matchPlayerDraft = normalizeDraftTeeAssignments({ selections: draft, forceDefault: false });
+  uiState.matchPlayerDraft = draft;
+  normalizeDraftTeeAssignments({ forceDefault: false });
   const refStats = getReferenceTeeStats(null, uiState.matchPlayerDraft);
   if (!refStats.showReferenceSelector) uiState.referenceTeeManual = false;
   syncReferenceTeeUi({ selections: uiState.matchPlayerDraft, forceAuto: !uiState.referenceTeeManual });
@@ -15993,14 +16079,21 @@ function updatePlayerDraftSlot(draftRows, slot, playerId = '', options = {}) {
   const requestedId = String(playerId || '');
   if (requestedId && next.some((row, index) => index !== normalizedSlot && String(row?.playerId || '') === requestedId)) return next;
   const fallbackTeam = Math.floor(normalizedSlot / playersPerTeam) + 1;
-  const row = next[normalizedSlot] || { slot: normalizedSlot, team: fallbackTeam, playerId: '', teeId: '' };
-  next[normalizedSlot] = { ...row, slot: normalizedSlot, team: Number(row.team || fallbackTeam) || fallbackTeam, playerId: requestedId, teeId: String(row.teeId || options.defaultTeeId || '') };
+  const row = next[normalizedSlot] || { slot: normalizedSlot, team: fallbackTeam, playerId: '' };
+  const hasExistingTee = Object.prototype.hasOwnProperty.call(row, 'teeId');
+  const validTeeIds = options.validTeeIds == null ? null : new Set(Array.from(options.validTeeIds, String));
+  let teeId = String(hasExistingTee ? (row.teeId || '') : (options.defaultTeeId || ''));
+  if (teeId && validTeeIds && !validTeeIds.has(teeId)) teeId = '';
+  next[normalizedSlot] = { ...row, slot: normalizedSlot, team: Number(row.team || fallbackTeam) || fallbackTeam, playerId: requestedId, teeId };
   return next;
 }
 function markMissingTeeRows() {
   clearMatchTeeErrors();
   document.querySelectorAll('#matchPlayersPicker [data-player-tee-slot]').forEach(select => {
-    if (!select.value) {
+    const slot = Number(select.dataset.playerTeeSlot);
+    const playerId = document.querySelector(`[data-player-slot="${slot}"]`)?.value || '';
+    const courseId = document.getElementById('matchCourseSelect')?.value || '';
+    if (playerId && (!select.value || !getTee(courseId, select.value))) {
       select.closest('.picker-row')?.classList.add('picker-row--error');
     }
   });
@@ -16009,7 +16102,9 @@ function assignPlayerToSlot(slot, playerId = '', options = {}) {
   const scrollAnchor = captureSetupScrollAnchor(`#matchPlayersPicker [data-assignment-slot="${Number(slot)}"]`);
   const draft = getMatchPlayerDraft();
   const playersPerTeam = Math.max(1, Number(document.getElementById('playersPerTeamSelect')?.value || 1));
-  const nextDraft = updatePlayerDraftSlot(draft, slot, playerId, { playersPerTeam, defaultTeeId: document.getElementById('matchTeeSelect')?.value || getDefaultMatchTeeId() || '' });
+  const courseId = document.getElementById('matchCourseSelect')?.value || '';
+  const validTeeIds = new Set((getCourse(courseId)?.tees || []).map(tee => String(tee.id)));
+  const nextDraft = updatePlayerDraftSlot(draft, slot, playerId, { playersPerTeam, defaultTeeId: document.getElementById('matchTeeSelect')?.value || getDefaultMatchTeeId() || '', validTeeIds: validTeeIds.size ? validTeeIds : null });
   uiState.matchPlayerDraft = nextDraft;
   syncReferenceTeeUi({ selections: nextDraft });
   populateMatchPlayerPicker(nextDraft);
@@ -16054,43 +16149,70 @@ function buildPressAuditSection(match, metrics, recordOverride = null) {
   const frozen = recordOverride && isFrozenRoundRecord(recordOverride) ? clonePlain(recordOverride) : (isFrozenRoundRecord(match?.roundRecordSnapshot) ? clonePlain(match.roundRecordSnapshot) : null);
   const nodes = frozen
     ? (frozen.games || []).filter(game => game.type === 'press').map(game => ({ ...clonePlain(game.config || {}), ...clonePlain(game), status: game.status || game.config?.status }))
-    : getPressTree(match).records.map(press => ({ ...clonePlain(press), status: getPressStatus(match, metrics, press).status }));
+    : getPressTree(match).records.map(press => clonePlain(press));
   if (!nodes.length) return '';
   const frozenTransactions = frozen?.pressTransactions || [];
   const rows = nodes.sort((a, b) => Number(a.pressDepth || 1) - Number(b.pressDepth || 1) || Number(a.startingHole || a.holeStart || 0) - Number(b.startingHole || b.holeStart || 0)).map((press, index) => {
     const start = Number(press.startingHole || press.holeStart);
     const end = Number(press.endingHole || press.holeEnd);
-    const status = String(press.status || 'PENDING');
-    const current = frozen ? null : buildPressSettlementShape(match, metrics, press);
-    const transactions = frozen ? frozenTransactions.filter(row => row.pressId === press.pressId) : (current?.transactions || []);
-    const transferred = transactions.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const statusState = frozen ? (press.result || { status: press.status || 'PENDING', leaderTeamId: press.leaderTeamId || null }) : getPressStatus(match, metrics, press);
+    const status = String(statusState.status || press.status || 'PENDING');
+    const settlement = frozen ? null : buildPressSettlementShape(match, metrics, press);
+    const transactions = frozen ? frozenTransactions.filter(row => row.pressId === (press.pressId || press.gameId)) : (settlement?.transactions || []);
+    const moneyMoved = transactions.filter(row => Number(row.amount || 0) > 0).reduce((sum, row) => sum + Number(row.amount || 0), 0);
     const declarer = press.initiatedByPlayerId ? (getPlayer(press.initiatedByPlayerId)?.name || press.initiatedByPlayerId) : press.initiatedByTeamId ? getTeamLabel(match, Number(press.initiatedByTeamId)) : 'Not recorded';
-    const result = status === 'VOIDED' || status === 'SUPERSEDED' ? status[0] + status.slice(1).toLowerCase() : status === 'HALVED' ? 'Halved' : status === 'FINAL' ? `${getTeamLabel(match, Number((current || {}).leaderTeamId || press.leaderTeamId)) || 'Winner recorded'} won` : status[0] + status.slice(1).toLowerCase();
-    const parentLabel = String(press.parentSegmentId || press.parentGameId || '').replaceAll('_', ' ');
-    return `<div class="press-audit-row" style="margin-left:${Math.min(3, Number(press.pressDepth || 1) - 1) * 16}px"><div class="game-summary-title">${Number(press.pressDepth || 1) > 1 ? 'Press on ' : ''}Press ${index + 1}</div><div class="game-summary-sub">Parent: ${escapeHtml(parentLabel)} · Depth ${Number(press.pressDepth || 1)}</div><div class="game-summary-sub">Declared by ${escapeHtml(declarer)} · Declared for H${Number(press.declaredForHole || start)} · Holes ${start}${start === end ? '' : `–${end}`}</div><div class="game-summary-sub">Stake: ${formatMoneyAccounting(Number(press.wagerAmount ?? press.stake ?? 0))} · Result: ${escapeHtml(result)} · Ledger impact: ${formatMoneyAccounting(transferred)}</div>${press.auditReason ? `<div class="game-summary-sub warning-text">Reason: ${escapeHtml(press.auditReason)}</div>` : ''}</div>`;
+    const result = status === 'VOIDED' || status === 'SUPERSEDED' ? status[0] + status.slice(1).toLowerCase() : status === 'HALVED' ? 'Halved' : status === 'FINAL' ? `${getTeamLabel(match, Number(statusState.leaderTeamId)) || 'Winner recorded'} won` : status[0] + status.slice(1).toLowerCase();
+    const segmentLabel = press.parentSegmentType === 'FRONT' ? 'Front Nine' : press.parentSegmentType === 'BACK' ? 'Back Nine' : 'Overall';
+    const gameLabel = press.outcomeGameKey && press.outcomeGameKey !== 'nassau' ? getGameLabel(press.outcomeGameKey) : segmentLabel;
+    const activityLabel = `${gameLabel} ${Number(press.pressDepth || 1) > 1 ? 'Re-Press' : 'Press'}`;
+    const accounting = moneyMoved > 0 ? ` · Money moved: ${formatMoneyAccounting(moneyMoved)}` : '';
+    return `<div class="press-audit-row" data-press-audit-id="${escapeHtml(press.pressId || press.gameId || `press-${index + 1}`)}" style="margin-left:${Math.min(3, Number(press.pressDepth || 1) - 1) * 16}px"><div class="game-summary-title">${escapeHtml(activityLabel)}</div><div class="game-summary-sub">Hole ${Number(press.declaredAtHole || press.declaredForHole || start)} · Holes ${start}${start === end ? '' : `–${end}`} · Depth ${Number(press.pressDepth || 1)}</div><div class="game-summary-sub">Declared by ${escapeHtml(declarer)} · Original wager: ${formatMoneyAccounting(Number(press.wagerAmount ?? press.stake ?? 0))}</div><div class="game-summary-sub">Result: ${escapeHtml(result)}${accounting}</div>${press.auditReason ? `<div class="game-summary-sub warning-text">Reason: ${escapeHtml(press.auditReason)}</div>` : ''}</div>`;
   }).join('');
-  return `<section class="export-section export-section-press-audit"><div class="export-section-head"><h2>Presses</h2><div class="export-section-sub">Child-game declaration, result, and accounting audit.</div></div><div class="press-audit-list">${rows}</div></section>`;
+  return `<section class="export-section export-section-press-audit"><div class="export-section-head"><h2>Press Activity</h2><div class="export-section-sub">Read-only declaration and result audit from authoritative round facts.</div></div><div class="press-audit-list">${rows}</div></section>`;
 }
 function buildPressSetupControls(gameKey, cfg = {}) {
   if (getGameEscalationCapability(gameKey) !== 'PRESS') return '';
   const preferenceDefaults = getNewMatchDefaultsFromPreferences().pressConfig;
-  const roundDefaults = editingMatchId ? getMatch(editingMatchId)?.pressConfig : preferenceDefaults;
-  const pc = normalizePressConfig({ ...roundDefaults, ...(cfg.pressConfig || {}), ...cfg });
+  const editingMatch = editingMatchId ? getMatch(editingMatchId) : null;
+  const pc = normalizePressConfig({ ...(editingMatch?.pressConfig || preferenceDefaults), ...(cfg.pressConfig || {}), ...cfg });
+  const facts = getPressEditFacts(editingMatch);
+  const joinedLocked = !!(editingMatch && editingMatch.storageMode === 'shared' && !isCurrentDeviceMatchHost(editingMatch));
+  const disableLocked = facts.pressCount > 0 && pc.pressesEnabled;
+  const controlLocked = joinedLocked ? 'disabled aria-disabled="true"' : '';
+  const enabledLocked = joinedLocked || disableLocked ? 'disabled aria-disabled="true"' : '';
+  const lockHelp = joinedLocked ? 'Only the Shared Match host can change Press settings.' : disableLocked ? 'Presses cannot be turned off after a Press has been created in this round.' : '';
   return `<details class="press-setup top-gap" ${pc.pressesEnabled ? 'open' : ''}>
     <summary>Presses · ${pc.pressesEnabled ? 'On' : 'Off'}</summary>
     <div class="grid two compact-grid top-gap">
-      <label class="inline-check span-2"><input type="checkbox" data-game-config="${gameKey}" data-field="pressesEnabled" ${pc.pressesEnabled ? 'checked' : ''}><span>Allow presses</span></label>
-      ${gameKey === 'nassau' ? `<label class="inline-check"><input type="checkbox" data-game-config="${gameKey}" data-field="nassauFrontEnabled" ${pc.nassauFrontEnabled ? 'checked' : ''}><span>Front</span></label><label class="inline-check"><input type="checkbox" data-game-config="${gameKey}" data-field="nassauBackEnabled" ${pc.nassauBackEnabled ? 'checked' : ''}><span>Back</span></label><label class="inline-check"><input type="checkbox" data-game-config="${gameKey}" data-field="nassauOverallEnabled" ${pc.nassauOverallEnabled ? 'checked' : ''}><span>Overall</span></label>` : ''}
-      <label><span>Trigger</span><select data-game-config="${gameKey}" data-field="pressType"><option value="MANUAL" ${pc.pressType === 'MANUAL' ? 'selected' : ''}>Manual</option><option value="PROMPT_AT_THRESHOLD" ${pc.pressType === 'PROMPT_AT_THRESHOLD' ? 'selected' : ''}>Prompt at threshold</option></select></label>
-      <label><span>Prompt when down</span><input type="number" min="1" max="9" data-game-config="${gameKey}" data-field="autoPressThreshold" value="${pc.autoPressThreshold}"></label>
-      <label><span>Who may declare</span><select data-game-config="${gameKey}" data-field="declaringSideRule"><option value="LOSING_SIDE_ONLY" ${pc.declaringSideRule === 'LOSING_SIDE_ONLY' ? 'selected' : ''}>Losing side only</option><option value="EITHER_SIDE" ${pc.declaringSideRule === 'EITHER_SIDE' ? 'selected' : ''}>Either side</option></select></label>
-      <label><span>Parent availability</span><select data-game-config="${gameKey}" data-field="pressAvailabilityRule"><option value="OPEN_SEGMENT_ONLY" ${pc.pressAvailabilityRule === 'OPEN_SEGMENT_ONLY' ? 'selected' : ''}>Open match only</option><option value="FUTURE_HOLES_REMAIN" ${pc.pressAvailabilityRule === 'FUTURE_HOLES_REMAIN' ? 'selected' : ''}>Any time holes remain</option></select></label>
-      <label><span>Declaration timing</span><select data-game-config="${gameKey}" data-field="declarationWindow"><option value="BEFORE_HOLE_STARTED" ${pc.declarationWindow === 'BEFORE_HOLE_STARTED' ? 'selected' : ''}>Before hole starts</option><option value="BEFORE_HOLE_COMPLETED" ${pc.declarationWindow === 'BEFORE_HOLE_COMPLETED' ? 'selected' : ''}>Before hole completes</option></select></label>
+      <label class="inline-check span-2"><input type="checkbox" data-game-config="${gameKey}" data-field="pressesEnabled" ${pc.pressesEnabled ? 'checked' : ''} ${enabledLocked}><span>Allow presses</span></label>
+      ${lockHelp ? `<div class="tiny span-2 warning-text" data-press-edit-helper="${gameKey}">${escapeHtml(lockHelp)}</div>` : ''}
+      ${gameKey === 'nassau' ? `<label class="inline-check"><input type="checkbox" data-game-config="${gameKey}" data-field="nassauFrontEnabled" ${pc.nassauFrontEnabled ? 'checked' : ''} ${controlLocked}><span>Front</span></label><label class="inline-check"><input type="checkbox" data-game-config="${gameKey}" data-field="nassauBackEnabled" ${pc.nassauBackEnabled ? 'checked' : ''} ${controlLocked}><span>Back</span></label><label class="inline-check"><input type="checkbox" data-game-config="${gameKey}" data-field="nassauOverallEnabled" ${pc.nassauOverallEnabled ? 'checked' : ''} ${controlLocked}><span>Overall</span></label>` : ''}
+      <label><span>Trigger</span><select data-game-config="${gameKey}" data-field="pressType" ${controlLocked}><option value="MANUAL" ${pc.pressType === 'MANUAL' ? 'selected' : ''}>Manual</option><option value="PROMPT_AT_THRESHOLD" ${pc.pressType === 'PROMPT_AT_THRESHOLD' ? 'selected' : ''}>Prompt at threshold</option></select></label>
+      <label><span>Prompt when down</span><input type="number" min="1" max="9" data-game-config="${gameKey}" data-field="autoPressThreshold" value="${pc.autoPressThreshold}" ${controlLocked}></label>
+      <label><span>Who may declare</span><select data-game-config="${gameKey}" data-field="declaringSideRule" ${controlLocked}><option value="LOSING_SIDE_ONLY" ${pc.declaringSideRule === 'LOSING_SIDE_ONLY' ? 'selected' : ''}>Losing side only</option><option value="EITHER_SIDE" ${pc.declaringSideRule === 'EITHER_SIDE' ? 'selected' : ''}>Either side</option></select></label>
+      <label><span>Parent availability</span><select data-game-config="${gameKey}" data-field="pressAvailabilityRule" ${controlLocked}><option value="OPEN_SEGMENT_ONLY" ${pc.pressAvailabilityRule === 'OPEN_SEGMENT_ONLY' ? 'selected' : ''}>Open match only</option><option value="FUTURE_HOLES_REMAIN" ${pc.pressAvailabilityRule === 'FUTURE_HOLES_REMAIN' ? 'selected' : ''}>Any time holes remain</option></select></label>
+      <label><span>Declaration timing</span><select data-game-config="${gameKey}" data-field="declarationWindow" ${controlLocked}><option value="BEFORE_HOLE_STARTED" ${pc.declarationWindow === 'BEFORE_HOLE_STARTED' ? 'selected' : ''}>Before hole starts</option><option value="BEFORE_HOLE_COMPLETED" ${pc.declarationWindow === 'BEFORE_HOLE_COMPLETED' ? 'selected' : ''}>Before hole completes</option></select></label>
       <div class="tiny span-2">All Presses and Re-Presses use the original wager for the game or Nassau segment.</div>
-      <label><span>Maximum Presses</span><input type="number" min="1" max="10" data-game-config="${gameKey}" data-field="maxPressesPerRound" aria-label="Maximum Presses for the entire round" value="${pc.maxPressesPerRound}"></label>
-      <label><span>Maximum Re-Presses</span><input type="number" min="0" max="4" data-game-config="${gameKey}" data-field="maxRePresses" aria-label="Maximum Re-Presses per individual Press" value="${pc.maxRePresses}"></label>
+      <label><span>Maximum Presses</span><input type="number" min="${Math.max(1, facts.pressCount || 1)}" max="10" data-game-config="${gameKey}" data-field="maxPressesPerRound" aria-label="Maximum Presses for the entire round" value="${pc.maxPressesPerRound}" ${controlLocked}></label>
+      <label><span>Maximum Re-Presses</span><input type="number" min="${Math.max(0, facts.deepestRePressDepth || 0)}" max="4" data-game-config="${gameKey}" data-field="maxRePresses" aria-label="Maximum Re-Presses per individual Press" value="${pc.maxRePresses}" ${controlLocked}></label>
       <div class="tiny span-2">Maximum Presses is the total for the entire round, including Re-Presses. Maximum Re-Presses limits each individual Press chain. Open match only requires an undecided parent.</div>
+      ${facts.pressCount ? '<div class="tiny span-2">Changes to unlocked settings apply only to future Press opportunities. Existing Presses keep their stored IDs, ranges, wagers, and results.</div>' : ''}
     </div></details>`;
+}
+
+function enforcePressSetupLimitInput(input) {
+  if (!input || !editingMatchId || !['maxPressesPerRound', 'maxRePresses'].includes(input.dataset.field)) return true;
+  const match = getMatch(editingMatchId);
+  const facts = getPressEditFacts(match);
+  const minimum = input.dataset.field === 'maxPressesPerRound' ? facts.pressCount : facts.deepestRePressDepth;
+  if (Number(input.value) >= minimum) return true;
+  const currentGame = (match?.selectedGames || []).find(game => game.key === input.dataset.gameConfig) || match?.pressConfig || {};
+  const current = getPressConfigForGame(match, currentGame);
+  input.value = String(current[input.dataset.field]);
+  toast(input.dataset.field === 'maxPressesPerRound'
+    ? `Maximum Presses cannot be lower than the ${facts.pressCount} Press wager${facts.pressCount === 1 ? '' : 's'} already created.`
+    : `Maximum Re-Presses cannot be lower than the existing chain depth of ${facts.deepestRePressDepth}.`);
+  return false;
 }
 function renderGamesPicker(existing = []) {
   const picker = document.getElementById('gamesPicker');
@@ -16098,12 +16220,16 @@ function renderGamesPicker(existing = []) {
   if (!picker || !configsWrap) return;
   const normalizedExisting = normalizeSelectedGamesOrder(existing || []);
   const selectedKeys = normalizedExisting.map(g => g.key);
+  const editingPressFacts = getPressEditFacts(editingMatchId ? getMatch(editingMatchId) : null);
   const singlesEligibleInSetup = getCurrentSetupTeamCount() === 2 && Number(document.getElementById('playersPerTeamSelect')?.value || 1) === 1;
   picker.innerHTML = GAME_SELECTION_GROUPS.map(group => `<section class="game-picker-group" aria-labelledby="game-group-${group.label.toLowerCase().replace(/[^a-z]+/g, '-')}"><div class="section-subhead" id="game-group-${group.label.toLowerCase().replace(/[^a-z]+/g, '-')}">${group.label}</div><div class="game-picker-group-options">${group.keys.map(key => GAME_LIBRARY.find(game => game.key === key)).filter(Boolean).map(game => {
     const singlesBlocked = game.key === 'singles_match' && !singlesEligibleInSetup;
+    const pressParentLocked = editingPressFacts.rootGameKeys.includes(game.key);
+    const gameBlocked = singlesBlocked || pressParentLocked;
+    const blockedTitle = pressParentLocked ? 'This game cannot be removed because it has Press activity in this round.' : (singlesBlocked ? 'Singles Match Play requires two teams with one player on each team.' : '');
     return `
-    <label class="game-pill ${selectedKeys.includes(game.key) ? 'selected' : ''} ${singlesBlocked ? 'disabled' : ''}" ${singlesBlocked ? 'title="Singles Match Play requires two teams with one player on each team."' : ''}>
-      <input type="checkbox" data-game-key="${game.key}" ${selectedKeys.includes(game.key) ? 'checked' : ''} ${singlesBlocked ? 'disabled' : ''} />
+    <label class="game-pill ${selectedKeys.includes(game.key) ? 'selected' : ''} ${gameBlocked ? 'disabled' : ''}" ${blockedTitle ? `title="${escapeHtml(blockedTitle)}"` : ''}>
+      <input type="checkbox" data-game-key="${game.key}" ${selectedKeys.includes(game.key) ? 'checked' : ''} ${gameBlocked ? 'disabled' : ''} />
       <span>${getGameLabel(game.key)}</span>
     </label>`;
   }).join('')}</div></section>`).join('');
@@ -17300,7 +17426,7 @@ function installHandlers() {
     renderScoringControlConfig(editingMatchId ? getMatch(editingMatchId) : null);
     renderRoundReadiness();
   }, '#sharedMatchEnabled'));
-  document.getElementById('matchTeeSelect').addEventListener('change', e => preserveSetupScrollDuring(() => { uiState.referenceTeeManual = true; uiState.referenceTeeAutoId = e.target.value || uiState.referenceTeeAutoId; const draft = normalizeDraftTeeAssignments({ forceDefault: false }).map(row => ({ ...row, teeId: row.teeId || e.target.value || '' })); syncMatchPlayerDraft(draft); normalizeDraftTeeAssignments({ forceDefault: false }); syncReferenceTeeUi({ selections: uiState.matchPlayerDraft, forceAuto: false }); populateMatchPlayerPicker(uiState.matchPlayerDraft); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); renderTodaysMatchSummary(); }, '#matchTeeSelect'));
+  document.getElementById('matchTeeSelect').addEventListener('change', e => preserveSetupScrollDuring(() => { uiState.referenceTeeManual = true; uiState.referenceTeeAutoId = e.target.value || uiState.referenceTeeAutoId; normalizeDraftTeeAssignments({ forceDefault: false }); syncMatchPlayerDraft(uiState.matchPlayerDraft); syncReferenceTeeUi({ selections: uiState.matchPlayerDraft, forceAuto: false }); populateMatchPlayerPicker(uiState.matchPlayerDraft); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); renderTodaysMatchSummary(); }, '#matchTeeSelect'));
   document.getElementById('teamNamesGrid').addEventListener('input', e => {
     // Keep team-name typing stable on mobile. Rebuilding the setup controls on every
     // keystroke can replace focused inputs and collapse the iPhone keyboard.
@@ -17486,6 +17612,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   });
   document.getElementById('setup').addEventListener('change', e => {
     if (e.target?.matches('[data-game-config][data-field="maxPressesPerRound"], [data-game-config][data-field="maxRePresses"]')) {
+      if (!enforcePressSetupLimitInput(e.target)) return;
       document.querySelectorAll(`[data-game-config][data-field="${e.target.dataset.field}"]`).forEach(input => { if (input !== e.target) input.value = e.target.value; });
     }
     if (e.target && (e.target.id === 'enableStatTrackingInput' || e.target.matches('[data-player-slot], [data-stat-track-player]'))) renderStatTrackingPlayerSelector();
@@ -17922,8 +18049,6 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const selectedPlayers = getSelectedPlayersFromSetup();
     const uniqueIds = new Set(selectedPlayers.map(p => p.playerId));
     if (selectedPlayers.length !== uniqueIds.size) return toast('Each player can only be selected once.');
-    if (selectedPlayers.length < 1) return toast('Select at least 1 player.');
-    if (selectedPlayers.some(p => !p.teeId)) { markMissingTeeRows(); return toast('Select a tee for each player.'); }
     const selectedGames = collectSelectedGames();
     if (selectedGames.length > 5) return toast('Select up to 5 gambling games.');
     if (selectedGames.some(g => g.key === 'nassau') && teamCount !== 2) return toast('Nassau requires exactly 2 teams.');
@@ -17935,13 +18060,19 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       if (sspWarnings.length) return toast(sspWarnings[0]);
     }
     const existing = editingMatchId ? getMatch(editingMatchId) : null;
+    const pressEditValidation = validatePressEditContract(existing, selectedGames, { isHost: !existing || isCurrentDeviceMatchHost(existing) });
+    if (!pressEditValidation.valid) return toast(pressEditValidation.primaryReason?.message || 'Press settings could not be updated.');
+    const validatedSelectedGames = pressEditValidation.proposedGames;
     const scoringAccessMode = normalizeScoringAccessMode(fd.get('scoreEntryMode') || 'single_device');
     const scoreEntryMode = getLegacyScoreEntryMode(scoringAccessMode);
     const officialScorerName = String(fd.get('officialScorerName') || '').trim() || 'Official scorer';
     const sharedMatchEnabled = (scoringAccessMode === 'assigned_players' || fd.get('sharedMatchEnabled') === 'on') && hasSupabaseConfig();
     const validationState = getMatchSetupValidationState({ fd, selectedPlayers, selectedGames, sharedMatchEnabled, scoringAccessMode });
     logMatchFinalizationDiagnostics('pre-build', { selectedPlayers, selectedGames, existing, sharedMatchEnabled, scoringAccessMode, courseId: String(fd.get('courseId') || ''), teeId: String(fd.get('teeId') || ''), holeCount: Number(fd.get('holeCount')) === 9 ? 9 : 18, validationState });
-    if (!validationState.ready) return toastMatchSetupFailure(validationState);
+    if (!validationState.ready) {
+      if (validationState.summary?.invalidTeeSlots?.length) markMissingTeeRows();
+      return toastMatchSetupFailure(validationState);
+    }
     const teamScorers = collectTeamScorerAssignments(teamCount, teamNames, existing?.teamScorers || []);
     const match = {
       id: editingMatchId || uid(),
@@ -17961,11 +18092,11 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       scoreEntryMode,
       officialScorerName,
       statTrackingEnabled: fd.get('enableStatTracking') === 'on',
-      smartScoreAdvanceEnabled: selectedGames.some(g => g.key === 'sneaky_sandy_poley') ? false : fd.get('smartScoreAdvance') === 'on',
+      smartScoreAdvanceEnabled: validatedSelectedGames.some(g => g.key === 'sneaky_sandy_poley') ? false : fd.get('smartScoreAdvance') === 'on',
       smartScoreAdvancePreset: getSmartScoreAdvancePresetFromSetup(),
       statTrackingPlayerIds: fd.get('enableStatTracking') === 'on' ? collectStatTrackingPlayerIdsFromSetup(selectedPlayers) : [],
       teamScorers,
-      selectedGames: normalizeSelectedGamesOrder(selectedGames),
+      selectedGames: validatedSelectedGames,
       featuredCompetition: normalizeFeaturedCompetition(fd.get('featuredCompetition') || existing?.featuredCompetition || 'auto'),
       status: existing?.status || 'active',
       completedAt: existing?.completedAt || null,
@@ -17977,7 +18108,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       hostDeviceId: existing?.hostDeviceId || existing?.sharedHostDeviceId || null,
       roundRecordSnapshot: existing?.roundRecordSnapshot || null,
       roundRecordSnapshotHistory: existing?.roundRecordSnapshotHistory || [],
-      pressConfig: normalizePressConfig(selectedGames.find(game => getGameEscalationCapability(game.key) === 'PRESS') || existing?.pressConfig || getNewMatchDefaultsFromPreferences().pressConfig),
+      pressConfig: normalizePressConfig(validatedSelectedGames.find(game => getGameEscalationCapability(game.key) === 'PRESS') || existing?.pressConfig || getNewMatchDefaultsFromPreferences().pressConfig),
       presses: existing?.presses || [],
       previousCompletedAt: existing?.previousCompletedAt || null,
       reopenedAt: existing?.reopenedAt || null,
@@ -18541,30 +18672,40 @@ function getMatchSetupValidationState({ draft = null, fd = null, selectedPlayers
   const { teamCount, playersPerTeam, requiredSlotCount, courseId, course, players, games, holeCount: requestedHoleCount, courseHolesLoaded, scoringAccessMode: normalizedMode, sharedMatchEnabled: isShared } = source;
   const missing = [];
   const warnings = [];
-  const uniqueIds = new Set(players.map(p => p.playerId).filter(Boolean));
+  const playerSlotStates = getPlayerTeeSlotStates(source);
+  const unassignedSlots = playerSlotStates.filter(slot => !slot.assigned);
+  const invalidTeeSlots = playerSlotStates.filter(slot => slot.assigned && !slot.teeValid);
+  const assignedPlayers = players.filter(player => player?.playerId);
+  const uniqueIds = new Set(assignedPlayers.map(p => p.playerId));
   if ((teamCount * playersPerTeam) > 32) missing.push('Limit is 32 total players');
   if (!courseId || !course) missing.push('Course selection');
-  if (players.length !== requiredSlotCount) missing.push(`All ${requiredSlotCount} player slots`);
-  if (players.length !== uniqueIds.size) missing.push('Each player can only be selected once');
-  if (players.some(p => !p.teeId || !getTee(courseId, p.teeId))) missing.push('A valid tee for each player');
+  if (unassignedSlots.length) missing.push(`All ${requiredSlotCount} player slots`);
+  if (assignedPlayers.length !== uniqueIds.size) missing.push('Each player can only be selected once');
+  if (invalidTeeSlots.length) missing.push('A valid tee for each player');
   if (!courseHolesLoaded) missing.push(`Valid ${requestedHoleCount}-hole course data`);
   if (![9, 18].includes(Number(requestedHoleCount))) missing.push('Selected holes');
   if (games.length > 5) missing.push('Select up to 5 gambling games');
   if (games.some(g => g.key === 'nassau') && teamCount !== 2) missing.push('Nassau requires exactly 2 teams');
   if (games.some(g => ['team_match','team_stroke'].includes(g.key)) && teamCount < 2) missing.push('Team games require at least 2 teams');
-  if (games.some(g => g.key === 'nine_point') && players.length < 3) missing.push('9-Point Game requires at least 3 assigned players');
+  if (games.some(g => g.key === 'nine_point') && assignedPlayers.length < 3) missing.push('9-Point Game requires at least 3 assigned players');
   if (games.some(g => g.key === 'nine_point' && (!Array.isArray(g.playerIds) || [...new Set(g.playerIds)].length !== 3))) missing.push('Select 3 players for the 9-Point Game');
-  if (games.some(g => g.key === 'sneaky_sandy_poley')) missing.push(...getSneakySandyPoleyTeamWarnings({ teamCount, playersPerTeam, players }));
+  if (games.some(g => g.key === 'sneaky_sandy_poley')) missing.push(...getSneakySandyPoleyTeamWarnings({ teamCount, playersPerTeam, players: assignedPlayers }));
+  const pressEditValidation = validatePressEditContract(source.active || null, games, { isHost: !source.active || isCurrentDeviceMatchHost(source.active) });
+  if (!pressEditValidation.valid) missing.push(...pressEditValidation.reasons.map(reason => reason.message));
   return {
     ready: missing.length === 0,
     missingRequirements: [...new Set(missing)],
     warnings,
+    pressEditValidation,
     summary: {
       courseSelected: !!courseId,
-      teeSelected: players.length === requiredSlotCount && players.every(p => !!p.teeId && !!getTee(courseId, p.teeId)),
+      teeSelected: playerSlotStates.every(slot => slot.complete),
       courseHolesLoaded,
-      playerCount: players.length,
+      playerCount: assignedPlayers.length,
       requiredPlayerCount: requiredSlotCount,
+      playerSlotStates,
+      unassignedSlots: unassignedSlots.map(slot => slot.slot),
+      invalidTeeSlots: invalidTeeSlots.map(slot => slot.slot),
       selectedHoles: requestedHoleCount,
       sharedMatch: !!isShared,
       assignmentsComplete: isShared ? (normalizedMode === 'assigned_players' ? 'Host default/managed' : 'N/A') : 'N/A',
@@ -18625,6 +18766,8 @@ function renderBuildInfoUi() {
   renderMatchSetupDiagnosticsUi();
   const diagnosticMatch = getActiveMatch();
   const scoredHoleCount = diagnosticMatch ? new Set((diagnosticMatch.players || []).flatMap(player => (player.scores || []).filter(score => Number(score?.gross) > 0).map(score => Number(score.holeNumber)))).size : 0;
+  const diagnosticPressFacts = getPressEditFacts(diagnosticMatch);
+  const diagnosticPressConfig = diagnosticMatch ? getPressConfigForGame(diagnosticMatch, (diagnosticMatch.selectedGames || []).find(game => getGameEscalationCapability(game.key) === 'PRESS') || {}) : normalizePressConfig();
   const cacheName = APP_CACHE_NAME;
   const pageControl = sw.supported ? (sw.controller ? 'Controlled' : 'Not controlled yet') : 'Unsupported';
   const updateAvailable = !!(window.dyeLedgerUpdateAvailable || sw.waiting);
@@ -18649,6 +18792,7 @@ function renderBuildInfoUi() {
     appScoredHoleDiagnostic: String(scoredHoleCount),
     appPreferenceSchemaDiagnostic: String(PLAYER_PREFERENCES_SCHEMA_VERSION),
     appRoundRecordDiagnostic: isFrozenRoundRecord(diagnosticMatch?.roundRecordSnapshot) ? 'Yes' : 'No',
+    appPressDiagnostic: diagnosticMatch ? `${diagnosticPressConfig.pressesEnabled ? 'On' : 'Off'} Â· ${diagnosticPressFacts.pressCount}/${diagnosticPressConfig.maxPressesPerRound} used Â· depth ${diagnosticPressFacts.deepestRePressDepth}/${diagnosticPressConfig.maxRePresses} Â· ${isFrozenRoundRecord(diagnosticMatch.roundRecordSnapshot) && (diagnosticMatch.roundRecordSnapshot.games || []).some(game => game.type === 'press') ? 'frozen audit present' : 'live audit'}` : 'Not active',
     appUpdateAvailableStatus: updateAvailable ? 'Yes' : (pwaUpdateStatusMessage === 'Checking…' ? 'Checking…' : 'No'),
     appLastUpdateCheck: lastPwaUpdateCheckAt ? formatTimestampET(lastPwaUpdateCheckAt) : 'Not checked yet',
     appUpdateStatusMessage: pwaUpdateStatusMessage || 'Not checked yet',
@@ -19035,6 +19179,8 @@ function installDyeLedgerLiveEngineAdapter() {
     getSelectablePlayersForDraftSlot,
     getPlayerComboboxMatches,
     updatePlayerDraftSlot,
+    reconcilePlayerDraftSlots,
+    getPlayerTeeSlotStates,
     selectPlayerComboboxOption,
     handlePlayerComboboxOptionPointerDown,
     setSharedMatchDraftMode,
@@ -19056,6 +19202,9 @@ function installDyeLedgerLiveEngineAdapter() {
     getGameEscalationCapability,
     normalizePressConfig,
     getPressConfigForGame,
+    getPressEditFacts,
+    normalizePressEditDraft,
+    validatePressEditContract,
     normalizePressRecord,
     dedupePressRecords,
     mergeAuthoritativePressRecords,
@@ -19154,6 +19303,7 @@ function installDyeLedgerLiveEngineAdapter() {
     buildRoundStatusSummary,
     getFeaturedCompetitionResult,
     buildClassicScorecard,
+    handleTableScrollRegionKeydown,
   };
   return window.__DYE_LEDGER_LIVE_ENGINE__;
 }
@@ -19177,6 +19327,28 @@ function resetHorizontalViewportPosition() {
   const body = document.body;
   if (root && root.scrollLeft) root.scrollLeft = 0;
   if (body && body.scrollLeft) body.scrollLeft = 0;
+}
+
+function handleTableScrollRegionKeydown(event) {
+  const region = event.target?.closest?.('.table-scroll-region');
+  if (!region || region.scrollWidth <= region.clientWidth) return false;
+  const maxScroll = Math.max(0, region.scrollWidth - region.clientWidth);
+  const pageStep = Math.max(48, Math.round(region.clientWidth * 0.8));
+  let nextScroll = null;
+  if (event.key === 'ArrowLeft') nextScroll = region.scrollLeft - 48;
+  if (event.key === 'ArrowRight') nextScroll = region.scrollLeft + 48;
+  if (event.key === 'Home') nextScroll = 0;
+  if (event.key === 'End') nextScroll = maxScroll;
+  if (event.key === 'PageUp') nextScroll = region.scrollLeft - pageStep;
+  if (event.key === 'PageDown') nextScroll = region.scrollLeft + pageStep;
+  if (nextScroll === null) return false;
+  event.preventDefault();
+  region.scrollLeft = Math.max(0, Math.min(maxScroll, nextScroll));
+  return true;
+}
+
+function installTableScrollKeyboardSupport() {
+  document.addEventListener('keydown', handleTableScrollRegionKeydown);
 }
 
 function installViewportStabilityGuards() {
@@ -19227,6 +19399,7 @@ function installAppChromeHeightSync() {
 if (!DYE_LEDGER_ADAPTER_MODE) {
   installViewportStabilityGuards();
   installAppChromeHeightSync();
+  installTableScrollKeyboardSupport();
 
   installHandlers();
   renderHoleRows();

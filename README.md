@@ -1,4 +1,4 @@
-# The Dye Ledger v30.3.71
+# The Dye Ledger v30.3.72
 
 The Dye Ledger is an offline-first match-and-games ledger for golf groups.
 
@@ -13,6 +13,6 @@ The header tabs (Match/Play/Scores/Library/Insights/More) remain pinned and visi
 
 The header's **Install App** control uses the browser's native install prompt where supported. On iPhone Safari it explains Share → Add to Home Screen and remembers dismissal for approximately 30 days.
 
-v30.3.71 proves the existing Press system across availability, safe mid-round editing, persistence, Shared Match synchronization, settlement, reopen/refinish, and frozen historical reporting. The header and iPhone Home Screen continue to use the same canonical Apple touch icon.
+v30.3.72 completes the existing Shared Match experience with deterministic assignment revisions, authorized score conflict resolution, clearer trust states, and exactly-once regression coverage. The v30.3.71 Press, scrolling, persistence, and icon work remains intact.
 
-See [`BUILD_NOTES_v30.3.71.md`](BUILD_NOTES_v30.3.71.md) for release notes. Canonical brand assets and replacement guidance live in [`branding/`](branding/) and [`docs/BRANDING.md`](docs/BRANDING.md).
+See [`BUILD_NOTES_v30.3.72.md`](BUILD_NOTES_v30.3.72.md) for release notes. Canonical brand assets and replacement guidance live in [`branding/`](branding/) and [`docs/BRANDING.md`](docs/BRANDING.md).

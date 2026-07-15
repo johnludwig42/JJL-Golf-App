@@ -149,9 +149,9 @@ test('combobox and tee controls remain independently labelled, keyboard-operable
   assert.equal(new Set(staticIds).size, staticIds.length);
 });
 
-test('180 varied setup sequences preserve slot isolation, tee ownership, readiness, reload, and handicap invariants', () => {
+test('240 varied setup sequences preserve slot isolation, tee ownership, readiness, reload, and handicap invariants', () => {
   const engine = fixture();
-  for (let iteration = 0; iteration < 180; iteration += 1) {
+  for (let iteration = 0; iteration < 240; iteration += 1) {
     const teamCount = 1 + (iteration % 4);
     const playersPerTeam = 1 + (Math.floor(iteration / 4) % 3);
     const slotCount = teamCount * playersPerTeam;

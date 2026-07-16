@@ -46,16 +46,18 @@ function sspSeed(puttsSource = 'default') {
   return { players, courses: [course], matches: [match], activeMatchId: 'm' };
 }
 
-test('validated Greeny and Prox require confirmed putts and normalization supplies complete stat coverage', () => {
+test('validated Greeny and Prox support manual validation without forcing Stat Tracking', () => {
   const engine = loadLiveEngine();
   const pending = engine.seedState(sspSeed('default')).matches[0];
-  assert.equal(pending.statTrackingEnabled, true);
-  assert.deepEqual(pending.statTrackingPlayerIds, ['p1', 'p2']);
+  assert.equal(pending.statTrackingEnabled, false);
+  assert.equal(pending.statTrackingPlayerIds.length, 0);
   assert.equal(engine.getSneakySandyPoleyPlayerStat(pending, 'p1', 0).available, false);
   let ledger = engine.buildSneakySandyPoleyLedger(pending, { metrics: engine.computeMatchMetrics(pending) });
   assert.equal(ledger.holes['1'].categoriesByTeam['1'].some(row => row.category === 'greeny' || row.category === 'prox'), false);
-  assert.ok(ledger.holes['1'].warnings.some(row => /2 putts or less/.test(row)));
+  assert.ok(ledger.holes['1'].warnings.some(row => /manual validation required/i.test(row)));
 
+  pending.statTrackingEnabled = true;
+  pending.statTrackingPlayerIds = ['p1', 'p2'];
   pending.players[0].stats[0].puttsSource = 'user';
   assert.equal(engine.getSneakySandyPoleyPlayerStat(pending, 'p1', 0).available, true);
   ledger = engine.buildSneakySandyPoleyLedger(pending, { metrics: engine.computeMatchMetrics(pending) });

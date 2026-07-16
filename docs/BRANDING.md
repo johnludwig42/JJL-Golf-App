@@ -19,7 +19,7 @@ The master depicts the gold ledger/flag mark above the white **THE DYE LEDGER** 
 
 `index.html` uses `branding/apple-touch-icon.png` for both the top-left header artwork and its one authoritative Apple Touch Icon link. The header uses the PNG directly with `object-fit: contain`; there is no mask, background-image substitution, or runtime fallback to the 192 px asset.
 
-`branding/app-icon-512.png` is byte-for-byte identical to `branding/app-icon-master.png`. The 192 px desktop PWA file and 180 px Apple file are approved same-artwork derivatives at their required platform dimensions. `manifest.json` uses versioned v30.3.73 URLs for the 192 px and 512 px desktop icons so Chromium can detect the current icon resources without pointing a 512 px slot at the 180 px Apple file. `service-worker.js` precaches those exact versioned URLs and the Apple file.
+`branding/app-icon-512.png` is byte-for-byte identical to `branding/app-icon-master.png`. The 192 px desktop PWA file and 180 px Apple file are approved same-artwork derivatives at their required platform dimensions. `manifest.json` uses versioned v30.3.74 URLs for the 192 px and 512 px desktop icons so Chromium can detect the current icon resources without pointing a 512 px slot at the 180 px Apple file. `service-worker.js` precaches those exact versioned URLs and the Apple file.
 
 Existing Home Screen icons may remain cached until the user removes and re-adds the app from Safari.
 

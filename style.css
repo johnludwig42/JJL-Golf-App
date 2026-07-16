@@ -10,6 +10,28 @@
   --shadow: 0 8px 20px rgba(0,0,0,.05);
   --danger: #8c2c2c;
 }
+
+/* v30.3.74 — outcome-first Scores contract and SSP validation states */
+#leaderboardWrap{display:grid;gap:14px}
+#leaderboard .scores-outcome-hero{order:-100;border-color:rgba(11,93,59,.24);background:linear-gradient(145deg,#fff,#f2f8f5)}
+#leaderboard .scoreboard-export-card{order:90}
+#leaderboard .print-section-notes{order:80}
+.scores-outcome-content{display:grid;gap:10px;min-width:0}
+.scores-outcome-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.scores-outcome-head h2{margin:3px 0 0;font-size:clamp(20px,4vw,30px)}
+.scores-state-badge{display:inline-flex;padding:6px 10px;border-radius:999px;background:#e8f3ed;color:#0b5d3b;font-weight:850;white-space:nowrap}
+.scores-outcome-result{font-size:clamp(22px,5vw,38px);line-height:1.08;font-weight:900;overflow-wrap:anywhere}
+.scores-outcome-meta{color:var(--muted)}
+.scores-money-summary{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;border-top:1px solid var(--border);padding-top:10px}
+.scores-money-summary span{color:var(--muted);font-size:12px}.scores-money-summary strong{text-align:right;font-variant-numeric:tabular-nums}
+.scores-visible-warning{border:1px solid #d97706;border-radius:12px;background:#fff7ed;color:#7c2d12;padding:10px 12px}
+.scores-settlement-contract h3{margin:0 0 4px}.scores-payment-routes{display:grid;gap:7px}
+.scores-settlement-contract .final-net-settlement-player{white-space:normal;text-overflow:clip;overflow-wrap:anywhere}
+.ssp-validation-state{grid-column:1/-1;margin-top:5px;font-size:12px;color:var(--muted)}
+.ssp-validation-state[data-state="validated"] strong{color:#0b5d3b}.ssp-validation-state[data-state="invalidated"] strong{color:#9f1239}
+.ssp-manual-validation-actions{display:flex;gap:8px;margin-top:7px}.ssp-manual-validation-actions button{min-height:40px}
+@media(min-width:900px){#leaderboard .print-section-match-status,#leaderboard details.scoreboard-collapsible{max-width:none}.scores-outcome-content{grid-template-columns:minmax(0,1fr) auto}.scores-outcome-head,.scores-outcome-result,.scores-outcome-meta,.scores-visible-warning{grid-column:1/-1}.scores-money-summary{grid-column:1/-1}}
+@media(max-width:430px){.scores-outcome-head,.scores-money-summary{align-items:flex-start;flex-direction:column}.scores-money-summary strong{text-align:left}.ssp-manual-validation-actions{width:100%}.ssp-manual-validation-actions button{flex:1}}
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body {

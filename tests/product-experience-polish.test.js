@@ -51,8 +51,8 @@ test('Home Screen branding is shared by the header while install assets remain c
   assert.match(html, /src="\.\/branding\/apple-touch-icon\.png" alt="The Dye Ledger"/);
   assert.match(html, /href="\.\/branding\/apple-touch-icon\.png"/);
   assert.deepEqual(manifest.icons.map(icon => icon.src), [
-    './branding/app-icon-192.png?v=30.3.73&rev=1',
-    './branding/app-icon-512.png?v=30.3.73&rev=1',
+    './branding/app-icon-192.png?v=30.3.74&rev=1',
+    './branding/app-icon-512.png?v=30.3.74&rev=1',
     './branding/apple-touch-icon.png',
   ]);
   for (const asset of ['app-icon-192.png', 'app-icon-512.png', 'apple-touch-icon.png', 'favicon-32.png', 'favicon-16.png']) {

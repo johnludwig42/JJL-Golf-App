@@ -1,5 +1,14 @@
 # Sneaky / Sandy / Poley
 
+## v30.3.74 Greeny and Prox validation contract
+
+- With **Validate Greeny/Prox off**, the scorer's Greeny and Prox selections are resolved immediately. Putts and Stat Tracking never invalidate them.
+- With validation on and Stat Tracking off, the host or local scorer explicitly confirms or rejects each selected Greeny. Pending manual rulings award no Greeny or Prox points.
+- With validation and Stat Tracking on, a user-entered 0–2 putts validates the Greeny and 3 or more putts invalidates it. Editing putts deterministically rebuilds the eligible Prox pool.
+- Zero eligible Greenies awards no Prox; one auto-resolves Prox; two or more require a selection constrained to eligible recipients. Pending Prox awards nothing.
+- Local matches allow the local scorer to resolve SSP facts. In Shared Match, existing authority remains unchanged: assigned scorers may enter their player facts, while the host controls the final manual validation and Prox resolution. Joined devices receive the resulting SSP fact envelope and render pending, validated, or invalidated state without replacing host facts.
+- Validation state is a stable SSP fact. Rendering is read-only; repeated rendering never creates or changes a Greeny, Prox, point, or settlement transaction.
+
 Status: v30.3.59 Shared Match-safe current status and reporting
 
 ## v30.3.59 Current Status Semantics

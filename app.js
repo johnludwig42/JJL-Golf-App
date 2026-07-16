@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.73',
-  versionNumber: '30.3.73',
-  cacheName: 'the-dye-ledger-v30.3.73',
+  version: 'v30.3.74',
+  versionNumber: '30.3.74',
+  cacheName: 'the-dye-ledger-v30.3.74',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Library & Product Consistency'
+  buildLabel: 'Scores & Settlement Reconciliation'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -2907,19 +2907,16 @@ function getSneakySandyPoleyConfig(match) {
 function ensureSspValidationStatCoverage(match) {
   const cfg = getSneakySandyPoleyConfig(match);
   if (!match || !cfg?.validateGreenyProx) return false;
-  const playerIds = getMatchPlayerIds(match);
-  const changed = !match.statTrackingEnabled
-    || JSON.stringify((match.statTrackingPlayerIds || []).map(String)) !== JSON.stringify(playerIds);
-  match.statTrackingEnabled = true;
-  match.statTrackingPlayerIds = playerIds;
-  return changed;
+  // Validation may use tracked putts or an explicit manual ruling. Never turn
+  // Stat Tracking on as a normalization side effect.
+  return false;
 }
 
 function getDefaultSneakySandyPoleyHoleInput(match, holeNumber = 1) {
   const playerIds = getMatchPlayerIds(match);
   const players = {};
   playerIds.forEach(playerId => {
-    players[playerId] = { sneaky: false, sandy: false, poley: false, greeny: false };
+    players[playerId] = { sneaky: false, sandy: false, poley: false, greeny: false, greenyValidation: 'pending' };
   });
   return { holeNumber: Number(holeNumber) || 1, players, proxPlayerId: '', bridge: false, rebridge: false, notes: '' };
 }
@@ -2935,6 +2932,7 @@ function normalizeSneakySandyPoleyHoleInput(match, raw = {}, holeNumber = 1) {
       sandy,
       poley: !!row.poley,
       greeny: !!row.greeny,
+      greenyValidation: ['validated', 'invalidated'].includes(String(row.greenyValidation || '')) ? String(row.greenyValidation) : 'pending',
     };
   });
   const allowedIds = new Set(Object.keys(defaults.players));
@@ -2976,7 +2974,11 @@ function flattenSharedSspFacts(facts = null) {
   if (facts.settings) flat.settings = JSON.stringify(facts.settings);
   Object.entries(facts.inputs || {}).forEach(([hole, input]) => {
     Object.entries(input?.players || {}).forEach(([playerId, row]) => {
-      ['sneaky', 'sandy', 'poley', 'greeny'].forEach(key => {
+      ['sneaky', 'sandy', 'poley', 'greeny', 'greenyValidation'].forEach(key => {
+        if (key === 'greenyValidation') {
+          flat[`holes.${hole}.players.${playerId}.${key}`] = ['validated', 'invalidated'].includes(String(row?.[key] || '')) ? String(row[key]) : 'pending';
+          return;
+        }
         flat[`holes.${hole}.players.${playerId}.${key}`] = key === 'sneaky' ? (!!row?.sneaky || !!row?.sandy) : !!row?.[key];
       });
     });
@@ -3072,6 +3074,34 @@ function getSneakySandyPoleyPlayerStat(match, playerId, holeIdx) {
     : null;
   const available = !!(match && playerRef && stat && stat.puttsSource !== 'default' && isStatTrackingEnabled(match) && isPlayerStatTrackingEnabled(match, playerId));
   return { available, stat: available ? stat : null };
+}
+
+function getSneakySandyPoleyGreenyState(match, input, playerId, holeIdx) {
+  const cfg = getSneakySandyPoleyConfig(match);
+  const row = input?.players?.[String(playerId)] || {};
+  if (!row.greeny) return { state: 'not-selected', resolved: true, eligible: false, reason: '' };
+  if (!cfg?.validateGreenyProx) return { state: 'validated', resolved: true, eligible: true, reason: 'Validation off' };
+  const tracked = getSneakySandyPoleyPlayerStat(match, playerId, holeIdx);
+  if (tracked.available) {
+    const putts = Number(tracked.stat?.putts);
+    return putts <= 2
+      ? { state: 'validated', resolved: true, eligible: true, reason: `${putts} putt${putts === 1 ? '' : 's'}` }
+      : { state: 'invalidated', resolved: true, eligible: false, reason: `${putts} putts` };
+  }
+  const manual = String(row.greenyValidation || 'pending');
+  if (manual === 'validated') return { state: 'validated', resolved: true, eligible: true, reason: 'Manual validation' };
+  if (manual === 'invalidated') return { state: 'invalidated', resolved: true, eligible: false, reason: 'Manual validation' };
+  return { state: 'manual-required', resolved: false, eligible: false, reason: 'Manual validation required' };
+}
+
+function resolveSneakySandyPoleyValidation(match, input, players = [], holeIdx = 0, options = {}) {
+  const greenies = (players || []).map(player => {
+    const playerId = String(player.playerId || '');
+    return { player, playerId, ...getSneakySandyPoleyGreenyState(match, input, playerId, holeIdx) };
+  });
+  const eligiblePlayers = greenies.filter(row => row.eligible).map(row => row.player);
+  const prox = resolveSneakySandyPoleyProxSelection(input, players, { ...options, eligiblePlayers });
+  return { greenies, eligiblePlayers, prox, unresolved: greenies.some(row => !row.resolved) || prox.mode === 'tbd' };
 }
 
 function createSneakySandyPoleyTeamPointMap(teams = [], value = 0) {
@@ -3230,6 +3260,7 @@ function buildSneakySandyPoleyLedger(match, options = {}) {
     const holeNumber = Number(holeResult?.holeNumber || idx + 1);
     const rawHoleInputs = match?.sneakySandyPoleyInputs && typeof match.sneakySandyPoleyInputs === 'object' ? match.sneakySandyPoleyInputs : {};
     const holeInput = normalizeSneakySandyPoleyHoleInput(match, rawHoleInputs[String(holeNumber)] || {}, holeNumber);
+    const validationState = resolveSneakySandyPoleyValidation(match, holeInput, metrics.players || [], idx);
     const holeWarnings = [];
     const holeLedger = {
       holeNumber,
@@ -3258,7 +3289,6 @@ function buildSneakySandyPoleyLedger(match, options = {}) {
       const hasGross = Number.isFinite(gross) && gross > 0;
       const hasPar = Number.isFinite(par) && par > 0;
       const input = holeInput.players?.[playerId] || {};
-      const { available: statsAvailable, stat } = getSneakySandyPoleyPlayerStat(match, playerId, idx);
       if (input.sneaky) {
         if (!hasGross || !hasPar) holeWarnings.push(`${getPlayerName(playerId)} Sneaky pending score/par validation.`);
         else if (gross !== par) holeWarnings.push(`${getPlayerName(playerId)} Sneaky requires par.`);
@@ -3276,26 +3306,22 @@ function buildSneakySandyPoleyLedger(match, options = {}) {
         else addCategory(holeLedger, teamId, { category: 'poley', points: 1, playerId, label: `${getPlayerName(playerId)}: Poley` });
       }
       if (input.greeny) {
-        if (cfg.validateGreenyProx) {
-          if (!statsAvailable) holeWarnings.push(`${getPlayerName(playerId)} Greeny requires 2 putts or less to validate.`);
-          else if (Number(stat.putts) <= 2) addCategory(holeLedger, teamId, { category: 'greeny', points: 1, playerId, label: `${getPlayerName(playerId)}: Greeny` });
-          else holeWarnings.push(`${getPlayerName(playerId)} Greeny requires 2 putts or less to validate.`);
-        } else {
-          addCategory(holeLedger, teamId, { category: 'greeny', points: 1, playerId, label: `${getPlayerName(playerId)}: Greeny` });
-        }
+        const greenyState = getSneakySandyPoleyGreenyState(match, holeInput, playerId, idx);
+        if (greenyState.eligible) addCategory(holeLedger, teamId, { category: 'greeny', points: 1, playerId, label: `${getPlayerName(playerId)}: Greeny` });
+        else if (greenyState.state === 'invalidated') holeWarnings.push(`${getPlayerName(playerId)} Greeny invalidated — ${greenyState.reason}.`);
+        else holeWarnings.push(`${getPlayerName(playerId)} Greeny manual validation required.`);
       }
       if (hasGross && hasPar && gross === par - 1) addCategory(holeLedger, teamId, { category: 'birdie', points: 2, playerId, label: `${getPlayerName(playerId)}: Birdie` });
       if (hasGross && hasPar && gross <= par - 2) addCategory(holeLedger, teamId, { category: 'eagle', points: 4, playerId, label: `${getPlayerName(playerId)}: Eagle` });
     });
-    if (holeInput.proxPlayerId) {
-      const playerId = String(holeInput.proxPlayerId);
+    if (validationState.prox.proxPlayerId) {
+      const playerId = String(validationState.prox.proxPlayerId);
       const teamId = getTeamIdForPlayer(playerId);
       const playerInput = holeInput.players?.[playerId] || {};
-      const { available: statsAvailable, stat } = getSneakySandyPoleyPlayerStat(match, playerId, idx);
-      const validateOk = !cfg.validateGreenyProx || (statsAvailable && Number(stat?.putts) <= 2);
+      const validateOk = getSneakySandyPoleyGreenyState(match, holeInput, playerId, idx).eligible;
       if (!teamId || !holeLedger.basePointsByTeam.hasOwnProperty(teamId)) holeWarnings.push('Prox player is not on an SSP team.');
       else if (!playerInput.greeny) holeWarnings.push('Prox requires an eligible Greeny.');
-      else if (!validateOk) holeWarnings.push('Prox requires 2 putts or less to validate.');
+      else if (!validateOk) holeWarnings.push('Prox requires a validated Greeny recipient.');
       else addCategory(holeLedger, teamId, { category: 'prox', points: 2, playerId, label: `${getPlayerName(playerId)}: Prox` });
     }
     const scoredByTeam = teams.map(team => {
@@ -3515,7 +3541,7 @@ function isSneakySandyPoleyProxEligible(input, playerId) {
 const SSP_PROX_TBD_VALUE = '__tbd';
 
 function resolveSneakySandyPoleyProxSelection(input, players = [], options = {}) {
-  const eligiblePlayers = getSneakySandyPoleyEligibleProxPlayers(input, players);
+  const eligiblePlayers = Array.isArray(options.eligiblePlayers) ? options.eligiblePlayers : getSneakySandyPoleyEligibleProxPlayers(input, players);
   const eligibleIds = eligiblePlayers.map(player => String(player.playerId || '')).filter(Boolean);
   const requested = String(options.requestedProxPlayerId ?? input?.proxPlayerId ?? '');
   const forceTbdOnMultiple = !!options.forceTbdOnMultiple;
@@ -4777,8 +4803,21 @@ function buildExportMomentum(match, metrics) {
 }
 
 
+function formatRoundMemoryRecapLine(memory) {
+  const context = [memory.createdByName, memory.holeNumber ? `Hole ${memory.holeNumber}` : '', memory.category && memory.category !== 'General' ? memory.category : ''].filter(Boolean).join(' · ');
+  return `- ${context ? `${context}: ` : ''}${String(memory.text || '').trim()}`;
+}
+function ensureRoundRecapMemoryCoverage(match, recapText) {
+  const recap = String(recapText || '').trim();
+  const memories = getRoundMemories(match);
+  if (!memories.length) return recap;
+  const missing = memories.filter(memory => !recap.toLocaleLowerCase().includes(String(memory.text || '').trim().toLocaleLowerCase()));
+  if (!missing.length) return recap;
+  const section = `Round Memories\n${missing.map(formatRoundMemoryRecapLine).join('\n')}`;
+  return [recap, section].filter(Boolean).join('\n\n');
+}
 function getStoredRoundRecap(match) {
-  return String(match?.roundRecapFinal || match?.roundRecapGenerated || match?.roundRecap || '').trim();
+  return ensureRoundRecapMemoryCoverage(match, String(match?.roundRecapFinal || match?.roundRecapGenerated || match?.roundRecap || '').trim());
 }
 function getDraftRoundRecap(match) {
   return String(match?.roundRecapGenerated || match?.roundRecap || '').trim();
@@ -5064,8 +5103,20 @@ function getGameClinchStates(match, metrics) {
   });
   return states;
 }
+function hasUnresolvedSneakySandyPoleyValidation(match, metrics) {
+  const cfg = getSneakySandyPoleyConfig(match);
+  if (!cfg?.validateGreenyProx || !metrics) return false;
+  return (metrics.holeResults || []).some((holeResult, idx) => {
+    const holeNumber = Number(holeResult?.holeNumber || idx + 1);
+    const input = normalizeSneakySandyPoleyHoleInput(match, match?.sneakySandyPoleyInputs?.[String(holeNumber)] || {}, holeNumber);
+    const selectedGreenies = Object.values(input.players || {}).some(row => row.greeny);
+    if (!selectedGreenies) return false;
+    return resolveSneakySandyPoleyValidation(match, input, metrics.players || [], idx).unresolved;
+  });
+}
 function areAllGamesFinal(match, metrics) {
   const completion = getRoundCompletionState(match, metrics);
+  if (hasUnresolvedSneakySandyPoleyValidation(match, metrics)) return false;
   if (completion.isComplete) return true;
   const states = getGameClinchStates(match, metrics);
   if (!states.length) return false;
@@ -5344,6 +5395,12 @@ function buildRoundRecord(match, metrics) {
     signatureStat: null
   }));
   playerRecords.forEach((record, index) => { record.signatureStat = buildPlayerSignatureStat(metrics.players[index], events, completion); });
+  const teamRecords = (metrics?.teams || []).map(teamMetric => ({
+    teamId: Number(teamMetric.team), displayName: getTeamLabel(match, teamMetric.team),
+    playerIds: (teamMetric.members || []).map(member => String(member.playerId)),
+    grossTotal: Number(teamMetric.grossTotal || 0), netTotal: Number(teamMetric.netTotal || 0),
+    grossToPar: Number(teamMetric.toPar || 0), netToPar: Number(teamMetric.netDiff || 0), headToHead: Number(teamMetric.overall || 0),
+  }));
   const holes = (metrics?.holeResults || []).map((hole, index) => ({
     holeNumber: Number(hole?.holeNumber || index + 1), par: Number(hole?.par || 0) || null, yards: Number(hole?.yardage || 0) || null, strokeIndex: Number(hole?.strokeIndex || 0) || null,
     scores: (hole?.playerScores || []).map(score => ({ playerId: String(score.playerId), gross: Number(score.gross) || null, net: Number.isFinite(Number(score.net)) ? Number(score.net) : null, strokesReceived: Number(score.strokes || score.strokesReceived || 0) }))
@@ -5358,7 +5415,7 @@ function buildRoundRecord(match, metrics) {
   return {
     schemaVersion: ROUND_RECORD_SCHEMA_VERSION,
     meta: { roundId: String(match?.id || ''), tripId: match?.tripId || null, eventId: match?.eventId || null, ownerUserId: match?.ownerUserId || match?.sharedOwnerUserId || null, createdBy: match?.createdBy || null, deviceId: match?.deviceId || null, hostDeviceId: match?.hostDeviceId || match?.sharedHostDeviceId || null, courseSnapshot: clonePlain(match?.courseSnapshot || metrics?.course || null), teeSnapshot: clonePlain(metrics?.tee || null), date: match?.date || null, holesPlanned: completion.selectedHoleCount, holesCompleted: completion.completedHoleCount, completedHoleNumbers: completion.completedHoles.slice(), status: completion.isIncomplete ? 'provisional' : 'final', endReason: match?.roundEndReason || (completion.isComplete ? 'completed' : null), timing: { valid: !!timing.valid, available: !!timing.available, elapsedMs: timing.valid ? timing.elapsedMs : null, label: timing.valid ? timing.label : null }, handicapConvention: match?.handicapConvention || 'low_man', lowManPlayerId: playerRecords.filter(player => player.courseHandicap != null).sort((a, b) => a.courseHandicap - b.courseHandicap)[0]?.playerId || null },
-    players: playerRecords, holes, games, events, transactions,
+    players: playerRecords, teams: teamRecords, holes, games, events, transactions,
     pressTransactions: (ctx.payoutGames || []).filter(game => game.meta?.press).flatMap(game => (game.meta.settlement?.transactions || []).map(row => ({ ...clonePlain(row), rootGameId: game.meta.press.rootGameId, pressDepth: game.meta.press.pressDepth }))),
     settlement: { netPositions: Object.fromEntries(Object.entries(ctx.finalTotals || {}).map(([id, amount]) => [String(id), Number(amount || 0)])), payments: transactions, crossFoot: Number(crossFoot.toFixed(2)) },
     notes: { hostLog: String(match?.roundRecapNotes || ''), photos: clonePlain(match?.roundPhotos || []), weather: clonePlain(match?.roundContext?.weather || null) }
@@ -5874,8 +5931,8 @@ function buildRoundRecapPayload(match, metrics) {
       label: getFeaturedCompetitionResult(match, metrics).label,
       result: getFeaturedCompetitionResult(match, metrics).result,
     },
-    memories: getRoundMemories(match).map(m => ({ text: m.text, category: m.category, holeNumber: m.holeNumber, createdAt: m.createdAt })),
-    recapInstructions: 'Write a polished, private-club style golf recap with short sections: Round Story, Featured Competition, Turning Points, Player Highlights, Game Story, Statistical Notes, Memorable Moments, and Closing Note or Fun Awards when supported. Center the Featured Competition first, distinguish it from Low Gross, Low Net, Money Winner, game winners, and awards, and use Round Notes and Memories for personality. If roundContext.weather.summary is present, you may reference the weather naturally where it helps explain the round, but do not force a weather mention or recite raw weather metrics awkwardly. Do not fabricate shots, weather, holes, or emotions not supported by data or notes. For an incomplete round, say completed holes and use the supplied completed-hole list; never say opening holes or front nine unless that exact sequential range is complete. Treat incomplete-round money as provisional unless the relevant game is mathematically decided. If clinched early, explain that the featured competition was decided before all holes were played. Do not fabricate untracked statistics. Keep the tone professional, fun, golf-aware, specific, and concise on mobile.',
+    memories: getRoundMemories(match).map(m => ({ text: m.text, category: m.category, holeNumber: m.holeNumber, author: m.createdByName, createdByName: m.createdByName, createdAt: m.createdAt, timestamp: m.timestamp })),
+    recapInstructions: 'Write a polished, private-club style golf recap with short sections: Round Story, Featured Competition, Turning Points, Player Highlights, Game Story, Statistical Notes, Memorable Moments, and Closing Note or Fun Awards when supported. Every item in memories is a high-intent user fact and must be materially represented with its specific names, hole number, and description preserved. Weave each Memory naturally when possible; otherwise include it verbatim in a Round Memories section. Never replace a specific Memory with vague generic language and never invent supporting details. Center the Featured Competition first, distinguish it from Low Gross, Low Net, Money Winner, game winners, and awards, and use Round Notes and Memories for personality. If roundContext.weather.summary is present, you may reference the weather naturally where it helps explain the round, but do not force a weather mention or recite raw weather metrics awkwardly. Do not fabricate shots, weather, holes, or emotions not supported by data or notes. For an incomplete round, say completed holes and use the supplied completed-hole list; never say opening holes or front nine unless that exact sequential range is complete. Treat incomplete-round money as provisional unless the relevant game is mathematically decided. If clinched early, explain that the featured competition was decided before all holes were played. Do not fabricate untracked statistics. Keep the tone professional, fun, golf-aware, specific, and concise on mobile.',
     players: playerSummaries,
     games: summarizeSelectedGamesForRecap(match, metrics),
     finalSettlement,
@@ -5909,7 +5966,7 @@ async function generateRoundRecapForActiveMatch() {
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data?.success === false) throw new Error(data?.error || `Round Recap failed (${response.status}).`);
-    const recap = String(data?.recap || data?.text || '').trim();
+    const recap = ensureRoundRecapMemoryCoverage(match, String(data?.recap || data?.text || '').trim());
     if (!recap) throw new Error('Round Recap returned no text.');
     match.roundRecapGenerated = recap;
     if (!String(match.roundRecapFinal || '').trim()) match.roundRecap = recap;
@@ -9316,6 +9373,126 @@ function closeQuickScoreboardView() {
   document.documentElement.classList.remove('quick-scoreboard-open');
 }
 
+function buildTeamSummaryRows(match, metrics, context) {
+  const playerTeam = new Map((context.frozen ? context.record.players || [] : metrics.players || []).map(player => [String(player.playerId), Number(player.teamId ?? player.team)]));
+  const moneyByTeam = new Map();
+  Object.entries(context.totals || {}).forEach(([playerId, amount]) => {
+    const teamId = playerTeam.get(String(playerId));
+    if (Number.isFinite(teamId)) moneyByTeam.set(teamId, Number(moneyByTeam.get(teamId) || 0) + Number(amount || 0));
+  });
+  const frozenTeams = Array.isArray(context.record?.teams) && context.record.teams.length ? context.record.teams : null;
+  const derivedFrozenTeams = context.frozen && !frozenTeams ? [...new Set((context.record.players || []).map(player => Number(player.teamId)).filter(Number.isFinite))].map(teamId => {
+    const teamPlayers = (context.record.players || []).filter(player => Number(player.teamId) === teamId);
+    const playerIds = new Set(teamPlayers.map(player => String(player.playerId)));
+    let gross = 0, net = 0, par = 0, headToHead = 0;
+    (context.record.holes || []).forEach(hole => {
+      const scores = (hole.scores || []).filter(score => playerIds.has(String(score.playerId)) && Number(score.gross) > 0);
+      gross += scores.reduce((sum, score) => sum + Number(score.gross || 0), 0);
+      net += scores.reduce((sum, score) => sum + Number(score.net ?? score.gross ?? 0), 0);
+      par += scores.length * Number(hole.par || 0);
+      const teamTotals = [...new Set((context.record.players || []).map(player => Number(player.teamId)).filter(Number.isFinite))].map(id => {
+        const ids = new Set((context.record.players || []).filter(player => Number(player.teamId) === id).map(player => String(player.playerId)));
+        return { id, net: (hole.scores || []).filter(score => ids.has(String(score.playerId)) && Number(score.gross) > 0).reduce((sum, score) => sum + Number(score.net ?? score.gross ?? 0), 0) };
+      });
+      if (teamTotals.length === 2 && teamTotals[0].net !== teamTotals[1].net) headToHead += teamTotals.find(row => row.id === teamId)?.net === Math.min(...teamTotals.map(row => row.net)) ? 1 : -1;
+    });
+    return { teamId, displayName: getTeamLabel(match, teamId), memberNames: teamPlayers.map(player => player.displayName || 'Player'), gross, net, grossToPar: gross - par, netToPar: net - par, headToHead };
+  }) : null;
+  const source = context.frozen && frozenTeams ? frozenTeams.map(team => ({
+    teamId: Number(team.teamId), displayName: team.displayName || `Team ${team.teamId}`,
+    memberNames: (team.playerIds || []).map(id => (context.record.players || []).find(player => String(player.playerId) === String(id))?.displayName || String(id)),
+    gross: Number(team.grossTotal || 0), net: Number(team.netTotal || 0), grossToPar: Number(team.grossToPar || 0), netToPar: Number(team.netToPar || 0), headToHead: Number(team.headToHead || 0),
+  })) : context.frozen ? derivedFrozenTeams : (metrics.teams || []).map(team => ({
+    teamId: Number(team.team), displayName: getTeamLabel(match, team.team), memberNames: (team.members || []).map(member => member.player?.name || 'Player'),
+    gross: Number(team.grossTotal || 0), net: Number(team.netTotal || 0), grossToPar: Number(team.toPar || 0), netToPar: Number(team.netDiff || 0), headToHead: Number(team.overall || 0),
+  }));
+  const rows = source.map(row => ({ ...row, money: Number(moneyByTeam.get(row.teamId) || 0), finality: context.final ? 'Final' : 'Provisional' }));
+  rows.sort((a, b) => a.netToPar - b.netToPar || a.grossToPar - b.grossToPar || a.teamId - b.teamId);
+  const best = rows.length ? rows[0].netToPar : null;
+  const tied = rows.filter(row => row.netToPar === best).length > 1;
+  rows.forEach((row, index) => {
+    row.rank = index > 0 && row.netToPar === rows[index - 1].netToPar ? rows[index - 1].rank : index + 1;
+    row.result = row.netToPar === best ? (tied ? 'Tied' : context.final ? 'Winner' : 'Leader') : '';
+  });
+  return rows;
+}
+
+function buildEffectiveScoresContext(match, metrics = null) {
+  const effectiveMetrics = metrics || computeMatchMetrics(match);
+  const completion = getRoundCompletionState(match, effectiveMetrics);
+  const reopened = !!(match?.reopenedAt || match?.previousCompletedAt) && match?.status !== 'complete';
+  const completed = match?.status === 'complete';
+  const frozen = completed && isFrozenRoundRecord(match?.roundRecordSnapshot);
+  const record = completed ? getEffectiveRoundRecord(match, effectiveMetrics) : buildRoundRecord(match, effectiveMetrics);
+  const allGamesFinal = areAllGamesFinal(match, effectiveMetrics);
+  let lifecycle = 'Live';
+  if (reopened) lifecycle = 'Reopened for Correction';
+  else if (completed && completion.isIncomplete && allGamesFinal) lifecycle = 'Clinched Early · Final';
+  else if (completed && completion.isIncomplete) lifecycle = 'Ended Early · Provisional';
+  else if (completed) lifecycle = 'Final';
+  const final = completed && (!completion.isIncomplete || allGamesFinal);
+  const playerRows = buildPlayerSummaryRows(match, effectiveMetrics, frozen ? record : null);
+  const trustedRows = playerRows.filter(row => row.hasTrustedScore);
+  const best = trustedRows.length ? Math.min(...trustedRows.map(row => Number(row.netToPar || 0))) : null;
+  const leaders = best == null ? [] : playerRows.filter(row => row.hasTrustedScore && Number(row.netToPar || 0) === best);
+  const payout = getPayoutReportContext(match, effectiveMetrics);
+  const players = frozen
+    ? (record.players || []).map(player => ({ id: String(player.playerId), name: player.displayName || 'Player' }))
+    : payout.players;
+  const totals = frozen ? { ...(record.settlement?.netPositions || {}) } : { ...(payout.finalTotals || {}) };
+  const context = { match, metrics: effectiveMetrics, completion, reopened, completed, frozen, legacyFallback: completed && !frozen, record, allGamesFinal, final, lifecycle, playerRows, leaders, players, totals, payout };
+  context.teamRows = buildTeamSummaryRows(match, effectiveMetrics, context);
+  context.frozenTeamFallback = frozen && !(Array.isArray(record?.teams) && record.teams.length);
+  return context;
+}
+
+function buildScoresOutcomeHero(context) {
+  const { completion, lifecycle, final, leaders, legacyFallback } = context;
+  const stateWord = final ? 'Winner' : 'Leader';
+  const outcome = !leaders.length ? 'No score leader yet' : leaders.length > 1
+    ? `Tied · ${leaders.map(row => row.displayName).join(', ')}`
+    : `${stateWord} · ${leaders[0].displayName}`;
+  const missing = getMissingScoreEntries(context.match, context.metrics);
+  const warning = missing.length
+    ? `<div class="scores-visible-warning" role="status"><strong>${missing.length} score${missing.length === 1 ? '' : 's'} missing.</strong> Results and settlement remain provisional.</div>`
+    : '';
+  const moneyRows = Object.entries(context.totals).map(([id, amount]) => ({ id, amount: Number(amount || 0) })).filter(row => Math.abs(row.amount) > 0.0001).sort((a, b) => b.amount - a.amount);
+  const topMoney = moneyRows[0];
+  const topName = context.players.find(player => String(player.id) === String(topMoney?.id))?.name || '';
+  return `<section class="scores-outcome-content" data-scores-lifecycle="${escapeHtml(lifecycle)}" data-result-source="${context.frozen ? 'frozen' : context.legacyFallback ? 'legacy-fallback' : 'live'}">
+    <div class="scores-outcome-head"><div><div class="section-label">Round Status</div><h2>${escapeHtml(lifecycle)}</h2></div><span class="scores-state-badge">${final ? 'Final' : 'Provisional'}</span></div>
+    <div class="scores-outcome-result">${escapeHtml(outcome)}</div>
+    <div class="scores-outcome-meta">${escapeHtml(completion.label)}${legacyFallback ? ' · Legacy saved-round compatibility view' : ''}</div>
+    ${topMoney ? `<div class="scores-money-summary"><span>${final ? 'Top final money position' : 'Current money position'}</span><strong>${escapeHtml(topName)} ${formatFinalNetSettlementMoney(topMoney.amount)}</strong></div>` : '<div class="scores-money-summary"><span>Money position</span><strong>Even · no payment currently required</strong></div>'}
+    ${warning}
+  </section>`;
+}
+
+function buildScoresSettlement(context) {
+  const heading = context.final ? 'Final Net Settlement' : 'Provisional Settlement';
+  const verb = context.final ? 'pays' : 'would pay';
+  const settlements = context.frozen
+    ? (context.record.transactions || []).map(row => ({ from: row.payerId, to: row.payeeId, amount: row.amount }))
+    : optimalSettlementRows(context.totals);
+  const name = id => context.players.find(player => String(player.id) === String(id))?.name || 'Unknown';
+  const routes = settlements.length ? settlements.map(row => `<div class="settle-up-row"><div class="settle-up-route"><strong>${escapeHtml(name(row.from))}</strong> ${verb} <strong>${escapeHtml(name(row.to))}</strong></div><div class="settle-up-amount"><strong>${formatMoneyAccounting(row.amount)}</strong></div></div>`).join('') : '<div class="tiny">No payment required.</div>';
+  const balances = context.players.map(player => ({ player, amount: Number(context.totals[player.id] || 0) }));
+  const balanceHtml = balances.map(({ player, amount }) => `<div class="final-net-settlement-row"><div class="final-net-settlement-player" title="${escapeHtml(player.name)}"><strong>${escapeHtml(player.name)}</strong></div><div class="final-net-settlement-amount"><span class="sr-only">${amount > 0 ? 'receives' : amount < 0 ? 'owes' : 'even'}</span><strong>${formatFinalNetSettlementMoney(amount)}</strong></div></div>`).join('');
+  return `<section class="scores-settlement-contract" data-settlement-state="${context.final ? 'final' : 'provisional'}"><h3>${heading}</h3><div class="tiny">${context.final ? 'Final payment routes settle all configured money games.' : 'Based on scores currently entered; payment routes may change.'}</div><div class="final-net-settlement-list top-gap">${balanceHtml}</div><div class="scores-payment-routes top-gap" aria-label="${heading} payment routes">${routes}</div></section>`;
+}
+
+function buildFrozenScoresGameSummary(record) {
+  const games = (record?.games || []).filter(game => game.type !== 'press');
+  if (!games.length) return '<div class="game-summary-grid"><div class="game-summary-card empty-state-card"><div class="game-summary-value">No money games configured. Score results remain available.</div></div></div>';
+  return `<div class="game-summary-grid">${games.map(game => {
+    const result = game.result || {};
+    const standing = result.result || result.resultText || result.value || result.status || 'Final result recorded';
+    const amounts = Object.values(game.amounts || {}).map(Number).filter(Number.isFinite);
+    const contribution = amounts.length ? Math.max(0, ...amounts) : 0;
+    return `<div class="game-summary-card" data-game-result-source="frozen"><div class="game-summary-title">${escapeHtml(getGameLabel(game.type || game.gameId))}</div><div class="game-summary-value">${escapeHtml(String(standing))}</div><div class="game-summary-sub">Final · Frozen round result</div><div class="game-summary-sub game-summary-economic">Settlement contribution: ${formatMoneyAccounting(contribution)}</div></div>`;
+  }).join('')}</div>`;
+}
+
 function renderLeaderboard() {
   const match = getActiveMatch();
   const empty = document.getElementById('leaderboardEmpty');
@@ -9357,7 +9534,8 @@ function renderLeaderboard() {
 
   empty.classList.add('hidden');
   wrap.classList.remove('hidden');
-  if (executiveSummary) executiveSummary.innerHTML = buildRoundSnapshot(match, metrics);
+  const scoresContext = buildEffectiveScoresContext(match, metrics);
+  if (executiveSummary) executiveSummary.innerHTML = buildScoresOutcomeHero(scoresContext);
   completedSummaryBanner?.classList.toggle('hidden', !isCompletedSummarySession(match));
   syncFinishRoundUi(match);
   const missingScoreEl = document.getElementById('missingScoreWarning');
@@ -9370,40 +9548,40 @@ function renderLeaderboard() {
     missingScoreEl.setAttribute('aria-hidden', warning ? 'false' : 'true');
   }
 
-  if (playerSummaryHost) playerSummaryHost.innerHTML = buildPlayerSummaryTable(buildPlayerSummaryRows(match, metrics), 'Player Leaderboard');
+  if (playerSummaryHost) playerSummaryHost.innerHTML = buildPlayerSummaryTable(scoresContext.playerRows, 'Player Leaderboard');
 
-  const sortedTeams = metrics.teams.slice().sort((a, b) => (a.netTotal - b.netTotal) || (a.grossTotal - b.grossTotal) || (a.team - b.team));
+  const sortedTeams = scoresContext.teamRows;
   const showTeamLeaderboard = hasMultiPlayerTeam(metrics);
   const teamLeaderboardCard = teamBody?.closest('details');
   if (teamLeaderboardCard) teamLeaderboardCard.classList.toggle('hidden', !showTeamLeaderboard);
   const teamMatchRelevant = showTeamLeaderboard && showTeamMatchMetric(match, metrics);
   const teamMetricLabel = teamMatchRelevant ? 'H2H' : '—';
-  const teamMetricValue = t => teamMatchRelevant ? formatSigned(t.overall) : '—';
-  const teamLeaderHeader = document.querySelectorAll('#leaderboard .leader-table thead tr th:last-child')[1];
-  if (teamLeaderHeader) teamLeaderHeader.textContent = teamMatchRelevant ? 'H2H' : '—';
+  const teamMetricValue = t => teamMatchRelevant ? formatSigned(t.headToHead) : '—';
   teamBody.innerHTML = showTeamLeaderboard ? sortedTeams.map(t => `
     <tr>
-      <td>${escapeHtml(getTeamLabel(match, t.team))}</td>
-      <td>${escapeHtml(t.members.map(m => m.player.name).join(', '))}</td>
-      <td>${t.grossTotal}</td>
-      <td>${t.netTotal}</td>
-      <td>${formatToPar(t.toPar)}</td>
-      <td>${formatToPar(t.netDiff)}</td>
+      <td><strong>${escapeHtml(t.displayName)}</strong><div class="tiny">#${t.rank}${t.result ? ` · ${escapeHtml(t.result)}` : ''} · ${t.finality}</div></td>
+      <td>${escapeHtml(t.memberNames.join(', '))}</td>
+      <td>${t.gross}</td>
+      <td>${t.net}</td>
+      <td>${formatToPar(t.grossToPar)}</td>
+      <td>${formatToPar(t.netToPar)}</td>
       <td>${teamMetricValue(t)}</td>
+      <td>${formatFinalNetSettlementMoney(t.money)}</td>
     </tr>
   `).join('') : '';
   const teamMobile = document.getElementById('teamLeaderboardMobile');
   if (teamMobile) {
     teamMobile.innerHTML = showTeamLeaderboard ? sortedTeams.map(t => `
       <div class="leader-mobile-card">
-        <div><strong>${escapeHtml(getTeamLabel(match, t.team))}</strong></div>
-        <div class="tiny">${escapeHtml(t.members.map(m => m.player.name).join(', '))}</div>
+        <div><strong>${escapeHtml(t.displayName)}</strong><span class="tiny"> · #${t.rank}${t.result ? ` · ${escapeHtml(t.result)}` : ''} · ${t.finality}</span></div>
+        <div class="tiny">${escapeHtml(t.memberNames.join(', '))}</div>
         <div class="leader-mobile-grid">
-          <div><div class="leader-mobile-label">Gross</div><div>${t.grossTotal}</div></div>
-          <div><div class="leader-mobile-label">Net</div><div>${t.netTotal}</div></div>
-          <div><div class="leader-mobile-label">To Par</div><div>${formatToPar(t.toPar)}</div></div>
-          <div><div class="leader-mobile-label">Net Diff</div><div>${formatToPar(t.netDiff)}</div></div>
+          <div><div class="leader-mobile-label">Gross</div><div>${t.gross}</div></div>
+          <div><div class="leader-mobile-label">Net</div><div>${t.net}</div></div>
+          <div><div class="leader-mobile-label">To Par</div><div>${formatToPar(t.grossToPar)}</div></div>
+          <div><div class="leader-mobile-label">Net Diff</div><div>${formatToPar(t.netToPar)}</div></div>
           <div><div class="leader-mobile-label">${teamMetricLabel}</div><div>${teamMetricValue(t)}</div></div>
+          <div><div class="leader-mobile-label">Money</div><div>${formatFinalNetSettlementMoney(t.money)}</div></div>
         </div>
       </div>
     `).join('') : '';
@@ -9424,7 +9602,9 @@ function renderLeaderboard() {
     }
   }
   matchStatus.innerHTML = buildFeaturedMatchStatus(match, metrics, match.matchStatusGame || statusOptions[0]?.key || 'team_match');
-  gamesSummary.innerHTML = `${buildSelectedGamesSummary(match, metrics)}${buildPressAuditSection(match, metrics, getEffectiveRoundRecord(match, metrics))}${buildSneakySandyPoleyExportSummary(match, metrics)}`;
+  gamesSummary.innerHTML = scoresContext.frozen
+    ? `${buildFrozenScoresGameSummary(scoresContext.record)}${buildPressAuditSection(match, metrics, scoresContext.record)}`
+    : `${buildSelectedGamesSummary(match, metrics)}${buildPressAuditSection(match, metrics, scoresContext.record)}${buildSneakySandyPoleyExportSummary(match, metrics)}`;
   if (classicScorecard) {
     classicScorecard.innerHTML = buildClassicScorecard(match, metrics);
   }
@@ -9480,7 +9660,7 @@ function renderLeaderboard() {
     if (momentumMeta) momentumMeta.textContent = 'Momentum is shown when a Nassau or match play game is in the round.';
   }
   if (payoutSummary) {
-    payoutSummary.innerHTML = buildNetPayoutSummary(match, metrics);
+    payoutSummary.innerHTML = buildScoresSettlement(scoresContext);
     scheduleTeamPayoutSplitPaneSync();
   }
 }
@@ -10466,11 +10646,13 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
     });
     const notes = document.querySelector('[data-ssp-notes]');
     if (notes) next.notes = String(notes.value || '').slice(0, 240);
-    const proxState = resolveSneakySandyPoleyProxSelection(
+    const proxState = resolveSneakySandyPoleyValidation(
+      match,
       next,
       (match.players || []).map(player => ({ playerId: player.playerId })),
+      Math.max(0, currentHole - 1),
       { requestedProxPlayerId, forceTbdOnMultiple: !!options.sspGreenyChanged }
-    );
+    ).prox;
     next.proxPlayerId = proxState.proxPlayerId;
     if (!getSneakySandyPoleyConfig(match)?.allowBridgeRebridge) {
       next.bridge = false;
@@ -14202,12 +14384,9 @@ function renderSneakySandyPoleyEntry(match, hole, metrics) {
   const players = getVisibleScoringPlayers(match, (metrics?.players || []), { stats: false });
   const canEditAny = players.some(p => canEditPlayerScore(match, p.team, p.playerId));
   const canEditHoleFacts = match.storageMode !== 'shared' || isCurrentDeviceMatchHost(match);
-  const proxState = resolveSneakySandyPoleyProxSelection(input, players);
+  const validationState = resolveSneakySandyPoleyValidation(match, input, players, Math.max(0, currentHole - 1));
+  const proxState = validationState.prox;
   const proxEligiblePlayers = proxState.eligiblePlayers;
-  if (input.proxPlayerId !== proxState.proxPlayerId) {
-    input.proxPlayerId = proxState.proxPlayerId;
-    persist({ skipRender: true });
-  }
   const actionKeys = [
     { key: 'sneaky', label: 'Sneaky' },
     { key: 'sandy', label: 'Sandy' },
@@ -14240,12 +14419,14 @@ function renderSneakySandyPoleyEntry(match, hole, metrics) {
       <div class="ssp-player-list top-gap">
         ${players.map(p => {
           const row = input.players[p.playerId] || {};
+          const greenyState = validationState.greenies.find(item => item.playerId === String(p.playerId));
           const canEdit = canEditPlayerScore(match, p.team, p.playerId);
           return `<div class="ssp-player-row ${canEdit ? '' : 'is-readonly'}">
             <div class="ssp-player-name"><strong title="${escapeHtml(p.player?.name || 'Player')}">${escapeHtml(p.player?.name || 'Player')}</strong><span class="tiny">${escapeHtml(getTeamLabel(match, p.team))}${canEdit ? '' : ' · read only'}</span></div>
             <div class="ssp-chip-group">
               ${actionKeys.map(action => `<label class="ssp-chip"><input type="checkbox" data-ssp-player="${escapeHtml(p.playerId)}" data-ssp-key="${action.key}" ${row[action.key] ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>${row[action.key] ? `✓ ${action.label}` : action.label}</span></label>`).join('')}
             </div>
+            ${cfg.validateGreenyProx && row.greeny ? `<div class="ssp-validation-state" data-state="${escapeHtml(greenyState?.state || 'manual-required')}"><strong>${greenyState?.state === 'validated' ? 'Validated' : greenyState?.state === 'invalidated' ? 'Invalidated' : 'Manual validation required'}</strong>${greenyState?.reason ? ` — ${escapeHtml(greenyState.reason)}` : ''}${!getSneakySandyPoleyPlayerStat(match, p.playerId, Math.max(0, currentHole - 1)).available && canEditHoleFacts ? `<span class="ssp-manual-validation-actions"><button type="button" class="secondary" data-ssp-greeny-validation="validated" data-ssp-player-id="${escapeHtml(p.playerId)}">Confirm</button><button type="button" class="secondary" data-ssp-greeny-validation="invalidated" data-ssp-player-id="${escapeHtml(p.playerId)}">Reject</button></span>` : ''}</div>` : ''}
           </div>`;
         }).join('') || '<div class="tiny">No scoring players available.</div>'}
       </div>
@@ -14255,7 +14436,7 @@ function renderSneakySandyPoleyEntry(match, hole, metrics) {
           ${proxEligiblePlayers.length > 1 ? `<option value="${SSP_PROX_TBD_VALUE}" ${proxState.uiValue === SSP_PROX_TBD_VALUE ? 'selected' : ''}>TBD</option>` : ''}
           ${proxEligiblePlayers.map(p => `<option value="${escapeHtml(p.playerId)}" ${proxState.uiValue === p.playerId ? 'selected' : ''}>${escapeHtml(p.player?.name || 'Player')}</option>`).join('')}
         </select></label>
-        ${proxEligiblePlayers.length ? (proxEligiblePlayers.length > 1 ? '<div class="tiny">Choose Prox when multiple Greenies are selected.</div>' : '<div class="tiny">Only Greeny is auto-selected for Prox.</div>') : '<div class="tiny">Select Greeny for a player to enable Prox.</div>'}
+        ${proxState.mode === 'tbd' ? '<div class="tiny warning-text">Prox selection required from validated Greeny recipients.</div>' : proxState.mode === 'auto' ? '<div class="tiny">Prox auto-resolved because only one eligible Greeny remains.</div>' : proxState.mode === 'none' ? '<div class="tiny">No eligible Prox recipient.</div>' : '<div class="tiny">Prox manually resolved.</div>'}
       </div>
       ${buildSneakySandyPoleyHolePreviewHtml(match, ledger, actualHoleNumber)}
     </div>`;
@@ -15140,7 +15321,7 @@ function buildSelectedGamesSummary(match, metrics) {
   const payoutGames = getPayoutReportContext(match, metrics).payoutGames || [];
   const payoutByKey = new Map(payoutGames.map(game => [game.key, game]));
   if (!selected.length) {
-    return `<div class="game-summary-grid"><div class="game-summary-card empty-state-card"><div class="game-summary-title">No payout games selected</div><div class="game-summary-value">No payout games were selected for this round.</div><div class="game-summary-sub">${metrics.completed}/${getPlayableHoleCount(match, metrics.tee)} holes completed · ${getHoleSegmentLabel(match, metrics.tee)}</div></div></div>`;
+    return `<div class="game-summary-grid"><div class="game-summary-card empty-state-card"><div class="game-summary-title">Score results</div><div class="game-summary-value">No money games configured. Score results remain available.</div><div class="game-summary-sub">${metrics.completed}/${getPlayableHoleCount(match, metrics.tee)} holes completed · ${getHoleSegmentLabel(match, metrics.tee)}</div></div></div>`;
   }
   const cards = selected.map(cfg => {
     const title = getFeaturedGameLabel(match, cfg.key);
@@ -18096,6 +18277,25 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
   document.getElementById('score').addEventListener('click', e => {
+    const validationButton = e.target.closest('[data-ssp-greeny-validation]');
+    if (validationButton) {
+      const match = getActiveMatch();
+      if (!match || (match.storageMode === 'shared' && !isCurrentDeviceMatchHost(match))) return;
+      const scoringHoles = getSelectedScoringHoles(match, getTee(match.courseId, match.teeId));
+      const holeNumber = Number(scoringHoles[currentHole - 1]?.holeNumber || currentHole);
+      const playerId = String(validationButton.dataset.sspPlayerId || '');
+      const next = getSneakySandyPoleyHoleInput(match, holeNumber);
+      if (!next.players[playerId]) return;
+      next.players[playerId].greenyValidation = validationButton.dataset.sspGreenyValidation === 'validated' ? 'validated' : 'invalidated';
+      match.sneakySandyPoleyInputs[String(holeNumber)] = next;
+      match.sharedSspUpdatedAt = new Date().toISOString();
+      match.sharedSspSourceDeviceId = getSharedDeviceId();
+      match.sharedSspSyncState = match.storageMode === 'shared' ? 'pending' : 'not-applicable';
+      persist({ skipRender: true });
+      scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
+      renderCurrentMatch();
+      return;
+    }
     const scoreStepBtn = e.target.closest('[data-score-step]');
     if (scoreStepBtn) {
       const playerId = scoreStepBtn.dataset.scoreStepPlayer || '';
@@ -19675,6 +19875,8 @@ function installDyeLedgerLiveEngineAdapter() {
     computeSkinResults,
     computeNinePointResults,
     buildSneakySandyPoleyLedger,
+    getSneakySandyPoleyGreenyState,
+    resolveSneakySandyPoleyValidation,
     ensureSspValidationStatCoverage,
     getSneakySandyPoleyPlayerStat,
     normalizeSneakySandyPoleyHoleInput,
@@ -19718,6 +19920,11 @@ function installDyeLedgerLiveEngineAdapter() {
     buildRoundRecordEvents,
     buildRoundRecordStory,
     buildRoundSnapshot,
+    buildEffectiveScoresContext,
+    buildScoresOutcomeHero,
+    buildScoresSettlement,
+    buildRoundRecapPayload,
+    ensureRoundRecapMemoryCoverage,
     buildFinishedMatchCandidate,
     createFinishRecoveryMarker,
     markRoundReopenedForEditing,

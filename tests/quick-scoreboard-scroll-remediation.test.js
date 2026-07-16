@@ -131,8 +131,8 @@ test('header, Apple, desktop PWA, favicon, worker cache, and branding documentat
   assert.doesNotMatch(htmlSource, /brand-mark[\s\S]{0,200}app-icon-192/);
 
   const expected = [
-    ['./branding/app-icon-192.png?v=30.3.72&rev=1', '192x192'],
-    ['./branding/app-icon-512.png?v=30.3.72&rev=1', '512x512'],
+    ['./branding/app-icon-192.png?v=30.3.73&rev=1', '192x192'],
+    ['./branding/app-icon-512.png?v=30.3.73&rev=1', '512x512'],
     ['./branding/apple-touch-icon.png', '180x180'],
   ];
   assert.deepEqual(manifest.icons.map(icon => [icon.src, icon.sizes]), expected);
@@ -145,9 +145,9 @@ test('header, Apple, desktop PWA, favicon, worker cache, and branding documentat
     assert.deepEqual(pngDimensions(bytes), { width, height });
     assert.match(worker, new RegExp(src.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
-  assert.match(worker, /cacheName: 'the-dye-ledger-v30\.3\.72'/);
-  assert.match(htmlSource, /favicon-32\.png\?v=30\.3\.72&amp;rev=1/);
-  assert.match(htmlSource, /favicon-16\.png\?v=30\.3\.72&amp;rev=1/);
+  assert.match(worker, /cacheName: 'the-dye-ledger-v30\.3\.73'/);
+  assert.match(htmlSource, /favicon-32\.png\?v=30\.3\.73&amp;rev=1/);
+  assert.match(htmlSource, /favicon-16\.png\?v=30\.3\.73&amp;rev=1/);
 
   const master = readFileSync(new URL('../branding/app-icon-master.png', import.meta.url));
   const desktop512 = readFileSync(new URL('../branding/app-icon-512.png', import.meta.url));

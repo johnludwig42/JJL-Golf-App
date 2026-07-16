@@ -92,9 +92,9 @@ test('Play keeps compact expandable Shared Match trust and removes routine expan
   assert.match(html, /id="memoryQuickCaptureWrap"/);
 });
 
-test('Library disclosures, cloud action authority, labels, and empty Session Summary are accepted', () => {
+test('Library disclosures, cloud action authority, labels, and empty Current Session are accepted', () => {
   assert.doesNotMatch(html, /Continue Playing &amp; Saved Matches/);
-  assert.match(html, /id="libraryRoundsSection"[^>]*open>[\s\S]*?<summary><h2>Rounds<\/h2>/);
+  assert.match(html, /id="libraryRoundsSection"[^>]*open>[\s\S]*?<summary>[\s\S]*?<h3>Rounds<\/h3>/);
   assert.match(html, /id="libraryCoursesSection" class="[^"]*library-section-disclosure"(?![^>]*open)/);
   assert.match(html, /id="libraryPlayersSection" class="[^"]*library-section-disclosure"(?![^>]*open)/);
   assert.match(html, /id="sessionSummaryCard" class="[^"]*library-section-disclosure hidden"/);

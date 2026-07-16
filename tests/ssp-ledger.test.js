@@ -203,16 +203,16 @@ test('Validate requires putts for Greeny and Prox', () => {
   });
   const hole = ledger.holes['1'];
   assert.equal(hole.basePointsByTeam['1'], 3);
-  assert.ok(hole.warnings.some(text => /Greeny requires 2 putts/.test(text)));
+  assert.ok(hole.warnings.some(text => /Greeny invalidated — 3 putts/.test(text)));
 });
 
-test('Prox requires an eligible Greeny', () => {
+test('stale Prox selection is cleared when no eligible Greeny remains', () => {
   const ledger = getLedger({
     scores: { p1: [4], p2: [4], p3: [4], p4: [4] },
     inputs: { 1: { proxPlayerId: 'p1', players: { p1: { greeny: false } } } },
   });
   assert.equal(ledger.holes['1'].basePointsByTeam['1'], 0);
-  assert.ok(ledger.holes['1'].warnings.some(text => /Prox requires an eligible Greeny/.test(text)));
+  assert.equal(Object.values(ledger.holes['1'].categoriesByTeam).flat().some(row => row.category === 'prox'), false);
 });
 
 test('TBD Prox awards no points until an eligible Greeny player is selected', () => {
@@ -643,7 +643,8 @@ test('Play SSP entry renderer has no dependency on Scores executive summary stat
   const leaderboardEnd = source.indexOf('\nfunction ', leaderboardStart + 1);
   const leaderboard = source.slice(leaderboardStart, leaderboardEnd > leaderboardStart ? leaderboardEnd : undefined);
   assert.match(leaderboard, /roundExecutiveSummary/);
-  assert.match(leaderboard, /buildRoundSnapshot\(match, metrics\)/);
+  assert.match(leaderboard, /buildEffectiveScoresContext\(match, metrics\)/);
+  assert.match(leaderboard, /buildScoresOutcomeHero\(scoresContext\)/);
 });
 
 test('SSP report inclusion distinguishes valid, pending, and unselected states', () => {

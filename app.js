@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.72',
-  versionNumber: '30.3.72',
-  cacheName: 'the-dye-ledger-v30.3.72',
+  version: 'v30.3.73',
+  versionNumber: '30.3.73',
+  cacheName: 'the-dye-ledger-v30.3.73',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Confidence Across Devices'
+  buildLabel: 'Library & Product Consistency'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -12241,23 +12241,28 @@ startSharedScoreRefresh();
 function renderPlayers() {
   const el = document.getElementById('playersList');
   if (!state.players.length) {
-    el.innerHTML = '<div class="tiny">No players saved yet.</div>';
+    el.innerHTML = '<div class="library-empty-state"><strong>No saved players</strong><span>Add a golfer above to reuse their name and handicap in future matches.</span></div>';
     return;
   }
-  el.innerHTML = state.players.map(p => `
-    <div class="item compact-item">
-      <div class="item-header compact-item-header">
-        <div>
-          <div class="item-title">${escapeHtml(p.name)}</div>
-          <div class="muted">Index ${Number(p.index).toFixed(1)}</div>
+  el.innerHTML = state.players.map(p => {
+    const savedRoundCount = state.matches.filter(match => (match.players || []).some(row => String(row.playerId) === String(p.id))).length;
+    return `
+    <div class="item compact-item library-item-card player-library-card">
+      <div class="item-header compact-item-header library-item-header">
+        <div class="library-item-identity">
+          <div class="item-title" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</div>
+          <div class="library-metadata" aria-label="Player details">
+            <span><b>Handicap Index</b>${Number(p.index).toFixed(1)}</span>
+            <span><b>Saved rounds</b>${savedRoundCount}</span>
+          </div>
         </div>
-        <div class="actions wrap compact-actions">
+        <div class="actions wrap compact-actions library-item-actions-inline">
           <button class="secondary" data-edit-player="${p.id}">Edit</button>
-          <button class="secondary" data-delete-player="${p.id}">Delete</button>
+          <button class="secondary danger-lite" data-delete-player="${p.id}">Delete</button>
         </div>
       </div>
     </div>
-  `).join('');
+  `;}).join('');
 }
 
 function strokeIndexSummary(holes, course) {
@@ -12485,13 +12490,13 @@ function renderCourses() {
   };
   const visibleCourses = query ? state.courses.filter(matchesQuery) : getRecentCourses(3);
   if (!state.courses.length) {
-    el.innerHTML = '<div class="tiny">No courses saved yet. Add a course or import a scorecard to build your Library.</div>';
+    el.innerHTML = '<div class="library-empty-state"><strong>No saved courses</strong><span>Use Course Actions below to add a course manually or import a scorecard.</span></div>';
     return;
   }
   if (!visibleCourses.length) {
     el.innerHTML = query
-      ? '<div class="tiny">No courses match your search.</div>'
-      : '<div class="tiny">No recently used courses yet. Search courses below to choose one for today’s round.</div>';
+      ? '<div class="library-empty-state"><strong>No matching courses</strong><span>Try a different course, location, or tee name.</span></div>'
+      : '<div class="library-empty-state"><strong>No recently used courses</strong><span>Search your saved courses to choose one for today’s round.</span></div>';
     return;
   }
   const heading = query ? `Search Results (${visibleCourses.length})` : 'Recently Used Courses';
@@ -12501,26 +12506,32 @@ function renderCourses() {
     const lastPlayedAt = getCourseLastPlayedAt(c);
     const recentText = lastPlayedAt ? `Last Played: ${formatRelativeCourseDate(lastPlayedAt)}` : 'Saved Course';
     const holeCount = getCourseHoleCount(c);
+    const sourceLabel = (c.cloudCourseId || c.source === 'supabase') ? 'Cloud + device' : 'This device';
     return `
-    <div class="item compact-item course-card ${expanded ? 'expanded' : 'collapsed'}">
-      <div class="item-header compact-item-header course-card-header">
-        <button type="button" class="course-expand-btn" data-toggle-course="${c.id}" aria-expanded="${expanded ? 'true' : 'false'}">
-          <span class="course-expand-icon">${expanded ? '▾' : '▸'}</span>
-          <span>
-            <span class="item-title">${escapeHtml(c.name)}</span>
+    <div class="item compact-item library-item-card course-card ${expanded ? 'expanded' : 'collapsed'}">
+      <div class="item-header compact-item-header library-item-header course-card-header">
+        <button type="button" class="course-expand-btn" data-toggle-course="${c.id}" aria-expanded="${expanded ? 'true' : 'false'}" aria-controls="course-tee-panel-${escapeHtml(c.id)}">
+          <span class="course-expand-icon" aria-hidden="true">${expanded ? '▾' : '▸'}</span>
+          <span class="library-item-identity">
+            <span class="item-title" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</span>
             <span class="muted course-meta-line">${escapeHtml([c.city, c.state].filter(Boolean).join(', ') || c.country || 'Course')}</span>
-            <span class="tiny course-meta-line">${escapeHtml(recentText)} · ${holeCount || '—'} holes · ${sortedTees.length} tee${sortedTees.length === 1 ? '' : 's'}</span>
+            <span class="tiny course-meta-line">${escapeHtml(sourceLabel)} · ${escapeHtml(recentText)} · ${holeCount || '—'} holes · ${sortedTees.length} tee${sortedTees.length === 1 ? '' : 's'}</span>
           </span>
         </button>
-        <div class="actions wrap compact-actions">
+        <div class="actions wrap compact-actions library-item-actions-inline">
           <button class="secondary" data-edit-course="${c.id}">Edit course</button>
-          <button class="secondary" data-delete-course-local="${c.id}">Delete Local</button>
-          <button class="secondary" data-delete-course-cloud="${c.id}" ${c.cloudCourseId ? '' : 'disabled title="Publish this course before cloud deletion is available."'}>Delete Cloud</button>
-          <button class="secondary" data-delete-course-all="${c.id}" ${c.cloudCourseId ? '' : 'disabled title="Publish this course before cloud deletion is available."'}>Delete Local + Cloud</button>
           <button class="secondary" data-new-tee="${c.id}">Add Tee Manually</button>
+          <details class="library-item-more-actions">
+            <summary>More actions</summary>
+            <div class="library-item-more-menu">
+              <button class="secondary danger-lite" data-delete-course-local="${c.id}">Delete from this device</button>
+              <button class="secondary danger-lite" data-delete-course-cloud="${c.id}" ${c.cloudCourseId ? '' : 'disabled title="Publish this course before cloud deletion is available."'}>Delete cloud copy</button>
+              <button class="secondary danger-lite" data-delete-course-all="${c.id}" ${c.cloudCourseId ? '' : 'disabled title="Publish this course before cloud deletion is available."'}>Delete everywhere</button>
+            </div>
+          </details>
         </div>
       </div>
-      <div class="top-gap ${expanded ? '' : 'hidden'}" data-course-tee-panel="${c.id}">
+      <div id="course-tee-panel-${escapeHtml(c.id)}" class="top-gap ${expanded ? '' : 'hidden'}" data-course-tee-panel="${c.id}">
         ${sortedTees.length ? sortedTees.map(t => `
           <div class="tee-block">
             <div class="strong">${escapeHtml(t.teeName)} · ${t.gender === 'F' ? 'Women' : 'Men'}${t.isCombo ? ' · Combo' : ''}</div>
@@ -12642,7 +12653,7 @@ function renderMatches() {
   const el = document.getElementById('matchesList');
   if (!el) return;
   if (!state.matches.length) {
-    el.innerHTML = '<div class="tiny">No matches saved yet.</div>';
+    el.innerHTML = '<div class="library-empty-state"><strong>No saved rounds</strong><span>Rounds appear here after you create one from Match Setup.</span></div>';
     return;
   }
   const sorted = state.matches.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
@@ -12656,27 +12667,43 @@ function renderMatches() {
     const timing = getRoundElapsedTimeState(match, metrics);
     const storage = match.storageMode === 'shared' ? 'Shared' : 'Local';
     const cloudMeta = match.storageMode === 'shared' ? `${storage} · ${match.cloudSyncState || 'local-cache'}${match.sharedMatchRef ? ` · ID ${match.sharedMatchRef}` : ''}` : storage;
+    const playerNames = (match.players || []).map(row => getPlayer(row.playerId)?.name || row.name).filter(Boolean);
+    const hasGames = Array.isArray(match.selectedGames) && match.selectedGames.length > 0;
+    const resultLabel = hasGames
+      ? buildRoundRecordResultLine(getEffectiveRoundRecord(match, metrics))
+      : (match.status === 'complete' ? 'Round complete · No games selected' : 'No games selected');
+    const canReopen = match.status === 'complete' && (match.storageMode !== 'shared' || isCurrentDeviceMatchHost(match));
+    const continueLabel = state.activeMatchId === match.id ? 'Continue Loaded Round' : (match.storageMode === 'shared' ? 'Continue / Refresh' : 'Continue');
     return `
-      <div class="item compact-item">
-        <div class="item-header compact-item-header">
-          <div>
-            <div class="item-title">${escapeHtml(match.name || 'Round')} · ${escapeHtml(match.date)}</div>
-            <div class="muted">${escapeHtml(course?.name || 'No course')} · ${escapeHtml(tee?.teeName || 'No tee')} · ${escapeHtml(getHoleSegmentLabel(match, tee))} · ${status}${timing.available ? ` · ${escapeHtml(match.status === 'complete' ? formatRoundDuration(timing.elapsedMs) : `elapsed ${formatRoundDuration(timing.elapsedMs)}`)}` : ''}</div>
-            <div class="tiny">${metrics ? `${metrics.completed}/${getPlayableHoleCount(match, metrics.tee)} holes completed` : ''}</div>
-            <div class="tiny">${escapeHtml(cloudMeta)}</div>
+      <div class="item compact-item library-item-card round-library-card" data-round-status="${match.status === 'complete' ? 'complete' : 'unfinished'}">
+        <div class="item-header compact-item-header library-item-header">
+          <div class="library-item-identity">
+            <div class="library-item-title-row"><div class="item-title" title="${escapeHtml(match.name || 'Round')}">${escapeHtml(match.name || 'Round')}</div><span class="library-status-badge">${escapeHtml(status)}</span></div>
+            <div class="muted">${escapeHtml(course?.name || 'No course')} · ${escapeHtml(match.date)}</div>
+            <div class="library-round-result"><b>Result</b><span>${escapeHtml(resultLabel)}</span></div>
+            <div class="library-metadata" aria-label="Round details">
+              <span><b>Tee</b>${escapeHtml(tee?.teeName || 'No tee')}</span>
+              <span><b>Format</b>${escapeHtml(getHoleSegmentLabel(match, tee))}</span>
+              <span><b>Progress</b>${metrics ? `${metrics.completed}/${getPlayableHoleCount(match, metrics.tee)} holes` : 'Unavailable'}</span>
+              <span><b>Players</b>${escapeHtml(playerNames.join(', ') || `${(match.players || []).length} saved`)}</span>
+              <span><b>Storage</b>${escapeHtml(cloudMeta)}</span>
+              ${timing.available ? `<span><b>Time</b>${escapeHtml(match.status === 'complete' ? formatRoundDuration(timing.elapsedMs) : `${formatRoundDuration(timing.elapsedMs)} elapsed`)}</span>` : ''}
+            </div>
           </div>
-          <div class="actions wrap compact-actions">
-            <button class="secondary" data-load-match="${match.id}">${state.activeMatchId === match.id ? 'Loaded' : (match.storageMode === 'shared' ? 'Load / Refresh' : 'Load')}</button>
-            <button class="secondary" data-share-match="${match.id}">PDF</button>
+          <div class="actions wrap compact-actions library-item-actions-inline">
+            ${match.status === 'complete'
+              ? `<button data-view-match="${match.id}">View</button>${canReopen ? `<button class="secondary" data-reopen-match="${match.id}">Reopen</button>` : ''}`
+              : `<button data-load-match="${match.id}">${continueLabel}</button>`}
+            <button class="secondary" data-share-match="${match.id}">Scorecard PDF</button>
             ${match.storageMode === 'shared' ? `<button class="secondary" data-refresh-shared-match="${match.sharedMatchId || match.id}">Cloud Refresh</button>` : ''}
-            <button class="secondary" data-delete-match="${match.id}">Delete</button>
+            <button class="secondary danger-lite" data-delete-match="${match.id}">Delete</button>
           </div>
         </div>
       </div>`;
   };
   const sections = [];
-  sections.push(`<div class="section-label library-section-heading">Continue Playing</div>${inProgress.length ? inProgress.map(renderRow).join('') : '<div class="tiny">No in-progress rounds.</div>'}`);
-  sections.push(`<div class="section-label library-section-heading top-gap">Saved Matches</div>${completed.length ? completed.map(renderRow).join('') : '<div class="tiny">No completed matches yet.</div>'}`);
+  sections.push(`<h4 class="library-section-heading">Continue Playing</h4>${inProgress.length ? inProgress.map(renderRow).join('') : '<div class="library-empty-state compact"><strong>No unfinished rounds</strong><span>Your next active round will appear here.</span></div>'}`);
+  sections.push(`<h4 class="library-section-heading top-gap">Completed Rounds</h4>${completed.length ? completed.map(renderRow).join('') : '<div class="library-empty-state compact"><strong>No completed rounds</strong><span>Finished rounds will remain available here.</span></div>'}`);
   el.innerHTML = sections.join('');
 }
 
@@ -12972,8 +12999,8 @@ function renderSessionSummary() {
   el.innerHTML = `
     <div class="item-header compact-item-header">
       <div>
-        <div class="section-label">Session</div>
-        <div class="tiny">${rounds.length} round${rounds.length === 1 ? '' : 's'} · ${escapeHtml(active.sessionName || 'Session')}</div>
+        <div class="item-title">${escapeHtml(active.sessionName || 'Current Session')}</div>
+        <div class="tiny">Rounds grouped with the currently loaded round · ${rounds.length} round${rounds.length === 1 ? '' : 's'}</div>
       </div>
     </div>
     <div class="session-round-list top-gap">
@@ -17720,7 +17747,11 @@ function installHandlers() {
     if (deleteTee) {
       const [courseId, teeId] = deleteTee.split('|');
       const course = getCourse(courseId); if (!course) return;
-      if (confirm('Delete this tee?')) { course.tees = course.tees.filter(t => t.id !== teeId); state.matches = state.matches.filter(m => m.teeId !== teeId); if (state.activeMatchId && !getActiveMatch()) state.activeMatchId = null; persist(); }
+      const tee = getTee(courseId, teeId);
+      if (confirm(`Delete Library Tee?\n\nThis removes ${tee?.teeName || 'this tee'} from ${course.name || 'this course'} for future setup. Existing saved rounds and their course snapshots remain unchanged.\n\nDelete Tee?`)) {
+        course.tees = course.tees.filter(t => t.id !== teeId);
+        persist();
+      }
     }
   });
 
@@ -18727,34 +18758,43 @@ document.getElementById('leaderboard').addEventListener('change', e => {
 
   document.getElementById('matchesList').addEventListener('click', e => {
     const loadId = e.target.dataset.loadMatch;
+    const viewId = e.target.dataset.viewMatch;
+    const reopenId = e.target.dataset.reopenMatch;
     const shareId = e.target.dataset.shareMatch;
     const deleteId = e.target.dataset.deleteMatch;
-    if (loadId) {
-      const target = getMatch(loadId);
-      state.activeMatchId = loadId;
+    const selectedId = loadId || viewId || reopenId;
+    if (selectedId) {
+      const target = getMatch(selectedId);
+      if (!target) return;
+      state.activeMatchId = selectedId;
       if (target?.storageMode === 'shared') setLastOpenedSharedMatch(target);
       currentHole = Math.min(getRequestedHoleCount(target), Math.max(1, Number(target?.currentHole) || completedHoles(target) || 1));
       persist();
-      if (target && target.status === 'complete') {
-        const reopen = window.confirm(
-          `"${target.name || 'Round'}" is marked complete. Reopen it for editing?
-
-` +
-          `OK = reopen and edit (Finish Round will overwrite the saved round when you confirm).
-` +
-          `Cancel = just view the leaderboard / scorecard.`
-        );
-        if (reopen) {
-          const completedBeforeReopen = clonePlain(target);
-          markRoundReopenedForEditing(target);
-          if (persist({ skipRender: true })) {
-            activateTab('score');
-            toast('Round reopened for editing. The prior frozen result remains in history.');
-          } else {
-            state.matches = state.matches.map(row => row.id === completedBeforeReopen.id ? completedBeforeReopen : row);
-            activateTab('leaderboard');
-          }
+      if (viewId) {
+        activateTab('leaderboard');
+        renderAll();
+        return;
+      }
+      if (reopenId) {
+        if (target.storageMode === 'shared' && !isCurrentDeviceMatchHost(target)) {
+          activateTab('leaderboard');
+          toast('Only the Shared Match host can reopen this completed round.');
+          renderAll();
+          return;
+        }
+        const reopen = window.confirm(`Reopen Completed Round?\n\n"${target.name || 'Round'}" will return to scoring for corrections. The prior frozen result remains preserved in round history until you finish and confirm the corrected round.\n\nReopen Round?`);
+        if (!reopen) {
+          activateTab('leaderboard');
+          renderAll();
+          return;
+        }
+        const completedBeforeReopen = clonePlain(target);
+        markRoundReopenedForEditing(target);
+        if (persist({ skipRender: true })) {
+          activateTab('score');
+          toast('Round reopened for editing. The prior frozen result remains in history.');
         } else {
+          state.matches = state.matches.map(row => row.id === completedBeforeReopen.id ? completedBeforeReopen : row);
           activateTab('leaderboard');
         }
         renderAll();
@@ -18763,10 +18803,15 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       activateTab('score');
     }
     if (shareId) { openPrintScorecard(shareId); }
-    if (deleteId && confirm('Delete this match?')) {
-      state.matches = state.matches.filter(m => m.id !== deleteId);
-      if (state.activeMatchId === deleteId) state.activeMatchId = null;
-      persist();
+    if (deleteId) {
+      const target = getMatch(deleteId);
+      if (!target) return;
+      const sharedNote = target.storageMode === 'shared' ? ' This removes only the copy on this device; it does not delete the Shared Match from the cloud.' : '';
+      if (confirm(`Remove Saved Round?\n\nThis removes "${target.name || 'Round'}" from this device.${sharedNote}\n\nThis action cannot be undone on this device.\n\nRemove Round?`)) {
+        state.matches = state.matches.filter(m => m.id !== deleteId);
+        if (state.activeMatchId === deleteId) state.activeMatchId = null;
+        persist();
+      }
     }
   });
   document.getElementById('prevHoleBtn').addEventListener('click', () => { saveCurrentHole({ targetHole: 'previous', silent: true }); });

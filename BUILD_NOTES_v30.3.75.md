@@ -20,7 +20,7 @@ Deferred: complete Amendment Session UI, historical claiming/import, phone/socia
 - Course Library least-privilege actor suite: passed.
 - Identity migrations 001-003 applied twice successfully as the idempotency gate.
 - Identity/RLS actor assertions: 40/40 passed, covering durable versus anonymous Accounts, Owner/Participant/Viewer/unrelated/anonymous access, immutable versions and audit, stale publication, same-Round foreign keys, Personal Golfer Library isolation, and protected catalog writes.
-- Repository-wide lint remains at the pre-existing baseline of 9 errors and 163 warnings; the new Identity module passes its focused checks.
+- Repository-wide lint passes with 0 errors and 163 pre-existing non-blocking warnings; the new Identity module passes its focused checks.
 
 ## Manual acceptance
 
@@ -32,7 +32,7 @@ Completed on a localhost-only disposable Supabase stack:
 - Sign-in and sign-out did not upload, claim, merge, rewrite, deduplicate, or delete local records.
 - The tracked production-associated Account Auth configuration remained disabled.
 
-Pending before merge or deployment:
+Deferred until before beta testing:
 
 - Installed iPhone PWA upgrade and data-retention acceptance.
 - Temporary offline scoring on the installed iPhone PWA.

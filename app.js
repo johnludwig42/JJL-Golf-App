@@ -12136,7 +12136,7 @@ function saveImportedScorecardCourse() {
   const duplicates = findLikelyDuplicateCourses(course);
   if (duplicates.length && !confirm(`A likely matching saved course already exists: ${duplicates[0].name}${duplicates[0].city ? ` (${duplicates[0].city})` : ''}. Save this import as a new course anyway?`)) {
     uiState.scorecardImportStatus = 'Import not saved. Review the existing saved course or change the course name/location.';
-    renderScorecardImportStatus();
+    updateScorecardImportStatus();
     return;
   }
   state.courses.push(course);

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
+import './v30.3.76-ssp-contracts.test.js';
 
 function emptyScores(values = []) {
   return Array.from({ length: 18 }, (_, idx) => ({ holeNumber: idx + 1, gross: values[idx] ?? null }));

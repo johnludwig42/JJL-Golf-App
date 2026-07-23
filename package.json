@@ -1,6 +1,6 @@
 {
   "name": "the-dye-ledger",
-  "version": "30.3.75",
+  "version": "30.3.76",
   "private": true,
   "type": "module",
   "scripts": {
@@ -17,7 +17,7 @@
     "test:live-engine": "node --test tests/live-engine-adapter.test.js",
     "release:sanity": "node scripts/release-sanity-check.js",
     "test:shared-match": "node --test tests/shared-match-ledger.test.js",
-    "test:ssp": "node --test tests/ssp-ledger.test.js",
+    "test:ssp": "node --test tests/ssp-ledger.test.js tests/ssp-shared-match.test.js",
     "test:ssp-shared": "node --test tests/ssp-shared-match.test.js",
     "test:courses": "node --test tests/course-library.test.js",
     "test:course": "node --test tests/course-library.test.js",

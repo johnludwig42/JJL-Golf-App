@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.75',
-  versionNumber: '30.3.75',
-  cacheName: 'the-dye-ledger-v30.3.75',
+  version: 'v30.3.76',
+  versionNumber: '30.3.76',
+  cacheName: 'the-dye-ledger-v30.3.76',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Identity & Security Foundation'
+  buildLabel: 'SSP Rules, Routing & Finality'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -2040,7 +2040,7 @@ function getFeaturedCompetitionResult(match, metrics) {
   if (key === 'stroke_gross') return { key, label: 'Low Gross', result: formatStrokeFeaturedResult(match, metrics, 'gross'), selection };
   if (key === 'sneaky_sandy_poley') {
     const ledger = buildSneakySandyPoleyLedger(match, { metrics });
-    const leader = ledger?.finalLeader || {};
+    const leader = ledger?.finalLeader?.thru ? ledger.finalLeader : ledger?.previewLeader || {};
     const label = 'Sneaky / Sandy / Poley';
     if (!ledger?.enabled || !Number(leader.thru)) return { key, label, result: 'SSP result unavailable until at least one SSP hole is scored.', selection };
     const result = leader.tied
@@ -2871,7 +2871,8 @@ function getDefaultSneakySandyPoleyConfig() {
     allowUmbee: false,
     allowUmbeeWithBridge: false,
     sspSequenceMode: 'routing',
-    version: 1,
+    startingHonorsTeamId: '1',
+    version: 2,
   };
 }
 
@@ -2880,6 +2881,7 @@ function normalizeSneakySandyPoleyConfig(config = {}) {
   const pointValue = Number(config.pointValue ?? config.stakePerPoint ?? defaults.pointValue);
   const allowUmbee = !!config.allowUmbee;
   const sspSequenceMode = String(config.sspSequenceMode || '').toLowerCase() === 'entry' ? 'entry' : 'routing';
+  const startingHonorsTeamId = String(config.startingHonorsTeamId || defaults.startingHonorsTeamId) === '2' ? '2' : '1';
   return {
     ...defaults,
     ...config,
@@ -2891,7 +2893,8 @@ function normalizeSneakySandyPoleyConfig(config = {}) {
     allowUmbee,
     allowUmbeeWithBridge: allowUmbee && !!config.allowUmbeeWithBridge,
     sspSequenceMode,
-    version: 1,
+    startingHonorsTeamId,
+    version: 2,
   };
 }
 
@@ -2901,7 +2904,57 @@ function isSneakySandyPoleyEnabled(match) {
 
 function getSneakySandyPoleyConfig(match) {
   const cfg = (match?.selectedGames || []).find(g => g.key === 'sneaky_sandy_poley');
-  return cfg ? normalizeSneakySandyPoleyConfig(cfg) : null;
+  if (!cfg) return null;
+  const normalized = normalizeSneakySandyPoleyConfig(cfg);
+  if (!match?.sspSequenceLockedAt) return normalized;
+  return {
+    ...normalized,
+    sspSequenceMode: match.sspSequenceLockedMode === 'entry' ? 'entry' : 'routing',
+    startingHonorsTeamId: String(match.sspStartingHonorsTeamId || '1') === '2' ? '2' : '1',
+  };
+}
+
+function correctActiveSspSequenceSettings(match, { sspSequenceMode, startingHonorsTeamId, reason, confirmed = false, correctedAt = null, participantId = null, deviceId = null } = {}) {
+  if (!match || !isSneakySandyPoleyEnabled(match)) throw new Error('An active SSP round is required.');
+  if (match.status === 'complete') throw new Error('Completed SSP rounds require an Amendment Session.');
+  if (match.storageMode === 'shared' && !isCurrentDeviceMatchHost(match)) throw new Error('Only the Shared Match host may correct locked SSP settings.');
+  if (!match.sspSequenceLockedAt) throw new Error('SSP sequence settings are not locked.');
+  if (!confirmed) throw new Error('Explicit confirmation is required.');
+  const auditReason = String(reason || '').trim();
+  if (!auditReason) throw new Error('A correction reason is required.');
+  const prior = getSneakySandyPoleyConfig(match);
+  const nextMode = sspSequenceMode === 'entry' ? 'entry' : 'routing';
+  const nextHonors = String(startingHonorsTeamId || '1') === '2' ? '2' : '1';
+  if (prior.sspSequenceMode === nextMode && prior.startingHonorsTeamId === nextHonors) throw new Error('The corrected SSP settings are unchanged.');
+  const timestamp = correctedAt || new Date().toISOString();
+  const actorParticipantId = participantId ?? getCurrentSharedParticipantId(match);
+  const actorDeviceId = deviceId ?? getSharedDeviceId();
+  match.sspSequenceCorrections = Array.isArray(match.sspSequenceCorrections) ? match.sspSequenceCorrections : [];
+  match.sspSequenceCorrections.push({
+    correctionId: `${match.id || 'round'}:ssp-sequence:${match.sspSequenceCorrections.length + 1}`,
+    priorMode: prior.sspSequenceMode,
+    newMode: nextMode,
+    priorStartingHonorsTeamId: prior.startingHonorsTeamId,
+    newStartingHonorsTeamId: nextHonors,
+    reason: auditReason.slice(0, 240),
+    correctedAt: timestamp,
+    participantId: String(actorParticipantId || ''),
+    deviceId: String(actorDeviceId || ''),
+  });
+  match.sspSequenceLockedAt = timestamp;
+  match.sspSequenceLockedMode = nextMode;
+  match.sspStartingHonorsTeamId = nextHonors;
+  match.sspSequenceLockedByParticipantId = String(actorParticipantId || '');
+  match.sspSequenceLockedByDeviceId = String(actorDeviceId || '');
+  const game = (match.selectedGames || []).find(row => row.key === 'sneaky_sandy_poley');
+  if (game) {
+    game.sspSequenceMode = nextMode;
+    game.startingHonorsTeamId = nextHonors;
+  }
+  match.sharedSspUpdatedAt = timestamp;
+  match.sharedSspSourceDeviceId = String(actorDeviceId || '');
+  match.sharedSspSyncState = match.storageMode === 'shared' ? 'pending' : 'not-applicable';
+  return match.sspSequenceCorrections[match.sspSequenceCorrections.length - 1];
 }
 
 function ensureSspValidationStatCoverage(match) {
@@ -2916,9 +2969,24 @@ function getDefaultSneakySandyPoleyHoleInput(match, holeNumber = 1) {
   const playerIds = getMatchPlayerIds(match);
   const players = {};
   playerIds.forEach(playerId => {
-    players[playerId] = { sneaky: false, sandy: false, poley: false, greeny: false, greenyValidation: 'pending' };
+    players[playerId] = { sneaky: false, sandy: false, poley: false, greeny: false, greenyValidation: 'pending', greenyValidationSource: '' };
   });
-  return { holeNumber: Number(holeNumber) || 1, players, proxPlayerId: '', bridge: false, rebridge: false, notes: '' };
+  return {
+    holeNumber: Number(holeNumber) || 1,
+    players,
+    proxPlayerId: '',
+    bridge: false,
+    rebridge: false,
+    bridgeDeclaredByTeamId: '',
+    rebridgeDeclaredByTeamId: '',
+    bridgeDeclaredAt: '',
+    rebridgeDeclaredAt: '',
+    bridgeDeclaredByParticipantId: '',
+    rebridgeDeclaredByParticipantId: '',
+    bridgeDeclaredByDeviceId: '',
+    rebridgeDeclaredByDeviceId: '',
+    notes: '',
+  };
 }
 
 function normalizeSneakySandyPoleyHoleInput(match, raw = {}, holeNumber = 1) {
@@ -2933,6 +3001,7 @@ function normalizeSneakySandyPoleyHoleInput(match, raw = {}, holeNumber = 1) {
       poley: !!row.poley,
       greeny: !!row.greeny,
       greenyValidation: ['validated', 'invalidated'].includes(String(row.greenyValidation || '')) ? String(row.greenyValidation) : 'pending',
+      greenyValidationSource: String(row.greenyValidationSource || '').slice(0, 40),
     };
   });
   const allowedIds = new Set(Object.keys(defaults.players));
@@ -2940,6 +3009,12 @@ function normalizeSneakySandyPoleyHoleInput(match, raw = {}, holeNumber = 1) {
   defaults.proxPlayerId = allowedIds.has(proxPlayerId) ? proxPlayerId : '';
   defaults.bridge = !!raw?.bridge;
   defaults.rebridge = !!raw?.rebridge;
+  [
+    'bridgeDeclaredByTeamId', 'rebridgeDeclaredByTeamId',
+    'bridgeDeclaredAt', 'rebridgeDeclaredAt',
+    'bridgeDeclaredByParticipantId', 'rebridgeDeclaredByParticipantId',
+    'bridgeDeclaredByDeviceId', 'rebridgeDeclaredByDeviceId',
+  ].forEach(key => { defaults[key] = String(raw?.[key] || '').slice(0, 120); });
   defaults.notes = String(raw?.notes || '').slice(0, 240);
   return defaults;
 }
@@ -2959,11 +3034,19 @@ function normalizeSneakySandyPoleyInputs(match) {
 function buildSharedSspFacts(match) {
   if (!isSneakySandyPoleyEnabled(match)) return null;
   return {
-    version: 1,
+    version: 2,
     settings: getSneakySandyPoleyConfig(match),
     inputs: JSON.parse(JSON.stringify(normalizeSneakySandyPoleyInputs(match))),
     playedHoleOrder: Array.isArray(match.playedHoleOrder) ? [...match.playedHoleOrder] : [],
     holeFirstCompletedAt: { ...(match.holeFirstCompletedAt || {}) },
+    sequenceLock: match.sspSequenceLockedAt ? {
+      lockedAt: match.sspSequenceLockedAt,
+      mode: match.sspSequenceLockedMode || 'routing',
+      startingHonorsTeamId: match.sspStartingHonorsTeamId || '1',
+      participantId: match.sspSequenceLockedByParticipantId || '',
+      deviceId: match.sspSequenceLockedByDeviceId || '',
+    } : null,
+    sequenceCorrections: Array.isArray(match.sspSequenceCorrections) ? JSON.parse(JSON.stringify(match.sspSequenceCorrections)) : [],
     updatedAt: match.sharedSspUpdatedAt || new Date().toISOString(),
     sourceDeviceId: match.sharedSspSourceDeviceId || getSharedDeviceId(),
   };
@@ -2974,7 +3057,11 @@ function flattenSharedSspFacts(facts = null) {
   if (facts.settings) flat.settings = JSON.stringify(facts.settings);
   Object.entries(facts.inputs || {}).forEach(([hole, input]) => {
     Object.entries(input?.players || {}).forEach(([playerId, row]) => {
-      ['sneaky', 'sandy', 'poley', 'greeny', 'greenyValidation'].forEach(key => {
+      ['sneaky', 'sandy', 'poley', 'greeny', 'greenyValidation', 'greenyValidationSource'].forEach(key => {
+        if (key === 'greenyValidationSource') {
+          flat[`holes.${hole}.players.${playerId}.${key}`] = String(row?.[key] || '');
+          return;
+        }
         if (key === 'greenyValidation') {
           flat[`holes.${hole}.players.${playerId}.${key}`] = ['validated', 'invalidated'].includes(String(row?.[key] || '')) ? String(row[key]) : 'pending';
           return;
@@ -2982,11 +3069,33 @@ function flattenSharedSspFacts(facts = null) {
         flat[`holes.${hole}.players.${playerId}.${key}`] = key === 'sneaky' ? (!!row?.sneaky || !!row?.sandy) : !!row?.[key];
       });
     });
-    ['proxPlayerId', 'bridge', 'rebridge', 'notes'].forEach(key => { flat[`holes.${hole}.${key}`] = input?.[key] ?? (key === 'proxPlayerId' || key === 'notes' ? '' : false); });
+    [
+      'proxPlayerId', 'bridge', 'rebridge',
+      'bridgeDeclaredByTeamId', 'rebridgeDeclaredByTeamId',
+      'bridgeDeclaredAt', 'rebridgeDeclaredAt',
+      'bridgeDeclaredByParticipantId', 'rebridgeDeclaredByParticipantId',
+      'bridgeDeclaredByDeviceId', 'rebridgeDeclaredByDeviceId', 'notes',
+    ].forEach(key => {
+      const booleanField = key === 'bridge' || key === 'rebridge';
+      flat[`holes.${hole}.${key}`] = input?.[key] ?? (booleanField ? false : '');
+    });
   });
   flat.playedHoleOrder = JSON.stringify(facts.playedHoleOrder || []);
   flat.holeFirstCompletedAt = JSON.stringify(facts.holeFirstCompletedAt || {});
+  flat['sequenceLock.mode'] = facts.sequenceLock?.lockedAt ? (facts.sequenceLock.mode === 'entry' ? 'entry' : 'routing') : '';
+  flat['sequenceLock.startingHonorsTeamId'] = facts.sequenceLock?.lockedAt ? (String(facts.sequenceLock.startingHonorsTeamId || '1') === '2' ? '2' : '1') : '';
+  flat.sequenceCorrections = JSON.stringify(facts.sequenceCorrections || []);
   return flat;
+}
+function selectDeterministicSspSequenceLock(localLock = null, remoteLock = null, { isHost = false } = {}) {
+  if (!localLock?.lockedAt) return remoteLock?.lockedAt ? JSON.parse(JSON.stringify(remoteLock)) : null;
+  if (!remoteLock?.lockedAt) return JSON.parse(JSON.stringify(localLock));
+  const localSemantic = `${localLock.mode === 'entry' ? 'entry' : 'routing'}:${String(localLock.startingHonorsTeamId || '1') === '2' ? '2' : '1'}`;
+  const remoteSemantic = `${remoteLock.mode === 'entry' ? 'entry' : 'routing'}:${String(remoteLock.startingHonorsTeamId || '1') === '2' ? '2' : '1'}`;
+  if (localSemantic !== remoteSemantic) return JSON.parse(JSON.stringify(isHost ? localLock : remoteLock));
+  const localRank = `${String(localLock.lockedAt)}:${String(localLock.deviceId || '')}`;
+  const remoteRank = `${String(remoteLock.lockedAt)}:${String(remoteLock.deviceId || '')}`;
+  return JSON.parse(JSON.stringify(localRank <= remoteRank ? localLock : remoteLock));
 }
 function reconcileSharedSspFacts(localFacts, remoteFacts, baselineFacts = null, { isHost = false } = {}) {
   if (!localFacts) return { facts: remoteFacts || null, conflicts: [] };
@@ -2996,6 +3105,8 @@ function reconcileSharedSspFacts(localFacts, remoteFacts, baselineFacts = null, 
   const base = flattenSharedSspFacts(baselineFacts);
   const conflicts = [];
   const useRemote = new Set();
+  const merged = JSON.parse(JSON.stringify(localFacts));
+  merged.sequenceLock = selectDeterministicSspSequenceLock(localFacts.sequenceLock, remoteFacts.sequenceLock, { isHost });
   new Set([...Object.keys(local), ...Object.keys(remote)]).forEach(field => {
     if (local[field] === remote[field]) return;
     const localChanged = !baselineFacts || local[field] !== base[field];
@@ -3003,13 +3114,14 @@ function reconcileSharedSspFacts(localFacts, remoteFacts, baselineFacts = null, 
     if (localChanged && remoteChanged) conflicts.push({ field, localValue: local[field], remoteValue: remote[field], holeNumber: Number(field.match(/^holes\.(\d+)/)?.[1] || 0), remoteSourceDeviceId: remoteFacts.sourceDeviceId || '' });
     else if (remoteChanged || (!localChanged && !isHost)) useRemote.add(field);
   });
-  if (conflicts.length) return { facts: localFacts, conflicts };
-  if (!useRemote.size) return { facts: localFacts, conflicts: [] };
-  const merged = JSON.parse(JSON.stringify(localFacts));
+  if (conflicts.length) return { facts: merged, conflicts };
+  if (!useRemote.size) return { facts: merged, conflicts: [] };
   useRemote.forEach(field => {
     if (field === 'settings') merged.settings = JSON.parse(remote[field]);
     else if (field === 'playedHoleOrder') merged.playedHoleOrder = JSON.parse(remote[field]);
     else if (field === 'holeFirstCompletedAt') merged.holeFirstCompletedAt = JSON.parse(remote[field]);
+    else if (field.startsWith('sequenceLock.')) merged.sequenceLock = selectDeterministicSspSequenceLock(localFacts.sequenceLock, remoteFacts.sequenceLock, { isHost });
+    else if (field === 'sequenceCorrections') merged.sequenceCorrections = JSON.parse(remote[field]);
     else {
       const parts = field.split('.');
       if (parts[0] === 'holes') parts[0] = 'inputs';
@@ -3033,6 +3145,14 @@ function applySharedSspFacts(match, facts, { baseline = true } = {}) {
   match.sneakySandyPoleyInputs = JSON.parse(JSON.stringify(facts.inputs || {}));
   match.playedHoleOrder = Array.isArray(facts.playedHoleOrder) ? [...facts.playedHoleOrder] : [];
   match.holeFirstCompletedAt = { ...(facts.holeFirstCompletedAt || {}) };
+  if (facts.sequenceLock?.lockedAt) {
+    match.sspSequenceLockedAt = String(facts.sequenceLock.lockedAt);
+    match.sspSequenceLockedMode = facts.sequenceLock.mode === 'entry' ? 'entry' : 'routing';
+    match.sspStartingHonorsTeamId = String(facts.sequenceLock.startingHonorsTeamId || '1') === '2' ? '2' : '1';
+    match.sspSequenceLockedByParticipantId = String(facts.sequenceLock.participantId || '');
+    match.sspSequenceLockedByDeviceId = String(facts.sequenceLock.deviceId || '');
+  }
+  match.sspSequenceCorrections = Array.isArray(facts.sequenceCorrections) ? JSON.parse(JSON.stringify(facts.sequenceCorrections)) : [];
   normalizeSneakySandyPoleyInputs(match);
   match.sharedSspUpdatedAt = facts.updatedAt || null;
   match.sharedSspSourceDeviceId = facts.sourceDeviceId || '';
@@ -3117,16 +3237,34 @@ function getSneakySandyPoleyPointWinner(pointsByTeam = {}, teams = []) {
   return { teamId: a > b ? teams[0].id : teams[1].id, tied: false, margin: Math.abs(a - b), total };
 }
 
-function getSneakySandyPoleyBridgeState(cfg = {}, holeInput = {}, holeWarnings = []) {
+function getSneakySandyPoleyBridgeState(cfg = {}, holeInput = {}, holeWarnings = [], honorsTeamId = null, teams = []) {
   const requestedRebridge = !!holeInput?.rebridge;
   const requestedBridge = !!holeInput?.bridge || requestedRebridge;
-  if (!requestedBridge) return { active: false, rebridge: false, multiplier: 1, label: '1x' };
+  const nonHonorsTeamId = (teams || []).find(team => String(team.id) !== String(honorsTeamId))?.id || null;
+  const bridgeDeclaredByTeamId = String(holeInput?.bridgeDeclaredByTeamId || '');
+  const rebridgeDeclaredByTeamId = String(holeInput?.rebridgeDeclaredByTeamId || '');
+  if (!requestedBridge) return { active: false, rebridge: false, multiplier: 1, label: '1x', honorsTeamId, nonHonorsTeamId };
   if (!cfg.allowBridgeRebridge) {
     if (holeWarnings) holeWarnings.push('Bridge/Re-Bridge ignored because it is off in Match Setup.');
-    return { active: false, rebridge: false, multiplier: 1, label: '1x' };
+    return { active: false, rebridge: false, multiplier: 1, label: '1x', honorsTeamId, nonHonorsTeamId };
   }
-  if (requestedRebridge) return { active: true, rebridge: true, multiplier: 4, label: 'Re-Bridge 4x' };
-  return { active: true, rebridge: false, multiplier: 2, label: 'Bridge 2x' };
+  if (bridgeDeclaredByTeamId && nonHonorsTeamId && bridgeDeclaredByTeamId !== String(nonHonorsTeamId)) {
+    if (holeWarnings) holeWarnings.push('Bridge must be declared by the team without Honors.');
+    return { active: false, rebridge: false, multiplier: 1, label: '1x', honorsTeamId, nonHonorsTeamId, invalid: true };
+  }
+  if (requestedRebridge && rebridgeDeclaredByTeamId && honorsTeamId && rebridgeDeclaredByTeamId !== String(honorsTeamId)) {
+    if (holeWarnings) holeWarnings.push('Re-Bridge must be declared by the team with Honors.');
+    return { active: true, rebridge: false, multiplier: 2, label: 'Bridge 2x', honorsTeamId, nonHonorsTeamId, invalid: true };
+  }
+  const attribution = {
+    honorsTeamId,
+    nonHonorsTeamId,
+    bridgeDeclaredByTeamId: bridgeDeclaredByTeamId || null,
+    rebridgeDeclaredByTeamId: rebridgeDeclaredByTeamId || null,
+    legacyAttribution: requestedBridge && !bridgeDeclaredByTeamId,
+  };
+  if (requestedRebridge) return { active: true, rebridge: true, multiplier: 4, label: 'Re-Bridge 4x', ...attribution };
+  return { active: true, rebridge: false, multiplier: 2, label: 'Bridge 2x', ...attribution };
 }
 
 function getSneakySandyPoleyUmbeeState(cfg = {}, holeLedger, teams = [], bridge = null, holeWarnings = []) {
@@ -3170,10 +3308,11 @@ function getSneakySandyPoleyUmbeeState(cfg = {}, holeLedger, teams = [], bridge 
 
 function buildSneakySandyPoleySettlement(match, ledger) {
   const teams = ledger?.teams || [];
-  const invalid = (label = 'SSP: settlement unavailable — teams must be equal') => ({ valid: false, tied: true, netPoints: 0, pointValue: 0, amount: 0, perPlayerAmount: 0, totalTransferred: 0, playerAmounts: {}, payerTeamId: null, payeeTeamId: null, label });
+  const invalid = (label = 'SSP: settlement unavailable — teams must be equal') => ({ valid: false, provisional: true, tied: true, netPoints: 0, pointValue: 0, amount: 0, perPlayerAmount: 0, totalTransferred: 0, playerAmounts: {}, payerTeamId: null, payeeTeamId: null, label });
   if (teams.length !== 2) return invalid('SSP: setup incomplete');
   const teamPlayerIds = teams.map(team => Array.isArray(team.playerIds) ? team.playerIds.filter(Boolean) : []);
   if (!teamPlayerIds[0].length || teamPlayerIds[0].length !== teamPlayerIds[1].length) return invalid();
+  if (ledger?.unresolved) return invalid('SSP: provisional — resolve Greeny/Prox or Shared Match conflicts before settlement');
   const totals = ledger?.finalTotalsByTeam || ledger?.totalsByTeam || {};
   const pointValue = Number(ledger?.settings?.pointValue ?? getSneakySandyPoleyConfig(match)?.pointValue ?? 0) || 0;
   const a = Number(totals[teams[0].id] || 0);
@@ -3242,6 +3381,7 @@ function buildSneakySandyPoleyLedger(match, options = {}) {
   if (teams.length !== 2) warnings.push('SSP base ledger requires exactly two teams.');
   const totalsByTeam = Object.fromEntries(teams.map(team => [team.id, 0]));
   const finalTotalsByTeam = Object.fromEntries(teams.map(team => [team.id, 0]));
+  const previewFinalTotalsByTeam = Object.fromEntries(teams.map(team => [team.id, 0]));
   const holes = {};
   const honorsByHole = {};
   const getTeamIdForPlayer = playerId => {
@@ -3266,6 +3406,8 @@ function buildSneakySandyPoleyLedger(match, options = {}) {
       holeNumber,
       complete: !!holeResult?.completed,
       counted: false,
+      sequenceEligible: !!holeResult?.completed,
+      unresolved: validationState.unresolved,
       basePointsByTeam: Object.fromEntries(teams.map(team => [team.id, 0])),
       categoriesByTeam: Object.fromEntries(teams.map(team => [team.id, []])),
       baseCategoriesByTeam: Object.fromEntries(teams.map(team => [team.id, []])),
@@ -3354,7 +3496,7 @@ function buildSneakySandyPoleyLedger(match, options = {}) {
 
   let controlTeamId = null;
   let mostRecentTakeTeamId = null;
-  let priorHonorsTeamId = teams[0]?.id || null;
+  let priorHonorsTeamId = teams.find(team => team.id === cfg.startingHonorsTeamId)?.id || teams[0]?.id || null;
   const routingSequence = Object.values(holes).sort((a, b) => Number(a.holeNumber) - Number(b.holeNumber));
   const playedOrder = Array.isArray(match?.playedHoleOrder) ? match.playedHoleOrder.map(Number).filter(Number.isFinite) : [];
   const entryRank = new Map(playedOrder.map((holeNumber, idx) => [holeNumber, idx]));
@@ -3367,6 +3509,8 @@ function buildSneakySandyPoleyLedger(match, options = {}) {
     })
     : routingSequence;
   sequence.forEach(holeLedger => {
+    const authoritativeControlTeamId = controlTeamId;
+    const authoritativeMostRecentTakeTeamId = mostRecentTakeTeamId;
     const holeKey = String(holeLedger.holeNumber);
     const baseWinner = getSneakySandyPoleyPointWinner(holeLedger.basePointsByTeam, teams);
     honorsByHole[holeKey] = priorHonorsTeamId;
@@ -3399,7 +3543,7 @@ function buildSneakySandyPoleyLedger(match, options = {}) {
       }
     }
     if (holeLedger.counted) {
-      holeLedger.bridge = getSneakySandyPoleyBridgeState(cfg, getSneakySandyPoleyHoleInput(match, holeLedger.holeNumber), holeLedger.warnings);
+      holeLedger.bridge = getSneakySandyPoleyBridgeState(cfg, getSneakySandyPoleyHoleInput(match, holeLedger.holeNumber), holeLedger.warnings, priorHonorsTeamId, teams);
       holeLedger.umbee = getSneakySandyPoleyUmbeeState(cfg, holeLedger, teams, holeLedger.bridge, holeLedger.warnings);
       teams.forEach(team => {
         const bridgeMultiplier = Number(holeLedger.bridge?.multiplier || 1);
@@ -3407,8 +3551,16 @@ function buildSneakySandyPoleyLedger(match, options = {}) {
         const finalMultiplier = bridgeMultiplier * umbeeMultiplier;
         holeLedger.finalMultiplierByTeam[team.id] = finalMultiplier;
         holeLedger.finalPointsByTeam[team.id] = Number(holeLedger.pointsAfterTakeKeepByTeam[team.id] || 0) * finalMultiplier;
-        finalTotalsByTeam[team.id] = Number(finalTotalsByTeam[team.id] || 0) + Number(holeLedger.finalPointsByTeam[team.id] || 0);
+        previewFinalTotalsByTeam[team.id] = Number(previewFinalTotalsByTeam[team.id] || 0) + Number(holeLedger.finalPointsByTeam[team.id] || 0);
+        if (holeLedger.sequenceEligible) {
+          finalTotalsByTeam[team.id] = Number(finalTotalsByTeam[team.id] || 0) + Number(holeLedger.finalPointsByTeam[team.id] || 0);
+        }
       });
+    }
+    if (!holeLedger.sequenceEligible) {
+      controlTeamId = authoritativeControlTeamId;
+      mostRecentTakeTeamId = authoritativeMostRecentTakeTeamId;
+      holeLedger.warnings.push('Live preview only — complete gross scores are required before this hole affects authoritative SSP state.');
     }
     const runningWinner = getSneakySandyPoleyPointWinner(finalTotalsByTeam, teams);
     holeLedger.runningTotalsByTeam = { ...finalTotalsByTeam };
@@ -3417,7 +3569,7 @@ function buildSneakySandyPoleyLedger(match, options = {}) {
       margin: runningWinner.margin,
       tied: runningWinner.tied,
     };
-    if (!runningWinner.tied && runningWinner.teamId) priorHonorsTeamId = runningWinner.teamId;
+    if (holeLedger.sequenceEligible && !runningWinner.tied && runningWinner.teamId) priorHonorsTeamId = runningWinner.teamId;
   });
   const totalEntries = Object.entries(totalsByTeam);
   const sortedTotals = totalEntries.slice().sort((a, b) => Number(b[1]) - Number(a[1]));
@@ -3427,7 +3579,10 @@ function buildSneakySandyPoleyLedger(match, options = {}) {
   const sortedFinalTotals = finalEntries.slice().sort((a, b) => Number(b[1]) - Number(a[1]));
   const finalMargin = sortedFinalTotals.length >= 2 ? Math.abs(Number(sortedFinalTotals[0][1]) - Number(sortedFinalTotals[1][1])) : 0;
   const finalTied = !finalMargin;
-  const thru = Object.values(holes).filter(hole => hole.counted).length;
+  const thru = Object.values(holes).filter(hole => hole.sequenceEligible).length;
+  const previewEntries = Object.entries(previewFinalTotalsByTeam).sort((a, b) => Number(b[1]) - Number(a[1]));
+  const previewMargin = previewEntries.length >= 2 ? Math.abs(Number(previewEntries[0][1]) - Number(previewEntries[1][1])) : 0;
+  const previewThru = Object.values(holes).filter(hole => hole.counted).length;
   const ledger = {
     enabled: true,
     settings: cfg,
@@ -3436,6 +3591,7 @@ function buildSneakySandyPoleyLedger(match, options = {}) {
     totalsByTeam,
     baseTotalsByTeam: totalsByTeam,
     finalTotalsByTeam,
+    previewFinalTotalsByTeam,
     leader: {
       teamId: tied ? null : sortedTotals[0]?.[0] || null,
       margin,
@@ -3448,10 +3604,18 @@ function buildSneakySandyPoleyLedger(match, options = {}) {
       thru,
       tied: finalTied,
     },
+    previewLeader: {
+      teamId: previewMargin ? previewEntries[0]?.[0] || null : null,
+      margin: previewMargin,
+      thru: previewThru,
+      tied: !previewMargin,
+    },
     settlement: null,
+    unresolved: Object.values(holes).some(hole => hole.counted && (hole.unresolved || !hole.sequenceEligible || hole.bridge?.invalid))
+      || (Array.isArray(match?.sharedSspConflicts) && match.sharedSspConflicts.length > 0),
     honorsByHole,
     sequenceMode: cfg.sspSequenceMode,
-    sequenceHoleNumbers: sequence.filter(hole => hole.counted).map(hole => Number(hole.holeNumber)),
+    sequenceHoleNumbers: sequence.filter(hole => hole.sequenceEligible).map(hole => Number(hole.holeNumber)),
     entryOrderFallback: cfg.sspSequenceMode === 'entry' && !hasEntryMetadata,
     warnings,
   };
@@ -3485,7 +3649,7 @@ function getSneakySandyPoleyStatus(match, metrics = null) {
   const ledger = buildSneakySandyPoleyLedger(match, { metrics });
   if (!ledger.enabled) return '';
   if ((ledger.teams || []).length !== 2) return 'SSP: setup incomplete';
-  const leader = ledger.finalLeader || ledger.leader || {};
+  const leader = ledger.finalLeader?.thru ? ledger.finalLeader : ledger.previewLeader || ledger.leader || {};
   if (!leader.thru) return 'SSP: Not started';
   if (leader.tied) return `SSP: Tied thru ${leader.thru}`;
   return `SSP: ${formatSneakySandyPoleyTeamName(ledger, match, leader.teamId)} +${leader.margin} thru ${leader.thru}`;
@@ -8170,7 +8334,7 @@ function getPrimaryMatchStatusLine(match, metrics, options = {}) {
   if (!text || text === 'Active') return '';
   if (key === 'sneaky_sandy_poley') {
     const ledger = buildSneakySandyPoleyLedger(match, { metrics });
-    const leader = ledger.finalLeader || {};
+    const leader = ledger.finalLeader?.thru ? ledger.finalLeader : ledger.previewLeader || {};
     const prefix = options.includesDraft ? 'Live SSP' : 'SSP Match';
     if (!leader.thru) return `${prefix}: Not started`;
     if (leader.tied) return `${prefix}: Tied thru ${Number(leader.thru) || 0}`;
@@ -8184,7 +8348,7 @@ function getPrimaryMatchStatusLine(match, metrics, options = {}) {
 function getSneakySandyPoleyHonorsLine(match, metrics) {
   if (!isSneakySandyPoleyEnabled(match) || !metrics) return '';
   const ledger = buildSneakySandyPoleyLedger(match, { metrics });
-  if (!ledger.enabled || !(ledger.sequenceHoleNumbers || []).length) return '';
+  if (!ledger.enabled) return '';
   const scoringHoles = getSelectedScoringHoles(match, getTee(match.courseId, match.teeId));
   const actualHoleNumber = Number(scoringHoles[currentHole - 1]?.holeNumber || currentHole);
   const honorsTeamId = ledger.honorsByHole?.[String(actualHoleNumber)];
@@ -10638,11 +10802,55 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
       next.players[playerId][key] = !!input.checked;
     });
     Object.values(next.players).forEach(row => { if (row.sandy) row.sneaky = true; });
+    if (options.sspGreenyChanged && options.sspGreenyPlayerId && next.players[options.sspGreenyPlayerId]) {
+      const row = next.players[options.sspGreenyPlayerId];
+      const cfg = getSneakySandyPoleyConfig(match);
+      const tracked = getSneakySandyPoleyPlayerStat(match, options.sspGreenyPlayerId, Math.max(0, currentHole - 1));
+      if (!row.greeny) {
+        row.greenyValidation = 'pending';
+        row.greenyValidationSource = '';
+      } else if (cfg?.validateGreenyProx && !tracked.available) {
+        row.greenyValidation = 'validated';
+        row.greenyValidationSource = 'scorer-confirmed';
+      } else if (cfg?.validateGreenyProx && tracked.available) {
+        row.greenyValidation = Number(tracked.stat?.putts) <= 2 ? 'validated' : 'invalidated';
+        row.greenyValidationSource = 'tracked-putts';
+      } else {
+        row.greenyValidation = 'validated';
+        row.greenyValidationSource = 'validation-not-required';
+      }
+    }
     const prox = document.querySelector('[data-ssp-prox]');
     const requestedProxPlayerId = prox ? String(prox.value || '') : next.proxPlayerId;
     document.querySelectorAll('[data-ssp-hole-key]').forEach(input => {
       const key = input.dataset.sspHoleKey || '';
-      if (key === 'bridge' || key === 'rebridge') next[key] = !!input.checked;
+      if (key !== 'bridge' && key !== 'rebridge') return;
+      const wasSelected = !!next[key];
+      next[key] = !!input.checked;
+      const ledger = buildSneakySandyPoleyLedger(match);
+      const holeLedger = ledger.holes?.[String(actualHoleNumber)] || {};
+      const declarerTeamId = key === 'bridge'
+        ? holeLedger.bridge?.nonHonorsTeamId || (ledger.teams || []).find(team => team.id !== holeLedger.honorsTeamId)?.id
+        : holeLedger.honorsTeamId;
+      const prefix = key === 'bridge' ? 'bridge' : 'rebridge';
+      if (next[key] && !wasSelected) {
+        next[`${prefix}DeclaredByTeamId`] = String(declarerTeamId || '');
+        next[`${prefix}DeclaredAt`] = new Date().toISOString();
+        next[`${prefix}DeclaredByParticipantId`] = getCurrentSharedParticipantId(match);
+        next[`${prefix}DeclaredByDeviceId`] = getSharedDeviceId();
+      } else if (!next[key]) {
+        next[`${prefix}DeclaredByTeamId`] = '';
+        next[`${prefix}DeclaredAt`] = '';
+        next[`${prefix}DeclaredByParticipantId`] = '';
+        next[`${prefix}DeclaredByDeviceId`] = '';
+        if (key === 'bridge') {
+          next.rebridge = false;
+          next.rebridgeDeclaredByTeamId = '';
+          next.rebridgeDeclaredAt = '';
+          next.rebridgeDeclaredByParticipantId = '';
+          next.rebridgeDeclaredByDeviceId = '';
+        }
+      }
     });
     const notes = document.querySelector('[data-ssp-notes]');
     if (notes) next.notes = String(notes.value || '').slice(0, 240);
@@ -14383,7 +14591,7 @@ function renderSneakySandyPoleyEntry(match, hole, metrics) {
   const input = getSneakySandyPoleyHoleInput(match, actualHoleNumber);
   const players = getVisibleScoringPlayers(match, (metrics?.players || []), { stats: false });
   const canEditAny = players.some(p => canEditPlayerScore(match, p.team, p.playerId));
-  const canEditHoleFacts = match.storageMode !== 'shared' || isCurrentDeviceMatchHost(match);
+  const canEditHoleFacts = match.storageMode !== 'shared' || isCurrentDeviceMatchHost(match) || canEditAny;
   const validationState = resolveSneakySandyPoleyValidation(match, input, players, Math.max(0, currentHole - 1));
   const proxState = validationState.prox;
   const proxEligiblePlayers = proxState.eligiblePlayers;
@@ -14394,6 +14602,11 @@ function renderSneakySandyPoleyEntry(match, hole, metrics) {
     { key: 'greeny', label: 'Greeny' },
   ];
   const ledger = buildSneakySandyPoleyLedger(match, { metrics });
+  const holeLedger = ledger.holes?.[String(actualHoleNumber)] || {};
+  const honorsTeamId = String(holeLedger.honorsTeamId || cfg.startingHonorsTeamId || '1');
+  const nonHonorsTeamId = String((ledger.teams || []).find(team => String(team.id) !== honorsTeamId)?.id || (honorsTeamId === '1' ? '2' : '1'));
+  const honorsName = formatSneakySandyPoleyTeamName(ledger, match, honorsTeamId);
+  const nonHonorsName = formatSneakySandyPoleyTeamName(ledger, match, nonHonorsTeamId);
   wrap.classList.remove('hidden');
   wrap.innerHTML = `
     <div class="card inset-card ssp-entry-card">
@@ -14402,18 +14615,20 @@ function renderSneakySandyPoleyEntry(match, hole, metrics) {
           <div class="section-label ssp-section-title">Sneaky / Sandy / Poley</div>
           <div class="tiny ssp-section-subline">Game Action · Live Preview · Hole ${actualHoleNumber}</div>
         </div>
+        ${match.sspSequenceLockedAt && (match.storageMode !== 'shared' || isCurrentDeviceMatchHost(match)) ? '<button type="button" class="secondary" data-ssp-correct-sequence>Correct SSP Setup</button>' : ''}
       </div>
       <div class="ssp-status-row top-gap">
         <span>Stakes: ${formatPositiveCurrency(cfg.pointValue, 1)} per point</span>
-        ${cfg.validateGreenyProx ? '<span>Validate on: Greeny/Prox require 2 putts or less.</span>' : '<span>Validate off</span>'}
+        <strong>Honors: ${escapeHtml(honorsName)}</strong>
+        ${cfg.validateGreenyProx ? '<span>Validate on: tracked putts decide when available; otherwise the Greeny selection confirms validation.</span>' : '<span>Validate off</span>'}
         <span class="ssp-multiplier-status">${escapeHtml(input.rebridge ? 'Re-Bridge 4x' : input.bridge ? 'Bridge 2x' : '1x')}</span>
         ${cfg.allowUmbee ? `<span>Umbee allowed${cfg.allowUmbeeWithBridge ? ' with Bridge/Re-Bridge' : ''}</span>` : '<span>Umbee off</span>'}
       </div>
       ${cfg.allowBridgeRebridge ? `<div class="ssp-header-actions top-gap" aria-label="Bridge controls">
         <span class="tiny ssp-header-actions-label">Tee-box call</span>
         <div class="ssp-chip-group ssp-bridge-chip-group">
-          <label class="ssp-chip"><input type="checkbox" data-ssp-hole-key="bridge" ${input.bridge ? 'checked' : ''} ${canEditHoleFacts ? '' : 'disabled'} /><span>${input.bridge ? '✓ Bridge' : 'Bridge'}</span></label>
-          <label class="ssp-chip"><input type="checkbox" data-ssp-hole-key="rebridge" ${input.rebridge ? 'checked' : ''} ${canEditHoleFacts ? '' : 'disabled'} /><span>${input.rebridge ? '✓ Re-Bridge' : 'Re-Bridge'}</span></label>
+          <label class="ssp-chip"><input type="checkbox" data-ssp-hole-key="bridge" ${input.bridge ? 'checked' : ''} ${canEditHoleFacts ? '' : 'disabled'} /><span>${input.bridge ? '✓ ' : ''}Bridge — ${escapeHtml(nonHonorsName)}</span></label>
+          ${input.bridge ? `<label class="ssp-chip"><input type="checkbox" data-ssp-hole-key="rebridge" ${input.rebridge ? 'checked' : ''} ${canEditHoleFacts ? '' : 'disabled'} /><span>${input.rebridge ? '✓ ' : ''}Re-Bridge — ${escapeHtml(honorsName)}</span></label>` : ''}
         </div>
       </div>` : ''}
       <div class="ssp-player-list top-gap">
@@ -14426,7 +14641,7 @@ function renderSneakySandyPoleyEntry(match, hole, metrics) {
             <div class="ssp-chip-group">
               ${actionKeys.map(action => `<label class="ssp-chip"><input type="checkbox" data-ssp-player="${escapeHtml(p.playerId)}" data-ssp-key="${action.key}" ${row[action.key] ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>${row[action.key] ? `✓ ${action.label}` : action.label}</span></label>`).join('')}
             </div>
-            ${cfg.validateGreenyProx && row.greeny ? `<div class="ssp-validation-state" data-state="${escapeHtml(greenyState?.state || 'manual-required')}"><strong>${greenyState?.state === 'validated' ? 'Validated' : greenyState?.state === 'invalidated' ? 'Invalidated' : 'Manual validation required'}</strong>${greenyState?.reason ? ` — ${escapeHtml(greenyState.reason)}` : ''}${!getSneakySandyPoleyPlayerStat(match, p.playerId, Math.max(0, currentHole - 1)).available && canEditHoleFacts ? `<span class="ssp-manual-validation-actions"><button type="button" class="secondary" data-ssp-greeny-validation="validated" data-ssp-player-id="${escapeHtml(p.playerId)}">Confirm</button><button type="button" class="secondary" data-ssp-greeny-validation="invalidated" data-ssp-player-id="${escapeHtml(p.playerId)}">Reject</button></span>` : ''}</div>` : ''}
+            ${cfg.validateGreenyProx && row.greeny ? `<div class="ssp-validation-state" data-state="${escapeHtml(greenyState?.state || 'manual-required')}"><strong>${greenyState?.state === 'validated' ? 'Validated' : greenyState?.state === 'invalidated' ? 'Invalidated' : 'Review required'}</strong>${greenyState?.reason ? ` — ${escapeHtml(greenyState.reason)}` : ''}</div>` : ''}
           </div>`;
         }).join('') || '<div class="tiny">No scoring players available.</div>'}
       </div>
@@ -14475,9 +14690,9 @@ function renderSneakySandyPoleyNote(match, hole, metrics) {
   const input = getSneakySandyPoleyHoleInput(match, actualHoleNumber);
   const players = getVisibleScoringPlayers(match, (metrics?.players || []), { stats: false });
   const canEditAny = players.some(p => canEditPlayerScore(match, p.team, p.playerId));
-  const canEditHoleFacts = match.storageMode !== 'shared' || isCurrentDeviceMatchHost(match);
+  const canEditHoleFacts = match.storageMode !== 'shared' || isCurrentDeviceMatchHost(match) || canEditAny;
   wrap.classList.remove('hidden');
-  wrap.innerHTML = `<label class="ssp-note-field"><span>Optional SSP note</span><input type="text" maxlength="240" data-ssp-notes value="${escapeHtml(input.notes || '')}" placeholder="Optional SSP note" ${canEditHoleFacts ? '' : 'disabled'} /></label>${!canEditHoleFacts ? '<div class="tiny">Host controls Prox, Bridge/Re-Bridge, and the SSP note in Shared Match.</div>' : ''}`;
+  wrap.innerHTML = `<label class="ssp-note-field"><span>Optional SSP note</span><input type="text" maxlength="240" data-ssp-notes value="${escapeHtml(input.notes || '')}" placeholder="Optional SSP note" ${canEditHoleFacts ? '' : 'disabled'} /></label>${!canEditHoleFacts ? '<div class="tiny">A participating scoring device may propose SSP hole facts; the host resolves conflicts and publishes final results.</div>' : ''}`;
 }
 
 function renderStatTrackingEntry(match, hole, metrics) {
@@ -16901,12 +17116,13 @@ function renderGamesPicker(existing = []) {
         <div class="grid two compact-grid top-gap">
           <label><span>$ per point</span><span class="currency-input"><span aria-hidden="true">$</span><input type="number" step="0.01" min="0" data-game-config="${game.key}" data-field="pointValue" value="${Number(sspCfg.pointValue ?? 1).toFixed(2)}" /></span></label>
           <div class="tiny">Final point differential &times; dollar value per point is the amount paid or received by each player.</div>
-          <label class="span-2"><span>SSP Hole Sequence</span><select data-game-config="${game.key}" data-field="sspSequenceMode"><option value="routing" ${sspCfg.sspSequenceMode !== 'entry' ? 'selected' : ''}>Standard hole order</option><option value="entry" ${sspCfg.sspSequenceMode === 'entry' ? 'selected' : ''}>Out-of-sequence / shotgun order</option></select></label>
-          <div class="tiny span-2">Standard follows normal scorecard order. Out-of-sequence follows the order holes are actually completed.</div>
+          <label><span>SSP Hole Sequence</span><select data-game-config="${game.key}" data-field="sspSequenceMode"><option value="routing" ${sspCfg.sspSequenceMode !== 'entry' ? 'selected' : ''}>Standard hole order</option><option value="entry" ${sspCfg.sspSequenceMode === 'entry' ? 'selected' : ''}>Actual play order</option></select></label>
+          <label><span>Starting Honors</span><select data-game-config="${game.key}" data-field="startingHonorsTeamId"><option value="1" ${sspCfg.startingHonorsTeamId !== '2' ? 'selected' : ''}>Team 1</option><option value="2" ${sspCfg.startingHonorsTeamId === '2' ? 'selected' : ''}>Team 2</option></select></label>
+          <div class="tiny span-2">Standard follows scorecard order. Actual play order freezes each hole at its first complete set of gross scores. These choices lock after the first eligible hole.</div>
           <label class="inline-check span-2"><input type="checkbox" data-game-config="${game.key}" data-field="validateGreenyProx" ${sspCfg.validateGreenyProx ? 'checked' : ''} /><span>Validate Greeny/Prox</span></label>
-          <div class="tiny span-2">When on, Greeny and Prox count only with 2 putts or less.</div>
+          <div class="tiny span-2">When on with Stat Tracking, 0–2 putts validates and 3+ invalidates. Without Stat Tracking, selecting Greeny confirms validation in the same tap.</div>
           <label class="inline-check span-2"><input type="checkbox" data-game-config="${game.key}" data-field="allowBridgeRebridge" ${sspCfg.allowBridgeRebridge ? 'checked' : ''} /><span>Allow Bridge/Re-Bridge</span></label>
-          <div class="tiny span-2">Optional per-hole multipliers: Bridge 2x, Re-Bridge 4x.</div>
+          <div class="tiny span-2">The team without Honors may Bridge after the Honors team tees; the Honors team may Re-Bridge after the second team tees. Both calls must occur before any second shot.</div>
           <label class="inline-check span-2"><input type="checkbox" data-game-config="${game.key}" data-field="allowUmbee" ${sspCfg.allowUmbee ? 'checked' : ''} /><span>Allow Umbee</span></label>
           <div class="tiny span-2">Optional pre-round multiplier for qualifying birdie/eagle holes.</div>
           ${sspCfg.allowUmbee ? `<label class="inline-check span-2"><input type="checkbox" data-game-config="${game.key}" data-field="allowUmbeeWithBridge" ${sspCfg.allowUmbeeWithBridge ? 'checked' : ''} /><span>Allow Umbee with Bridge/Re-Bridge</span></label><div class="tiny span-2">If on, Umbee and Bridge/Re-Bridge multipliers may stack.</div>` : ''}
@@ -18277,23 +18493,45 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
   document.getElementById('score').addEventListener('click', e => {
-    const validationButton = e.target.closest('[data-ssp-greeny-validation]');
-    if (validationButton) {
+    if (e.target.closest('[data-ssp-correct-sequence]')) {
       const match = getActiveMatch();
-      if (!match || (match.storageMode === 'shared' && !isCurrentDeviceMatchHost(match))) return;
-      const scoringHoles = getSelectedScoringHoles(match, getTee(match.courseId, match.teeId));
-      const holeNumber = Number(scoringHoles[currentHole - 1]?.holeNumber || currentHole);
-      const playerId = String(validationButton.dataset.sspPlayerId || '');
-      const next = getSneakySandyPoleyHoleInput(match, holeNumber);
-      if (!next.players[playerId]) return;
-      next.players[playerId].greenyValidation = validationButton.dataset.sspGreenyValidation === 'validated' ? 'validated' : 'invalidated';
-      match.sneakySandyPoleyInputs[String(holeNumber)] = next;
-      match.sharedSspUpdatedAt = new Date().toISOString();
-      match.sharedSspSourceDeviceId = getSharedDeviceId();
-      match.sharedSspSyncState = match.storageMode === 'shared' ? 'pending' : 'not-applicable';
-      persist({ skipRender: true });
-      scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
-      renderCurrentMatch();
+      if (!match) return;
+      const current = getSneakySandyPoleyConfig(match);
+      const modeAnswer = window.prompt('Correct SSP sequence:\nEnter STANDARD or ACTUAL.', current?.sspSequenceMode === 'entry' ? 'ACTUAL' : 'STANDARD');
+      if (modeAnswer === null) return;
+      const normalizedModeAnswer = String(modeAnswer).trim().toUpperCase();
+      if (!['STANDARD', 'ACTUAL'].includes(normalizedModeAnswer)) {
+        toast('Enter STANDARD or ACTUAL.');
+        return;
+      }
+      const honorsAnswer = window.prompt('Correct Starting Honors:\nEnter team 1 or team 2.', current?.startingHonorsTeamId || '1');
+      if (honorsAnswer === null) return;
+      const normalizedHonorsAnswer = String(honorsAnswer).replace(/\D/g, '');
+      if (!['1', '2'].includes(normalizedHonorsAnswer)) {
+        toast('Enter team 1 or team 2.');
+        return;
+      }
+      const reason = window.prompt('Reason for this SSP setup correction?');
+      if (reason === null || !String(reason).trim()) {
+        toast('A correction reason is required.');
+        return;
+      }
+      const confirmed = window.confirm('Apply this SSP setup correction?\n\nThe active-round ledger will be recalculated and the correction will be attributed and audited.');
+      if (!confirmed) return;
+      try {
+        correctActiveSspSequenceSettings(match, {
+          sspSequenceMode: normalizedModeAnswer === 'ACTUAL' ? 'entry' : 'routing',
+          startingHonorsTeamId: normalizedHonorsAnswer,
+          reason,
+          confirmed: true,
+        });
+        persist({ skipRender: true });
+        scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
+        renderCurrentMatch();
+        toast('SSP setup corrected and ledger recalculated.');
+      } catch (error) {
+        toast(error?.message || 'Unable to correct SSP setup.');
+      }
       return;
     }
     const scoreStepBtn = e.target.closest('[data-score-step]');
@@ -18370,7 +18608,11 @@ document.getElementById('leaderboard').addEventListener('change', e => {
         if (key === 'sandy' && e.target.checked && sneaky) sneaky.checked = true;
         if (key === 'sneaky' && !e.target.checked && sandy?.checked) e.target.checked = true;
       }
-      const applyOptions = { sspGreenyChanged: e.target.matches('[data-ssp-player][data-ssp-key="greeny"]') };
+      const greenyChanged = e.target.matches('[data-ssp-player][data-ssp-key="greeny"]');
+      const applyOptions = {
+        sspGreenyChanged: greenyChanged,
+        sspGreenyPlayerId: greenyChanged ? String(e.target.dataset.sspPlayer || '') : '',
+      };
       applyCurrentHoleDomToMatch(match, applyOptions);
       persist({ skipRender: true });
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true, applyOptions });
@@ -18915,6 +19157,14 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       if (nowCompleteAfterSave) {
         if (!match.playedHoleOrder.map(Number).includes(Number(actualHoleNumber))) match.playedHoleOrder.push(Number(actualHoleNumber));
         recordHoleFirstCompletedAt(match, actualHoleNumber);
+        const sspCfg = getSneakySandyPoleyConfig(match);
+        if (sspCfg && !match.sspSequenceLockedAt) {
+          match.sspSequenceLockedAt = new Date().toISOString();
+          match.sspSequenceLockedByParticipantId = getCurrentSharedParticipantId(match);
+          match.sspSequenceLockedByDeviceId = getSharedDeviceId();
+          match.sspSequenceLockedMode = sspCfg.sspSequenceMode;
+          match.sspStartingHonorsTeamId = sspCfg.startingHonorsTeamId;
+        }
       }
     } catch (orderErr) {
       recordAppError(orderErr, 'Actual Play Order Tracking');
@@ -19802,6 +20052,9 @@ function installDyeLedgerLiveEngineAdapter() {
     savePlayerPreferences,
     updatePlayerPreference,
     resetPlayerPreferences,
+    normalizeSneakySandyPoleyConfig,
+    correctActiveSspSequenceSettings,
+    selectDeterministicSspSequenceLock,
     getPlayerPreferencesDiagnostics,
     getNewMatchDefaultsFromPreferences,
     mergeNewMatchDefaults,

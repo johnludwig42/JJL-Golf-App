@@ -1,5 +1,7 @@
 # Course Library Security Migration
 
+> **Decision A-001 supersession:** This review package predates the approved authenticated-only cloud Course Library policy. Any anonymous/public Course Library read design described by the package is a legacy proposal and is not approved for deployment. The migration SQL remains unchanged for historical review; an authorized security work package must reconcile it before deployment. Downloaded local course data must remain available offline.
+
 ## Scope and baseline
 
 This package prepares, but does not deploy, Course Library RLS. The production baseline supplied for the future deployment is 10 courses, 54 tees, and 972 holes. The migration aborts on a different baseline or invalid relationships. Counts are a one-time deployment gate, not a permanent invariant.

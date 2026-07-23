@@ -188,7 +188,7 @@ NEXT:
 
 FUTURE:
 
-- Authentication later, not now.
+- v30.3.75 establishes authenticated Account and identity/security foundations. Phone/social linking, historical claiming, privacy UI, and cloud history migration remain deferred.
 - Cloud saved-match sync later, not now.
 - Event ownership.
 - Apple Watch companion app exploration.

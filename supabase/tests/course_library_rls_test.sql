@@ -30,14 +30,14 @@ select test.ok((select count(*) from public.courses)=10,'public reads canonical 
 select test.ok((select count(*) from public.course_tees)=54,'public reads canonical tees');
 select test.ok((select count(*) from public.course_holes)=972,'public reads canonical holes');
 select test.denied($q$insert into public.courses(id,name) values('public-draft','No')$q$,'public course insert denied');
-select test.zero_rows($q$update public.courses set name='No' where id='legacy-1'$q$,'public course update denied');
-select test.zero_rows($q$delete from public.courses where id='legacy-1'$q$,'public course delete denied');
+select test.denied($q$update public.courses set name='No' where id='legacy-1'$q$,'public course update denied');
+select test.denied($q$delete from public.courses where id='legacy-1'$q$,'public course delete denied');
 select test.denied($q$insert into public.course_tees(id,course_id,tee_name) values('public-tee','legacy-1','No')$q$,'public tee insert denied');
 select test.denied($q$insert into public.course_holes(id,course_id,tee_id,hole_number) values('public-hole','legacy-1','tee-1',19)$q$,'public hole insert denied');
-select test.zero_rows($q$update public.course_tees set tee_name='No' where id='tee-1'$q$,'public tee update denied');
-select test.zero_rows($q$delete from public.course_tees where id='tee-1'$q$,'public tee delete denied');
-select test.zero_rows($q$update public.course_holes set par=9 where id='hole-1-1'$q$,'public hole update denied');
-select test.zero_rows($q$delete from public.course_holes where id='hole-1-1'$q$,'public hole delete denied');
+select test.denied($q$update public.course_tees set tee_name='No' where id='tee-1'$q$,'public tee update denied');
+select test.denied($q$delete from public.course_tees where id='tee-1'$q$,'public tee delete denied');
+select test.denied($q$update public.course_holes set par=9 where id='hole-1-1'$q$,'public hole update denied');
+select test.denied($q$delete from public.course_holes where id='hole-1-1'$q$,'public hole delete denied');
 reset role;
 
 -- Anonymous Auth still has the authenticated DB role but no draft privileges.

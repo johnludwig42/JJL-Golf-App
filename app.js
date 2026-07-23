@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.74',
-  versionNumber: '30.3.74',
-  cacheName: 'the-dye-ledger-v30.3.74',
+  version: 'v30.3.75',
+  versionNumber: '30.3.75',
+  cacheName: 'the-dye-ledger-v30.3.75',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Scores & Settlement Reconciliation'
+  buildLabel: 'Identity & Security Foundation'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -20081,6 +20081,7 @@ if (!DYE_LEDGER_ADAPTER_MODE) {
   loadMatchEditor(null, recoveredSetupDraft || undefined);
   updateVersionUi();
   renderAll();
+  window.DyeLedgerIdentitySecurity?.mountAccountSecurity?.();
   if (hasSupabaseConfig()) {
     window.setTimeout(() => refreshCourseLibraryFromCloud({ silent: true, force: true }), 250);
   }

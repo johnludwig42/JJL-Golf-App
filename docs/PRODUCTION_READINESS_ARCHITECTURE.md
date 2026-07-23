@@ -74,6 +74,8 @@ There is no ambiguous hybrid UI state and no completion claim based only on an i
 
 ## Reopen and historical integrity
 
+> **Legacy implementation pending constitutional migration:** Constitution v1.0, Principles 10–12, supersedes reopening as the approved correction model for completed Rounds. Future corrections must use authorized Amendment Sessions and publish a new RoundRecord version while preserving every prior version. The following text remains an accurate description of current behavior, not approval to extend it.
+
 Reopen is explicit. Before the completed round becomes active, its frozen RoundRecord is deep-copied to `roundRecordSnapshotHistory` with a superseded timestamp and reason. The current frozen pointer is cleared, completion time is retained as `previousCompletedAt`, and edits resume.
 
 The reopened state must itself persist successfully before the UI leaves Library. If that save fails, the completed in-memory record is restored. A later Finish creates a new authoritative frozen record while preserving superseded history.

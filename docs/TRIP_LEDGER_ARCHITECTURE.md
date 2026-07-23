@@ -52,6 +52,8 @@ Legacy rounds without snapshots are not immutable ledger inputs. A future import
 
 ## Reopening, correction, voiding, and supersession
 
+> **Legacy implementation pending constitutional migration:** Constitution v1.0, Principles 10–12, establishes that completed RoundRecords are never reopened or silently overwritten. Corrections must occur through authorized Amendment Sessions that publish a new version with attribution, reason, audit, and preserved prior versions. The behavior below documents the current implementation; it is not the approved long-term correction architecture.
+
 The current product explicitly allows reopening a completed round and later saving it as an overwrite. Reopening moves the frozen snapshot into `roundRecordSnapshotHistory`, stamps `supersededAt` and `supersededReason`, and clears the active snapshot. Confirming the corrected finish creates a new snapshot if eligible. Reports do not perform this transition. A future correction UI should expose this audit history and support explicit void/supersession semantics; it must never silently replace frozen history.
 
 ## Legacy and offline compatibility

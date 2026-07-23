@@ -10,9 +10,21 @@ The purpose of this document is to prevent accidental redesign, repeated debate,
 
 ---
 
+## Constitutional Authority
+
+[The Dye Ledger Constitution v1.0](docs/architecture/THE_DYE_LEDGER_CONSTITUTION_v1.0.md) is the highest-level architectural authority for the product and platform.
+
+This document contains lower-level engineering decisions and implementation guidance. It must be interpreted consistently with the Constitution. Any apparent conflict must be escalated before implementation rather than silently resolved in favor of this document.
+
+The approved v30.3.75 identity and Course Library access policies are recorded in [Identity & Security Decisions](docs/architecture/IDENTITY_AND_SECURITY_DECISIONS_v30.3.75.md).
+
+---
+
 ## Current Production Version
 
-Current production version: v30.3.44
+Historical production reference in this section: v30.3.44. Current repository release: v30.3.75.
+
+Status note: This version reference is historical and stale. It is not a current deployment record and does not alter constitutional authority.
 
 All new work should preserve backward compatibility with existing saved matches, localStorage data, Supabase course data, and installed PWA behavior unless a prompt explicitly authorizes a breaking change.
 
@@ -371,6 +383,8 @@ Status: Designed / Deferred.
 
 The Dye Ledger remains local-first today, with no authentication requirement and no cloud saved-match sync requirement in the current product. New engineering should still preserve a clean path toward a future multi-tenant architecture.
 
+Status note: The statement that the product has no authentication requirement describes legacy implementation. It is superseded by Constitution v1.0, Principle 3, and Decision A-000. v30.3.75 must establish formal, durable authentication while preserving offline-first behavior. Anonymous identities may remain only for explicitly approved transitional or guest workflows.
+
 Principles:
 
 1. Engineer today's features so they naturally evolve into tomorrow's cloud platform.
@@ -420,6 +434,8 @@ Continue to preserve:
 * backward compatibility
 * additive migrations
 * no authentication requirement in the current product
+
+Status note: The preceding no-authentication item is superseded by Constitution v1.0 and Decision A-000. It must not be treated as the approved final identity architecture.
 
 Status: Principle / Future Architecture. Do not implement multi-tenancy until explicitly planned.
 

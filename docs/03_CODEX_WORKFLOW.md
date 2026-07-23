@@ -4,6 +4,17 @@ Version: 1.0
 Status: Living Document  
 Owner: Product Owner / ChatGPT / Codex
 
+## Constitutional Authority
+
+Before proposing or implementing a major feature, security architecture, identity change, domain-model change, or historical-record change:
+
+1. Read [The Dye Ledger Constitution v1.0](architecture/THE_DYE_LEDGER_CONSTITUTION_v1.0.md).
+2. Identify every affected constitutional principle.
+3. Include a Constitutional Review using the [Constitutional Review Template](architecture/CONSTITUTIONAL_REVIEW_TEMPLATE.md).
+4. Escalate any apparent conflict before implementation.
+
+The Constitution is the highest-level architectural authority. This workflow governs execution but may not silently override the Constitution.
+
 ## 1. Purpose
 
 This document defines the engineering operating procedures every future Codex session must follow when working on The Dye Ledger.

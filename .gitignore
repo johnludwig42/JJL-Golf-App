@@ -1,0 +1,21 @@
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*service-account*.json
+*service_account*.json
+
+# Local Supabase state and generated artifacts
+.supabase/
+supabase/.branches/
+supabase/.temp/
+
+# Common local tooling output
+node_modules/
+coverage/
+*.log
+

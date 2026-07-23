@@ -175,15 +175,15 @@ Recent releases:
 - v30.3.41 — Effortless Scoring Polish
 - v30.3.42 — Duplicate Course Dropdown Fix and initial documentation work
 
-Current/next release under discussion:
+Current release implementation (updated July 22, 2026):
 
 ```text
-v30.3.43 — Round Context Foundation: Weather
+v30.3.75 — Identity & Security Foundation
 ```
 
 ## 8. Near-Term Roadmap
 
-1. v30.3.43 — Round Context Foundation: Weather
+1. v30.3.75 — Identity & Security Foundation
 2. Scoring & Setup Polish
    - move Exit Round Early lower
    - add 200 ms to Smart Score Advance timing options

@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.74',
-  versionNumber: '30.3.74',
-  cacheName: 'the-dye-ledger-v30.3.74',
+  version: 'v30.3.75',
+  versionNumber: '30.3.75',
+  cacheName: 'the-dye-ledger-v30.3.75',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Scores & Settlement Reconciliation'
+  buildLabel: 'Identity & Security Foundation'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -12136,7 +12136,7 @@ function saveImportedScorecardCourse() {
   const duplicates = findLikelyDuplicateCourses(course);
   if (duplicates.length && !confirm(`A likely matching saved course already exists: ${duplicates[0].name}${duplicates[0].city ? ` (${duplicates[0].city})` : ''}. Save this import as a new course anyway?`)) {
     uiState.scorecardImportStatus = 'Import not saved. Review the existing saved course or change the course name/location.';
-    renderScorecardImportStatus();
+    updateScorecardImportStatus();
     return;
   }
   state.courses.push(course);
@@ -20081,6 +20081,7 @@ if (!DYE_LEDGER_ADAPTER_MODE) {
   loadMatchEditor(null, recoveredSetupDraft || undefined);
   updateVersionUi();
   renderAll();
+  window.DyeLedgerIdentitySecurity?.mountAccountSecurity?.();
   if (hasSupabaseConfig()) {
     window.setTimeout(() => refreshCourseLibraryFromCloud({ silent: true, force: true }), 250);
   }

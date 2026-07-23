@@ -84,7 +84,11 @@ export default [
       sourceType: "module",
       globals: {
         console: "readonly",
-        process: "readonly"
+        process: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        URL: "readonly",
+        URLSearchParams: "readonly"
       }
     },
     rules: {

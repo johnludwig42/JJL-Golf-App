@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.77',
-  versionNumber: '30.3.77',
-  cacheName: 'the-dye-ledger-v30.3.77',
+  version: 'v30.3.78',
+  versionNumber: '30.3.78',
+  cacheName: 'the-dye-ledger-v30.3.78',
   buildDate: new Date().toISOString(),
-  buildLabel: 'PWA Branding & Round Completion Reliability'
+  buildLabel: 'Shared Match Summary & Player Insights'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -4088,6 +4088,13 @@ function formatYardageValue(v) {
   const num = Number(v);
   return Number.isFinite(num) && num > 0 ? num.toLocaleString('en-US') : '0';
 }
+function formatMomentumMoneyValue(v) {
+  const num = Number(v);
+  if (!Number.isFinite(num) || Math.abs(num) < 0.0001) return '$0';
+  const abs = Math.abs(num);
+  const decimals = Number.isInteger(abs) ? 0 : 2;
+  return `${num > 0 ? '+' : '−'}$${abs.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: 2 })}`;
+}
 function getPlayerTeeId(match, playerRef = null) {
   const ref = playerRef || {};
   return ref.teeId || match?.teeId || '';
@@ -5893,14 +5900,16 @@ function buildRoundRecordMomentum(match, metrics, record) {
   const x = index => data.length === 1 ? (left + width - right) / 2 : left + index * (width - left - right) / (data.length - 1);
   const y = value => zero - value / max * ((height - top - bottom) / 2);
   const points = data.map((row, index) => `${x(index)},${y(row.cumulative)}`).join(' ');
+  const pointValue = Number(ledger?.settings?.pointValue || ledger?.settlement?.pointValue || 0);
   const annotations = data.map((row, index) => {
     const multiplier = record.events.find(event => event.type === 'multiplier' && event.holeNumber === row.holeNumber);
-    return `<circle cx="${x(index)}" cy="${y(row.cumulative)}" r="4" class="ssp-momentum-dot"/>${multiplier ? `<text x="${x(index)}" y="${Math.max(12, y(row.cumulative) - 10)}" text-anchor="middle">H${row.holeNumber} ${multiplier.magnitude}x</text>` : `<text x="${x(index)}" y="${height - 10}" text-anchor="middle">H${row.holeNumber}</text>`}`;
+    const moneyY = Math.max(12, Math.min(height - bottom - 7, y(row.cumulative) + (row.cumulative > 0 ? -9 : 15)));
+    return `<circle cx="${x(index)}" cy="${y(row.cumulative)}" r="4" class="ssp-momentum-dot"/><text x="${x(index)}" y="${moneyY}" text-anchor="middle" class="momentum-point-value" data-ssp-money="${row.cumulative * pointValue}">${escapeHtml(formatMomentumMoneyValue(row.cumulative * pointValue))}</text><text x="${x(index)}" y="${height - 10}" text-anchor="middle">H${row.holeNumber}${multiplier ? ` ${multiplier.magnitude}x` : ''}</text>`;
   }).join('');
   const final = data[data.length - 1];
   const teams = ledger.teams || [];
   const finalLabel = final.cumulative ? `${final.cumulative > 0 ? teams[0]?.name : teams[1]?.name} +${Math.abs(final.cumulative)}` : 'Tied';
-  return `<div class="round-record-momentum"><div class="round-record-momentum-head"><strong>SSP Momentum</strong><span>Final: ${escapeHtml(finalLabel)}</span></div><div class="tiny">Above zero favors ${escapeHtml(teams[0]?.name || 'Team 1')}; below zero favors ${escapeHtml(teams[1]?.name || 'Team 2')}.</div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="SSP cumulative point margin"><line x1="${left}" y1="${zero}" x2="${width - right}" y2="${zero}" class="ssp-momentum-zero"/><polyline points="${points}" class="ssp-momentum-line" fill="none"/>${annotations}</svg></div>`;
+  return `<div class="round-record-momentum"><div class="round-record-momentum-head"><strong>SSP Momentum</strong><span>Final: ${escapeHtml(finalLabel)}</span></div><div class="tiny">Line = cumulative points. Labels = cumulative team money position at ${escapeHtml(formatPositiveCurrency(pointValue, 2))} per point. Above zero favors ${escapeHtml(teams[0]?.name || 'Team 1')}; below zero favors ${escapeHtml(teams[1]?.name || 'Team 2')}.</div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="SSP cumulative point margin with cumulative team money labels"><line x1="${left}" y1="${zero}" x2="${width - right}" y2="${zero}" class="ssp-momentum-zero"/><polyline points="${points}" class="ssp-momentum-line" fill="none"/>${annotations}</svg></div>`;
 }
 function buildRoundSnapshot(match, metrics, roundRecord = null) {
   if (!metrics) return '';
@@ -5925,7 +5934,7 @@ function buildRoundSnapshot(match, metrics, roundRecord = null) {
     <div class="round-record-result">${escapeHtml(buildRoundRecordResultLine(record))}</div>
     <div class="round-record-storyline">${escapeHtml(heroStoryLine)}</div>
     ${buildRoundRecordMomentum(match, metrics, record)}
-    ${turning ? `<div class="round-record-turning"><span>Turning Point · H${escapeHtml(turning.holeNumber || '—')}${turningHole?.par ? ` · Par ${escapeHtml(turningHole.par)}` : ''}${turningHole?.yards ? ` · ${escapeHtml(turningHole.yards)} yds` : ''}</span><strong>${escapeHtml(describeRoundRecordEvent(record, turning))}</strong></div>` : ''}
+    ${turning ? `<div class="round-record-turning"><span>Turning Point · H${escapeHtml(turning.holeNumber || '—')}${turningHole?.par ? ` · Par ${escapeHtml(turningHole.par)}` : ''}${turningHole?.yards ? ` · ${escapeHtml(formatYardageValue(turningHole.yards))} yds` : ''}</span><strong>${escapeHtml(describeRoundRecordEvent(record, turning))}</strong></div>` : ''}
     <div class="round-record-settle">${paymentChips || '<span class="settle-up-chip settle-up-chip--even">No payment required</span>'}</div>
     <div class="round-record-reconcile">${record.transactions.length} payment${record.transactions.length === 1 ? '' : 's'} settle all games · ${Math.abs(record.settlement.crossFoot) <= 0.0001 ? 'reconciled' : 'review required'}</div>
     <div class="round-record-footer">${footer}</div>
@@ -6434,13 +6443,17 @@ function buildSneakySandyPoleyExportSummary(match, metrics) {
     const y = value => zeroY - (value / max) * (chartHeight / 2);
     const points = momentum.map((row, i) => `${x(i)},${y(row.cumulative)}`).join(' ');
     const xLabels = momentum.map((row, i) => `<text x="${x(i)}" y="${height - 14}" text-anchor="middle">H${row.holeNumber}</text>`).join('');
-    const dots = momentum.map((row, i) => `<circle cx="${x(i)}" cy="${y(row.cumulative)}" r="4.5" class="ssp-momentum-dot"><title>Hole ${row.holeNumber}: ${row.cumulative > 0 ? teams[0].name : row.cumulative < 0 ? teams[1].name : 'Tied'} ${row.cumulative ? `+${Math.abs(row.cumulative)}` : ''}</title></circle>`).join('');
+    const dots = momentum.map((row, i) => `<circle cx="${x(i)}" cy="${y(row.cumulative)}" r="4.5" class="ssp-momentum-dot"><title>Hole ${row.holeNumber}: ${row.cumulative > 0 ? teams[0].name : row.cumulative < 0 ? teams[1].name : 'Tied'} ${row.cumulative ? `+${Math.abs(row.cumulative)} points` : ''}; ${formatMomentumMoneyValue(row.cumulative * pointValue)}</title></circle>`).join('');
+    const moneyLabels = momentum.map((row, i) => {
+      const labelY = Math.max(14, Math.min(height - padBottom - 8, y(row.cumulative) + (row.cumulative > 0 ? -10 : 17)));
+      return `<text x="${x(i)}" y="${labelY}" text-anchor="middle" class="momentum-point-value" data-ssp-money="${row.cumulative * pointValue}">${escapeHtml(formatMomentumMoneyValue(row.cumulative * pointValue))}</text>`;
+    }).join('');
     const last = momentum[momentum.length - 1];
     const finalText = last.cumulative === 0 ? 'Tied' : `${last.cumulative > 0 ? teams[0].name : teams[1].name} +${Math.abs(last.cumulative)}`;
     const finalLabel = `<div class="ssp-momentum-result"><strong>Final:</strong> ${escapeHtml(finalText)}</div>`;
     const biggest = momentum.slice().sort((a, b) => Math.abs(b.margin) - Math.abs(a.margin)).slice(0, 3).filter(row => row.margin);
     const swings = biggest.length ? `<div class="ssp-momentum-swings"><strong>${biggest.length === 1 ? 'Largest swing' : 'Key swings'}:</strong> ${biggest.map(row => `H${row.holeNumber} — ${Math.abs(row.margin)}-point swing to ${escapeHtml(row.margin > 0 ? teams[0].name : teams[1].name)}`).join(' · ')}</div>` : '';
-    return `<div class="ssp-momentum print-keep-together"><div class="ssp-momentum-heading"><h3>SSP Momentum</h3>${finalLabel}</div><div class="export-section-sub">Cumulative SSP point margin by completed SSP hole. Above zero favors ${escapeHtml(teams[0].name)} · below zero favors ${escapeHtml(teams[1].name)}.</div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="SSP cumulative point margin"><line x1="${padLeft}" y1="${zeroY}" x2="${width - padRight}" y2="${zeroY}" class="ssp-momentum-zero"/><line x1="${padLeft}" y1="${padTop}" x2="${padLeft}" y2="${height - padBottom}" class="ssp-momentum-axis"/><text x="${padLeft - 8}" y="${padTop + 4}" text-anchor="end">+${max}</text><text x="${padLeft - 8}" y="${zeroY + 4}" text-anchor="end">0</text><text x="${padLeft - 8}" y="${height - padBottom + 4}" text-anchor="end">−${max}</text><polyline points="${points}" class="ssp-momentum-line" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${dots}${xLabels}</svg>${swings}</div>`;
+    return `<div class="ssp-momentum print-keep-together"><div class="ssp-momentum-heading"><h3>SSP Momentum</h3>${finalLabel}</div><div class="export-section-sub">Line = cumulative SSP point margin; labels = cumulative team money position at ${escapeHtml(formatPositiveCurrency(pointValue, 2))} per point. Above zero favors ${escapeHtml(teams[0].name)} · below zero favors ${escapeHtml(teams[1].name)}.</div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="SSP cumulative point margin with cumulative team money labels"><line x1="${padLeft}" y1="${zeroY}" x2="${width - padRight}" y2="${zeroY}" class="ssp-momentum-zero"/><line x1="${padLeft}" y1="${padTop}" x2="${padLeft}" y2="${height - padBottom}" class="ssp-momentum-axis"/><text x="${padLeft - 8}" y="${padTop + 4}" text-anchor="end">+${max}</text><text x="${padLeft - 8}" y="${zeroY + 4}" text-anchor="end">0</text><text x="${padLeft - 8}" y="${height - padBottom + 4}" text-anchor="end">−${max}</text><polyline points="${points}" class="ssp-momentum-line" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>${dots}${moneyLabels}${xLabels}</svg>${swings}</div>`;
   })() : '<div class="ssp-momentum-empty">SSP Momentum will appear after holes are scored.</div>';
   return `
     <section class="export-section export-section-ssp-summary">
@@ -6573,6 +6586,14 @@ function buildSummaryExportBody(match, metrics) {
     </section>
 
     ${exportSspAuditHtml}
+
+    ${completion.completedHoleCount ? `<section class="export-section export-section-player-insights">
+      <div class="export-section-head">
+        <h2>Player Insights</h2>
+        <div class="export-section-sub">Derived from completed, scored holes. Missing information is excluded rather than estimated.</div>
+      </div>
+      ${buildPlayerRoundInsights(match, metrics, { exportView: true })}
+    </section>` : ''}
 
     ${completion.completedHoleCount >= 6 ? `<section class="export-section export-section-score-distribution">
       <div class="export-section-head">
@@ -9057,31 +9078,117 @@ function computeScoreDistributionSummary(match, metrics) {
   });
 }
 
-function buildScoreDistributionSummary(match, metrics) {
+function computePlayerRoundInsights(match, metrics) {
+  const holeResults = Array.isArray(metrics?.holeResults) ? metrics.holeResults : [];
+  const players = Array.isArray(metrics?.players) ? metrics.players : [];
+  const completion = getRoundCompletionState(match, metrics);
+  return players.map(playerMetric => {
+    const playerId = String(playerMetric.playerId);
+    const playerRef = (match?.players || []).find(row => String(row.playerId) === playerId);
+    const totals = {
+      scoredHoles: 0,
+      gross: 0,
+      par: 0,
+      birdieOrBetter: 0,
+      parOrBetter: 0,
+      bogeyOrBetter: 0,
+      greensInRegulation: 0,
+      convertedGreens: 0,
+    };
+    holeResults.forEach((holeResult, holeIdx) => {
+      if (!holeResult?.completed) return;
+      const score = (holeResult.playerScores || []).find(row => String(row.playerId) === playerId);
+      const gross = Number(score?.gross);
+      const playerHole = getPlayerHole(match, playerMetric, holeIdx, metrics?.tee) || metrics?.tee?.holes?.[holeIdx] || null;
+      const par = Number(score?.par) || Number(playerHole?.par) || Number(holeResult?.par);
+      if (!Number.isFinite(gross) || gross <= 0 || !Number.isFinite(par) || par <= 0) return;
+      const diff = gross - par;
+      totals.scoredHoles += 1;
+      totals.gross += gross;
+      totals.par += par;
+      if (diff <= -1) totals.birdieOrBetter += 1;
+      if (diff <= 0) totals.parOrBetter += 1;
+      if (diff <= 1) totals.bogeyOrBetter += 1;
+      const stat = getPlayerStatEntry(playerRef, holeIdx);
+      if (stat.green) {
+        totals.greensInRegulation += 1;
+        if (diff <= -1) totals.convertedGreens += 1;
+      }
+    });
+    const divide = (numerator, denominator) => denominator ? numerator / denominator : null;
+    return {
+      playerId,
+      displayName: playerMetric.player?.name || getPlayer(playerId)?.name || 'Player',
+      totals,
+      scoringAverage: divide(totals.gross, totals.scoredHoles),
+      averageToPar: divide(totals.gross - totals.par, totals.scoredHoles),
+      birdieOrBetterRate: divide(totals.birdieOrBetter, totals.scoredHoles),
+      parOrBetterRate: divide(totals.parOrBetter, totals.scoredHoles),
+      bogeyAvoidanceRate: divide(totals.bogeyOrBetter, totals.scoredHoles),
+      birdieConversionRate: divide(totals.convertedGreens, totals.greensInRegulation),
+      provisional: !!completion?.isIncomplete,
+    };
+  });
+}
+
+function formatPlayerInsightPercent(rate) {
+  return Number.isFinite(Number(rate)) ? `${(Number(rate) * 100).toFixed(0)}%` : '—';
+}
+
+function buildPlayerRoundInsights(match, metrics, { exportView = false } = {}) {
+  const rows = computePlayerRoundInsights(match, metrics).filter(row => row.totals.scoredHoles > 0);
+  if (!rows.length) return '';
+  const completion = getRoundCompletionState(match, metrics);
+  const status = completion?.isIncomplete ? '<div class="tiny player-insights-status">Provisional · completed, scored holes only.</div>' : '';
+  const body = rows.map(row => `
+    <tr>
+      <td><strong>${escapeHtml(row.displayName)}</strong></td>
+      <td>${row.totals.scoredHoles}</td>
+      <td>${Number(row.scoringAverage).toFixed(2)}</td>
+      <td>${formatPlayerInsightPercent(row.birdieOrBetterRate)}</td>
+      <td>${formatPlayerInsightPercent(row.parOrBetterRate)}</td>
+      <td>${formatPlayerInsightPercent(row.bogeyAvoidanceRate)}</td>
+      <td>${row.totals.greensInRegulation ? `${formatPlayerInsightPercent(row.birdieConversionRate)} (${row.totals.convertedGreens}/${row.totals.greensInRegulation})` : '—'}</td>
+    </tr>`).join('');
+  const table = `<table class="${exportView ? 'export-table ' : ''}player-insights-table" aria-label="Player Insights"><thead><tr><th>Player</th><th>Holes</th><th>Avg</th><th>Birdie+</th><th>Par+</th><th>Bogey Avoid.</th><th>Birdie Conversion</th></tr></thead><tbody>${body}</tbody></table>`;
+  if (exportView) return `${status}<div class="fit-stage" data-fit="width" data-fit-min="0.78"><div class="fit-box">${table}</div></div>`;
+  return `<div class="player-insights-wrap"><div class="section-subhead">Player insights</div><div class="tiny">Gross results on completed holes. Birdie Conversion is birdie-or-better on a recorded green in regulation.</div>${status}<div class="player-insights-scroll table-scroll-region top-gap" tabindex="0" role="region" aria-label="Player Insights; scroll horizontally for all statistics">${table}</div></div>`;
+}
+
+const SCORE_DISTRIBUTION_COLUMNS = [
+  { key: 'eagle', label: 'Eagle' },
+  { key: 'birdie', label: 'Birdie' },
+  { key: 'par', label: 'Par' },
+  { key: 'bogey', label: 'Bogey' },
+  { key: 'doubleBogey', label: 'Double Bogey' },
+  { key: 'other', label: 'Other' },
+];
+
+function buildScoreDistributionSummary(match, metrics, options = {}) {
   const rows = computeScoreDistributionSummary(match, metrics);
   if (!rows.length) return '<div class="tiny">No player scores available yet.</div>';
   const anyScores = rows.some(r => Object.values(r.totals || {}).some(v => Number(v) > 0));
   if (!anyScores) return '<div class="tiny">No completed holes yet.</div>';
-  return buildScoreDistributionPresentation(rows.map(({ playerMetric, totals }) => ({ name: playerMetric.player.name, totals })));
+  return buildScoreDistributionPresentation(rows.map(({ playerMetric, totals }) => ({ name: playerMetric.player.name, totals })), options);
 }
 
-function buildScoreDistributionPresentation(rows = []) {
+function buildScoreDistributionPresentation(rows = [], { hideAllZeroColumns = false } = {}) {
+  const columns = hideAllZeroColumns
+    ? SCORE_DISTRIBUTION_COLUMNS.filter(column => rows.some(row => Number(row?.totals?.[column.key]) > 0))
+    : SCORE_DISTRIBUTION_COLUMNS;
+  const compactClass = hideAllZeroColumns ? ' score-distribution-table--adaptive' : '';
+  const displayNote = hideAllZeroColumns ? ' Only scoring categories recorded in this round are shown.' : '';
   return `
     <div class="score-distribution-wrap top-gap">
       <div class="section-subhead">Score distribution</div>
-      <div class="tiny">Gross scores only; completed holes only. Hole-in-ones, albatrosses, and triple bogeys or worse are included in Other.</div>
+      <div class="tiny">Gross scores only; completed holes only. Hole-in-ones, albatrosses, and triple bogeys or worse are included in Other.${displayNote}</div>
       <div class="score-distribution-scroll table-scroll-region top-gap" data-scroll-table="score-distribution" tabindex="0" role="region" aria-label="Score distribution; scroll horizontally to view all statistics">
-        <table class="score-distribution-table">
-          <thead><tr><th>Player</th><th>Eagle</th><th>Birdie</th><th>Par</th><th>Bogey</th><th>Double Bogey</th><th>Other</th></tr></thead>
+        <table class="score-distribution-table${compactClass}">
+          <thead><tr><th>Player</th>${columns.map(column => `<th>${escapeHtml(column.label)}</th>`).join('')}</tr></thead>
           <tbody>${rows.map(({ name, totals }) => `
             <tr>
               <td title="${escapeHtml(name)}"><strong>${escapeHtml(name)}</strong></td>
-              <td>${totals.eagle}</td>
-              <td>${totals.birdie}</td>
-              <td>${totals.par}</td>
-              <td>${totals.bogey}</td>
-              <td>${totals.doubleBogey}</td>
-              <td>${totals.other}</td>
+              ${columns.map(column => `<td>${Number(totals?.[column.key] || 0)}</td>`).join('')}
             </tr>`).join('')}</tbody>
         </table>
       </div>
@@ -9236,16 +9343,17 @@ function buildPlayerHoleStatSummaryTable(match, metrics, playerMetric, completed
 }
 
 function buildStatTrackingSummary(match, metrics) {
-  const scoreDistributionHtml = buildScoreDistributionSummary(match, metrics);
+  const scoreDistributionHtml = buildScoreDistributionSummary(match, metrics, { hideAllZeroColumns: true });
+  const playerInsightsHtml = buildPlayerRoundInsights(match, metrics);
   const scoringByParTable = buildScoringByParSummary(match, metrics, { compact: true });
   const scoringByParHtml = scoringByParTable
     ? `<div class="scoring-by-par-stats"><div class="section-subhead">Scoring by Hole Par</div><div class="tiny">Gross scoring average by par value. Only scored holes are included.</div><div class="top-gap">${scoringByParTable}</div></div>`
     : '';
-  if (!isStatTrackingEnabled(match)) return scoringByParHtml + scoreDistributionHtml;
+  if (!isStatTrackingEnabled(match)) return playerInsightsHtml + scoringByParHtml + scoreDistributionHtml;
   const completedLimit = getCompletedStatHoleLimit(match, metrics);
-  if (!completedLimit) return scoringByParHtml + scoreDistributionHtml;
+  if (!completedLimit) return playerInsightsHtml + scoringByParHtml + scoreDistributionHtml;
   const summary = computeStatTrackingSummary(match, metrics);
-  if (!summary.length) return '<div class="tiny">No players were selected for stat tracking.</div>' + scoringByParHtml + scoreDistributionHtml;
+  if (!summary.length) return '<div class="tiny">No players were selected for stat tracking.</div>' + playerInsightsHtml + scoringByParHtml + scoreDistributionHtml;
   const manualStatsHtml = `<div class="section-subhead">Manual stat tracking</div><div class="stat-summary-grid top-gap">${summary.map(({ playerMetric, totals }) => `
     <div class="stat-summary-card">
       <div class="stat-summary-name">${escapeHtml(playerMetric.player.name)}</div>
@@ -9263,7 +9371,7 @@ function buildStatTrackingSummary(match, metrics) {
         ${buildPlayerHoleStatSummaryTable(match, metrics, playerMetric, completedLimit)}
       </details>
     </div>`).join('')}</div>`;
-  return manualStatsHtml + scoringByParHtml + scoreDistributionHtml;
+  return manualStatsHtml + playerInsightsHtml + scoringByParHtml + scoreDistributionHtml;
 }
 
 function getPlayerDetailThroughLabel(match, metrics, playerMetric) {
@@ -14638,6 +14746,9 @@ function getMomentumYAxisScale(values, { compact = false } = {}) {
 function renderMomentumChart(match, metrics, gameKey, { compact = false, range = 'full', showPointValues = false } = {}) {
   const model = buildMomentumPresentation(match, metrics, gameKey, { range });
   if (!model) return '';
+  const sspPointValue = model.baseGameKey === 'sneaky_sandy_poley'
+    ? Number(getSneakySandyPoleyConfig(match)?.pointValue || 0)
+    : 0;
   const scale = getMomentumYAxisScale(model.series.map(row => row.value), { compact });
   if (!scale) return '';
   const width = 520, height = compact ? 150 : 205, left = compact ? 42 : 46, right = 88, top = 24, bottom = 28;
@@ -14648,9 +14759,10 @@ function renderMomentumChart(match, metrics, gameKey, { compact = false, range =
   const labels = model.series.map((row, index) => `<text x="${x(index)}" y="${height - 8}" text-anchor="middle">H${row.holeNumber}</text>`).join('');
   const dots = model.series.map((row, index) => `<circle cx="${x(index)}" cy="${y(row.value)}" r="${compact ? 3 : 4}" class="momentum-chart-dot"/>`).join('');
   const valueLabels = (model.baseGameKey === 'nassau' || showPointValues) ? model.series.map((row, index) => {
-    const label = row.value === 0 ? 'E' : row.value > 0 ? `+${row.value}` : String(row.value);
+    const isSsp = model.baseGameKey === 'sneaky_sandy_poley';
+    const label = isSsp ? formatMomentumMoneyValue(row.value * sspPointValue) : row.value === 0 ? 'E' : row.value > 0 ? `+${row.value}` : String(row.value);
     const labelY = Math.max(12, Math.min(height - bottom - 7, y(row.value) + (row.value > 0 ? -9 : 15)));
-    return `<text x="${x(index)}" y="${labelY}" text-anchor="middle" class="momentum-point-value" data-momentum-value="${row.value}">${label}</text>`;
+    return `<text x="${x(index)}" y="${labelY}" text-anchor="middle" class="momentum-point-value" data-momentum-value="${row.value}"${isSsp ? ` data-momentum-money="${row.value * sspPointValue}"` : ''}>${label}</text>`;
   }).join('') : '';
   const tickMarkup = scale.ticks.map(value => {
     const tickY = y(value);
@@ -14658,7 +14770,8 @@ function renderMomentumChart(match, metrics, gameKey, { compact = false, range =
     return `${value === 0 ? '' : `<line x1="${left}" y1="${tickY}" x2="${width - right + 8}" y2="${tickY}" class="momentum-gridline"/>`}<text x="${left - 7}" y="${tickY + 4}" text-anchor="end" class="momentum-axis-tick" data-momentum-tick="${value}" data-tick-y="${tickY}">${label}</text>`;
   }).join('');
   const unit = gameKey === 'sneaky_sandy_poley' ? 'points' : 'holes';
-  return `<div class="momentum-chart ${compact ? 'momentum-chart--compact' : 'momentum-chart--full'}" data-momentum-game="${escapeHtml(gameKey)}" data-momentum-range="${escapeHtml(model.range)}" data-momentum-perspective="${model.perspective}" data-momentum-y-bound="${scale.bound}" data-momentum-y-step="${scale.step}"><div class="momentum-orientation">Positive = ${escapeHtml(model.upperLabel)} ahead</div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(gameKey)} momentum; positive values mean ${escapeHtml(model.upperLabel)} ahead"><line x1="${left}" y1="${top}" x2="${left}" y2="${height - bottom}" class="momentum-y-axis"/>${tickMarkup}<line x1="${left}" y1="${zero}" x2="${width - right + 8}" y2="${zero}" class="momentum-zero-baseline" data-zero-y="${zero}"/><text x="4" y="12" class="momentum-axis-unit">${unit}</text><polyline points="${points}" class="momentum-chart-line"/>${dots}${valueLabels}${labels}<text x="${width - 4}" y="${top + 5}" text-anchor="end" class="momentum-side-label momentum-side-label--upper">${escapeHtml(model.upperLabel)}</text><text x="${width - 4}" y="${height - bottom}" text-anchor="end" class="momentum-side-label momentum-side-label--lower">${escapeHtml(model.lowerLabel)}</text></svg></div>`;
+  const sspLabelNote = model.baseGameKey === 'sneaky_sandy_poley' ? ` · Labels = cumulative team money at ${formatPositiveCurrency(sspPointValue, 2)}/point` : '';
+  return `<div class="momentum-chart ${compact ? 'momentum-chart--compact' : 'momentum-chart--full'}" data-momentum-game="${escapeHtml(gameKey)}" data-momentum-range="${escapeHtml(model.range)}" data-momentum-perspective="${model.perspective}" data-momentum-y-bound="${scale.bound}" data-momentum-y-step="${scale.step}"><div class="momentum-orientation">Positive = ${escapeHtml(model.upperLabel)} ahead${escapeHtml(sspLabelNote)}</div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(gameKey)} momentum; positive values mean ${escapeHtml(model.upperLabel)} ahead"><line x1="${left}" y1="${top}" x2="${left}" y2="${height - bottom}" class="momentum-y-axis"/>${tickMarkup}<line x1="${left}" y1="${zero}" x2="${width - right + 8}" y2="${zero}" class="momentum-zero-baseline" data-zero-y="${zero}"/><text x="4" y="12" class="momentum-axis-unit">${unit}</text><polyline points="${points}" class="momentum-chart-line"/>${dots}${valueLabels}${labels}<text x="${width - 4}" y="${top + 5}" text-anchor="end" class="momentum-side-label momentum-side-label--upper">${escapeHtml(model.upperLabel)}</text><text x="${width - 4}" y="${height - bottom}" text-anchor="end" class="momentum-side-label momentum-side-label--lower">${escapeHtml(model.lowerLabel)}</text></svg></div>`;
 }
 function getMomentumRangeOptions(match, metrics) {
   if (getRequestedHoleCount(match) === 9) return [{ key: 'full', label: getHoleSegmentLabel(match, metrics?.tee) }];
@@ -16427,6 +16540,18 @@ function selectPlayerComboboxOption(option, assign = assignPlayerToSlot) {
   option.dataset.playerSelectionHandled = 'true';
   assign(slot, playerId, { preserveFocus: false });
   return true;
+}
+
+function scrollToActiveHoleScoringTop({ behavior = 'smooth' } = {}) {
+  requestAnimationFrame(() => {
+    const target = document.getElementById('activeHoleScoringTop');
+    if (!target || !target.offsetParent) return;
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+    const chrome = document.querySelector('.app-chrome');
+    const offset = (chrome?.getBoundingClientRect?.().height || 0) + 12;
+    const y = target.getBoundingClientRect().top + window.scrollY - offset;
+    window.scrollTo({ top: Math.max(0, y), behavior: reducedMotion ? 'auto' : behavior });
+  });
 }
 
 function handlePlayerComboboxOptionPointerDown(event, assign = assignPlayerToSlot) {
@@ -19396,6 +19521,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
     match.currentHole = currentHole;
     if (!persist()) return false;
+    if (currentHole !== savedPosition) scrollToActiveHoleScoringTop();
     scheduleSharedMatchSync(match, { immediate: true, silent: true });
     if (match.storageMode === 'shared') refreshActiveSharedScores({ silent: true, render: false });
     if (!silent) toast(hostOverridePlayers && hostOverridePlayers.length ? `Host updated Hole ${savedHole} score.` : `Hole ${savedHole} saved.`);
@@ -20351,7 +20477,12 @@ function installDyeLedgerLiveEngineAdapter() {
     buildPlayerSummaryTable,
     buildScoringByParRows,
     buildScoringByParSummary,
+    computePlayerRoundInsights,
+    buildPlayerRoundInsights,
     buildStatTrackingSummary,
+    buildScoreDistributionPresentation,
+    formatYardageValue,
+    formatMomentumMoneyValue,
     buildUnifiedExportDocument,
     buildQuickScoreDistribution,
     getTeamDisplayName,

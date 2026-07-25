@@ -175,16 +175,16 @@ Recent releases:
 - v30.3.41 — Effortless Scoring Polish
 - v30.3.42 — Duplicate Course Dropdown Fix and initial documentation work
 
-Current release implementation (updated July 23, 2026):
+Current release implementation (updated July 25, 2026):
 
 ```text
-v30.3.77 — PWA Branding & Round Completion Reliability
+v30.3.78 — Scores, Summary Usability & Player Insights
 ```
 
 ## 8. Near-Term Roadmap
 
-1. v30.3.77 — PWA Branding & Round Completion Reliability
-2. Shared Match Summary & Player Insights
+1. v30.3.78 — Scores, Summary Usability & Player Insights
+2. v30.3.79 — Shared Match Summary Optimization & Expanded Round Analytics
 3. Beta Account Activation
 4. Cloud Security & Ownership Activation
 5. Amendment Sessions

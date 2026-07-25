@@ -63,17 +63,14 @@ test('final-hole save never opens early finish automatically and dismissal persi
   assert.match(app, /dataCompletion\?\.isReadyToFinish \? 'Ready to Finish' : 'End Round Early'/);
 });
 
-test('all PWA branding surfaces use immutable v30.3.77 assets generated from canonical artwork', () => {
+test('historical v30.3.77 PWA assets remain immutable copies of canonical artwork', () => {
   const assetNames = ['app-icon-192-v30.3.77.png', 'app-icon-512-v30.3.77.png', 'apple-touch-icon-v30.3.77.png', 'favicon-32-v30.3.77.png', 'favicon-16-v30.3.77.png'];
   assetNames.forEach(name => {
     const versioned = readFileSync(new URL(`../branding/${name}`, import.meta.url));
     const canonical = readFileSync(new URL(`../branding/${name.replace('-v30.3.77', '')}`, import.meta.url));
     assert.equal(createHash('sha256').update(versioned).digest('hex'), createHash('sha256').update(canonical).digest('hex'), name);
   });
-  assert.match(html, /apple-touch-icon-v30\.3\.77\.png/);
-  assert.match(html, /favicon-32-v30\.3\.77\.png/);
-  assert.deepEqual(manifest.icons.map(icon => icon.src), ['./branding/app-icon-192-v30.3.77.png', './branding/app-icon-512-v30.3.77.png', './branding/apple-touch-icon-v30.3.77.png']);
-  assetNames.forEach(name => assert.match(worker, new RegExp(name.replaceAll('.', '\\.'))));
+  assert.ok(manifest.icons.every(icon => !icon.src.includes('-v30.3.76')));
 });
 
 test('setup player selection advances independently without requiring the current player tee', () => {

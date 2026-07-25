@@ -43,7 +43,7 @@ test('truthful game status covers concrete live, final, tied, incomplete, and no
   assert.match(finalSsp.engine.getTruthfulGameStatus(finalSsp.match, finalSsp.metrics, 'sneaky_sandy_poley'), /^Final:/);
 });
 
-test('shared momentum presentation orients leader positive, labels sides, and preserves source data', () => {
+test('shared momentum presentation honors the selected perspective, labels sides, and preserves source data', () => {
   const fixture = render(buildMatch({ selectedGames: [{ key: 'team_match', basis: 'net', stake: 5 }], scores: winningScores, status: 'complete', teamNames: ['', ''] }));
   const before = JSON.stringify(fixture.match);
   const model = fixture.engine.buildMomentumPresentation(fixture.match, fixture.metrics, 'team_match');
@@ -57,6 +57,13 @@ test('shared momentum presentation orients leader positive, labels sides, and pr
   assert.match(compact, /momentum-zero-baseline/);
   assert.match(full, /momentum-side-label--upper/);
   assert.equal(JSON.stringify(fixture.match), before);
+  fixture.match.momentumPerspective = 2;
+  const reversed = fixture.engine.buildMomentumPresentation(fixture.match, fixture.metrics, 'team_match');
+  assert.equal(reversed.perspective, 2);
+  assert.ok(reversed.series.at(-1).value < 0);
+  assert.equal(reversed.upperLabel, 'Phil/Steve');
+  assert.equal(reversed.lowerLabel, 'John S./John J.');
+  assert.equal(reversed.series.every((row, index) => row.value === -model.series[index].value), true);
   const tied = render(buildMatch({ selectedGames: [{ key: 'team_match', basis: 'net' }], scores: Object.fromEntries(players.map(player => [player.id, [4,4,4]])) }));
   assert.equal(tied.engine.buildMomentumPresentation(tied.match, tied.metrics, 'team_match').perspective, 1);
 });
@@ -191,7 +198,7 @@ test('responsive source paths contain internal scrolling, width-fit momentum, de
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
   const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
-  assert.match(html, /src="\.\/branding\/apple-touch-icon\.png" alt="The Dye Ledger"/);
+  assert.match(html, /src="\.\/branding\/apple-touch-icon-v30\.3\.77\.png" alt="The Dye Ledger"/);
   assert.match(html, /id="playMatchSummary"[^>]*aria-label="Match Summary"/);
   assert.match(css, /\.table-scroll-region\{[^}]*overflow-x:auto[^}]*overflow-y:hidden/);
   assert.match(css, /\.quick-scoreboard-modal\{[^}]*overflow-x:hidden/s);
@@ -212,8 +219,8 @@ test('Quick Scoreboard reuses the native bounded scorecard scroller and Play Gre
   assert.match(css, /\.scorecard-wrap\{position:relative;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;/);
   assert.match(css, /@media \(max-width:760px\)\{\.scorecard-table\{min-width:920px\}\}/);
   assert.match(css, /\.quick-classic-scorecard>\.scorecard-wrap,\.quick-score-distribution>\.score-distribution-scroll\{width:calc\(100% - 24px\);max-width:calc\(100% - 24px\);/);
-  assert.match(html, /style\.css\?v=30\.3\.76&amp;rev=1/);
-  assert.match(app, /cacheName: 'the-dye-ledger-v30\.3\.76'/);
+  assert.match(html, /style\.css\?v=30\.3\.77&amp;rev=1/);
+  assert.match(app, /cacheName: 'the-dye-ledger-v30\.3\.77'/);
   assert.match(css, /#greeniesEntryWrap \.greenies-check\{min-height:44px;padding:4px 9px;gap:7px\}/);
   assert.match(css, /#greeniesEntryWrap \.greenies-check input\[type="checkbox"\]\{width:20px;height:20px;min-height:20px;padding:0\}/);
   assert.match(html, /id="greeniesEntryWrap" class="top-gap hidden"/);

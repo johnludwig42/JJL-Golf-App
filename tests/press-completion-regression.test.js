@@ -164,18 +164,18 @@ test('completed Press Activity audit is frozen, concise, correct, idempotent, an
   assert.equal(noPress.engine.buildPressAuditSection(noPress.match, noPress.metrics), '');
 });
 
-test('UI/save source locks, v30.3.76 icon references, cache paths, and branding docs are consistent', () => {
+test('UI/save source locks, v30.3.77 icon references, cache paths, and branding docs are consistent', () => {
   assert.match(app, /PRESS_DISABLE_BLOCKED_EXISTING_PRESS/);
   assert.match(app, /data-press-edit-helper/);
   assert.match(app, /disabled aria-disabled="true"/);
   assert.match(app, /validatePressEditContract\(existing, selectedGames/);
   assert.equal((html.match(/rel="apple-touch-icon"/g) || []).length, 1);
-  assert.match(html, /<img src="\.\/branding\/apple-touch-icon\.png" alt="The Dye Ledger"/);
-  assert.match(html, /rel="apple-touch-icon"[^>]+href="\.\/branding\/apple-touch-icon\.png"/);
+  assert.match(html, /<img src="\.\/branding\/apple-touch-icon-v30\.3\.77\.png" alt="The Dye Ledger"/);
+  assert.match(html, /rel="apple-touch-icon"[^>]+href="\.\/branding\/apple-touch-icon-v30\.3\.77\.png"/);
   assert.doesNotMatch(html, /<img src="\.\/branding\/app-icon-192\.png" alt="The Dye Ledger"/);
-  assert.match(worker, /branding\/apple-touch-icon\.png/);
-  assert.match(worker, /the-dye-ledger-v30\.3\.76/);
-  assert.match(branding, /Header \/ iPhone Home Screen[^\n]*`branding\/apple-touch-icon\.png`/);
+  assert.match(worker, /branding\/apple-touch-icon-v30\.3\.77\.png/);
+  assert.match(worker, /the-dye-ledger-v30\.3\.77/);
+  assert.match(branding, /Header \/ iPhone source[^\n]*`branding\/apple-touch-icon\.png`/);
   assert.match(branding, /Existing Home Screen icons may remain cached until the user removes and re-adds the app from Safari/);
-  assert.equal(createHash('sha256').update(appleIcon).digest('hex'), '5cb89e80dc9037f063f6f4c0eab700c5154ee1625033d2ae4ec445618d090507');
+  assert.equal(createHash('sha256').update(appleIcon).digest('hex'), 'd38a80dad54f65b47c46eef6c952e02f8fbf94d8b52338a567dcb4664224ba95');
 });

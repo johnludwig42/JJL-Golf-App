@@ -2801,6 +2801,7 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
 .section-subhead{font-weight:700;color:var(--ink);margin-bottom:4px}
 .score-distribution-scroll{position:relative;border:1px solid var(--border);border-radius:14px;background:#fff}
 .score-distribution-table{width:max-content;min-width:max(680px,100%);border-collapse:separate;border-spacing:0;table-layout:auto;font-size:.9rem}
+.score-distribution-table.score-distribution-table--adaptive{width:100%;min-width:0;table-layout:fixed}
 .score-distribution-table th,.score-distribution-table td{padding:9px 10px;border-bottom:1px solid rgba(12,55,33,.08);text-align:center;white-space:nowrap}
 .score-distribution-table th:not(:first-child),.score-distribution-table td:not(:first-child){min-width:78px}
 .score-distribution-table th:first-child,.score-distribution-table td:first-child{width:164px;min-width:164px;max-width:164px;text-align:left;position:sticky;left:0;background:#fff;z-index:1;overflow:hidden;text-overflow:ellipsis;box-shadow:8px 0 12px -10px rgba(0,0,0,.28)}
@@ -2808,7 +2809,7 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
 .score-distribution-table thead th{font-size:.75rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);background:#f7faf8}
 .score-distribution-table thead th:first-child{background:#f7faf8;z-index:2}
 .score-distribution-table tbody tr:last-child td{border-bottom:0}
-@media (max-width: 640px){.score-distribution-table{font-size:.82rem;min-width:620px}.score-distribution-table th,.score-distribution-table td{padding:8px 8px}}
+@media (max-width: 640px){.score-distribution-table{font-size:.82rem;min-width:620px}.score-distribution-table.score-distribution-table--adaptive{min-width:0}.score-distribution-table th,.score-distribution-table td{padding:8px 8px}}
 
 /* v27.34 final net settlement and settle-up summary */
 .final-net-settlement-card{
@@ -5869,4 +5870,20 @@ html.quick-scoreboard-open,body.quick-scoreboard-open{overflow:hidden!important;
 @media print{
   .scoring-by-par-cards{display:none!important}
   .scoring-by-par-scroll{display:block!important}
+}
+
+/* v30.3.78 derived round-level Player Insights */
+.player-insights-wrap{margin-top:18px}
+.player-insights-status{margin-top:7px;color:var(--muted);font-weight:750}
+.player-insights-scroll{border:1px solid var(--border);border-radius:12px;background:#fff}
+.player-insights-table{width:100%;min-width:690px;border-collapse:collapse;font-size:.82rem}
+.player-insights-table th,.player-insights-table td{padding:9px 8px;border-bottom:1px solid var(--border);text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}
+.player-insights-table th:first-child,.player-insights-table td:first-child{text-align:left;position:sticky;left:0;background:#fff;z-index:2}
+.player-insights-table thead th{background:#f4f8f6}
+.player-insights-table thead th:first-child{z-index:3}
+.player-insights-table tbody tr:last-child td{border-bottom:0}
+@media print{
+  .player-insights-scroll{overflow:visible!important;border:0}
+  .player-insights-table{min-width:0}
+  .player-insights-table th:first-child,.player-insights-table td:first-child{position:static}
 }

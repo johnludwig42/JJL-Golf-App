@@ -7,18 +7,18 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=30.3.77&amp;rev=1" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v30.3.77.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v30.3.77.png" />
-  <link rel="shortcut icon" href="./branding/favicon-32-v30.3.77.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v30.3.77.png" />
-  <link rel="stylesheet" href="style.css?v=30.3.77&amp;rev=1" />
+  <link rel="manifest" href="manifest.json?v=30.3.78&amp;rev=1" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v30.3.78.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v30.3.78.png" />
+  <link rel="shortcut icon" href="./branding/favicon-32-v30.3.78.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v30.3.78.png" />
+  <link rel="stylesheet" href="style.css?v=30.3.78&amp;rev=1" />
 </head>
 <body>
   <div class="app-chrome"><header class="app-header compact-header">
     <div class="brand-wrap">
       <div class="brand-mark">
-        <img src="./branding/apple-touch-icon-v30.3.77.png" alt="The Dye Ledger" />
+        <img src="./branding/apple-touch-icon-v30.3.78.png" alt="The Dye Ledger" />
       </div>
       <div>
       <h1>The Dye Ledger</h1>
@@ -309,7 +309,7 @@
         </div>
         <div id="scoreEntryEmpty" class="tiny top-gap">Create or load a match to begin score entry.</div>
         <div id="scoreEntryWrap" class="hidden top-gap">
-          <div class="score-hole-nav actions wrap compact-actions">
+          <div id="activeHoleScoringTop" class="score-hole-nav actions wrap compact-actions">
             <button id="prevHoleBtn" type="button" class="secondary">◀ Prev</button>
             <div id="currentHoleBadge" class="badge big-badge">Hole 1</div>
             <button id="nextHoleBtn" type="button" class="secondary">Next ▶</button>
@@ -404,10 +404,10 @@
           </div>
           </div>
         </div>
-        <div class="card tight-card scoreboard-card print-section-match-status">
+        <details class="card tight-card scoreboard-card scoreboard-collapsible print-section-match-status">
+          <summary><h2>Match status</h2></summary>
           <div class="item-header compact-item-header">
             <div>
-              <h2>Match status</h2>
               <div class="tiny">Choose which selected game is featured here.</div>
             </div>
             <label class="inline-select tiny">
@@ -416,7 +416,7 @@
             </label>
           </div>
           <div id="matchStatusSummary" class="result compact-result"></div>
-        </div>
+        </details>
 
         <div class="card tight-card scoreboard-card print-section-momentum">
           <div class="item-header compact-item-header">
@@ -479,30 +479,30 @@
           <div id="playerLeaderboardSummary" class="top-gap"></div>
         </details>
 
-        <div class="card tight-card scoreboard-card print-section-classic-scorecard">
-          <h2>Classic scorecard</h2>
+        <details class="card tight-card scoreboard-card scoreboard-collapsible print-section-classic-scorecard">
+          <summary><h2>Classic scorecard</h2></summary>
           <div id="classicScorecard" class="top-gap"></div>
-        </div>
+        </details>
 
-        <div id="statTrackingSummaryCard" class="card tight-card scoreboard-card print-section-stat-tracking hidden">
-          <h2>Stats</h2>
+        <details id="statTrackingSummaryCard" class="card tight-card scoreboard-card scoreboard-collapsible print-section-stat-tracking hidden">
+          <summary><h2>Stats</h2></summary>
           <div id="statTrackingSummary" class="top-gap"></div>
-        </div>
+        </details>
 
         <div id="ninePointScorecardCard" class="card tight-card scoreboard-card print-section-nine-point hidden">
           <h2>9-Point game scorecard</h2>
           <div id="ninePointScorecard" class="top-gap"></div>
         </div>
 
-        <div id="roundStoryCard" class="card tight-card scoreboard-card print-section-notes">
-          <h2>Round Notes, Memories &amp; Recap</h2>
+        <details id="roundStoryCard" class="card tight-card scoreboard-card scoreboard-collapsible print-section-notes">
+          <summary><h2>Round Notes, Memories &amp; Recap</h2></summary>
           <div class="tiny">Competition first, storytelling second. These notes and memories help generate the AI recap.</div>
           <div class="round-story-section top-gap">
             <h3>Memories (<span id="roundMemoriesCount">0</span>)</h3>
             <div id="roundMemoriesPanel" class="top-gap"></div>
           </div>
           <div id="roundRecapControls" class="top-gap"></div>
-        </div>
+        </details>
 
       </div>
 
@@ -829,7 +829,7 @@
       <div class="card tight-card app-updates-card">
         <h2>App Updates</h2>
         <div class="app-update-summary">
-          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.77</strong></div>
+          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.78</strong></div>
           <div><span class="muted-label">Build Date</span><strong id="appBuildTimestamp">loading…</strong></div>
           <div><span class="muted-label">Cache</span><span id="appActiveCacheName" class="break-word">checking…</span></div>
           <div><span class="muted-label">Update Available</span><strong id="appUpdateAvailableStatus">checking…</strong></div>
@@ -903,7 +903,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.3.77</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
+    <span id="appVersionFooter">v30.3.78</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
@@ -1048,8 +1048,8 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=30.3.77&amp;rev=1"></script>
-  <script src="identity-security.js?v=30.3.77&amp;rev=1"></script>
-  <script src="app.js?v=30.3.77&amp;rev=1"></script>
+  <script src="supabase-config.js?v=30.3.78&amp;rev=1"></script>
+  <script src="identity-security.js?v=30.3.78&amp;rev=1"></script>
+  <script src="app.js?v=30.3.78&amp;rev=1"></script>
 </body>
 </html>

@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.76',
-  versionNumber: '30.3.76',
-  cacheName: 'the-dye-ledger-v30.3.76',
+  version: 'v30.3.77',
+  versionNumber: '30.3.77',
+  cacheName: 'the-dye-ledger-v30.3.77',
   buildDate: new Date().toISOString(),
-  buildLabel: 'SSP Rules, Routing & Finality'
+  buildLabel: 'PWA Branding & Round Completion Reliability'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -2050,7 +2050,7 @@ function getFeaturedCompetitionResult(match, metrics) {
   }
   if (key === 'singles_match') {
     const result = computeSinglesMatchPlayResult(match, metrics, getSinglesMatchConfig(match) || {});
-    const text = result?.displayResult || result?.statusText || result?.winnerText || 'Featured result unavailable until more holes are scored.';
+    const text = result?.resultText || result?.displayResult || result?.statusText || result?.winnerText || 'Featured result unavailable until more holes are scored.';
     return { key, label: 'Singles Match Play', result: completion?.isIncomplete && !String(text).includes('through') ? `${text}${formatIncompleteScopeSuffix(completion)}` : text, selection };
   }
   if (['nassau', 'team_match'].includes(key) && metrics?.teams?.length === 2) {
@@ -2911,6 +2911,38 @@ function getSneakySandyPoleyConfig(match) {
     ...normalized,
     sspSequenceMode: match.sspSequenceLockedMode === 'entry' ? 'entry' : 'routing',
     startingHonorsTeamId: String(match.sspStartingHonorsTeamId || '1') === '2' ? '2' : '1',
+  };
+}
+
+function getScoresFeaturedOutcome(context) {
+  const match = context?.match;
+  const metrics = context?.metrics;
+  const frozenFeatured = context?.frozen && context?.record?.featuredCompetition
+    ? context.record.featuredCompetition
+    : null;
+  const featured = frozenFeatured || getFeaturedCompetitionResult(match, metrics);
+  const selectedGames = getOrderedSelectedGames(match);
+  const selection = String(featured?.selection || getFeaturedCompetitionSelection(match));
+  const key = String(featured?.resolved || featured?.key || resolveFeaturedCompetitionKey(match, metrics));
+  const selectedGameIsFeatured = selectedGames.some(game => String(game?.key) === key);
+  const explicitlyFeatured = !['auto', 'none'].includes(selection);
+  if (key !== 'none' && (selectedGameIsFeatured || explicitlyFeatured) && featured?.result) {
+    return {
+      type: 'featured',
+      label: `Featured Competition · ${featured.label || getFeaturedCompetitionDisplayName(match, key)}`,
+      result: String(featured.result),
+      key,
+    };
+  }
+  const leaders = Array.isArray(context?.leaders) ? context.leaders : [];
+  if (!leaders.length) return { type: 'best-net', label: 'Best Net Score', result: 'No score leader yet', key: 'stroke_net' };
+  const score = formatToPar(Number(leaders[0]?.netToPar) || 0);
+  const names = leaders.map(row => row.displayName).filter(Boolean).join(', ');
+  return {
+    type: 'best-net',
+    label: 'Best Net Score',
+    result: `${leaders.length > 1 ? 'Tied · ' : ''}${names} · ${score}`,
+    key: 'stroke_net',
   };
 }
 
@@ -3827,6 +3859,7 @@ function normalizeHoleStat(stat = {}, idx = 0) {
     penaltyStrokes: Number.isFinite(Number(stat?.penaltyStrokes ?? stat?.penalties ?? stat?.penalty_strokes)) && Number(stat?.penaltyStrokes ?? stat?.penalties ?? stat?.penalty_strokes) >= 0 ? Math.round(Number(stat?.penaltyStrokes ?? stat?.penalties ?? stat?.penalty_strokes)) : 0,
     upAndDown: !!stat?.upAndDown,
     sandy: !!stat?.sandy,
+    entryCompleted: !!stat?.entryCompleted,
   };
 }
 function isStatTrackingEnabled(match) {
@@ -3929,6 +3962,71 @@ function isSelectedRoundComplete(match, tee = null) {
   return count > 0 && players.length > 0 && Array.from({ length: count }, (_, idx) => idx).every(idx =>
     players.every(player => Number(player?.scores?.[idx]?.gross) > 0)
   );
+}
+
+function getRoundDataCompletionState(match, metrics = null) {
+  if (!match) return {
+    isReadyToFinish: false,
+    scoresComplete: false,
+    statsComplete: false,
+    gamesComplete: false,
+    unresolved: [{ type: 'round', label: 'No active round' }],
+  };
+  const effectiveMetrics = metrics || computeMatchMetrics(match);
+  const scoreCompletion = getRoundCompletionState(match, effectiveMetrics);
+  const unresolved = [];
+  if (!scoreCompletion.isComplete) {
+    const missingScores = getMissingScoreEntries(match, effectiveMetrics);
+    unresolved.push({
+      type: 'scores',
+      count: missingScores.length,
+      label: `${missingScores.length} required score${missingScores.length === 1 ? '' : 's'} remain`,
+    });
+  }
+  const trackedPlayerIds = new Set(getStatTrackingParticipantIds(match));
+  if (isStatTrackingEnabled(match) && trackedPlayerIds.size) {
+    const holeCount = getPlayableHoleCount(match, effectiveMetrics?.tee || getTee(match.courseId, match.teeId));
+    let missingStatEntries = 0;
+    (match.players || []).forEach(player => {
+      if (!trackedPlayerIds.has(String(player.playerId))) return;
+      for (let idx = 0; idx < holeCount; idx += 1) {
+        if (!player.stats?.[idx]?.entryCompleted) missingStatEntries += 1;
+      }
+    });
+    if (missingStatEntries) {
+      unresolved.push({
+        type: 'stats',
+        count: missingStatEntries,
+        label: `${missingStatEntries} required stat entr${missingStatEntries === 1 ? 'y remains' : 'ies remain'}`,
+      });
+    }
+  }
+  if (isSneakySandyPoleyEnabled(match)) {
+    const ledger = buildSneakySandyPoleyLedger(match, { metrics: effectiveMetrics });
+    if (ledger.unresolved) {
+      unresolved.push({
+        type: 'ssp',
+        count: 1,
+        label: 'SSP has unresolved validation, sequence, Bridge, or Shared Match facts',
+      });
+    }
+  }
+  const scoresComplete = scoreCompletion.isComplete;
+  const statsComplete = !unresolved.some(item => item.type === 'stats');
+  const gamesComplete = !unresolved.some(item => item.type === 'ssp');
+  return {
+    isReadyToFinish: scoresComplete && statsComplete && gamesComplete,
+    scoresComplete,
+    statsComplete,
+    gamesComplete,
+    scoreCompletion,
+    unresolved,
+  };
+}
+
+function describeRoundDataCompletion(completion) {
+  const labels = (completion?.unresolved || []).map(item => item.label).filter(Boolean);
+  return labels.length ? labels.join('; ') : 'All required round information is complete';
 }
 
 function shouldInferRotatedHoleSequenceStart(match, position, tee = null) {
@@ -4881,7 +4979,8 @@ function buildExportPlayerLeaderboard(match, metrics) {
     ${completion?.isIncomplete ? `<div class="export-section-sub">Through ${completion.completedHoleCount} of ${completion.selectedHoleCount} holes.</div>` : ''}
     <div class="fit-stage" data-fit="width" data-fit-min="0.84">
       <div class="fit-box">
-        <table class="export-table">
+        <table class="export-table export-player-leaderboard">
+          <colgroup><col class="export-player-col">${showTeamColumn ? '<col class="export-team-col">' : ''}<col class="export-result-col"><col class="export-result-col"><col class="export-result-col"><col class="export-result-col"></colgroup>
           <thead>
             <tr><th>Player</th>${teamHead}<th>Gross</th><th>Net</th><th>Net to Par</th><th>Postable</th></tr>
           </thead>
@@ -4889,6 +4988,61 @@ function buildExportPlayerLeaderboard(match, metrics) {
         </table>
       </div>
     </div>`;
+}
+
+function buildScoringByParRows(match, metrics) {
+  const players = Array.isArray(metrics?.players) ? metrics.players : [];
+  const holes = Array.isArray(metrics?.holeResults) ? metrics.holeResults : [];
+  const completion = getRoundCompletionState(match, metrics);
+  return players.map(player => {
+    const playerId = String(player.playerId);
+    const byPar = Object.fromEntries([3, 4, 5].map(par => {
+      const scored = holes.map(hole => {
+        const score = (hole?.playerScores || []).find(row => String(row.playerId) === playerId);
+        const holePar = Number(score?.par ?? hole?.par);
+        const gross = Number(score?.gross);
+        return holePar === par && Number.isFinite(gross) && gross > 0 ? gross : null;
+      }).filter(Number.isFinite);
+      const count = scored.length;
+      const average = count ? scored.reduce((sum, gross) => sum + gross, 0) / count : null;
+      return [par, { par, count, average, relativeToPar: count ? average - par : null }];
+    }));
+    return {
+      playerId,
+      displayName: player.player?.name || getPlayer(playerId)?.name || 'Player',
+      byPar,
+      scoredHoleCount: Object.values(byPar).reduce((sum, row) => sum + row.count, 0),
+      provisional: !!completion?.isIncomplete,
+    };
+  });
+}
+
+function formatScoringByParRelative(value) {
+  if (!Number.isFinite(Number(value))) return '—';
+  const rounded = Math.abs(Number(value)) < 0.005 ? 0 : Number(value);
+  if (rounded === 0) return 'E';
+  return `${rounded > 0 ? '+' : '−'}${Math.abs(rounded).toFixed(2)}`;
+}
+
+function formatScoringByParCell(stat) {
+  if (!stat?.count || !Number.isFinite(Number(stat.average))) return '—';
+  return `${Number(stat.average).toFixed(2)} (${formatScoringByParRelative(stat.relativeToPar)}) · ${stat.count} hole${stat.count === 1 ? '' : 's'}`;
+}
+
+function buildScoringByParSummary(match, metrics, { exportView = false, compact = false } = {}) {
+  const rows = buildScoringByParRows(match, metrics);
+  if (!rows.some(row => row.scoredHoleCount > 0)) return '';
+  const completion = getRoundCompletionState(match, metrics);
+  const status = completion?.isIncomplete ? '<div class="tiny scoring-by-par-status">Provisional · completed, scored holes only.</div>' : '';
+  const tableClass = exportView ? 'export-table scoring-by-par-table' : `scoring-by-par-table${compact ? ' scoring-by-par-table--compact' : ''}`;
+  const cellText = stat => compact
+    ? (stat?.count && Number.isFinite(Number(stat.average)) ? Number(stat.average).toFixed(2) : '—')
+    : formatScoringByParCell(stat);
+  const table = `<div class="${exportView ? 'fit-stage' : 'scoring-by-par-scroll table-scroll-region'}"${exportView ? ' data-fit="width" data-fit-min="0.82"' : ' tabindex="0" role="region" aria-label="Scoring by Hole Par; scroll horizontally for all par values"'}><div class="${exportView ? 'fit-box' : ''}"><table class="${tableClass}" aria-label="Scoring by Hole Par"><thead><tr><th>Player</th><th>Par 3</th><th>Par 4</th><th>Par 5</th></tr></thead><tbody>${rows.map(row => `<tr><td>${escapeHtml(row.displayName)}</td>${[3, 4, 5].map(par => `<td>${escapeHtml(cellText(row.byPar[par]))}</td>`).join('')}</tr>`).join('')}</tbody></table></div></div>`;
+  if (exportView) return `${status}${table}`;
+  if (compact) return `<div class="scoring-by-par-summary-compact">${status}${table}</div>`;
+  const cards = `<div class="scoring-by-par-cards">${rows.map(row => `<article class="scoring-by-par-card"><strong>${escapeHtml(row.displayName)}</strong>${[3, 4, 5].map(par => `<div><span>Par ${par}</span><b>${escapeHtml(formatScoringByParCell(row.byPar[par]))}</b></div>`).join('')}</article>`).join('')}</div>`;
+  return `${status}${table}${cards}`;
 }
 
 function buildExportTeamLeaderboard(match, metrics) {
@@ -6414,6 +6568,7 @@ function buildSummaryExportBody(match, metrics) {
       <div class="export-section-head"><h2>Leaderboards</h2><div class="export-section-sub">Full player and team tables supporting the executive highlights.</div></div>
       <h3>Player leaderboard</h3>
       ${buildExportPlayerLeaderboard(match, metrics)}
+      <div class="leaderboard-team-block"><h3>Scoring by Hole Par</h3><div class="export-section-sub">Gross averages; scored holes only.${completion.isIncomplete ? ' Provisional.' : ''}</div>${buildScoringByParSummary(match, metrics, { exportView: true })}</div>
       ${hasMultiPlayerTeam(metrics) ? `<div class="leaderboard-team-block"><h3>Team leaderboard</h3>${buildExportTeamLeaderboard(match, metrics)}</div>` : ''}
     </section>
 
@@ -6732,6 +6887,14 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       background: linear-gradient(180deg, #f9fbfd 0%, #f2f6fa 100%);
       font-weight: 800;
       color: #243247;
+    }
+    .export-player-leaderboard .export-player-col { width: 28%; }
+    .export-player-leaderboard .export-team-col { width: 16%; }
+    .export-player-leaderboard .export-result-col { width: 14%; }
+    .export-player-leaderboard th:nth-last-child(-n+4),
+    .export-player-leaderboard td:nth-last-child(-n+4) {
+      text-align: center;
+      font-variant-numeric: tabular-nums;
     }
     .export-pill-grid {
       display: grid;
@@ -9074,11 +9237,15 @@ function buildPlayerHoleStatSummaryTable(match, metrics, playerMetric, completed
 
 function buildStatTrackingSummary(match, metrics) {
   const scoreDistributionHtml = buildScoreDistributionSummary(match, metrics);
-  if (!isStatTrackingEnabled(match)) return scoreDistributionHtml;
+  const scoringByParTable = buildScoringByParSummary(match, metrics, { compact: true });
+  const scoringByParHtml = scoringByParTable
+    ? `<div class="scoring-by-par-stats"><div class="section-subhead">Scoring by Hole Par</div><div class="tiny">Gross scoring average by par value. Only scored holes are included.</div><div class="top-gap">${scoringByParTable}</div></div>`
+    : '';
+  if (!isStatTrackingEnabled(match)) return scoringByParHtml + scoreDistributionHtml;
   const completedLimit = getCompletedStatHoleLimit(match, metrics);
-  if (!completedLimit) return scoreDistributionHtml;
+  if (!completedLimit) return scoringByParHtml + scoreDistributionHtml;
   const summary = computeStatTrackingSummary(match, metrics);
-  if (!summary.length) return '<div class="tiny">No players were selected for stat tracking.</div>' + scoreDistributionHtml;
+  if (!summary.length) return '<div class="tiny">No players were selected for stat tracking.</div>' + scoringByParHtml + scoreDistributionHtml;
   const manualStatsHtml = `<div class="section-subhead">Manual stat tracking</div><div class="stat-summary-grid top-gap">${summary.map(({ playerMetric, totals }) => `
     <div class="stat-summary-card">
       <div class="stat-summary-name">${escapeHtml(playerMetric.player.name)}</div>
@@ -9096,7 +9263,7 @@ function buildStatTrackingSummary(match, metrics) {
         ${buildPlayerHoleStatSummaryTable(match, metrics, playerMetric, completedLimit)}
       </details>
     </div>`).join('')}</div>`;
-  return manualStatsHtml + scoreDistributionHtml;
+  return manualStatsHtml + scoringByParHtml + scoreDistributionHtml;
 }
 
 function getPlayerDetailThroughLabel(match, metrics, playerMetric) {
@@ -9611,11 +9778,8 @@ function buildEffectiveScoresContext(match, metrics = null) {
 }
 
 function buildScoresOutcomeHero(context) {
-  const { completion, lifecycle, final, leaders, legacyFallback } = context;
-  const stateWord = final ? 'Winner' : 'Leader';
-  const outcome = !leaders.length ? 'No score leader yet' : leaders.length > 1
-    ? `Tied · ${leaders.map(row => row.displayName).join(', ')}`
-    : `${stateWord} · ${leaders[0].displayName}`;
+  const { completion, lifecycle, final, legacyFallback } = context;
+  const outcome = getScoresFeaturedOutcome(context);
   const missing = getMissingScoreEntries(context.match, context.metrics);
   const warning = missing.length
     ? `<div class="scores-visible-warning" role="status"><strong>${missing.length} score${missing.length === 1 ? '' : 's'} missing.</strong> Results and settlement remain provisional.</div>`
@@ -9625,7 +9789,8 @@ function buildScoresOutcomeHero(context) {
   const topName = context.players.find(player => String(player.id) === String(topMoney?.id))?.name || '';
   return `<section class="scores-outcome-content" data-scores-lifecycle="${escapeHtml(lifecycle)}" data-result-source="${context.frozen ? 'frozen' : context.legacyFallback ? 'legacy-fallback' : 'live'}">
     <div class="scores-outcome-head"><div><div class="section-label">Round Status</div><h2>${escapeHtml(lifecycle)}</h2></div><span class="scores-state-badge">${final ? 'Final' : 'Provisional'}</span></div>
-    <div class="scores-outcome-result">${escapeHtml(outcome)}</div>
+    <div class="scores-outcome-feature-label">${escapeHtml(outcome.label)}</div>
+    <div class="scores-outcome-result" data-scores-outcome="${escapeHtml(outcome.type)}" data-scores-outcome-key="${escapeHtml(outcome.key)}">${escapeHtml(outcome.result)}</div>
     <div class="scores-outcome-meta">${escapeHtml(completion.label)}${legacyFallback ? ' · Legacy saved-round compatibility view' : ''}</div>
     ${topMoney ? `<div class="scores-money-summary"><span>${final ? 'Top final money position' : 'Current money position'}</span><strong>${escapeHtml(topName)} ${formatFinalNetSettlementMoney(topMoney.amount)}</strong></div>` : '<div class="scores-money-summary"><span>Money position</span><strong>Even · no payment currently required</strong></div>'}
     ${warning}
@@ -9713,7 +9878,6 @@ function renderLeaderboard() {
   }
 
   if (playerSummaryHost) playerSummaryHost.innerHTML = buildPlayerSummaryTable(scoresContext.playerRows, 'Player Leaderboard');
-
   const sortedTeams = scoresContext.teamRows;
   const showTeamLeaderboard = hasMultiPlayerTeam(metrics);
   const teamLeaderboardCard = teamBody?.closest('details');
@@ -9818,7 +9982,7 @@ function renderLeaderboard() {
   }
   if (showMomentum && holeMomentum) {
     const chartGameKey = getMomentumChartKeyForRange(activeMomentumGame, activeMomentumRange);
-    holeMomentum.innerHTML = renderMomentumChart(match, metrics, chartGameKey, { range: activeMomentumRange }) || '<div class="tiny">Momentum will appear after a valid completed hole in this view.</div>';
+    holeMomentum.innerHTML = renderMomentumChart(match, metrics, chartGameKey, { range: activeMomentumRange, showPointValues: true }) || '<div class="tiny">Momentum will appear after a valid completed hole in this view.</div>';
   } else if (holeMomentum) {
     holeMomentum.innerHTML = '';
     if (momentumMeta) momentumMeta.textContent = 'Momentum is shown when a Nassau or match play game is in the round.';
@@ -10889,7 +11053,10 @@ function scheduleSharedActiveMatchSyncFromDom({ immediate = false, silent = true
 }
 function buildCloudMatchPayload(match, organizerUserId = null) {
   const createdAt = new Date().toISOString();
-  const courseSnapshot = getCourseSnapshotForMatch(match);
+  const courseSnapshot = { ...(getCourseSnapshotForMatch(match) || {}) };
+  courseSnapshot.statEntryCompletion = Object.fromEntries((match.players || []).flatMap(player =>
+    (player.stats || []).map((stat, idx) => [`${player.playerId}:${idx + 1}`, !!stat?.entryCompleted])
+  ));
   const teams = Array.from({ length: Math.max(1, Number(match.teamCount) || 1) }, (_, idx) => ({
     id: `${match.sharedMatchId || match.id}:team:${idx + 1}`,
     match_id: match.sharedMatchId || match.id,
@@ -11286,6 +11453,7 @@ function hydrateMatchFromCloudBundle(bundle) {
           penaltyStrokes: Number.isFinite(Number(entry.penalty_strokes ?? entry.penaltyStrokes)) ? Number(entry.penalty_strokes ?? entry.penaltyStrokes) : 0,
           upAndDown: !!entry.up_and_down,
           sandy: !!entry.sandy,
+          entryCompleted: !!matchRow?.course_snapshot?.statEntryCompletion?.[`${row.player_id}:${holeNumber}`],
         }, statIdx);
       }),
     })),
@@ -13702,7 +13870,8 @@ function hideRoundCompletePrompt() {
 }
 function showRoundCompletePrompt(match = getActiveMatch()) {
   if (!match || match.status === 'complete') return;
-  if (!isSelectedRoundComplete(match, getTee(match.courseId, match.teeId))) return;
+  const dataCompletion = getRoundDataCompletionState(match);
+  if (!dataCompletion.isReadyToFinish || match.roundFinishPromptDismissedAt) return;
   if (roundCompletePromptShownForMatchId === match.id) return;
   roundCompletePromptShownForMatchId = match.id;
   const selectedCount = getPlayableHoleCount(match, getTee(match.courseId, match.teeId));
@@ -13717,8 +13886,7 @@ function showRoundCompletePrompt(match = getActiveMatch()) {
       finishConfirmArmed = true;
       completeActiveRound();
     } else {
-      currentHole = selectedCount;
-      renderCurrentMatch();
+      reviewFinalHoleFromPrompt();
     }
     return;
   }
@@ -13730,7 +13898,11 @@ function showRoundCompletePrompt(match = getActiveMatch()) {
 }
 function reviewFinalHoleFromPrompt() {
   const match = getActiveMatch();
-  if (match) currentHole = Math.max(1, getRequestedHoleCount(match));
+  if (match) {
+    currentHole = Math.max(1, getRequestedHoleCount(match));
+    match.roundFinishPromptDismissedAt = match.roundFinishPromptDismissedAt || new Date().toISOString();
+    persist({ skipRender: true });
+  }
   hideRoundCompletePrompt();
   renderCurrentMatch();
 }
@@ -13755,6 +13927,7 @@ function syncFinishRoundUi(match = getActiveMatch()) {
   const hasMatch = !!match;
   const activeRound = hasActiveRound(match);
   const reopenedEdit = !!match?.previousCompletedAt;
+  const dataCompletion = hasMatch && !isComplete ? getRoundDataCompletionState(match) : null;
   const show = (el, visible) => {
     if (!el) return;
     el.classList.toggle('hidden', !visible);
@@ -13770,13 +13943,16 @@ function syncFinishRoundUi(match = getActiveMatch()) {
   show(setupFinishBtn, false);
   show(setupConfirmBtn, false);
   show(postRoundInline, hasMatch && isComplete);
-  if (scoreboardFinishBtn) scoreboardFinishBtn.textContent = reopenedEdit ? 'Save / End Round' : 'Finish / End Round';
+  if (scoreboardFinishBtn) scoreboardFinishBtn.textContent = reopenedEdit
+    ? 'Save / End Round'
+    : dataCompletion?.isReadyToFinish ? 'Ready to Finish' : 'End Round Early';
   if (postRoundInlineText && hasMatch && isComplete) postRoundInlineText.textContent = `${completedHoles(match)} holes completed. What would you like to do next?`;
   if (scoreboardRoundActions) scoreboardRoundActions.classList.toggle('no-active-round', !activeRound && !isComplete);
   if (scoreboardRoundState) {
     if (!activeRound && !isComplete) scoreboardRoundState.textContent = 'No active round. Start scoring to generate reports and summaries.';
     else if (isComplete) scoreboardRoundState.textContent = 'Round complete. Next-step options are available below.';
     else if (reopenedEdit) scoreboardRoundState.textContent = 'Editing previously completed round. Finish / End Round will overwrite the saved round.';
+    else if (dataCompletion?.scoresComplete && !dataCompletion.isReadyToFinish) scoreboardRoundState.textContent = `All scores entered · ${describeRoundDataCompletion(dataCompletion)}.`;
     else scoreboardRoundState.textContent = `${completedHoles(match)}/${getRequestedHoleCount(match)} holes completed.`;
   }
 }
@@ -13815,7 +13991,8 @@ function showRoundEndPrompt(mode, match = getActiveMatch()) {
   }
   if (mode === 'early') {
     title.textContent = 'End Round Early?';
-    text.textContent = `${completed} of ${requested} holes completed. Why did the round end early?`;
+    const dataCompletion = getRoundDataCompletionState(match);
+    text.textContent = `${completed} of ${requested} holes completed. ${describeRoundDataCompletion(dataCompletion)}. Finishing now may leave reports or settlements provisional. Why did the round end early?`;
     if (reasonBox) {
       reasonBox.classList.remove('hidden');
       const currentReason = String(match.roundEndReason || 'darkness');
@@ -13848,8 +14025,7 @@ function handleScoreboardFinishEndRound() {
 }
 function getFinishRoundRoutingMode(match, metrics = null) {
   if (!match) return 'early';
-  const completion = getRoundCompletionState(match, metrics || computeMatchMetrics(match));
-  return completion.isComplete ? 'complete' : 'early';
+  return getRoundDataCompletionState(match, metrics || computeMatchMetrics(match)).isReadyToFinish ? 'complete' : 'early';
 }
 function handleRoundEndPrimary() {
   const match = getActiveMatch();
@@ -14436,7 +14612,9 @@ function buildMomentumPresentation(match, metrics, gameKey, { range = 'full' } =
   }
   if (!series.length || series.some(row => !Number.isFinite(row.value))) return null;
   const last = Number(series[series.length - 1].value) || 0;
-  const perspective = last > 0 ? 1 : last < 0 ? 2 : (Number(match.momentumPerspective || 1) === 2 ? 2 : 1);
+  // The golfer's selected perspective is authoritative. Do not silently
+  // flip the chart back to whichever side currently leads.
+  const perspective = Number(match.momentumPerspective || 1) === 2 ? 2 : 1;
   const oriented = series.map(row => ({ ...row, value: perspective === 1 ? row.value : -row.value }));
   return { gameKey, baseGameKey, range, sourceSeries: series, series: oriented, perspective, upperLabel: labels[perspective - 1], lowerLabel: labels[perspective === 1 ? 1 : 0], tied: last === 0 };
 }
@@ -14457,7 +14635,7 @@ function getMomentumYAxisScale(values, { compact = false } = {}) {
   const ticks = compact ? [-bound, 0, bound] : fullTicks;
   return { maxAbs, bound, step, ticks };
 }
-function renderMomentumChart(match, metrics, gameKey, { compact = false, range = 'full' } = {}) {
+function renderMomentumChart(match, metrics, gameKey, { compact = false, range = 'full', showPointValues = false } = {}) {
   const model = buildMomentumPresentation(match, metrics, gameKey, { range });
   if (!model) return '';
   const scale = getMomentumYAxisScale(model.series.map(row => row.value), { compact });
@@ -14469,7 +14647,7 @@ function renderMomentumChart(match, metrics, gameKey, { compact = false, range =
   const points = model.series.map((row, index) => `${x(index)},${y(row.value)}`).join(' ');
   const labels = model.series.map((row, index) => `<text x="${x(index)}" y="${height - 8}" text-anchor="middle">H${row.holeNumber}</text>`).join('');
   const dots = model.series.map((row, index) => `<circle cx="${x(index)}" cy="${y(row.value)}" r="${compact ? 3 : 4}" class="momentum-chart-dot"/>`).join('');
-  const valueLabels = model.baseGameKey === 'nassau' ? model.series.map((row, index) => {
+  const valueLabels = (model.baseGameKey === 'nassau' || showPointValues) ? model.series.map((row, index) => {
     const label = row.value === 0 ? 'E' : row.value > 0 ? `+${row.value}` : String(row.value);
     const labelY = Math.max(12, Math.min(height - bottom - 7, y(row.value) + (row.value > 0 ? -9 : 15)));
     return `<text x="${x(index)}" y="${labelY}" text-anchor="middle" class="momentum-point-value" data-momentum-value="${row.value}">${label}</text>`;
@@ -14510,7 +14688,7 @@ function getMomentumChartKeyForRange(gameKey, range) {
 function buildQuickScoreboardMomentumCharts(match, metrics, expanded = false) {
   const eligible = getOrderedSelectedGames(match).flatMap(game => game.key === 'nassau' ? ['nassau_front', ...((metrics.holeResults || []).length > 9 ? ['nassau_back'] : []), 'nassau_overall'] : [game.key]).filter(key => ['nassau_front', 'nassau_back', 'nassau_overall', 'team_match', 'singles_match', 'sneaky_sandy_poley'].includes(key));
   const cards = [...new Set(eligible)].map(key => {
-    const chart = renderMomentumChart(match, metrics, key, { compact: true });
+    const chart = renderMomentumChart(match, metrics, key, { compact: true, showPointValues: true });
     if (!chart) return '';
     const label = key === 'sneaky_sandy_poley' ? 'SSP' : key.startsWith('nassau_') ? `${key.split('_')[1][0].toUpperCase() + key.split('_')[1].slice(1)} Nassau Momentum` : getGameLabel(key);
     return `<div class="quick-momentum-card"><strong>${escapeHtml(label)}</strong>${chart}</div>`;
@@ -16185,11 +16363,21 @@ function populateMatchPlayerPicker(selected = []) {
 
 function closePlayerCombobox(inputEl, { restoreInvalid = true } = {}) {
   if (!inputEl) return false;
+  // A selection or clear rebuilds the assignment rows. Ignore the delayed
+  // focusout from the detached input so it cannot restore stale slot data.
+  if (inputEl.isConnected === false) return false;
   const slot = Number(inputEl.dataset.playerComboboxSlot);
   const hidden = document.querySelector(`[data-player-slot="${slot}"]`);
   if (!hidden) return false;
   const match = getPlayerByLookupLabel(inputEl.value, getSelectablePlayersForDraftSlot(state.players, getMatchPlayerDraft(), slot));
-  if (match) assignPlayerToSlot(slot, match.id, { preserveFocus: true });
+  const currentPlayerId = String(hidden.value || '');
+  if (match && String(match.id) !== currentPlayerId) {
+    assignPlayerToSlot(slot, match.id, { preserveFocus: false });
+  } else if (match) {
+    // Closing an unchanged field must not rebuild the picker or recapture focus.
+    // The user must remain free to move directly to any player, tee, or setup control.
+    inputEl.value = getPlayerLookupLabel(match);
+  }
   else if (restoreInvalid) {
     const current = getPlayer(hidden.value);
     inputEl.value = current ? getPlayerLookupLabel(current) : '';
@@ -16237,7 +16425,7 @@ function selectPlayerComboboxOption(option, assign = assignPlayerToSlot) {
   const row = option.closest?.('[data-assignment-slot]');
   if (!Number.isInteger(slot) || slot < 0 || !playerId || Number(row?.dataset.assignmentSlot) !== slot) return false;
   option.dataset.playerSelectionHandled = 'true';
-  assign(slot, playerId, { preserveFocus: true });
+  assign(slot, playerId, { preserveFocus: false });
   return true;
 }
 
@@ -16251,7 +16439,7 @@ function handlePlayerComboboxClearPointerDown(event, assign = assignPlayerToSlot
   const clear = event.target.closest?.('[data-clear-player-slot]');
   if (!clear || (event.pointerType === 'mouse' && event.button !== 0)) return false;
   event.preventDefault();
-  assign(Number(clear.dataset.clearPlayerSlot), '', { preserveFocus: true });
+  assign(Number(clear.dataset.clearPlayerSlot), '', { preserveFocus: false });
   return true;
 }
 
@@ -18253,12 +18441,13 @@ function installHandlers() {
       return;
     }
     const clear = e.target.closest('[data-clear-player-slot]');
-    if (clear) assignPlayerToSlot(Number(clear.dataset.clearPlayerSlot), '', { preserveFocus: true });
+    if (clear) assignPlayerToSlot(Number(clear.dataset.clearPlayerSlot), '', { preserveFocus: false });
   });
   matchPlayersPickerEl.addEventListener('focusout', e => {
     const input = e.target.closest('[data-player-combobox-slot]');
     if (!input) return;
     window.setTimeout(() => {
+      if (!input.isConnected) return;
       const row = input.closest('[data-assignment-slot]');
       if (row && !row.contains(document.activeElement)) closePlayerCombobox(input, { restoreInvalid: true });
     }, 0);
@@ -19155,6 +19344,19 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       match.holeFirstCompletedAt = match.holeFirstCompletedAt && typeof match.holeFirstCompletedAt === 'object' ? match.holeFirstCompletedAt : {};
       const nowCompleteAfterSave = (match.players || []).length > 0 && (match.players || []).every(mp => Number(mp?.scores?.[currentHole - 1]?.gross) > 0);
       if (nowCompleteAfterSave) {
+        if (isStatTrackingEnabled(match)) {
+          const trackedIds = new Set(getStatTrackingParticipantIds(match));
+          const editableStatIds = new Set([...document.querySelectorAll('input[data-stat-player][data-stat-key]')]
+            .filter(input => !input.disabled)
+            .map(input => String(input.dataset.statPlayer || ''))
+            .filter(Boolean));
+          (match.players || []).forEach(player => {
+            if (!trackedIds.has(String(player.playerId)) || !editableStatIds.has(String(player.playerId))) return;
+            const stat = normalizeHoleStat(player.stats?.[currentHole - 1] || {}, currentHole - 1);
+            stat.entryCompleted = true;
+            player.stats[currentHole - 1] = stat;
+          });
+        }
         if (!match.playedHoleOrder.map(Number).includes(Number(actualHoleNumber))) match.playedHoleOrder.push(Number(actualHoleNumber));
         recordHoleFirstCompletedAt(match, actualHoleNumber);
         const sspCfg = getSneakySandyPoleyConfig(match);
@@ -19199,8 +19401,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (!silent) toast(hostOverridePlayers && hostOverridePlayers.length ? `Host updated Hole ${savedHole} score.` : `Hole ${savedHole} saved.`);
     const savedHoleWasFinalInSequence = sequence.length > 0 && sequence[sequence.length - 1] === savedPosition;
     if (!wasCompleteBeforeSave && savedHoleWasFinalInSequence && !nextHoleInSequence) {
-      if (isSelectedRoundComplete(match, teeForNavigation)) showRoundCompletePrompt(match);
-      else showRoundEndPrompt('early', match);
+      const dataCompletion = getRoundDataCompletionState(match);
+      if (dataCompletion.isReadyToFinish) showRoundCompletePrompt(match);
+      else if (dataCompletion.scoresComplete) toast(`All scores entered. ${describeRoundDataCompletion(dataCompletion)}.`, 5200);
     }
     return true;
   }
@@ -20146,6 +20349,10 @@ function installDyeLedgerLiveEngineAdapter() {
     buildQuickPlayerScoreSummary,
     buildPlayerSummaryRows,
     buildPlayerSummaryTable,
+    buildScoringByParRows,
+    buildScoringByParSummary,
+    buildStatTrackingSummary,
+    buildUnifiedExportDocument,
     buildQuickScoreDistribution,
     getTeamDisplayName,
     getActiveScoringPosition,
@@ -20210,6 +20417,8 @@ function installDyeLedgerLiveEngineAdapter() {
     getRoundElapsedTimeState,
     formatRoundWeatherDisplay,
     getRoundCompletionState,
+    getRoundDataCompletionState,
+    describeRoundDataCompletion,
     getFinishRoundRoutingMode,
     normalizeJoinMatchCode,
     generateSharedMatchCode,
@@ -20223,6 +20432,7 @@ function installDyeLedgerLiveEngineAdapter() {
     reconcileSharedGreenies,
     buildRoundStatusSummary,
     getFeaturedCompetitionResult,
+    getScoresFeaturedOutcome,
     buildClassicScorecard,
     handleTableScrollRegionKeydown,
   };

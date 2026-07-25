@@ -44,7 +44,7 @@ function count(value, pattern) {
   return (String(value).match(pattern) || []).length;
 }
 
-test('Classic Scorecard has one shared focusable scroller with sticky descriptive columns and complete 18-hole totals', () => {
+test('Classic Scorecard has one shared focusable scroller with only Player sticky and complete 18-hole totals', () => {
   const { engine, match, metrics } = fixture(18);
   const classic = engine.buildClassicScorecard(match, metrics, { readOnly: true });
   assert.equal(count(classic, /data-scroll-table="classic-scorecard"/g), 1);
@@ -55,7 +55,8 @@ test('Classic Scorecard has one shared focusable scroller with sticky descriptiv
   assert.match(classic, /scorecard-sticky-team/);
   assert.match(css, /\.scorecard-table\{width:100%;border-collapse:separate;border-spacing:0;min-width:1080px/);
   assert.match(css, /\.quick-classic-scorecard \.scorecard-sticky-team\{[^}]*min-width:96px[^}]*max-width:96px/);
-  assert.match(css, /\.quick-classic-scorecard \.scorecard-table th:nth-child\(2\)[^}]*\{left:128px\}/);
+  assert.match(css, /\.scorecard-table:not\(\.nine-point-scorecard-table\) tbody \.scorecard-sticky-team\{[^}]*position:static!important/);
+  assert.match(css, /\.scorecard-table:not\(\.nine-point-scorecard-table\) \.scorecard-sticky-name\{[^}]*left:0!important/);
 });
 
 test('9-hole and completed historical Quick Scoreboards retain one bounded Classic Scorecard scroller', () => {
@@ -125,15 +126,15 @@ function sha256(bytes) {
 }
 
 test('header, Apple, desktop PWA, favicon, worker cache, and branding documentation agree without changing artwork bytes', () => {
-  assert.match(htmlSource, /<img src="\.\/branding\/apple-touch-icon\.png" alt="The Dye Ledger"/);
+  assert.match(htmlSource, /<img src="\.\/branding\/apple-touch-icon-v30\.3\.77\.png" alt="The Dye Ledger"/);
   assert.equal(count(htmlSource, /rel="apple-touch-icon"/g), 1);
-  assert.match(htmlSource, /rel="apple-touch-icon"[^>]+href="\.\/branding\/apple-touch-icon\.png"/);
+  assert.match(htmlSource, /rel="apple-touch-icon"[^>]+href="\.\/branding\/apple-touch-icon-v30\.3\.77\.png"/);
   assert.doesNotMatch(htmlSource, /brand-mark[\s\S]{0,200}app-icon-192/);
 
   const expected = [
-    ['./branding/app-icon-192.png?v=30.3.76&rev=1', '192x192'],
-    ['./branding/app-icon-512.png?v=30.3.76&rev=1', '512x512'],
-    ['./branding/apple-touch-icon.png', '180x180'],
+    ['./branding/app-icon-192-v30.3.77.png', '192x192'],
+    ['./branding/app-icon-512-v30.3.77.png', '512x512'],
+    ['./branding/apple-touch-icon-v30.3.77.png', '180x180'],
   ];
   assert.deepEqual(manifest.icons.map(icon => [icon.src, icon.sizes]), expected);
   for (const [src, sizes] of expected) {
@@ -145,18 +146,18 @@ test('header, Apple, desktop PWA, favicon, worker cache, and branding documentat
     assert.deepEqual(pngDimensions(bytes), { width, height });
     assert.match(worker, new RegExp(src.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
-  assert.match(worker, /cacheName: 'the-dye-ledger-v30\.3\.76'/);
-  assert.match(htmlSource, /favicon-32\.png\?v=30\.3\.76&amp;rev=1/);
-  assert.match(htmlSource, /favicon-16\.png\?v=30\.3\.76&amp;rev=1/);
+  assert.match(worker, /cacheName: 'the-dye-ledger-v30\.3\.77'/);
+  assert.match(htmlSource, /favicon-32-v30\.3\.77\.png/);
+  assert.match(htmlSource, /favicon-16-v30\.3\.77\.png/);
 
   const master = readFileSync(new URL('../branding/app-icon-master.png', import.meta.url));
   const desktop512 = readFileSync(new URL('../branding/app-icon-512.png', import.meta.url));
-  assert.equal(sha256(master), sha256(desktop512));
-  assert.equal(sha256(desktop512), '1b0a37cd22c82572c8f078e8e951a69838052eaa886ad79019393dfaa423eb38');
-  assert.equal(sha256(readFileSync(new URL('../branding/app-icon-192.png', import.meta.url))), 'faaa29cf23395b54f256a378040692fa1c20f32aa86892c894ae8dd6b6203965');
-  assert.equal(sha256(readFileSync(new URL('../branding/apple-touch-icon.png', import.meta.url))), '5cb89e80dc9037f063f6f4c0eab700c5154ee1625033d2ae4ec445618d090507');
-  assert.match(branding, /Desktop PWA 192 icon/);
-  assert.match(branding, /Desktop PWA 512 icon/);
+  assert.equal(sha256(master), 'bc5e2a77364395f3030c3a97d89d2383bd925247c5edfb49a9737c24fa246514');
+  assert.equal(sha256(desktop512), 'cf38a69e46161df04d4c6ead7f3ffc6a8cdd70ae68ce447ca1eb160cd0895fac');
+  assert.equal(sha256(readFileSync(new URL('../branding/app-icon-192.png', import.meta.url))), '3494cd99e97f7385f6f037e224182b6f683b2c6d9146e532e24237cd58f23399');
+  assert.equal(sha256(readFileSync(new URL('../branding/apple-touch-icon.png', import.meta.url))), 'd38a80dad54f65b47c46eef6c952e02f8fbf94d8b52338a567dcb4664224ba95');
+  assert.match(branding, /Desktop PWA 192 source/);
+  assert.match(branding, /Desktop PWA 512 source/);
   assert.match(branding, /uninstall and reinstall/i);
   assert.match(branding, /favicon may remain cached separately/i);
 });

@@ -175,26 +175,26 @@ Recent releases:
 - v30.3.41 — Effortless Scoring Polish
 - v30.3.42 — Duplicate Course Dropdown Fix and initial documentation work
 
-Current release implementation (updated July 22, 2026):
+Current release implementation (updated July 23, 2026):
 
 ```text
-v30.3.75 — Identity & Security Foundation
+v30.3.77 — PWA Branding & Round Completion Reliability
 ```
 
 ## 8. Near-Term Roadmap
 
-1. v30.3.75 — Identity & Security Foundation
-2. Scoring & Setup Polish
-   - move Exit Round Early lower
-   - add 200 ms to Smart Score Advance timing options
-3. Player Preferences Foundation
-4. Competition Engine Audit & Hardening
-5. Foundational Games Expansion
+1. v30.3.77 — PWA Branding & Round Completion Reliability
+2. Shared Match Summary & Player Insights
+3. Beta Account Activation
+4. Cloud Security & Ownership Activation
+5. Amendment Sessions
+6. Competition Engine Audit & Hardening
+7. Foundational Games Expansion
    - Wolf
    - Sixes / Round Robin
    - Best Ball
-6. Production Hardening & Diagnostics
-7. Event Edition Foundation
+8. Production Hardening & Diagnostics
+9. Event Edition Foundation
 
 ## 9. Foundational Games
 

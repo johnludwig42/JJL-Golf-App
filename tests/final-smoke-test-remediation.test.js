@@ -70,7 +70,7 @@ test('mouse and touch pointerdown select once through the authoritative option h
     };
     assert.equal(engine.handlePlayerComboboxOptionPointerDown(event, (...args) => calls.push(args)), true);
     assert.equal(prevented, 1);
-    assert.deepEqual(JSON.parse(JSON.stringify(calls)), [[pointerType === 'mouse' ? 0 : 2, `${pointerType}-player`, { preserveFocus: true }]]);
+    assert.deepEqual(JSON.parse(JSON.stringify(calls)), [[pointerType === 'mouse' ? 0 : 2, `${pointerType}-player`, { preserveFocus: false }]]);
     assert.equal(engine.selectPlayerComboboxOption(candidate, (...args) => calls.push(args)), false);
     assert.equal(calls.length, 1, 'the subsequent activation must not assign twice');
   }

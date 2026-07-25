@@ -6,6 +6,20 @@ This document records engineering and product-architecture decisions that are co
 
 Codex should read this file before making engineering changes.
 
+## 2026-07-23 — Automatic finish requires data completeness
+
+- Gross-score completion is necessary but not sufficient for the automatic finish offer.
+- Enabled tracked-stat entries and unresolved SSP facts participate in readiness; disabled features do not.
+- The automatic prompt is offered once and dismissal is persisted on the local Round.
+- End Round Early remains manual and reports unresolved information.
+- This changes presentation and readiness only; existing scoring, settlement, and finalization remain authoritative.
+
+## 2026-07-23 — PWA branding assets are immutable per release
+
+- Canonical source artwork remains in `branding/`.
+- Every release creates immutable, version-named derivatives and updates the manifest, HTML, and service-worker references together.
+- Previously released versioned assets are never overwritten.
+
 The purpose of this document is to prevent accidental redesign, repeated debate, and inconsistent implementation.
 
 ---

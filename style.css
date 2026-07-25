@@ -21,6 +21,7 @@
 .scores-outcome-head h2{margin:3px 0 0;font-size:clamp(20px,4vw,30px)}
 .scores-state-badge{display:inline-flex;padding:6px 10px;border-radius:999px;background:#e8f3ed;color:#0b5d3b;font-weight:850;white-space:nowrap}
 .scores-outcome-result{font-size:clamp(22px,5vw,38px);line-height:1.08;font-weight:900;overflow-wrap:anywhere}
+.scores-outcome-feature-label{color:var(--accent);font-size:.78rem;font-weight:900;letter-spacing:.04em;text-transform:uppercase}
 .scores-outcome-meta{color:var(--muted)}
 .scores-money-summary{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;border-top:1px solid var(--border);padding-top:10px}
 .scores-money-summary span{color:var(--muted);font-size:12px}.scores-money-summary strong{text-align:right;font-variant-numeric:tabular-nums}
@@ -2524,8 +2525,8 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
   #score .score-step-btn{width:28px!important;min-width:28px!important;height:32px!important;font-size:16px!important}
   .catch-up-scoring-bar{align-items:stretch;flex-direction:column}.catch-up-actions{display:grid;grid-template-columns:1fr 1fr}.catch-up-actions button{width:100%}
   .quick-scoreboard-body{gap:14px}.quick-game-row{grid-template-columns:minmax(0,.7fr) minmax(0,1.8fr)}
-  .quick-player-table th:first-child,.quick-player-table td:first-child{width:8%}.quick-player-table th:nth-child(2),.quick-player-table td:nth-child(2){width:38%}
-  .quick-player-table th:nth-child(3),.quick-player-table td:nth-child(3),.quick-player-table th:nth-child(4),.quick-player-table td:nth-child(4),.quick-player-table th:nth-child(5),.quick-player-table td:nth-child(5){width:18%}
+  .quick-player-table th:first-child,.quick-player-table td:first-child{width:7%}.quick-player-table th:nth-child(2),.quick-player-table td:nth-child(2){width:29%}
+  .quick-player-table th:nth-child(n+3),.quick-player-table td:nth-child(n+3){width:16%;text-align:center}
   .match-status-tile-primary{grid-column:auto}
   .round-record-hero{padding:15px 13px}.round-record-result{font-size:clamp(22px,8vw,31px);line-height:1.05}
   .round-record-settle{gap:7px}.settle-up-chip{white-space:normal;line-height:1.25}
@@ -5676,11 +5677,11 @@ html.quick-scoreboard-open,body.quick-scoreboard-open{overflow:hidden!important;
 .quick-scoreboard-table th{font-size:.72rem;text-transform:uppercase;color:var(--muted);background:#f7faf8;}
 .quick-scoreboard-table tr:last-child td{border-bottom:0;}
 .quick-player-table th:first-child,.quick-player-table td:first-child{width:7%;text-align:center;padding-left:3px;padding-right:3px;}
-.quick-player-table th:nth-child(2),.quick-player-table td:nth-child(2){width:35%;}
+.quick-player-table th:nth-child(2),.quick-player-table td:nth-child(2){width:29%;}
 .quick-player-table th:nth-child(3),.quick-player-table td:nth-child(3),
 .quick-player-table th:nth-child(4),.quick-player-table td:nth-child(4),
 .quick-player-table th:nth-child(5),.quick-player-table td:nth-child(5),
-.quick-player-table th:nth-child(6),.quick-player-table td:nth-child(6){width:14.5%;text-align:right;font-variant-numeric:tabular-nums;}
+.quick-player-table th:nth-child(6),.quick-player-table td:nth-child(6){width:16%;text-align:center;font-variant-numeric:tabular-nums;}
 .player-summary-table td:nth-child(2){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.player-summary-table th:nth-child(n+3),.player-summary-table td:nth-child(n+3){padding-left:4px;padding-right:4px}
 .quick-team-table th:first-child,.quick-team-table td:first-child{width:52%;}
 .quick-team-table th:nth-child(2),.quick-team-table td:nth-child(2),
@@ -5809,4 +5810,63 @@ html.quick-scoreboard-open,body.quick-scoreboard-open{overflow:hidden!important;
   #score .gross-score-stepper{width:94px!important;max-width:94px!important;gap:2px!important}
   #score .gross-score-stepper .score-input{width:34px!important;min-width:34px!important;max-width:34px!important;height:34px!important;min-height:34px!important}
   #score .score-step-btn{width:28px!important;min-width:28px!important;height:32px!important;font-size:16px!important}
+}
+
+/* v30.3.77 Classic Scorecard horizontal-scroll refinement:
+   keep Player visible while Team and all result columns pass beneath it. */
+@media screen {
+  .scorecard-table:not(.nine-point-scorecard-table) tbody .scorecard-sticky-team{
+    position:static!important;
+    left:auto!important;
+    z-index:auto!important;
+    box-shadow:none!important;
+  }
+  .scorecard-table:not(.nine-point-scorecard-table) thead .scorecard-sticky-team{
+    position:sticky!important;
+    top:0;
+    left:auto!important;
+    z-index:4!important;
+    box-shadow:none!important;
+  }
+  .scorecard-table:not(.nine-point-scorecard-table) .scorecard-sticky-name{
+    left:0!important;
+    z-index:6!important;
+    background:#fff!important;
+    box-shadow:6px 0 10px -8px rgba(0,0,0,.24)!important;
+  }
+  .scorecard-table:not(.nine-point-scorecard-table) thead .scorecard-sticky-name{
+    z-index:7!important;
+    background:#f4f8f6!important;
+  }
+}
+
+/* v30.3.77 round scoring averages by hole par */
+.scoring-by-par-status{margin-bottom:8px;color:var(--muted);font-weight:750}
+.scoring-by-par-scroll{border:1px solid var(--border);border-radius:12px;background:#fff}
+.scoring-by-par-table{width:100%;border-collapse:collapse;font-size:.84rem}
+.scoring-by-par-table th,.scoring-by-par-table td{padding:10px 9px;border-bottom:1px solid var(--border);text-align:center;white-space:nowrap}
+.scoring-by-par-table th:first-child,.scoring-by-par-table td:first-child{text-align:left;font-weight:800}
+.scoring-by-par-table tbody tr:last-child td{border-bottom:0}
+.scoring-by-par-stats{margin-top:18px}
+.scoring-by-par-summary-compact .scoring-by-par-table{table-layout:fixed}
+.scoring-by-par-summary-compact .scoring-by-par-table th:first-child,
+.scoring-by-par-summary-compact .scoring-by-par-table td:first-child{width:40%}
+.scoring-by-par-summary-compact .scoring-by-par-table th:not(:first-child),
+.scoring-by-par-summary-compact .scoring-by-par-table td:not(:first-child){width:20%;font-variant-numeric:tabular-nums}
+.scoring-by-par-cards{display:none}
+@media (max-width:760px){
+  .scoring-by-par-scroll{display:none}
+  .scoring-by-par-summary-compact .scoring-by-par-scroll{display:block}
+  .scoring-by-par-summary-compact .scoring-by-par-table th,
+  .scoring-by-par-summary-compact .scoring-by-par-table td{padding:9px 5px;font-size:.8rem}
+  .scoring-by-par-cards{display:grid;gap:9px}
+  .scoring-by-par-card{padding:11px;border:1px solid var(--border);border-radius:12px;background:#fff;display:grid;gap:8px}
+  .scoring-by-par-card>strong{font-size:.95rem}
+  .scoring-by-par-card>div{display:grid;grid-template-columns:52px minmax(0,1fr);gap:8px;align-items:baseline}
+  .scoring-by-par-card span{color:var(--muted);font-size:.78rem;font-weight:800}
+  .scoring-by-par-card b{font-size:.84rem;font-variant-numeric:tabular-nums}
+}
+@media print{
+  .scoring-by-par-cards{display:none!important}
+  .scoring-by-par-scroll{display:block!important}
 }

@@ -489,24 +489,57 @@ Status: Locked.
 
 ---
 
+### 30. Use intent-based navigation and progressive disclosure
+
+As product capability grows, major golfer workflows must not expose implementation structure as one long form or one undifferentiated page.
+
+For complex workflows:
+
+* begin with a concise overview of state, readiness, and the next action
+* use focused drill-in destinations rather than a rigid wizard
+* allow destinations to be visited in any order unless the domain truly requires sequencing
+* autosave reversible draft selections
+* keep one authoritative validation contract
+* route validation issues directly to the affected control
+* show human-facing summaries and move diagnostics behind troubleshooting affordances
+* use strong Preferences-derived defaults while making deviations visible and reversible
+
+Navigation redesigns must preserve domain calculations, historical facts, persistence, Shared Match authority, and backward compatibility unless those changes are separately approved.
+
+Status: Locked.
+
+---
+
+### 31. Nearby-course discovery is contextual and privacy-preserving
+
+Course & Round may offer nearby-course suggestions, but location access must be initiated by an explicit golfer action in that context. The app must not request location on launch, continuously track location, log raw coordinates, attach location history to an Account, or require location for Match Setup or scoring.
+
+Approximate location is sufficient. Denied permission, unavailable service, and offline operation must fall back to recent, favorite, saved, and searchable courses without degrading local scoring.
+
+Canonical course coordinates require provenance and correction support. On-device sorting of saved courses is preferred when trustworthy coordinates already exist. Nearby-course discovery remains architecturally separate from future live hole GPS or shot tracking.
+
+Status: Locked.
+
+---
+
 ## Future Roadmap Ordering
 
 The current strategic order is:
 
-1. Product Acceptance hardening
-2. Shared Match trust
-3. scoring and iPhone PWA confidence
-4. competition regression harness
-5. Quick Match / setup simplification
-6. Player Preferences Foundation
-7. reporting and storytelling polish
-8. Competition Engine completion
+1. Shared Match Summary and analytics clarity
+2. Match Setup navigation and readiness
+3. Competition Rules Contract and handicap hardening
+4. Beta Account and cloud ownership activation
+5. Play/Shared Match language, accessibility, and production confidence
+6. Amendment Sessions
+7. Library and Courses navigation
+8. Foundational Games expansion
 
    * Wolf
    * Sixes / Round Robin
    * Best Ball
 9. Event Edition
-10. Press Engine, Memory System, historical analytics, AI season/event recaps, and other strategic features
+10. Memory System, historical analytics, AI season/event recaps, and other strategic features
 
 Status: Current planning assumption.
 

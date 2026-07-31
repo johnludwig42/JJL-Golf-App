@@ -239,16 +239,19 @@ A golfer near the first tee may face too many decisions:
 
 ### Near-term direction
 
-Create a Quick Match or simplified setup path.
+Replace the single long setup form with a hub-and-spoke navigation model in v30.3.80.
 
-Likely flow:
+The clean landing page will summarize five independently accessible destinations:
 
-1. choose course
-2. choose players
-3. choose game preset
-4. start scoring
+1. Course & Round
+2. Players
+3. Games & Stat Tracking
+4. Scoring Control
+5. Advanced Options seeded from Preferences
 
-Everything else should move behind Customize or Advanced.
+This is not a rigid wizard. Golfers may visit sections in any order, selections autosave into one draft, and the landing page owns readiness, linked validation guidance, and Start Round. Existing calculation, persistence, Shared Match, template, and validation contracts remain authoritative during the navigation redesign.
+
+Status: Scheduled for v30.3.80.
 
 Status: Should address before Version 1.0.
 

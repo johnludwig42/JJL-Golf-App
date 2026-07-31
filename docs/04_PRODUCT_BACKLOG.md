@@ -21,6 +21,36 @@ Priority labels:
 - Engineer today's features so they naturally evolve into tomorrow's multi-tenant platform.
 - Statistics should become insights, and insights should become coaching.
 - The product should solve problems competitors do not solve, rather than chasing feature parity.
+- Complex workflows should begin with a quiet overview and reveal detail only when it becomes useful.
+- Product navigation should reflect golfer intent rather than database, component, or implementation structure.
+- Routine selections should autosave and remain reversible; confirmation is reserved for destructive, historical, or financially consequential actions.
+
+## 0. Product UX Program
+
+NOW:
+
+- v30.3.79: distinguish the roles of Scores, Quick Scoreboard, and Match Summary while improving summary hierarchy, iPhone readability, and round analytics.
+- v30.3.80: replace the long Match Setup form with an overview and focused Course & Round, Players, Games & Stat Tracking, Scoring Control, and Advanced Options destinations.
+- Design Course & Round around Recent, Favorites, Nearby, and Search. Request location only after the golfer chooses Show Nearby Courses; location remains optional and never blocks setup or scoring.
+- Match Setup remains non-linear: sections can be visited in any order, use one persisted draft, and share one authoritative Start Round validation contract.
+
+NEXT:
+
+- v30.3.81: make every configured game state its basis, scoring method, allowance, tie/carryover behavior, stake meaning, Press behavior, and finality contract.
+- Simplify Play into an instrument panel centered on the current hole, featured competition, required inputs, and next action.
+- Keep Quick Scoreboard intentionally concise rather than duplicating the complete Scores experience.
+- Replace technical Shared Match language with human states such as Hosting, Joined, Waiting, Needs Review, and Synchronized; retain diagnostics behind troubleshooting.
+- Attach restrained Account UX to Beta Account Activation, including explicit local-versus-cloud guidance.
+- Attach Library and Courses information-architecture work to their later ownership/catalog releases instead of redesigning them twice.
+- In the Library and Courses release, add canonical latitude/longitude, provenance, correction controls, and catalog-backed nearby discovery. Permit on-device distance sorting for saved courses when trustworthy coordinates exist.
+
+ACROSS RELEASES:
+
+- Use a controlled status vocabulary.
+- Improve empty states, contextual help, undo, Dynamic Type tolerance, VoiceOver order, contrast, touch targets, and text equivalents for charts.
+- Preserve one dominant primary action per page.
+- Avoid a whole-app visual rewrite; simplify one complete workflow per release.
+- Never continuously track golfers for nearby-course discovery. Do not log coordinates or attach raw location history to an Account.
 
 ## 1. Play Experience
 

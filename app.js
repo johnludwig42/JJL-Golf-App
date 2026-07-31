@@ -13,9 +13,9 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.78',
-  versionNumber: '30.3.78',
-  cacheName: 'the-dye-ledger-v30.3.78',
+  version: 'v30.3.79',
+  versionNumber: '30.3.79',
+  cacheName: 'the-dye-ledger-v30.3.79',
   buildDate: new Date().toISOString(),
   buildLabel: 'Shared Match Summary & Player Insights'
 };
@@ -5142,7 +5142,8 @@ function ensureRoundRecapMemoryCoverage(match, recapText) {
   return [recap, section].filter(Boolean).join('\n\n');
 }
 function getStoredRoundRecap(match) {
-  return ensureRoundRecapMemoryCoverage(match, String(match?.roundRecapFinal || match?.roundRecapGenerated || match?.roundRecap || '').trim());
+  const stored = String(match?.roundRecapFinal || match?.roundRecapGenerated || match?.roundRecap || '').trim();
+  return stored ? ensureRoundRecapMemoryCoverage(match, stored) : '';
 }
 function getDraftRoundRecap(match) {
   return String(match?.roundRecapGenerated || match?.roundRecap || '').trim();
@@ -5170,10 +5171,11 @@ function formatRoundRecapHtml(text) {
   if (!paragraphs.length) return '';
   return paragraphs.map(p => `<p>${escapeHtml(p)}</p>`).join('');
 }
-function buildRoundRecapExport(match, metrics = null) {
+function buildRoundRecapExport(match, metrics = null, { includeEmpty = false } = {}) {
   const recap = getStoredRoundRecap(match);
-  if (!recap) return '';
+  if (!recap && !includeEmpty) return '';
   const completion = metrics ? getRoundCompletionState(match, metrics) : null;
+  const accepted = !!String(match?.roundRecapFinal || '').trim();
   const incompleteNote = completion?.isIncomplete
     ? `<div class="export-provisional-label">${areAllGamesFinal(match, metrics) ? 'Clinched Early — recap reflects completed holes.' : 'Incomplete Round — recap should be read as provisional.'}</div>`
     : '';
@@ -5181,11 +5183,31 @@ function buildRoundRecapExport(match, metrics = null) {
     <section class="export-section export-section-round-recap">
       <div class="export-section-head">
         <h2>AI Round Recap</h2>
-        <div class="export-section-sub">Story-driven recap centered on the Featured Competition, round notes, memories, scores, games, and stats.</div>
+        <div class="export-section-sub">${recap ? `${accepted ? 'Accepted recap' : 'Draft recap'} centered on the Featured Competition, round notes, memories, scores, games, and stats.` : 'No AI recap has been generated for this round.'}</div>
       </div>
       ${incompleteNote}
-      <div class="export-round-recap-text">${formatRoundRecapHtml(recap)}</div>
+      ${recap ? `<div class="export-round-recap-text">${formatRoundRecapHtml(recap)}</div>` : '<div class="export-empty">Generate and review an AI recap from the Scores tab to include it here. Scores, settlement, and memories remain available below.</div>'}
     </section>`;
+}
+
+function buildMatchSummaryAnalyticsHighlights(match, metrics) {
+  const rows = computePlayerRoundInsights(match, metrics).filter(row => row.totals.scoredHoles > 0);
+  if (!rows.length) return '';
+  const best = (key, direction = 'max', predicate = () => true) => rows
+    .filter(row => predicate(row) && Number.isFinite(Number(row[key])))
+    .sort((a, b) => direction === 'min' ? Number(a[key]) - Number(b[key]) : Number(b[key]) - Number(a[key]))[0] || null;
+  const scoring = best('scoringAverage', 'min');
+  const birdies = best('birdieOrBetterRate');
+  const avoidance = best('bogeyAvoidanceRate');
+  const conversion = best('birdieConversionRate', 'max', row => row.totals.greensInRegulation > 0);
+  const cards = [
+    scoring ? ['Scoring Average', scoring.displayName, Number(scoring.scoringAverage).toFixed(2)] : null,
+    birdies ? ['Birdie or Better', birdies.displayName, formatPlayerInsightPercent(birdies.birdieOrBetterRate)] : null,
+    avoidance ? ['Bogey Avoidance', avoidance.displayName, formatPlayerInsightPercent(avoidance.bogeyAvoidanceRate)] : null,
+    conversion ? ['Birdie Conversion', conversion.displayName, `${formatPlayerInsightPercent(conversion.birdieConversionRate)} (${conversion.totals.convertedGreens}/${conversion.totals.greensInRegulation})`] : null,
+  ].filter(Boolean).map(([label, name, value]) => `<div class="game-summary-card"><div class="game-summary-title">${escapeHtml(label)}</div><div class="game-summary-value">${escapeHtml(name)}</div><div class="game-summary-sub">${escapeHtml(value)}</div></div>`).join('');
+  const completion = getRoundCompletionState(match, metrics);
+  return `<section class="export-section export-section-analytics-highlights"><div class="export-section-head"><h2>Round Analytics</h2><div class="export-section-sub">${completion.isIncomplete ? 'Provisional highlights from completed, scored holes.' : 'Highlights from completed, scored holes.'} Ties use scorecard order; detailed player statistics appear below.</div></div><div class="game-summary-grid">${cards}</div></section>`;
 }
 
 function getPlayerGrossScoreForHole(match, metrics, playerId, holeNumber, selectedHoleIdx = null) {
@@ -5743,7 +5765,7 @@ function buildRoundRecord(match, metrics) {
     players: playerRecords, teams: teamRecords, holes, games, events, transactions,
     pressTransactions: (ctx.payoutGames || []).filter(game => game.meta?.press).flatMap(game => (game.meta.settlement?.transactions || []).map(row => ({ ...clonePlain(row), rootGameId: game.meta.press.rootGameId, pressDepth: game.meta.press.pressDepth }))),
     settlement: { netPositions: Object.fromEntries(Object.entries(ctx.finalTotals || {}).map(([id, amount]) => [String(id), Number(amount || 0)])), payments: transactions, crossFoot: Number(crossFoot.toFixed(2)) },
-    notes: { hostLog: String(match?.roundRecapNotes || ''), photos: clonePlain(match?.roundPhotos || []), weather: clonePlain(match?.roundContext?.weather || null) }
+    notes: { hostLog: String(match?.roundRecapNotes || ''), photos: clonePlain(match?.roundPhotos || []), weather: clonePlain(match?.roundContext?.weather || null), aiRecap: getStoredRoundRecap(match) || null, aiRecapStatus: String(match?.roundRecapFinal || '').trim() ? 'accepted' : (getStoredRoundRecap(match) ? 'draft' : 'none') }
   };
 }
 function isFrozenRoundRecord(record) {
@@ -6541,6 +6563,8 @@ function buildSummaryExportBody(match, metrics) {
   const html = `
     ${exportRoundSnapshotHtml}
     ${buildRoundStorySection(match, metrics, roundRecord)}
+    ${buildRoundRecapExport(match, metrics, { includeEmpty: true })}
+    ${buildMatchSummaryAnalyticsHighlights(match, metrics)}
 
     <section class="export-section export-section-net-payout">
       <div class="export-section-head">
@@ -6551,7 +6575,7 @@ function buildSummaryExportBody(match, metrics) {
     </section>
 
 
-    <section class="export-section export-section-games-summary">
+    <section class="export-section export-section-games-summary export-section-games-summary-after-recap">
       <div class="export-section-head">
         <h2>Game Drivers</h2>
         <div class="export-section-sub">Competition status, stakes, and current economic contribution.</div>
@@ -20483,6 +20507,8 @@ function installDyeLedgerLiveEngineAdapter() {
     buildScoreDistributionPresentation,
     formatYardageValue,
     formatMomentumMoneyValue,
+    buildRoundRecapExport,
+    buildMatchSummaryAnalyticsHighlights,
     buildUnifiedExportDocument,
     buildQuickScoreDistribution,
     getTeamDisplayName,

@@ -175,26 +175,44 @@ Recent releases:
 - v30.3.41 — Effortless Scoring Polish
 - v30.3.42 — Duplicate Course Dropdown Fix and initial documentation work
 
-Current release implementation (updated July 25, 2026):
+Current release implementation (updated July 31, 2026):
 
 ```text
-v30.3.78 — Scores, Summary Usability & Player Insights
+v30.3.79 — Shared Match Summary Optimization & Expanded Round Analytics
 ```
 
 ## 8. Near-Term Roadmap
 
-1. v30.3.78 — Scores, Summary Usability & Player Insights
-2. v30.3.79 — Shared Match Summary Optimization & Expanded Round Analytics
-3. Beta Account Activation
-4. Cloud Security & Ownership Activation
-5. Amendment Sessions
-6. Competition Engine Audit & Hardening
-7. Foundational Games Expansion
+1. v30.3.78 — Scores, Summary Usability & Player Insights (deployed)
+2. v30.3.79 — Shared Match Summary Optimization, Expanded Round Analytics, and clear Scores/Quick Scoreboard roles (in development)
+3. v30.3.80 — Match Setup Navigation & Readiness Redesign
+   - Hub-and-spoke setup overview
+   - Course & Round
+     - Recent, favorite, nearby, and search-ready course discovery
+     - Contextual, golfer-initiated location permission; never required for setup
+   - Players
+   - Games & Stat Tracking
+   - Scoring Control
+   - Advanced Options seeded from Preferences
+4. v30.3.81 — Competition Rules Contract & Handicap Audit
+   - Versioned Game Rules Catalog
+   - WHS calculation precision and game-specific allowances
+   - Explicit Skins carryover and wager contracts
+   - Nassau Gross/Net presentation and Match Play finality wording
+5. Beta Account Activation & Account UX
+6. Cloud Security & Ownership Activation
+7. Play, Shared Match Language, Accessibility & Production Hardening
+8. Amendment Sessions
+9. Library & Courses Navigation
+   - Canonical course coordinates, provenance, correction, and catalog-backed nearby lookup
+   - On-device nearby sorting for saved courses when trustworthy coordinates are available
+10. Foundational Games Expansion
    - Wolf
    - Sixes / Round Robin
    - Best Ball
-8. Production Hardening & Diagnostics
-9. Event Edition Foundation
+11. Event Edition Foundation
+
+UX work follows a progressive-disclosure program rather than a whole-app rewrite. Each release simplifies one complete workflow while preserving local-first storage, scoring truth, Shared Match authority, and backward compatibility. See `docs/UX_PRODUCT_STRATEGY.md`.
 
 ## 9. Foundational Games
 

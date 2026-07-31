@@ -10,11 +10,7 @@ const worker = readFileSync(new URL('../service-worker.js', import.meta.url), 'u
 const manifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
-test('v30.3.78 release identity and immutable PWA assets are consistent', () => {
-  assert.equal(pkg.version, '30.3.78');
-  assert.equal(manifest.version, 'v30.3.78');
-  assert.match(app, /versionNumber:\s*'30\.3\.78'/);
-  assert.match(worker, /cacheName:\s*'the-dye-ledger-v30\.3\.78'/);
+test('v30.3.78 immutable PWA assets remain available after later upgrades', () => {
   const assets = [
     'app-icon-192-v30.3.78.png',
     'app-icon-512-v30.3.78.png',
@@ -23,11 +19,6 @@ test('v30.3.78 release identity and immutable PWA assets are consistent', () => 
     'favicon-16-v30.3.78.png',
   ];
   assets.forEach(name => assert.equal(existsSync(new URL(`../branding/${name}`, import.meta.url)), true));
-  assert.deepEqual(manifest.icons.map(icon => icon.src), [
-    './branding/app-icon-192-v30.3.78.png',
-    './branding/app-icon-512-v30.3.78.png',
-    './branding/apple-touch-icon-v30.3.78.png',
-  ]);
 });
 
 test('hole navigation scrolls to the active-hole header only after a successful hole change', () => {

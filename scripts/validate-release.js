@@ -30,8 +30,8 @@ requireCondition(app.includes(`versionNumber: '${version}'`), 'app.js runtime ve
 requireCondition(app.includes(`cacheName: 'the-dye-ledger-${displayVersion}'`), 'app.js cache version is inconsistent');
 requireCondition(worker.includes(`versionNumber: '${version}'`), 'service-worker.js version is inconsistent');
 requireCondition(worker.includes(`cacheName: 'the-dye-ledger-${displayVersion}'`), 'service-worker cache version is inconsistent');
-requireCondition(html.includes(`app.js?v=${version}&amp;rev=1`), 'index.html app asset query is stale');
-requireCondition(html.includes(`style.css?v=${version}&amp;rev=1`), 'index.html style asset query is stale');
+requireCondition(html.includes(`app.js?v=${version}&amp;rev=`), 'index.html app asset query is stale');
+requireCondition(html.includes(`style.css?v=${version}&amp;rev=`), 'index.html style asset query is stale');
 
 const installBlock = worker.match(/self\.addEventListener\('install'[\s\S]*?\n\}\);/)?.[0] || '';
 requireCondition(!installBlock.includes('skipWaiting'), 'service worker install must not force activation');

@@ -251,7 +251,7 @@ The clean landing page will summarize five independently accessible destinations
 
 This is not a rigid wizard. Golfers may visit sections in any order, selections autosave into one draft, and the landing page owns readiness, linked validation guidance, and Start Round. Existing calculation, persistence, Shared Match, template, and validation contracts remain authoritative during the navigation redesign.
 
-Status: Scheduled for v30.3.80.
+Status: Implemented in v30.3.80; retain as a usability and manual-acceptance watch item.
 
 Status: Should address before Version 1.0.
 

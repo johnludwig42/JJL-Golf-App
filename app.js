@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.79',
-  versionNumber: '30.3.79',
-  cacheName: 'the-dye-ledger-v30.3.79',
+  version: 'v30.3.80',
+  versionNumber: '30.3.80',
+  cacheName: 'the-dye-ledger-v30.3.80',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Shared Match Summary & Player Insights'
+  buildLabel: 'Guided Match Setup'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -43,7 +43,7 @@ const SMART_SCORE_ADVANCE_PRESETS = {
 };
 const DEFAULT_SMART_SCORE_ADVANCE_PRESET = 'normal';
 const PLAYER_PREFERENCES_STORAGE_KEY = 'dyeLedger.playerPreferences';
-const PLAYER_PREFERENCES_SCHEMA_VERSION = 3;
+const PLAYER_PREFERENCES_SCHEMA_VERSION = 4;
 const PLAYER_PREFERENCE_PATHS = new Set([
   'scoring.smartScoreAdvanceEnabled',
   'scoring.smartScoreAdvancePreset',
@@ -58,6 +58,7 @@ const PLAYER_PREFERENCE_PATHS = new Set([
   'press.maxPressesPerRound',
   'press.maxRePresses',
   'roundDefaults.sharedMatchEnabled',
+  'roundDefaults.captureWeatherContext',
   'quickScoreboard.classicScorecardExpanded',
   'quickScoreboard.scoreDistributionExpanded',
   'quickScoreboard.momentumExpanded',
@@ -79,6 +80,7 @@ function getDefaultPlayerPreferences() {
     press: normalizePressConfig(PRESS_CONFIG_DEFAULTS),
     roundDefaults: {
       sharedMatchEnabled: false,
+      captureWeatherContext: true,
     },
     quickScoreboard: {
       classicScorecardExpanded: false,
@@ -109,6 +111,7 @@ function normalizePlayerPreferences(raw) {
     roundDefaults: {
       ...roundDefaults,
       sharedMatchEnabled: typeof roundDefaults.sharedMatchEnabled === 'boolean' ? roundDefaults.sharedMatchEnabled : false,
+      captureWeatherContext: typeof roundDefaults.captureWeatherContext === 'boolean' ? roundDefaults.captureWeatherContext : true,
     },
     quickScoreboard: {
       ...quickScoreboard,
@@ -185,6 +188,7 @@ function getNewMatchDefaultsFromPreferences(preferences = getPlayerPreferences()
     statTrackingEnabled: normalized.scoring.statTrackingDefault,
     pressConfig: normalizePressConfig(normalized.press),
     sharedMatchEnabled: normalized.roundDefaults.sharedMatchEnabled,
+    captureWeatherContext: normalized.roundDefaults.captureWeatherContext,
   };
 }
 
@@ -196,6 +200,7 @@ function mergeNewMatchDefaults(explicitValues = {}, preferences = getPlayerPrefe
     statTrackingEnabled: explicitValues.statTrackingEnabled == null ? defaults.statTrackingEnabled : !!explicitValues.statTrackingEnabled,
     pressConfig: normalizePressConfig(explicitValues.pressConfig == null ? defaults.pressConfig : explicitValues.pressConfig),
     sharedMatchEnabled: explicitValues.sharedMatchEnabled == null ? defaults.sharedMatchEnabled : !!explicitValues.sharedMatchEnabled,
+    captureWeatherContext: explicitValues.captureWeatherContext === null || explicitValues.captureWeatherContext === undefined ? defaults.captureWeatherContext : !!explicitValues.captureWeatherContext,
   };
 }
 const WEATHER_CAPTURE_SOURCE = 'open-meteo';
@@ -374,6 +379,13 @@ async function copyAppDiagnostics() {
     recordAppError(err, 'Copy Diagnostics Fallback');
     toast('Unable to copy diagnostics automatically.');
   }
+}
+
+function emailAppDiagnostics() {
+  const subject = `The Dye Ledger ${APP_VERSION} support request`;
+  const diagnostics = getAppDiagnosticsText().slice(0, 12000);
+  const body = `Please describe what you were doing when the issue occurred:\n\n\nSanitized app diagnostics:\n\n${diagnostics}`;
+  window.location.href = `mailto:support@dyeledger.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
 function installGlobalErrorHandlers() {
@@ -2243,6 +2255,8 @@ const uiState = {
   momentumRangeByMatch: {},
   memoryDraftCategory: 'General',
   roundRecapEditing: false,
+  activeSetupDestination: '',
+  nearbyCourseDistances: {},
 };
 let pendingNextRoundSessionContext = null;
 
@@ -2495,6 +2509,12 @@ function getWeatherFailureStatus(error) {
 async function captureWeatherForMatch(matchId) {
   const match = getMatch(matchId);
   if (!match) return false;
+  if (match.captureWeatherContext === false) {
+    match.roundContext = normalizeRoundContext(match.roundContext);
+    setRoundWeatherStatus(match, 'skipped', 'Weather context is off for this round.');
+    persistWeatherCaptureResult(match);
+    return false;
+  }
   match.roundContext = normalizeRoundContext(match.roundContext);
   if (match.roundContext.weather) return false;
   try {
@@ -2537,6 +2557,8 @@ function persistWeatherCaptureResult(match) {
 
 function scheduleWeatherCaptureForMatch(matchId) {
   if (!matchId) return;
+  const match = getMatch(matchId);
+  if (match?.captureWeatherContext === false) return;
   window.setTimeout(() => { captureWeatherForMatch(matchId).catch(() => {}); }, 0);
 }
 
@@ -2777,6 +2799,7 @@ function sanitizeSetupDraft(input, preferences = getPlayerPreferences()) {
     statTrackingEnabled: typeof input.statTrackingEnabled === 'boolean' ? input.statTrackingEnabled : base.statTrackingEnabled,
     smartScoreAdvanceEnabled: typeof input.smartScoreAdvanceEnabled === 'boolean' ? input.smartScoreAdvanceEnabled : base.smartScoreAdvanceEnabled,
     smartScoreAdvancePreset: normalizeSmartScoreAdvancePreset(input.smartScoreAdvancePreset || base.smartScoreAdvancePreset),
+    captureWeatherContext: typeof input.captureWeatherContext === 'boolean' ? input.captureWeatherContext : base.captureWeatherContext,
     statTrackingPlayerIds: Array.isArray(input.statTrackingPlayerIds) ? input.statTrackingPlayerIds.map(String) : [],
     selectedGames: normalizePressEditDraft(null, (Array.isArray(input.selectedGames) ? input.selectedGames : []).filter(game => game && typeof game === 'object' && !Array.isArray(game)).map(clonePlain)).selectedGames,
     featuredCompetition: normalizeFeaturedCompetition(input.featuredCompetition || 'auto'),
@@ -7660,6 +7683,7 @@ function createEmptyMatch(overrides = {}) {
     statTrackingEnabled: !!overrides.statTrackingEnabled,
     smartScoreAdvanceEnabled: overrides.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!overrides.smartScoreAdvanceEnabled,
     smartScoreAdvancePreset: normalizeSmartScoreAdvancePreset(overrides.smartScoreAdvancePreset),
+    captureWeatherContext: overrides.captureWeatherContext !== false,
     statTrackingPlayerIds: Array.isArray(overrides.statTrackingPlayerIds) ? overrides.statTrackingPlayerIds.map(String) : null,
     selectedGames: Array.isArray(overrides.selectedGames) ? overrides.selectedGames : [],
     pressConfig: normalizePressConfig(overrides.pressConfig),
@@ -12879,19 +12903,22 @@ function renderRecentAppErrorsDiagnostics() {
   el.classList.remove('hidden');
   el.innerHTML = `
     <h2>Recent App Errors</h2>
-    <div class="tiny">Collapsed diagnostics for unexpected app errors. Use Copy Diagnostics to paste useful details into ChatGPT.</div>
+    <div class="tiny">Unexpected app errors are recorded here. Use Email Support to send sanitized diagnostic details to support@dyeledger.com.</div>
     <div class="app-update-summary top-gap">
-      <div><span class="muted-label">Last Error</span><strong>${latest ? `${escapeHtml(latest.name || 'Error')} — ${escapeHtml(latest.message || 'Unknown error')}` : 'None recorded'}</strong></div>
-      <div><span class="muted-label">Error Count</span><strong>${errors.length}</strong></div>
+      <div><span class="muted-label">Last Error:&nbsp;</span><strong>${latest ? `${escapeHtml(latest.name || 'Error')} — ${escapeHtml(latest.message || 'Unknown error')}` : 'None recorded'}</strong></div>
+      <div><span class="muted-label">Error Count:&nbsp;</span><strong>${errors.length}</strong></div>
     </div>
     ${details || '<div class="tiny top-gap">No recent app errors recorded.</div>'}
     <div class="actions wrap top-gap">
+      <button id="emailAppDiagnosticsBtn" type="button">Email Support</button>
       <button id="copyAppDiagnosticsBtn" type="button" class="secondary">Copy Diagnostics</button>
       <button id="clearAppErrorsBtn" type="button" class="secondary">Clear Errors</button>
     </div>
   `;
   const copyBtn = document.getElementById('copyAppDiagnosticsBtn');
   if (copyBtn) copyBtn.addEventListener('click', copyAppDiagnostics);
+  const emailBtn = document.getElementById('emailAppDiagnosticsBtn');
+  if (emailBtn) emailBtn.addEventListener('click', emailAppDiagnostics);
   const clearBtn = document.getElementById('clearAppErrorsBtn');
   if (clearBtn) clearBtn.addEventListener('click', clearRecentAppErrors);
 }
@@ -13485,6 +13512,7 @@ function createBlankSetupDraft(preferences = getPlayerPreferences()) {
     statTrackingEnabled: preferenceDefaults.statTrackingEnabled,
     smartScoreAdvanceEnabled: preferenceDefaults.smartScoreAdvanceEnabled,
     smartScoreAdvancePreset: preferenceDefaults.smartScoreAdvancePreset,
+    captureWeatherContext: preferenceDefaults.captureWeatherContext,
     pressConfig: preferenceDefaults.pressConfig,
     storageMode: preferenceDefaults.sharedMatchEnabled ? 'shared' : 'local',
     selectedGames: [],
@@ -13540,6 +13568,7 @@ function buildNextRoundDraft(prior) {
     statTrackingEnabled: !!prior.statTrackingEnabled,
     smartScoreAdvanceEnabled: prior.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!prior.smartScoreAdvanceEnabled,
     smartScoreAdvancePreset: normalizeSmartScoreAdvancePreset(prior.smartScoreAdvancePreset),
+    captureWeatherContext: prior.captureWeatherContext !== false,
     statTrackingPlayerIds: Array.isArray(prior.statTrackingPlayerIds) ? clonePlain(prior.statTrackingPlayerIds) : null,
     selectedGames: [],
     players: cleanPlayers,
@@ -16236,6 +16265,7 @@ function captureCurrentSetupDraft() {
     statTrackingEnabled: fd.get('enableStatTracking') === 'on',
     smartScoreAdvanceEnabled: fd.get('smartScoreAdvance') === 'on',
     smartScoreAdvancePreset: getSmartScoreAdvancePresetFromSetup(),
+    captureWeatherContext: fd.get('captureWeatherContext') === 'on',
     statTrackingPlayerIds: collectStatTrackingPlayerIdsFromSetup(players),
     selectedGames,
     featuredCompetition: String(fd.get('featuredCompetition') || 'auto'),
@@ -16799,6 +16829,7 @@ function buildTemplateFromCurrentSetup(nameOverride = '') {
     statTrackingEnabled: fd.get('enableStatTracking') === 'on',
     smartScoreAdvanceEnabled: selectedGames.some(g => g.key === 'sneaky_sandy_poley') ? false : fd.get('smartScoreAdvance') === 'on',
     smartScoreAdvancePreset: getSmartScoreAdvancePresetFromSetup(),
+    captureWeatherContext: fd.get('captureWeatherContext') === 'on',
     statTrackingPlayerIds: fd.get('enableStatTracking') === 'on' ? collectStatTrackingPlayerIdsFromSetup(selectedPlayers) : [],
     sharedMatchEnabled: fd.get('sharedMatchEnabled') === 'on',
   };
@@ -16809,6 +16840,7 @@ function applyMatchTemplate(templateId) {
   if (!template) return toast('Template not found.');
   const preferenceDefaults = mergeNewMatchDefaults({
     smartScoreAdvancePreset: template.smartScoreAdvancePreset,
+    captureWeatherContext: Object.prototype.hasOwnProperty.call(template, 'captureWeatherContext') ? template.captureWeatherContext : null,
     statTrackingEnabled: template.statTrackingEnabled,
     sharedMatchEnabled: Object.prototype.hasOwnProperty.call(template, 'sharedMatchEnabled')
       ? template.sharedMatchEnabled
@@ -16835,6 +16867,7 @@ function applyMatchTemplate(templateId) {
     statTrackingEnabled: preferenceDefaults.statTrackingEnabled,
     smartScoreAdvanceEnabled: template.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!template.smartScoreAdvanceEnabled,
     smartScoreAdvancePreset: preferenceDefaults.smartScoreAdvancePreset,
+    captureWeatherContext: preferenceDefaults.captureWeatherContext,
     statTrackingPlayerIds: Array.isArray(template.statTrackingPlayerIds) ? template.statTrackingPlayerIds.slice() : [],
     storageMode: preferenceDefaults.sharedMatchEnabled ? 'shared' : 'local',
     players: sanitizeTemplatePlayers(template.players).map((p, idx) => ({
@@ -16955,7 +16988,12 @@ function getAuthoritativeMatchSetupDraftState({ fd = null, selectedPlayers = nul
   const featuredCompetition = normalizeFeaturedCompetition(formData?.get('featuredCompetition') || active?.featuredCompetition || 'auto');
   const normalizedMode = normalizeScoringAccessMode(scoringAccessMode || formData?.get('scoreEntryMode') || active?.scoringAccessMode || 'single_device');
   const shared = sharedMatchEnabled == null ? (!!document.getElementById('sharedMatchEnabled')?.checked || normalizedMode === 'assigned_players') : !!sharedMatchEnabled;
-  return { formData, active, teamCount, playersPerTeam, requiredSlotCount, courseId, course, players, games, holeCount, nineHoleSegment, customStartHole, referenceTeeId, applicableTeeIds, tees, courseHolesLoaded, teamNames, featuredCompetition, scoringAccessMode: normalizedMode, sharedMatchEnabled: shared };
+  const allowance = Number(formData?.get('allowance') ?? active?.allowance ?? 100);
+  const statTrackingEnabled = formData ? formData.get('enableStatTracking') === 'on' : !!active?.statTrackingEnabled;
+  const smartScoreAdvanceEnabled = formData ? formData.get('smartScoreAdvance') === 'on' : active?.smartScoreAdvanceEnabled !== false;
+  const smartScoreAdvancePreset = normalizeSmartScoreAdvancePreset(formData?.get('smartScoreAdvancePreset') || active?.smartScoreAdvancePreset);
+  const captureWeatherContext = formData ? formData.get('captureWeatherContext') === 'on' : active?.captureWeatherContext !== false;
+  return { formData, active, teamCount, playersPerTeam, requiredSlotCount, courseId, course, players, games, holeCount, nineHoleSegment, customStartHole, referenceTeeId, applicableTeeIds, tees, courseHolesLoaded, teamNames, featuredCompetition, scoringAccessMode: normalizedMode, sharedMatchEnabled: shared, storageMode: shared ? 'shared' : 'local', allowance, statTrackingEnabled, smartScoreAdvanceEnabled, smartScoreAdvancePreset, captureWeatherContext };
 }
 
 function getPlayerTeeSlotStates({ teamCount = 1, playersPerTeam = 1, requiredSlotCount = null, courseId = '', players = [] } = {}) {
@@ -17033,15 +17071,6 @@ function getRoundReadinessState() {
   return { checks, warnings, ready: validation.ready && warnings.length === 0, validation, draft };
 }
 
-function buildRoundReadinessWeatherStatus() {
-  const match = editingMatchId ? getMatch(editingMatchId) : null;
-  const status = getRoundWeatherStatusLabel(match);
-  return `<div class="readiness-weather-status ${escapeHtml(status.kind)}">
-    <span>${status.kind === 'ok' ? 'OK' : status.kind === 'warn' ? '!' : 'i'}</span>
-    <div><strong>${escapeHtml(status.label)}</strong><div class="tiny">${escapeHtml(status.detail)}</div></div>
-  </div>`;
-}
-
 function syncSetupDisclosureAria(disclosure) {
   const summary = disclosure?.querySelector(':scope > summary');
   if (summary) summary.setAttribute('aria-expanded', disclosure.open ? 'true' : 'false');
@@ -17079,20 +17108,149 @@ function renderRoundReadiness() {
   if (!wrap) return;
   const state = getRoundReadinessState();
   expandSetupDisclosuresForWarnings(state.warnings);
-  const statusTitle = state.ready ? 'Ready to Play' : 'Review Setup';
-  const completeChecks = state.checks.filter(check => check.ok);
-  const statusText = state.ready
-    ? `${completeChecks.length} check${completeChecks.length === 1 ? '' : 's'} complete`
-    : `${state.warnings.length} item${state.warnings.length === 1 ? '' : 's'} need attention`;
-  wrap.innerHTML = `<div class="round-readiness-status ${state.ready ? 'ready' : 'review'}">
-      <div><div class="section-label">${escapeHtml(statusTitle)}</div><div class="tiny">${escapeHtml(statusText)}</div></div>
-    </div>
-    ${state.warnings.length ? `<div class="readiness-check-list top-gap">${state.warnings.map(c => `<div class="readiness-check warn"><span>!</span><div><strong>${escapeHtml(c.label)}</strong><div class="tiny">${escapeHtml(c.warning)}</div></div></div>`).join('')}</div>` : ''}
-    <details class="readiness-complete-details top-gap">
-      <summary>${completeChecks.length} check${completeChecks.length === 1 ? '' : 's'} complete</summary>
-      <div class="readiness-check-list top-gap">${completeChecks.map(c => `<div class="readiness-check ok"><span>✓</span><div><strong>${escapeHtml(c.label)}</strong></div></div>`).join('')}</div>
-    </details>
-    ${buildRoundReadinessWeatherStatus()}`;
+  wrap.classList.toggle('hidden', !state.warnings.length);
+  wrap.innerHTML = state.warnings.length
+    ? `<div class="tiny compact-readiness-intro">Tap an item to finish setup.</div><div class="readiness-check-list top-gap">${state.warnings.map(c => `<button type="button" class="readiness-check readiness-check-button warn" data-readiness-destination="${getSetupDestinationForReadinessItem(c)}"><span>!</span><div><strong>${escapeHtml(c.label)}</strong><div class="tiny">${escapeHtml(c.warning)}</div></div></button>`).join('')}</div>`
+    : '';
+  renderSetupDestinationStatuses(state);
+}
+
+const SETUP_DESTINATION_COPY = {
+  course: ['Course & Round', 'Choose the course, date, and round length.'],
+  players: ['Players', 'Configure teams, golfers, tees, and handicap preview.'],
+  games: ['Games & Stat Tracking', 'Choose competitions, the featured game, and optional statistics.'],
+  scoring: ['Scoring Control', 'Choose local or Shared Match scoring authority.'],
+  advanced: ['Advanced Options', 'Review Preferences-derived overrides and reusable templates.'],
+};
+
+function renderRoundPreferenceSummary() {
+  const wrap = document.getElementById('roundPreferenceSummary');
+  if (!wrap) return;
+  const preferences = normalizePlayerPreferences(getPlayerPreferences());
+  const press = normalizePressConfig(preferences.press);
+  const quick = preferences.quickScoreboard;
+  const row = (label, detail, action = '', destination = '') => `<div class="round-preference-row"><div><strong>${escapeHtml(label)}</strong><div class="tiny">${escapeHtml(detail)}</div></div>${action ? `<button type="button" class="secondary" ${destination === 'preferences' ? 'data-open-player-preferences="1"' : `data-open-setup-destination="${escapeHtml(destination)}"`}>${escapeHtml(action)}</button>` : ''}</div>`;
+  wrap.innerHTML = [
+    `<div class="round-preference-row"><div><strong>Press defaults</strong><div class="tiny">${escapeHtml(`${press.pressesEnabled ? 'On' : 'Off'} · ${press.pressType === 'MANUAL' ? 'Manual' : 'Prompt'} · maximum ${press.maxPressesPerRound} Presses. Saved changes do not silently rewrite this draft.`)}</div></div><div class="round-preference-actions"><button type="button" class="secondary" data-open-press-preferences="1">Press Preferences</button><button type="button" class="secondary" data-apply-press-defaults="1">Apply to This Round</button></div></div>`,
+    row('Quick Scoreboard', `${quick.classicScorecardExpanded ? 'Scorecard open' : 'Scorecard closed'} · ${quick.scoreDistributionExpanded ? 'Distribution open' : 'Distribution closed'} · ${quick.momentumExpanded ? 'Momentum open' : 'Momentum closed'}.`, 'Open Preferences', 'preferences'),
+  ].join('');
+}
+
+function applySavedPressDefaultsToCurrentSetup() {
+  const pressDefaults = normalizePressConfig(getPlayerPreferences().press);
+  const selectedGames = collectSelectedGames();
+  let applied = 0;
+  const nextGames = selectedGames.map(game => {
+    if (getGameEscalationCapability(game.key) !== 'PRESS') return game;
+    applied += 1;
+    return { ...game, ...pressDefaults };
+  });
+  if (!applied) {
+    toast('Select a Press-capable game before applying Press defaults.');
+    return false;
+  }
+  renderGamesPicker(nextGames);
+  renderFeaturedCompetitionSetup(nextGames);
+  renderRoundPreferenceSummary();
+  renderRoundReadiness();
+  scheduleSetupDraftSave();
+  toast(`Press defaults applied to ${applied} selected game${applied === 1 ? '' : 's'} for this round.`);
+  return true;
+}
+
+function getSetupDestinationForReadinessItem(item = {}) {
+  const text = `${item.label || ''} ${item.warning || ''}`;
+  if (/course|holes loaded|match date/i.test(text)) return 'course';
+  if (/player|tee|team|handicap|allowance/i.test(text)) return 'players';
+  if (/game|featured|9-point|sneaky|stat/i.test(text)) return 'games';
+  if (/shared|scor|assignment|device/i.test(text)) return 'scoring';
+  return 'advanced';
+}
+
+function openSetupDestination(destination = '') {
+  const form = document.getElementById('matchForm');
+  if (!form) return false;
+  const normalized = Object.prototype.hasOwnProperty.call(SETUP_DESTINATION_COPY, destination) ? destination : '';
+  uiState.activeSetupDestination = normalized;
+  if (normalized) form.dataset.activeSetupDestination = normalized;
+  else delete form.dataset.activeSetupDestination;
+  const copy = SETUP_DESTINATION_COPY[normalized] || ['', ''];
+  const title = document.getElementById('matchSectionTitle'); if (title) title.textContent = normalized ? copy[0] : 'Match Setup';
+  const subtitle = document.getElementById('matchSectionSubtitle'); if (subtitle) subtitle.textContent = normalized ? copy[1] : 'Complete these sections in any order. Your selections save automatically.';
+  document.getElementById('setupDestinationBackBtn')?.classList.toggle('hidden', !normalized);
+  document.getElementById('setupHubOverallStatus')?.classList.toggle('hidden', !!normalized);
+  if (normalized === 'players') setSetupDisclosureOpen('playersTeamsDisclosure', true);
+  if (normalized === 'games') setSetupDisclosureOpen('gamesDisclosure', true);
+  if (normalized === 'advanced') renderRoundPreferenceSummary();
+  scheduleSetupDraftSave();
+  requestAnimationFrame(() => document.getElementById('matchSectionHeader')?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }));
+  return true;
+}
+
+function renderSetupDestinationStatuses(readinessState = null) {
+  const state = readinessState || getRoundReadinessState();
+  const warnings = state.warnings || [];
+  const preferenceDefaults = getNewMatchDefaultsFromPreferences();
+  const counts = Object.keys(SETUP_DESTINATION_COPY).reduce((out, key) => ({ ...out, [key]: warnings.filter(item => getSetupDestinationForReadinessItem(item) === key).length }), {});
+  const draft = state.draft || {};
+  const labels = {
+    course: counts.course ? 'Needs attention' : (draft.courseId ? 'Ready' : 'Not started'),
+    players: counts.players ? 'Needs attention' : ((draft.players || []).length ? 'Ready' : 'Not started'),
+    games: counts.games ? 'Needs attention' : ((draft.games || []).length || draft.statTrackingEnabled ? 'Ready' : 'Optional'),
+    scoring: counts.scoring ? 'Needs attention' : (draft.storageMode === 'shared' ? 'Shared Match' : 'Local scoring'),
+    advanced: counts.advanced ? 'Needs attention' : (draft.smartScoreAdvanceEnabled !== preferenceDefaults.smartScoreAdvanceEnabled || normalizeSmartScoreAdvancePreset(draft.smartScoreAdvancePreset) !== preferenceDefaults.smartScoreAdvancePreset || draft.captureWeatherContext !== preferenceDefaults.captureWeatherContext ? 'Customized' : 'Defaults'),
+  };
+  Object.entries(labels).forEach(([key, label]) => {
+    const el = document.querySelector(`[data-setup-status="${key}"]`);
+    if (!el) return;
+    el.textContent = label;
+    el.classList.toggle('attention', counts[key] > 0);
+    el.classList.toggle('ready', counts[key] === 0 && !['Not started', 'Optional', 'Defaults'].includes(label));
+  });
+  const overall = document.getElementById('setupHubOverallStatus');
+  if (overall) {
+    overall.textContent = state.ready ? 'Ready to play' : `${warnings.length} need attention`;
+    overall.classList.toggle('ready', !!state.ready);
+  }
+}
+
+function getCourseCoordinates(course) {
+  const latitude = Number(course?.latitude ?? course?.lat ?? course?.location?.latitude);
+  const longitude = Number(course?.longitude ?? course?.lng ?? course?.lon ?? course?.location?.longitude);
+  return Number.isFinite(latitude) && Number.isFinite(longitude) ? { latitude, longitude } : null;
+}
+
+function getDistanceMiles(a, b) {
+  const radians = value => Number(value) * Math.PI / 180;
+  const dLat = radians(b.latitude - a.latitude), dLon = radians(b.longitude - a.longitude);
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(radians(a.latitude)) * Math.cos(radians(b.latitude)) * Math.sin(dLon / 2) ** 2;
+  return 3958.8 * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+async function showNearbySavedCourses() {
+  const status = document.getElementById('nearbyCoursesStatus');
+  if (navigator.onLine === false) { if (status) status.textContent = 'Nearby lookup is unavailable offline. Saved-course search still works.'; return false; }
+  try {
+    if (status) status.textContent = 'Requesting your approximate location…';
+    const position = await getCurrentWeatherPosition();
+    const origin = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+    const rows = (state.courses || []).map(course => ({ course, coordinates: getCourseCoordinates(course) })).filter(row => row.coordinates).map(row => ({ ...row, distance: getDistanceMiles(origin, row.coordinates) })).sort((a, b) => a.distance - b.distance);
+    uiState.nearbyCourseDistances = Object.fromEntries(rows.map(row => [String(row.course.id), row.distance]));
+    if (!rows.length) { if (status) status.textContent = 'Saved courses do not yet include verified coordinates. Use Recent or course search.'; return false; }
+    const select = document.getElementById('matchCourseSelect');
+    if (select) {
+      const current = select.value;
+      const optionByValue = new Map(Array.from(select.options).map(option => [String(option.value), option]));
+      rows.forEach(row => { const option = optionByValue.get(String(row.course.id)); if (option) { option.textContent = `${row.course.name} · ${row.distance.toFixed(1)} mi`; select.appendChild(option); } });
+      select.value = current;
+    }
+    if (status) status.textContent = `Closest saved course: ${rows[0].course.name} · ${rows[0].distance.toFixed(1)} mi. Location was not stored.`;
+    return true;
+  } catch (err) {
+    const failure = getWeatherFailureStatus(err);
+    if (status) status.textContent = failure.state === 'permission_needed' ? 'Location permission was denied. Course search remains available.' : 'Location is unavailable. Course search remains available.';
+    return false;
+  }
 }
 
 function renderSetupConfidencePanels() {
@@ -17923,6 +18081,13 @@ function renderMatchSetupState() {
   const showCurrentMatchPanel = !!active && !showForm && !showJoin;
   const choiceGrid = document.getElementById('setupChoiceGrid');
 
+  if (!showForm) {
+    const sectionTitle = document.getElementById('matchSectionTitle'); if (sectionTitle) sectionTitle.textContent = 'Match';
+    const sectionSubtitle = document.getElementById('matchSectionSubtitle'); if (sectionSubtitle) sectionSubtitle.textContent = 'Prepare today\'s round: players, teams, course, games, and shared-match scoring.';
+    document.getElementById('setupDestinationBackBtn')?.classList.add('hidden');
+    document.getElementById('setupHubOverallStatus')?.classList.add('hidden');
+  }
+
   if (entry) entry.classList.toggle('hidden', showForm || showJoin || (active?.storageMode === 'shared' && !hostCanEdit && !showCurrentMatchPanel));
   if (choiceGrid) choiceGrid.classList.toggle('hidden', !!active || setupWorkflowMode !== 'landing');
   if (joinPanel) {
@@ -18120,6 +18285,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
   updateSetupActionButtonStates();
   activateTab('setup');
   initializeSetupDisclosures({ resetOpen: !matchId });
+  openSetupDestination('');
   if (!matchId) {
     const draft = draftMatch || createBlankSetupDraft();
     form.dataset.setupDraftId = draft.id || uid();
@@ -18138,6 +18304,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
     document.getElementById('officialScorerNameInput').value = draft.officialScorerName || 'Official scorer';
     const statToggle = document.getElementById('enableStatTrackingInput'); if (statToggle) statToggle.checked = !!draft.statTrackingEnabled;
     const smartToggle = document.getElementById('smartScoreAdvanceInput'); if (smartToggle) smartToggle.checked = draft.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!draft.smartScoreAdvanceEnabled;
+    const weatherToggle = document.getElementById('captureWeatherContextInput'); if (weatherToggle) weatherToggle.checked = draft.captureWeatherContext !== false;
     syncSmartScoreAdvancePresetUi(draft);
     populateMatchCourseSelects(draft.courseId || '', draft.teeId || '');
     renderTeamNameInputs(draft.teamCount || 1, draft.teamNames || []);
@@ -18172,6 +18339,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
   document.getElementById('officialScorerNameInput').value = match.officialScorerName || 'Official scorer';
   const statToggle = document.getElementById('enableStatTrackingInput'); if (statToggle) statToggle.checked = !!match.statTrackingEnabled;
   const smartToggle = document.getElementById('smartScoreAdvanceInput'); if (smartToggle) smartToggle.checked = match.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!match.smartScoreAdvanceEnabled;
+  const weatherToggle = document.getElementById('captureWeatherContextInput'); if (weatherToggle) weatherToggle.checked = match.captureWeatherContext !== false;
   syncSmartScoreAdvancePresetUi(match);
   renderTeamNameInputs(match.teamCount || 2, match.teamNames || []);
   renderScoringControlConfig(match);
@@ -18188,7 +18356,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
   renderTodaysMatchSummary();
   renderMatchTemplatesPanel();
   renderRoundReadiness();
-  window.scrollTo({ top: document.getElementById('matchFormTitle').getBoundingClientRect().top + window.scrollY - 20, behavior: 'smooth' });
+  window.scrollTo({ top: document.getElementById('matchSectionHeader').getBoundingClientRect().top + window.scrollY - 20, behavior: 'smooth' });
 }
 
 function exportJson() {
@@ -18262,6 +18430,33 @@ function installHandlers() {
   const setupDraftForm = document.getElementById('matchForm');
   setupDraftForm?.addEventListener('input', scheduleSetupDraftSave);
   setupDraftForm?.addEventListener('change', scheduleSetupDraftSave);
+  setupDraftForm?.addEventListener('click', event => {
+    const applyPressDefaultsButton = event.target.closest('[data-apply-press-defaults]');
+    if (applyPressDefaultsButton) {
+      applySavedPressDefaultsToCurrentSetup();
+      return;
+    }
+    const pressPreferencesButton = event.target.closest('[data-open-press-preferences]');
+    if (pressPreferencesButton) {
+      scheduleSetupDraftSave();
+      activateTab('settings');
+      requestAnimationFrame(() => document.getElementById('pressPreferencesHeading')?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }));
+      return;
+    }
+    const preferencesButton = event.target.closest('[data-open-player-preferences]');
+    if (preferencesButton) {
+      scheduleSetupDraftSave();
+      activateTab('settings');
+      requestAnimationFrame(() => document.getElementById('playerPreferencesTitle')?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }));
+      return;
+    }
+    const destinationButton = event.target.closest('[data-open-setup-destination]');
+    if (destinationButton) openSetupDestination(destinationButton.dataset.openSetupDestination || '');
+    const readinessButton = event.target.closest('[data-readiness-destination]');
+    if (readinessButton) openSetupDestination(readinessButton.dataset.readinessDestination || '');
+  });
+  document.getElementById('setupDestinationBackBtn')?.addEventListener('click', () => openSetupDestination(''));
+  document.getElementById('showNearbyCoursesBtn')?.addEventListener('click', showNearbySavedCourses);
   document.addEventListener('click', e => {
     const jump = e.target.closest?.('[data-jump-missing-score]');
     if (jump) {
@@ -18560,7 +18755,7 @@ function installHandlers() {
     renderScoringControlConfig(editingMatchId ? getMatch(editingMatchId) : null);
     renderRoundReadiness();
   }, '#sharedMatchEnabled'));
-  document.getElementById('matchTeeSelect').addEventListener('change', e => preserveSetupScrollDuring(() => { uiState.referenceTeeManual = true; uiState.referenceTeeAutoId = e.target.value || uiState.referenceTeeAutoId; normalizeDraftTeeAssignments({ forceDefault: false }); syncMatchPlayerDraft(uiState.matchPlayerDraft); syncReferenceTeeUi({ selections: uiState.matchPlayerDraft, forceAuto: false }); populateMatchPlayerPicker(uiState.matchPlayerDraft); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); renderTodaysMatchSummary(); }, '#matchTeeSelect'));
+  document.getElementById('matchTeeSelect').addEventListener('change', () => preserveSetupScrollDuring(() => { uiState.referenceTeeManual = true; normalizeDraftTeeAssignments({ forceDefault: false }); syncMatchPlayerDraft(uiState.matchPlayerDraft); syncReferenceTeeUi({ selections: uiState.matchPlayerDraft, forceAuto: false }); populateMatchPlayerPicker(uiState.matchPlayerDraft); renderGamesPicker(collectSelectedGames()); renderSetupHandicapPreview(); renderTodaysMatchSummary(); }, '#matchTeeSelect'));
   document.getElementById('teamNamesGrid').addEventListener('input', e => {
     // Keep team-name typing stable on mobile. Rebuilding the setup controls on every
     // keystroke can replace focused inputs and collapse the iPhone keyboard.
@@ -18759,8 +18954,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
     if (e.target && (e.target.id === 'enableStatTrackingInput' || e.target.matches('[data-player-slot], [data-stat-track-player]'))) renderStatTrackingPlayerSelector();
     if (e.target && (e.target.id === 'smartScoreAdvanceInput' || e.target.id === 'smartScoreAdvancePresetSelect')) syncSmartScoreAdvancePresetUi();
-    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #featuredCompetitionSelect, #scoreEntryModeSelect, #officialScorerNameInput, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-game-config], #enableStatTrackingInput, #smartScoreAdvanceInput, #smartScoreAdvancePresetSelect, [data-stat-track-player]')) {
-      setTimeout(() => { renderSetupHandicapPreview(); renderGamesPicker(collectSelectedGames()); renderFeaturedCompetitionSetup(collectSelectedGames()); renderTodaysMatchSummary(); }, 0);
+    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #featuredCompetitionSelect, #scoreEntryModeSelect, #officialScorerNameInput, #sharedMatchEnabled, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-game-config], #enableStatTrackingInput, #smartScoreAdvanceInput, #smartScoreAdvancePresetSelect, #captureWeatherContextInput, [data-stat-track-player]')) {
+      setTimeout(() => { renderSetupHandicapPreview(); renderGamesPicker(collectSelectedGames()); renderFeaturedCompetitionSetup(collectSelectedGames()); renderTodaysMatchSummary(); renderRoundPreferenceSummary(); }, 0);
     }
   });
   document.getElementById('setup').addEventListener('input', e => {
@@ -19301,6 +19496,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       statTrackingEnabled: fd.get('enableStatTracking') === 'on',
       smartScoreAdvanceEnabled: validatedSelectedGames.some(g => g.key === 'sneaky_sandy_poley') ? false : fd.get('smartScoreAdvance') === 'on',
       smartScoreAdvancePreset: getSmartScoreAdvancePresetFromSetup(),
+      captureWeatherContext: fd.get('captureWeatherContext') === 'on',
       statTrackingPlayerIds: fd.get('enableStatTracking') === 'on' ? collectStatTrackingPlayerIdsFromSetup(selectedPlayers) : [],
       teamScorers,
       selectedGames: validatedSelectedGames,
@@ -20501,6 +20697,10 @@ function installDyeLedgerLiveEngineAdapter() {
     buildPlayerSummaryTable,
     buildScoringByParRows,
     buildScoringByParSummary,
+    getSetupDestinationForReadinessItem,
+    getCourseCoordinates,
+    getDistanceMiles,
+    emailAppDiagnostics,
     computePlayerRoundInsights,
     buildPlayerRoundInsights,
     buildStatTrackingSummary,

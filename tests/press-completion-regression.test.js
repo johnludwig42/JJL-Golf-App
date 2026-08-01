@@ -164,17 +164,17 @@ test('completed Press Activity audit is frozen, concise, correct, idempotent, an
   assert.equal(noPress.engine.buildPressAuditSection(noPress.match, noPress.metrics), '');
 });
 
-test('UI/save source locks, v30.3.79 icon references, cache paths, and branding docs are consistent', () => {
+test('UI/save source locks, v30.3.80 icon references, cache paths, and branding docs are consistent', () => {
   assert.match(app, /PRESS_DISABLE_BLOCKED_EXISTING_PRESS/);
   assert.match(app, /data-press-edit-helper/);
   assert.match(app, /disabled aria-disabled="true"/);
   assert.match(app, /validatePressEditContract\(existing, selectedGames/);
   assert.equal((html.match(/rel="apple-touch-icon"/g) || []).length, 1);
-  assert.match(html, /<img src="\.\/branding\/apple-touch-icon-v30\.3\.79\.png" alt="The Dye Ledger"/);
-  assert.match(html, /rel="apple-touch-icon"[^>]+href="\.\/branding\/apple-touch-icon-v30\.3\.79\.png"/);
+  assert.match(html, /<img src="\.\/branding\/apple-touch-icon-v30\.3\.80\.png" alt="The Dye Ledger"/);
+  assert.match(html, /rel="apple-touch-icon"[^>]+href="\.\/branding\/apple-touch-icon-v30\.3\.80\.png"/);
   assert.doesNotMatch(html, /<img src="\.\/branding\/app-icon-192\.png" alt="The Dye Ledger"/);
-  assert.match(worker, /branding\/apple-touch-icon-v30\.3\.79\.png/);
-  assert.match(worker, /the-dye-ledger-v30\.3\.79/);
+  assert.match(worker, /branding\/apple-touch-icon-v30\.3\.80\.png/);
+  assert.match(worker, /the-dye-ledger-v30\.3\.80/);
   assert.match(branding, /Header \/ iPhone source[^\n]*`branding\/apple-touch-icon\.png`/);
   assert.match(branding, /Existing Home Screen icons may remain cached until the user removes and re-adds the app from Safari/);
   assert.equal(createHash('sha256').update(appleIcon).digest('hex'), 'd38a80dad54f65b47c46eef6c952e02f8fbf94d8b52338a567dcb4664224ba95');

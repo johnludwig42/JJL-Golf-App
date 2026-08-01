@@ -29,6 +29,18 @@ The product should reveal the right amount of complexity at the moment it become
 
 ## Release integration
 
+### Match-derived product design system
+
+The v30.3.80 Match experience is the reference pattern for every non-Play tab. The shared system consists of:
+
+- a concise tab identity card;
+- a quiet overview made of tappable destination cards;
+- focused drill-in pages with a left-aligned title, concise purpose statement, and predictable return action;
+- consistent typography, spacing, borders, disclosure controls, status language, empty states, and primary-action hierarchy;
+- progressive disclosure for advanced, diagnostic, or infrequently used controls.
+
+Consistency applies to navigation and interaction hierarchy, not to domain purpose. Match remains guided configuration; Scores remains review and interpretation; Library remains browsing and management; Insights remains analytical exploration; More remains settings and account management; and Play remains a focused scoring instrument.
+
 ### v30.3.79 — Summary and analytics clarity
 
 - Optimize Shared Match Summary hierarchy and iPhone readability.
@@ -63,6 +75,7 @@ The product should reveal the right amount of complexity at the moment it become
 - Present Account status, local/cloud boundaries, session state, and sign-out in human language.
 - Never imply that sign-in uploads, claims, merges, rewrites, or deletes local history.
 - Add cloud ownership controls only when the security architecture is activated.
+- Apply the shared destination-card and drill-in pattern to More, beginning with Account & Security, Preferences, Press Preferences, Shared Match & Connectivity, Data & Diagnostics, and About.
 
 ### Play and Shared Match production polish
 
@@ -71,6 +84,7 @@ The product should reveal the right amount of complexity at the moment it become
 - Move diagnostics and reconciliation details behind troubleshooting.
 - Use human Shared Match states while retaining technical evidence for support.
 - Complete accessibility, installed-iPhone, offline, and two-device acceptance.
+- Deliver Play refinement as a stand-alone release after the non-Play design system is established. Evaluate compact active-play chrome, mobile-first player scoring rows, progressive SSP/game detail, explicit completion feedback, and a single authoritative save/advance action.
 
 ### Library and Courses
 
@@ -79,6 +93,18 @@ The product should reveal the right amount of complexity at the moment it become
 - Add governed course coordinates with provenance and correction support.
 - Support catalog-backed nearby lookup and private on-device sorting of saved courses.
 - Do not redesign Library or Courses twice before their cloud ownership model is ready.
+
+### Scores synthesis
+
+- Use a quiet Scores overview with focused destinations for Round Status, Scorecards, Games & Results, Statistics, and Notes & Memories.
+- Preserve the established roles of Scores, Quick Scoreboard, and Match Summary.
+- Do not change scoring, handicap, competition, settlement, or completed-round facts as part of the navigation work.
+
+### Insights synthesis
+
+- Organize the Insights overview around golfer questions: My Game, Scoring Trends, Hole Performance, Games & Competition, and Round Comparisons.
+- Keep detailed charts and filters within focused destinations and provide textual equivalents.
+- Derive insights from authoritative Round facts; do not duplicate or rewrite historical records.
 
 ## Location and nearby-course boundary
 

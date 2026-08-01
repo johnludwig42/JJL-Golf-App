@@ -8,8 +8,8 @@ const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const manifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
 const serviceWorker = readFileSync(new URL('../service-worker.js', import.meta.url), 'utf8');
 
-test('Match setup presents the accepted v30.3.69 round-preparation hierarchy without a snapshot hero', () => {
-  const labels = ['Round Setup', 'Match Details', 'Players &amp; Teams', 'Games', 'Match Templates', 'Advanced Options', 'Pre-Round Checklist', 'Start Round'];
+test('Match setup presents the accepted destination-based round-preparation hierarchy without a snapshot hero', () => {
+  const labels = ['Course &amp; Round', 'Players', 'Games &amp; Stat Tracking', 'Scoring Control', 'Advanced Options'];
   let cursor = -1;
   for (const label of labels) {
     const next = html.indexOf(label, cursor + 1);
@@ -20,10 +20,10 @@ test('Match setup presents the accepted v30.3.69 round-preparation hierarchy wit
   assert.match(html, /Player Handicap Preview/);
   assert.doesNotMatch(html, /Playing handicap preview/i);
   assert.match(html, /id="matchSubmitBtn"[^>]+aria-label="Start round"[^>]*>Start Round</);
-  assert.match(html, /<details class="span-2 card inset-card setup-advanced-card top-gap">/);
-  assert.doesNotMatch(html, /setup-advanced-card top-gap" open/);
+  assert.doesNotMatch(html, /data-setup-destination="advanced" open/);
+  assert.match(html, /id="setupDestinationBackBtn"/);
   for (const label of ['Smart Score Advance', 'Stat Tracking', 'Shared Match', 'Scoring Control']) assert.match(html, new RegExp(label));
-  assert.match(app, /completeChecks = state\.checks\.filter/);
+  assert.match(app, /Tap an item to finish setup/);
 });
 
 test('game selection is grouped by the golfer mental model', () => {
@@ -48,14 +48,14 @@ test('Library course tools are visually cohesive and maintenance is disclosed', 
 });
 
 test('Home Screen branding is shared by the header while install assets remain complete', () => {
-  assert.match(html, /src="\.\/branding\/apple-touch-icon-v30\.3\.79\.png" alt="The Dye Ledger"/);
-  assert.match(html, /href="\.\/branding\/apple-touch-icon-v30\.3\.79\.png"/);
+  assert.match(html, /src="\.\/branding\/apple-touch-icon-v30\.3\.80\.png" alt="The Dye Ledger"/);
+  assert.match(html, /href="\.\/branding\/apple-touch-icon-v30\.3\.80\.png"/);
   assert.deepEqual(manifest.icons.map(icon => icon.src), [
-    './branding/app-icon-192-v30.3.79.png',
-    './branding/app-icon-512-v30.3.79.png',
-    './branding/apple-touch-icon-v30.3.79.png',
+    './branding/app-icon-192-v30.3.80.png',
+    './branding/app-icon-512-v30.3.80.png',
+    './branding/apple-touch-icon-v30.3.80.png',
   ]);
-  for (const asset of ['app-icon-192-v30.3.79.png', 'app-icon-512-v30.3.79.png', 'apple-touch-icon-v30.3.79.png', 'favicon-32-v30.3.79.png', 'favicon-16-v30.3.79.png']) {
+  for (const asset of ['app-icon-192-v30.3.80.png', 'app-icon-512-v30.3.80.png', 'apple-touch-icon-v30.3.80.png', 'favicon-32-v30.3.80.png', 'favicon-16-v30.3.80.png']) {
     assert.match(serviceWorker, new RegExp(`branding/${asset.replace('.', '\\.')}`));
   }
 });

@@ -5887,3 +5887,41 @@ html.quick-scoreboard-open,body.quick-scoreboard-open{overflow:hidden!important;
   .player-insights-table{min-width:0}
   .player-insights-table th:first-child,.player-insights-table td:first-child{position:static}
 }
+
+/* v30.3.80 Match Setup hub-and-spoke navigation */
+.visually-hidden{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.match-section-header .item-header{flex-direction:row;align-items:flex-start;justify-content:space-between;flex-wrap:nowrap;text-align:left}
+.match-section-header .item-header>div:first-child{flex:1 1 auto;min-width:0;text-align:left}
+.match-section-header h2{margin:0}
+.setup-header-back{flex:0 0 auto;margin:0;padding:.55rem .8rem;min-height:40px;white-space:nowrap}
+.round-preference-summary{display:grid;gap:8px;grid-column:1/-1}
+.round-preference-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px;border:1px solid var(--border);border-radius:12px;background:#fbfdfc}
+.round-preference-row>div{min-width:0}
+.round-preference-row strong{display:block;font-size:.86rem}
+.round-preference-row button{flex:0 0 auto;min-height:38px;padding:7px 10px}
+.round-preference-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}
+@media(max-width:430px){.match-section-header .item-header{flex-direction:row;flex-wrap:wrap}.setup-header-back{order:2}.round-preference-row{align-items:flex-start;flex-direction:column}.round-preference-actions,.round-preference-row button{width:100%}.round-preference-actions{display:grid}}
+.match-templates-card{order:3!important;border-left:1px solid var(--border)!important;background:var(--card)!important}
+.compact-readiness-panel{padding:.2rem 0}
+.compact-readiness-intro{font-weight:700;color:var(--muted)}
+.setup-destination-hub{padding:4px 0 2px}
+.setup-hub-heading,.setup-destination-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.setup-hub-status,.setup-destination-status{display:inline-flex;align-items:center;border-radius:999px;padding:5px 9px;background:#eef2ef;color:#385044;font-size:.78rem;font-weight:700;white-space:nowrap}
+.setup-hub-status.ready,.setup-destination-status.ready{background:#e2f2e7;color:#0b5d3b}
+.setup-destination-status.attention{background:#fff0d8;color:#7a4a00}
+.setup-destination-grid{display:grid;gap:10px}
+.setup-destination-card{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;border:1px solid #d4dfd8;background:#fff;border-radius:16px;padding:15px;color:inherit;box-shadow:0 1px 2px rgba(10,45,28,.04)}
+.setup-destination-card>span:first-child{display:grid;gap:3px;min-width:0}
+.setup-destination-card strong{font-size:1rem}
+.setup-destination-card small{font-size:.78rem;color:#617168;font-weight:500}
+.setup-destination-card:focus-visible{outline:3px solid rgba(11,93,59,.24);outline-offset:2px}
+.setup-destination-toolbar{padding:10px 0 14px;border-bottom:1px solid #dce4df}
+.setup-destination-toolbar>div{flex:1}
+.setup-destination-panel{display:none!important}
+#matchForm[data-active-setup-destination] .setup-destination-hub,#matchForm[data-active-setup-destination] .setup-overview-only{display:none!important}
+#matchForm[data-active-setup-destination="course"] [data-setup-destination="course"],#matchForm[data-active-setup-destination="players"] [data-setup-destination="players"],#matchForm[data-active-setup-destination="games"] [data-setup-destination="games"],#matchForm[data-active-setup-destination="scoring"] [data-setup-destination="scoring"],#matchForm[data-active-setup-destination="advanced"] [data-setup-destination="advanced"]{display:block!important}
+#matchForm[data-active-setup-destination="course"] label[data-setup-destination="course"],#matchForm[data-active-setup-destination="players"] label[data-setup-destination="players"],#matchForm[data-active-setup-destination="advanced"] label[data-setup-destination="advanced"]{display:grid!important}
+.nearby-course-action{align-self:end}
+.nearby-course-action .tiny{margin-top:6px}
+.readiness-check-button{appearance:none;width:100%;border:0;background:transparent;text-align:left;color:inherit;padding:0}
+@media(min-width:720px){.setup-destination-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.setup-destination-card:last-child{grid-column:1/-1}}

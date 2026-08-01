@@ -61,16 +61,14 @@ test('Shared Match Round Default normalizes, persists, resets, and seeds only ne
   assert.doesNotMatch(app.slice(app.indexOf('function buildCloudMatchPayload'), app.indexOf('async function uploadSharedMatch')), /playerPreferences|roundDefaults/);
 });
 
-test('checklist copy is concise and location remains outside required validation checks', () => {
+test('compact readiness guidance remains actionable and location stays outside required validation checks', () => {
   const render = app.slice(app.indexOf('function renderRoundReadiness()'), app.indexOf('function renderSetupConfidencePanels'));
-  assert.match(render, /Ready to Play/);
-  assert.match(render, /Review Setup/);
-  assert.match(render, /check\$\{completeChecks\.length === 1 \? '' : 's'\} complete/);
-  assert.match(render, /item\$\{state\.warnings\.length === 1 \? '' : 's'\} need attention/);
+  assert.match(render, /Tap an item to finish setup/);
+  assert.match(render, /data-readiness-destination/);
   assert.doesNotMatch(render, /Everything looks good|readiness-count|>Ready</);
-  const truth = app.slice(app.indexOf('function getRoundReadinessState()'), app.indexOf('function buildRoundReadinessWeatherStatus'));
+  const truth = app.slice(app.indexOf('function getRoundReadinessState()'), app.indexOf('function initializeSetupDisclosures'));
   assert.doesNotMatch(truth, /location|weather/i);
-  assert.match(render, /buildRoundReadinessWeatherStatus\(\)/);
+  assert.doesNotMatch(render, /buildRoundReadinessWeatherStatus\(\)/);
 });
 
 test('Round actions preserve semantics with a dominant primary and balanced secondary button', () => {

@@ -7,18 +7,18 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=30.3.79&amp;rev=1" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v30.3.79.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v30.3.79.png" />
-  <link rel="shortcut icon" href="./branding/favicon-32-v30.3.79.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v30.3.79.png" />
-  <link rel="stylesheet" href="style.css?v=30.3.79&amp;rev=1" />
+  <link rel="manifest" href="manifest.json?v=30.3.80&amp;rev=2" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v30.3.80.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v30.3.80.png" />
+  <link rel="shortcut icon" href="./branding/favicon-32-v30.3.80.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v30.3.80.png" />
+  <link rel="stylesheet" href="style.css?v=30.3.80&amp;rev=2" />
 </head>
 <body>
   <div class="app-chrome"><header class="app-header compact-header">
     <div class="brand-wrap">
       <div class="brand-mark">
-        <img src="./branding/apple-touch-icon-v30.3.79.png" alt="The Dye Ledger" />
+        <img src="./branding/apple-touch-icon-v30.3.80.png" alt="The Dye Ledger" />
       </div>
       <div>
       <h1>The Dye Ledger</h1>
@@ -42,9 +42,15 @@
 
   <main>
     <section id="setup" class="panel active">
-      <div class="card tight-card">
-        <h2>Match</h2>
-        <div class="tiny">Prepare today's round: players, teams, course, games, and shared-match scoring.</div>
+      <div id="matchSectionHeader" class="card tight-card match-section-header">
+        <div class="item-header compact-item-header">
+          <div>
+            <h2 id="matchSectionTitle">Match</h2>
+            <div id="matchSectionSubtitle" class="tiny">Prepare today's round: players, teams, course, games, and shared-match scoring.</div>
+          </div>
+          <button id="setupDestinationBackBtn" type="button" class="secondary setup-header-back hidden">‹ Match Setup</button>
+          <span id="setupHubOverallStatus" class="setup-hub-status hidden">Review setup</span>
+        </div>
       </div>
 
 
@@ -98,27 +104,37 @@
       <div id="setupSharedAdminPanel" class="card tight-card hidden"></div>
 
       <div id="matchSetupFormWrap" class="card tight-card">
-        <h2 id="matchFormTitle" class="setup-major-heading">Round Setup</h2>
+        <h2 id="matchFormTitle" class="visually-hidden">Match Setup</h2>
         <form id="matchForm" class="grid two compact-grid">
-          <div class="span-2 setup-flow-section">
+          <div id="setupDestinationHub" class="span-2 setup-destination-hub" aria-label="Match setup sections">
+            <div class="setup-destination-grid top-gap">
+              <button type="button" class="setup-destination-card" data-open-setup-destination="course"><span><strong>Course &amp; Round</strong><small>Course, tee, date, and round length</small></span><span class="setup-destination-status" data-setup-status="course">Not started</span></button>
+              <button type="button" class="setup-destination-card" data-open-setup-destination="players"><span><strong>Players</strong><small>Teams, golfers, tees, and handicaps</small></span><span class="setup-destination-status" data-setup-status="players">Not started</span></button>
+              <button type="button" class="setup-destination-card" data-open-setup-destination="games"><span><strong>Games &amp; Stat Tracking</strong><small>Competitions, featured game, and statistics</small></span><span class="setup-destination-status" data-setup-status="games">Optional</span></button>
+              <button type="button" class="setup-destination-card" data-open-setup-destination="scoring"><span><strong>Scoring Control</strong><small>Local or Shared Match scoring authority</small></span><span class="setup-destination-status" data-setup-status="scoring">Ready</span></button>
+              <button type="button" class="setup-destination-card" data-open-setup-destination="advanced"><span><strong>Advanced Options</strong><small>Preferences-derived round overrides and templates</small></span><span class="setup-destination-status" data-setup-status="advanced">Defaults</span></button>
+            </div>
+          </div>
+
+          <div class="span-2 setup-flow-section setup-destination-panel" data-setup-destination="course">
             <div class="section-label">Match Details</div>
             <div class="tiny">Set the basic round information first.</div>
           </div>
-          <label><span>Match date</span><input name="date" type="date" required /></label>
-          <label><span>Match name</span><input class="input-match" name="name" placeholder="Saturday game" /></label>
-          <label><span>Course</span><select name="courseId" id="matchCourseSelect" required></select></label>
-          <div id="setupCourseLibraryStatus" class="course-library-status tiny top-gap span-2 is-not-configured">Supabase not configured. Manual course entry remains available.</div>
-          <div id="referenceTeeField" class="reference-tee-field hidden">
+          <label class="setup-destination-panel" data-setup-destination="course"><span>Match date</span><input name="date" type="date" required /></label>
+          <label class="setup-destination-panel" data-setup-destination="course"><span>Match name</span><input class="input-match" name="name" placeholder="Saturday game" /></label>
+          <label class="setup-destination-panel" data-setup-destination="course"><span>Course</span><select name="courseId" id="matchCourseSelect" required></select></label>
+          <div class="setup-destination-panel nearby-course-action" data-setup-destination="course"><button id="showNearbyCoursesBtn" type="button" class="secondary">Show Nearby Courses</button><div id="nearbyCoursesStatus" class="tiny">Optional. Location is requested only when you tap this button.</div></div>
+          <div id="referenceTeeField" class="reference-tee-field hidden setup-destination-panel" data-setup-destination="course">
             <label><span>Reference tee <span id="referenceTeeBadge" class="tiny"></span></span><select name="teeId" id="matchTeeSelect"></select></label>
             <div id="referenceTeeHelp" class="tiny">Used only when players are on different tees.</div>
           </div>
-          <label><span>Match length</span>
+          <label class="setup-destination-panel" data-setup-destination="course"><span>Match length</span>
             <select name="holeCount" id="holeCountSelect">
               <option value="9">9 holes</option>
               <option value="18" selected>18 holes</option>
             </select>
           </label>
-          <div id="nineHoleConfigWrap" class="hidden span-2 grid two compact-grid">
+          <div id="nineHoleConfigWrap" class="hidden span-2 grid two compact-grid setup-destination-panel" data-setup-destination="course">
             <label><span>9-hole segment</span>
               <select id="nineHoleSegmentSelect" name="nineHoleSegment">
                 <option value="front">Front 9</option>
@@ -130,9 +146,9 @@
               <select id="customNineHoleStartSelect" name="customStartHole"></select>
             </label>
           </div>
-          <label class="span-2"><span>Allowance</span><span class="percentage-input"><input class="input-match" name="allowance" type="number" min="0" max="100" value="100" required aria-label="Allowance percentage" /><span aria-hidden="true">%</span></span></label>
+          <label class="span-2 setup-destination-panel" data-setup-destination="players"><span>Handicap allowance</span><span class="percentage-input"><input class="input-match" name="allowance" type="number" min="0" max="100" value="100" required aria-label="Allowance percentage" /><span aria-hidden="true">%</span></span><span class="tiny">Applied to playing handicaps for this round.</span></label>
 
-          <details id="playersTeamsDisclosure" class="span-2 card inset-card setup-section-disclosure" open>
+          <details id="playersTeamsDisclosure" class="span-2 card inset-card setup-section-disclosure setup-destination-panel" data-setup-destination="players" open>
             <summary>
               <span>
                 <span class="section-label setup-section-heading">Players &amp; Teams</span>
@@ -177,7 +193,7 @@
             </div>
           </details>
 
-          <details id="gamesDisclosure" class="span-2 card inset-card setup-games-card setup-section-disclosure" open>
+          <details id="gamesDisclosure" class="span-2 card inset-card setup-games-card setup-section-disclosure setup-destination-panel" data-setup-destination="games" open>
             <summary>
               <span>
                 <span class="section-label setup-section-heading">Games</span>
@@ -195,41 +211,40 @@
               <div class="tiny">Choose the main competition to highlight in the Round Snapshot and AI Recap. This does not affect scoring or payouts.</div>
             </div>
             <div id="gameConfigs" class="top-gap"></div>
+            <section class="advanced-option-group top-gap">
+              <div class="section-label">Stat Tracking</div>
+              <div class="tiny">Turn on per-hole stat tracking and choose which players should be tracked.</div>
+              <label class="inline-check top-gap"><input id="enableStatTrackingInput" name="enableStatTracking" type="checkbox" /><span>Enable Stat Tracking</span></label>
+              <div id="statTrackingPlayersWrap" class="top-gap hidden"></div>
+            </section>
             </div>
           </details>
 
-          <div class="span-2 card inset-card match-templates-card top-gap">
-            <div class="item-header compact-item-header">
-              <div>
-                <div class="section-label setup-section-heading">Match Templates</div>
-                <div class="tiny">Save and reuse setup only — never scores, settlements, recaps, or results.</div>
-              </div>
-              <button id="saveCurrentSetupTemplateBtn" type="button" class="secondary">Save Current Setup as Template</button>
+          <section id="scoringControlSection" class="span-2 card inset-card setup-advanced-card top-gap setup-destination-panel" data-setup-destination="scoring">
+            <div class="section-label setup-major-heading">Scoring Control</div>
+            <div class="tiny">Choose local or Shared Match scoring authority before play begins.</div>
+            <label class="inline-check top-gap"><input id="sharedMatchEnabled" name="sharedMatchEnabled" type="checkbox" /><span>Create as shared match (Supabase)</span></label>
+            <div id="sharedMatchHint" class="tiny top-gap">Shared matches are unavailable until supabase-config.js is filled in.</div>
+            <div class="grid two compact-grid top-gap">
+              <label><span>Score entry mode</span><select name="scoreEntryMode" id="scoreEntryModeSelect"><option value="single_device" selected>One Device Scores for Everyone</option><option value="assigned_players">Assigned Players Score Entry</option></select></label>
+              <label><span>Organizer / lead scorer</span><input class="input-match" name="officialScorerName" id="officialScorerNameInput" placeholder="Captain / pro shop / organizer" /></label>
             </div>
-            <div id="matchTemplatesPanel" class="match-templates-panel top-gap"></div>
-          </div>
+            <div id="teamInputRoleConfig" class="top-gap hidden"></div>
+            <div id="scoreEntryModeHint" class="tiny top-gap">One Device Scores for Everyone keeps one lead scorer in charge of entry.</div>
+          </section>
 
-          <details class="span-2 card inset-card setup-advanced-card top-gap">
-            <summary>
-              <span>
-                <span class="section-label setup-major-heading">Advanced Options</span>
-                <span class="tiny">Player Preferences supply the defaults. Expand only for this round's overrides.</span>
-              </span>
-            </summary>
-            <div class="advanced-options-grid top-gap">
-            <section class="advanced-option-group">
-            <div class="item-header compact-item-header">
-              <div>
-                <div class="section-label">Stat Tracking</div>
-                <div class="tiny">Turn on per-hole stat tracking and choose which players should be tracked.</div>
-              </div>
-            </div>
-            <label class="inline-check top-gap"><input id="enableStatTrackingInput" name="enableStatTracking" type="checkbox" /><span>Enable Stat Tracking</span></label>
-            <div id="statTrackingPlayersWrap" class="top-gap hidden"></div>
-            </section>
-            <section class="advanced-option-group">
-            <div class="section-label">Smart Score Advance</div>
-            <div class="tiny">Override the saved scoring rhythm for this round.</div>
+          <details class="span-2 card inset-card setup-advanced-card top-gap setup-destination-panel" data-setup-destination="advanced">
+            <summary><span><span class="section-label setup-major-heading">Preferences for This Round</span><span class="tiny">Inherited defaults; changes here apply only to this round.</span></span></summary>
+            <div class="advanced-options-grid top-gap"><section class="advanced-option-group">
+              <div class="section-label">Weather context</div>
+              <label class="inline-check top-gap"><input id="captureWeatherContextInput" name="captureWeatherContext" type="checkbox" checked /><span>Capture weather after the round starts</span></label>
+              <div class="tiny top-gap">Uses location only when capture begins. Scoring remains available if weather or location is unavailable.</div>
+            </section><div id="roundPreferenceSummary" class="round-preference-summary"></div></div>
+          </details>
+
+          <details class="span-2 card inset-card setup-advanced-card top-gap setup-destination-panel" data-setup-destination="advanced">
+            <summary><span><span class="section-label setup-major-heading">Smart Score Advance</span><span class="tiny">Uses your saved preference unless changed for this round.</span></span></summary>
+            <div class="advanced-options-grid top-gap"><section class="advanced-option-group">
             <label class="inline-check top-gap"><input id="smartScoreAdvanceInput" name="smartScoreAdvance" type="checkbox" checked /><span>Smart Score Advance</span></label>
             <label id="smartScoreAdvancePresetWrap" class="smart-score-preset-wrap"><span>Advance timing</span>
               <select id="smartScoreAdvancePresetSelect" name="smartScoreAdvancePreset">
@@ -240,51 +255,17 @@
             </label>
             <div id="smartScoreAdvanceSspHint" class="tiny top-gap hidden">Smart Score Advance is disabled because Sneaky / Sandy / Poley requires per-hole game inputs.</div>
             <div class="tiny top-gap">After entering gross scores, the app can advance to the next playable hole when Stat Tracking is off and every active scoring row has a score.</div>
-            </section>
-
-            <section class="advanced-option-group">
-            <div class="item-header compact-item-header">
-              <div>
-                <div class="section-label">Shared Match</div>
-                <div class="tiny">Enable shared storage only when this round needs it.</div>
-              </div>
-            </div>
-            <details class="setup-advanced-details top-gap">
-              <summary>Shared Match</summary>
-              <div class="tiny top-gap">Shared matches remain local-first. Course publishing is intentionally separate from scorecard import review.</div>
-              <label class="inline-check top-gap"><input id="sharedMatchEnabled" name="sharedMatchEnabled" type="checkbox" /><span>Create as shared match (Supabase)</span></label>
-              <div id="sharedMatchHint" class="tiny top-gap">Shared matches are unavailable until supabase-config.js is filled in.</div>
-            </details>
-            <details class="setup-advanced-details top-gap">
-              <summary>Scoring Control</summary>
-              <div class="tiny top-gap">Choose the scoring access model before scoring begins.</div>
-              <div class="grid two compact-grid top-gap">
-                <label><span>Score entry mode</span>
-                  <select name="scoreEntryMode" id="scoreEntryModeSelect">
-                    <option value="single_device" selected>One Device Scores for Everyone</option>
-                    <option value="assigned_players">Assigned Players Score Entry</option>
-                  </select>
-                </label>
-                <label><span>Organizer / lead scorer</span><input class="input-match" name="officialScorerName" id="officialScorerNameInput" placeholder="Captain / pro shop / organizer" /></label>
-              </div>
-              <div id="teamInputRoleConfig" class="top-gap hidden"></div>
-              <div id="scoreEntryModeHint" class="tiny top-gap">One Device Scores for Everyone keeps one lead scorer in charge of entry.</div>
-            </details>
-            </section>
-            </div>
+            </section></div>
           </details>
 
-          <div class="span-2 card inset-card round-readiness-card top-gap">
-            <div class="item-header compact-item-header">
-              <div>
-                <div class="section-label setup-major-heading">Pre-Round Checklist</div>
-                <div class="tiny">Resolve anything that needs attention before the first tee.</div>
-              </div>
-            </div>
-            <div id="roundReadinessPanel" class="top-gap"></div>
-          </div>
+          <details class="span-2 card inset-card setup-advanced-card match-templates-card top-gap setup-destination-panel" data-setup-destination="advanced">
+            <summary><span><span class="section-label setup-major-heading">Match Templates</span><span class="tiny">Save or reuse a setup without scores, settlements, recaps, or results.</span></span></summary>
+            <div class="advanced-options-grid top-gap"><section class="advanced-option-group"><button id="saveCurrentSetupTemplateBtn" type="button" class="secondary">Save Current Setup as Template</button><div id="matchTemplatesPanel" class="match-templates-panel top-gap"></div></section></div>
+          </details>
 
-          <div class="span-2 setup-start-round-card top-gap">
+          <div id="roundReadinessPanel" class="span-2 compact-readiness-panel top-gap setup-overview-only"></div>
+
+          <div class="span-2 setup-start-round-card top-gap setup-overview-only">
             <h2 class="setup-round-actions-heading">Round Actions</h2>
             <div class="actions top-gap preview-card-actions">
               <button id="matchSubmitBtn" type="submit" form="matchForm" class="setup-action-btn" aria-label="Start round">Start Round</button>
@@ -737,7 +718,7 @@
             <div id="hapticPreferenceHelp" class="tiny">Provides a brief vibration when supported after a score is committed.</div>
           </fieldset>
 
-          <div class="section-label preference-group-label">Press Preferences</div>
+          <div id="pressPreferencesHeading" class="section-label preference-group-label">Press Preferences</div>
           <div class="tiny">These settings become the default for new rounds. Any round may override them during Round Setup.</div>
           <fieldset class="preference-row"><legend>Presses</legend><div class="preference-segments" data-preference-control="press.pressesEnabled"><label><input type="radio" name="press.pressesEnabled" value="true" /><span>On</span></label><label><input type="radio" name="press.pressesEnabled" value="false" /><span>Off</span></label></div></fieldset>
           <fieldset class="preference-row"><legend>Trigger</legend><div class="preference-segments" data-preference-control="press.pressType"><label><input type="radio" name="press.pressType" value="MANUAL" /><span>Manual</span></label><label><input type="radio" name="press.pressType" value="PROMPT_AT_THRESHOLD" /><span>Prompt</span></label></div></fieldset>
@@ -757,6 +738,14 @@
               <label><input type="radio" name="roundDefaults.sharedMatchEnabled" value="false" /><span>Off</span></label>
             </div>
             <div id="sharedMatchDefaultHelp" class="tiny">Sets whether new rounds begin as Shared Matches. It can still be changed during Round Setup.</div>
+          </fieldset>
+          <fieldset class="preference-row" aria-describedby="weatherContextDefaultHelp">
+            <legend>Weather context</legend>
+            <div class="preference-segments" data-preference-control="roundDefaults.captureWeatherContext">
+              <label><input type="radio" name="roundDefaults.captureWeatherContext" value="true" /><span>On</span></label>
+              <label><input type="radio" name="roundDefaults.captureWeatherContext" value="false" /><span>Off</span></label>
+            </div>
+            <div id="weatherContextDefaultHelp" class="tiny">Sets whether new rounds request location to capture current weather after scoring begins. It can be changed for an individual round.</div>
           </fieldset>
 
           <div class="section-label preference-group-label">Quick Scoreboard</div>
@@ -829,7 +818,7 @@
       <div class="card tight-card app-updates-card">
         <h2>App Updates</h2>
         <div class="app-update-summary">
-          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.79</strong></div>
+          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.80</strong></div>
           <div><span class="muted-label">Build Date</span><strong id="appBuildTimestamp">loading…</strong></div>
           <div><span class="muted-label">Cache</span><span id="appActiveCacheName" class="break-word">checking…</span></div>
           <div><span class="muted-label">Update Available</span><strong id="appUpdateAvailableStatus">checking…</strong></div>
@@ -903,7 +892,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.3.79</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
+    <span id="appVersionFooter">v30.3.80</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
@@ -1048,8 +1037,8 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=30.3.79&amp;rev=1"></script>
-  <script src="identity-security.js?v=30.3.79&amp;rev=1"></script>
-  <script src="app.js?v=30.3.79&amp;rev=1"></script>
+  <script src="supabase-config.js?v=30.3.80&amp;rev=2"></script>
+  <script src="identity-security.js?v=30.3.80&amp;rev=2"></script>
+  <script src="app.js?v=30.3.80&amp;rev=2"></script>
 </body>
 </html>

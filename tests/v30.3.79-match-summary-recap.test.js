@@ -27,11 +27,7 @@ function fixture(recap = {}) {
   return { engine, live, metrics: engine.computeMatchMetrics(live) };
 }
 
-test('v30.3.79 release identity and immutable PWA assets are consistent', () => {
-  assert.equal(pkg.version, '30.3.79');
-  assert.equal(manifest.version, 'v30.3.79');
-  assert.match(app, /versionNumber:\s*'30\.3\.79'/);
-  assert.match(worker, /cacheName:\s*'the-dye-ledger-v30\.3\.79'/);
+test('v30.3.79 immutable PWA assets remain available after later upgrades', () => {
   ['app-icon-192-v30.3.79.png', 'app-icon-512-v30.3.79.png', 'apple-touch-icon-v30.3.79.png', 'favicon-32-v30.3.79.png', 'favicon-16-v30.3.79.png']
     .forEach(name => assert.equal(existsSync(new URL(`../branding/${name}`, import.meta.url)), true));
 });

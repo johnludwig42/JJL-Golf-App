@@ -529,17 +529,21 @@ The current strategic order is:
 1. Shared Match Summary and analytics clarity
 2. Match Setup navigation and readiness
 3. Competition Rules Contract and handicap hardening
-4. Beta Account and cloud ownership activation
-5. Play/Shared Match language, accessibility, and production confidence
-6. Amendment Sessions
+4. Match-derived shared design-system foundation
+5. Beta Account activation and More navigation
+6. Cloud security and ownership activation
 7. Library and Courses navigation
-8. Foundational Games expansion
+8. Scores experience synthesis
+9. Insights experience synthesis
+10. Stand-alone Play Mode UX, Shared Match language, accessibility, and production confidence
+11. Amendment Sessions
+12. Foundational Games expansion
 
    * Wolf
    * Sixes / Round Robin
    * Best Ball
-9. Event Edition
-10. Memory System, historical analytics, AI season/event recaps, and other strategic features
+13. Event Edition
+14. Memory System, historical analytics, AI season/event recaps, and other strategic features
 
 Status: Current planning assumption.
 

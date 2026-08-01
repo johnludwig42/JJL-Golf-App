@@ -17,7 +17,7 @@ The master depicts the gold ledger/flag mark above the white **THE DYE LEDGER** 
 | Browser favicon source | `branding/favicon-32.png` | 32 × 32 |
 | Small browser favicon source | `branding/favicon-16.png` | 16 × 16 |
 
-Release builds use immutable filenames such as `branding/apple-touch-icon-v30.3.79.png`. `index.html` uses the same release-specific Apple artwork for the header and its one authoritative Apple Touch Icon link. The header uses the PNG directly with `object-fit: contain`; there is no mask, background-image substitution, or runtime fallback to the 192 px asset.
+Release builds use immutable filenames such as `branding/apple-touch-icon-v30.3.80.png`. `index.html` uses the same release-specific Apple artwork for the header and its one authoritative Apple Touch Icon link. The header uses the PNG directly with `object-fit: contain`; there is no mask, background-image substitution, or runtime fallback to the 192 px asset.
 
 The 512 px and 192 px desktop PWA files, 180 px Apple file, and favicons are high-quality downsampled derivatives of the approved master. `manifest.json`, `index.html`, and `service-worker.js` reference only the current release-specific copies so browsers, Safari, installed PWAs, and the offline shell see a new resource identity together.
 

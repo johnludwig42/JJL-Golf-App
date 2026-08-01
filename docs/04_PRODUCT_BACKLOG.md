@@ -30,13 +30,13 @@ Priority labels:
 NOW:
 
 - v30.3.79: deployed Shared Match Summary hierarchy, clearer Scores/Quick Scoreboard roles, and expanded round analytics.
-- v30.3.80: implement the Match Setup overview with focused Course & Round, Players, Games & Stat Tracking, Scoring Control, and Advanced Options destinations.
+- v30.3.80: deployed the Match Setup overview with focused Course & Round, Players, Games & Stat Tracking, Scoring Control, and Advanced Options destinations.
 - Design Course & Round around Recent, Favorites, Nearby, and Search. Request location only after the golfer chooses Show Nearby Courses; location remains optional and never blocks setup or scoring.
 - Match Setup remains non-linear: sections can be visited in any order, use one persisted draft, and share one authoritative Start Round validation contract.
 
 NEXT:
 
-- v30.3.81: make every configured game state its basis, scoring method, allowance, tie/carryover behavior, stake meaning, Press behavior, and finality contract.
+- v30.3.81: in development — make every configured game state its basis, scoring method, allowance, tie/carryover behavior, stake meaning, Press behavior, and finality contract; remove the duplicate setup-readiness checklist while retaining destination badges and routed validation.
 - Adopt the v30.3.80 Match experience as the design-system reference for non-Play tabs: tab identity card, quiet overview, destination cards, focused drill-ins, predictable return behavior, and consistent hierarchy.
 - Apply that system to More with Beta Account Activation; then to Library and Courses after ownership/catalog boundaries are ready; then to Scores and Insights.
 - Preserve distinct tab purposes rather than cloning Match: configuration, review, browsing, analysis, and settings remain different jobs.

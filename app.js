@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.80',
-  versionNumber: '30.3.80',
-  cacheName: 'the-dye-ledger-v30.3.80',
+  version: 'v30.3.81',
+  versionNumber: '30.3.81',
+  cacheName: 'the-dye-ledger-v30.3.81',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Guided Match Setup'
+  buildLabel: 'Competition Rules & Handicap Trust'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -429,6 +429,64 @@ const GAME_SELECTION_GROUPS = Object.freeze([
   { label: 'Stroke & Hole Games', keys: ['team_stroke', 'skins', 'net_skins', 'greenies'] },
   { label: 'Specialty Games', keys: ['sneaky_sandy_poley', 'nine_point'] },
 ]);
+
+const COMPETITION_RULES_CATALOG_VERSION = 1;
+const COMPETITION_RULES_CATALOG = Object.freeze({
+  nassau: Object.freeze({ scoringMethod: 'Three independent match-play wagers: front nine, back nine, and overall', allowance: 'Round allowance; net matches stroke off the lowest Playing Handicap', tieTreatment: 'Each tied component is halved', stakeMeaning: 'Separate amount for each enabled component', escalation: 'Presses use the configured Press contract', finality: 'A component is final when its holes are complete or the result is mathematically decided' }),
+  singles_match: Object.freeze({ scoringMethod: 'One-on-one match play by holes won', allowance: 'Round allowance; net match strokes off the lowest Playing Handicap', tieTreatment: 'A tied match is halved', stakeMeaning: 'One match amount or the configured amount per hole', escalation: 'Presses use the configured Press contract', finality: 'Final when all holes are complete or the match is mathematically decided' }),
+  individual_match: Object.freeze({ scoringMethod: 'Independent player-versus-player Nassau, match-play, or stroke-play side matches', allowance: 'Each side match uses its saved gross or net basis', tieTreatment: 'Ties are halved unless the saved side-match format states otherwise', stakeMeaning: 'Amount saved for each side match', escalation: 'No implicit escalation', finality: 'Each side match finalizes independently' }),
+  team_match: Object.freeze({ scoringMethod: 'Team best-ball match play by holes won', allowance: 'Round allowance; net match strokes off the lowest Playing Handicap', tieTreatment: 'A tied match is halved', stakeMeaning: 'Amount paid per player on the losing team', escalation: 'Presses use the configured Press contract', finality: 'Final when all holes are complete or the match is mathematically decided' }),
+  team_stroke: Object.freeze({ scoringMethod: 'Team aggregate or best-ball stroke total', allowance: 'Round allowance applied to each player before team scoring', tieTreatment: 'A tied final total is halved', stakeMeaning: 'Amount paid per player by each losing team', escalation: 'No implicit escalation', finality: 'Final only when all required scores are complete' }),
+  skins: Object.freeze({ scoringMethod: 'Unique low gross or net score wins each skin', allowance: 'Gross or round-allowance net basis as configured', tieTreatment: 'Saved carryover rule controls tied holes', stakeMeaning: 'Amount per skin unit won from every opponent', escalation: 'Carryover only when explicitly saved', finality: 'Final when all holes are complete; unresolved final carry uses the saved treatment' }),
+  net_skins: Object.freeze({ scoringMethod: 'Unique low net score wins each skin', allowance: 'Round allowance applied before comparing net scores', tieTreatment: 'Saved carryover rule controls tied holes', stakeMeaning: 'Amount per skin unit won from every opponent', escalation: 'Carryover only when explicitly saved', finality: 'Final when all holes are complete; unresolved final carry uses the saved treatment' }),
+  greenies: Object.freeze({ scoringMethod: 'Selected participant closest to the pin on eligible par-3 holes', allowance: 'No handicap adjustment', tieTreatment: 'No winner unless a participant is selected', stakeMeaning: 'Amount won from every other selected participant', escalation: 'No implicit escalation', finality: 'Final when eligible results are saved and round scoring is complete' }),
+  sneaky_sandy_poley: Object.freeze({ scoringMethod: 'Versioned SSP points ledger using saved manual facts and net low-ball/low-total results', allowance: 'Round allowance applied to net components', tieTreatment: 'Tied comparisons push for no base point', stakeMeaning: 'Final team point differential multiplied by dollars per point', escalation: 'Bridge/Re-Bridge and Umbee follow the saved SSP contract', finality: 'Final when all required scores and SSP facts are complete' }),
+  nine_point: Object.freeze({ scoringMethod: 'Exactly nine points divided among three players on each completed hole', allowance: 'Saved gross or round-allowance net basis', tieTreatment: 'Points split according to the saved 9-Point scoring table', stakeMeaning: 'Final point differentials settle head-to-head at dollars per point', escalation: 'No implicit escalation', finality: 'Final when every required hole has three valid scores' }),
+});
+
+function getCompetitionRulesContract(gameKey, config = {}) {
+  const base = COMPETITION_RULES_CATALOG[gameKey] || {};
+  const contract = {
+    catalogVersion: COMPETITION_RULES_CATALOG_VERSION,
+    gameKey,
+    basis: gameKey === 'greenies' ? 'event' : String(config.basis || (gameKey === 'skins' ? 'gross' : 'net')).toLowerCase(),
+    scoringMethod: base.scoringMethod || 'Saved game configuration',
+    allowance: base.allowance || 'Round allowance when net scoring is used',
+    tieTreatment: base.tieTreatment || 'Saved game tie treatment',
+    stakeMeaning: base.stakeMeaning || 'Saved game stake',
+    escalation: base.escalation || 'No implicit escalation',
+    finality: base.finality || 'Final when all required facts are complete',
+  };
+  if (gameKey === 'skins' || gameKey === 'net_skins') {
+    const carryoverMode = config.carryoverMode === 'carry' ? 'carry' : 'none';
+    contract.tieTreatment = carryoverMode === 'carry' ? 'Tied skins carry forward to the next unique winner' : 'Tied skins do not carry forward';
+    contract.finality = carryoverMode === 'carry'
+      ? 'Final when all holes are complete; an unresolved carry after the final hole expires with no winner'
+      : 'Final when all holes are complete';
+  }
+  return Object.freeze(contract);
+}
+
+function stampCompetitionRulesConfig(game = {}) {
+  return { ...game, rulesCatalogVersion: Number(game.rulesCatalogVersion) || COMPETITION_RULES_CATALOG_VERSION };
+}
+
+function buildCompetitionRulesSummary(games = []) {
+  const rows = (games || []).map(game => {
+    const contract = getCompetitionRulesContract(game.key, game);
+    return `<div class="competition-rule-row" data-rules-game="${escapeHtml(game.key)}">
+      <strong>${escapeHtml(getGameLabel(game.key))}</strong>
+      <div class="tiny"><b>Basis:</b> ${escapeHtml(contract.basis)} · <b>Scoring:</b> ${escapeHtml(contract.scoringMethod)}</div>
+      <div class="tiny"><b>Allowance:</b> ${escapeHtml(contract.allowance)}</div>
+      <div class="tiny"><b>Ties:</b> ${escapeHtml(contract.tieTreatment)}</div>
+      <div class="tiny"><b>Stake:</b> ${escapeHtml(contract.stakeMeaning)}</div>
+      <div class="tiny"><b>Press/Carry:</b> ${escapeHtml(contract.escalation)}</div>
+      <div class="tiny"><b>Finality:</b> ${escapeHtml(contract.finality)}</div>
+    </div>`;
+  }).join('');
+  if (!rows) return '';
+  return `<details class="card inset-card competition-rules-summary top-gap"><summary><strong>Rules used for this round</strong><span class="tiny">Catalog v${COMPETITION_RULES_CATALOG_VERSION}</span></summary><div class="competition-rule-list top-gap">${rows}</div></details>`;
+}
 
 const GAME_LABELS = Object.fromEntries(GAME_LIBRARY.map(g => [g.key, g.label]));
 const CLOUD_MATCH_CACHE_PREFIX = 'the-dye-ledger-cloud-match:';
@@ -4768,8 +4826,10 @@ function getTeamStrokeScoreboardData(match, metrics, cfg = {}) {
 function computeSkinResults(match, metrics, cfg = {}) {
   const basis = String(cfg.basis || 'net').toLowerCase();
   const isTeam = cfg.skinsType === 'team';
+  const carries = cfg.carryoverMode === 'carry';
   const winnersByHole = [];
   const counts = {};
+  let pendingCarry = 0;
   (metrics?.holeResults || []).forEach(h => {
     if (!h.completed) return;
     if (isTeam) {
@@ -4779,8 +4839,12 @@ function computeSkinResults(match, metrics, cfg = {}) {
       const winners = scoredTeams.filter(t => t.value == best);
       if (winners.length === 1) {
         const winner = winners[0].team;
-        counts[winner] = (counts[winner] || 0) + 1;
-        winnersByHole.push({ holeNumber: h.holeNumber, winnerType: 'team', winner });
+        const value = 1 + (carries ? pendingCarry : 0);
+        counts[winner] = (counts[winner] || 0) + value;
+        winnersByHole.push({ holeNumber: h.holeNumber, winnerType: 'team', winner, value, carried: carries ? pendingCarry : 0 });
+        pendingCarry = 0;
+      } else if (carries) {
+        pendingCarry += 1;
       }
       return;
     }
@@ -4790,11 +4854,15 @@ function computeSkinResults(match, metrics, cfg = {}) {
     const winners = scoredPlayers.filter(p => p.value == best);
     if (winners.length === 1) {
       const winner = winners[0].playerId;
-      counts[winner] = (counts[winner] || 0) + 1;
-      winnersByHole.push({ holeNumber: h.holeNumber, winnerType: 'player', winner });
+      const value = 1 + (carries ? pendingCarry : 0);
+      counts[winner] = (counts[winner] || 0) + value;
+      winnersByHole.push({ holeNumber: h.holeNumber, winnerType: 'player', winner, value, carried: carries ? pendingCarry : 0 });
+      pendingCarry = 0;
+    } else if (carries) {
+      pendingCarry += 1;
     }
   });
-  return { counts, winnersByHole };
+  return { counts, winnersByHole, unresolvedCarry: carries ? pendingCarry : 0, carryoverMode: carries ? 'carry' : 'none', finalCarryTreatment: 'expire' };
 }
 function getGreeniesResults(match, metrics, cfg = {}) {
   const counts = {};
@@ -7910,11 +7978,17 @@ function normalizeState() {
     state.lastOpenedSharedMatchId = active?.sharedMatchId || active?.sharedMatchRef || null;
   }
 }
+function unroundedCourseHandicap(index, slope, rating, par) {
+  return Number(index) * (Number(slope) / 113) + (Number(rating) - Number(par));
+}
 function courseHandicap(index, slope, rating, par) {
-  return Math.round(Number(index) * (Number(slope) / 113) + (Number(rating) - Number(par)));
+  return Math.round(unroundedCourseHandicap(index, slope, rating, par));
 }
 function playingHandicap(courseHdcp, allowancePct) {
   return Math.round(Number(courseHdcp) * (Number(allowancePct) / 100));
+}
+function playingHandicapFromInputs(index, slope, rating, par, allowancePct) {
+  return playingHandicap(unroundedCourseHandicap(index, slope, rating, par), allowancePct);
 }
 function getCourse(courseId) { return state.courses.find(c => c.id === courseId); }
 function getTee(courseId, teeId) { return getCourse(courseId)?.tees.find(t => t.id === teeId); }
@@ -8022,7 +8096,7 @@ function computeMatchMetrics(match) {
     const player = getPlayer(mp.playerId);
     const playerTee = getPlayerTee(match, mp) || tee;
     const courseHdcp = courseHandicap(player?.index || 0, playerTee.slope, playerTee.rating, playerTee.par);
-    const playHdcp = playingHandicap(courseHdcp, match.allowance);
+    const playHdcp = playingHandicapFromInputs(player?.index || 0, playerTee.slope, playerTee.rating, playerTee.par, match.allowance);
     return {
       ...mp,
       player,
@@ -8204,7 +8278,7 @@ function renderSetupHandicapPreview() {
     if (!player || !playerTee) return null;
     const playerIndex = Number(player.index) || 0;
     const ch = courseHandicap(playerIndex, playerTee.slope, playerTee.rating, playerTee.par);
-    const ph = playingHandicap(ch, allowance);
+    const ph = playingHandicapFromInputs(playerIndex, playerTee.slope, playerTee.rating, playerTee.par, allowance);
     return { player, playerIndex, team: sp.team, tee: playerTee, courseHdcp: ch, playHdcp: ph };
   }).filter(Boolean);
   if (!enriched.length) {
@@ -11224,7 +11298,7 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
     const player = getPlayer(mp.playerId) || { id: mp.playerId, name: `Player ${idx + 1}`, index: 0 };
     const tee = getTee(match.courseId, mp.teeId || match.teeId);
     const courseHdcp = tee ? courseHandicap(player.index, tee.slope, tee.rating, tee.par) : 0;
-    const playHdcp = playingHandicap(courseHdcp, match.allowance);
+    const playHdcp = tee ? playingHandicapFromInputs(player.index, tee.slope, tee.rating, tee.par, match.allowance) : 0;
     return {
       id: `${match.sharedMatchId || match.id}:player:${player.id}`,
       match_id: match.sharedMatchId || match.id,
@@ -14572,6 +14646,7 @@ function buildLiveIndividualMatchStatus(match, metrics) {
 }
 
 function getSkinCarryoverCount(match, metrics, cfg = {}) {
+  if (cfg.carryoverMode !== 'carry') return 0;
   const basis = String(cfg.basis || 'net').toLowerCase();
   const isTeam = cfg.skinsType === 'team';
   let carry = 0;
@@ -15777,7 +15852,7 @@ function computeLivePayoutGames(match, metrics) {
           skins.winnersByHole.forEach(h => {
             const winner = h.winner;
             const losers = metrics.teams.filter(t => t.team !== winner).map(t => t.team);
-            transferTeamStakePerPerson(amounts, winner, losers, stake);
+            transferTeamStakePerPerson(amounts, winner, losers, stake * Math.max(1, Number(h.value) || 1));
           });
         }
         pushGame(cfg.key === 'net_skins' ? 'team_net_skins' : 'team_skins', `${cfg.key === 'net_skins' ? 'Team Net Skins' : 'Team Skins'} (${basisLabel})`, amounts, 'team', null, cfg.key, { winnersByHole: skins.winnersByHole, counts: skins.counts });
@@ -15786,7 +15861,7 @@ function computeLivePayoutGames(match, metrics) {
           skins.winnersByHole.forEach(h => {
             const winner = h.winner;
             const others = metrics.players.filter(p => p.playerId !== winner).map(p => p.playerId);
-            addVsField(amounts, winner, others, stake);
+            addVsField(amounts, winner, others, stake * Math.max(1, Number(h.value) || 1));
           });
         }
         pushGame(cfg.key === 'net_skins' ? 'individual_net_skins' : 'individual_skins', `${cfg.key === 'net_skins' ? 'Individual Net Skins' : 'Individual Skins'} (${basisLabel})`, amounts, 'individual', null, cfg.key, { winnersByHole: skins.winnersByHole, counts: skins.counts });
@@ -17105,13 +17180,12 @@ function expandSetupDisclosuresForWarnings(warnings = []) {
 
 function renderRoundReadiness() {
   const wrap = document.getElementById('roundReadinessPanel');
-  if (!wrap) return;
   const state = getRoundReadinessState();
   expandSetupDisclosuresForWarnings(state.warnings);
-  wrap.classList.toggle('hidden', !state.warnings.length);
-  wrap.innerHTML = state.warnings.length
-    ? `<div class="tiny compact-readiness-intro">Tap an item to finish setup.</div><div class="readiness-check-list top-gap">${state.warnings.map(c => `<button type="button" class="readiness-check readiness-check-button warn" data-readiness-destination="${getSetupDestinationForReadinessItem(c)}"><span>!</span><div><strong>${escapeHtml(c.label)}</strong><div class="tiny">${escapeHtml(c.warning)}</div></div></button>`).join('')}</div>`
-    : '';
+  if (wrap) {
+    wrap.classList.add('hidden');
+    wrap.replaceChildren();
+  }
   renderSetupDestinationStatuses(state);
 }
 
@@ -17266,12 +17340,12 @@ function getDefaultGameConfigs() {
     { key: 'individual_match', matchups: [] },
     { key: 'team_match', basis: 'net', stake: 5 },
     { key: 'team_stroke', basis: 'net', scoringMode: 'aggregate', stake: 5 },
-    { key: 'skins', basis: 'gross', skinsType: 'individual', stake: 5 },
-    { key: 'net_skins', basis: 'net', skinsType: 'individual', stake: 5 },
+    { key: 'skins', basis: 'gross', skinsType: 'individual', carryoverMode: 'carry', finalCarryTreatment: 'expire', stake: 5 },
+    { key: 'net_skins', basis: 'net', skinsType: 'individual', carryoverMode: 'carry', finalCarryTreatment: 'expire', stake: 5 },
     { key: 'greenies', stakePerPlayer: 1, participants: [] },
     getDefaultSneakySandyPoleyConfig(),
     { key: 'nine_point', basis: 'net', stakePerPoint: 1, playerIds: [] },
-  ];
+  ].map(stampCompetitionRulesConfig);
 }
 function getGameConfig(key, existing = []) {
   return (existing || []).find(g => g.key === key) || getDefaultGameConfigs().find(g => g.key === key) || { key };
@@ -17568,7 +17642,13 @@ function renderGamesPicker(existing = []) {
             <option value="gross" ${cfg.basis === 'gross' ? 'selected' : ''}>Gross</option>
             <option value="net" ${cfg.basis === 'net' ? 'selected' : ''}>Net</option>
           </select></label>
+          <label><span>Tied skins</span><select data-game-config="${game.key}" data-field="carryoverMode">
+            <option value="carry" ${cfg.carryoverMode === 'carry' ? 'selected' : ''}>Carry forward</option>
+            <option value="none" ${cfg.carryoverMode !== 'carry' ? 'selected' : ''}>No carry</option>
+          </select></label>
+          <input type="hidden" data-game-config="${game.key}" data-field="finalCarryTreatment" value="expire" />
           <label><span>$ Stake</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stake" value="${cfg.stake ?? 5}" /></label>
+          <div class="tiny">Any carry still unresolved after the final hole expires with no winner.</div>
         </div>
       </div>`;
     }
@@ -17582,7 +17662,13 @@ function renderGamesPicker(existing = []) {
           </select></label>
           <input type="hidden" data-game-config="${game.key}" data-field="basis" value="net" />
           <div class="tiny">Basis: <strong>Net</strong></div>
+          <label><span>Tied skins</span><select data-game-config="${game.key}" data-field="carryoverMode">
+            <option value="carry" ${cfg.carryoverMode === 'carry' ? 'selected' : ''}>Carry forward</option>
+            <option value="none" ${cfg.carryoverMode !== 'carry' ? 'selected' : ''}>No carry</option>
+          </select></label>
+          <input type="hidden" data-game-config="${game.key}" data-field="finalCarryTreatment" value="expire" />
           <label><span>$ Stake</span><input type="number" step="0.01" data-game-config="${game.key}" data-field="stake" value="${cfg.stake ?? 5}" /></label>
+          <div class="tiny">Any carry still unresolved after the final hole expires with no winner.</div>
         </div>
       </div>`;
     }
@@ -17692,6 +17778,7 @@ function renderGamesPicker(existing = []) {
       </div>${buildPressSetupControls(game.key, cfg)}
     </div>`;
   }).join('');
+  configsWrap.insertAdjacentHTML('beforeend', buildCompetitionRulesSummary(normalizedExisting.filter(game => selectedKeys.includes(game.key))));
   syncSmartScoreAdvancePresetUi({ selectedGames: normalizedExisting });
 }
 function collectSelectedGames() {
@@ -17736,7 +17823,7 @@ function collectSelectedGames() {
     }
     return cfg;
   });
-  return normalizeSelectedGamesOrder(games);
+  return normalizeSelectedGamesOrder(games.map(stampCompetitionRulesConfig));
 }
 
 
@@ -18693,7 +18780,7 @@ function installHandlers() {
     const allowance = Number(document.getElementById('calcAllowance').value) || 100;
     if (!player || !course || !tee) return toast('Select player, course, and tee.');
     const ch = courseHandicap(player.index, tee.slope, tee.rating, tee.par);
-    const ph = playingHandicap(ch, allowance);
+    const ph = playingHandicapFromInputs(player.index, tee.slope, tee.rating, tee.par, allowance);
     document.getElementById('calcResult').innerHTML = `<strong>${escapeHtml(player.name)}</strong> · Course Hdcp ${ch} · Playing Hdcp ${ph}`;
   });
 
@@ -19416,6 +19503,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   function toastMatchSetupFailure(validationState) {
     const message = formatMatchSetupFailureMessage(validationState);
     toast(message);
+    const firstWarning = getRoundReadinessState().warnings[0];
+    if (firstWarning) openSetupDestination(getSetupDestinationForReadinessItem(firstWarning));
     try { window.dyeLedgerLastMatchSetupValidation = validationState; } catch {}
   }
 
@@ -19500,6 +19589,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       statTrackingPlayerIds: fd.get('enableStatTracking') === 'on' ? collectStatTrackingPlayerIdsFromSetup(selectedPlayers) : [],
       teamScorers,
       selectedGames: validatedSelectedGames,
+      competitionRulesCatalogVersion: existing?.competitionRulesCatalogVersion || COMPETITION_RULES_CATALOG_VERSION,
       featuredCompetition: normalizeFeaturedCompetition(fd.get('featuredCompetition') || existing?.featuredCompetition || 'auto'),
       status: existing?.status || 'active',
       completedAt: existing?.completedAt || null,
@@ -20635,6 +20725,9 @@ function installDyeLedgerLiveEngineAdapter() {
     handlePlayerComboboxOptionPointerDown,
     getDefaultGameConfigs,
     getGameConfig,
+    getCompetitionRulesContract,
+    stampCompetitionRulesConfig,
+    buildCompetitionRulesSummary,
     setSharedMatchDraftMode,
     getMatchSetupValidationState,
     buildNextRoundDraft,
@@ -20643,8 +20736,10 @@ function installDyeLedgerLiveEngineAdapter() {
     triggerSmartScoreHaptic,
     createEmptyMatch,
     normalizeMatch,
+    unroundedCourseHandicap,
     courseHandicap,
     playingHandicap,
+    playingHandicapFromInputs,
     computeMatchMetrics,
     computeLivePayoutGames,
     getPayoutReportContext,

@@ -23,7 +23,8 @@ test('Match setup presents the accepted destination-based round-preparation hier
   assert.doesNotMatch(html, /data-setup-destination="advanced" open/);
   assert.match(html, /id="setupDestinationBackBtn"/);
   for (const label of ['Smart Score Advance', 'Stat Tracking', 'Shared Match', 'Scoring Control']) assert.match(html, new RegExp(label));
-  assert.match(app, /Tap an item to finish setup/);
+  assert.doesNotMatch(app, /Tap an item to finish setup/);
+  assert.doesNotMatch(html, /roundReadinessPanel/);
 });
 
 test('game selection is grouped by the golfer mental model', () => {
@@ -48,14 +49,14 @@ test('Library course tools are visually cohesive and maintenance is disclosed', 
 });
 
 test('Home Screen branding is shared by the header while install assets remain complete', () => {
-  assert.match(html, /src="\.\/branding\/apple-touch-icon-v30\.3\.80\.png" alt="The Dye Ledger"/);
-  assert.match(html, /href="\.\/branding\/apple-touch-icon-v30\.3\.80\.png"/);
+  assert.match(html, /src="\.\/branding\/apple-touch-icon-v30\.3\.81\.png" alt="The Dye Ledger"/);
+  assert.match(html, /href="\.\/branding\/apple-touch-icon-v30\.3\.81\.png"/);
   assert.deepEqual(manifest.icons.map(icon => icon.src), [
-    './branding/app-icon-192-v30.3.80.png',
-    './branding/app-icon-512-v30.3.80.png',
-    './branding/apple-touch-icon-v30.3.80.png',
+    './branding/app-icon-192-v30.3.81.png',
+    './branding/app-icon-512-v30.3.81.png',
+    './branding/apple-touch-icon-v30.3.81.png',
   ]);
-  for (const asset of ['app-icon-192-v30.3.80.png', 'app-icon-512-v30.3.80.png', 'apple-touch-icon-v30.3.80.png', 'favicon-32-v30.3.80.png', 'favicon-16-v30.3.80.png']) {
+  for (const asset of ['app-icon-192-v30.3.81.png', 'app-icon-512-v30.3.81.png', 'apple-touch-icon-v30.3.81.png', 'favicon-32-v30.3.81.png', 'favicon-16-v30.3.81.png']) {
     assert.match(serviceWorker, new RegExp(`branding/${asset.replace('.', '\\.')}`));
   }
 });

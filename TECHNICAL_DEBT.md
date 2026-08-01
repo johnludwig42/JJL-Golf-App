@@ -249,9 +249,9 @@ The clean landing page will summarize five independently accessible destinations
 4. Scoring Control
 5. Advanced Options seeded from Preferences
 
-This is not a rigid wizard. Golfers may visit sections in any order, selections autosave into one draft, and the landing page owns readiness, linked validation guidance, and Start Round. Existing calculation, persistence, Shared Match, template, and validation contracts remain authoritative during the navigation redesign.
+This is not a rigid wizard. Golfers may visit sections in any order, selections autosave into one draft, and the landing page owns readiness and Start Round. Destination status badges provide the normal readiness signal. A failed Start Round action routes to the first affected destination and retains specific validation guidance instead of showing a persistent duplicate checklist. Existing calculation, persistence, Shared Match, template, and validation contracts remain authoritative during the navigation redesign.
 
-Status: Implemented in v30.3.80; retain as a usability and manual-acceptance watch item.
+Status: Implemented in v30.3.80 and simplified in v30.3.81; retain as a usability and manual-acceptance watch item.
 
 Status: Should address before Version 1.0.
 

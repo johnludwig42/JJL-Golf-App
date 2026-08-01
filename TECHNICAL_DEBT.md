@@ -253,6 +253,8 @@ This is not a rigid wizard. Golfers may visit sections in any order, selections 
 
 Status: Implemented in v30.3.80 and simplified in v30.3.81; retain as a usability and manual-acceptance watch item.
 
+The shared presentation grammar is extended to Scores, Library, and More in v30.3.82. Destination selection remains ephemeral UI state and must not become another persistence schema, synchronization fact, or historical attribute. Play and Insights remain intentionally outside this release.
+
 Status: Should address before Version 1.0.
 
 ---
@@ -406,9 +408,16 @@ AI recap direction is strong.
 
 Output quality depends on prompts, available data, notes, memories, and edge-case handling.
 
-### Future direction
+### Planned near-term treatment
 
-Create canned acceptance examples:
+Deliver a focused AI Recap Governance & Content Reliability release before Beta Account Activation:
+
+* recover the deployed `round-recap` Edge Function source into version control and document the live-state inventory procedure
+* create one authoritative, versioned content contract shared by the application payload and server prompt
+* make scores, handicaps, game results, Featured Competition status, settlement, and other deterministic Round facts binding over conflicting notes or generated prose
+* define tone, structure, supported section omission, concise output limits, privacy, sensitive-content handling, unsupported inference, and incomplete/provisional-round language
+* retain explicit draft, edit, accept, attribution, and post-freeze Amendment Session boundaries
+* add deterministic contradiction checks and canned acceptance examples:
 
 * normal 18-hole match
 * incomplete round
@@ -428,7 +437,7 @@ Evaluate for:
 * natural weather use
 * settlement accuracy
 
-Status: Deferred but important.
+Status: Planned as the next focused release after v30.3.82. Production inventory is read-only; test-environment validation and separate Product Owner deployment approval are required.
 
 ---
 

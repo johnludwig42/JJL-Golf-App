@@ -1,6 +1,6 @@
 {
   "name": "the-dye-ledger",
-  "version": "30.3.81",
+  "version": "30.3.82",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,6 +12,7 @@
     "test:v30.3.79": "node --test tests/v30.3.79-match-summary-recap.test.js",
     "test:v30.3.80": "node --test tests/v30.3.80-match-setup-navigation.test.js",
     "test:v30.3.81": "node --test tests/v30.3.81-competition-rules.test.js",
+    "test:v30.3.82": "node --test tests/v30.3.82-product-experience-system.test.js",
     "test:identity-security": "node --test tests/v30.3.75-identity-security.test.js",
     "test:run": "npm run test",
     "simulate": "node scripts/simulate-rounds.js",

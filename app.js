@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.81',
-  versionNumber: '30.3.81',
-  cacheName: 'the-dye-ledger-v30.3.81',
+  version: 'v30.3.82',
+  versionNumber: '30.3.82',
+  cacheName: 'the-dye-ledger-v30.3.82',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Competition Rules & Handicap Trust'
+  buildLabel: 'Product Experience System'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -18252,6 +18252,62 @@ function loadCourseEditor(courseId = null) {
   form.name.value = course.name; form.city.value = course.city; form.state.value = course.state; form.country.value = course.country;
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+const EXPERIENCE_DESTINATIONS = Object.freeze({
+  leaderboard: Object.freeze({
+    results: ['Results', 'Outcome, games, momentum, and settlement.'],
+    scorecards: ['Scorecards', 'Team, player, and classic scorecards.'],
+    statistics: ['Statistics', 'Tracked statistics and specialty-game detail.'],
+    story: ['Round Story', 'Sharing, notes, memories, and recap.'],
+  }),
+  courses: Object.freeze({
+    rounds: ['Rounds', 'Continue an unfinished round or review saved history.'],
+    courses: ['Courses', 'Find, import, add, and maintain reusable courses.'],
+    players: ['Players', 'Manage saved golfers and handicap indexes.'],
+    session: ['Current Session', 'Review the active multi-round group.'],
+  }),
+  settings: Object.freeze({
+    account: ['Account & Security', 'Review sign-in status and local-first account guidance.'],
+    preferences: ['Preferences', 'Set scoring, Press, round, and Quick Scoreboard defaults.'],
+    utilities: ['Golf Utilities', 'Use the handicap calculator and local data tools.'],
+    shared: ['Shared Match', 'Join, refresh, and inspect shared scoring.'],
+    support: ['App Support', 'Check updates, diagnostics, recent errors, and release notes.'],
+  }),
+});
+
+function getExperienceContainer(tabId) {
+  return tabId === 'leaderboard' ? document.getElementById('leaderboardWrap') : document.getElementById(tabId);
+}
+
+function openExperienceDestination(tabId, destination, { scroll = true } = {}) {
+  const container = getExperienceContainer(tabId);
+  const copy = EXPERIENCE_DESTINATIONS[tabId]?.[destination];
+  if (!container || !copy) return false;
+  container.dataset.activeDestination = destination;
+  const header = container.querySelector('[data-experience-destination-header]');
+  header?.classList.remove('hidden');
+  const title = header?.querySelector('[data-experience-destination-title]');
+  const description = header?.querySelector('[data-experience-destination-description]');
+  if (title) title.textContent = copy[0];
+  if (description) description.textContent = copy[1];
+  container.querySelectorAll(`[data-experience-section~="${destination}"]`).forEach(section => {
+    if (section.tagName === 'DETAILS') section.open = true;
+  });
+  if (scroll) window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+  header?.querySelector('[data-experience-back]')?.focus?.({ preventScroll: true });
+  return true;
+}
+
+function closeExperienceDestination(tabId, { scroll = true } = {}) {
+  const container = getExperienceContainer(tabId);
+  if (!container) return false;
+  delete container.dataset.activeDestination;
+  container.querySelector('[data-experience-destination-header]')?.classList.add('hidden');
+  if (scroll) window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+  container.querySelector('[data-experience-target]')?.focus?.({ preventScroll: true });
+  return true;
+}
+
 function activateTab(tabId) {
   const previousTabId = document.querySelector('.panel.active')?.id || '';
   const closedCompletedSummary = tabId === 'setup' && closeCompletedSummarySession();
@@ -18270,6 +18326,7 @@ function activateTab(tabId) {
     renderCurrentMatch();
   }
   if (tabId === 'courses') renderPlayers();
+  if (previousTabId !== tabId && EXPERIENCE_DESTINATIONS[tabId]) closeExperienceDestination(tabId, { scroll: false });
   if (previousTabId !== tabId) window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
 }
 
@@ -18279,6 +18336,7 @@ function viewCompletedMatchSummary() {
   hidePostRoundActions();
   activateTab('leaderboard');
   renderLeaderboard();
+  openExperienceDestination('leaderboard', 'results', { scroll: false });
 }
 
 function loadTeeEditor(courseId = null, teeId = null) {
@@ -18574,6 +18632,20 @@ function installHandlers() {
       return;
     }
   });
+  document.addEventListener('click', event => {
+    const destinationButton = event.target.closest?.('[data-experience-target]');
+    if (destinationButton) {
+      const panel = destinationButton.closest('.panel');
+      if (panel) openExperienceDestination(panel.id, destinationButton.dataset.experienceTarget);
+      return;
+    }
+    const backButton = event.target.closest?.('[data-experience-back]');
+    if (backButton) {
+      const panel = backButton.closest('.panel');
+      if (panel) closeExperienceDestination(panel.id);
+    }
+  });
+
   document.querySelectorAll('.tab').forEach(btn => btn.addEventListener('click', () => {
     const tabId = btn.dataset.tab;
     activateTab(tabId);
@@ -20728,6 +20800,8 @@ function installDyeLedgerLiveEngineAdapter() {
     getCompetitionRulesContract,
     stampCompetitionRulesConfig,
     buildCompetitionRulesSummary,
+    openExperienceDestination,
+    closeExperienceDestination,
     setSharedMatchDraftMode,
     getMatchSetupValidationState,
     buildNextRoundDraft,

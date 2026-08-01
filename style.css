@@ -5930,3 +5930,30 @@ html.quick-scoreboard-open,body.quick-scoreboard-open{overflow:hidden!important;
 .competition-rule-list{display:grid;gap:10px}
 .competition-rule-row{padding:12px;border:1px solid var(--line,#d7e3db);border-radius:14px;background:#fff}
 .competition-rule-row .tiny{margin-top:4px;line-height:1.4}
+.experience-page-header{text-align:left}
+.product-tab-header{padding:16px!important;border-left:0!important;background:#fff!important;text-align:left}
+.product-tab-header>.item-header{min-height:0;align-items:flex-start;justify-content:flex-start}
+.product-tab-header-copy{flex:1 1 auto;width:100%;min-width:0;text-align:left}
+.product-tab-header h2{margin:0 0 5px!important;font-size:1.35rem!important;line-height:1.2}
+.product-tab-header .tiny{line-height:1.4}
+#leaderboardWrap>.experience-page-header{order:-300}
+#leaderboardWrap>.experience-overview{order:-290}
+#leaderboardWrap>.experience-destination-header{order:-280}
+.experience-overview{padding:14px}
+.experience-destination-grid{display:grid;gap:10px}
+.experience-destination-card{width:100%;min-height:72px;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 16px;border:1px solid var(--line,#d7e3db);border-radius:16px;background:#fff;color:inherit;text-align:left;box-shadow:none}
+.experience-destination-card:hover,.experience-destination-card:focus-visible{border-color:var(--primary,#0b5d3b);background:#f7fbf8;transform:none}
+.experience-destination-card>span:first-child{display:grid;gap:3px;min-width:0}
+.experience-destination-card strong{font-size:1rem;line-height:1.2}
+.experience-destination-card small{font-size:.78rem;font-weight:500;color:var(--muted,#586b61);line-height:1.35}
+.experience-status{flex:0 0 auto;border-radius:999px;padding:5px 9px;background:#edf4ef;color:#244c38;font-size:.72rem;font-weight:800}
+.experience-destination-header{align-items:center;justify-content:space-between;gap:16px;text-align:left}
+.experience-destination-header:not(.hidden){display:flex}
+.experience-destination-header h2{margin:2px 0 0}
+.experience-back-button{flex:0 0 auto;white-space:nowrap}
+.experience-panel:not([data-active-destination])>[data-experience-section]{display:none!important}
+.experience-panel[data-active-destination]>[data-experience-overview]{display:none!important}
+.experience-panel[data-active-destination="results"]>[data-experience-section]:not([data-experience-section~="results"]),.experience-panel[data-active-destination="scorecards"]>[data-experience-section]:not([data-experience-section~="scorecards"]),.experience-panel[data-active-destination="statistics"]>[data-experience-section]:not([data-experience-section~="statistics"]),.experience-panel[data-active-destination="story"]>[data-experience-section]:not([data-experience-section~="story"]),.experience-panel[data-active-destination="rounds"]>[data-experience-section]:not([data-experience-section~="rounds"]),.experience-panel[data-active-destination="courses"]>[data-experience-section]:not([data-experience-section~="courses"]),.experience-panel[data-active-destination="players"]>[data-experience-section]:not([data-experience-section~="players"]),.experience-panel[data-active-destination="session"]>[data-experience-section]:not([data-experience-section~="session"]),.experience-panel[data-active-destination="account"]>[data-experience-section]:not([data-experience-section~="account"]),.experience-panel[data-active-destination="preferences"]>[data-experience-section]:not([data-experience-section~="preferences"]),.experience-panel[data-active-destination="utilities"]>[data-experience-section]:not([data-experience-section~="utilities"]),.experience-panel[data-active-destination="shared"]>[data-experience-section]:not([data-experience-section~="shared"]),.experience-panel[data-active-destination="support"]>[data-experience-section]:not([data-experience-section~="support"]){display:none!important}
+@media(min-width:720px){.experience-destination-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.experience-destination-card:last-child:nth-child(odd){grid-column:1/-1}}
+@media(max-width:520px){.experience-destination-header{align-items:flex-start;flex-direction:column}.experience-back-button{order:-1}.experience-destination-card{min-height:68px;padding:13px}}
+@media print{.experience-panel>[data-experience-section]{display:block!important}.experience-panel>[data-experience-section].hidden{display:none!important}}

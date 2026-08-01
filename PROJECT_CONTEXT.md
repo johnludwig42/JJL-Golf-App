@@ -178,7 +178,7 @@ Recent releases:
 Current release implementation (updated August 1, 2026):
 
 ```text
-v30.3.81 — Competition Rules & Handicap Trust
+v30.3.82 — Product Experience System
 ```
 
 ## 8. Near-Term Roadmap
@@ -194,39 +194,46 @@ v30.3.81 — Competition Rules & Handicap Trust
    - Games & Stat Tracking
    - Scoring Control
    - Advanced Options seeded from Preferences
-4. v30.3.81 — Competition Rules Contract & Handicap Audit (in development)
+4. v30.3.81 — Competition Rules Contract & Handicap Audit (deployed)
    - Versioned Game Rules Catalog
    - WHS calculation precision and game-specific allowances
    - Explicit Skins carryover and wager contracts
    - Nassau Gross/Net presentation and Match Play finality wording
    - Quiet Match overview using destination status badges without a duplicate readiness checklist
-5. Match-Derived Product Design System
-   - Treat the v30.3.80 Match experience as the reference for all non-Play tabs
+5. v30.3.82 — Match-Derived Product Experience System (in development)
+   - Treat the v30.3.80 Match experience as the reference for Scores, Library, and More
    - Standardize tab identity cards, quiet overview pages, destination cards, focused drill-ins, left-aligned destination headers, return behavior, status language, spacing, disclosures, and primary-action hierarchy
-   - Preserve each tab's distinct job; shared structure must not make Scores, Library, Insights, More, and Play behave identically
-6. Beta Account Activation, Account UX & More Navigation
+   - Preserve each tab's distinct job; Play and Insights remain unchanged in this release
+6. AI Recap Governance & Content Reliability
+   - Recover the deployed `round-recap` Supabase Edge Function source into version control and inventory the live function without changing production
+   - Establish one authoritative, versioned content specification covering tone, structure, fact precedence, Featured Competition, Memories, notes, weather, incomplete rounds, provisional money, privacy, sensitive content, and unsupported inference
+   - Make deterministic Round facts binding when user notes or generated prose conflict; keep AI storytelling subordinate to scoring, game results, and settlement
+   - Define concise output limits, supported section omission, draft/edit/accept behavior, attribution, and post-freeze Amendment Session boundaries
+   - Add deterministic contradiction checks and canned acceptance fixtures for normal, incomplete, no-notes, weather-heavy, dramatic, one-sided, Shared Match, stats-heavy, social, and sensitive-content rounds
+   - Validate any server change only in an explicitly configured non-production environment; deployment requires separate Product Owner approval
+7. Beta Account Activation, Account UX & More Navigation
    - Apply the shared design system first to More
    - Organize Account & Security, Preferences, Press Preferences, Shared Match & Connectivity, Data & Diagnostics, and About as focused destinations
-7. Cloud Security & Ownership Activation
-8. Library & Courses Navigation
+8. Cloud Security & Ownership Activation
+9. Library & Courses Navigation
    - Canonical course coordinates, provenance, correction, and catalog-backed nearby lookup
    - On-device nearby sorting for saved courses when trustworthy coordinates are available
    - Apply the shared design system to Rounds, Golfers, Courses, Match Templates, and Memories after ownership/catalog boundaries are ready
-9. Scores Experience Synthesis
+10. Scores Experience Synthesis
    - Apply the shared design system to Round Status, Scorecards, Games & Results, Statistics, and Notes & Memories
    - Preserve authoritative scoring, settlement, completed-round history, and the established Quick Scoreboard/Match Summary boundaries
-10. Insights Experience Synthesis
+11. Insights Experience Synthesis
    - Organize insights around golfer questions: My Game, Scoring Trends, Hole Performance, Games & Competition, and Round Comparisons
    - Continue deriving analytics from authoritative Round facts rather than duplicating history
-11. Stand-Alone Play Mode UX, Shared Match Language, Accessibility & Production Hardening
+12. Stand-Alone Play Mode UX, Shared Match Language, Accessibility & Production Hardening
    - Keep Play distinct as the current-hole scoring instrument
    - Evaluate compact active-play chrome, mobile scoring rows, progressive game detail, explicit completion feedback, and one authoritative save/advance action
-12. Amendment Sessions
-13. Foundational Games Expansion
+13. Amendment Sessions
+14. Foundational Games Expansion
    - Wolf
    - Sixes / Round Robin
    - Best Ball
-14. Event Edition Foundation
+15. Event Edition Foundation
 
 UX work follows a progressive-disclosure program rather than a whole-app rewrite. Each release simplifies one complete workflow while preserving local-first storage, scoring truth, Shared Match authority, and backward compatibility. See `docs/UX_PRODUCT_STRATEGY.md`.
 

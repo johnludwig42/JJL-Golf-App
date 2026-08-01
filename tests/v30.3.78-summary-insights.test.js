@@ -87,7 +87,7 @@ test('Player Insights derive exact completed-hole rates and GIR-based birdie con
         team: 1,
         teeId: 'insight-tee',
         scores: scoreRows([2, 4, 6, 3, 5, 4]),
-        stats: pars.map((_, index) => ({ holeNumber: index + 1, green: [0, 1, 5].includes(index), entryCompleted: true })),
+        stats: pars.map((_, index) => ({ holeNumber: index + 1, fairway: [1, 5].includes(index), green: [0, 1, 5].includes(index), entryCompleted: true })),
       },
       {
         playerId: 'b',
@@ -118,12 +118,29 @@ test('Player Insights derive exact completed-hole rates and GIR-based birdie con
   assert.equal(alpha.totals.greensInRegulation, 3);
   assert.equal(alpha.totals.convertedGreens, 2);
   assert.equal(alpha.birdieConversionRate, 2 / 3);
+  assert.equal(alpha.totals.fairwayHitOpportunities, 2);
+  assert.equal(alpha.totals.fairwayHitGirs, 2);
+  assert.equal(alpha.totals.fairwayMissedOpportunities, 2);
+  assert.equal(alpha.totals.fairwayMissedGirs, 0);
+  assert.equal(alpha.fairwayHitGirRate, 1);
+  assert.equal(alpha.fairwayMissedGirRate, 0);
+  assert.equal(alpha.fairwayGirAdvantage, 1);
   const presentation = engine.buildPlayerRoundInsights(live, metrics);
   assert.match(presentation, /Alpha/);
   assert.match(presentation, /33%/);
   assert.match(presentation, /67% \(2\/3\)/);
+  assert.match(presentation, /GIR · Fairway Hit/);
+  assert.match(presentation, /100% \(2\/2\)/);
+  assert.match(presentation, /\+100 pp/);
   assert.doesNotMatch(presentation, /Provisional/);
   assert.equal(JSON.stringify(live), before);
+  const record = engine.buildRoundRecord(live, metrics);
+  assert.deepEqual(JSON.parse(JSON.stringify(record.players.find(row => row.playerId === 'a').approachPerformance)), {
+    fairwayHitOpportunities: 2,
+    fairwayHitGirs: 2,
+    fairwayMissedOpportunities: 2,
+    fairwayMissedGirs: 0,
+  });
   live.players.find(row => row.playerId === 'b').scores[5].gross = null;
   const partial = engine.buildPlayerRoundInsights(live, engine.computeMatchMetrics(live));
   assert.match(partial, /Provisional/);

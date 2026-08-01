@@ -437,7 +437,7 @@ Evaluate for:
 * natural weather use
 * settlement accuracy
 
-Status: Planned as the next focused release after v30.3.82. Production inventory is read-only; test-environment validation and separate Product Owner deployment approval are required.
+Status: Planned for v30.3.84, immediately after the focused v30.3.83 Play and update-reliability release. Production inventory is read-only; test-environment validation and separate Product Owner deployment approval are required.
 
 ---
 
@@ -648,6 +648,8 @@ Status: Future Vision.
 ---
 
 ## 21. Historical Analytics and AI Insights
+
+v30.3.83 adds auditable single-round fairway-conditioned GIR counts and presentation. Multi-round aggregation, trend filters, confidence treatment, and AI Recap eligibility remain deferred. Historical aggregation must sum successes and opportunities across RoundRecords rather than average round percentages.
 
 ### Current state
 

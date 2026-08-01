@@ -57,9 +57,9 @@ test('print restores the complete Scores record independent of selected destinat
   assert.match(html, /data-experience-section="story"/);
 });
 
-test('v30.3.82 identity and immutable PWA assets are wired consistently', () => {
-  assert.match(app, /version: 'v30\.3\.82'/);
-  assert.match(html, /apple-touch-icon-v30\.3\.82\.png/);
-  assert.match(html, /style\.css\?v=30\.3\.82&amp;rev=5/);
+test('v30.3.82 Product Experience remains present after the current PWA upgrade', () => {
+  assert.match(app, /version: 'v30\.3\.83'/);
+  assert.match(html, /apple-touch-icon-v30\.3\.83\.png/);
+  assert.match(html, /style\.css\?v=30\.3\.83&amp;rev=4/);
   assert.match(notes, /v30\.3\.82/);
 });

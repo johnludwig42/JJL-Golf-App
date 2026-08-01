@@ -7,18 +7,18 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=30.3.82&amp;rev=5" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v30.3.82.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v30.3.82.png" />
-  <link rel="shortcut icon" href="./branding/favicon-32-v30.3.82.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v30.3.82.png" />
-  <link rel="stylesheet" href="style.css?v=30.3.82&amp;rev=5" />
+  <link rel="manifest" href="manifest.json?v=30.3.83&amp;rev=4" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v30.3.83.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v30.3.83.png" />
+  <link rel="shortcut icon" href="./branding/favicon-32-v30.3.83.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v30.3.83.png" />
+  <link rel="stylesheet" href="style.css?v=30.3.83&amp;rev=4" />
 </head>
 <body>
   <div class="app-chrome"><header class="app-header compact-header">
     <div class="brand-wrap">
       <div class="brand-mark">
-        <img src="./branding/apple-touch-icon-v30.3.82.png" alt="The Dye Ledger" />
+        <img src="./branding/apple-touch-icon-v30.3.83.png" alt="The Dye Ledger" />
       </div>
       <div>
       <h1>The Dye Ledger</h1>
@@ -277,18 +277,8 @@
 
     <section id="score" class="panel">
       <div class="card tight-card">
-        <div class="item-header">
-          <div>
-            <h2 class="score-title-row">Scoring input <span id="scoringTitleSync" class="score-title-sync"></span></h2>
-            <div id="currentMatchMeta" class="muted">No active match.</div>
-          </div>
-          <div class="actions wrap compact-actions">
-            <button id="finishRoundBtn" type="button" class="secondary">Finish Round</button>
-            <button id="confirmFinishRoundBtn" type="button" class="secondary hidden">Confirm Finish</button>
-          </div>
-        </div>
         <div id="scoreEntryEmpty" class="tiny top-gap">Create or load a match to begin score entry.</div>
-        <div id="scoreEntryWrap" class="hidden top-gap">
+        <div id="scoreEntryWrap" class="hidden">
           <div id="activeHoleScoringTop" class="score-hole-nav actions wrap compact-actions">
             <button id="prevHoleBtn" type="button" class="secondary">◀ Prev</button>
             <div id="currentHoleBadge" class="badge big-badge">Hole 1</div>
@@ -329,6 +319,23 @@
           </div>
           <div id="scoreAccessCard" class="card inset-card top-gap hidden" aria-label="Other scores and stats visibility controls"></div>
           <div id="memoryQuickCaptureWrap" class="memory-quick-capture top-gap hidden"></div>
+          <section id="playRoundProgress" class="play-round-progress top-gap" aria-labelledby="playRoundProgressTitle">
+            <div class="item-header compact-item-header">
+              <div>
+                <div id="playRoundProgressTitle" class="section-label">Round Progress</div>
+                <div id="currentMatchProgress" class="play-round-progress-summary">No active match.</div>
+              </div>
+              <span id="scoringTitleSync" class="score-title-sync"></span>
+            </div>
+            <details class="play-round-details top-gap">
+              <summary>Round details</summary>
+              <div id="currentMatchMeta" class="muted top-gap">No active match.</div>
+            </details>
+            <div class="actions wrap compact-actions top-gap">
+              <button id="finishRoundBtn" type="button" class="secondary">Finish Round</button>
+              <button id="confirmFinishRoundBtn" type="button" class="secondary hidden">Confirm Finish</button>
+            </div>
+          </section>
           <div id="holeJumpTiles" class="hole-jump-tiles top-gap hidden" aria-hidden="true"></div>
         </div>
       </div>
@@ -878,7 +885,7 @@
       <div class="card tight-card app-updates-card" data-experience-section="support">
         <h2>App Updates</h2>
         <div class="app-update-summary">
-          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.82</strong></div>
+          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.83</strong></div>
           <div><span class="muted-label">Build Date</span><strong id="appBuildTimestamp">loading…</strong></div>
           <div><span class="muted-label">Cache</span><span id="appActiveCacheName" class="break-word">checking…</span></div>
           <div><span class="muted-label">Update Available</span><strong id="appUpdateAvailableStatus">checking…</strong></div>
@@ -887,10 +894,10 @@
         </div>
         <div class="actions wrap top-gap app-update-actions">
           <button id="pwaCheckForUpdatesBtn" type="button" class="secondary">Check for Updates</button>
-          <button id="pwaRefreshNowBtn" type="button">Refresh Now</button>
+          <button id="pwaRefreshNowBtn" type="button">Install Update</button>
           <button id="pwaResetCacheBtn" type="button" class="secondary">Reset App Cache</button>
         </div>
-        <div class="tiny top-gap" id="appCacheGuidance">If the app looks stale, use Check for Updates first, then Refresh Now. Reset App Cache preserves saved matches and local courses.</div>
+        <div class="tiny top-gap" id="appCacheGuidance">Check for Updates reports the installed version. Install Update saves local state first and proceeds unless a visible entry or another operation is unfinished. Reset App Cache preserves saved matches and local courses.</div>
         <div class="tiny warning-text hidden top-gap" id="appUpdateWarning"></div>
         <details class="top-gap">
           <summary>Technical diagnostics</summary>
@@ -942,17 +949,17 @@
   <div id="updateBanner" class="update-banner hidden" role="status" aria-live="polite">
     <div class="update-banner-copy">
       <strong>New version available</strong>
-      <span>Refresh to update to the latest build.</span>
+      <span>Install the update when your current entry is saved.</span>
     </div>
     <div class="update-banner-actions">
-      <button id="updateNowBtn" type="button">Update</button>
+      <button id="updateNowBtn" type="button">Install Update</button>
       <button id="updateLaterBtn" type="button" class="secondary">Later</button>
     </div>
   </div>
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.3.82</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
+    <span id="appVersionFooter">v30.3.83</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
@@ -1097,8 +1104,8 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=30.3.82&amp;rev=5"></script>
-  <script src="identity-security.js?v=30.3.82&amp;rev=5"></script>
-  <script src="app.js?v=30.3.82&amp;rev=5"></script>
+  <script src="supabase-config.js?v=30.3.83&amp;rev=4"></script>
+  <script src="identity-security.js?v=30.3.83&amp;rev=4"></script>
+  <script src="app.js?v=30.3.83&amp;rev=4"></script>
 </body>
 </html>

@@ -4135,6 +4135,37 @@ main,
   text-align: center;
   margin-top: 6px;
 }
+.play-round-progress {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--panel-muted);
+}
+.play-round-progress .item-header {
+  align-items: flex-start;
+  gap: 10px;
+}
+.play-round-progress-summary {
+  margin-top: 3px;
+  color: var(--text);
+  font-weight: 800;
+  line-height: 1.35;
+}
+.play-round-details summary {
+  color: var(--muted);
+  font-size: .84rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+.play-round-details .muted {
+  line-height: 1.45;
+}
+.play-round-progress .compact-actions button {
+  min-height: 42px;
+}
+@media (max-width: 640px) {
+  .play-round-progress { padding: 11px 12px; border-radius: 14px; }
+}
 .memory-sheet textarea {
   width: 100%;
   box-sizing: border-box;
@@ -5621,6 +5652,9 @@ html.quick-scoreboard-open,body.quick-scoreboard-open{overflow:hidden!important;
 #leaderboard .hole-momentum{display:block;width:100%;max-width:100%;min-width:0;overflow:hidden}
 #leaderboard .hole-momentum .momentum-chart{width:100%;max-width:100%;min-width:0}
 .momentum-orientation{margin:2px 0 5px;color:var(--muted);font-size:.72rem;font-weight:750}.momentum-point-value{font-size:10px;fill:var(--text);font-weight:900;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round;font-variant-numeric:tabular-nums}
+.quick-scoreboard-momentum .momentum-axis-tick{font-size:12px!important;font-weight:850}
+.quick-scoreboard-momentum .momentum-point-value{font-size:12px;font-weight:900;stroke-width:3.5px}
+.quick-scoreboard-momentum .momentum-chart text:not(.momentum-point-value):not(.momentum-side-label):not(.momentum-axis-tick){font-size:11px}
 .quick-round-highlight{display:grid;gap:5px}.quick-round-highlight span{color:var(--muted);font-size:.78rem;font-weight:800}.quick-player-context>div{display:flex;flex-wrap:wrap;gap:7px 14px}.quick-player-context span{font-size:.82rem}
 .play-report-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}.play-report-actions .compact-icon-btn{min-height:40px;margin:0}
 .play-match-summary{display:none}
@@ -5882,10 +5916,21 @@ html.quick-scoreboard-open,body.quick-scoreboard-open{overflow:hidden!important;
 .player-insights-table thead th{background:#f4f8f6}
 .player-insights-table thead th:first-child{z-index:3}
 .player-insights-table tbody tr:last-child td{border-bottom:0}
+.approach-performance-wrap{margin-top:18px}
+.approach-performance-scroll{border:1px solid var(--border);border-radius:12px;background:#fff}
+.approach-performance-table{width:100%;min-width:620px;border-collapse:collapse;font-size:.82rem}
+.approach-performance-table th,.approach-performance-table td{padding:9px 8px;border-bottom:1px solid var(--border);text-align:center;white-space:nowrap;font-variant-numeric:tabular-nums}
+.approach-performance-table th:first-child,.approach-performance-table td:first-child{text-align:left;position:sticky;left:0;background:#fff;z-index:2}
+.approach-performance-table thead th{background:#f4f8f6}
+.approach-performance-table thead th:first-child{z-index:3}
+.approach-performance-table tbody tr:last-child td{border-bottom:0}
 @media print{
   .player-insights-scroll{overflow:visible!important;border:0}
   .player-insights-table{min-width:0}
   .player-insights-table th:first-child,.player-insights-table td:first-child{position:static}
+  .approach-performance-scroll{overflow:visible!important;border:0}
+  .approach-performance-table{min-width:0}
+  .approach-performance-table th:first-child,.approach-performance-table td:first-child{position:static}
 }
 
 /* v30.3.80 Match Setup hub-and-spoke navigation */

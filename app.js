@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.82',
-  versionNumber: '30.3.82',
-  cacheName: 'the-dye-ledger-v30.3.82',
+  version: 'v30.3.83',
+  versionNumber: '30.3.83',
+  cacheName: 'the-dye-ledger-v30.3.83',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Product Experience System'
+  buildLabel: 'Play Focus & Reliable App Updates'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -5828,6 +5828,16 @@ function buildRoundRecord(match, metrics) {
     courseHandicap: Number.isFinite(Number(playerMetric?.courseHdcp ?? playerMetric?.courseHandicap)) ? Number(playerMetric.courseHdcp ?? playerMetric.courseHandicap) : null,
     teeId: match?.players?.[index]?.teeId || match?.teeId || null, teamId: playerMetric?.team ?? match?.players?.[index]?.team ?? null,
     statLines: isPlayerStatTrackingEnabled(match, playerMetric.playerId) ? (computeStatTrackingSummary(match, metrics).find(row => String(row.playerMetric?.playerId) === String(playerMetric.playerId))?.totals || null) : null,
+    approachPerformance: (() => {
+      const insight = computePlayerRoundInsights(match, metrics).find(row => String(row.playerId) === String(playerMetric.playerId));
+      if (!isPlayerStatTrackingEnabled(match, playerMetric.playerId) || !insight) return null;
+      return {
+        fairwayHitOpportunities: insight.totals.fairwayHitOpportunities,
+        fairwayHitGirs: insight.totals.fairwayHitGirs,
+        fairwayMissedOpportunities: insight.totals.fairwayMissedOpportunities,
+        fairwayMissedGirs: insight.totals.fairwayMissedGirs,
+      };
+    })(),
     scoreDistribution: completion.completedHoleCount >= 6 ? (computeScoreDistributionSummary(match, metrics).find(row => String(row.playerMetric?.playerId) === String(playerMetric.playerId))?.totals || null) : null,
     grossTotal: Number(playerMetric?.grossTotal || 0), netTotal: Number(playerMetric?.leaderboardNetTotal || 0), netToPar: Number(playerMetric?.leaderboardNetDiff || 0), postable: Number(playerMetric?.postableTotal || 0),
     signatureStat: null
@@ -9216,6 +9226,10 @@ function computePlayerRoundInsights(match, metrics) {
       bogeyOrBetter: 0,
       greensInRegulation: 0,
       convertedGreens: 0,
+      fairwayHitOpportunities: 0,
+      fairwayHitGirs: 0,
+      fairwayMissedOpportunities: 0,
+      fairwayMissedGirs: 0,
     };
     holeResults.forEach((holeResult, holeIdx) => {
       if (!holeResult?.completed) return;
@@ -9236,6 +9250,12 @@ function computePlayerRoundInsights(match, metrics) {
         totals.greensInRegulation += 1;
         if (diff <= -1) totals.convertedGreens += 1;
       }
+      if (isPlayerStatTrackingEnabled(match, playerId) && (par === 4 || par === 5)) {
+        const opportunityKey = stat.fairway ? 'fairwayHitOpportunities' : 'fairwayMissedOpportunities';
+        const girKey = stat.fairway ? 'fairwayHitGirs' : 'fairwayMissedGirs';
+        totals[opportunityKey] += 1;
+        if (stat.green) totals[girKey] += 1;
+      }
     });
     const divide = (numerator, denominator) => denominator ? numerator / denominator : null;
     return {
@@ -9248,6 +9268,11 @@ function computePlayerRoundInsights(match, metrics) {
       parOrBetterRate: divide(totals.parOrBetter, totals.scoredHoles),
       bogeyAvoidanceRate: divide(totals.bogeyOrBetter, totals.scoredHoles),
       birdieConversionRate: divide(totals.convertedGreens, totals.greensInRegulation),
+      fairwayHitGirRate: divide(totals.fairwayHitGirs, totals.fairwayHitOpportunities),
+      fairwayMissedGirRate: divide(totals.fairwayMissedGirs, totals.fairwayMissedOpportunities),
+      fairwayGirAdvantage: totals.fairwayHitOpportunities >= 2 && totals.fairwayMissedOpportunities >= 2
+        ? divide(totals.fairwayHitGirs, totals.fairwayHitOpportunities) - divide(totals.fairwayMissedGirs, totals.fairwayMissedOpportunities)
+        : null,
       provisional: !!completion?.isIncomplete,
     };
   });
@@ -9255,6 +9280,36 @@ function computePlayerRoundInsights(match, metrics) {
 
 function formatPlayerInsightPercent(rate) {
   return Number.isFinite(Number(rate)) ? `${(Number(rate) * 100).toFixed(0)}%` : '—';
+}
+
+function formatFairwayGirAdvantage(rate) {
+  if (!Number.isFinite(Number(rate))) return '— · limited sample';
+  const points = Math.round(Number(rate) * 100);
+  return `${points > 0 ? '+' : points < 0 ? '−' : ''}${Math.abs(points)} pp`;
+}
+
+function formatApproachRate(rate, successes, opportunities) {
+  return opportunities ? `${formatPlayerInsightPercent(rate)} (${successes}/${opportunities})` : '—';
+}
+
+function buildApproachPerformanceStats(match, metrics, { exportView = false, playerId = null } = {}) {
+  const rows = computePlayerRoundInsights(match, metrics)
+    .filter(row => (!playerId || String(row.playerId) === String(playerId)) && isPlayerStatTrackingEnabled(match, row.playerId));
+  const heading = exportView ? '<h3>Approach Performance</h3>' : '<div class="section-subhead">Approach performance</div>';
+  if (!rows.length) {
+    const unavailable = '<div class="tiny">Unavailable for this round. Enable Stat Tracking for a player to record the fairway and GIR facts required for these metrics.</div>';
+    return exportView ? `<div class="approach-performance-export">${heading}${unavailable}</div>` : `<div class="approach-performance-wrap">${heading}${unavailable}</div>`;
+  }
+  const body = rows.map(row => `<tr>
+    <td><strong>${escapeHtml(row.displayName)}</strong></td>
+    <td>${formatApproachRate(row.fairwayHitGirRate, row.totals.fairwayHitGirs, row.totals.fairwayHitOpportunities)}</td>
+    <td>${formatApproachRate(row.fairwayMissedGirRate, row.totals.fairwayMissedGirs, row.totals.fairwayMissedOpportunities)}</td>
+    <td>${formatFairwayGirAdvantage(row.fairwayGirAdvantage)}</td>
+  </tr>`).join('');
+  const table = `<table class="${exportView ? 'export-table ' : ''}approach-performance-table" aria-label="Approach performance by fairway result"><thead><tr><th>Player</th><th>GIR · Fairway Hit</th><th>GIR · Fairway Missed</th><th>Fairway GIR Advantage</th></tr></thead><tbody>${body}</tbody></table>`;
+  const note = '<div class="tiny">Completed par 4 and par 5 holes only. Advantage requires at least two opportunities from both fairway outcomes.</div>';
+  if (exportView) return `<div class="approach-performance-export">${heading}${note}${table}</div>`;
+  return `<div class="approach-performance-wrap">${heading}${note}<div class="approach-performance-scroll table-scroll-region top-gap" tabindex="0" role="region" aria-label="Approach performance; scroll horizontally for all statistics">${table}</div></div>`;
 }
 
 function buildPlayerRoundInsights(match, metrics, { exportView = false } = {}) {
@@ -9273,8 +9328,9 @@ function buildPlayerRoundInsights(match, metrics, { exportView = false } = {}) {
       <td>${row.totals.greensInRegulation ? `${formatPlayerInsightPercent(row.birdieConversionRate)} (${row.totals.convertedGreens}/${row.totals.greensInRegulation})` : '—'}</td>
     </tr>`).join('');
   const table = `<table class="${exportView ? 'export-table ' : ''}player-insights-table" aria-label="Player Insights"><thead><tr><th>Player</th><th>Holes</th><th>Avg</th><th>Birdie+</th><th>Par+</th><th>Bogey Avoid.</th><th>Birdie Conversion</th></tr></thead><tbody>${body}</tbody></table>`;
-  if (exportView) return `${status}<div class="fit-stage" data-fit="width" data-fit-min="0.78"><div class="fit-box">${table}</div></div>`;
-  return `<div class="player-insights-wrap"><div class="section-subhead">Player insights</div><div class="tiny">Gross results on completed holes. Birdie Conversion is birdie-or-better on a recorded green in regulation.</div>${status}<div class="player-insights-scroll table-scroll-region top-gap" tabindex="0" role="region" aria-label="Player Insights; scroll horizontally for all statistics">${table}</div></div>`;
+  const approach = buildApproachPerformanceStats(match, metrics, { exportView });
+  if (exportView) return `${status}<div class="fit-stage" data-fit="width" data-fit-min="0.78"><div class="fit-box">${table}</div></div>${approach}`;
+  return `<div class="player-insights-wrap"><div class="section-subhead">Player insights</div><div class="tiny">Gross results on completed holes. Birdie Conversion is birdie-or-better on a recorded green in regulation.</div>${status}<div class="player-insights-scroll table-scroll-region top-gap" tabindex="0" role="region" aria-label="Player Insights; scroll horizontally for all statistics">${table}</div></div>${approach}`;
 }
 
 const SCORE_DISTRIBUTION_COLUMNS = [
@@ -9543,6 +9599,7 @@ function buildPlayerDetailStatBlock(match, metrics, playerMetric) {
   const totals = summary?.totals || { fairwaysHit: 0, fairwayOpps: 0, greens: 0, putts: 0, penaltyStrokes: 0, upAndDowns: 0, sandies: 0 };
   const completedLimit = getCompletedStatHoleLimit(match, metrics);
   return `
+    ${buildApproachPerformanceStats(match, metrics, { playerId: playerMetric.playerId })}
     <div class="player-detail-stat-totals">
       <div><span>Fairways</span><strong>${totals.fairwaysHit} / ${totals.fairwayOpps}</strong></div>
       <div><span>GIR</span><strong>${totals.greens}</strong></div>
@@ -14524,12 +14581,14 @@ function confirmPendingPress() {
 function renderCurrentMatch() {
   const match = getActiveMatch();
   const metaEl = document.getElementById('currentMatchMeta');
+  const progressEl = document.getElementById('currentMatchProgress');
   const emptyEl = document.getElementById('scoreEntryEmpty');
   const wrapEl = document.getElementById('scoreEntryWrap');
   if (!match) finishConfirmArmed = false;
   syncFinishRoundUi(match);
   if (!match) {
-    metaEl.textContent = 'No active match.';
+    if (metaEl) metaEl.textContent = 'No active match.';
+    if (progressEl) progressEl.textContent = 'No active match.';
     emptyEl.classList.remove('hidden');
     wrapEl.classList.add('hidden');
     const tileWrap = document.getElementById('holeJumpTiles'); if (tileWrap) tileWrap.innerHTML = '';
@@ -14546,6 +14605,8 @@ function renderCurrentMatch() {
     ? ' · Reopened from completed round (Finish Round will overwrite the saved round)'
     : '';
   const timing = getRoundElapsedTimeState(match, metrics);
+  const compactElapsedAvailable = timing.available && Number(timing.elapsedMs) <= 12 * 60 * 60 * 1000;
+  if (progressEl) progressEl.textContent = `${metrics?.completed || 0} of ${holeCount} complete${compactElapsedAvailable ? ` · ${formatRoundDuration(timing.elapsedMs)}` : ''}`;
   metaEl.textContent = `${getSessionRoundLabel(match)} · ${match.date} · ${match.name || 'Round'} · ${course?.name || ''} · ${getHoleSegmentLabel(match, tee)} · ${metrics?.completed || 0}/${holeCount} holes completed${timing.available ? ` · ${timing.label}` : ''}${metrics?.teeFallbackUsed ? ` · Tee fallback: ${tee?.teeName || 'first saved tee'}` : ''}${match.storageMode === 'shared' ? ` · Shared ID ${match.sharedMatchRef || match.sharedMatchId || match.id}` : ''}${reopenedNote}`;
   emptyEl.classList.add('hidden');
   wrapEl.classList.remove('hidden');
@@ -20254,6 +20315,11 @@ function logDyeLedgerBuildInfo() {
 window.getDyeLedgerBuildInfo = getDyeLedgerBuildInfo;
 window.getDyeLedgerScrollInfo = getDyeLedgerScrollInfo;
 
+function isServiceWorkerContextSupported() {
+  const protocol = String(window.location?.protocol || '').toLowerCase();
+  return (protocol === 'http:' || protocol === 'https:') && String(window.location?.origin || '') !== 'null';
+}
+
 function getServiceWorkerDiagnosticSnapshot() {
   const supported = 'serviceWorker' in navigator;
   const registration = window.dyeLedgerServiceWorkerRegistration || swRegistration || null;
@@ -20402,7 +20468,7 @@ function renderBuildInfoUi() {
     appUpdateStatusMessage: pwaUpdateStatusMessage || 'Not checked yet',
     appVersionFooterBuild: formatBuildDateET(BUILD_TIMESTAMP),
     appCacheGuidance: sw.supported
-      ? (sw.controller ? 'Use Check for Updates, then Refresh Now if a new build is available. Reset App Cache preserves saved matches and local courses.' : 'This page is not currently controlled by the service worker. Refresh Now or Reset App Cache may be needed.')
+      ? (sw.controller ? 'Check for Updates reports the installed version. Install Update saves local state first and proceeds unless a visible entry or another operation is unfinished.' : 'This page is not currently controlled by the service worker. Install Update or Reset App Cache may be needed.')
       : 'Service worker unavailable in this browser.'
   };
   Object.entries(values).forEach(([id, value]) => {
@@ -20441,8 +20507,30 @@ let forceUnsafeAppReload = false;
 let pendingDeferredAppReload = false;
 let lastPwaUpdateCheckAt = null;
 let pwaUpdateStatusMessage = 'Not checked yet';
+let appUpdateConfirmationConsumed = false;
+const APP_UPDATE_CONFIRMATION_KEY = 'dyeLedgerPendingUpdateVersion';
+const hookedServiceWorkerRegistrations = new WeakSet();
+
+function getServiceWorkerVersion(worker) {
+  try { return new URL(worker?.scriptURL || '', window.location.href).searchParams.get('v') || ''; }
+  catch { return ''; }
+}
+
+function consumeAppUpdateConfirmation() {
+  if (appUpdateConfirmationConsumed) return;
+  appUpdateConfirmationConsumed = true;
+  let pending = '';
+  try { pending = sessionStorage.getItem(APP_UPDATE_CONFIRMATION_KEY) || ''; } catch {}
+  if (!pending) return;
+  if (pending === APP_VERSION_NUMBER) {
+    pwaUpdateStatusMessage = `Updated successfully to ${APP_VERSION}.`;
+    try { sessionStorage.removeItem(APP_UPDATE_CONFIRMATION_KEY); } catch {}
+    setTimeout(() => toast(`Updated successfully to ${APP_VERSION}.`), 250);
+  }
+}
 
 function updateVersionUi() {
+  consumeAppUpdateConfirmation();
   const loadSharedMatchBtn = document.getElementById('loadSharedMatchBtn');
   if (loadSharedMatchBtn) loadSharedMatchBtn.addEventListener('click', async () => {
     const input = document.getElementById('sharedMatchIdInput');
@@ -20527,14 +20615,17 @@ function setUpdateBannerContent({ deferred = false } = {}) {
   const title = banner.querySelector('.update-banner-copy strong');
   const copy = banner.querySelector('.update-banner-copy span');
   const action = document.getElementById('updateNowBtn');
+  const registration = window.dyeLedgerServiceWorkerRegistration || swRegistration;
+  const availableVersion = getServiceWorkerVersion(registration?.waiting || registration?.installing);
+  const versionLabel = availableVersion ? `v${availableVersion}` : 'the latest version';
   if (deferred) {
-    if (title) title.textContent = 'Update ready';
-    if (copy) copy.textContent = 'Refresh when you are done with match setup or scoring.';
-    if (action) action.textContent = 'Refresh When Safe';
+    if (title) title.textContent = `${versionLabel} is ready`;
+    if (copy) copy.textContent = 'Save the current entry, then install the update.';
+    if (action) action.textContent = 'Try Again';
   } else {
-    if (title) title.textContent = 'New version available';
-    if (copy) copy.textContent = 'Refresh to update to the latest build.';
-    if (action) action.textContent = 'Update';
+    if (title) title.textContent = `${versionLabel} is ready`;
+    if (copy) copy.textContent = `Current version: ${APP_VERSION}. Your saved rounds will remain on this device.`;
+    if (action) action.textContent = 'Install Update';
   }
 }
 
@@ -20561,32 +20652,47 @@ function hasUnsavedVisibleScoreInputs() {
   });
 }
 
-function hasUnsafeReloadContext() {
-  const activePanel = getActivePanelId();
-  const activeMatch = getActiveMatch();
-  if (newMatchStartInProgress || cleanNewMatchSetupInProgress) return true;
-  if (uiState.scorecardImportLoading || uiState.cloudCoursesLoading) return true;
-  if (hasOpenBlockingUi()) return true;
-  if (activePanel === 'setup' && (setupWorkflowMode === 'create' || setupWorkflowMode === 'join' || editingMatchId)) return true;
-  if (activePanel === 'score') return true;
-  if (hasUnsavedVisibleScoreInputs()) return true;
-  if (activeMatch && activeMatch.status !== 'complete' && activePanel !== 'more') return true;
-  return false;
+function getUnsafeReloadReason() {
+  if (newMatchStartInProgress || cleanNewMatchSetupInProgress) return 'Match setup is still being prepared.';
+  if (uiState.scorecardImportLoading) return 'Scorecard import is still running.';
+  if (uiState.cloudCoursesLoading) return 'Course Library is still updating.';
+  if (hasOpenBlockingUi()) return 'Finish or close the open dialog first.';
+  if (hasUnsavedVisibleScoreInputs()) return 'Save the current hole entry first.';
+  return '';
 }
 
-function showReloadDeferredMessage() {
+function hasUnsafeReloadContext() {
+  return !!getUnsafeReloadReason();
+}
+
+function persistBeforeAppUpdate() {
+  if (setupDraftSaveTimer) {
+    window.clearTimeout(setupDraftSaveTimer);
+    setupDraftSaveTimer = null;
+  }
+  if (getActivePanelId() === 'setup' && setupWorkflowMode === 'create' && !editingMatchId) {
+    const draft = captureCurrentSetupDraft();
+    if (draft) {
+      const draftResult = saveSetupDraft(draft);
+      if (!draftResult.ok) return false;
+    }
+  }
+  return persist({ skipRender: true });
+}
+
+function showReloadDeferredMessage(reason = getUnsafeReloadReason()) {
   pendingDeferredAppReload = true;
-  pwaUpdateStatusMessage = 'Update ready. Refresh when you are done with match setup or scoring.';
+  pwaUpdateStatusMessage = `Update paused — ${reason || 'save your work first'}`;
   setUpdateBannerContent({ deferred: true });
   showUpdateBanner({ deferred: true });
   renderBuildInfoUi();
-  toast('Update ready. Refresh when you are done with match setup or scoring.');
+  toast(pwaUpdateStatusMessage);
 }
 
 function reloadOnceSafely({ force = false } = {}) {
   if (hasReloadedForServiceWorker) return;
   if (!force && hasUnsafeReloadContext()) {
-    showReloadDeferredMessage();
+    showReloadDeferredMessage(getUnsafeReloadReason());
     return;
   }
   hasReloadedForServiceWorker = true;
@@ -20600,51 +20706,102 @@ async function checkForPwaUpdates() {
   renderBuildInfoUi();
   const result = await forceDyeLedgerUpdateCheck();
   const sw = getServiceWorkerDiagnosticSnapshot();
-  if (!result.supported) {
+  if (!result.contextSupported) {
+    pwaUpdateStatusMessage = 'Update checks are available when the app is opened from its local or deployed web address.';
+  } else if (!result.supported) {
     pwaUpdateStatusMessage = 'Service worker not supported in this browser.';
   } else if (result.error) {
     pwaUpdateStatusMessage = `Update check failed — ${result.error}`;
   } else if (sw.waiting || window.dyeLedgerUpdateAvailable) {
     window.dyeLedgerUpdateAvailable = true;
-    pwaUpdateStatusMessage = 'Update available. Tap Refresh Now.';
+    const availableVersion = getServiceWorkerVersion(sw.waiting);
+    pwaUpdateStatusMessage = `${availableVersion ? `v${availableVersion}` : 'An update'} is ready. Tap Install Update.`;
   } else if (!sw.controller) {
     pwaUpdateStatusMessage = 'Service worker not controlling this page yet. Tap Refresh Now.';
   } else {
-    pwaUpdateStatusMessage = 'App is up to date.';
+    pwaUpdateStatusMessage = `App is up to date — ${APP_VERSION}.`;
   }
   renderBuildInfoUi();
   toast(pwaUpdateStatusMessage);
+}
+
+function waitForWaitingServiceWorker(registration, timeoutMs = 10000) {
+  if (!registration || registration.waiting) return Promise.resolve(registration?.waiting || null);
+  const worker = registration.installing;
+  if (!worker) return Promise.resolve(null);
+  return new Promise(resolve => {
+    let finished = false;
+    const finish = value => {
+      if (finished) return;
+      finished = true;
+      worker.removeEventListener('statechange', onStateChange);
+      window.clearTimeout(timer);
+      resolve(value || null);
+    };
+    const onStateChange = () => {
+      if (registration.waiting) finish(registration.waiting);
+      else if (worker.state === 'redundant') finish(null);
+    };
+    const timer = window.setTimeout(() => finish(registration.waiting), timeoutMs);
+    worker.addEventListener('statechange', onStateChange);
+    onStateChange();
+  });
 }
 
 async function refreshPwaNow(options = {}) {
   userRequestedAppReload = true;
   forceUnsafeAppReload = !!options.force;
   if (!forceUnsafeAppReload && hasUnsafeReloadContext()) {
-    showReloadDeferredMessage();
+    showReloadDeferredMessage(getUnsafeReloadReason());
     return;
   }
-  pwaUpdateStatusMessage = 'Refreshing…';
+  if (!forceUnsafeAppReload && !persistBeforeAppUpdate()) {
+    showReloadDeferredMessage('The latest local save did not complete. Your app was not refreshed.');
+    return;
+  }
+  pwaUpdateStatusMessage = 'Checking for updates…';
   renderBuildInfoUi();
+  if (!isServiceWorkerContextSupported()) {
+    pwaUpdateStatusMessage = 'Open the app from its local or deployed web address to install updates.';
+    renderBuildInfoUi();
+    toast(pwaUpdateStatusMessage);
+    return;
+  }
   try {
     const registration = await navigator.serviceWorker?.getRegistration?.();
     if (registration) hookServiceWorkerRegistration(registration);
     if (registration?.waiting) {
+      const targetVersion = getServiceWorkerVersion(registration.waiting) || APP_VERSION_NUMBER;
+      pwaUpdateStatusMessage = `Installing v${targetVersion}…`;
+      try { sessionStorage.setItem(APP_UPDATE_CONFIRMATION_KEY, targetVersion); } catch {}
+      renderBuildInfoUi();
       registration.waiting.postMessage({ type: 'SKIP_WAITING' });
       setTimeout(() => reloadOnceSafely({ force: forceUnsafeAppReload }), 1200);
       return;
     }
     if (registration) {
       await registration.update();
-      if (registration.waiting) {
-        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      const waitingWorker = registration.waiting || await waitForWaitingServiceWorker(registration);
+      if (waitingWorker) {
+        const targetVersion = getServiceWorkerVersion(waitingWorker) || APP_VERSION_NUMBER;
+        pwaUpdateStatusMessage = `Installing v${targetVersion}…`;
+        try { sessionStorage.setItem(APP_UPDATE_CONFIRMATION_KEY, targetVersion); } catch {}
+        renderBuildInfoUi();
+        waitingWorker.postMessage({ type: 'SKIP_WAITING' });
         setTimeout(() => reloadOnceSafely({ force: forceUnsafeAppReload }), 1200);
         return;
       }
     }
   } catch (err) {
     console.warn('[PWA] Refresh Now update check failed:', err);
+    pwaUpdateStatusMessage = `Update check failed — ${err?.message || 'try again when online'}.`;
+    renderBuildInfoUi();
+    toast(pwaUpdateStatusMessage);
+    return;
   }
-  reloadOnceSafely({ force: forceUnsafeAppReload });
+  pwaUpdateStatusMessage = `App is up to date — ${APP_VERSION}.`;
+  renderBuildInfoUi();
+  toast(pwaUpdateStatusMessage);
 }
 
 async function resetDyeLedgerAppCache() {
@@ -20680,6 +20837,8 @@ function hookServiceWorkerRegistration(registration) {
   window.dyeLedgerServiceWorkerRegistration = registration;
   if (registration.waiting) showUpdateBanner();
   renderBuildInfoUi();
+  if (hookedServiceWorkerRegistrations.has(registration)) return;
+  hookedServiceWorkerRegistrations.add(registration);
 
   registration.addEventListener('updatefound', () => {
     const newWorker = registration.installing;
@@ -20696,12 +20855,13 @@ function hookServiceWorkerRegistration(registration) {
 async function forceDyeLedgerUpdateCheck() {
   const result = {
     supported: 'serviceWorker' in navigator,
+    contextSupported: isServiceWorkerContextSupported(),
     registrationsChecked: 0,
     updateAvailable: !!window.dyeLedgerUpdateAvailable,
     serviceWorkerControlled: !!navigator.serviceWorker?.controller,
     error: null
   };
-  if (!result.supported) return result;
+  if (!result.supported || !result.contextSupported) return result;
   try {
     const registrations = await navigator.serviceWorker.getRegistrations();
     result.registrationsChecked = registrations.length;
@@ -20721,7 +20881,7 @@ async function forceDyeLedgerUpdateCheck() {
 window.forceDyeLedgerUpdateCheck = forceDyeLedgerUpdateCheck;
 
 function registerServiceWorker() {
-  if (!('serviceWorker' in navigator)) return;
+  if (!('serviceWorker' in navigator) || !isServiceWorkerContextSupported()) return;
   window.addEventListener('load', async () => {
     try {
       const registration = await navigator.serviceWorker.register(`./service-worker.js?v=${BUILD_INFO.versionNumber}`, { scope: './' });

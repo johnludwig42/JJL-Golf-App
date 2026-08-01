@@ -7,18 +7,18 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=30.3.81&amp;rev=1" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v30.3.81.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v30.3.81.png" />
-  <link rel="shortcut icon" href="./branding/favicon-32-v30.3.81.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v30.3.81.png" />
-  <link rel="stylesheet" href="style.css?v=30.3.81&amp;rev=1" />
+  <link rel="manifest" href="manifest.json?v=30.3.82&amp;rev=5" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v30.3.82.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v30.3.82.png" />
+  <link rel="shortcut icon" href="./branding/favicon-32-v30.3.82.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v30.3.82.png" />
+  <link rel="stylesheet" href="style.css?v=30.3.82&amp;rev=5" />
 </head>
 <body>
   <div class="app-chrome"><header class="app-header compact-header">
     <div class="brand-wrap">
       <div class="brand-mark">
-        <img src="./branding/apple-touch-icon-v30.3.81.png" alt="The Dye Ledger" />
+        <img src="./branding/apple-touch-icon-v30.3.82.png" alt="The Dye Ledger" />
       </div>
       <div>
       <h1>The Dye Ledger</h1>
@@ -42,16 +42,16 @@
 
   <main>
     <section id="setup" class="panel active">
-      <div id="matchSectionHeader" class="card tight-card match-section-header">
+      <header id="matchSectionHeader" class="card tight-card match-section-header product-tab-header">
         <div class="item-header compact-item-header">
-          <div>
+          <div class="product-tab-header-copy">
             <h2 id="matchSectionTitle">Match</h2>
             <div id="matchSectionSubtitle" class="tiny">Prepare today's round: players, teams, course, games, and shared-match scoring.</div>
           </div>
           <button id="setupDestinationBackBtn" type="button" class="secondary setup-header-back hidden">‹ Match Setup</button>
           <span id="setupHubOverallStatus" class="setup-hub-status hidden">Review setup</span>
         </div>
-      </div>
+      </header>
 
 
       <div id="setupEntryCard" class="card tight-card setup-entry-card">
@@ -335,17 +335,37 @@
     </section>
 
     <section id="leaderboard" class="panel">
-      <div id="leaderboardWrap" class="hidden">
+      <div id="leaderboardWrap" class="hidden experience-panel">
+        <header class="card tight-card experience-page-header product-tab-header no-print">
+          <div class="item-header compact-item-header">
+            <div class="product-tab-header-copy">
+              <h2>Scores</h2>
+              <div class="tiny">Review the competition, scorecard, statistics, and story of the round.</div>
+            </div>
+          </div>
+        </header>
+        <div class="card tight-card experience-overview no-print" data-experience-overview>
+          <div class="experience-destination-grid" aria-label="Scores sections">
+            <button type="button" class="experience-destination-card" data-experience-target="results"><span><strong>Results</strong><small>Outcome, games, momentum, and settlement</small></span><span class="experience-status">Round</span></button>
+            <button type="button" class="experience-destination-card" data-experience-target="scorecards"><span><strong>Scorecards</strong><small>Team, player, and classic scorecards</small></span><span class="experience-status">Review</span></button>
+            <button type="button" class="experience-destination-card" data-experience-target="statistics"><span><strong>Statistics</strong><small>Tracked stats and specialty-game detail</small></span><span class="experience-status">Analyze</span></button>
+            <button type="button" class="experience-destination-card" data-experience-target="story"><span><strong>Round Story</strong><small>Notes, memories, recap, and sharing</small></span><span class="experience-status">Remember</span></button>
+          </div>
+        </div>
+        <div class="card tight-card experience-destination-header hidden no-print" data-experience-destination-header>
+          <div><div class="section-kicker">Scores</div><h2 data-experience-destination-title>Results</h2><div class="tiny" data-experience-destination-description></div></div>
+          <button type="button" class="secondary experience-back-button" data-experience-back>‹ Scores</button>
+        </div>
         <div id="printRoundMeta" class="print-round-meta hidden"></div>
-        <div id="completedSummarySessionBanner" class="completed-summary-session-banner hidden no-print" role="status">
+        <div id="completedSummarySessionBanner" class="completed-summary-session-banner hidden no-print" role="status" data-experience-section="results story">
           <div>
             <strong>Round saved.</strong>
             <div class="tiny">You are viewing the completed match summary.</div>
           </div>
           <button id="completedSummaryDoneBtn" type="button" class="secondary">Done — Return to Match</button>
         </div>
-        <div id="roundExecutiveSummary" class="card tight-card scoreboard-card scores-outcome-hero print-section-executive" aria-live="polite"></div>
-        <div class="card tight-card scoreboard-card scoreboard-export-card print-section-export">
+        <div id="roundExecutiveSummary" class="card tight-card scoreboard-card scores-outcome-hero print-section-executive" aria-live="polite" data-experience-section="results"></div>
+        <div class="card tight-card scoreboard-card scoreboard-export-card print-section-export" data-experience-section="story">
           <div class="item-header compact-item-header">
             <div>
               <h2>Share / Save PDF</h2>
@@ -384,7 +404,7 @@
           </div>
           </div>
         </div>
-        <details class="card tight-card scoreboard-card scoreboard-collapsible print-section-match-status">
+        <details class="card tight-card scoreboard-card scoreboard-collapsible print-section-match-status" data-experience-section="results">
           <summary><h2>Match status</h2></summary>
           <div class="item-header compact-item-header">
             <div>
@@ -398,7 +418,7 @@
           <div id="matchStatusSummary" class="result compact-result"></div>
         </details>
 
-        <div class="card tight-card scoreboard-card print-section-momentum">
+        <div class="card tight-card scoreboard-card print-section-momentum" data-experience-section="results">
           <div class="item-header compact-item-header">
             <div>
               <h2>Hole-by-hole momentum</h2>
@@ -422,17 +442,17 @@
           <div id="holeMomentum" class="hole-momentum"></div>
         </div>
 
-        <details class="card tight-card scoreboard-card scoreboard-collapsible print-section-scoreboard-summary">
+        <details class="card tight-card scoreboard-card scoreboard-collapsible print-section-scoreboard-summary" data-experience-section="results">
           <summary><h2>Games summary</h2></summary>
           <div id="gamesSummary" class="result compact-result top-gap"></div>
         </details>
 
-        <details class="card tight-card scoreboard-card scoreboard-collapsible print-section-payout">
+        <details class="card tight-card scoreboard-card scoreboard-collapsible print-section-payout" data-experience-section="results">
           <summary><h2>Settlement</h2></summary>
           <div id="payoutSummary" class="result compact-result top-gap"></div>
         </details>
 
-        <details class="card tight-card scoreboard-card scoreboard-collapsible">
+        <details class="card tight-card scoreboard-card scoreboard-collapsible" data-experience-section="scorecards">
           <summary><h2>Team leaderboard</h2></summary>
           <div class="leader-table-wrap top-gap">
             <table class="leader-table">
@@ -454,27 +474,27 @@
           <div id="teamLeaderboardMobile" class="leader-mobile-cards top-gap"></div>
         </details>
 
-        <details class="card tight-card scoreboard-card scoreboard-collapsible">
+        <details class="card tight-card scoreboard-card scoreboard-collapsible" data-experience-section="scorecards">
           <summary><h2>Player Leaderboard</h2></summary>
           <div id="playerLeaderboardSummary" class="top-gap"></div>
         </details>
 
-        <details class="card tight-card scoreboard-card scoreboard-collapsible print-section-classic-scorecard">
+        <details class="card tight-card scoreboard-card scoreboard-collapsible print-section-classic-scorecard" data-experience-section="scorecards">
           <summary><h2>Classic scorecard</h2></summary>
           <div id="classicScorecard" class="top-gap"></div>
         </details>
 
-        <details id="statTrackingSummaryCard" class="card tight-card scoreboard-card scoreboard-collapsible print-section-stat-tracking hidden">
+        <details id="statTrackingSummaryCard" class="card tight-card scoreboard-card scoreboard-collapsible print-section-stat-tracking hidden" data-experience-section="statistics">
           <summary><h2>Stats</h2></summary>
           <div id="statTrackingSummary" class="top-gap"></div>
         </details>
 
-        <div id="ninePointScorecardCard" class="card tight-card scoreboard-card print-section-nine-point hidden">
+        <div id="ninePointScorecardCard" class="card tight-card scoreboard-card print-section-nine-point hidden" data-experience-section="statistics">
           <h2>9-Point game scorecard</h2>
           <div id="ninePointScorecard" class="top-gap"></div>
         </div>
 
-        <details id="roundStoryCard" class="card tight-card scoreboard-card scoreboard-collapsible print-section-notes">
+        <details id="roundStoryCard" class="card tight-card scoreboard-card scoreboard-collapsible print-section-notes" data-experience-section="story">
           <summary><h2>Round Notes, Memories &amp; Recap</h2></summary>
           <div class="tiny">Competition first, storytelling second. These notes and memories help generate the AI recap.</div>
           <div class="round-story-section top-gap">
@@ -491,21 +511,37 @@
       </div>
     </section>
 
-    <section id="courses" class="panel">
-      <header class="card tight-card library-page-header">
-        <div class="section-kicker">Saved on this device</div>
-        <h2>Library</h2>
-        <div class="tiny">Find saved rounds, reusable courses and players, plus the current multi-round session.</div>
+    <section id="courses" class="panel experience-panel">
+      <header class="card tight-card library-page-header experience-page-header product-tab-header">
+        <div class="item-header compact-item-header">
+          <div class="product-tab-header-copy">
+            <h2>Library</h2>
+            <div class="tiny">Find saved rounds, reusable courses and players, plus the current multi-round session.</div>
+          </div>
+        </div>
       </header>
 
-      <details id="libraryRoundsSection" class="card tight-card library-section-disclosure" open>
+      <div class="card tight-card experience-overview" data-experience-overview>
+        <div class="experience-destination-grid" aria-label="Library sections">
+          <button type="button" class="experience-destination-card" data-experience-target="rounds"><span><strong>Rounds</strong><small>Continue or review saved rounds</small></span><span class="experience-status">History</span></button>
+          <button type="button" class="experience-destination-card" data-experience-target="courses"><span><strong>Courses</strong><small>Find, import, add, and maintain courses</small></span><span class="experience-status">Saved</span></button>
+          <button type="button" class="experience-destination-card" data-experience-target="players"><span><strong>Players</strong><small>Manage golfers and handicap indexes</small></span><span class="experience-status">Golfers</span></button>
+          <button type="button" class="experience-destination-card" data-experience-target="session"><span><strong>Current Session</strong><small>Review the active multi-round group</small></span><span class="experience-status">Session</span></button>
+        </div>
+      </div>
+      <div class="card tight-card experience-destination-header hidden" data-experience-destination-header>
+        <div><div class="section-kicker">Library</div><h2 data-experience-destination-title>Rounds</h2><div class="tiny" data-experience-destination-description></div></div>
+        <button type="button" class="secondary experience-back-button" data-experience-back>‹ Library</button>
+      </div>
+
+      <details id="libraryRoundsSection" class="card tight-card library-section-disclosure" data-experience-section="rounds" open>
         <summary><span><span class="section-kicker">Round history</span><h3>Rounds</h3></span></summary>
         <div class="library-section-intro">Continue an unfinished round or view a completed round and its saved scorecard.</div>
         <div id="matchesList" class="list top-gap"></div>
       </details>
 
 
-      <details id="libraryCoursesSection" class="card tight-card library-course-card library-section-disclosure">
+      <details id="libraryCoursesSection" class="card tight-card library-course-card library-section-disclosure" data-experience-section="courses">
         <summary><span><span class="section-kicker">Reusable setup</span><h3>Courses</h3></span></summary>
         <div class="item-header compact-item-header top-gap">
           <div>
@@ -620,7 +656,7 @@
       </details>
       </details>
 
-      <details id="libraryPlayersSection" class="card tight-card library-section-disclosure">
+      <details id="libraryPlayersSection" class="card tight-card library-section-disclosure" data-experience-section="players">
         <summary><span><span class="section-kicker">Saved golfers</span><h3>Players</h3></span></summary>
         <div class="library-section-intro">Save golfers and handicap indexes for quick reuse in Match Setup.</div>
         <form id="playerForm" class="grid two compact-grid top-gap">
@@ -640,7 +676,7 @@
         <div id="playersList" class="list top-gap"></div>
       </details>
 
-      <details id="sessionSummaryCard" class="card tight-card library-section-disclosure hidden">
+      <details id="sessionSummaryCard" class="card tight-card library-section-disclosure hidden" data-experience-section="session">
         <summary><span><span class="section-kicker">Active group</span><h3>Current Session</h3></span></summary>
         <div id="sessionSummary" class="top-gap"></div>
       </details>
@@ -653,10 +689,17 @@
     </section>
 
     <section id="insights" class="panel">
+      <header class="card tight-card experience-page-header product-tab-header">
+        <div class="item-header compact-item-header">
+          <div class="product-tab-header-copy">
+            <h2>Insights</h2>
+            <div class="tiny">Learn from scoring trends, course history, and player performance.</div>
+          </div>
+        </div>
+      </header>
       <div class="card tight-card">
-        <h2>Insights</h2>
-        <div class="tiny">Coming Soon</div>
-        <div class="top-gap">Future insights will help you learn from your golf history.</div>
+        <h2>Coming Soon</h2>
+        <div>Future insights will help you learn from your golf history.</div>
         <ul class="tiny top-gap">
           <li>Player trends and scoring averages</li>
           <li>Course and hole performance</li>
@@ -667,18 +710,36 @@
 
     </section>
 
-    <section id="settings" class="panel">
-      <div class="card tight-card">
-        <h2>More</h2>
-        <div class="tiny">Administration, utilities, settings, and diagnostics.</div>
+    <section id="settings" class="panel experience-panel">
+      <header class="card tight-card experience-page-header product-tab-header">
+        <div class="item-header compact-item-header">
+          <div class="product-tab-header-copy">
+            <h2>More</h2>
+            <div class="tiny">Administration, utilities, settings, and diagnostics.</div>
+          </div>
+        </div>
+      </header>
+
+      <div class="card tight-card experience-overview" data-experience-overview>
+        <div class="experience-destination-grid" aria-label="More sections">
+          <button type="button" class="experience-destination-card" data-experience-target="account"><span><strong>Account &amp; Security</strong><small>Sign-in status and local-first guidance</small></span><span class="experience-status">Account</span></button>
+          <button type="button" class="experience-destination-card" data-experience-target="preferences"><span><strong>Preferences</strong><small>Scoring, Press, round, and scoreboard defaults</small></span><span class="experience-status">Defaults</span></button>
+          <button type="button" class="experience-destination-card" data-experience-target="utilities"><span><strong>Golf Utilities</strong><small>Handicap calculator and data tools</small></span><span class="experience-status">Tools</span></button>
+          <button type="button" class="experience-destination-card" data-experience-target="shared"><span><strong>Shared Match</strong><small>Join, refresh, and inspect shared scoring</small></span><span class="experience-status">Connect</span></button>
+          <button type="button" class="experience-destination-card" data-experience-target="support"><span><strong>App Support</strong><small>Updates, diagnostics, errors, and release notes</small></span><span class="experience-status">Support</span></button>
+        </div>
+      </div>
+      <div class="card tight-card experience-destination-header hidden" data-experience-destination-header>
+        <div><div class="section-kicker">More</div><h2 data-experience-destination-title>Account &amp; Security</h2><div class="tiny" data-experience-destination-description></div></div>
+        <button type="button" class="secondary experience-back-button" data-experience-back>‹ More</button>
       </div>
 
-      <section id="accountSecurityPanel" class="card tight-card account-security-card" aria-live="polite">
+      <section id="accountSecurityPanel" class="card tight-card account-security-card" aria-live="polite" data-experience-section="account">
         <h2>Account &amp; Security</h2>
         <div class="tiny">Checking account status… Local scoring remains available.</div>
       </section>
 
-      <section class="card tight-card player-preferences-card" aria-labelledby="playerPreferencesTitle">
+      <section class="card tight-card player-preferences-card" aria-labelledby="playerPreferencesTitle" data-experience-section="preferences">
         <h2 id="playerPreferencesTitle">Player Preferences</h2>
         <div class="tiny">Personal defaults for future matches and Quick Scoreboard views on this device.</div>
         <form id="playerPreferencesForm" class="player-preferences-form top-gap">
@@ -774,7 +835,7 @@
         </form>
       </section>
 
-      <div class="card tight-card">
+      <div class="card tight-card" data-experience-section="utilities">
         <h2>Handicap calculator</h2>
         <form id="calcForm" class="grid two compact-grid">
           <label><span>Player</span><select id="calcPlayer" required></select></label>
@@ -786,7 +847,7 @@
         <div id="calcResult" class="result compact-result"></div>
       </div>
 
-      <div class="card tight-card">
+      <div class="card tight-card" data-experience-section="utilities">
         <h2>Data tools</h2>
         <div class="actions wrap">
           <button id="exportBtn" type="button">Export JSON</button>
@@ -797,7 +858,7 @@
         </div>
       </div>
 
-      <div class="card tight-card">
+      <div class="card tight-card" data-experience-section="shared">
         <h2>Supabase shared rounds</h2>
         <div class="strong" id="supabaseStatus">Not configured</div>
         <div class="tiny top-gap" id="supabaseStatusDetail">Add your Supabase URL and anon key in supabase-config.js to enable shared rounds.</div>
@@ -810,14 +871,14 @@
         </div>
         <div class="tiny top-gap">Join a local-first shared match by code or ID, then synchronize on Save Hole, load, manual refresh, and opportunistic sync.</div>
       </div>
-      <div id="sharedAssignmentDiagnosticsMore" class="card tight-card hidden"></div>
-      <div id="matchSetupDiagnosticsMore" class="card tight-card hidden"></div>
-      <div id="recentAppErrorsMore" class="card tight-card hidden"></div>
+      <div id="sharedAssignmentDiagnosticsMore" class="card tight-card hidden" data-experience-section="shared support"></div>
+      <div id="matchSetupDiagnosticsMore" class="card tight-card hidden" data-experience-section="support"></div>
+      <div id="recentAppErrorsMore" class="card tight-card hidden" data-experience-section="support"></div>
 
-      <div class="card tight-card app-updates-card">
+      <div class="card tight-card app-updates-card" data-experience-section="support">
         <h2>App Updates</h2>
         <div class="app-update-summary">
-          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.81</strong></div>
+          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.82</strong></div>
           <div><span class="muted-label">Build Date</span><strong id="appBuildTimestamp">loading…</strong></div>
           <div><span class="muted-label">Cache</span><span id="appActiveCacheName" class="break-word">checking…</span></div>
           <div><span class="muted-label">Update Available</span><strong id="appUpdateAvailableStatus">checking…</strong></div>
@@ -857,7 +918,7 @@
         </details>
       </div>
 
-      <div class="card tight-card">
+      <div class="card tight-card" data-experience-section="support">
         <h2>App notes</h2>
         <ul class="tight-list">
           <li>v30.3.74 makes Scores outcome-first and frozen-safe, clarifies lifecycle and settlement language, hardens SSP Greeny/Prox validation, and guarantees every saved Memory is represented in recap output.</li>
@@ -891,7 +952,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.3.81</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
+    <span id="appVersionFooter">v30.3.82</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
@@ -1036,8 +1097,8 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=30.3.81&amp;rev=1"></script>
-  <script src="identity-security.js?v=30.3.81&amp;rev=1"></script>
-  <script src="app.js?v=30.3.81&amp;rev=1"></script>
+  <script src="supabase-config.js?v=30.3.82&amp;rev=5"></script>
+  <script src="identity-security.js?v=30.3.82&amp;rev=5"></script>
+  <script src="app.js?v=30.3.82&amp;rev=5"></script>
 </body>
 </html>

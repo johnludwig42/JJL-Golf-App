@@ -36,9 +36,10 @@ NOW:
 
 NEXT:
 
-- v30.3.81: in development — make every configured game state its basis, scoring method, allowance, tie/carryover behavior, stake meaning, Press behavior, and finality contract; remove the duplicate setup-readiness checklist while retaining destination badges and routed validation.
-- Adopt the v30.3.80 Match experience as the design-system reference for non-Play tabs: tab identity card, quiet overview, destination cards, focused drill-ins, predictable return behavior, and consistent hierarchy.
-- Apply that system to More with Beta Account Activation; then to Library and Courses after ownership/catalog boundaries are ready; then to Scores and Insights.
+- v30.3.81: deployed — every configured game states its basis, scoring method, allowance, tie/carryover behavior, stake meaning, escalation behavior, and finality contract; Match Setup uses destination badges and routed validation without a duplicate readiness checklist.
+- v30.3.82: in development — adopt the Match experience across Scores, Library, and More using tab identity, quiet overviews, destination cards, focused drill-ins, predictable return behavior, and consistent hierarchy.
+- Deliver the next focused release as AI Recap Governance & Content Reliability: recover and version the deployed `round-recap` function source; inventory but do not alter production; consolidate the client and server prompts into one versioned content contract; make deterministic Round facts binding; define privacy, sensitive-content, unsupported-inference, length, section-omission, and post-freeze publication rules; and add contradiction checks plus representative content acceptance fixtures. Any server deployment requires separate Product Owner approval.
+- Apply the shared experience system to More with Beta Account Activation; then to Library and Courses after ownership/catalog boundaries are ready; then to Scores and Insights.
 - Preserve distinct tab purposes rather than cloning Match: configuration, review, browsing, analysis, and settings remain different jobs.
 - Deliver a later stand-alone Play Mode UX release centered on the current hole, featured competition, required inputs, completion feedback, and one authoritative save/advance action.
 - Keep Quick Scoreboard intentionally concise rather than duplicating the complete Scores experience.

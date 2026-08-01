@@ -7,7 +7,7 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const css = fs.readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 
 test('Library uses a semantic page and section heading hierarchy', () => {
-  assert.match(html, /<header class="card tight-card library-page-header">[\s\S]*?<h2>Library<\/h2>/);
+  assert.match(html, /<header class="card tight-card library-page-header experience-page-header product-tab-header">[\s\S]*?<h2>Library<\/h2>/);
   for (const heading of ['Rounds', 'Courses', 'Players', 'Current Session']) {
     assert.match(html, new RegExp(`<h3>${heading}<\\/h3>`));
   }

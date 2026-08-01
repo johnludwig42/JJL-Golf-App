@@ -61,11 +61,12 @@ test('Shared Match Round Default normalizes, persists, resets, and seeds only ne
   assert.doesNotMatch(app.slice(app.indexOf('function buildCloudMatchPayload'), app.indexOf('async function uploadSharedMatch')), /playerPreferences|roundDefaults/);
 });
 
-test('compact readiness guidance remains actionable and location stays outside required validation checks', () => {
+test('destination statuses replace the redundant readiness checklist and validation routes to the affected section', () => {
   const render = app.slice(app.indexOf('function renderRoundReadiness()'), app.indexOf('function renderSetupConfidencePanels'));
-  assert.match(render, /Tap an item to finish setup/);
-  assert.match(render, /data-readiness-destination/);
-  assert.doesNotMatch(render, /Everything looks good|readiness-count|>Ready</);
+  assert.doesNotMatch(render, /Tap an item to finish setup|readiness-check-list|data-readiness-destination/);
+  assert.match(render, /renderSetupDestinationStatuses\(state\)/);
+  assert.doesNotMatch(html, /roundReadinessPanel/);
+  assert.match(app, /openSetupDestination\(getSetupDestinationForReadinessItem\(firstWarning\)\)/);
   const truth = app.slice(app.indexOf('function getRoundReadinessState()'), app.indexOf('function initializeSetupDisclosures'));
   assert.doesNotMatch(truth, /location|weather/i);
   assert.doesNotMatch(render, /buildRoundReadinessWeatherStatus\(\)/);

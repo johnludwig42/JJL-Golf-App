@@ -178,14 +178,14 @@ Recent releases:
 Current release implementation (updated August 1, 2026):
 
 ```text
-v30.3.80 — Guided Match Setup
+v30.3.81 — Competition Rules & Handicap Trust
 ```
 
 ## 8. Near-Term Roadmap
 
 1. v30.3.78 — Scores, Summary Usability & Player Insights (deployed)
 2. v30.3.79 — Shared Match Summary Optimization, Expanded Round Analytics, and clear Scores/Quick Scoreboard roles (deployed)
-3. v30.3.80 — Match Setup Navigation & Readiness Redesign (in development)
+3. v30.3.80 — Match Setup Navigation & Readiness Redesign (deployed)
    - Hub-and-spoke setup overview
    - Course & Round
      - Recent, favorite, nearby, and search-ready course discovery
@@ -194,11 +194,12 @@ v30.3.80 — Guided Match Setup
    - Games & Stat Tracking
    - Scoring Control
    - Advanced Options seeded from Preferences
-4. v30.3.81 — Competition Rules Contract & Handicap Audit
+4. v30.3.81 — Competition Rules Contract & Handicap Audit (in development)
    - Versioned Game Rules Catalog
    - WHS calculation precision and game-specific allowances
    - Explicit Skins carryover and wager contracts
    - Nassau Gross/Net presentation and Match Play finality wording
+   - Quiet Match overview using destination status badges without a duplicate readiness checklist
 5. Match-Derived Product Design System
    - Treat the v30.3.80 Match experience as the reference for all non-Play tabs
    - Standardize tab identity cards, quiet overview pages, destination cards, focused drill-ins, left-aligned destination headers, return behavior, status language, spacing, disclosures, and primary-action hierarchy

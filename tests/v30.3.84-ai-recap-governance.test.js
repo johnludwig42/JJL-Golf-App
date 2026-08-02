@@ -1,0 +1,110 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
+import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
+
+const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+const functionSource = readFileSync(new URL('../supabase/functions/round-recap/index.ts', import.meta.url), 'utf8');
+const contentSpec = JSON.parse(readFileSync(new URL('../supabase/functions/round-recap/content-spec.json', import.meta.url), 'utf8'));
+const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+const manifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
+const acceptanceFixtures = JSON.parse(readFileSync(new URL('./fixtures/recap-content-fixtures.json', import.meta.url), 'utf8'));
+
+function incompleteFixture({ trackedStats = false } = {}) {
+  const engine = loadLiveEngine();
+  const holes = Array.from({ length: 18 }, (_, index) => ({ holeNumber: index + 1, par: index % 3 === 0 ? 3 : index % 3 === 1 ? 4 : 5, strokeIndex: index + 1, yardage: 150 + index * 20 }));
+  const course = { id: 'recap-course', name: 'Recap Course', tees: [{ id: 'recap-tee', teeName: 'Club', rating: 72, slope: 113, par: 72, holes }] };
+  const match = {
+    id: 'recap-round', courseId: course.id, teeId: 'recap-tee', holeCount: 18, status: 'active', allowance: 100,
+    teamCount: 2, playersPerTeam: 1, selectedGames: [], statTrackingEnabled: trackedStats, statTrackingPlayerIds: trackedStats ? ['a', 'b'] : [], memories: [{ id: 'm1', text: 'Alex holed a long putt on 1.', holeNumber: 1, category: 'Highlight' }],
+    players: [
+      { playerId: 'a', team: 1, teeId: 'recap-tee', scores: trackedStats ? [3, 4, 5].map((gross, index) => ({ holeNumber: index + 1, gross })) : [{ holeNumber: 1, gross: 3 }], stats: trackedStats ? [{ fairway: true, green: true }, { fairway: true, green: true }, { fairway: false, green: false }] : [] },
+      { playerId: 'b', team: 2, teeId: 'recap-tee', scores: trackedStats ? [4, 5, 6].map((gross, index) => ({ holeNumber: index + 1, gross })) : [{ holeNumber: 1, gross: 4 }], stats: trackedStats ? [{ fairway: false, green: false }, { fairway: true, green: false }, { fairway: false, green: true }] : [] },
+    ],
+  };
+  const state = engine.seedState({ players: [{ id: 'a', name: 'Alex', index: 4 }, { id: 'b', name: 'Blake', index: 7 }], courses: [course], matches: [match], activeMatchId: match.id });
+  return { engine, match: state.matches[0], metrics: engine.computeMatchMetrics(state.matches[0]) };
+}
+
+test('one versioned content specification governs tone, authority, privacy, and publication', () => {
+  assert.equal(contentSpec.version, '1.0.0');
+  assert.equal(contentSpec.authorityOrder[0], 'authoritativeFacts');
+  assert.match(contentSpec.rules.join('\n'), /Never invent shots/);
+  assert.match(contentSpec.rules.join('\n'), /email addresses, phone numbers, device identifiers/);
+  assert.equal(contentSpec.publication.generatedState, 'draft');
+  assert.equal(contentSpec.publication.acceptanceRequired, true);
+  assert.match(contentSpec.targetWords, /650–850/);
+  assert.equal(contentSpec.maximumWords, 900);
+  assert.ok(contentSpec.sections.includes('Player Improvement Opportunities'));
+  assert.match(contentSpec.rules.join('\n'), /sample size/);
+  assert.match(functionSource, /contentSpec\.version/);
+  assert.match(functionSource, /OPENAI_API_KEY/);
+  assert.match(functionSource, /OPENAI_RECAP_MODEL/);
+  assert.doesNotMatch(functionSource, /sk-[A-Za-z0-9]/);
+});
+
+test('payload identifies the content contract and keeps deterministic facts authoritative', () => {
+  const { engine, match, metrics } = incompleteFixture();
+  const payload = engine.buildRoundRecapPayload(match, metrics);
+  assert.equal(payload.recapContentSpecVersion, '1.0.0');
+  assert.ok(payload.authoritativeFacts);
+  assert.match(payload.recapInstructions, /Compatibility bridge/);
+  assert.match(payload.recapInstructions, /authoritativeFacts override/);
+  assert.doesNotMatch(JSON.stringify(payload), /password|otp|service.role/i);
+});
+
+test('tracked-stat payload supports evidence-based improvement review without inferred mechanics', () => {
+  const { engine, match, metrics } = incompleteFixture({ trackedStats: true });
+  const payload = engine.buildRoundRecapPayload(match, metrics);
+  assert.equal(payload.players[0].statsTracked, true);
+  assert.equal(payload.players[0].approachPerformance.trackedScoredHoles, 3);
+  assert.equal(payload.players[0].approachPerformance.fairwayHitOpportunities, 1);
+  assert.match(payload.recapInstructions, /650–850 words/);
+  assert.match(payload.recapInstructions, /sample size/);
+  assert.match(payload.recapInstructions, /do not infer swing mechanics/);
+
+  const missing = engine.validateRoundRecapContent(match, metrics, 'Three holes were completed. Alex holed a long putt on 1.');
+  assert.ok(missing.issues.some(issue => issue.code === 'MISSING_IMPROVEMENT_REVIEW'));
+  const valid = engine.validateRoundRecapContent(match, metrics, 'Three holes were completed. Alex holed a long putt on 1. Improvement opportunity: over this three-hole sample, Alex may consider making green-in-regulation consistency a next-round focus.');
+  assert.equal(valid.valid, true);
+});
+
+test('deterministic checks block false completion, false finality, and missing Memories', () => {
+  const { engine, match, metrics } = incompleteFixture();
+  const falseFull = engine.validateRoundRecapContent(match, metrics, 'Alex completed all 18 holes. Alex holed a long putt on 1.');
+  assert.equal(falseFull.valid, false);
+  assert.ok(falseFull.issues.some(issue => issue.code === 'FALSE_FULL_ROUND'));
+  const falseMoney = engine.validateRoundRecapContent(match, metrics, 'The final settlement was complete. Alex holed a long putt on 1.');
+  assert.ok(falseMoney.issues.some(issue => issue.code === 'FALSE_FINAL_SETTLEMENT'));
+  const missingMemory = engine.validateRoundRecapContent(match, metrics, 'A short provisional round was played.');
+  assert.ok(missingMemory.issues.some(issue => issue.code === 'MISSING_MEMORIES'));
+  const valid = engine.validateRoundRecapContent(match, metrics, 'One hole was completed. Alex holed a long putt on 1.');
+  assert.equal(valid.valid, true);
+});
+
+test('repository package documents unknown live state and forbids unapproved production deployment', () => {
+  for (const path of ['../docs/AI_RECAP_CONTENT_SPEC_v1.0.md', '../docs/AI_RECAP_DEPLOYMENT_v30.3.84.md', '../docs/architecture/CONSTITUTIONAL_REVIEW_v30.3.84.md']) {
+    assert.equal(existsSync(new URL(path, import.meta.url)), true);
+  }
+  const deployment = readFileSync(new URL('../docs/AI_RECAP_DEPLOYMENT_v30.3.84.md', import.meta.url), 'utf8');
+  assert.match(deployment, /No production inventory, deployment, secret change, or function mutation was performed/);
+  assert.match(deployment, /source as unknown/);
+  assert.match(deployment, /separate Product Owner approval/);
+});
+
+test('content acceptance matrix covers normal, incomplete, social, statistical, and sensitive rounds', () => {
+  assert.deepEqual(acceptanceFixtures.map(row => row.id), [
+    'normal-18', 'incomplete-round', 'no-notes', 'weather-heavy', 'dramatic-finish',
+    'one-sided-match', 'shared-match', 'stats-heavy', 'social-round', 'sensitive-content',
+  ]);
+  assert.ok(acceptanceFixtures.every(row => Array.isArray(row.expect) && row.expect.length >= 2));
+});
+
+test('v30.3.84 metadata and immutable PWA assets are consistent', () => {
+  assert.equal(pkg.version, '30.3.84');
+  assert.equal(manifest.version, 'v30.3.84');
+  assert.match(app, /version: 'v30\.3\.84'/);
+  for (const name of ['app-icon-192-v30.3.84.png', 'app-icon-512-v30.3.84.png', 'apple-touch-icon-v30.3.84.png', 'favicon-32-v30.3.84.png', 'favicon-16-v30.3.84.png']) {
+    assert.equal(existsSync(new URL(`../branding/${name}`, import.meta.url)), true, name);
+  }
+});

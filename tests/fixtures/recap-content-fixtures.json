@@ -1,0 +1,12 @@
+[
+  { "id": "normal-18", "expect": ["featured competition", "final facts", "concise"] },
+  { "id": "incomplete-round", "expect": ["completed-hole count", "provisional money", "no full-round implication"] },
+  { "id": "no-notes", "expect": ["fact-led story", "no invented personality"] },
+  { "id": "weather-heavy", "expect": ["weather only when useful", "no raw-metric recital"] },
+  { "id": "dramatic-finish", "expect": ["supported turning point", "no invented shot"] },
+  { "id": "one-sided-match", "expect": ["accurate finality", "no ridicule"] },
+  { "id": "shared-match", "expect": ["round facts", "no device or account identifiers"] },
+  { "id": "stats-heavy", "expect": ["tracked statistics only", "story before stats"] },
+  { "id": "social-round", "expect": ["Memories represented", "notes subordinate to facts"] },
+  { "id": "sensitive-content", "expect": ["neutral treatment", "privacy", "no amplification"] }
+]

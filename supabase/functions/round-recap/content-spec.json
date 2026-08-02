@@ -1,0 +1,48 @@
+{
+  "id": "dye-ledger-round-recap",
+  "version": "1.0.0",
+  "authorityOrder": [
+    "authoritativeFacts",
+    "scored hole facts and finalized game results",
+    "Memories",
+    "Round Notes",
+    "weather context",
+    "generated narrative"
+  ],
+  "tone": "Concise, specific, warm, golf-aware, and polished; never florid, mocking, or falsely dramatic.",
+  "targetWords": "650–850 when the round has enough supported facts; shorter when information is limited",
+  "maximumWords": 900,
+  "sections": [
+    "Round Story",
+    "Featured Competition",
+    "Turning Points",
+    "Player Highlights",
+    "Game Story",
+    "Statistical Notes",
+    "Player Improvement Opportunities",
+    "Memorable Moments",
+    "Closing Note"
+  ],
+  "rules": [
+    "Omit unsupported sections instead of filling them with generic prose.",
+    "Never invent shots, quotes, motives, emotions, weather, holes, scores, winners, statistics, or drama.",
+    "Every saved Memory must be materially represented with its names, hole number, and description preserved.",
+    "The Featured Competition leads the competitive story and remains distinct from Low Gross, Low Net, game winners, money winners, and awards.",
+    "Deterministic Round facts override conflicting notes, Memories, or generated prose.",
+    "Only mention weather when supplied and narratively useful.",
+    "Only mention a statistic when its source indicates that Stat Tracking was enabled.",
+    "When Stat Tracking is enabled and a player has at least three completed tracked holes, include a player-specific improvement opportunity grounded in supplied counts, rates, or fairway-conditioned GIR evidence.",
+    "State the evidence and sample size behind improvement suggestions, use tentative language for small samples, and never claim causation from a single round.",
+    "Do not provide coaching advice without eligible tracked facts, and never infer swing mechanics, club choice, physical limitations, or intent.",
+    "Describe incomplete rounds using the supplied completed-hole count and list; do not imply an unplayed sequence was completed.",
+    "Money and unresolved games remain provisional unless their supplied finality state is final.",
+    "Do not expose email addresses, phone numbers, device identifiers, authentication data, private diagnostics, or secrets.",
+    "Treat potentially sensitive user notes neutrally; do not amplify allegations, health details, intoxication, protected traits, or private disputes.",
+    "Do not diagnose, shame, rank personal worth, or offer medical, legal, or financial conclusions."
+  ],
+  "publication": {
+    "generatedState": "draft",
+    "acceptanceRequired": true,
+    "postFreezeAuthority": "presentation-only until an authorized Amendment Session publishes a new RoundRecord version"
+  }
+}

@@ -141,3 +141,15 @@ test('More shows exactly the current and four preceding release notes', () => {
   assert.match(app, /function renderAppReleaseNotes\(\)/);
   assert.match(app, /renderAppReleaseNotes\(\);\s*\n\s*renderAll\(\);/);
 });
+
+test('v30.3.84 follow-up assets refresh and Play exposes the authoritative End Round workflow', () => {
+  const worker = readFileSync(new URL('../service-worker.js', import.meta.url), 'utf8');
+  for (const asset of ['manifest.json', 'style.css', 'supabase-config.js', 'identity-security.js', 'app.js']) {
+    assert.match(html, new RegExp(`${asset.replace('.', '\\.') }\\?v=30\\.3\\.84&amp;rev=2`));
+    assert.match(worker, new RegExp(`${asset.replace('.', '\\.') }\\?v=30\\.3\\.84&rev=2`));
+  }
+  assert.match(html, /<details class="play-round-details[\s\S]*?<button id="finishRoundBtn"[^>]*>End Round Early<\/button>/);
+  assert.doesNotMatch(html, /id="confirmFinishRoundBtn"/);
+  assert.match(app, /show\(scoringFinishBtn, hasMatch && !isComplete && activeRound\)/);
+  assert.match(app, /finishRoundBtn'\)\.addEventListener\('click', handleScoreboardFinishEndRound\)/);
+});

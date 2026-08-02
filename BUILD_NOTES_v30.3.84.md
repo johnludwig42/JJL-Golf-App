@@ -21,6 +21,8 @@ v30.3.84 establishes one versioned AI Recap content authority, adds deterministi
 - Generation rejects drafts that contradict round completion or provisional settlement.
 - Acceptance applies the same deterministic checks and explains why a recap needs review.
 - Existing local recaps remain readable and are not silently regenerated or rewritten.
+- Add Memory now uses the same safe-area-aware floating mobile-window treatment as Quick Scoreboard, without changing Memory persistence or scoring state.
+- More now renders exactly the five most recent release notes from structured data, and release validation fails when the list is stale, duplicated, misordered, or does not begin with the current version.
 
 ## Edge Function and deployment boundary
 

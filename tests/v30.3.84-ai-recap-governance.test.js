@@ -71,6 +71,23 @@ test('tracked-stat payload supports evidence-based improvement review without in
   assert.equal(valid.valid, true);
 });
 
+test('verified recap weather requires temperature and humidity without exposing coordinates', () => {
+  const { engine, match, metrics } = incompleteFixture();
+  match.roundContext = { weather: { summary: 'Warm and breezy', temperature: 78, humidity: 64, latitudeApprox: 39.77, longitudeApprox: -86.16 } };
+  const payload = engine.buildRoundRecapPayload(match, metrics);
+  assert.equal(payload.roundContext.weather.temperature, 78);
+  assert.equal(payload.roundContext.weather.humidity, 64);
+  assert.equal('latitudeApprox' in payload.roundContext.weather, false);
+  assert.equal('longitudeApprox' in payload.roundContext.weather, false);
+  assert.match(payload.recapInstructions, /temperature in degrees Fahrenheit and humidity percentage/);
+
+  const missing = engine.validateRoundRecapContent(match, metrics, 'Recorded conditions were warm and breezy. Alex holed a long putt on 1.');
+  assert.ok(missing.issues.some(issue => issue.code === 'MISSING_WEATHER_TEMPERATURE'));
+  assert.ok(missing.issues.some(issue => issue.code === 'MISSING_WEATHER_HUMIDITY'));
+  const valid = engine.validateRoundRecapContent(match, metrics, 'Recorded conditions were warm and breezy at 78°F with 64% humidity. Alex holed a long putt on 1.');
+  assert.equal(valid.valid, true);
+});
+
 test('deterministic checks block false completion, false finality, and missing Memories', () => {
   const { engine, match, metrics } = incompleteFixture();
   const falseFull = engine.validateRoundRecapContent(match, metrics, 'Alex completed all 18 holes. Alex holed a long putt on 1.');

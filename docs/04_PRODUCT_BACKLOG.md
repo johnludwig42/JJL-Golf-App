@@ -206,7 +206,14 @@ FUTURE:
 - AI Event Recap.
 - Trip Recap.
 - Memory System.
-- Photos.
+- Focused local-first Memory Photo Attachments release:
+  - optional Camera or Photo Library selection from Add Memory on iPhone
+  - on-device preview, replace, and remove controls
+  - local resize/compression, correct orientation, and metadata/GPS stripping by default
+  - versioned IndexedDB media records linked by stable Memory ID and Round ID; never store image data in localStorage
+  - existing Memories, rounds, scoring, Shared Match, and offline capture remain compatible
+  - no sign-in or cloud upload required; cloud sharing, moderation, collaborative galleries, and AI image analysis remain separately consented future work
+  - preserve contributor attribution and keep access removal, withdrawal, anonymization, archival, and permanent deletion as distinct operations
 - Voice notes.
 
 ## 8. Platform / Architecture

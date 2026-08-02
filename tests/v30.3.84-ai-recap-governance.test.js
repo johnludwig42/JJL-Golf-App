@@ -4,10 +4,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
 
 const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const functionSource = readFileSync(new URL('../supabase/functions/round-recap/index.ts', import.meta.url), 'utf8');
 const contentSpec = JSON.parse(readFileSync(new URL('../supabase/functions/round-recap/content-spec.json', import.meta.url), 'utf8'));
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const manifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
+const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const acceptanceFixtures = JSON.parse(readFileSync(new URL('./fixtures/recap-content-fixtures.json', import.meta.url), 'utf8'));
 
 function incompleteFixture({ trackedStats = false } = {}) {
@@ -107,4 +109,18 @@ test('v30.3.84 metadata and immutable PWA assets are consistent', () => {
   for (const name of ['app-icon-192-v30.3.84.png', 'app-icon-512-v30.3.84.png', 'apple-touch-icon-v30.3.84.png', 'favicon-32-v30.3.84.png', 'favicon-16-v30.3.84.png']) {
     assert.equal(existsSync(new URL(`../branding/${name}`, import.meta.url)), true, name);
   }
+});
+
+test('Add Memory uses the Quick Scoreboard floating mobile-window treatment', () => {
+  assert.match(css, /#addMemoryDialog\s*\{[\s\S]*?padding:calc\(var\(--app-chrome-height,[\s\S]*?\) 12px/s);
+  assert.match(css, /#addMemoryDialog \.memory-sheet\s*\{[\s\S]*?max-width:100%;[\s\S]*?overflow-y:auto;[\s\S]*?overflow-x:hidden;[\s\S]*?border-radius:16px;/s);
+  assert.match(css, /\.memory-sheet > label,[\s\S]*?margin-left:14px;[\s\S]*?margin-right:14px;/s);
+});
+
+test('More shows exactly the current and four preceding release notes', () => {
+  const source = html.match(/<script id="appReleaseNotesData" type="application\/json">([\s\S]*?)<\/script>/)?.[1];
+  const notes = JSON.parse(source);
+  assert.deepEqual(notes.map(note => note.version), ['v30.3.84', 'v30.3.83', 'v30.3.82', 'v30.3.81', 'v30.3.80']);
+  assert.match(app, /function renderAppReleaseNotes\(\)/);
+  assert.match(app, /renderAppReleaseNotes\(\);\s*\n\s*renderAll\(\);/);
 });

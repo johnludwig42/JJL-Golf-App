@@ -26,6 +26,25 @@ const APP_CACHE_NAME = BUILD_INFO.cacheName;
 const APP_VERSION_NUMBER = BUILD_INFO.versionNumber;
 const ROUND_RECAP_CONTENT_SPEC_VERSION = '1.0.0';
 
+function getAppReleaseNotes() {
+  try {
+    const source = document.getElementById('appReleaseNotesData')?.textContent || '[]';
+    const notes = JSON.parse(source);
+    return Array.isArray(notes) ? notes.slice(0, 5) : [];
+  } catch {
+    return [];
+  }
+}
+
+function renderAppReleaseNotes() {
+  const list = document.getElementById('appReleaseNotesList');
+  if (!list) return;
+  const notes = getAppReleaseNotes();
+  list.innerHTML = notes.length
+    ? notes.map(note => `<li><strong>${escapeHtml(note.version)}</strong> — ${escapeHtml(note.summary)}</li>`).join('')
+    : '<li>Recent update notes are temporarily unavailable.</li>';
+}
+
 const MATCH_TEMPLATES_STORAGE_KEY = 'dyeLedger.matchTemplates.v1';
 const PRESS_SCHEMA_VERSION = 1;
 const PRESS_CONFIG_DEFAULTS = Object.freeze({ pressesEnabled: false, pressType: 'MANUAL', pressAvailabilityRule: 'OPEN_SEGMENT_ONLY', maxPressesPerRound: 3, maxPressesPerSegment: 3, maxPressesPerRootGame: 3, maxRePresses: 0, maxPressDepth: 1, pressValueRule: 'INHERIT_ROOT_STAKE', pressAuthorityRule: 'HOST_ONLY', autoPressThreshold: 2, declaringSideRule: 'LOSING_SIDE_ONLY', declarationWindow: 'BEFORE_HOLE_STARTED', nassauFrontEnabled: true, nassauBackEnabled: true, nassauOverallEnabled: true });
@@ -21279,6 +21298,7 @@ if (!DYE_LEDGER_ADAPTER_MODE) {
   setupWorkflowMode = startupActiveMatch || recoveredSetupDraft ? 'create' : 'landing';
   loadMatchEditor(null, recoveredSetupDraft || undefined);
   updateVersionUi();
+  renderAppReleaseNotes();
   renderAll();
   window.DyeLedgerIdentitySecurity?.mountAccountSecurity?.();
   if (hasSupabaseConfig()) {

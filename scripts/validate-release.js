@@ -33,6 +33,31 @@ requireCondition(worker.includes(`cacheName: 'the-dye-ledger-${displayVersion}'`
 requireCondition(html.includes(`app.js?v=${version}&amp;rev=`), 'index.html app asset query is stale');
 requireCondition(html.includes(`style.css?v=${version}&amp;rev=`), 'index.html style asset query is stale');
 
+const releaseNotesSource = html.match(/<script id="appReleaseNotesData" type="application\/json">([\s\S]*?)<\/script>/)?.[1] || '';
+let releaseNotes = [];
+try {
+  releaseNotes = JSON.parse(releaseNotesSource);
+} catch {
+  failures.push('App release notes are missing or invalid JSON');
+}
+requireCondition(Array.isArray(releaseNotes) && releaseNotes.length === 5, 'App notes must contain exactly the five most recent releases');
+if (Array.isArray(releaseNotes) && releaseNotes.length) {
+  const versions = releaseNotes.map(note => String(note?.version || ''));
+  requireCondition(versions[0] === displayVersion, `App notes must begin with current version ${displayVersion}`);
+  requireCondition(new Set(versions).size === versions.length, 'App notes contain duplicate versions');
+  requireCondition(releaseNotes.every(note => String(note?.summary || '').trim()), 'Every App note requires a summary');
+  const numeric = versions.map(value => value.replace(/^v/, '').split('.').map(Number));
+  const descending = numeric.every((parts, index) => index === 0 || parts.some((value, partIndex) => value !== numeric[index - 1][partIndex]) && (() => {
+    for (let partIndex = 0; partIndex < Math.max(parts.length, numeric[index - 1].length); partIndex += 1) {
+      const previous = numeric[index - 1][partIndex] || 0;
+      const current = parts[partIndex] || 0;
+      if (previous !== current) return previous > current;
+    }
+    return false;
+  })());
+  requireCondition(descending, 'App notes must be ordered newest to oldest');
+}
+
 const installBlock = worker.match(/self\.addEventListener\('install'[\s\S]*?\n\}\);/)?.[0] || '';
 requireCondition(!installBlock.includes('skipWaiting'), 'service worker install must not force activation');
 requireCondition(/SKIP_WAITING[\s\S]*skipWaiting/.test(worker), 'service worker must support explicit waiting-worker activation');

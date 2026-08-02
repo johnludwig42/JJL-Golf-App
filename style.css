@@ -4171,6 +4171,31 @@ main,
   box-sizing: border-box;
   resize: vertical;
 }
+.memory-sheet > label,
+.memory-sheet > .grid,
+.memory-sheet > .actions {
+  margin-left:14px;
+  margin-right:14px;
+}
+@media (max-width:760px) {
+  #addMemoryDialog {
+    align-items:flex-start;
+    padding:calc(var(--app-chrome-height, 0px) + max(12px, env(safe-area-inset-top))) 12px calc(12px + env(safe-area-inset-bottom));
+    overflow-x:hidden;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  #addMemoryDialog .memory-sheet {
+    width:min(720px, 100%);
+    max-width:100%;
+    min-width:0;
+    max-height:calc(100dvh - var(--app-chrome-height, 0px) - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow-y:auto;
+    overflow-x:hidden;
+    border-radius:16px;
+    padding-bottom:max(14px, env(safe-area-inset-bottom));
+  }
+}
 
 /* v30.1.2: Header and navigation density optimization */
 .app-header.compact-header {

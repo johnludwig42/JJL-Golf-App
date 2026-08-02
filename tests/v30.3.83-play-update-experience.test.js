@@ -70,20 +70,8 @@ test('update lifecycle identifies versions and confirms successful installation'
   assert.doesNotMatch(worker.match(/self\.addEventListener\('install'[\s\S]*?\n\}\);/)?.[0] || '', /skipWaiting/);
 });
 
-test('v30.3.83 metadata and immutable PWA assets are consistent', () => {
-  assert.equal(pkg.version, '30.3.83');
-  assert.equal(manifest.version, 'v30.3.83');
-  assert.match(app, /version: 'v30\.3\.83'/);
-  assert.match(worker, /cacheName: 'the-dye-ledger-v30\.3\.83'/);
+test('historical v30.3.83 PWA assets remain available after later upgrades', () => {
   for (const name of ['app-icon-192-v30.3.83.png', 'app-icon-512-v30.3.83.png', 'apple-touch-icon-v30.3.83.png', 'favicon-32-v30.3.83.png', 'favicon-16-v30.3.83.png']) {
     assert.equal(existsSync(new URL(`../branding/${name}`, import.meta.url)), true, name);
-    assert.match(worker, new RegExp(name.replaceAll('.', '\\.')));
   }
-  assert.deepEqual(manifest.icons.map(icon => icon.src), [
-    './branding/app-icon-192-v30.3.83.png',
-    './branding/app-icon-512-v30.3.83.png',
-    './branding/apple-touch-icon-v30.3.83.png',
-  ]);
-  assert.match(html, /apple-touch-icon-v30\.3\.83\.png/);
-  assert.match(html, /favicon-32-v30\.3\.83\.png/);
 });

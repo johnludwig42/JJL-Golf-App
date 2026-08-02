@@ -178,7 +178,7 @@ Recent releases:
 Current release implementation (updated August 1, 2026):
 
 ```text
-v30.3.83 — Play Focus & Reliable App Updates
+v30.3.84 — AI Recap Governance & Content Reliability
 ```
 
 ## 8. Near-Term Roadmap
@@ -204,12 +204,12 @@ v30.3.83 — Play Focus & Reliable App Updates
    - Treat the v30.3.80 Match experience as the reference for Scores, Library, and More
    - Standardize tab identity cards, quiet overview pages, destination cards, focused drill-ins, left-aligned destination headers, return behavior, status language, spacing, disclosures, and primary-action hierarchy
    - Preserve each tab's distinct job; Play and Insights remain unchanged in this release
-6. v30.3.83 — Play Focus & Reliable App Updates (in development)
+6. v30.3.83 — Play Focus, Reliable App Updates & Approach Performance (completed)
    - Make hole navigation the first actionable Play control and move compact Round Progress below Add Memory
    - Preserve current-hole facts, scoring, games, Save Hole, Shared Match, and the complete Quick Scoreboard without calculation or behavior changes
    - Replace broad active-round update blocking with visible-unsaved-entry and in-flight-operation safety checks
    - Save local state before activation and show explicit checking, ready, installing, paused, current-version, and successful-update states
-7. v30.3.84 — AI Recap Governance & Content Reliability
+7. v30.3.84 — AI Recap Governance & Content Reliability (in development)
    - Recover the deployed `round-recap` Supabase Edge Function source into version control and inventory the live function without changing production
    - Establish one authoritative, versioned content specification covering tone, structure, fact precedence, Featured Competition, Memories, notes, weather, incomplete rounds, provisional money, privacy, sensitive content, and unsupported inference
    - Make deterministic Round facts binding when user notes or generated prose conflict; keep AI storytelling subordinate to scoring, game results, and settlement

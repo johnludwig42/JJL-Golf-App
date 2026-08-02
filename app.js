@@ -13,17 +13,18 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.83',
-  versionNumber: '30.3.83',
-  cacheName: 'the-dye-ledger-v30.3.83',
+  version: 'v30.3.84',
+  versionNumber: '30.3.84',
+  cacheName: 'the-dye-ledger-v30.3.84',
   buildDate: new Date().toISOString(),
-  buildLabel: 'Play Focus & Reliable App Updates'
+  buildLabel: 'AI Recap Governance & Content Reliability'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
 const BUILD_LABEL = BUILD_INFO.buildLabel;
 const APP_CACHE_NAME = BUILD_INFO.cacheName;
 const APP_VERSION_NUMBER = BUILD_INFO.versionNumber;
+const ROUND_RECAP_CONTENT_SPEC_VERSION = '1.0.0';
 
 const MATCH_TEMPLATES_STORAGE_KEY = 'dyeLedger.matchTemplates.v1';
 const PRESS_SCHEMA_VERSION = 1;
@@ -6303,6 +6304,32 @@ function buildRoundRecapAuthoritativeFacts(match, metrics, playerSummaries, fina
     statLeaders: buildRoundRecapStatLeaders(playerSummaries),
   };
 }
+
+function validateRoundRecapContent(match, metrics, recapText) {
+  const recap = String(recapText || '').trim();
+  const issues = [];
+  if (!recap) issues.push({ code: 'EMPTY_RECAP', message: 'The recap is empty.' });
+  const completion = getRoundCompletionState(match, metrics);
+  if (completion?.isIncomplete && /\b(?:all|full|complete(?:d)?)\s+(?:the\s+)?18\s+holes\b/i.test(recap)) {
+    issues.push({ code: 'FALSE_FULL_ROUND', message: `The recap describes a full 18 holes, but ${completion.completedHoleCount} of ${completion.selectedHoleCount} holes are complete.` });
+  }
+  if (completion?.isIncomplete && !areAllGamesFinal(match, metrics) && /\b(?:final settlement|final payout|settled up|all games (?:were )?final)\b/i.test(recap)) {
+    issues.push({ code: 'FALSE_FINAL_SETTLEMENT', message: 'The recap describes final settlement even though the incomplete round remains provisional.' });
+  }
+  const missingMemories = getRoundMemories(match).filter(memory => {
+    const text = String(memory?.text || '').trim();
+    return text && !recap.toLocaleLowerCase().includes(text.toLocaleLowerCase());
+  });
+  if (missingMemories.length) issues.push({ code: 'MISSING_MEMORIES', message: `${missingMemories.length} saved ${missingMemories.length === 1 ? 'Memory is' : 'Memories are'} not represented.` });
+  const coachingEligible = computePlayerRoundInsights(match, metrics).some(insight =>
+    isPlayerStatTrackingEnabled(match, insight.playerId) && Number(insight?.totals?.scoredHoles || 0) >= 3
+  );
+  if (coachingEligible && !/\b(?:improvement|practice focus|next-round focus|opportunity)\b/i.test(recap)) {
+    issues.push({ code: 'MISSING_IMPROVEMENT_REVIEW', message: 'Stat Tracking has enough evidence for player improvement opportunities, but the recap does not include them.' });
+  }
+  return { valid: issues.length === 0, issues, specVersion: ROUND_RECAP_CONTENT_SPEC_VERSION };
+}
+
 function buildRoundRecapPayload(match, metrics) {
   const courseName = metrics?.course?.name || getCourse(match?.courseId)?.name || 'Course';
   const teeName = metrics?.tee?.teeName || getTee(match?.courseId, match?.teeId)?.teeName || 'Tee';
@@ -6316,6 +6343,7 @@ function buildRoundRecapPayload(match, metrics) {
     const dist = computeScoreDistributionSummary(match, metrics).find(r => r.playerMetric?.playerId === pm.playerId)?.totals || {};
     const statsTracked = isPlayerStatTrackingEnabled(match, pm.playerId);
     const stat = statsTracked ? (computeStatTrackingSummary(match, metrics).find(r => r.playerMetric?.playerId === pm.playerId)?.totals || {}) : null;
+    const insight = statsTracked ? computePlayerRoundInsights(match, metrics).find(r => String(r.playerId) === String(pm.playerId)) : null;
     return {
       name: pm.player?.name || 'Player',
       team: getTeamLabel(match, pm.team),
@@ -6330,6 +6358,16 @@ function buildRoundRecapPayload(match, metrics) {
       scoreDistribution: dist,
       statsTracked,
       stats: stat,
+      approachPerformance: insight ? {
+        trackedScoredHoles: insight.totals.scoredHoles,
+        fairwayHitOpportunities: insight.totals.fairwayHitOpportunities,
+        fairwayHitGirs: insight.totals.fairwayHitGirs,
+        fairwayHitGirRate: insight.fairwayHitGirRate,
+        fairwayMissedOpportunities: insight.totals.fairwayMissedOpportunities,
+        fairwayMissedGirs: insight.totals.fairwayMissedGirs,
+        fairwayMissedGirRate: insight.fairwayMissedGirRate,
+        fairwayGirAdvantage: insight.fairwayGirAdvantage,
+      } : null,
     };
   });
   const payoutGames = (payoutCtx.payoutGames || []).map(game => ({
@@ -6356,6 +6394,7 @@ function buildRoundRecapPayload(match, metrics) {
   const allGamesFinal = areAllGamesFinal(match, metrics);
   return {
     app: 'The Dye Ledger',
+    recapContentSpecVersion: ROUND_RECAP_CONTENT_SPEC_VERSION,
     course: courseName,
     tee: teeName,
     date: match?.date || todayIso(),
@@ -6382,7 +6421,7 @@ function buildRoundRecapPayload(match, metrics) {
       result: getFeaturedCompetitionResult(match, metrics).result,
     },
     memories: getRoundMemories(match).map(m => ({ text: m.text, category: m.category, holeNumber: m.holeNumber, author: m.createdByName, createdByName: m.createdByName, createdAt: m.createdAt, timestamp: m.timestamp })),
-    recapInstructions: 'Write a polished, private-club style golf recap with short sections: Round Story, Featured Competition, Turning Points, Player Highlights, Game Story, Statistical Notes, Memorable Moments, and Closing Note or Fun Awards when supported. Every item in memories is a high-intent user fact and must be materially represented with its specific names, hole number, and description preserved. Weave each Memory naturally when possible; otherwise include it verbatim in a Round Memories section. Never replace a specific Memory with vague generic language and never invent supporting details. Center the Featured Competition first, distinguish it from Low Gross, Low Net, Money Winner, game winners, and awards, and use Round Notes and Memories for personality. If roundContext.weather.summary is present, you may reference the weather naturally where it helps explain the round, but do not force a weather mention or recite raw weather metrics awkwardly. Do not fabricate shots, weather, holes, or emotions not supported by data or notes. For an incomplete round, say completed holes and use the supplied completed-hole list; never say opening holes or front nine unless that exact sequential range is complete. Treat incomplete-round money as provisional unless the relevant game is mathematically decided. If clinched early, explain that the featured competition was decided before all holes were played. Do not fabricate untracked statistics. Keep the tone professional, fun, golf-aware, specific, and concise on mobile.',
+    recapInstructions: 'Compatibility bridge for the currently deployed function: apply the Dye Ledger recap content specification identified by recapContentSpecVersion. Target 650–850 words when enough supported facts exist, never exceed 900 words, and stay shorter rather than pad a fact-light round. Write a polished, private-club style golf recap with sections when supported: Round Story, Featured Competition, Turning Points, Player Highlights, Game Story, Statistical Notes, Player Improvement Opportunities, Memorable Moments, and Closing Note or Fun Awards. Every item in memories is a high-intent user fact and must be materially represented with its specific names, hole number, and description preserved. Weave each Memory naturally when possible; otherwise include it verbatim in a Round Memories section. Never replace a specific Memory with vague generic language and never invent supporting details. Center the Featured Competition first, distinguish it from Low Gross, Low Net, Money Winner, game winners, and awards, and use Round Notes and Memories for personality. When a player has Stat Tracking enabled and at least three tracked scored holes, specifically review that player for an improvement opportunity grounded in the supplied counts, rates, or approachPerformance evidence. State the sample size, use tentative language for small samples, and do not infer swing mechanics, club choice, physical limitations, intent, or causation from one round. If eligible evidence does not exist, omit coaching rather than guess. If roundContext.weather.summary is present, you may reference the weather naturally where it helps explain the round, but do not force a weather mention or recite raw weather metrics awkwardly. Do not fabricate shots, weather, holes, or emotions not supported by data or notes. For an incomplete round, say completed holes and use the supplied completed-hole list; never say opening holes or front nine unless that exact sequential range is complete. Treat incomplete-round money as provisional unless the relevant game is mathematically decided. If clinched early, explain that the featured competition was decided before all holes were played. Do not fabricate untracked statistics. Deterministic authoritativeFacts override notes, Memories, and generated prose. Keep the tone professional, fun, golf-aware, specific, and mobile-readable.',
     players: playerSummaries,
     games: summarizeSelectedGamesForRecap(match, metrics),
     finalSettlement,
@@ -6418,6 +6457,8 @@ async function generateRoundRecapForActiveMatch() {
     if (!response.ok || data?.success === false) throw new Error(data?.error || `Round Recap failed (${response.status}).`);
     const recap = ensureRoundRecapMemoryCoverage(match, String(data?.recap || data?.text || '').trim());
     if (!recap) throw new Error('Round Recap returned no text.');
+    const validation = validateRoundRecapContent(match, metrics, recap);
+    if (!validation.valid) throw new Error(`Round Recap needs review: ${validation.issues.map(issue => issue.message).join(' ')}`);
     match.roundRecapGenerated = recap;
     if (!String(match.roundRecapFinal || '').trim()) match.roundRecap = recap;
     match.roundRecapGeneratedAt = new Date().toISOString();
@@ -6440,6 +6481,14 @@ function acceptRoundRecapForActiveMatch() {
   const editBox = document.getElementById('roundRecapEditBox');
   const text = String(editBox?.value || getStoredRoundRecap(match) || '').trim();
   if (!text) return toast('No recap text to accept.');
+  const metrics = computeMatchMetrics(match);
+  const validation = validateRoundRecapContent(match, metrics, text);
+  if (!validation.valid) {
+    match.roundRecapStatus = `Cannot accept recap: ${validation.issues.map(issue => issue.message).join(' ')}`;
+    persist({ skipRender: true });
+    renderLeaderboard();
+    return toast('Recap needs review before it can be accepted.');
+  }
   match.roundRecapFinal = text;
   match.roundRecap = text;
   match.roundRecapStatus = 'Accepted recap saved for Match Summary and PDF.';
@@ -21070,6 +21119,7 @@ function installDyeLedgerLiveEngineAdapter() {
     buildScoresOutcomeHero,
     buildScoresSettlement,
     buildRoundRecapPayload,
+    validateRoundRecapContent,
     ensureRoundRecapMemoryCoverage,
     buildFinishedMatchCandidate,
     createFinishRecoveryMarker,

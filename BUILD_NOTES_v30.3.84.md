@@ -24,6 +24,8 @@ v30.3.84 establishes one versioned AI Recap content authority, adds deterministi
 - Add Memory now uses the same safe-area-aware floating mobile-window treatment as Quick Scoreboard, without changing Memory persistence or scoring state.
 - More now renders exactly the five most recent release notes from structured data, and release validation fails when the list is stale, duplicated, misordered, or does not begin with the current version.
 - Verified recap weather now requires a brief recorded-conditions summary with available temperature and humidity readings while excluding coordinates and unsupported causal claims.
+- Advances the v30.3.84 asset revision so installed PWAs receive the Add Memory floating-window CSS, with validation requiring index/service-worker revision consistency.
+- Makes End Round Early discoverable below Play's Round Details and routes it through the same authoritative completion, reason, provisional-warning, persistence, and summary workflow used by Scores.
 
 ## Edge Function and deployment boundary
 

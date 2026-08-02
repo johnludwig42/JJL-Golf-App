@@ -14298,7 +14298,6 @@ function finishRoundFromPrompt() {
 
 function syncFinishRoundUi(match = getActiveMatch()) {
   const scoringFinishBtn = document.getElementById('finishRoundBtn');
-  const scoringConfirmBtn = document.getElementById('confirmFinishRoundBtn');
   const scoreboardFinishBtn = document.getElementById('scoreboardFinishRoundBtn');
   const scoreboardConfirmBtn = document.getElementById('scoreboardConfirmFinishRoundBtn');
   const setupFinishBtn = document.getElementById('setupFinishRoundBtn');
@@ -14320,14 +14319,16 @@ function syncFinishRoundUi(match = getActiveMatch()) {
     el.disabled = !visible;
     el.setAttribute('aria-hidden', visible ? 'false' : 'true');
   };
-  show(scoringFinishBtn, false);
-  show(scoringConfirmBtn, false);
+  show(scoringFinishBtn, hasMatch && !isComplete && activeRound);
   show(scoreboardFinishBtn, hasMatch && !isComplete && activeRound);
   show(scoreboardConfirmBtn, false);
   show(setupFinishBtn, false);
   show(setupConfirmBtn, false);
   show(postRoundInline, hasMatch && isComplete);
   if (scoreboardFinishBtn) scoreboardFinishBtn.textContent = reopenedEdit
+    ? 'Save / End Round'
+    : dataCompletion?.isReadyToFinish ? 'Ready to Finish' : 'End Round Early';
+  if (scoringFinishBtn) scoringFinishBtn.textContent = reopenedEdit
     ? 'Save / End Round'
     : dataCompletion?.isReadyToFinish ? 'Ready to Finish' : 'End Round Early';
   if (postRoundInlineText && hasMatch && isComplete) postRoundInlineText.textContent = `${completedHoles(match)} holes completed. What would you like to do next?`;
@@ -14430,16 +14431,6 @@ function handleRoundEndSecondary() {
   if (mode === 'complete') reviewFinalHoleFromPrompt();
 }
 
-
-function armFinishRound() {
-  const match = getActiveMatch();
-  if (!match) return toast('No active match.');
-  finishConfirmArmed = true;
-  syncFinishRoundUi(match);
-  toast(match.previousCompletedAt
-    ? 'Tap Confirm Save Updates to overwrite the saved round.'
-    : 'Tap Confirm Finish to lock this round to history.');
-}
 
 function buildFinishedMatchCandidate(match, completedAt = new Date().toISOString()) {
   const candidate = clonePlain(match);
@@ -19012,7 +19003,7 @@ function installHandlers() {
   
   document.getElementById('newMatchBtn').addEventListener('click', () => { setupWorkflowMode = 'create'; handleNewMatchRequest(); });
   const setupFinishRoundBtn = document.getElementById('setupFinishRoundBtn');
-  if (setupFinishRoundBtn) setupFinishRoundBtn.addEventListener('click', armFinishRound);
+  if (setupFinishRoundBtn) setupFinishRoundBtn.addEventListener('click', handleScoreboardFinishEndRound);
   const setupConfirmFinishRoundBtn = document.getElementById('setupConfirmFinishRoundBtn');
   if (setupConfirmFinishRoundBtn) setupConfirmFinishRoundBtn.addEventListener('click', completeActiveRound);
   document.getElementById('editActiveMatchBtn').addEventListener('click', () => {
@@ -20225,8 +20216,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (!ok) return renderCurrentMatch();
     renderCurrentMatch();
   });
-  document.getElementById('finishRoundBtn').addEventListener('click', armFinishRound);
-  document.getElementById('confirmFinishRoundBtn').addEventListener('click', completeActiveRound);
+  document.getElementById('finishRoundBtn').addEventListener('click', handleScoreboardFinishEndRound);
   document.getElementById('roundCompleteFinishBtn')?.addEventListener('click', finishRoundFromPrompt);
   document.getElementById('roundCompleteReviewBtn')?.addEventListener('click', reviewFinalHoleFromPrompt);
   document.getElementById('roundEndPrimaryBtn')?.addEventListener('click', handleRoundEndPrimary);

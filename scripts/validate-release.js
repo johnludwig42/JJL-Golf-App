@@ -33,6 +33,16 @@ requireCondition(worker.includes(`cacheName: 'the-dye-ledger-${displayVersion}'`
 requireCondition(html.includes(`app.js?v=${version}&amp;rev=`), 'index.html app asset query is stale');
 requireCondition(html.includes(`style.css?v=${version}&amp;rev=`), 'index.html style asset query is stale');
 
+const versionedAssets = ['manifest.json', 'style.css', 'supabase-config.js', 'identity-security.js', 'app.js'];
+const assetRevisions = versionedAssets.map(asset => {
+  const escapedAsset = asset.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const revision = html.match(new RegExp(`${escapedAsset}\\?v=${version.replace(/\./g, '\\.')}&amp;rev=(\\d+)`))?.[1] || '';
+  requireCondition(!!revision, `Missing versioned asset revision for ${asset}`);
+  requireCondition(worker.includes(`./${asset}?v=${version}&rev=${revision}`), `Service worker revision for ${asset} does not match index.html`);
+  return revision;
+});
+requireCondition(new Set(assetRevisions.filter(Boolean)).size === 1, 'All release assets must use one consistent revision');
+
 const releaseNotesSource = html.match(/<script id="appReleaseNotesData" type="application\/json">([\s\S]*?)<\/script>/)?.[1] || '';
 let releaseNotes = [];
 try {

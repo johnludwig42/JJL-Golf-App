@@ -2,7 +2,7 @@
   { "id": "normal-18", "expect": ["featured competition", "final facts", "concise"] },
   { "id": "incomplete-round", "expect": ["completed-hole count", "provisional money", "no full-round implication"] },
   { "id": "no-notes", "expect": ["fact-led story", "no invented personality"] },
-  { "id": "weather-heavy", "expect": ["weather only when useful", "no raw-metric recital"] },
+  { "id": "weather-heavy", "expect": ["brief recorded-conditions summary", "temperature and humidity readings", "no coordinates or unsupported causation"] },
   { "id": "dramatic-finish", "expect": ["supported turning point", "no invented shot"] },
   { "id": "one-sided-match", "expect": ["accurate finality", "no ridicule"] },
   { "id": "shared-match", "expect": ["round facts", "no device or account identifiers"] },

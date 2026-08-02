@@ -6,7 +6,7 @@ The machine-readable authority is `supabase/functions/round-recap/content-spec.j
 
 Deterministic Round facts are binding. Scores, completed holes, handicaps, Featured Competition status, game results, settlement, and tracked-stat facts override conflicting notes, Memories, or generated prose. The generator may omit unsupported sections but must never fill gaps by inference.
 
-Every saved Memory is a high-intent contributor fact and must be materially represented. Round Notes supply voice and context but cannot alter authoritative outcomes. Weather is optional context and is mentioned only when supplied and useful.
+Every saved Memory is a high-intent contributor fact and must be materially represented. Round Notes supply voice and context but cannot alter authoritative outcomes. When verified weather is supplied, the recap includes one brief natural summary and states the temperature and humidity readings when available. It describes them as recorded conditions, omits coordinates and unnecessary raw metrics, and never claims weather caused an outcome unless a Round Note or Memory explicitly supports that connection.
 
 ## Output contract
 

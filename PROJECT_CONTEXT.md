@@ -234,6 +234,12 @@ v30.3.84 — AI Recap Governance & Content Reliability
    - Keep Play distinct as the current-hole scoring instrument
    - Evaluate compact active-play chrome, mobile scoring rows, progressive game detail, explicit completion feedback, and one authoritative save/advance action
 14. Amendment Sessions
+15. Local-First Memory Photo Attachments
+   - Add optional Camera or Photo Library capture to Add Memory with preview, replace, and remove actions
+   - Resize and compress on device, preserve orientation, and strip unnecessary metadata including GPS by default
+   - Store versioned media in IndexedDB under stable Memory and Round identifiers; never put image data in localStorage
+   - Preserve local-only/offline use and all existing Memories, rounds, scoring, Shared Match, and RoundRecords
+   - Defer cloud upload/sharing, collaborative galleries, moderation, AI image analysis, and broader privacy UI to separately authorized work
 15. Foundational Games Expansion
    - Wolf
    - Sixes / Round Robin

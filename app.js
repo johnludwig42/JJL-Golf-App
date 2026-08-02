@@ -2406,6 +2406,7 @@ function normalizeRoundWeatherSnapshot(weather) {
     || normalized.temperature != null
     || normalized.apparentTemperature != null
     || normalized.windSpeed != null
+    || normalized.humidity !== null
     || normalized.conditionsCode != null;
   return hasWeatherData ? normalized : null;
 }
@@ -6340,6 +6341,17 @@ function validateRoundRecapContent(match, metrics, recapText) {
     return text && !recap.toLocaleLowerCase().includes(text.toLocaleLowerCase());
   });
   if (missingMemories.length) issues.push({ code: 'MISSING_MEMORIES', message: `${missingMemories.length} saved ${missingMemories.length === 1 ? 'Memory is' : 'Memories are'} not represented.` });
+  const weather = normalizeRoundWeatherSnapshot(match?.roundContext?.weather);
+  if (weather) {
+    const temperature = weather.temperature === null || weather.temperature === undefined ? '' : String(weather.temperature);
+    const humidity = weather.humidity === null || weather.humidity === undefined ? '' : String(weather.humidity);
+    if (temperature && !(recap.includes(temperature) && /(?:°|degrees?|fahrenheit|\bF\b)/i.test(recap))) {
+      issues.push({ code: 'MISSING_WEATHER_TEMPERATURE', message: `The recap does not include the recorded temperature of ${temperature}°F.` });
+    }
+    if (humidity && !(recap.includes(humidity) && /humidity/i.test(recap))) {
+      issues.push({ code: 'MISSING_WEATHER_HUMIDITY', message: `The recap does not include the recorded humidity of ${humidity}%.` });
+    }
+  }
   const coachingEligible = computePlayerRoundInsights(match, metrics).some(insight =>
     isPlayerStatTrackingEnabled(match, insight.playerId) && Number(insight?.totals?.scoredHoles || 0) >= 3
   );
@@ -6411,6 +6423,18 @@ function buildRoundRecapPayload(match, metrics) {
   const roundCompletionState = getRoundCompletionState(match, metrics);
   const gameClinchStates = getGameClinchStates(match, metrics);
   const allGamesFinal = areAllGamesFinal(match, metrics);
+  const normalizedRecapWeather = normalizeRoundWeatherSnapshot(match?.roundContext?.weather);
+  const recapWeather = normalizedRecapWeather ? {
+    capturedAt: normalizedRecapWeather.capturedAt,
+    temperature: normalizedRecapWeather.temperature,
+    apparentTemperature: normalizedRecapWeather.apparentTemperature,
+    humidity: normalizedRecapWeather.humidity,
+    windSpeed: normalizedRecapWeather.windSpeed,
+    windDirection: normalizedRecapWeather.windDirection,
+    precipitation: normalizedRecapWeather.precipitation,
+    conditionsText: normalizedRecapWeather.conditionsText,
+    summary: normalizedRecapWeather.summary,
+  } : null;
   return {
     app: 'The Dye Ledger',
     recapContentSpecVersion: ROUND_RECAP_CONTENT_SPEC_VERSION,
@@ -6426,7 +6450,7 @@ function buildRoundRecapPayload(match, metrics) {
     gameClinchStates,
     roundNotes: String(match?.roundRecapNotes || '').trim(),
     roundContext: {
-      weather: normalizeRoundWeatherSnapshot(match?.roundContext?.weather),
+      weather: recapWeather,
       roundTiming: {
         startedAt: match?.roundTiming?.startedAt || null,
         endedAt: match?.roundTiming?.endedAt || match?.completedAt || null,
@@ -6440,7 +6464,7 @@ function buildRoundRecapPayload(match, metrics) {
       result: getFeaturedCompetitionResult(match, metrics).result,
     },
     memories: getRoundMemories(match).map(m => ({ text: m.text, category: m.category, holeNumber: m.holeNumber, author: m.createdByName, createdByName: m.createdByName, createdAt: m.createdAt, timestamp: m.timestamp })),
-    recapInstructions: 'Compatibility bridge for the currently deployed function: apply the Dye Ledger recap content specification identified by recapContentSpecVersion. Target 650–850 words when enough supported facts exist, never exceed 900 words, and stay shorter rather than pad a fact-light round. Write a polished, private-club style golf recap with sections when supported: Round Story, Featured Competition, Turning Points, Player Highlights, Game Story, Statistical Notes, Player Improvement Opportunities, Memorable Moments, and Closing Note or Fun Awards. Every item in memories is a high-intent user fact and must be materially represented with its specific names, hole number, and description preserved. Weave each Memory naturally when possible; otherwise include it verbatim in a Round Memories section. Never replace a specific Memory with vague generic language and never invent supporting details. Center the Featured Competition first, distinguish it from Low Gross, Low Net, Money Winner, game winners, and awards, and use Round Notes and Memories for personality. When a player has Stat Tracking enabled and at least three tracked scored holes, specifically review that player for an improvement opportunity grounded in the supplied counts, rates, or approachPerformance evidence. State the sample size, use tentative language for small samples, and do not infer swing mechanics, club choice, physical limitations, intent, or causation from one round. If eligible evidence does not exist, omit coaching rather than guess. If roundContext.weather.summary is present, you may reference the weather naturally where it helps explain the round, but do not force a weather mention or recite raw weather metrics awkwardly. Do not fabricate shots, weather, holes, or emotions not supported by data or notes. For an incomplete round, say completed holes and use the supplied completed-hole list; never say opening holes or front nine unless that exact sequential range is complete. Treat incomplete-round money as provisional unless the relevant game is mathematically decided. If clinched early, explain that the featured competition was decided before all holes were played. Do not fabricate untracked statistics. Deterministic authoritativeFacts override notes, Memories, and generated prose. Keep the tone professional, fun, golf-aware, specific, and mobile-readable.',
+    recapInstructions: 'Compatibility bridge for the currently deployed function: apply the Dye Ledger recap content specification identified by recapContentSpecVersion. Target 650–850 words when enough supported facts exist, never exceed 900 words, and stay shorter rather than pad a fact-light round. Write a polished, private-club style golf recap with sections when supported: Round Story, Featured Competition, Turning Points, Player Highlights, Game Story, Statistical Notes, Player Improvement Opportunities, Memorable Moments, and Closing Note or Fun Awards. Every item in memories is a high-intent user fact and must be materially represented with its specific names, hole number, and description preserved. Weave each Memory naturally when possible; otherwise include it verbatim in a Round Memories section. Never replace a specific Memory with vague generic language and never invent supporting details. Center the Featured Competition first, distinguish it from Low Gross, Low Net, Money Winner, game winners, and awards, and use Round Notes and Memories for personality. When a player has Stat Tracking enabled and at least three tracked scored holes, specifically review that player for an improvement opportunity grounded in the supplied counts, rates, or approachPerformance evidence. State the sample size, use tentative language for small samples, and do not infer swing mechanics, club choice, physical limitations, intent, or causation from one round. If eligible evidence does not exist, omit coaching rather than guess. When roundContext.weather is present, include one brief natural summary of the recorded conditions and state the supplied temperature in degrees Fahrenheit and humidity percentage when available. Do not expose coordinates, recite unnecessary raw metrics, imply the snapshot covered the entire round, or claim weather caused an outcome unless a Round Note or Memory explicitly supports that connection. Do not fabricate shots, weather, holes, or emotions not supported by data or notes. For an incomplete round, say completed holes and use the supplied completed-hole list; never say opening holes or front nine unless that exact sequential range is complete. Treat incomplete-round money as provisional unless the relevant game is mathematically decided. If clinched early, explain that the featured competition was decided before all holes were played. Do not fabricate untracked statistics. Deterministic authoritativeFacts override notes, Memories, and generated prose. Keep the tone professional, fun, golf-aware, specific, and mobile-readable.',
     players: playerSummaries,
     games: summarizeSelectedGamesForRecap(match, metrics),
     finalSettlement,

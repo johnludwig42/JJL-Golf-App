@@ -11,11 +11,11 @@ const manifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
 test('post-v30.3.80 release identity retains immutable PWA assets', () => {
-  assert.equal(pkg.version, '30.3.84');
-  assert.equal(manifest.version, 'v30.3.84');
-  assert.match(app, /versionNumber:\s*'30\.3\.84'/);
-  assert.match(worker, /cacheName:\s*'the-dye-ledger-v30\.3\.84'/);
-  ['app-icon-192-v30.3.84.png', 'app-icon-512-v30.3.84.png', 'apple-touch-icon-v30.3.84.png', 'favicon-32-v30.3.84.png', 'favicon-16-v30.3.84.png']
+  assert.equal(pkg.version, '30.3.85');
+  assert.equal(manifest.version, 'v30.3.85');
+  assert.match(app, /versionNumber:\s*'30\.3\.85'/);
+  assert.match(worker, /cacheName:\s*'the-dye-ledger-v30\.3\.85'/);
+  ['app-icon-192-v30.3.85.png', 'app-icon-512-v30.3.85.png', 'apple-touch-icon-v30.3.85.png', 'favicon-32-v30.3.85.png', 'favicon-16-v30.3.85.png']
     .forEach(name => assert.equal(existsSync(new URL(`../branding/${name}`, import.meta.url)), true));
 });
 
@@ -50,7 +50,7 @@ test('destination headings live in the Match header and supporting setup content
   assert.match(app, /title\.textContent = normalized \? copy\[0\] : 'Match Setup'/);
   assert.doesNotMatch(html, />Pre-Round Checklist</);
   assert.doesNotMatch(html, /id="setupCourseLibraryStatus"/);
-  assert.match(html, /data-setup-destination="players"><span>Handicap allowance/);
+  assert.match(html, /data-setup-destination="games"><span>Default handicap allowance/);
   const header = html.slice(html.indexOf('id="matchSectionHeader"'), html.indexOf('</div>\n\n', html.indexOf('id="matchSectionHeader"')));
   assert.ok(header.indexOf('id="matchSectionTitle"') < header.indexOf('id="setupDestinationBackBtn"'));
   const advancedStart = html.indexOf('Preferences for This Round');

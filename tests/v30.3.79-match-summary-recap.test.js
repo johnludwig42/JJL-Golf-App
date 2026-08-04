@@ -42,7 +42,7 @@ test('Match Summary presents accepted AI recap in the main narrative hierarchy',
   assert.match(summary, /Alex nearly holed the bunker shot/);
   assert.ok(summary.indexOf('Round Story') < summary.indexOf('AI Round Recap'));
   assert.ok(summary.indexOf('AI Round Recap') < summary.indexOf('Round Analytics'));
-  assert.ok(summary.indexOf('Round Analytics') < summary.indexOf('Final Net Settlement'));
+  assert.ok(summary.indexOf('Round Analytics') < summary.indexOf('Final Settlement'));
   assert.equal(JSON.stringify(live), before);
 });
 
@@ -55,7 +55,7 @@ test('draft and absent AI recaps are labeled truthfully without hiding the rest 
   const empty = emptyFixture.engine.buildSummaryExportBody(emptyFixture.live, emptyFixture.metrics);
   assert.match(empty, /No AI recap has been generated/);
   assert.match(empty, /Generate and review an AI recap/);
-  assert.match(empty, /Final Net Settlement/);
+  assert.match(empty, /Final Settlement/);
 });
 
 test('summary generation and late recap presentation do not mutate frozen or legacy local records', () => {

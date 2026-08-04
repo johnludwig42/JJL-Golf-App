@@ -26,7 +26,9 @@ test('hole navigation scrolls to the active-hole header only after a successful 
   assert.match(app, /function scrollToActiveHoleScoringTop\(\{ behavior = 'smooth' \} = \{\}\)/);
   assert.match(app, /prefers-reduced-motion: reduce/);
   assert.match(app, /if \(!persist\(\)\) return false;\s*if \(currentHole !== savedPosition\) scrollToActiveHoleScoringTop\(\);/);
-  assert.ok(app.indexOf('if (!persist()) return false;') < app.indexOf('scrollToActiveHoleScoringTop();'));
+  const savePersist = app.indexOf('if (!persist()) return false;');
+  const savedHoleScroll = app.indexOf('if (currentHole !== savedPosition) scrollToActiveHoleScoringTop();', savePersist);
+  assert.ok(savePersist >= 0 && savedHoleScroll > savePersist);
 });
 
 test('approved Scores sections are independent closed-by-default disclosures and remain printable', () => {
@@ -46,10 +48,10 @@ test('approved Scores sections are independent closed-by-default disclosures and
   assert.doesNotMatch(app, /(?:matchStatus|classicScorecard|statTrackingSummaryCard|roundStoryCard)\.open\s*=/);
 });
 
-test('End Round Early placement and behavior remain unchanged in this release', () => {
+test('End Round placement preserves the authoritative completion workflow', () => {
   assert.match(html, /id="scoreboardFinishRoundBtn"[^>]*>Finish \/ End Round<\/button>/);
   assert.ok(html.indexOf('id="scoreboardFinishRoundBtn"') < html.indexOf('print-section-match-status'));
-  assert.match(app, /dataCompletion\?\.isReadyToFinish \? 'Ready to Finish' : 'End Round Early'/);
+  assert.match(app, /scoringFinishBtn\.textContent = reopenedEdit \? 'Save \/ End Round' : 'End Round'/);
   assert.match(app, /scoreboardFinishRoundBtn\.addEventListener\('click', handleScoreboardFinishEndRound\)/);
 });
 

@@ -53,7 +53,7 @@ test('checklist and Start Round validation share one complete authoritative draf
   assert.equal(ready.summary.courseHolesLoaded, true);
   const missingPlayer = engine.getMatchSetupValidationState({ draft: { ...draft, players: draft.players.slice(0, 1) } });
   assert.equal(missingPlayer.ready, false);
-  assert.ok(missingPlayer.missingRequirements.some(item => /player slots/i.test(item)));
+  assert.ok(missingPlayer.missingRequirements.some(item => /player slots|active player|Nassau player/i.test(item)));
   const missingHoles = engine.getMatchSetupValidationState({ draft: { ...draft, courseHolesLoaded: false } });
   assert.equal(missingHoles.ready, false);
   assert.ok(missingHoles.missingRequirements.some(item => /course data/i.test(item)));

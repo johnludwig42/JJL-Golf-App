@@ -522,6 +522,20 @@ Status: Locked.
 
 ---
 
+### 32. Nassau rules and handicap views are explicit Round facts
+
+Nassau remains a two-team competition. Each team may contain one through six active golfers, and unequal teams are permitted. Both teams count the same Best N value, which cannot exceed the smaller active roster. A missing score from any active team member keeps the hole unresolved.
+
+New Nassau configurations store a scoring-policy version, Gross or Net basis, Best N count, handicap allowance, and recommendation/custom provenance. Net recommendations follow the approved format matrix; custom and unequal formats use a clearly labeled Dye Ledger recommendation. New setup does not create combined Gross & Net Nassau games, while legacy combined games retain their original Best 1 interpretation.
+
+Presses and Re-Presses inherit the complete parent scoring policy. Shared Match clients that do not understand a newer Nassau capability must fail closed rather than silently calculate a legacy result.
+
+Course Net means full signed Course Handicap. Match Net means competition-relative strokes under the selected game's stored allowance. These are separate scorecard views and report sections; neither may be mislabeled as the other.
+
+Status: Locked.
+
+---
+
 ## Future Roadmap Ordering
 
 The current strategic order is:

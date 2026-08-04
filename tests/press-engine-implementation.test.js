@@ -154,7 +154,7 @@ test('Player Score Summary is compact, stable-ID keyed, and precedes the scoreca
   assert.match(summary, /Player Score Summary/);
   assert.match(summary, /data-player-id="a"/);
   assert.match(summary, /data-player-id="b"/);
-  assert.match(summary, /<th>Gross<\/th><th>Net<\/th><th>Net \+\/-<\/th>/);
+  assert.match(summary, /<th>Gross<\/th><th>Course Net<\/th><th>Course Net \+\/-<\/th>/);
   const html = f.engine.buildQuickScoreboardView(f.match, f.metrics);
   assert.ok(html.indexOf('Player Score Summary') < html.indexOf('Classic Scorecard'));
   assert.equal(JSON.stringify(f.match), before);

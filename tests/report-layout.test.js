@@ -42,12 +42,12 @@ test('RoundRecord fixtures preserve three-layer order, structured settlement, an
   ];
   fixtures.forEach(fixture => {
     const { html, record } = render(fixture);
-    const order = ['The Dye Ledger', 'Round Story', 'AI Round Recap', 'Round Analytics', 'Net Settlement', 'Game Drivers', 'Ledger / Audit Detail', 'Classic scorecard', 'Leaderboards'];
+    const order = ['The Dye Ledger', 'Round Story', 'AI Round Recap', 'Round Analytics', 'Settlement', 'Game Drivers', 'Ledger / Audit Detail', 'Classic scorecard', 'Leaderboards'];
     order.forEach(label => assert.match(html, new RegExp(label)));
     order.slice(1).forEach((label, idx) => assert.ok(html.indexOf(label) > html.indexOf(order[idx]), `${fixture.id}: ${label} order`));
     assert.match(html, /data-report-section-type="main"/);
     assert.match(html, /data-report-section-type="appendix"/);
-    assert.match(html, /Gross score shown above net score/);
+    assert.match(html, /Gross score shown above Course Net/);
     assert.equal(record.schemaVersion, 1);
     assert.equal(record.meta.tripId, null);
     assert.equal(record.players.length, fixture.players.length);

@@ -2284,6 +2284,8 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
 .player-combobox-option:hover,.player-combobox-option.is-active{background:#e8f2ec;color:#0b5d3b}
 .player-combobox-empty{padding:10px}
 .handicap-preview-table{--handicap-preview-columns:minmax(100px,1.8fr) repeat(4,minmax(42px,.65fr));min-width:0;overflow:hidden}
+.handicap-preview-table.course-handicap-preview{--handicap-preview-columns:minmax(120px,2fr) repeat(2,minmax(64px,.8fr))}
+.handicap-preview-table.featured-game-handicap-preview{--handicap-preview-columns:minmax(100px,1.8fr) repeat(4,minmax(42px,.65fr))}
 .handicap-preview-header,.handicap-preview-meta,#setup .persistent-preview-card .handicap-preview-meta{display:grid;grid-template-columns:var(--handicap-preview-columns);align-items:center;gap:6px;min-width:0;white-space:normal}
 .handicap-preview-header{padding:0 14px 6px;color:var(--muted);font-size:.72rem;font-weight:800;line-height:1.15}
 .handicap-preview-cardline{overflow:hidden}
@@ -2352,6 +2354,7 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
 #sessionSummaryCard{order:7}
 @media (max-width:560px){
   .handicap-preview-table{--handicap-preview-columns:minmax(86px,1.7fr) repeat(4,minmax(38px,.6fr))}
+  .handicap-preview-table.course-handicap-preview{--handicap-preview-columns:minmax(104px,1.8fr) repeat(2,minmax(54px,.7fr))}
   .handicap-preview-header,.handicap-preview-meta,#setup .persistent-preview-card .handicap-preview-meta{gap:3px;font-size:10px}
   .handicap-preview-header{padding-left:10px;padding-right:10px;font-size:8px}
   .handicap-preview-meta .tiny,#setup .persistent-preview-card .handicap-preview-meta .tiny{font-size:8px;white-space:normal}
@@ -5871,6 +5874,11 @@ html.quick-scoreboard-open,body.quick-scoreboard-open{overflow:hidden!important;
   #score .gross-score-stepper .score-input{width:34px!important;min-width:34px!important;max-width:34px!important;height:34px!important;min-height:34px!important}
   #score .score-step-btn{width:28px!important;min-width:28px!important;height:32px!important;font-size:16px!important}
 }
+.memory-feed-item{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+.memory-feed-copy{min-width:0;width:100%;overflow-wrap:anywhere}
+.memory-edit-btn{width:auto;min-height:40px;padding:8px 14px;justify-self:end}
+.stat-hole-review{display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid rgba(11,93,59,.18);border-radius:12px;background:#f7fbf8;font-weight:800}
+.stat-hole-review input{width:22px;height:22px;flex:0 0 auto}
 
 /* v30.3.77 Classic Scorecard horizontal-scroll refinement:
    keep Player visible while Team and all result columns pass beneath it. */
@@ -6017,13 +6025,18 @@ html.quick-scoreboard-open,body.quick-scoreboard-open{overflow:hidden!important;
 .experience-destination-card strong{font-size:1rem;line-height:1.2}
 .experience-destination-card small{font-size:.78rem;font-weight:500;color:var(--muted,#586b61);line-height:1.35}
 .experience-status{flex:0 0 auto;border-radius:999px;padding:5px 9px;background:#edf4ef;color:#244c38;font-size:.72rem;font-weight:800}
-.experience-destination-header{align-items:center;justify-content:space-between;gap:16px;text-align:left}
+.experience-destination-header{align-items:flex-start;flex-direction:column;justify-content:flex-start;gap:12px;text-align:left}
 .experience-destination-header:not(.hidden){display:flex}
 .experience-destination-header h2{margin:2px 0 0}
 .experience-back-button{flex:0 0 auto;white-space:nowrap}
+.experience-panel[data-active-destination]>.experience-page-header{display:none!important}
+.experience-bottom-navigation{padding:14px 16px;text-align:left}
+.experience-bottom-navigation:not(.hidden){display:block}
+#leaderboardWrap>.experience-bottom-navigation{order:9999}
 .experience-panel:not([data-active-destination])>[data-experience-section]{display:none!important}
 .experience-panel[data-active-destination]>[data-experience-overview]{display:none!important}
 .experience-panel[data-active-destination="results"]>[data-experience-section]:not([data-experience-section~="results"]),.experience-panel[data-active-destination="scorecards"]>[data-experience-section]:not([data-experience-section~="scorecards"]),.experience-panel[data-active-destination="statistics"]>[data-experience-section]:not([data-experience-section~="statistics"]),.experience-panel[data-active-destination="story"]>[data-experience-section]:not([data-experience-section~="story"]),.experience-panel[data-active-destination="rounds"]>[data-experience-section]:not([data-experience-section~="rounds"]),.experience-panel[data-active-destination="courses"]>[data-experience-section]:not([data-experience-section~="courses"]),.experience-panel[data-active-destination="players"]>[data-experience-section]:not([data-experience-section~="players"]),.experience-panel[data-active-destination="session"]>[data-experience-section]:not([data-experience-section~="session"]),.experience-panel[data-active-destination="account"]>[data-experience-section]:not([data-experience-section~="account"]),.experience-panel[data-active-destination="preferences"]>[data-experience-section]:not([data-experience-section~="preferences"]),.experience-panel[data-active-destination="utilities"]>[data-experience-section]:not([data-experience-section~="utilities"]),.experience-panel[data-active-destination="shared"]>[data-experience-section]:not([data-experience-section~="shared"]),.experience-panel[data-active-destination="support"]>[data-experience-section]:not([data-experience-section~="support"]){display:none!important}
 @media(min-width:720px){.experience-destination-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.experience-destination-card:last-child:nth-child(odd){grid-column:1/-1}}
-@media(max-width:520px){.experience-destination-header{align-items:flex-start;flex-direction:column}.experience-back-button{order:-1}.experience-destination-card{min-height:68px;padding:13px}}
+@media(max-width:520px){.experience-destination-card{min-height:68px;padding:13px}}
 @media print{.experience-panel>[data-experience-section]{display:block!important}.experience-panel>[data-experience-section].hidden{display:none!important}}
+.scorecard-view-controls{display:grid;gap:6px;margin-bottom:12px;width:100%}.scorecard-view-label{font-weight:800;color:var(--muted)}.scorecard-view-controls .segmented-control{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px;width:100%;max-width:430px;padding:4px;border:1px solid var(--border);border-radius:14px;background:var(--accent-2,#e7f4ee);box-sizing:border-box;overflow:hidden}.scorecard-view-controls .segmented-control button{display:flex;align-items:center;justify-content:center;gap:5px;min-width:0;min-height:42px;padding:8px 6px;border:0;border-radius:10px;background:transparent;color:var(--text,#19312a);font-weight:800;white-space:nowrap}.scorecard-view-controls .segmented-control button.active{background:var(--accent,#0b5d3b);color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.14)}.scorecard-view-controls .segmented-control button:not(.active) .scorecard-toggle-check{visibility:hidden}.scorecard-view-controls .segmented-control button:disabled{opacity:.48}.scorecard-view-controls label{display:grid;gap:4px;min-width:min(100%,240px)}.player-summary-net-note{margin:0 0 8px;color:var(--muted)}

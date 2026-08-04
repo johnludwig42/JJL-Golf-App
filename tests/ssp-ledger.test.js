@@ -683,10 +683,10 @@ test('summary export follows analyst hierarchy and preserves classic scorecard a
   }));
   const match = state.matches[0];
   const html = engine.buildSummaryExportBody(match, engine.computeMatchMetrics(match));
-  const headings = ['The Dye Ledger', 'Round Story', 'AI Round Recap', 'Round Analytics', 'Net Settlement — Provisional', 'Game Drivers', 'Ledger / Audit Detail', 'Classic scorecard', 'Settlement Reconciliation'];
+  const headings = ['The Dye Ledger', 'Round Story', 'AI Round Recap', 'Round Analytics', 'Settlement — Provisional', 'Game Drivers', 'Ledger / Audit Detail', 'Classic scorecard', 'Settlement Reconciliation'];
   headings.forEach(heading => assert.match(html, new RegExp(heading)));
   headings.slice(1).forEach((heading, idx) => assert.ok(html.indexOf(heading) > html.indexOf(headings[idx])));
-  assert.match(html, /Gross score shown above net score/);
+  assert.match(html, /Gross score shown above Course Net/);
   assert.doesNotMatch(html, /Score Distribution/);
   assert.doesNotMatch(html, /Round pace/);
   assert.doesNotMatch(engine.buildRoundSnapshot(match, engine.computeMatchMetrics(match)), /AI Recap Teaser/);

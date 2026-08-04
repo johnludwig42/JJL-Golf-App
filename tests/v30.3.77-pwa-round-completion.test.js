@@ -31,7 +31,7 @@ function seed({ statTrackingEnabled = false, statsComplete = false, selectedGame
   return { engine, match: state.matches[0] };
 }
 
-test('automatic completion requires scores and only enabled data classes', () => {
+test('completion diagnostics preserve scores and enabled data-class coverage', () => {
   const plain = seed();
   assert.equal(plain.engine.getRoundDataCompletionState(plain.match).isReadyToFinish, true);
   const tracked = seed({ statTrackingEnabled: true });
@@ -39,7 +39,7 @@ test('automatic completion requires scores and only enabled data classes', () =>
   assert.equal(incomplete.scoresComplete, true);
   assert.equal(incomplete.statsComplete, false);
   assert.equal(incomplete.isReadyToFinish, false);
-  assert.match(tracked.engine.describeRoundDataCompletion(incomplete), /required stat entries remain/);
+  assert.match(tracked.engine.describeRoundDataCompletion(incomplete), /stat entries have no recorded interaction/);
   tracked.match.players.forEach(player => player.stats.forEach(stat => { stat.entryCompleted = true; }));
   assert.equal(tracked.engine.getRoundDataCompletionState(tracked.match).isReadyToFinish, true);
 });
@@ -56,11 +56,12 @@ test('unresolved SSP facts block automatic completion without changing gross com
   assert.match(fixture.engine.describeRoundDataCompletion(completion), /SSP has unresolved/);
 });
 
-test('final-hole save never opens early finish automatically and dismissal persists on the round', () => {
+test('final-hole save is user-driven and never opens a finish prompt automatically', () => {
   assert.doesNotMatch(app, /else showRoundEndPrompt\('early', match\)/);
   assert.match(app, /match\.roundFinishPromptDismissedAt = match\.roundFinishPromptDismissedAt \|\| new Date\(\)\.toISOString\(\)/);
-  assert.match(app, /dataCompletion\.isReadyToFinish\) showRoundCompletePrompt\(match\)/);
-  assert.match(app, /dataCompletion\?\.isReadyToFinish \? 'Ready to Finish' : 'End Round Early'/);
+  assert.doesNotMatch(app, /dataCompletion\.isReadyToFinish\) showRoundCompletePrompt\(match\)/);
+  assert.match(app, /All scores entered\. Use End Round when ready\./);
+  assert.match(app, /scoringFinishBtn\.textContent = reopenedEdit \? 'Save \/ End Round' : 'End Round'/);
 });
 
 test('historical v30.3.77 PWA assets remain immutable copies of canonical artwork', () => {

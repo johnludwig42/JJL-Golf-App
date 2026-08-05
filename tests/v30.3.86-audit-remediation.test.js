@@ -77,9 +77,9 @@ test('iPhone installation dialog has balanced structural tags', () => {
   assert.match(html, /id="iosInstallDialog"[\s\S]*id="dismissIosInstallBtn"[\s\S]*<\/div>\s*<\/div>\s*<\/div>/);
 });
 
-test('v30.3.86 metadata is immutable and consistently labeled', () => {
-  assert.match(app, /version: 'v30\.3\.86'/);
+test('current release metadata is immutable and consistently labeled', () => {
+  assert.match(app, /version: 'v30\.3\.87'/);
   assert.match(app, /buildDate: '2026-08-04T04:00:00\.000Z'/);
-  assert.match(app, /buildLabel: 'Scoring Integrity & Audit Remediation'/);
+  assert.match(app, /buildLabel: 'AI Recap Service Reliability'/);
   assert.doesNotMatch(app.slice(0, 1000), /new Date\(\)\.toISOString\(\)/);
 });

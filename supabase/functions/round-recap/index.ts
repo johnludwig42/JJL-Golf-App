@@ -1,4 +1,5 @@
 import contentSpec from './content-spec.json' with { type: 'json' };
+import { parseRecapResponse } from './response-utils.js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,6 +9,10 @@ const corsHeaders = {
 
 function json(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+}
+
+function failure(status: number, code: string, error: string) {
+  return json(status, { success: false, code, error });
 }
 
 function buildSystemInstructions() {
@@ -25,36 +30,42 @@ function buildSystemInstructions() {
 
 Deno.serve(async request => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  if (request.method !== 'POST') return json(405, { success: false, error: 'Method not allowed.' });
+  if (request.method !== 'POST') return failure(405, 'METHOD_NOT_ALLOWED', 'Method not allowed.');
   try {
     const body = await request.json();
     const match = body?.match;
-    if (!match || typeof match !== 'object') return json(400, { success: false, error: 'A round recap payload is required.' });
-    if (match.recapContentSpecVersion !== contentSpec.version) return json(409, { success: false, error: 'Unsupported recap content specification.' });
-    if (!match.authoritativeFacts || !Array.isArray(match.players)) return json(400, { success: false, error: 'Authoritative round facts are required.' });
+    const repair = body?.repair && typeof body.repair === 'object' ? body.repair : null;
+    if (!match || typeof match !== 'object') return failure(400, 'INVALID_PAYLOAD', 'A round recap payload is required.');
+    if (match.recapContentSpecVersion !== contentSpec.version) return failure(409, 'CONTENT_SPEC_MISMATCH', 'Unsupported recap content specification.');
+    if (!match.authoritativeFacts || !Array.isArray(match.players)) return failure(400, 'INVALID_PAYLOAD', 'Authoritative round facts are required.');
 
     const apiKey = Deno.env.get('OPENAI_API_KEY');
     const model = Deno.env.get('OPENAI_RECAP_MODEL');
-    if (!apiKey || !model) return json(503, { success: false, error: 'Round Recap service is not configured.' });
+    if (!apiKey || !model) return failure(503, 'SERVICE_NOT_CONFIGURED', 'Round Recap service is not configured.');
+
+    const repairInstructions = repair ? [
+      'Revise the supplied prior recap. Preserve all accurate material and correct every listed validation issue.',
+      'Do not mention the revision process or validation rules in the recap.',
+      `Validation issues: ${JSON.stringify(Array.isArray(repair.issues) ? repair.issues : [])}`,
+      `Prior recap: ${String(repair.priorRecap || '').slice(0, 12000)}`,
+    ].join('\n') : '';
 
     const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model,
-        instructions: buildSystemInstructions(),
+        instructions: [buildSystemInstructions(), repairInstructions].filter(Boolean).join('\n\n'),
         input: JSON.stringify(match),
         text: { format: { type: 'json_schema', name: 'round_recap', strict: true, schema: { type: 'object', properties: { recap: { type: 'string' } }, required: ['recap'], additionalProperties: false } } },
       }),
     });
     const result = await response.json();
-    if (!response.ok) return json(502, { success: false, error: 'Round Recap generation failed.' });
-    const outputText = String(result?.output_text || '').trim();
-    const parsed = JSON.parse(outputText || '{}');
-    const recap = String(parsed?.recap || '').trim();
-    if (!recap) return json(502, { success: false, error: 'Round Recap returned no text.' });
+    if (!response.ok) return failure(response.status === 429 ? 429 : 502, response.status === 429 ? 'RATE_LIMITED' : 'PROVIDER_FAILED', 'Round Recap generation failed.');
+    const recap = parseRecapResponse(result);
+    if (!recap) return failure(502, 'EMPTY_PROVIDER_RESPONSE', 'Round Recap returned no text.');
     return json(200, { success: true, recap, contentSpecVersion: contentSpec.version, state: 'draft' });
   } catch {
-    return json(400, { success: false, error: 'Round Recap request could not be processed.' });
+    return failure(400, 'REQUEST_PROCESSING_FAILED', 'Round Recap request could not be processed.');
   }
 });

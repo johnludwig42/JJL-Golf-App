@@ -134,6 +134,32 @@ test('missing non-terminal hole is named and a complete 18-hole import needs no 
   assert.equal(complete.warnings.length, 0);
 });
 
+test('course identity treats common United States country labels as equivalent', () => {
+  const engine = loadLiveEngine();
+  const usa = course('usa', 'Chatham Hills', 'Westfield');
+  const full = course('full', 'Chatham Hills', 'Westfield');
+  full.country = 'United States of America';
+  const state = engine.seedState({ players: [], courses: [usa, full], matches: [], activeMatchId: null });
+  assert.equal(engine.isSameCourseIdentity(usa, full), true);
+  assert.equal(engine.normalizeCourseCountryIdentity('U.S.A.'), 'united states of america');
+  assert.equal(engine.getDedupedCourseOptions().length, 1);
+  assert.equal(state.courses.length, 2, 'deduplication must not delete stored records');
+});
+
+test('identical reviewed scorecards resolve to an existing saved course without mutating storage', () => {
+  const engine = loadLiveEngine();
+  const existing = course('existing', 'Chatham Hills', 'Westfield');
+  existing.source = 'scorecard-import';
+  existing.cloudSyncState = 'local-draft';
+  const repeatedImport = JSON.parse(JSON.stringify(existing));
+  repeatedImport.id = 'new-import-id';
+  repeatedImport.country = 'United States of America';
+  repeatedImport.importedAt = '2026-08-05T12:00:00.000Z';
+  const state = engine.seedState({ players: [], courses: [existing], matches: [], activeMatchId: null });
+  assert.equal(engine.findEquivalentSavedCourse(repeatedImport)?.id, existing.id);
+  assert.equal(state.courses.length, 1);
+});
+
 test('cloud refresh cannot overwrite or absorb a complete unsynced scorecard import', () => {
   const engine = loadLiveEngine();
   const imported = course('local-import', 'Purgatory Golf Club', 'Noblesville');

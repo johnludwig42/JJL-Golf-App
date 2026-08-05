@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.87',
-  versionNumber: '30.3.87',
-  cacheName: 'the-dye-ledger-v30.3.87',
-  buildDate: '2026-08-04T04:00:00.000Z',
-  buildLabel: 'AI Recap Service Reliability'
+  version: 'v30.3.88',
+  versionNumber: '30.3.88',
+  cacheName: 'the-dye-ledger-v30.3.88',
+  buildDate: '2026-08-05T04:00:00.000Z',
+  buildLabel: 'Course Library Reliability'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -5399,9 +5399,41 @@ function ensureRoundRecapMemoryCoverage(match, recapText) {
   const section = `Round Memories\n${missing.map(formatRoundMemoryRecapLine).join('\n')}`;
   return [recap, section].filter(Boolean).join('\n\n');
 }
+function isRoundRecapWeatherCovered(match, recapText) {
+  const weather = normalizeRoundWeatherSnapshot(match?.roundContext?.weather);
+  if (!weather) return true;
+  const recap = String(recapText || '').trim();
+  const temperature = weather.temperature === null || weather.temperature === undefined ? '' : String(weather.temperature);
+  const humidity = weather.humidity === null || weather.humidity === undefined ? '' : String(weather.humidity);
+  if (temperature && !(recap.includes(temperature) && /(?:Â°|°|degrees?|fahrenheit|\bF\b)/i.test(recap))) return false;
+  if (humidity && !(recap.includes(humidity) && /humidity/i.test(recap))) return false;
+  if (temperature || humidity) return true;
+  const condition = String(weather.conditionsText || weather.summary || '').trim().toLocaleLowerCase();
+  return !condition || recap.toLocaleLowerCase().includes(condition);
+}
+function formatRoundRecapWeatherLine(match) {
+  const weather = normalizeRoundWeatherSnapshot(match?.roundContext?.weather);
+  if (!weather) return '';
+  const details = [];
+  const condition = String(weather.conditionsText || '').trim();
+  if (condition) details.push(condition);
+  if (weather.temperature !== null && weather.temperature !== undefined) details.push(`${weather.temperature}°F`);
+  if (weather.humidity !== null && weather.humidity !== undefined) details.push(`${weather.humidity}% humidity`);
+  if (weather.windSpeed !== null && weather.windSpeed !== undefined) {
+    const direction = getWindDirectionText(weather.windDirection);
+    details.push(`wind ${weather.windSpeed} mph${direction ? ` ${direction}` : ''}`);
+  }
+  return details.length ? `Recorded at match startup: ${details.join(', ')}.` : String(weather.summary || '').trim();
+}
+function ensureRoundRecapRequiredFacts(match, recapText) {
+  const recapWithMemories = ensureRoundRecapMemoryCoverage(match, recapText);
+  if (isRoundRecapWeatherCovered(match, recapWithMemories)) return recapWithMemories;
+  const weatherLine = formatRoundRecapWeatherLine(match);
+  return [recapWithMemories, weatherLine ? `Weather\n${weatherLine}` : ''].filter(Boolean).join('\n\n');
+}
 function getStoredRoundRecap(match) {
   const stored = String(match?.roundRecapFinal || match?.roundRecapGenerated || match?.roundRecap || '').trim();
-  return stored ? ensureRoundRecapMemoryCoverage(match, stored) : '';
+  return stored ? ensureRoundRecapRequiredFacts(match, stored) : '';
 }
 function getDraftRoundRecap(match) {
   return String(match?.roundRecapGenerated || match?.roundRecap || '').trim();
@@ -6637,7 +6669,7 @@ function buildRoundRecapPayload(match, metrics) {
       result: getFeaturedCompetitionResult(match, metrics).result,
     },
     memories: getRoundMemories(match).map(m => ({ text: m.text, category: m.category, holeNumber: m.holeNumber, author: m.createdByName, createdByName: m.createdByName, createdAt: m.createdAt, timestamp: m.timestamp })),
-    recapInstructions: 'Compatibility bridge for the currently deployed function: apply the Dye Ledger recap content specification identified by recapContentSpecVersion. Target 650–850 words when enough supported facts exist, never exceed 900 words, and stay shorter rather than pad a fact-light round. Write a polished, private-club style golf recap with sections when supported: Round Story, Featured Competition, Turning Points, Player Highlights, Game Story, Statistical Notes, Player Improvement Opportunities, Memorable Moments, and Closing Note or Fun Awards. Every item in memories is a high-intent user fact and must be materially represented with its specific names, hole number, and description preserved. Weave each Memory naturally when possible; otherwise include it verbatim in a Round Memories section. Never replace a specific Memory with vague generic language and never invent supporting details. Center the Featured Competition first, distinguish it from Low Gross, Low Net, Money Winner, game winners, and awards, and use Round Notes and Memories for personality. When a player has Stat Tracking enabled and at least three tracked scored holes, specifically review that player for an improvement opportunity grounded in the supplied counts, rates, or approachPerformance evidence. State the sample size, use tentative language for small samples, and do not infer swing mechanics, club choice, physical limitations, intent, or causation from one round. If eligible evidence does not exist, omit coaching rather than guess. When roundContext.weather is present, include one brief natural summary of the recorded conditions and state the supplied temperature in degrees Fahrenheit and humidity percentage when available. Do not expose coordinates, recite unnecessary raw metrics, imply the snapshot covered the entire round, or claim weather caused an outcome unless a Round Note or Memory explicitly supports that connection. Do not fabricate shots, weather, holes, or emotions not supported by data or notes. For an incomplete round, say completed holes and use the supplied completed-hole list; never say opening holes or front nine unless that exact sequential range is complete. Treat incomplete-round money as provisional unless the relevant game is mathematically decided. If clinched early, explain that the featured competition was decided before all holes were played. Do not fabricate untracked statistics. Deterministic authoritativeFacts override notes, Memories, and generated prose. Keep the tone professional, fun, golf-aware, specific, and mobile-readable.',
+    recapInstructions: 'Compatibility bridge for the currently deployed function: apply the Dye Ledger recap content specification identified by recapContentSpecVersion. Target 650–850 words when enough supported facts exist, never exceed 900 words, and stay shorter rather than pad a fact-light round. Write a polished, private-club style golf recap with sections when supported: Round Story, Featured Competition, Turning Points, Player Highlights, Game Story, Statistical Notes, Player Improvement Opportunities, Memorable Moments, and Closing Note or Fun Awards. Every item in memories is a high-intent user fact and must be materially represented with its specific names, hole number, and description preserved. Weave each Memory naturally when possible; otherwise include it verbatim in a Round Memories section. Never replace a specific Memory with vague generic language and never invent supporting details. Center the Featured Competition first, distinguish it from Low Gross, Low Net, Money Winner, game winners, and awards, and use Round Notes and Memories for personality. When a player has Stat Tracking enabled and at least three tracked scored holes, specifically review that player for an improvement opportunity grounded in the supplied counts, rates, or approachPerformance evidence. State the sample size, use tentative language for small samples, and do not infer swing mechanics, club choice, physical limitations, intent, or causation from one round. If eligible evidence does not exist, omit coaching rather than guess. When roundContext.weather is present, include one brief natural summary of the recorded conditions and state the supplied temperature in degrees Fahrenheit and humidity percentage when available. Weave those verified conditions into the recap when natural; otherwise add a final Weather section after any Round Memories section. Do not expose coordinates, recite unnecessary raw metrics, imply the snapshot covered the entire round, or claim weather caused an outcome unless a Round Note or Memory explicitly supports that connection. Do not fabricate shots, weather, holes, or emotions not supported by data or notes. For an incomplete round, say completed holes and use the supplied completed-hole list; never say opening holes or front nine unless that exact sequential range is complete. Treat incomplete-round money as provisional unless the relevant game is mathematically decided. If clinched early, explain that the featured competition was decided before all holes were played. Do not fabricate untracked statistics. Deterministic authoritativeFacts override notes, Memories, and generated prose. Keep the tone professional, fun, golf-aware, specific, and mobile-readable.',
     players: playerSummaries,
     games: summarizeSelectedGamesForRecap(match, metrics),
     finalSettlement,
@@ -6676,7 +6708,7 @@ async function generateRoundRecapForActiveMatch() {
       failure.code = data?.code || '';
       throw failure;
     }
-    return ensureRoundRecapMemoryCoverage(match, String(data?.recap || data?.text || '').trim());
+    return ensureRoundRecapRequiredFacts(match, String(data?.recap || data?.text || '').trim());
   };
   try {
     let recap = await requestRecap();
@@ -11054,6 +11086,12 @@ function normalizeCourseIdentityText(value) {
     .replace(/\s+/g, ' ')
     .trim();
 }
+function normalizeCourseCountryIdentity(value) {
+  const normalized = normalizeCourseIdentityText(value);
+  if (!normalized) return '';
+  if (['us', 'u s', 'usa', 'u s a', 'united states', 'united states of america'].includes(normalized)) return 'united states of america';
+  return normalized;
+}
 function getCourseHoleCount(course = {}) {
   const teeHoleCounts = (Array.isArray(course.tees) ? course.tees : [])
     .map(tee => Array.isArray(tee.holes) ? tee.holes.length : 0)
@@ -11067,7 +11105,7 @@ function buildCourseIdentity(course = {}) {
     name: normalizeCourseIdentityText(course.name),
     city: normalizeCourseIdentityText(course.city),
     state: normalizeCourseIdentityText(course.state || course.region),
-    country: normalizeCourseIdentityText(course.country),
+    country: normalizeCourseCountryIdentity(course.country),
     holeCount: getCourseHoleCount(course),
   };
 }
@@ -11091,6 +11129,33 @@ function isSameCourseIdentity(a = {}, b = {}) {
 }
 function findLikelyDuplicateCourses(course = {}, excludeId = '') {
   return (state.courses || []).filter(existing => String(existing.id || '') !== String(excludeId || '') && isSameCourseIdentity(existing, course));
+}
+function normalizeCourseComparableNumber(value) {
+  if (value == null || String(value).trim() === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+function buildCourseContentFingerprint(course = {}) {
+  const tees = (Array.isArray(course.tees) ? course.tees : []).map(tee => ({
+    teeName: normalizeCourseIdentityText(tee.teeName || tee.name),
+    gender: String(tee.gender || 'M').trim().toUpperCase(),
+    rating: normalizeCourseComparableNumber(tee.rating),
+    slope: normalizeCourseComparableNumber(tee.slope),
+    holes: (Array.isArray(tee.holes) ? tee.holes : []).map((hole, idx) => ({
+      holeNumber: Number(hole.holeNumber) || idx + 1,
+      par: normalizeCourseComparableNumber(hole.par),
+      strokeIndex: normalizeCourseComparableNumber(hole.strokeIndex),
+      yardage: normalizeCourseComparableNumber(hole.yardage),
+    })).sort((a, b) => a.holeNumber - b.holeNumber),
+  })).sort((a, b) => a.teeName.localeCompare(b.teeName) || a.gender.localeCompare(b.gender));
+  return JSON.stringify({ identity: buildCourseIdentity(course), tees });
+}
+function findEquivalentSavedCourse(course = {}, excludeId = '') {
+  const fingerprint = buildCourseContentFingerprint(course);
+  return (state.courses || []).find(existing => (
+    String(existing.id || '') !== String(excludeId || '')
+    && buildCourseContentFingerprint(existing) === fingerprint
+  )) || null;
 }
 function makeDuplicateCloudCourseError(course, matches = []) {
   const courseName = String(course?.name || 'Course').trim() || 'Course';
@@ -13266,6 +13331,17 @@ function saveImportedScorecardCourse() {
     importedAt: new Date().toISOString(),
   };
   course.tees.forEach(t => { t.courseName = course.name; normalizeTee(t, course.name); });
+  const equivalent = findEquivalentSavedCourse(course);
+  if (equivalent) {
+    uiState.expandedCourses.add(equivalent.id);
+    uiState.scorecardImportStatus = `This scorecard is already saved as ${equivalent.name}. No duplicate was created.`;
+    uiState.scorecardImportData = null;
+    uiState.scorecardImportFiles = [];
+    uiState.scorecardImportFileName = '';
+    renderAll();
+    toast('This scorecard is already saved. No duplicate was created.');
+    return;
+  }
   const duplicates = findLikelyDuplicateCourses(course);
   if (duplicates.length && !confirm(`A likely matching saved course already exists: ${duplicates[0].name}${duplicates[0].city ? ` (${duplicates[0].city})` : ''}. Save this import as a new course anyway?`)) {
     uiState.scorecardImportStatus = 'Import not saved. Review the existing saved course or change the course name/location.';
@@ -21744,6 +21820,9 @@ function installDyeLedgerLiveEngineAdapter() {
     buildRoundRecapPayload,
     validateRoundRecapContent,
     ensureRoundRecapMemoryCoverage,
+    ensureRoundRecapRequiredFacts,
+    isRoundRecapWeatherCovered,
+    formatRoundRecapWeatherLine,
     buildFinishedMatchCandidate,
     createFinishRecoveryMarker,
     markRoundReopenedForEditing,
@@ -21760,8 +21839,11 @@ function installDyeLedgerLiveEngineAdapter() {
     getMatchTee,
     getCourseSnapshotForMatch,
     normalizeCourseIdentityText,
+    normalizeCourseCountryIdentity,
     isSameCourseIdentity,
     findLikelyDuplicateCourses,
+    buildCourseContentFingerprint,
+    findEquivalentSavedCourse,
     getDedupedCourseOptions,
     mergeSupabaseCourses,
     getPlayerHoleTeeInfo,

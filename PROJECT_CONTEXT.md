@@ -420,6 +420,6 @@ Every release should either:
 - improve reliability
 - prepare the architecture for future growth
 
-## 18. Current release — v30.3.87
+## 18. Current release — v30.3.88
 
-v30.3.87 focuses exclusively on AI Recap Service Reliability. It repairs raw provider-response parsing, adds stable non-sensitive error classification, makes one controlled correction attempt, and preserves drafts that still need host review. It does not change scoring, settlement, local storage keys, Supabase data, or historical RoundRecords. The repository Edge Function is a deployment candidate only until an explicitly authorized test and production process is completed.
+v30.3.88 is a focused Course Library Reliability release with a deterministic AI Recap weather-coverage refinement. It treats common United States country labels as one matching identity, prevents an identical reviewed scorecard import from creating another local record, and guarantees verified match-start weather appears either naturally in the recap or in a final Weather section after Memories. Existing course records, round snapshots, local persistence keys, scoring, settlement, and Supabase data remain unchanged; cleanup of historical duplicates is deliberately deferred.

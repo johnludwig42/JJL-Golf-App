@@ -593,3 +593,15 @@ If a proposed change violates one of these principles, stop and call it out befo
 - Test and production Edge Function deployments are independent approval gates.
 
 Status: Approved and implemented locally for v30.3.87; external deployment not performed.
+
+## v30.3.88 — Course Identity and Import Idempotency
+
+Decision: Course identity comparison canonicalizes common United States country aliases, but stored display values remain untouched. Saving a scorecard whose normalized identity and tee/hole content exactly match an existing saved course reuses that record and does not append a duplicate. A matching identity with materially different content continues through the explicit duplicate-warning path.
+
+Rationale: Mutable formatting differences such as `USA` versus `United States of America` must not create separate rendered catalog identities. At the same time, course content must never be silently merged or overwritten because an imported revision may be intentionally different.
+
+Compatibility and safety: Existing local records, course IDs, cloud links, round snapshots, and persistence keys are unchanged. Historical duplicate cleanup is deferred to a separate previewable workflow. No Supabase data is modified.
+
+Status: Approved and implemented locally for v30.3.88; external deployment not performed.
+
+AI Recap weather addendum: Verified match-start weather is a required recap fact when present. Generated prose may integrate it naturally; otherwise the client appends a deterministic final Weather section after any missing-Memory fallback. The fallback uses only recorded conditions, temperature, humidity, and wind, labels the timing as match startup, excludes coordinates, and never blocks recap availability when weather was not captured.

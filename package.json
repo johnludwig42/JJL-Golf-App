@@ -1,10 +1,10 @@
 {
   "name": "the-dye-ledger",
-  "version": "30.3.87",
+  "version": "30.3.88",
   "private": true,
   "type": "module",
   "scripts": {
-    "pretest": "node --test tests/v30.3.87-ai-recap-reliability.test.js tests/v30.3.86-audit-remediation.test.js tests/v30.3.85-round-story-reliability.test.js",
+    "pretest": "node --test tests/course-library.test.js tests/v30.3.87-ai-recap-reliability.test.js tests/v30.3.86-audit-remediation.test.js",
     "lint": "eslint app.js service-worker.js scripts/**/*.js",
     "validate": "node scripts/validate-release.js",
     "test": "node --test tests/v30.3.85-nassau-scoring-policy.test.js tests/v30.3.84-ai-recap-governance.test.js tests/v30.3.83-play-update-experience.test.js tests/v30.3.81-competition-rules.test.js tests/v30.3.75-identity-security.test.js tests/v30.3.74-contracts.test.js tests/simulation-lab.test.js tests/live-engine-adapter.test.js tests/shared-match-ledger.test.js tests/shared-match-completion.test.js tests/final-product-acceptance-shared-remediation.test.js tests/ssp-ledger.test.js tests/ssp-shared-match.test.js tests/course-library.test.js tests/course-library-security-package.test.js tests/report-layout.test.js tests/trip-ledger-architecture.test.js tests/mobile-scoring-ux.test.js tests/quick-scoreboard-scroll-remediation.test.js tests/library-product-consistency.test.js tests/player-tee-order-independence.test.js tests/press-engine-design.test.js tests/press-engine-implementation.test.js tests/press-completion-regression.test.js tests/player-preferences.test.js tests/product-experience-polish.test.js tests/final-qa-remediation.test.js tests/final-product-acceptance-ui.test.js tests/final-smoke-test-remediation.test.js tests/production-readiness-stability.test.js tests/focused-reliability-remediation.test.js",
@@ -19,6 +19,7 @@
     "test:v30.3.85": "node --test tests/v30.3.85-round-story-reliability.test.js tests/v30.3.85-nassau-scoring-policy.test.js",
     "test:v30.3.86": "node --test tests/v30.3.86-audit-remediation.test.js tests/v30.3.85-round-story-reliability.test.js tests/v30.3.85-nassau-scoring-policy.test.js",
     "test:v30.3.87": "node --test tests/v30.3.87-ai-recap-reliability.test.js tests/v30.3.84-ai-recap-governance.test.js tests/v30.3.85-round-story-reliability.test.js",
+    "test:v30.3.88": "node --test tests/course-library.test.js tests/course-library-security-package.test.js",
     "test:identity-security": "node --test tests/v30.3.75-identity-security.test.js",
     "test:run": "npm run test",
     "simulate": "node scripts/simulate-rounds.js",

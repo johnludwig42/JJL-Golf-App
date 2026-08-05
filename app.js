@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.88',
-  versionNumber: '30.3.88',
-  cacheName: 'the-dye-ledger-v30.3.88',
-  buildDate: '2026-08-05T04:00:00.000Z',
-  buildLabel: 'Course Library Reliability'
+  version: 'v30.3.89',
+  versionNumber: '30.3.89',
+  cacheName: 'the-dye-ledger-v30.3.89',
+  buildDate: '2026-08-05T21:17:30.000Z',
+  buildLabel: 'Shared Match Reliability & Reporting'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -1494,6 +1494,14 @@ function getSharedSyncStatus(match) {
     return { label: 'Saved Locally', detail: 'Scoring works here while the next synchronization is prepared.', tone: 'warning', pending: 0, state: 'saved-locally' };
   }
   return { label: 'Needs Attention', detail: 'Shared Match status should be checked before continuing.', tone: 'attention', pending, state: 'needs-attention' };
+}
+function getSharedPendingEntryCount(match) {
+  const parity = match?.sharedLedgerParity;
+  if (!parity || typeof parity !== 'object') return 0;
+  return Math.max(0,
+    Number(parity.missingRemote?.length || 0)
+    + Number(parity.missingLocal?.length || 0)
+    + Number(parity.conflicts?.length || 0));
 }
 function formatSharedLastSync(match) {
   return match?.lastCloudSyncAt ? formatTimestampET(match.lastCloudSyncAt, { includeDate: false }) : 'Not synced yet';
@@ -6205,7 +6213,7 @@ function buildRoundRecordStory(record) {
   const turningPoint = record.events.find(event => ['lead_change', 'swing', 'multiplier'].includes(event.type)) || record.events.find(event => Number(event.holeNumber)) || null;
   const resultLine = buildRoundRecordResultLine(record);
   const storyLine = describeRoundRecordEvent(record, turningPoint) || describeRoundRecordEvent(record, record.events[0]) || `${record.meta.holesCompleted} completed hole${record.meta.holesCompleted === 1 ? '' : 's'} define the current result.`;
-  const headline = turningPoint?.holeNumber && Number(turningPoint.magnitude) ? `The ${Number(turningPoint.magnitude)}-Point ${turningPoint.holeNumber === 3 ? 'Third' : `H${turningPoint.holeNumber}`}` : (record.meta.status === 'provisional' ? 'The Round So Far' : 'How the Round Turned');
+  const headline = turningPoint?.holeNumber && Number(turningPoint.magnitude) ? `Turning Point: Hole ${Number(turningPoint.holeNumber)}` : (record.meta.status === 'provisional' ? 'The Round So Far' : 'How the Round Turned');
   const provisional = record.meta.status === 'provisional' ? `Only ${record.meta.holesCompleted} of ${record.meta.holesPlanned} holes were completed, so the round record remains provisional.` : '';
   const consequence = record.transactions.length ? `${record.transactions.length} payment${record.transactions.length === 1 ? '' : 's'} settle the current game ledger.` : 'No payment is currently required.';
   const secondaryEvent = record.events.map(event => describeRoundRecordEvent(record, event)).find(description => description && description !== storyLine) || '';
@@ -7584,6 +7592,10 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       break-before: page !important;
       page-break-before: always !important;
     }
+    .export-auto-page-before {
+      break-before: page !important;
+      page-break-before: always !important;
+    }
     .export-section-round-recap { break-inside: auto; page-break-inside: auto; }
     .nine-point-scorecard-table th:nth-child(2),
     .nine-point-scorecard-table td:nth-child(2) {
@@ -7874,10 +7886,29 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
           const sectionChrome = section.offsetHeight - content.offsetHeight;
           const naturalHeight = Math.max(content.scrollHeight || 0, content.offsetHeight || 0, content.getBoundingClientRect().height || 0);
           const availableHeight = Math.max(280, printableHeight - sectionChrome - (index === 0 ? headerHeight : 0));
-          let scale = naturalHeight > 0 ? Math.min(1, availableHeight / naturalHeight) : 1;
-          scale = Math.max(0.62, Math.min(scale, 1));
+          const scale = naturalHeight > printableHeight ? Math.max(0.78, Math.min(1, availableHeight / naturalHeight)) : 1;
           section.style.setProperty('--page-scale', String(scale));
           section.style.height = Math.ceil((naturalHeight * scale) + sectionChrome) + 'px';
+        });
+      }
+      function paginateWholeSections() {
+        const printableHeight = getPrintablePageHeightPx();
+        const header = document.querySelector('.export-header');
+        let used = header ? Math.ceil(header.getBoundingClientRect().height) + SECTION_GAP_PX : 0;
+        document.querySelectorAll('.export-section').forEach(function (section) {
+          section.classList.remove('export-auto-page-before');
+          const forced = section.classList.contains('export-force-page-before')
+            || section.classList.contains('export-section-classic-summary')
+            || section.classList.contains('export-section-round-recap')
+            || section.classList.contains('export-section-ssp-audit')
+            || section.classList.contains('report-layer--ledger');
+          if (forced) used = 0;
+          const height = Math.ceil(section.getBoundingClientRect().height || section.offsetHeight || 0) + SECTION_GAP_PX;
+          if (!forced && height <= printableHeight && used > 0 && used + height > printableHeight) {
+            section.classList.add('export-auto-page-before');
+            used = 0;
+          }
+          used = height > printableHeight ? 0 : used + height;
         });
       }
       function reserveFirstPageForRecap() {
@@ -7907,6 +7938,7 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
         fitAllStages();
         layoutPrintPages();
         reserveFirstPageForRecap();
+        paginateWholeSections();
       }
       function startPrint() {
         prepareExportLayout();
@@ -8287,7 +8319,9 @@ function normalizeState() {
   state.lastOpenedSharedMatchId = typeof state.lastOpenedSharedMatchId === 'string' && state.lastOpenedSharedMatchId.trim() ? state.lastOpenedSharedMatchId.trim() : null;
   state.players.forEach((p, index) => {
     p.id = p.id || `legacy:player:${index + 1}`;
-    p.name = p.name || '';
+    p.formalName = String(p.formalName || p.name || '').trim();
+    p.nickname = String(p.nickname || '').trim();
+    p.name = p.nickname || p.formalName;
     p.index = Number(p.index) || 0;
   });
   state.playerRegistry = normalizePlayerRegistry(state.playerRegistry, state.players);
@@ -10585,7 +10619,20 @@ function buildFrozenScoresGameSummary(record) {
     const standing = decodeLegacyEscapedText(result.result || result.resultText || result.value || result.status || 'Final result recorded');
     const amounts = Object.values(game.amounts || {}).map(Number).filter(Number.isFinite);
     const contribution = amounts.length ? Math.max(0, ...amounts) : 0;
-    return `<div class="game-summary-card" data-game-result-source="frozen"><div class="game-summary-title">${escapeHtml(getGameLabel(game.type || game.gameId))}</div><div class="game-summary-value">${escapeHtml(String(standing))}</div><div class="game-summary-sub">Final · Frozen round result</div><div class="game-summary-sub game-summary-economic">Settlement contribution: ${formatMoneyAccounting(contribution)}</div></div>`;
+    const isGreenies = String(game.type || game.gameId || '') === 'greenies';
+    const greeniesParticipantIds = isGreenies
+      ? Array.from(new Set([...(game.config?.participants || []), ...Object.keys(game.amounts || {})].map(String)))
+      : [];
+    const greeniesPositions = isGreenies
+      ? greeniesParticipantIds.map(playerId => ({
+        name: (record.players || []).find(player => String(player.playerId) === String(playerId))?.displayName || playerId,
+        amount: Number(game.amounts?.[playerId] || 0),
+      })).sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name))
+      : [];
+    const economic = isGreenies
+      ? `Final net position: ${greeniesPositions.length ? greeniesPositions.map(row => `${row.name} ${formatFinalNetSettlementMoney(row.amount)}`).join(' · ') : 'all players even'}`
+      : `Settlement contribution: ${formatMoneyAccounting(contribution)}`;
+    return `<div class="game-summary-card" data-game-result-source="frozen"><div class="game-summary-title">${escapeHtml(getGameLabel(game.type || game.gameId))}</div><div class="game-summary-value">${escapeHtml(String(standing))}</div><div class="game-summary-sub">Final · Frozen round result</div><div class="game-summary-sub game-summary-economic">${escapeHtml(economic)}</div></div>`;
   }).join('')}</div>`;
 }
 
@@ -12858,7 +12905,7 @@ function clearScheduledSharedMatchSync(matchId) {
 async function flushSharedMatchSync(matchId, { silent = true } = {}) {
   if (!matchId) return;
   const match = getMatch(matchId);
-  if (!match || match.storageMode !== 'shared' || !hasSupabaseConfig()) return;
+  if (!match || match.storageMode !== 'shared' || !hasSupabaseConfig()) return null;
   if (sharedMatchSyncInflight.has(matchId)) {
     sharedMatchSyncDirty.set(matchId, true);
     try { await sharedMatchSyncInflight.get(matchId); } catch {}
@@ -12880,7 +12927,15 @@ async function flushSharedMatchSync(matchId, { silent = true } = {}) {
       setLastOpenedSharedMatch(match);
       match.lastSharedSyncError = '';
       persist({ skipRender: true });
-      if (!silent) toast('Shared match synced.');
+      if (!silent) {
+        const parity = match.sharedLedgerParity;
+        const pendingEntries = getSharedPendingEntryCount(match);
+        toast(parity?.parityConfirmed
+          ? 'All shared scores are confirmed.'
+          : pendingEntries
+            ? `${pendingEntries} score entr${pendingEntries === 1 ? 'y is' : 'ies are'} still awaiting confirmation.`
+            : 'Synchronization completed, but score parity is not yet confirmed.');
+      }
     } catch (err) {
       console.error(err);
       match.cloudSyncState = 'local-cache';
@@ -12899,6 +12954,7 @@ async function flushSharedMatchSync(matchId, { silent = true } = {}) {
       await flushSharedMatchSync(matchId, { silent: true });
     }
   }
+  return match.sharedLedgerParity || null;
 }
 function scheduleSharedMatchSync(matchOrId, { immediate = false, silent = true } = {}) {
   const matchId = typeof matchOrId === 'string' ? matchOrId : (matchOrId?.id || null);
@@ -13682,8 +13738,9 @@ function renderPlayers() {
     <div class="item compact-item library-item-card player-library-card">
       <div class="item-header compact-item-header library-item-header">
         <div class="library-item-identity">
-          <div class="item-title" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</div>
+          <div class="item-title" title="${escapeHtml(p.formalName || p.name)}">${escapeHtml(p.name)}</div>
           <div class="library-metadata" aria-label="Player details">
+            ${p.nickname ? `<span><b>Full name</b>${escapeHtml(p.formalName || p.name)}</span>` : ''}
             <span><b>Handicap Index</b>${Number(p.index).toFixed(1)}</span>
             <span><b>Saved rounds</b>${savedRoundCount}</span>
           </div>
@@ -14923,7 +14980,7 @@ function getFinishRoundRoutingMode(match, metrics = null) {
   if (!match) return 'early';
   return getRoundDataCompletionState(match, metrics || computeMatchMetrics(match)).scoresComplete ? 'complete' : 'early';
 }
-function handleRoundEndPrimary() {
+async function handleRoundEndPrimary() {
   const match = getActiveMatch();
   const modal = document.getElementById('roundEndPrompt');
   const mode = modal?.dataset?.roundEndMode || '';
@@ -14932,6 +14989,30 @@ function handleRoundEndPrimary() {
     else match.roundEndReason = 'completed';
   }
   hideRoundEndPrompt();
+  if (match?.storageMode === 'shared') {
+    try {
+      applyCurrentHoleDomToMatch(match);
+      persist({ skipRender: true });
+      await flushSharedMatchSync(match.id, { silent: true });
+      const parity = await reconcileSharedMatchBeforeSummary(match, { silent: true });
+      renderAll();
+      if (!parity?.parityConfirmed) {
+        finishConfirmArmed = false;
+        const pending = Math.max(0, Number(parity?.missingRemote?.length || 0));
+        toast(pending
+          ? `${pending} locally saved score entr${pending === 1 ? 'y is' : 'ies are'} not yet confirmed. Tap Sync Now and try again.`
+          : 'Shared scores are not fully reconciled. Tap Sync Now and try again.');
+        return;
+      }
+    } catch (err) {
+      finishConfirmArmed = false;
+      match.lastSharedSyncError = getSharedFriendlyError(err);
+      persist({ skipRender: true });
+      renderAll();
+      toast('Shared scores could not be confirmed. They remain saved on this device.');
+      return;
+    }
+  }
   finishConfirmArmed = true;
   completeActiveRound();
 }
@@ -16766,11 +16847,19 @@ function buildSelectedGamesSummary(match, metrics) {
       sub = `${formatPositiveCurrency(Number(ledger.settings?.pointValue || 0), 2)} per point · ${ledger.settlement?.label || 'SSP: tied, no payment'}${swingText}`;
     }
     const payoutGame = payoutByKey.get(cfg.key) || payoutGames.find(game => String(game.key || '').startsWith(`${cfg.key}_`));
-    const payoutRows = Object.entries(payoutGame?.amounts || {}).map(([id, amount]) => ({ name: getPlayer(id)?.name || id, amount: Number(amount || 0) }));
+    const payoutIds = cfg.key === 'greenies'
+      ? Array.from(new Set([...(cfg.participants || []), ...Object.keys(payoutGame?.amounts || {})].map(String)))
+      : Object.keys(payoutGame?.amounts || {});
+    const payoutRows = payoutIds.map(id => ({ name: getPlayer(id)?.name || id, amount: Number(payoutGame?.amounts?.[id] || 0) }));
     const winners = payoutRows.filter(row => row.amount > 0.0001).sort((a, b) => b.amount - a.amount);
-    const economic = winners.length
-      ? `Current payout: ${winners.map(row => `${row.name} ${formatMoneyAccounting(row.amount)}`).join(' · ')}`
-      : 'Current payout: $0.00';
+    const allPositions = payoutRows.sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
+    const economic = cfg.key === 'greenies'
+      ? (allPositions.length
+        ? `${completion.isIncomplete ? 'Current' : 'Final'} net position: ${allPositions.map(row => `${row.name} ${formatFinalNetSettlementMoney(row.amount)}`).join(' · ')}`
+        : `${completion.isIncomplete ? 'Current' : 'Final'} net position: all players even`)
+      : (winners.length
+        ? `Current payout: ${winners.map(row => `${row.name} ${formatMoneyAccounting(row.amount)}`).join(' · ')}`
+        : 'Current payout: $0.00');
     return `<div class="game-summary-card"><div class="game-summary-title">${escapeHtml(title)}</div><div class="game-summary-value">${escapeHtml(value)}</div>${sub ? `<div class="game-summary-sub">${escapeHtml(sub)}</div>` : ''}<div class="game-summary-sub game-summary-economic">${escapeHtml(economic)} · ${completion.isIncomplete ? 'Provisional' : 'Final'}</div></div>`;
   });
   return `<div class="game-summary-grid">${cards.join('')}</div>`;
@@ -16954,7 +17043,11 @@ function collectTeamScorerAssignments(teamCount, teamNames, existing = []) {
 function renderScoreAccessCard(match) {
   const card = document.getElementById('scoreAccessCard');
   const titleSync = document.getElementById('scoringTitleSync');
+  const progressSyncActions = document.getElementById('sharedRoundSyncActions');
+  const progressSyncHelp = document.getElementById('sharedRoundSyncHelp');
   if (titleSync) titleSync.innerHTML = '';
+  if (progressSyncActions) progressSyncActions.classList.add('hidden');
+  if (progressSyncHelp) progressSyncHelp.textContent = '';
   if (!card) return;
   if (!match || match.storageMode !== 'shared') {
     card.classList.add('hidden');
@@ -16962,6 +17055,7 @@ function renderScoreAccessCard(match) {
     return;
   }
   const sync = getSharedSyncStatus(match);
+  const pendingEntries = getSharedPendingEntryCount(match);
   const indicator = sync.tone === 'good' ? '🟢' : sync.tone === 'working' ? '🔵' : sync.tone === 'warning' ? '🟡' : sync.tone === 'offline' ? '⚪' : '🔴';
   const shortLabel = sync.label;
   const showToggles = isAssignedPlayersMode(match) && hasSharedAssignedPlayerFocus(match);
@@ -17014,11 +17108,15 @@ function renderScoreAccessCard(match) {
     ${!isCurrentDeviceMatchHost(match) && isAssignedPlayersMode(match) && !assignedNames.length ? '<div class="joined-assignment-waiting top-gap"><strong>Waiting for the host to assign players to this device.</strong><div class="tiny top-gap">Scores are saved on this phone once you are assigned.</div></div>' : ''}
     <div class="tiny top-gap">${escapeHtml(sync.detail)}</div>
     <div class="row-actions top-gap">
-      ${sync.state !== 'synced' ? '<button type="button" class="secondary" data-retry-shared-sync="1">Retry Sync</button>' : ''}
+      <button type="button" class="secondary" data-retry-shared-sync="1">Sync Now</button>
       ${isAssignedPlayersMode(match) ? '<button type="button" class="secondary" data-check-shared-assignment="1">Refresh Assignments</button>' : ''}
       <button type="button" class="secondary" data-copy-shared-code="1">Copy Match Code</button>
     </div>`;
-  if (titleSync) titleSync.innerHTML = `<details class="shared-title-sync-details"><summary class="shared-title-sync-pill" title="${escapeHtml(sync.detail)}">${indicator} ${escapeHtml(shortLabel)} <span aria-hidden="true">â–¾</span></summary><div class="shared-title-sync-diagnostics">${statusHtml}</div></details>`;
+  if (titleSync) titleSync.innerHTML = `<details class="shared-title-sync-details"><summary class="shared-title-sync-pill" title="${escapeHtml(sync.detail)}">${indicator} ${escapeHtml(shortLabel)} <span class="shared-sync-disclosure" aria-hidden="true"></span></summary><div class="shared-title-sync-diagnostics">${statusHtml}</div></details>`;
+  if (progressSyncActions) progressSyncActions.classList.remove('hidden');
+  if (progressSyncHelp) progressSyncHelp.textContent = pendingEntries
+    ? `${pendingEntries} score entr${pendingEntries === 1 ? 'y' : 'ies'} awaiting reconciliation.`
+    : sync.detail;
   card.classList.toggle('hidden', !showToggles);
   if (!showToggles) card.innerHTML = '';
 }
@@ -18969,13 +19067,13 @@ function loadPlayerEditor(playerId = null) {
   if (!playerId) { form.reset(); return; }
   const player = getPlayer(playerId); if (!player) return;
   activateTab('courses');
-  form.name.value = player.name; form.index.value = player.index;
+  form.formalName.value = player.formalName || player.name; form.nickname.value = player.nickname || ''; form.index.value = player.index;
   requestAnimationFrame(() => {
     const chrome = document.querySelector('.app-chrome');
     const offset = (chrome?.getBoundingClientRect?.().height || 0) + 12;
     const y = form.getBoundingClientRect().top + window.scrollY - offset;
     window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
-    form.querySelector('[name="name"]')?.focus?.({ preventScroll: true });
+    form.querySelector('[name="formalName"]')?.focus?.({ preventScroll: true });
   });
 }
 function loadCourseEditor(courseId = null) {
@@ -19414,8 +19512,11 @@ function installHandlers() {
   document.getElementById('playerForm').addEventListener('submit', e => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const player = { id: editingPlayerId || uid(), name: String(fd.get('name') || '').trim(), index: Number(fd.get('index')) || 0 };
-    if (!player.name) return toast('Player name is required.');
+    const formalName = String(fd.get('formalName') || '').trim();
+    const nickname = String(fd.get('nickname') || '').trim();
+    const prior = editingPlayerId ? getPlayer(editingPlayerId) : null;
+    const player = { ...prior, id: editingPlayerId || uid(), formalName, nickname, name: nickname || formalName, index: Number(fd.get('index')) || 0 };
+    if (!player.formalName) return toast('Full golfer name is required.');
     if (editingPlayerId) state.players = state.players.map(p => p.id === editingPlayerId ? player : p); else state.players.push(player);
     loadPlayerEditor(null); persist(); toast(editingPlayerId ? 'Player updated.' : 'Player added.');
   });

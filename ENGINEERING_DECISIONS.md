@@ -604,6 +604,14 @@ Compatibility and safety: Existing local records, course IDs, cloud links, round
 
 Status: Approved and implemented locally for v30.3.88; external deployment not performed.
 
+## v30.3.89 — Shared completion requires confirmed score parity
+
+Shared Match completion must save current DOM inputs, push locally authorized score entries, pull the authoritative remote ledger, and compare all scored player/hole entries before creating a completed local RoundRecord. If parity cannot be confirmed, completion stops safely and all local scores remain available. A general successful request is not equivalent to confirmed ledger parity.
+
+The Round Progress area exposes Sync Now because synchronization is a round-level operation. Device identity remains separate from Account, Golfer Identity, Round Participation, and scoring assignment. Full golfer name and preferred nickname are mutable attributes and never canonical identity keys.
+
+Status: Approved and implemented locally for v30.3.89; no production data or policies changed.
+
 AI Recap weather addendum: Verified match-start weather is a required recap fact when present. Generated prose may integrate it naturally; otherwise the client appends a deterministic final Weather section after any missing-Memory fallback. The fallback uses only recorded conditions, temperature, humidity, and wind, labels the timing as match startup, excludes coordinates, and never blocks recap availability when weather was not captured.
 
 Cloud catalog pagination addendum: Browser catalog reads must not assume a single Supabase response contains every `course_holes` row. Hole rows are retrieved in deterministic, bounded pages until exhaustion. A cloud tee that is missing any expected hole cannot replace a complete local tee. This guard affects retrieval and local merging only; it performs no cloud deletion, rewrite, or cleanup.

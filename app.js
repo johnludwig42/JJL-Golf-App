@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.86',
-  versionNumber: '30.3.86',
-  cacheName: 'the-dye-ledger-v30.3.86',
+  version: 'v30.3.87',
+  versionNumber: '30.3.87',
+  cacheName: 'the-dye-ledger-v30.3.87',
   buildDate: '2026-08-04T04:00:00.000Z',
-  buildLabel: 'Scoring Integrity & Audit Remediation'
+  buildLabel: 'AI Recap Service Reliability'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -6343,16 +6343,19 @@ function buildRecapInputTransparency(match) {
 }
 function buildRoundRecapControls(match) {
   if (!match) return '';
-  const recap = getStoredRoundRecap(match);
   const finalRecap = getFinalRoundRecap(match);
   const draftRecap = getDraftRoundRecap(match);
+  const recap = draftRecap || finalRecap;
+  const hasNewDraft = !!draftRecap && draftRecap !== finalRecap;
   const online = navigator.onLine !== false;
   const configured = !!getRoundRecapUrl();
   const disabled = !online || !configured;
   const memoryCount = getRoundMemories(match).length;
   const reason = !configured ? 'Configure Supabase to enable AI round recaps.' : (!online ? 'Round Recap requires an internet connection.' : `AI recap uses Round Notes plus ${memoryCount} saved memor${memoryCount === 1 ? 'y' : 'ies'}.`);
   const editing = !!uiState.roundRecapEditing && !!recap;
-  const recapStatus = finalRecap ? 'Accepted recap ready for Match Summary and PDF.' : (draftRecap ? 'Draft recap ready for host review.' : (buildRoundRecapStatus(match) || reason));
+  const recapStatus = hasNewDraft ? (buildRoundRecapStatus(match) || 'New draft recap ready for host review.')
+    : (finalRecap ? 'Accepted recap ready for Match Summary and PDF.' : (draftRecap ? 'Draft recap ready for host review.' : (buildRoundRecapStatus(match) || reason)));
+  const validationIssues = Array.isArray(match.roundRecapValidationIssues) ? match.roundRecapValidationIssues : [];
   const recapPreview = recap ? (editing
     ? `<textarea id="roundRecapEditBox" class="round-recap-edit-box" rows="10">${escapeHtml(recap)}</textarea>`
     : `<div class="round-recap-preview">${formatRoundRecapHtml(recap)}</div>`) : '';
@@ -6361,6 +6364,7 @@ function buildRoundRecapControls(match) {
       <div>
         <div class="section-label">AI Round Recap</div>
         <div class="tiny">${escapeHtml(recapStatus)}</div>
+        ${validationIssues.length ? `<div class="round-recap-review-warning" role="status"><strong>Review required</strong><ul>${validationIssues.map(issue => `<li>${escapeHtml(issue.message || issue.code || 'Generated recap needs review.')}</li>`).join('')}</ul></div>` : ''}
       </div>
       <div class="round-recap-notes-field">
         <label for="roundRecapNotesBox">Round Notes for AI Recap</label>
@@ -6473,6 +6477,25 @@ function buildRoundRecapAuthoritativeFacts(match, metrics, playerSummaries, fina
     greenieWinners: (summarizeSelectedGamesForRecap(match, metrics).find(g => g.key === 'greenies')?.summary?.winners) || [],
     statLeaders: buildRoundRecapStatLeaders(playerSummaries),
   };
+}
+function getRoundRecapFailureMessage(status, code = '') {
+  const normalizedCode = String(code || '').trim().toUpperCase();
+  if (status === 404 || normalizedCode === 'FUNCTION_NOT_FOUND') return 'AI Recap service is not deployed for this environment.';
+  if (status === 401 || status === 403 || normalizedCode === 'AUTHORIZATION_FAILED') return 'AI Recap service authorization is not configured correctly.';
+  if (status === 409 || normalizedCode === 'CONTENT_SPEC_MISMATCH') return 'AI Recap service version does not match this app. Update the service before trying again.';
+  if (status === 429 || normalizedCode === 'RATE_LIMITED') return 'AI Recap request limit reached. Please wait and try again.';
+  if (status === 503 || normalizedCode === 'SERVICE_NOT_CONFIGURED') return 'AI Recap service is not fully configured for this environment.';
+  if (status === 502 || normalizedCode === 'PROVIDER_FAILED') return 'AI Recap provider could not complete the request. Please try again.';
+  return 'AI Recap service returned an error. Scores, Memories, and Match Summary remain saved.';
+}
+function setRoundRecapFailure(match, { status = 0, code = '', message = '' } = {}) {
+  const safeCode = String(code || `HTTP_${Number(status) || 0}`).replace(/[^A-Z0-9_-]/gi, '').slice(0, 48).toUpperCase();
+  match.roundRecapLastError = {
+    code: safeCode || 'UNKNOWN',
+    status: Number(status) || 0,
+    occurredAt: new Date().toISOString(),
+  };
+  match.roundRecapStatus = message || getRoundRecapFailureMessage(Number(status) || 0, safeCode);
 }
 
 function validateRoundRecapContent(match, metrics, recapText) {
@@ -6640,39 +6663,51 @@ async function generateRoundRecapForActiveMatch() {
   persist({ skipRender: true });
   renderRoundMemoriesPanel(match);
   renderRoundRecapControlPanel(match);
-  try {
+  const requestRecap = async (repair = null) => {
     const response = await fetch(url, {
       method: 'POST',
       headers: getRoundRecapHeaders(),
-      body: JSON.stringify({ match: buildRoundRecapPayload(match, metrics) }),
+      body: JSON.stringify({ match: buildRoundRecapPayload(match, metrics), ...(repair ? { repair } : {}) }),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data?.success === false) {
       const failure = new Error(data?.error || `Round Recap failed (${response.status}).`);
       failure.status = response.status;
+      failure.code = data?.code || '';
       throw failure;
     }
-    const recap = ensureRoundRecapMemoryCoverage(match, String(data?.recap || data?.text || '').trim());
+    return ensureRoundRecapMemoryCoverage(match, String(data?.recap || data?.text || '').trim());
+  };
+  try {
+    let recap = await requestRecap();
     if (!recap) throw new Error('Round Recap returned no text.');
-    const validation = validateRoundRecapContent(match, metrics, recap);
-    if (!validation.valid) throw new Error(`Round Recap needs review: ${validation.issues.map(issue => issue.message).join(' ')}`);
+    let validation = validateRoundRecapContent(match, metrics, recap);
+    if (!validation.valid) {
+      const repaired = await requestRecap({
+        priorRecap: recap,
+        issues: validation.issues.map(issue => ({ code: issue.code, message: issue.message })),
+      });
+      if (repaired) {
+        recap = repaired;
+        validation = validateRoundRecapContent(match, metrics, recap);
+      }
+    }
     match.roundRecapGenerated = recap;
     if (!String(match.roundRecapFinal || '').trim()) match.roundRecap = recap;
     match.roundRecapGeneratedAt = new Date().toISOString();
-    match.roundRecapStatus = String(match.roundRecapFinal || '').trim() ? 'New draft recap generated. Accepted recap preserved.' : 'Draft recap generated. Review, edit, or accept it.';
+    match.roundRecapValidationIssues = validation.issues.map(issue => ({ code: issue.code, message: issue.message }));
+    match.roundRecapLastError = null;
+    match.roundRecapStatus = validation.valid
+      ? (String(match.roundRecapFinal || '').trim() ? 'New draft recap generated. Accepted recap preserved.' : 'Draft recap generated. Review, edit, or accept it.')
+      : `Draft generated but needs review: ${validation.issues.map(issue => issue.message).join(' ')}`;
     persist({ skipRender: true });
     renderLeaderboard();
-    toast('Round Recap generated.');
+    toast(validation.valid ? 'Round Recap generated.' : 'Round Recap draft saved for review.');
   } catch (err) {
     console.error(err);
     const status = Number(err?.status || 0);
-    const detail = String(err?.message || '');
-    match.roundRecapStatus = detail.startsWith('Round Recap needs review:') ? detail
-      : status === 404 ? 'AI Recap service is not deployed for this environment.'
-      : status === 401 || status === 403 ? 'AI Recap service authorization is not configured correctly.'
-      : status === 429 ? 'AI Recap request limit reached. Please wait and try again.'
-      : navigator.onLine === false || err?.name === 'TypeError' ? 'AI Recap could not reach the service. Check the connection and try again.'
-      : 'AI Recap service returned an error. Scores, Memories, and Match Summary remain saved.';
+    const offlineMessage = navigator.onLine === false || err?.name === 'TypeError' ? 'AI Recap could not reach the service. Check the connection and try again.' : '';
+    setRoundRecapFailure(match, { status, code: err?.code, message: offlineMessage });
     persist({ skipRender: true });
     renderLeaderboard();
     toast('Round Recap unavailable. Match Summary still works normally.');
@@ -6683,7 +6718,7 @@ function acceptRoundRecapForActiveMatch() {
   const match = getActiveMatch();
   if (!match) return;
   const editBox = document.getElementById('roundRecapEditBox');
-  const text = String(editBox?.value || getStoredRoundRecap(match) || '').trim();
+  const text = String(editBox?.value || getDraftRoundRecap(match) || getStoredRoundRecap(match) || '').trim();
   if (!text) return toast('No recap text to accept.');
   const metrics = computeMatchMetrics(match);
   const validation = validateRoundRecapContent(match, metrics, text);
@@ -6696,6 +6731,8 @@ function acceptRoundRecapForActiveMatch() {
   match.roundRecapFinal = text;
   match.roundRecap = text;
   match.roundRecapStatus = 'Accepted recap saved for Match Summary and PDF.';
+  match.roundRecapValidationIssues = [];
+  match.roundRecapLastError = null;
   uiState.roundRecapEditing = false;
   persist({ skipRender: true });
   renderLeaderboard();
@@ -6709,6 +6746,8 @@ function clearRoundRecapForActiveMatch() {
   match.roundRecapFinal = '';
   match.roundRecapGeneratedAt = null;
   match.roundRecapStatus = 'Round Recap cleared.';
+  match.roundRecapValidationIssues = [];
+  match.roundRecapLastError = null;
   uiState.roundRecapEditing = false;
   persist({ skipRender: true });
   renderLeaderboard();
@@ -8187,6 +8226,12 @@ function normalizeMatch(match) {
   match.roundRecapFinal = typeof match.roundRecapFinal === 'string' ? match.roundRecapFinal : '';
   match.roundRecapGeneratedAt = match.roundRecapGeneratedAt || null;
   match.roundRecapStatus = typeof match.roundRecapStatus === 'string' ? match.roundRecapStatus : '';
+  match.roundRecapValidationIssues = Array.isArray(match.roundRecapValidationIssues)
+    ? match.roundRecapValidationIssues.map(issue => ({ code: String(issue?.code || ''), message: String(issue?.message || '') })).slice(0, 12)
+    : [];
+  match.roundRecapLastError = match.roundRecapLastError && typeof match.roundRecapLastError === 'object'
+    ? { code: String(match.roundRecapLastError.code || ''), status: Number(match.roundRecapLastError.status) || 0, occurredAt: match.roundRecapLastError.occurredAt || null }
+    : null;
   match.roundEndReason = String(match.roundEndReason || '').trim();
   match.roundCompletionState = match.roundCompletionState && typeof match.roundCompletionState === 'object' ? match.roundCompletionState : null;
   match.roundContext = normalizeRoundContext(match.roundContext);

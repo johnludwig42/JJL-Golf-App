@@ -419,3 +419,7 @@ Every release should either:
 - preserve memories
 - improve reliability
 - prepare the architecture for future growth
+
+## 18. Current release — v30.3.87
+
+v30.3.87 focuses exclusively on AI Recap Service Reliability. It repairs raw provider-response parsing, adds stable non-sensitive error classification, makes one controlled correction attempt, and preserves drafts that still need host review. It does not change scoring, settlement, local storage keys, Supabase data, or historical RoundRecords. The repository Edge Function is a deployment candidate only until an explicitly authorized test and production process is completed.

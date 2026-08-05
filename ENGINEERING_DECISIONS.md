@@ -582,3 +582,14 @@ When in doubt, prefer:
 * no redesign of unrelated systems
 
 If a proposed change violates one of these principles, stop and call it out before implementing.
+
+## v30.3.87 — AI Recap Failure and Draft Policy
+
+- Raw OpenAI Responses API payloads are parsed from the documented nested output content; SDK convenience fields remain compatibility-only.
+- A generated recap that fails deterministic content validation is preserved as a draft with explicit review items rather than discarded.
+- The app may make one controlled correction request. It must not loop or silently publish generated text.
+- Accepted recap artifacts remain preserved when a later regeneration or provider call fails.
+- Diagnostics retain only stable error code, HTTP status, and timestamp. Prompts, Round Notes, Memories, recap content, credentials, and provider secrets are excluded.
+- Test and production Edge Function deployments are independent approval gates.
+
+Status: Approved and implemented locally for v30.3.87; external deployment not performed.

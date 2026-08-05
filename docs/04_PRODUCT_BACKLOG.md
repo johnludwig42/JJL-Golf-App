@@ -255,3 +255,13 @@ FUTURE:
 - Trip Ledger Architecture Prep: define immutable RoundRecord persistence, schema migration, trip/event aggregation, and append-only settlement transactions.
 - Add a local player registry and reusable saved-roster model with stable identity across rounds.
 - Add a 1080Ã—1350 Hero-card image export after the report Hero has completed cross-browser PDF QA.
+
+# v30.3.87 AI Recap Service Reliability
+
+- [x] Parse raw Responses API structured output reliably.
+- [x] Preserve reviewable drafts after deterministic validation failures.
+- [x] Add one controlled correction attempt and actionable sanitized failure states.
+- [x] Keep scoring, Match Summary, accepted recaps, and local persistence independent of provider availability.
+- [ ] Inventory and deploy to an explicitly approved non-production Supabase project.
+- [ ] Complete synthetic end-to-end provider testing and abuse/failure acceptance.
+- [ ] Deploy to production only after separate Product Owner approval.

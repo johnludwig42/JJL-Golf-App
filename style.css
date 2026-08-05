@@ -4392,6 +4392,8 @@ main,
   color:var(--text);
 }
 .round-recap-preview p{margin:0 0 0.85em;}
+.round-recap-review-warning{margin-top:10px;padding:10px 12px;border:1px solid #d59a32;border-radius:12px;background:#fff7e6;color:#5e4318;font-size:0.86rem;}
+.round-recap-review-warning ul{margin:6px 0 0;padding-left:18px;}
 .round-recap-edit-box{min-height:220px;line-height:1.55;font-size:15px;resize:vertical;}
 .library-section-heading{margin:2px 0 7px;font-size:.74rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);}
 .player-hole-stat-details{max-width:100%;overflow:visible;}

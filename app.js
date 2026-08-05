@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.85',
-  versionNumber: '30.3.85',
-  cacheName: 'the-dye-ledger-v30.3.85',
-  buildDate: new Date().toISOString(),
-  buildLabel: 'AI Recap Governance & Content Reliability'
+  version: 'v30.3.86',
+  versionNumber: '30.3.86',
+  cacheName: 'the-dye-ledger-v30.3.86',
+  buildDate: '2026-08-04T04:00:00.000Z',
+  buildLabel: 'Scoring Integrity & Audit Remediation'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -455,7 +455,7 @@ const GAME_SELECTION_GROUPS = Object.freeze([
 
 const COMPETITION_RULES_CATALOG_VERSION = 1;
 const COMPETITION_RULES_CATALOG = Object.freeze({
-  nassau: Object.freeze({ scoringMethod: 'Three independent match-play wagers: front nine, back nine, and overall', allowance: 'Round allowance; net matches stroke off the lowest Playing Handicap', tieTreatment: 'Each tied component is halved', stakeMeaning: 'Separate amount for each enabled component', escalation: 'Presses use the configured Press contract', finality: 'A component is final when its holes are complete or the result is mathematically decided' }),
+  nassau: Object.freeze({ scoringMethod: 'Three independent match-play wagers: front nine, back nine, and overall using the saved Best N policy', allowance: 'Game-specific allowance is applied to each unrounded Course Handicap, then each Game Handicap is rounded before strokes are allocated from the lowest Game Handicap', tieTreatment: 'Each tied component is halved', stakeMeaning: 'Each losing player owes the saved component stake; the collected amount is divided equally among the winning players', escalation: 'Presses use the configured Press contract', finality: 'A component is final when its holes are complete or the result is mathematically decided' }),
   singles_match: Object.freeze({ scoringMethod: 'One-on-one match play by holes won', allowance: 'Round allowance; net match strokes off the lowest Playing Handicap', tieTreatment: 'A tied match is halved', stakeMeaning: 'One match amount or the configured amount per hole', escalation: 'Presses use the configured Press contract', finality: 'Final when all holes are complete or the match is mathematically decided' }),
   individual_match: Object.freeze({ scoringMethod: 'Independent player-versus-player Nassau, match-play, or stroke-play side matches', allowance: 'Each side match uses its saved gross or net basis', tieTreatment: 'Ties are halved unless the saved side-match format states otherwise', stakeMeaning: 'Amount saved for each side match', escalation: 'No implicit escalation', finality: 'Each side match finalizes independently' }),
   team_match: Object.freeze({ scoringMethod: 'Team best-ball match play by holes won', allowance: 'Round allowance; net match strokes off the lowest Playing Handicap', tieTreatment: 'A tied match is halved', stakeMeaning: 'Amount paid per player on the losing team', escalation: 'Presses use the configured Press contract', finality: 'Final when all holes are complete or the match is mathematically decided' }),
@@ -2393,6 +2393,14 @@ function todayIso() {
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 }
+function decodeLegacyEscapedText(value) {
+  return String(value ?? '')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#(?:39|x27);/gi, "'")
+    .replace(/&amp;/g, '&');
+}
 function toast(message, ms = 2200) {
   const el = document.getElementById('toast');
   el.textContent = message;
@@ -3074,7 +3082,7 @@ function getScoresFeaturedOutcome(context) {
     return {
       type: 'featured',
       label: `Featured Competition · ${featured.label || getFeaturedCompetitionDisplayName(match, key)}`,
-      result: String(featured.result),
+      result: context?.frozen ? decodeLegacyEscapedText(featured.result) : String(featured.result),
       key,
     };
   }
@@ -4375,11 +4383,16 @@ function formatNassauPolicyLabel(config = {}, match = null) {
 function getGameRelativeStrokeAllowance(holeStrokeIndex, playerMetric, metrics, config = {}) {
   if (!playerMetric || !holeStrokeIndex) return 0;
   if (Number(config.scoringPolicyVersion || 0) < 1) return holeStrokeAllowanceForPlayer(holeStrokeIndex, playerMetric.playHdcp, metrics?.lowPlaying);
-  const values = (metrics?.players || []).map(player => Number(player.unroundedCourseHdcp)).filter(Number.isFinite);
-  const lowUnrounded = values.length ? Math.min(...values) : NaN;
+  const allowance = normalizeHandicapAllowancePercent(config.handicapAllowancePercent, 100);
+  const values = (metrics?.players || [])
+    .map(player => Number(player.unroundedCourseHdcp))
+    .filter(Number.isFinite)
+    .map(courseHandicap => Math.round(courseHandicap * allowance / 100));
+  const lowGameHandicap = values.length ? Math.min(...values) : NaN;
   const playerUnrounded = Number(playerMetric.unroundedCourseHdcp);
-  if (!Number.isFinite(lowUnrounded) || !Number.isFinite(playerUnrounded)) return 0;
-  const difference = Math.max(0, Math.round((playerUnrounded - lowUnrounded) * normalizeHandicapAllowancePercent(config.handicapAllowancePercent, 100) / 100));
+  if (!Number.isFinite(lowGameHandicap) || !Number.isFinite(playerUnrounded)) return 0;
+  const playerGameHandicap = Math.round(playerUnrounded * allowance / 100);
+  const difference = Math.max(0, playerGameHandicap - lowGameHandicap);
   return holeStrokeAllowanceForPlayer(holeStrokeIndex, difference, 0);
 }
 function resolveTeamHoleScore(holeResult, teamNo, policy = {}, options = {}) {
@@ -5901,7 +5914,9 @@ function buildExecutiveDriverRows(match, metrics, ctx = getPayoutReportContext(m
       result = !Number(leader.thru) ? 'Selected · momentum pending' : leader.tied ? `Tied through ${leader.thru} SSP holes` : `${formatSneakySandyPoleyTeamName(ledger, match, leader.teamId)} +${Number(leader.margin || 0)} points`;
       stakes = `${formatPositiveCurrency(Number(ledger?.settings?.pointValue || cfg.pointValue || 0), 2)}/point`;
     } else if (cfg.key === 'nassau' || cfg.key === 'team_match') {
-      const diffs = computeTeamGameDiffs(match, metrics, cfg.key);
+      const diffs = cfg.key === 'nassau'
+        ? computeNassauDiffsForBasis(metrics, cfg.basis === 'gross' ? 'gross' : 'net', cfg)
+        : computeTeamGameDiffs(match, metrics, cfg.key);
       result = completion.isIncomplete ? formatTeamGameStatusScoped(match, metrics, diffs.overall, completion) : formatTeamGameStatus(match, metrics, diffs.overall);
       if (cfg.key === 'nassau') stakes = [cfg.stakesFront, cfg.stakesBack, cfg.stakesOverall].some(Number) ? `${formatMoneyAccounting(Number(cfg.stakesFront || 0))} front · ${formatMoneyAccounting(Number(cfg.stakesBack || 0))} back · ${formatMoneyAccounting(Number(cfg.stakesOverall || 0))} overall` : 'No wager configured';
     } else if (game?.label) {
@@ -6384,7 +6399,9 @@ function summarizeSelectedGamesForRecap(match, metrics) {
       } else if (cfg.key === 'individual_match') {
         item.summary = getIndividualMatchPairings(match, metrics).map(p => ({ label: p.label, game: getSideMatchGameLabel(p.game), basis: formatBasisLabel(p.basis), stake: Number(p.stake) || 0, status: p.status, completedHoles: p.completedCount }));
       } else if (cfg.key === 'nassau' || cfg.key === 'team_match') {
-        const diffs = computeTeamGameDiffs(match, metrics, cfg.key);
+        const diffs = cfg.key === 'nassau'
+          ? computeNassauDiffsForBasis(metrics, cfg.basis === 'gross' ? 'gross' : 'net', cfg)
+          : computeTeamGameDiffs(match, metrics, cfg.key);
         item.summary = { basis: formatBasisLabel(cfg.basis), front: diffs.front, back: diffs.back, overall: diffs.overall, status: formatTeamGameStatus(match, metrics, diffs.overall) };
       }
     } catch (err) {
@@ -8624,7 +8641,7 @@ function renderFeaturedCompetitionHandicapPreview({ course, tee, selected, enric
 function describeTeamLabel(match, teamNo, metrics) {
   const name = match.teamNames?.[teamNo - 1] || `Team ${teamNo}`;
   const members = metrics.teams.find(t => t.team === teamNo)?.members?.map(m => m.player.name).join(', ');
-  return members ? `${escapeHtml(name)} (${escapeHtml(members)})` : escapeHtml(name);
+  return members ? `${name} (${members})` : name;
 }
 
 function computeTeamGameDiffs(match, metrics, gameKey) {
@@ -10086,14 +10103,40 @@ function getPlayerScoringMixLabel(match, metrics, playerMetric) {
   return parts.length ? parts.join(' • ') : 'No scored holes yet';
 }
 
+function getPlayerDetailNetSummary(match, metrics, playerMetric, { netMode = 'course', matchGameConfig = null } = {}) {
+  const tee = metrics?.tee;
+  if (!match || !tee || !playerMetric) return { gross: 0, net: 0, par: 0, scored: 0 };
+  const holes = getSelectedScoringHoles(match, tee);
+  return holes.reduce((summary, hole, index) => {
+    const gross = Number(playerMetric.scores?.[index]?.gross);
+    if (!Number.isFinite(gross) || gross <= 0) return summary;
+    const playerHole = getPlayerHole(match, playerMetric, index, tee) || hole;
+    const strokes = netMode === 'match'
+      ? (matchGameConfig?.courseNetMode
+        ? holeCourseNetStrokeAllowance(playerHole?.strokeIndex, playerMetric.courseHdcp)
+        : getGameRelativeStrokeAllowance(playerHole?.strokeIndex, playerMetric, metrics, matchGameConfig || { scoringPolicyVersion: 0 }))
+      : holeCourseNetStrokeAllowance(playerHole?.strokeIndex, playerMetric.courseHdcp);
+    summary.gross += gross;
+    summary.net += gross - strokes;
+    summary.par += Number(playerHole?.par || hole?.par || 0);
+    summary.scored += 1;
+    return summary;
+  }, { gross: 0, net: 0, par: 0, scored: 0 });
+}
+
 function buildPlayerDetailView(match, metrics, playerId) {
   const playerMetric = (metrics?.players || []).find(p => String(p.playerId) === String(playerId));
   if (!match || !metrics || !playerMetric) return '<div class="player-detail-empty">Player details are unavailable.</div>';
-  const showNet = Number(playerMetric.playHdcp || 0) !== 0 || Number(playerMetric.netTotal || 0) !== Number(playerMetric.grossTotal || 0);
+  const courseNet = getPlayerDetailNetSummary(match, metrics, playerMetric, { netMode: 'course' });
+  const featuredMatchOption = getFeaturedMatchNetScorecardOptions(match, metrics)[0] || null;
+  const matchNet = featuredMatchOption
+    ? getPlayerDetailNetSummary(match, metrics, playerMetric, { netMode: 'match', matchGameConfig: featuredMatchOption.config })
+    : null;
   const scoreTiles = [
-    ['Gross', playerMetric.grossTotal || 0],
-    ...(showNet ? [['Net', playerMetric.netTotal || 0]] : []),
-    ['Vs Par', formatToPar(playerMetric.toPar || 0)],
+    ['Gross', courseNet.gross],
+    ['Course Net', courseNet.net],
+    ...(matchNet ? [['Match Net', matchNet.net]] : []),
+    ['Gross vs Par', formatToPar(courseNet.gross - courseNet.par)],
     ['Through', getPlayerDetailThroughLabel(match, metrics, playerMetric)],
     ['Scoring Mix', getPlayerScoringMixLabel(match, metrics, playerMetric)],
   ];
@@ -10109,7 +10152,7 @@ function buildPlayerDetailView(match, metrics, playerId) {
     ${buildPlayerDetailGameStatusBlock(match, metrics, playerMetric)}
     <section class="player-detail-section">
       <h3>Classic scorecard</h3>
-      ${buildClassicScorecard(match, metrics, { playerId: playerMetric.playerId, readOnly: true, blankCourseTeamCell: true, hideTeamColumn: true, blankPlayerHeader: true })}
+      ${buildClassicScorecardPanel(match, metrics, { playerId: playerMetric.playerId, readOnly: true, blankCourseTeamCell: true, hideTeamColumn: true, blankPlayerHeader: true })}
     </section>
     <section class="player-detail-section">
       <h3>Hole statistics</h3>
@@ -10131,6 +10174,7 @@ function openPlayerDetailView(playerId) {
   if (title) title.textContent = playerMetric?.player?.name || 'Player Detail';
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
+  modal.dataset.playerId = String(playerId);
   document.body.classList.add('player-detail-open');
   document.getElementById('playerDetailCloseBtn')?.focus({ preventScroll: true });
 }
@@ -10198,7 +10242,8 @@ function buildQuickNassauResults(match, metrics, record = null) {
       return `<div class="quick-nassau-press" data-press-parent="${segment}" style="--press-depth:${Math.min(3, Number(press.pressDepth || 1))}"><div><strong>${Number(press.pressDepth || 1) > 1 ? 'Press on ' : ''}Press ${index + 1}</strong><small>Holes ${press.startingHole}–${press.endingHole} · Declared by ${escapeHtml(declarer)} · ${formatCompactCurrency(press.wagerAmount)}</small></div><div class="quick-nassau-values"><strong>${escapeHtml(result)}</strong><span>${escapeHtml(state.status)} · ${formatCompactCurrency(impact, { signed: impact > 0 })}</span></div></div>`;
     }).join('');
     const label = component.component === 'overall' ? 'Overall / 18' : component.component[0].toUpperCase() + component.component.slice(1);
-    return `<div class="quick-nassau-component" data-nassau-component="${component.component}"><div class="quick-nassau-base"><div><strong>${label}</strong><small>Base wager ${formatCompactCurrency(component.stake)} · ${component.status}</small></div><div class="quick-nassau-values"><strong>${escapeHtml(component.result)}</strong><span>${formatCompactCurrency(component.contribution, { signed: component.contribution > 0 })}</span></div></div>${children}</div>`;
+    const displayedResult = frozen ? decodeLegacyEscapedText(component.result) : component.result;
+    return `<div class="quick-nassau-component" data-nassau-component="${component.component}"><div class="quick-nassau-base"><div><strong>${label}</strong><small>Base wager ${formatCompactCurrency(component.stake)} · ${component.status}</small></div><div class="quick-nassau-values"><strong>${escapeHtml(displayedResult)}</strong><span>${formatCompactCurrency(component.contribution, { signed: component.contribution > 0 })}</span></div></div>${children}</div>`;
   }).join('');
   return `<section class="quick-scoreboard-section quick-game-results"><h4>Game Summary</h4><div class="quick-game-parent"><div class="quick-game-parent-title">Nassau</div>${rows}</div></section>`;
 }
@@ -10210,7 +10255,8 @@ function buildQuickGameSummary(match, metrics, record = null) {
   const cards = selected.filter(cfg => cfg.key !== 'nassau').map(cfg => {
     const frozenGame = frozen ? (record.games || []).find(game => game.gameId === cfg.key) : null;
     const sspLedger = cfg.key === 'sneaky_sandy_poley' ? buildSneakySandyPoleyLedger(match, { metrics }) : null;
-    const status = frozenGame?.result?.result || sspLedger?.settlement?.label || getTruthfulGameStatus(match, metrics, cfg.key, cfg);
+    const storedStatus = frozenGame?.result?.result;
+    const status = (storedStatus ? decodeLegacyEscapedText(storedStatus) : '') || sspLedger?.settlement?.label || getTruthfulGameStatus(match, metrics, cfg.key, cfg);
     if (!status) return '';
     const games = (payout.payoutGames || []).filter(game => game.sourceKey === cfg.key || game.key === cfg.key);
     const contribution = frozen ? Object.values(frozenGame?.amounts || {}).filter(amount => Number(amount) > 0).reduce((sum, amount) => sum + Number(amount), 0) : games.reduce((sum, game) => sum + Object.values(game.amounts || {}).filter(amount => Number(amount) > 0).reduce((part, amount) => part + Number(amount), 0), 0);
@@ -10306,7 +10352,7 @@ function buildQuickScoreboardView(match, metrics, preferences = getPlayerPrefere
       </div>
       ${buildQuickPlayerScoreSummary(match, metrics, record)}
       ${buildQuickScoreDistribution(match, metrics, record, quickPreferences.scoreDistributionExpanded)}
-      <details class="quick-scoreboard-section quick-disclosure quick-classic-scorecard"${quickPreferences.classicScorecardExpanded ? ' open' : ''}><summary>Classic Scorecard</summary>${buildClassicScorecard(match, metrics, { readOnly: true })}</details>
+      <details class="quick-scoreboard-section quick-disclosure quick-classic-scorecard"${quickPreferences.classicScorecardExpanded ? ' open' : ''}><summary>Classic Scorecard</summary>${buildClassicScorecardPanel(match, metrics, { readOnly: true })}</details>
       ${buildQuickScoreboardMomentumCharts(match, metrics, quickPreferences.momentumExpanded)}
       ${highlightHtml}
     </div>`;
@@ -10459,7 +10505,7 @@ function buildFrozenScoresGameSummary(record) {
   if (!games.length) return '<div class="game-summary-grid"><div class="game-summary-card empty-state-card"><div class="game-summary-value">No money games configured. Score results remain available.</div></div></div>';
   return `<div class="game-summary-grid">${games.map(game => {
     const result = game.result || {};
-    const standing = result.result || result.resultText || result.value || result.status || 'Final result recorded';
+    const standing = decodeLegacyEscapedText(result.result || result.resultText || result.value || result.status || 'Final result recorded');
     const amounts = Object.values(game.amounts || {}).map(Number).filter(Number.isFinite);
     const contribution = amounts.length ? Math.max(0, ...amounts) : 0;
     return `<div class="game-summary-card" data-game-result-source="frozen"><div class="game-summary-title">${escapeHtml(getGameLabel(game.type || game.gameId))}</div><div class="game-summary-value">${escapeHtml(String(standing))}</div><div class="game-summary-sub">Final · Frozen round result</div><div class="game-summary-sub game-summary-economic">Settlement contribution: ${formatMoneyAccounting(contribution)}</div></div>`;
@@ -10832,17 +10878,30 @@ function mergeSupabaseCourses(cloudCourses = []) {
   let updated = 0;
   cloudCourses.forEach(course => {
     if (!course?.id || !course?.name) return;
-    const existingIdx = state.courses.findIndex(c => c.id === course.id);
+    const cloudCourseId = String(course.cloudCourseId || course.id || '').trim();
+    const existingIdx = state.courses.findIndex(c => {
+      const existingCloudId = String(c?.cloudCourseId || (c?.source === 'supabase' ? c?.id : '') || '').trim();
+      return !!cloudCourseId && existingCloudId === cloudCourseId;
+    });
     const nameKey = String(course.name || '').trim().toLowerCase();
     const cityKey = String(course.city || '').trim().toLowerCase();
     const stateKey = String(course.state || '').trim().toLowerCase();
-    const duplicateIdx = existingIdx >= 0 ? existingIdx : state.courses.findIndex(c => (
+    const duplicateIdx = existingIdx >= 0 ? existingIdx : state.courses.findIndex(c => isSupabaseCourse(c) && (
       String(c.name || '').trim().toLowerCase() === nameKey
       && String(c.city || '').trim().toLowerCase() === cityKey
       && String(c.state || '').trim().toLowerCase() === stateKey
     ));
     if (duplicateIdx >= 0) {
       const existing = state.courses[duplicateIdx];
+      const preserveLocalChanges = ['local-draft', 'pending-sync'].includes(String(existing.cloudSyncState || ''));
+      if (preserveLocalChanges) {
+        state.courses[duplicateIdx] = {
+          ...existing,
+          cloudCourseId: cloudCourseId || existing.cloudCourseId,
+        };
+        updated += 1;
+        return;
+      }
       const cloudTees = (course.tees || []).map(ct => {
         const localMatch = (existing.tees || []).find(t => (t.cloudTeeId && t.cloudTeeId === ct.cloudTeeId) || (String(t.teeName || '').trim().toLowerCase() === String(ct.teeName || '').trim().toLowerCase() && String(t.gender || 'M') === String(ct.gender || 'M')));
         return localMatch ? { ...localMatch, ...ct, id: localMatch.id, cloudTeeId: ct.cloudTeeId || localMatch.cloudTeeId || ct.id, source: 'supabase' } : ct;
@@ -13585,7 +13644,12 @@ function buildMemoriesDisplay(match) {
   if (!memories.length) {
     return `<div class="memory-feed-empty tiny">No memories saved yet. Use Add Memory on the Play tab to capture a quick moment.</div>`;
   }
-  return `<div class="memory-feed-list">${memories.map(memory => `
+  const editPolicy = match?.status === 'completed' || isFrozenRoundRecord(match?.roundRecordSnapshot)
+    ? '<div class="tiny memory-edit-policy">Completed-round Memories are preserved. Corrections will use Amendment Sessions.</div>'
+    : match?.storageMode === 'shared'
+      ? '<div class="tiny memory-edit-policy">Shared Match Memories are append-only while conflict-safe editing is being completed.</div>'
+      : '';
+  return `${editPolicy}<div class="memory-feed-list">${memories.map(memory => `
     <div class="memory-feed-item">
       <div class="memory-feed-copy"><div class="memory-feed-text">${escapeHtml(memory.text)}</div>
       <div class="memory-feed-meta tiny">${escapeHtml(formatMemoryMeta(memory))}</div>
@@ -13596,9 +13660,10 @@ function buildMemoriesDisplay(match) {
 
 function canEditRoundMemory(match, memory) {
   if (!match || !memory) return false;
-  if (match.storageMode !== 'shared') return true;
-  if (isCurrentDeviceMatchHost(match)) return true;
-  return String(memory.createdByDeviceId || '') === String(getSharedDeviceId());
+  if (match.status === 'completed' || isFrozenRoundRecord(match.roundRecordSnapshot)) return false;
+  // Shared Memories remain append-only until revision-safe, conflict-aware synchronization ships.
+  if (match.storageMode === 'shared') return false;
+  return true;
 }
 function renderRoundMemoriesPanel(match = getActiveMatch()) {
   const panel = document.getElementById('roundMemoriesPanel');
@@ -13618,7 +13683,7 @@ function openAddMemoryModal(memoryId = '') {
   const hole = document.getElementById('memoryHoleSelect');
   if (!backdrop || !text || !category || !hole) return;
   const existing = memoryId ? getRoundMemories(match).find(memory => String(memory.memoryId) === String(memoryId)) : null;
-  if (existing && !canEditRoundMemory(match, existing)) return toast('Only the Memory contributor or Shared Match host can revise this Memory.');
+  if (existing && !canEditRoundMemory(match, existing)) return toast(match.status === 'completed' || isFrozenRoundRecord(match.roundRecordSnapshot) ? 'Completed-round Memories are preserved. Corrections will use Amendment Sessions.' : 'Shared Match Memories are append-only while conflict-safe editing is being completed.');
   editingMemoryId = existing?.memoryId || '';
   const maxHole = getPlayableHoleCount(match, getTee(match.courseId, match.teeId)) || 18;
   hole.innerHTML = Array.from({ length: maxHole }, (_, idx) => `<option value="${idx + 1}">Hole ${idx + 1}</option>`).join('');
@@ -13649,7 +13714,7 @@ function saveMemoryFromModal() {
   const text = String(document.getElementById('memoryTextInput')?.value || '').trim();
   if (!text) return toast('Add a memory first.');
   const existing = editingMemoryId ? getRoundMemories(match).find(memory => String(memory.memoryId) === String(editingMemoryId)) : null;
-  if (existing && !canEditRoundMemory(match, existing)) return toast('Only the Memory contributor or Shared Match host can revise this Memory.');
+  if (existing && !canEditRoundMemory(match, existing)) return toast(match.status === 'completed' || isFrozenRoundRecord(match.roundRecordSnapshot) ? 'Completed-round Memories are preserved. Corrections will use Amendment Sessions.' : 'Shared Match Memories are append-only while conflict-safe editing is being completed.');
   const revisedAt = existing ? new Date().toISOString() : null;
   const revisionHistory = existing ? [
     ...(Array.isArray(existing.revisionHistory) ? existing.revisionHistory : []),
@@ -13680,10 +13745,10 @@ function saveMemoryFromModal() {
   else match.memories.push(entry);
   persist({ skipRender: true });
   if (match.storageMode === 'shared') {
-    console.debug('[SharedMemories]', { action: 'local-memory-created', memory: entry, memoryCount: match.memories.length });
+    if (window.dyeLedgerDebugDiagnostics === true) console.debug('[SharedMemories]', { action: 'local-memory-created', memoryId: entry.memoryId, memoryCount: match.memories.length });
     publishSharedMemories(match)
       .then(published => {
-        console.debug('[SharedMemories]', { action: 'publish-complete', published, memoryCount: getRoundMemories(match).length });
+        if (window.dyeLedgerDebugDiagnostics === true) console.debug('[SharedMemories]', { action: 'publish-complete', published, memoryCount: getRoundMemories(match).length });
         if (published) persist({ skipRender: true });
       })
       .catch(err => {
@@ -15710,26 +15775,64 @@ function renderScoreGrid(match, tee, metrics, scoringHoles = null) {
   const hole = holes[currentHole - 1];
   const visiblePlayers = getVisibleScoringPlayers(match, metrics.players || [], { stats: false });
   if (!visiblePlayers.length && isJoinedDeviceWaitingForAssignment(match)) {
-    body.innerHTML = `<tr><td colspan="5"><div class="joined-assignment-waiting"><strong>Joined device</strong><div class="tiny top-gap">Waiting for the host to assign players to this device.</div><div class="tiny">Scores are saved on this phone once you are assigned. Checking for assignment...</div><button type="button" class="secondary top-gap" data-check-shared-assignment="1">Check Assignment</button></div></td></tr>`;
+    body.innerHTML = `<tr><td colspan="4"><div class="joined-assignment-waiting"><strong>Joined device</strong><div class="tiny top-gap">Waiting for the host to assign players to this device.</div><div class="tiny">Scores are saved on this phone once you are assigned. Checking for assignment...</div><button type="button" class="secondary top-gap" data-check-shared-assignment="1">Check Assignment</button></div></td></tr>`;
     return;
   }
-  body.innerHTML = visiblePlayers.map(p => {
+  body.innerHTML = buildTeamGroupedScoreGridRows(match, tee, metrics, visiblePlayers, hole);
+}
+
+function getFeaturedCompetitionStrokeDistribution(match, tee, metrics, playerMetric) {
+  const context = getFeaturedCompetitionHandicapContext(match, metrics);
+  if (!match || !tee || !playerMetric || context.mode !== 'relative') return null;
+  const holes = getSelectedScoringHoles(match, tee);
+  let front = 0;
+  let back = 0;
+  holes.forEach((fallbackHole, index) => {
+    const playerHole = getPlayerHole(match, playerMetric, index, tee) || fallbackHole;
+    const strokes = Math.max(0, Number(getFeaturedCompetitionStrokeAllowance(match, metrics, playerMetric, playerHole?.strokeIndex)) || 0);
+    if (Number(playerHole?.holeNumber || fallbackHole?.holeNumber || index + 1) <= 9) front += strokes;
+    else back += strokes;
+  });
+  const total = front + back;
+  if (holes.length <= 9) {
+    const holeNumbers = holes.map((hole, index) => Number(hole?.holeNumber || index + 1));
+    const side = holeNumbers.length && holeNumbers.every(holeNumber => holeNumber >= 1 && holeNumber <= 9)
+      ? 'Front 9'
+      : (holeNumbers.length && holeNumbers.every(holeNumber => holeNumber >= 10 && holeNumber <= 18) ? 'Back 9' : 'Selected 9');
+    return { total, front, back, label: `Gets ${total} · ${side}` };
+  }
+  return { total, front, back, label: `Gets ${total} · Front ${front} · Back ${back}` };
+}
+
+function buildTeamGroupedScoreGridRows(match, tee, metrics, visiblePlayers = [], hole = null) {
+  const groups = new Map();
+  visiblePlayers.forEach(playerMetric => {
+    const team = Math.max(1, Number(playerMetric.team) || 1);
+    if (!groups.has(team)) groups.set(team, []);
+    groups.get(team).push(playerMetric);
+  });
+  return [...groups.entries()].sort(([left], [right]) => left - right).map(([team, players]) => {
+    const teamLabel = getTeamLabel(match, team);
+    const teamHeading = `<tr class="score-team-heading" data-score-team="${team}"><th colspan="4" scope="rowgroup"><span>${escapeHtml(teamLabel)}</span></th></tr>`;
+    const playerRows = players.map(p => {
     const score = p.scores[currentHole - 1];
     const playerHole = getPlayerHole(match, p, currentHole - 1, tee) || hole;
     const strokes = getFeaturedCompetitionStrokeAllowance(match, metrics, p, playerHole?.strokeIndex);
     const gross = score?.gross || '';
     const net = score?.gross ? score.gross - strokes : '';
     const canEdit = canEditPlayerScore(match, p.team, p.playerId);
+    const strokeDistribution = getFeaturedCompetitionStrokeDistribution(match, tee, metrics, p);
     if (match.storageMode === 'shared') console.debug('[SharedScoreGate]', explainPlayerEditability(match, p.playerId));
     return `
       <tr class="${canEdit ? '' : 'score-row-readonly'}">
-        <td><button type="button" class="player-detail-trigger score-player-name" data-player-detail="${escapeHtml(p.playerId)}" title="${escapeHtml(p.player.name)}">${escapeHtml(p.player.name)}</button><div class="tiny score-player-tee">${escapeHtml(getPlayerHoleTeeInfo(match, p, currentHole - 1, tee).label)}${canEdit ? '' : ' · locked'}</div></td>
-        <td>${escapeHtml(getTeamLabel(match, p.team))}</td>
+        <td><button type="button" class="player-detail-trigger score-player-name" data-player-detail="${escapeHtml(p.playerId)}" title="${escapeHtml(p.player.name)}">${escapeHtml(p.player.name)}</button><div class="tiny score-player-tee">${escapeHtml(getPlayerHoleTeeInfo(match, p, currentHole - 1, tee).label)}${canEdit ? '' : ' · locked'}</div>${strokeDistribution ? `<div class="tiny score-player-stroke-distribution">${escapeHtml(strokeDistribution.label)}</div>` : ''}</td>
         <td><div class="gross-score-stepper" role="group" aria-label="Gross score for ${escapeHtml(p.player.name)}"><button type="button" class="score-step-btn" data-score-step="down" data-score-step-player="${escapeHtml(p.playerId)}" ${canEdit ? '' : 'disabled'}>−</button><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="next" autocomplete="off" min="1" max="15" data-score-player="${p.playerId}" data-score-locked="${canEdit ? '0' : '1'}" title="${canEdit ? 'Enter score' : 'You can only score your assigned players.'}" data-hole-par="${Number(playerHole?.par || hole?.par || 4) || 4}" placeholder="—" value="${gross}" ${canEdit ? '' : 'disabled'} /><button type="button" class="score-step-btn" data-score-step="up" data-score-step-player="${escapeHtml(p.playerId)}" ${canEdit ? '' : 'disabled'}>+</button></div></td>
         <td class="score-strokes-cell">${formatStrokesDisplay(strokes)}</td>
-        <td>${net === '' ? '—' : net}</td>
+        <td class="score-net-cell">${net === '' ? '—' : net}</td>
       </tr>
     `;
+    }).join('');
+    return `${teamHeading}${playerRows}`;
   }).join('');
 }
 
@@ -15816,7 +15919,7 @@ function updateLiveNetForScoreInput(inputEl) {
   const strokes = holeStrokeAllowanceForPlayer(playerHole?.strokeIndex, playerMetric.playHdcp, metrics.lowPlaying);
   const raw = String(inputEl.value || '').trim();
   const gross = Number(raw);
-  const netCell = inputEl.closest('tr')?.children?.[4];
+  const netCell = inputEl.closest('tr')?.querySelector?.('.score-net-cell');
   if (!netCell) return;
   netCell.textContent = raw && Number.isFinite(gross) ? String(gross - strokes) : '';
 }
@@ -16422,7 +16525,7 @@ function buildSelectedGamesSummary(match, metrics) {
     let value = 'Live';
     let sub = '';
     if (cfg.key === 'nassau') {
-      const diffs = computeTeamGameDiffs(match, metrics, cfg.key);
+      const diffs = computeNassauDiffsForBasis(metrics, cfg.basis === 'gross' ? 'gross' : 'net', cfg);
       value = completion.isIncomplete ? formatTeamGameStatusScoped(match, metrics, diffs.overall, completion) : formatTeamGameStatus(match, metrics, diffs.overall);
       const frontStake = Number(cfg.stakesFront || 0);
       const backStake = Number(cfg.stakesBack || 0);
@@ -20107,19 +20210,17 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   }
 
   function logMatchFinalizationDiagnostics(stage, payload = {}) {
-    if (!payload.error && window.dyeLedgerDebugDiagnostics !== true) return;
+    if (window.dyeLedgerDebugDiagnostics !== true) return;
     try {
       console.group('Match Finalization');
       console.log('Stage:', stage);
-      console.log('Course:', payload.courseId || payload.match?.courseId || '');
-      console.log('Tee:', payload.teeId || payload.match?.teeId || '');
-      console.log('Players:', payload.selectedPlayers || payload.match?.players || []);
-      console.log('Selected Holes:', payload.holeCount || payload.match?.holeCount || '');
+      console.log('Player Count:', Array.isArray(payload.selectedPlayers || payload.match?.players) ? (payload.selectedPlayers || payload.match?.players).length : 0);
+      console.log('Selected Holes:', Number(payload.holeCount || payload.match?.holeCount || 0));
       console.log('Shared Match:', payload.sharedMatchEnabled ?? (payload.match?.storageMode === 'shared'));
-      console.log('Assignments:', payload.match?.sharedPlayerAssignments || payload.existing?.sharedPlayerAssignments || {});
-      console.log('Round State:', { activeMatchId: state.activeMatchId, currentHole, editingMatchId, setupWorkflowMode });
-      if (payload.validationState) console.log('Validation:', payload.validationState);
-      if (payload.error) console.error('Match finalization failed:', payload.error, payload);
+      console.log('Assignment Count:', Object.keys(payload.match?.sharedPlayerAssignments || payload.existing?.sharedPlayerAssignments || {}).length);
+      console.log('Round State:', { hasActiveMatch: !!state.activeMatchId, currentHole, isEditing: !!editingMatchId, setupWorkflowMode });
+      if (payload.validationState) console.log('Validation:', { isValid: !!payload.validationState.isValid, missingRequirementCount: payload.validationState.missingRequirements?.length || 0 });
+      if (payload.error) console.error('Match finalization failed:', payload.error?.name || 'Error');
       console.groupEnd();
     } catch (diagErr) {
       console.warn('Match finalization diagnostics failed:', diagErr);
@@ -20359,6 +20460,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     document.getElementById('roundRecapControls')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   });
   document.getElementById('completedSummaryDoneBtn')?.addEventListener('click', exitCompletedSummaryToMatch);
+  document.getElementById('completedSummaryNewMatchBtn')?.addEventListener('click', () => { hidePostRoundActions(); startCleanNewMatchSetup(); });
   const postRoundInlineAnotherBtn = document.getElementById('postRoundInlineAnotherRoundBtn');
   if (postRoundInlineAnotherBtn) postRoundInlineAnotherBtn.addEventListener('click', startAnotherRoundWithSameGroup);
   const postRoundInlineNewBtn = document.getElementById('postRoundInlineNewMatchBtn');
@@ -20557,13 +20659,45 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('addMemoryCancelBtn')?.addEventListener('click', closeAddMemoryModal);
   document.getElementById('addMemoryDialog')?.addEventListener('click', e => { if (e.target?.id === 'addMemoryDialog') closeAddMemoryModal(); });
   document.getElementById('playerDetailCloseBtn')?.addEventListener('click', closePlayerDetailView);
-  document.getElementById('playerDetailDialog')?.addEventListener('click', e => { if (e.target?.id === 'playerDetailDialog') closePlayerDetailView(); });
+  document.getElementById('playerDetailDialog')?.addEventListener('click', e => {
+    if (e.target?.id === 'playerDetailDialog') return closePlayerDetailView();
+    const scorecardView = e.target.closest('[data-scorecard-net-view]');
+    const match = getActiveMatch();
+    const modal = document.getElementById('playerDetailDialog');
+    if (!scorecardView || !match || !modal?.dataset.playerId) return;
+    const key = String(match.id);
+    const current = uiState.classicScorecardViewByMatch[key] || {};
+    uiState.classicScorecardViewByMatch[key] = { ...current, mode: scorecardView.dataset.scorecardNetView === 'match' ? 'match' : 'course' };
+    openPlayerDetailView(modal.dataset.playerId);
+  });
   document.getElementById('quickScoreboardBtn')?.addEventListener('click', openQuickScoreboardView);
   document.getElementById('playPressBtn')?.addEventListener('click', openPressOpportunityCard);
   document.getElementById('quickScoreboardCloseBtn')?.addEventListener('click', closeQuickScoreboardView);
   document.getElementById('pressCancelBtn')?.addEventListener('click', closePressConfirmation);
   document.getElementById('pressConfirmBtn')?.addEventListener('click', confirmPendingPress);
-  document.getElementById('quickScoreboardDialog')?.addEventListener('click', e => { if (e.target?.id === 'quickScoreboardDialog') closeQuickScoreboardView(); });
+  document.getElementById('quickScoreboardDialog')?.addEventListener('click', e => {
+    if (e.target?.id === 'quickScoreboardDialog') return closeQuickScoreboardView();
+    const scorecardView = e.target.closest('[data-scorecard-net-view]');
+    const match = getActiveMatch();
+    if (!scorecardView || !match) return;
+    const key = String(match.id);
+    const current = uiState.classicScorecardViewByMatch[key] || {};
+    uiState.classicScorecardViewByMatch[key] = { ...current, mode: scorecardView.dataset.scorecardNetView === 'match' ? 'match' : 'course' };
+    openQuickScoreboardView();
+    const scorecard = document.querySelector('#quickScoreboardBody .quick-classic-scorecard');
+    if (scorecard) scorecard.open = true;
+  });
+  document.getElementById('quickScoreboardDialog')?.addEventListener('change', e => {
+    if (!e.target.matches('[data-scorecard-match-game]')) return;
+    const match = getActiveMatch();
+    if (!match) return;
+    const key = String(match.id);
+    const current = uiState.classicScorecardViewByMatch[key] || {};
+    uiState.classicScorecardViewByMatch[key] = { ...current, mode: 'match', gameKey: String(e.target.value || '') };
+    openQuickScoreboardView();
+    const scorecard = document.querySelector('#quickScoreboardBody .quick-classic-scorecard');
+    if (scorecard) scorecard.open = true;
+  });
   document.getElementById('score')?.addEventListener('click', async e => {
     const playerDetailBtn = e.target.closest('[data-player-detail]');
     if (playerDetailBtn) {
@@ -21507,6 +21641,9 @@ function installDyeLedgerLiveEngineAdapter() {
     getSneakySandyPoleyHonorsLine,
     buildSneakySandyPoleyRunningText,
     buildQuickScoreboardView,
+    buildPlayerDetailView,
+    getFeaturedCompetitionStrokeDistribution,
+    buildTeamGroupedScoreGridRows,
     buildQuickSettlementHero,
     buildQuickNassauResults,
     buildQuickGameSummary,
@@ -21558,6 +21695,7 @@ function installDyeLedgerLiveEngineAdapter() {
     buildEffectiveScoresContext,
     buildScoresOutcomeHero,
     buildScoresSettlement,
+    buildFrozenScoresGameSummary,
     buildRoundRecapPayload,
     validateRoundRecapContent,
     ensureRoundRecapMemoryCoverage,
@@ -21580,6 +21718,7 @@ function installDyeLedgerLiveEngineAdapter() {
     isSameCourseIdentity,
     findLikelyDuplicateCourses,
     getDedupedCourseOptions,
+    mergeSupabaseCourses,
     getPlayerHoleTeeInfo,
     buildScorecardImportRequestBody,
     getScorecardImportReviewWarnings,

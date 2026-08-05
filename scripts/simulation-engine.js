@@ -56,7 +56,11 @@ export function makeDefaultCourse() {
 }
 
 export function courseHandicap(index = 0, slope = 113, rating = 72, par = 72) {
-  return Math.round((Number(index) || 0) * (Number(slope) || 113) / 113 + ((Number(rating) || par) - (Number(par) || 72)));
+  return Math.round(unroundedCourseHandicap(index, slope, rating, par));
+}
+
+export function unroundedCourseHandicap(index = 0, slope = 113, rating = 72, par = 72) {
+  return (Number(index) || 0) * (Number(slope) || 113) / 113 + ((Number(rating) || par) - (Number(par) || 72));
 }
 
 export function playingHandicap(courseHdcp = 0, allowance = 100) {
@@ -96,9 +100,10 @@ export function computeMetrics(roundInput) {
   const round = normalizeRound(roundInput);
   const holes = round.course.holes.slice(0, round.holeCount);
   const players = round.players.map(player => {
-    const ch = courseHandicap(player.index, round.course.slope, round.course.rating, round.course.par);
+    const unroundedCh = unroundedCourseHandicap(player.index, round.course.slope, round.course.rating, round.course.par);
+    const ch = Math.round(unroundedCh);
     const ph = playingHandicap(ch, round.allowance);
-    return { ...player, courseHdcp: ch, playHdcp: ph, scores: (round.scores[player.id] || []).slice(0, round.holeCount) };
+    return { ...player, unroundedCourseHdcp: unroundedCh, courseHdcp: ch, playHdcp: ph, scores: (round.scores[player.id] || []).slice(0, round.holeCount) };
   });
   const lowPlaying = Math.min(...players.map(p => p.playHdcp));
   const holeResults = holes.map((hole, idx) => {
@@ -162,6 +167,35 @@ export function computeTeamDiffs(metrics, basis = 'net') {
     }
   });
   if (!diffs.winner && diffs.overall !== 0 && metrics.completed === metrics.holeCount) diffs.winner = diffs.overall > 0 ? 1 : 2;
+  return diffs;
+}
+
+export function computeNassauDiffs(metrics, config = {}) {
+  if (Number(config.scoringPolicyVersion || 0) < 1) return computeTeamDiffs(metrics, String(config.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net');
+  const basis = String(config.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net';
+  const countingBalls = Math.max(1, Math.min(6, Math.round(Number(config.countingBalls) || 1)));
+  const allowance = basis === 'gross' ? 0 : Math.max(0, Math.min(100, Number(config.handicapAllowancePercent) || 100));
+  const gameHandicaps = new Map(metrics.players.map(player => [player.id, Math.round(Number(player.unroundedCourseHdcp) * allowance / 100)]));
+  const lowGameHandicap = Math.min(...gameHandicaps.values());
+  const diffs = { front: 0, back: 0, overall: 0, closedAt: null, winner: 0 };
+  metrics.holeResults.forEach((hole, idx) => {
+    if (!hole.completed) return;
+    const teamTotal = team => {
+      const scores = hole.playerScores.filter(score => Number(metrics.players.find(player => player.id === score.playerId)?.team) === team);
+      if (scores.length < countingBalls || scores.some(score => !Number.isFinite(score.gross))) return null;
+      const values = scores.map(score => {
+        if (basis === 'gross') return Number(score.gross);
+        const gameHandicap = gameHandicaps.get(score.playerId);
+        const strokes = holeStrokeAllowanceForPlayer(hole.strokeIndex, gameHandicap, lowGameHandicap);
+        return Number(score.gross) - strokes;
+      }).sort((a, b) => a - b);
+      return values.slice(0, countingBalls).reduce((sum, value) => sum + value, 0);
+    };
+    const step = headToHead(teamTotal(1), teamTotal(2));
+    diffs.overall += step;
+    if (idx < 9) diffs.front += step;
+    else diffs.back += step;
+  });
   return diffs;
 }
 
@@ -291,7 +325,7 @@ export function computePayouts(roundInput) {
     }
     if (cfg.key === 'nassau') {
       const basis = String(cfg.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net';
-      const diffs = computeTeamDiffs(metrics, basis);
+      const diffs = computeNassauDiffs(metrics, { ...cfg, basis });
       const amounts = {};
       [['front', cfg.stakesFront], ['back', cfg.stakesBack], ['overall', cfg.stakesOverall]].forEach(([part, stake]) => {
         const diff = diffs[part];

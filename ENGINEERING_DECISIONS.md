@@ -532,6 +532,10 @@ Presses and Re-Presses inherit the complete parent scoring policy. Shared Match 
 
 Course Net means full signed Course Handicap. Match Net means competition-relative strokes under the selected game's stored allowance. These are separate scorecard views and report sections; neither may be mislabeled as the other.
 
+Game Handicaps are calculated by applying the saved game allowance to each player's unrounded Course Handicap and rounding each result individually. Competition-relative strokes are then allocated from the lowest rounded Game Handicap. Subtracting unrounded Course Handicaps before applying the allowance is prohibited because it can produce a different stroke allocation.
+
+For unequal-team Nassau settlement, each player on the losing team owes one saved component stake. The collected amount is divided equally among the players on the winning team. This contract must be presented and tested explicitly; it must not be inferred from equal-team assumptions.
+
 Status: Locked.
 
 ---

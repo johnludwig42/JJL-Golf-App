@@ -423,3 +423,7 @@ Every release should either:
 ## 18. Current release — v30.3.88
 
 v30.3.88 is a focused Course Library Reliability release with a deterministic AI Recap weather-coverage refinement. It treats common United States country labels as one matching identity, prevents an identical reviewed scorecard import from creating another local record, paginates cloud hole catalogs beyond 1,000 rows, protects complete local tees from partial cloud responses, and guarantees verified match-start weather appears either naturally in the recap or in a final Weather section after Memories. Existing course records, round snapshots, local persistence keys, scoring, settlement, and Supabase data remain unchanged; cleanup of historical duplicates is deliberately deferred.
+
+## 19. Current development release — v30.3.89
+
+v30.3.89 is a Shared Match Reliability & Reporting release. It adds explicit Round Progress synchronization, parity-gated Shared Match completion, delayed older-hole convergence coverage, clearer synchronization states, responsive settlement rows, complete Greenies net positions, additive full-name/nickname fields, accurate build timestamps, clearer turning-point headings, and deterministic PDF section pagination. It preserves all existing local rounds and introduces no production database or policy change.

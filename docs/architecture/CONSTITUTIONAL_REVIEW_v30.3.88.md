@@ -7,6 +7,7 @@
 - **Principle 8 — Information Classes:** Mutable course catalog labels are normalized for comparison without becoming historical identity keys.
 - **Principle 10 — Versioned History:** No completed RoundRecord or prior version is overwritten.
 - **Principle 13 — The Round:** Verified match-start weather may enrich the Round Story while remaining explicitly scoped to the captured startup conditions.
+- **Principle 23 — Privacy, Deletion & Historical Preservation:** Paginated catalog reads and partial-response guards prevent accidental local degradation without deleting or rewriting cloud catalog records.
 - **Principle 23 — Privacy, Deletion & Historical Preservation:** No automatic deletion or destructive duplicate cleanup occurs.
 
 ## Compliance conclusion

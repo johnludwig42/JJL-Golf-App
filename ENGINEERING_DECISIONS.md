@@ -605,3 +605,5 @@ Compatibility and safety: Existing local records, course IDs, cloud links, round
 Status: Approved and implemented locally for v30.3.88; external deployment not performed.
 
 AI Recap weather addendum: Verified match-start weather is a required recap fact when present. Generated prose may integrate it naturally; otherwise the client appends a deterministic final Weather section after any missing-Memory fallback. The fallback uses only recorded conditions, temperature, humidity, and wind, labels the timing as match startup, excludes coordinates, and never blocks recap availability when weather was not captured.
+
+Cloud catalog pagination addendum: Browser catalog reads must not assume a single Supabase response contains every `course_holes` row. Hole rows are retrieved in deterministic, bounded pages until exhaustion. A cloud tee that is missing any expected hole cannot replace a complete local tee. This guard affects retrieval and local merging only; it performs no cloud deletion, rewrite, or cleanup.

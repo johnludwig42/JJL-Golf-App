@@ -13,6 +13,9 @@ v30.3.88 is a focused Course Library Reliability release. It prevents repeated i
 - Focused deterministic tests cover alias matching, rendered-option deduplication, storage preservation, and repeated imports.
 - Verified match-start weather is now guaranteed in the displayed AI Recap: it remains integrated in the narrative when present there, or is appended in a final Weather section after any Round Memories section.
 - The deterministic weather fallback includes available conditions, temperature, humidity, and wind without exposing location coordinates or inventing unavailable readings.
+- Cloud `course_holes` reads are now deterministically paginated beyond Supabase's 1,000-row response boundary.
+- A partial cloud tee response can no longer replace a complete local 18-hole tee.
+- Read-only cloud verification confirmed Purgatory Golf Club and Chatham Hills each retain six complete 18-hole, par-72 tee records; no repair write or re-import was required.
 
 ## Recovery finding
 
@@ -33,3 +36,4 @@ The user-provided August 5 export contains 30 local course records and 18 matche
 3. Import and save a complete scorecard once.
 4. Repeat the identical import and confirm the app says it is already saved and does not increase the local course count.
 5. Import materially different course data with a matching name/location and confirm the existing duplicate warning remains available.
+6. Refresh a cloud catalog containing more than 1,000 hole rows and confirm every tee still exposes holes 1–18 with correct par and yardage totals.

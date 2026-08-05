@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.89',
-  versionNumber: '30.3.89',
-  cacheName: 'the-dye-ledger-v30.3.89',
-  buildDate: '2026-08-05T21:17:30.000Z',
-  buildLabel: 'Shared Match Reliability & Reporting'
+  version: 'v30.3.90',
+  versionNumber: '30.3.90',
+  cacheName: 'the-dye-ledger-v30.3.90',
+  buildDate: '2026-08-05T23:43:55.000Z',
+  buildLabel: 'Shared Match Code Compatibility'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -656,8 +656,13 @@ function normalizeMatchCode(value = '') {
   return compact.slice(0, 16);
 }
 function normalizeJoinMatchCode(value = '') {
-  const compact = String(value || '').trim().toUpperCase().replace(/\s+/g, '');
-  return /^DYE-[1-9]{6}$/.test(compact) ? compact : '';
+  const compact = String(value || '').trim().toUpperCase();
+  if (/^DYE-[1-9]{6}$/.test(compact)) return compact;
+  // Shared Matches created before canonical DYE codes used the app's
+  // 12-character local-first identifier as the cloud row ID. Preserve that
+  // identifier exactly so an in-progress historical match remains joinable.
+  if (/^[A-Z0-9]{12}$/.test(compact)) return compact;
+  return '';
 }
 function generateSharedMatchCode(random = Math.random) {
   const digits = Array.from({ length: 6 }, () => String(1 + Math.min(8, Math.floor(Number(random()) * 9)))).join('');
@@ -673,6 +678,9 @@ async function generateUniqueSharedMatchCode(codeExists, { random = Math.random,
 }
 function isCanonicalSharedMatchCode(value = '') {
   return /^DYE-[1-9]{6}$/.test(String(value || '').trim().toUpperCase());
+}
+function isLegacySharedMatchCode(value = '') {
+  return /^[A-Z0-9]{12}$/.test(String(value || '').trim().toUpperCase());
 }
 
 function getDefaultSharedDeviceLabel(match = null, deviceId = null) {
@@ -18887,6 +18895,7 @@ function renderSetupSharedAdminPanel() {
   const isHost = isCurrentDeviceMatchHost(match);
   const mode = normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device');
   const code = normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || '');
+  const codeLabel = isLegacySharedMatchCode(code) ? 'Legacy Match Code' : 'Shared Match Code';
   let participants = getSharedAssignmentParticipants(match);
   let devices = getSharedAssignmentDevices(match);
   if (match.sharedMatchId && hasSupabaseConfig() && isHost && !sharedParticipantPanelRefreshPending) {
@@ -18945,7 +18954,7 @@ function renderSetupSharedAdminPanel() {
       <span class="setup-role-badge">${isHost ? 'Host' : 'Joined'}</span>
     </div>
     <div class="shared-match-panel top-gap shared-match-status-${escapeHtml(sync.tone)}">
-      <div class="shared-match-code"><span>Shared Match Code</span><strong>${escapeHtml(code || '—')}</strong><div class="tiny">Players can join this match using the code above.</div></div>
+      <div class="shared-match-code"><span>${escapeHtml(codeLabel)}</span><strong>${escapeHtml(code || '—')}</strong><div class="tiny">${isLegacySharedMatchCode(code) ? 'This existing match keeps its original code. Enter it exactly as shown to join.' : 'Players can join this match using the code above.'}</div></div>
       <div class="shared-status-grid top-gap">
         <div><div class="tiny">Connection</div><strong>${escapeHtml(getSharedOnlineLabel())}</strong></div>
         <div><div class="tiny">Status</div><strong>${escapeHtml(sync.label)}</strong></div>
@@ -20281,7 +20290,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const input = document.getElementById('setupJoinMatchCodeInput');
     const deviceName = setStoredSharedDeviceName(String(nameInput?.value || '').trim() || 'Joined Device');
     const matchId = normalizeJoinMatchCode(input?.value || '');
-    if (!matchId) return toast('Enter a Match Code like DYE-532835 using six digits from 1 through 9.');
+    if (!matchId) return toast('Enter a code like DYE-532835, or the 12-character legacy code shown by the host.');
     try {
       const joined = await loadSharedMatchFromCloud(matchId, { activate: true, silent: false, requireRegistration: true });
       setupWorkflowMode = 'join';

@@ -427,3 +427,6 @@ v30.3.88 is a focused Course Library Reliability release with a deterministic AI
 ## 19. Current development release — v30.3.89
 
 v30.3.89 is a Shared Match Reliability & Reporting release. It adds explicit Round Progress synchronization, parity-gated Shared Match completion, delayed older-hole convergence coverage, clearer synchronization states, responsive settlement rows, complete Greenies net positions, additive full-name/nickname fields, accurate build timestamps, clearer turning-point headings, and deterministic PDF section pagination. It preserves all existing local rounds and introduces no production database or policy change.
+# v30.3.90 Shared Match code compatibility
+
+New Shared Matches use only `DYE-######`. Existing 12-character Shared Match identifiers remain joinable through the normal Match workflow without re-keying an active or historical match. Join codes remain locators, not Account, Golfer Identity, Device, role, participation, or scoring-assignment keys.

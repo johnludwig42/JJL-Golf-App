@@ -322,7 +322,7 @@ test('responsive source paths contain internal scrolling, width-fit momentum, de
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
   const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
-  assert.match(html, /src="\.\/branding\/apple-touch-icon-v30\.3\.89\.png" alt="The Dye Ledger"/);
+  assert.match(html, /src="\.\/branding\/apple-touch-icon-v30\.3\.90\.png" alt="The Dye Ledger"/);
   assert.match(html, /id="playMatchSummary"[^>]*aria-label="Match Summary"/);
   assert.match(css, /\.table-scroll-region\{[^}]*overflow-x:auto[^}]*overflow-y:hidden/);
   assert.match(css, /\.quick-scoreboard-modal\{[^}]*overflow-x:hidden/s);
@@ -343,8 +343,8 @@ test('Quick Scoreboard reuses the native bounded scorecard scroller and Play Gre
   assert.match(css, /\.scorecard-wrap\{position:relative;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;/);
   assert.match(css, /@media \(max-width:760px\)\{\.scorecard-table\{min-width:920px\}\}/);
   assert.match(css, /\.quick-classic-scorecard>\.scorecard-wrap,\.quick-score-distribution>\.score-distribution-scroll\{width:calc\(100% - 24px\);max-width:calc\(100% - 24px\);/);
-  assert.match(html, /style\.css\?v=30\.3\.89&amp;rev=1/);
-  assert.match(app, /cacheName: 'the-dye-ledger-v30\.3\.89'/);
+  assert.match(html, /style\.css\?v=30\.3\.90&amp;rev=1/);
+  assert.match(app, /cacheName: 'the-dye-ledger-v30\.3\.90'/);
   assert.match(css, /#greeniesEntryWrap \.greenies-check\{min-height:44px;padding:4px 9px;gap:7px\}/);
   assert.match(css, /#greeniesEntryWrap \.greenies-check input\[type="checkbox"\]\{width:20px;height:20px;min-height:20px;padding:0\}/);
   assert.match(html, /id="greeniesEntryWrap" class="top-gap hidden"/);

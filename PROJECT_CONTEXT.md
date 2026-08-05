@@ -175,10 +175,10 @@ Recent releases:
 - v30.3.41 — Effortless Scoring Polish
 - v30.3.42 — Duplicate Course Dropdown Fix and initial documentation work
 
-Current release implementation (updated August 2, 2026):
+Current release implementation (updated August 4, 2026):
 
 ```text
-v30.3.85 — Round Completion & Story Reliability
+v30.3.86 — Scoring Integrity & Audit Remediation
 ```
 
 ## 8. Near-Term Roadmap
@@ -216,7 +216,7 @@ v30.3.85 — Round Completion & Story Reliability
    - Define concise output limits, supported section omission, draft/edit/accept behavior, attribution, and post-freeze Amendment Session boundaries
    - Add deterministic contradiction checks and canned acceptance fixtures for normal, incomplete, no-notes, weather-heavy, dramatic, one-sided, Shared Match, stats-heavy, social, and sensitive-content rounds
    - Validate any server change only in an explicitly configured non-production environment; deployment requires separate Product Owner approval
-8. v30.3.85 — Round Completion & Story Reliability (in development)
+8. v30.3.85 — Round Completion & Story Reliability (completed)
    - Explicit stat review before automatic finish
    - Editable active-round Memories with stable attribution
    - Clear post-round AI Recap generation and review
@@ -224,14 +224,20 @@ v30.3.85 — Round Completion & Story Reliability
    - Versioned two-team Nassau Best N scoring for one to six players per team, including unequal rosters and incomplete-hole protection
    - Game-specific Nassau allowance recommendations/customization, inherited Press policy, and fail-closed Shared Match compatibility
    - Explicit Course Net versus Match Net scorecards, including signed plus-handicap Course Net allocation
-9. Insights Foundation
+9. v30.3.86 — Scoring Integrity & Audit Remediation (in development)
+   - Route every Nassau result through the authoritative saved Best N policy
+   - Apply and round each Game Handicap before allocating relative strokes
+   - Preserve completed-round Memories pending Amendment Sessions and keep Shared Match Memories append-only pending conflict-safe revision sync
+   - Redact private diagnostics, repair structural HTML, and strengthen release coverage
+   - Define unequal-team Nassau stakes as per losing player, divided equally among winning players
+10. Insights Foundation
    - Versioned filter/result contracts, local legacy adapter, eligibility rules, and data-coverage audit
    - Question-first, deterministic, offline analytics before AI coaching
-10. Beta Account Activation, Account UX & More Navigation
+11. Beta Account Activation, Account UX & More Navigation
    - Apply the shared design system first to More
    - Organize Account & Security, Preferences, Press Preferences, Shared Match & Connectivity, Data & Diagnostics, and About as focused destinations
-11. Cloud Security & Ownership Activation
-12. Library & Courses Navigation
+12. Cloud Security & Ownership Activation
+13. Library & Courses Navigation
    - Canonical course coordinates, provenance, correction, and catalog-backed nearby lookup
    - On-device nearby sorting for saved courses when trustworthy coordinates are available
    - Apply the shared design system to Rounds, Golfers, Courses, Match Templates, and Memories after ownership/catalog boundaries are ready

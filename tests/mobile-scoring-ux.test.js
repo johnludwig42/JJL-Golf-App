@@ -21,6 +21,130 @@ function render(match) {
 }
 const winningScores = { p1: [4,4,4,4,4,4,4,4,4], p2: [4,4,4,4,4,4,4,4,4], p3: [5,5,5,5,5,5,5,5,5], p4: [5,5,5,5,5,5,5,5,5] };
 
+test('Play scoring groups players beneath full-width team headings without duplicating the Team column', () => {
+  const fixture = render(buildMatch({ teamNames: ['Brian & Phil', 'Tom & John'], scores: winningScores }));
+  const html = fixture.engine.buildTeamGroupedScoreGridRows(
+    fixture.match,
+    fixture.metrics.tee,
+    fixture.metrics,
+    fixture.metrics.players,
+    fixture.metrics.tee.holes[0],
+  );
+  assert.match(html, /score-team-heading[^>]*data-score-team="1"[\s\S]*Brian &amp; Phil/);
+  assert.match(html, /score-team-heading[^>]*data-score-team="2"[\s\S]*Tom &amp; John/);
+  assert.equal((html.match(/score-team-heading/g) || []).length, 2);
+  assert.doesNotMatch(html, />2 players</);
+  assert.equal((html.match(/data-score-player=/g) || []).length, 4);
+  assert.equal((html.match(/score-net-cell/g) || []).length, 4);
+  assert.doesNotMatch(html, /<td>Brian &amp; Phil<\/td>|<td>Tom &amp; John<\/td>/);
+});
+
+test('Play shows actual Featured Competition Gets split from saved stroke indexes', () => {
+  const engine = loadLiveEngine();
+  const fullPlayers = [
+    { id: 'low', name: 'Low', index: 0 },
+    { id: 'six', name: 'Six', index: 6 },
+    { id: 'other-a', name: 'Other A', index: 0 },
+    { id: 'other-b', name: 'Other B', index: 0 },
+  ];
+  const holes = Array.from({ length: 18 }, (_, index) => ({
+    holeNumber: index + 1,
+    par: 4,
+    yardage: 400,
+    strokeIndex: index < 9 ? (index * 2) + 1 : ((index - 9) * 2) + 2,
+  }));
+  const fullCourse = { id: 'full-course', name: 'Full Course', tees: [{ id: 'full-tee', teeName: 'White', rating: 72, slope: 113, par: 72, holes }] };
+  const match = {
+    id: 'stroke-distribution', courseId: fullCourse.id, teeId: 'full-tee', holeCount: 18,
+    teamCount: 2, playersPerTeam: 2, teamNames: ['One', 'Two'], allowance: 100,
+    featuredCompetition: 'nassau',
+    selectedGames: [{ key: 'nassau', basis: 'net', countingBalls: 1, scoringPolicyVersion: 1, handicapAllowanceMode: 'recommended', handicapAllowancePercent: 90 }],
+    players: fullPlayers.map((player, index) => ({ playerId: player.id, team: index < 2 ? 1 : 2, teeId: 'full-tee', scores: scoreRows([]) })),
+  };
+  const state = engine.seedState({ players: fullPlayers, courses: [fullCourse], matches: [match], activeMatchId: match.id });
+  const live = state.matches[0];
+  const metrics = engine.computeMatchMetrics(live);
+  const distribution = engine.getFeaturedCompetitionStrokeDistribution(live, metrics.tee, metrics, metrics.players.find(player => player.playerId === 'six'));
+  assert.deepEqual({ ...distribution }, { total: 5, front: 3, back: 2, label: 'Gets 5 · Front 3 · Back 2' });
+});
+
+test('Play labels a nine-hole side from the selected holes rather than received strokes', () => {
+  const fixture = render(buildMatch({ selectedGames: [{ key: 'nassau', basis: 'net', countingBalls: 1, scoringPolicyVersion: 1, handicapAllowancePercent: 90 }] }));
+  fixture.match.featuredCompetition = 'nassau';
+  const distribution = fixture.engine.getFeaturedCompetitionStrokeDistribution(
+    fixture.match,
+    fixture.metrics.tee,
+    fixture.metrics,
+    fixture.metrics.players[0],
+  );
+  assert.equal(distribution.total, 0);
+  assert.equal(distribution.label, 'Gets 0 · Front 9');
+});
+
+test('player detail Classic scorecard offers the shared Course Net and Match Net controls', () => {
+  const engine = loadLiveEngine();
+  const handicapPlayers = players.map((player, index) => ({ ...player, index: [5, 10, 12, 15][index] }));
+  const match = buildMatch({ selectedGames: [{ key: 'nassau', basis: 'net', countingBalls: 1, scoringPolicyVersion: 1, handicapAllowancePercent: 90 }], scores: winningScores });
+  match.featuredCompetition = 'nassau';
+  const state = engine.seedState({ players: handicapPlayers, courses: [structuredClone(course)], matches: [match], activeMatchId: match.id });
+  const metrics = engine.computeMatchMetrics(state.matches[0]);
+  const html = engine.buildPlayerDetailView(state.matches[0], metrics, metrics.players[0].playerId);
+  assert.match(html, /<span>Gross<\/span><strong>36<\/strong>/);
+  assert.match(html, /<span>Course Net<\/span><strong>31<\/strong>/);
+  assert.match(html, /<span>Match Net<\/span><strong>36<\/strong>/);
+  assert.doesNotMatch(html, /<span>Net<\/span>/);
+  assert.match(html, /data-scorecard-net-view="course"[\s\S]*Course Net/);
+  assert.match(html, /data-scorecard-net-view="match"[\s\S]*Match Net/);
+});
+
+test('completed Match Summary exposes a safe Create New Match action while retaining Save Hole Scores', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+  assert.match(html, /id="completedSummaryNewMatchBtn"[^>]*>Create New Match<\/button>/);
+  assert.match(app, /completedSummaryNewMatchBtn[^\n]*startCleanNewMatchSetup/);
+  assert.match(html, /id="saveScoresBtn"[^>]*>Save Hole Scores<\/button>/);
+});
+
+test('compact Play player metadata preserves a full-cell tap target without shrinking score controls', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  assert.match(html, /<th>Strokes<\/th>/);
+  assert.doesNotMatch(html, /<th>Game Stroke<\/th>/);
+  assert.match(css, /score-player-name\{[\s\S]*min-height:0!important;[\s\S]*height:auto;[\s\S]*line-height:1\.15;/);
+  assert.match(css, /score-player-name\{[\s\S]*max-width:calc\(100% - 12px\);[\s\S]*margin-left:12px;/);
+  assert.match(css, /score-player-name::after\{[\s\S]*position:absolute;[\s\S]*inset:0;/);
+  assert.match(css, /score-team-heading th\{[\s\S]*background:#f4f8f5;[\s\S]*box-shadow:inset 3px 0 0/);
+  assert.match(css, /gross-score-stepper \.score-input\{[\s\S]*min-height:34px!important/);
+});
+
+test('Quick Scoreboard Classic Scorecard offers Course Net and Match Net from the shared scorecard engine', () => {
+  const fixture = render(buildMatch({ selectedGames: [{ key: 'nassau', basis: 'net', countingBalls: 1, scoringPolicyVersion: 1, handicapAllowancePercent: 90 }], scores: winningScores }));
+  fixture.match.featuredCompetition = 'nassau';
+  const html = fixture.engine.buildQuickScoreboardView(fixture.match, fixture.metrics, fixture.engine.getDefaultPlayerPreferences());
+  assert.match(html, /data-scorecard-net-view="course"[\s\S]*Course Net/);
+  assert.match(html, /data-scorecard-net-view="match"[\s\S]*Match Net/);
+});
+
+test('Scores escapes ampersands in team names exactly once', () => {
+  const fixture = render(buildMatch({ teamNames: ['Brian & Phil', 'Tom & John'], scores: winningScores, status: 'complete' }));
+  fixture.match.featuredCompetition = 'nassau';
+  const context = fixture.engine.buildEffectiveScoresContext(fixture.match, fixture.metrics);
+  const outcome = fixture.engine.getScoresFeaturedOutcome(context);
+  const html = fixture.engine.buildScoresOutcomeHero(context);
+  assert.match(outcome.result, /Brian & Phil/);
+  assert.doesNotMatch(outcome.result, /&amp;/);
+  assert.match(html, /Brian &amp; Phil/);
+  assert.doesNotMatch(html, /Brian &amp;amp; Phil/);
+});
+
+test('legacy frozen Games Summary decodes stored entities and escapes them once for display', () => {
+  const html = render(buildMatch()).engine.buildFrozenScoresGameSummary({
+    games: [{ type: 'nassau', result: { result: 'Brian &amp; Phil (Brian Warner, Phil Bounsall) 3 up' }, amounts: { p1: 10 } }],
+  });
+  assert.match(html, /Brian &amp; Phil \(Brian Warner, Phil Bounsall\) 3 up/);
+  assert.doesNotMatch(html, /Brian &amp;amp; Phil/);
+});
+
 test('truthful game status covers concrete live, final, tied, incomplete, and not-started states', () => {
   const liveNassau = render(buildMatch({ scores: Object.fromEntries(Object.entries(winningScores).map(([id, rows]) => [id, rows.slice(0, 4)])) }));
   assert.match(liveNassau.engine.getTruthfulGameStatus(liveNassau.match, liveNassau.metrics, 'nassau'), /Team|John|\+4|thru 4/i);
@@ -198,7 +322,7 @@ test('responsive source paths contain internal scrolling, width-fit momentum, de
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
   const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
-  assert.match(html, /src="\.\/branding\/apple-touch-icon-v30\.3\.85\.png" alt="The Dye Ledger"/);
+  assert.match(html, /src="\.\/branding\/apple-touch-icon-v30\.3\.86\.png" alt="The Dye Ledger"/);
   assert.match(html, /id="playMatchSummary"[^>]*aria-label="Match Summary"/);
   assert.match(css, /\.table-scroll-region\{[^}]*overflow-x:auto[^}]*overflow-y:hidden/);
   assert.match(css, /\.quick-scoreboard-modal\{[^}]*overflow-x:hidden/s);
@@ -213,14 +337,14 @@ test('Quick Scoreboard reuses the native bounded scorecard scroller and Play Gre
   const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
   const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   assert.match(css, /body\s*\{\s*touch-action:\s*auto;/);
-  assert.match(app, /quick-classic-scorecard"\$\{quickPreferences\.classicScorecardExpanded \? ' open' : ''\}><summary>Classic Scorecard<\/summary>\$\{buildClassicScorecard\(match, metrics, \{ readOnly: true \}\)\}<\/details>/);
+  assert.match(app, /quick-classic-scorecard"\$\{quickPreferences\.classicScorecardExpanded \? ' open' : ''\}><summary>Classic Scorecard<\/summary>\$\{buildClassicScorecardPanel\(match, metrics, \{ readOnly: true \}\)\}<\/details>/);
   assert.doesNotMatch(app, /quick-classic-scorecard[^\n]*quick-scroll-panel/);
   assert.match(app, /class="scorecard-wrap table-scroll-region" data-scroll-table="classic-scorecard" tabindex="0" role="region" aria-label="Classic scorecard; scroll horizontally to view all holes"/);
   assert.match(css, /\.scorecard-wrap\{position:relative;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;/);
   assert.match(css, /@media \(max-width:760px\)\{\.scorecard-table\{min-width:920px\}\}/);
   assert.match(css, /\.quick-classic-scorecard>\.scorecard-wrap,\.quick-score-distribution>\.score-distribution-scroll\{width:calc\(100% - 24px\);max-width:calc\(100% - 24px\);/);
-  assert.match(html, /style\.css\?v=30\.3\.85&amp;rev=8/);
-  assert.match(app, /cacheName: 'the-dye-ledger-v30\.3\.85'/);
+  assert.match(html, /style\.css\?v=30\.3\.86&amp;rev=9/);
+  assert.match(app, /cacheName: 'the-dye-ledger-v30\.3\.86'/);
   assert.match(css, /#greeniesEntryWrap \.greenies-check\{min-height:44px;padding:4px 9px;gap:7px\}/);
   assert.match(css, /#greeniesEntryWrap \.greenies-check input\[type="checkbox"\]\{width:20px;height:20px;min-height:20px;padding:0\}/);
   assert.match(html, /id="greeniesEntryWrap" class="top-gap hidden"/);

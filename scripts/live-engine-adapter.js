@@ -196,7 +196,7 @@ export function evaluateRoundWithLiveEngine(roundInput, options = {}) {
   const match = engine.seedState({ courses: [liveMatch.course], players: liveMatch.players, matches: [liveMatch.match], activeMatchId: liveMatch.match.id }).matches[0];
   const metrics = engine.computeMatchMetrics(match);
   const context = engine.getPayoutReportContext(match, metrics);
-  const finalTotals = normalizeAmounts(context.finalTotals || {});
+  const finalTotals = normalizeAmounts(Object.fromEntries(liveMatch.players.map(player => [player.id, Number(context.finalTotals?.[player.id] || 0)])));
   const games = (context.payoutGames || []).map(game => ({
     key: normalizeLiveGameKey(game),
     liveKey: game.key,

@@ -364,7 +364,7 @@ test('shared Classic Scorecard scroller preserves 18-hole and 9-hole final colum
   const full = fixture(undefined, 5);
   const fullBefore = JSON.stringify(full.match);
   const fullHtml = full.engine.buildQuickScoreboardView(full.match, full.metrics);
-  assert.match(fullHtml, /<details class="[^"]*quick-classic-scorecard"><summary>Classic Scorecard<\/summary><div class="scorecard-sub tiny">/);
+  assert.match(fullHtml, /<details class="[^"]*quick-classic-scorecard"><summary>Classic Scorecard<\/summary><div class="scorecard-view-controls">[\s\S]*<div class="scorecard-sub tiny">/);
   assert.match(fullHtml, /<div class="scorecard-wrap table-scroll-region" data-scroll-table="classic-scorecard" tabindex="0" role="region"/);
   assert.match(fullHtml, />H18<\/th>/);
   assert.match(fullHtml, /<th>Out<\/th><th>In<\/th><th>Total<\/th>/);

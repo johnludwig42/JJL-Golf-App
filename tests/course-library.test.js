@@ -134,6 +134,55 @@ test('missing non-terminal hole is named and a complete 18-hole import needs no 
   assert.equal(complete.warnings.length, 0);
 });
 
+test('cloud refresh cannot overwrite or absorb a complete unsynced scorecard import', () => {
+  const engine = loadLiveEngine();
+  const imported = course('local-import', 'Purgatory Golf Club', 'Noblesville');
+  imported.source = 'scorecard-import';
+  imported.cloudSyncState = 'local-draft';
+  imported.tees[0].teeName = 'White';
+  imported.tees[0].par = 72;
+
+  const staleCloud = course('cloud-course', 'Purgatory Golf Club', 'Noblesville');
+  staleCloud.source = 'supabase';
+  staleCloud.cloudCourseId = staleCloud.id;
+  staleCloud.tees[0].teeName = 'White';
+  staleCloud.tees[0].holes = staleCloud.tees[0].holes.slice(0, 16);
+  staleCloud.tees[0].par = 64;
+
+  const state = engine.seedState({ players: [], courses: [imported], matches: [], activeMatchId: null });
+  engine.mergeSupabaseCourses([staleCloud]);
+
+  const savedImport = state.courses.find(row => row.id === imported.id);
+  assert.equal(state.courses.length, 2);
+  assert.equal(savedImport.cloudSyncState, 'local-draft');
+  assert.equal(savedImport.tees[0].holes.length, 18);
+  assert.equal(savedImport.tees[0].par, 72);
+});
+
+test('cloud refresh preserves pending local tee repairs for an established cloud course', () => {
+  const engine = loadLiveEngine();
+  const pending = course('local-cache', 'Purgatory Golf Club', 'Noblesville');
+  pending.cloudCourseId = 'cloud-course';
+  pending.source = 'scorecard-import';
+  pending.cloudSyncState = 'pending-sync';
+  pending.tees[0].teeName = 'White';
+
+  const staleCloud = course('cloud-course', 'Purgatory Golf Club', 'Noblesville');
+  staleCloud.source = 'supabase';
+  staleCloud.cloudCourseId = staleCloud.id;
+  staleCloud.tees[0].teeName = 'White';
+  staleCloud.tees[0].holes = staleCloud.tees[0].holes.slice(0, 16);
+  staleCloud.tees[0].par = 64;
+
+  const state = engine.seedState({ players: [], courses: [pending], matches: [], activeMatchId: null });
+  engine.mergeSupabaseCourses([staleCloud]);
+
+  assert.equal(state.courses.length, 1);
+  assert.equal(state.courses[0].cloudSyncState, 'pending-sync');
+  assert.equal(state.courses[0].tees[0].holes.length, 18);
+  assert.equal(state.courses[0].tees[0].par, 72);
+});
+
 test('Play status line stays hidden when no competition is selected', () => {
   const engine = loadLiveEngine();
   const libraryCourse = course();

@@ -127,7 +127,7 @@ test('setup and scorecard UX expose the approved model without altering the clas
   assert.match(app, /scorecard-sticky-team/);
   assert.match(html, /id="setupFeaturedHandicapPreview"/);
   assert.match(html, /id="playStrokeBasisNote"/);
-  assert.match(html, /<th>Game Stroke<\/th>/);
+  assert.match(html, /<th>Strokes<\/th>/);
   assert.match(html, /data-setup-destination="games"[\s\S]*data-open-setup-destination=""[^>]*aria-label="Return to Match Setup"/);
   assert.match(app, /Featured Competition to show its handicap basis/);
   assert.match(app, /Featured Competition handicap preview is temporarily unavailable\. Match setup and scoring are unaffected\./);

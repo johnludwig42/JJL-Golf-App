@@ -39,13 +39,14 @@ test('Play stat matrix uses interaction provenance without a review checkbox', (
   assert.match(app, /All scores entered\. Use End Round when ready\./);
 });
 
-test('Scores exposes append-only attributed Memory revisions without rewriting frozen RoundRecords', () => {
+test('active local Memories retain revisions while completed and Shared Match Memories are append-only', () => {
   assert.match(app, /data-edit-memory/);
   assert.match(app, /updatedAt/);
   assert.match(app, /revisionHistory/);
   assert.match(app, /priorText: existing\.text/);
   assert.match(app, /roundRecordPreserved: isFrozenRoundRecord\(match\.roundRecordSnapshot\)/);
-  assert.doesNotMatch(app, /if \(!match \|\| !memory \|\| isFrozenRoundRecord\(match\.roundRecordSnapshot\)\) return false/);
+  assert.match(app, /match\.status === 'completed' \|\| isFrozenRoundRecord\(match\.roundRecordSnapshot\)/);
+  assert.match(app, /Shared Memories remain append-only until revision-safe, conflict-aware synchronization ships/);
 });
 
 test('destination navigation provides a second back control on long pages', () => {

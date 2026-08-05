@@ -273,5 +273,6 @@ FUTURE:
 - [x] Preserve all existing local courses and historical round snapshots without automatic cleanup or migration.
 - [x] Add deterministic coverage for alias matching, non-destructive rendering, and idempotent imports.
 - [x] Guarantee verified match-start weather appears in the AI Recap, with a final Weather fallback after Memories.
+- [x] Paginate cloud hole-catalog reads beyond 1,000 rows and reject partial cloud replacement of complete local tees.
 - [ ] Recover Purgatory Golf Club from an older export, another browser profile, or the inactive staging project if separately authorized.
 - [ ] Design an explicit, previewable historical duplicate-cleanup workflow; do not silently merge or delete records.

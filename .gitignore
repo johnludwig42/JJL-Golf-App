@@ -19,3 +19,5 @@ node_modules/
 coverage/
 *.log
 
+# Temporary document-review renders
+tmp/pdfs/

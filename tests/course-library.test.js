@@ -160,6 +160,42 @@ test('identical reviewed scorecards resolve to an existing saved course without 
   assert.equal(state.courses.length, 1);
 });
 
+test('cloud hole loading paginates beyond the Supabase 1,000-row response limit', async () => {
+  const engine = loadLiveEngine();
+  const sourceRows = Array.from({ length: 1116 }, (_, idx) => ({ id: `hole-${String(idx + 1).padStart(4, '0')}`, hole_number: (idx % 18) + 1 }));
+  const requestedRanges = [];
+  const client = {
+    from(table) {
+      assert.equal(table, 'course_holes');
+      return {
+        select() { return this; },
+        order(column) { assert.equal(column, 'id'); return this; },
+        async range(from, to) {
+          requestedRanges.push([from, to]);
+          return { data: sourceRows.slice(from, to + 1), error: null };
+        },
+      };
+    },
+  };
+  const rows = await engine.fetchAllSupabaseRows(client, 'course_holes');
+  assert.equal(rows.length, 1116);
+  assert.deepEqual(JSON.parse(JSON.stringify(requestedRanges)), [[0, 999], [1000, 1999]]);
+});
+
+test('partial cloud tee data cannot replace a complete local 18-hole tee', () => {
+  const engine = loadLiveEngine();
+  const local = course('local', 'Chatham Hills', 'Westfield').tees[0];
+  const cloud = JSON.parse(JSON.stringify(local));
+  cloud.id = 'cloud-tee';
+  cloud.cloudTeeId = 'cloud-tee';
+  cloud.holes = cloud.holes.slice(0, 17);
+  const merged = engine.mergeCloudTeePreservingCompleteLocal(local, cloud);
+  assert.equal(engine.getCourseTeeHoleCoverage(local).complete, true);
+  assert.equal(engine.getCourseTeeHoleCoverage(cloud, 18).complete, false);
+  assert.equal(merged.holes.length, 18);
+  assert.match(merged.cloudHoleCoverageWarning, /missing holes 18/);
+});
+
 test('cloud refresh cannot overwrite or absorb a complete unsynced scorecard import', () => {
   const engine = loadLiveEngine();
   const imported = course('local-import', 'Purgatory Golf Club', 'Noblesville');

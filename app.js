@@ -10924,6 +10924,31 @@ function isCourseBetterDropdownCandidate(candidate = {}, current = {}, selectedC
   if (candidateTees !== currentTees) return candidateTees > currentTees;
   return String(candidate.name || '').localeCompare(String(current.name || '')) < 0;
 }
+function getCourseTeeHoleCoverage(tee = {}, expectedHoleCount = null) {
+  const holeNumbers = [...new Set((Array.isArray(tee.holes) ? tee.holes : [])
+    .map((hole, idx) => Number(hole?.holeNumber) || idx + 1)
+    .filter(number => Number.isInteger(number) && number > 0))].sort((a, b) => a - b);
+  const inferredExpected = Number(expectedHoleCount) === 9 || Number(expectedHoleCount) === 18
+    ? Number(expectedHoleCount)
+    : (holeNumbers.some(number => number > 9) ? 18 : (holeNumbers.length >= 9 ? 9 : 18));
+  const missing = Array.from({ length: inferredExpected }, (_, idx) => idx + 1).filter(number => !holeNumbers.includes(number));
+  return { expectedHoleCount: inferredExpected, holeNumbers, missing, complete: missing.length === 0 };
+}
+function mergeCloudTeePreservingCompleteLocal(localTee = null, cloudTee = {}) {
+  if (!localTee) return cloudTee;
+  const localCoverage = getCourseTeeHoleCoverage(localTee);
+  const cloudCoverage = getCourseTeeHoleCoverage(cloudTee, localCoverage.expectedHoleCount);
+  const preserveLocalHoles = localCoverage.complete && !cloudCoverage.complete;
+  return {
+    ...localTee,
+    ...cloudTee,
+    id: localTee.id,
+    cloudTeeId: cloudTee.cloudTeeId || localTee.cloudTeeId || cloudTee.id,
+    source: 'supabase',
+    holes: preserveLocalHoles ? localTee.holes : cloudTee.holes,
+    ...(preserveLocalHoles ? { cloudHoleCoverageWarning: `Incomplete cloud response: missing holes ${cloudCoverage.missing.join(', ')}` } : { cloudHoleCoverageWarning: '' }),
+  };
+}
 function getDedupedCourseOptions(selectedCourseId = '') {
   const byStableOrName = new Map();
   (state.courses || []).forEach(course => {
@@ -10981,7 +11006,7 @@ function mergeSupabaseCourses(cloudCourses = []) {
       }
       const cloudTees = (course.tees || []).map(ct => {
         const localMatch = (existing.tees || []).find(t => (t.cloudTeeId && t.cloudTeeId === ct.cloudTeeId) || (String(t.teeName || '').trim().toLowerCase() === String(ct.teeName || '').trim().toLowerCase() && String(t.gender || 'M') === String(ct.gender || 'M')));
-        return localMatch ? { ...localMatch, ...ct, id: localMatch.id, cloudTeeId: ct.cloudTeeId || localMatch.cloudTeeId || ct.id, source: 'supabase' } : ct;
+        return mergeCloudTeePreservingCompleteLocal(localMatch, ct);
       });
       const localOnlyTees = (existing.tees || []).filter(t => !cloudTees.some(ct => ct.id === t.id || (ct.cloudTeeId && ct.cloudTeeId === t.cloudTeeId) || (String(ct.teeName || '').trim().toLowerCase() === String(t.teeName || '').trim().toLowerCase() && String(ct.gender || 'M') === String(t.gender || 'M'))));
       state.courses[duplicateIdx] = {
@@ -11014,14 +11039,13 @@ async function loadSupabaseCourses({ silent = false } = {}) {
   try {
     const client = await ensureSupabaseClient({ anonymousAuth: false });
     if (!client) throw new Error('Supabase client unavailable.');
-    const [{ data: courseRows, error: courseError }, { data: teeRows, error: teeError }, { data: holeRows, error: holeError }] = await Promise.all([
+    const [{ data: courseRows, error: courseError }, { data: teeRows, error: teeError }, holeRows] = await Promise.all([
       client.from('courses').select('*').order('name'),
       client.from('course_tees').select('*').order('tee_name'),
-      client.from('course_holes').select('*').order('hole_number'),
+      fetchAllSupabaseRows(client, 'course_holes', { orderColumn: 'id' }),
     ]);
     if (courseError) throw courseError;
     if (teeError) throw teeError;
-    if (holeError) throw holeError;
     const holesByTee = new Map();
     (holeRows || []).forEach(row => {
       const teeId = String(row.tee_id || '');
@@ -11085,6 +11109,20 @@ function normalizeCourseIdentityText(value) {
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+async function fetchAllSupabaseRows(client, table, { orderColumn = 'id', pageSize = 1000 } = {}) {
+  const safePageSize = Math.max(1, Math.min(1000, Number(pageSize) || 1000));
+  const rows = [];
+  for (let from = 0; ; from += safePageSize) {
+    const to = from + safePageSize - 1;
+    const { data, error } = await client.from(table).select('*').order(orderColumn, { ascending: true }).range(from, to);
+    if (error) throw error;
+    const page = Array.isArray(data) ? data : [];
+    rows.push(...page);
+    if (page.length < safePageSize) break;
+  }
+  return rows;
 }
 function normalizeCourseCountryIdentity(value) {
   const normalized = normalizeCourseIdentityText(value);
@@ -21845,6 +21883,9 @@ function installDyeLedgerLiveEngineAdapter() {
     buildCourseContentFingerprint,
     findEquivalentSavedCourse,
     getDedupedCourseOptions,
+    getCourseTeeHoleCoverage,
+    mergeCloudTeePreservingCompleteLocal,
+    fetchAllSupabaseRows,
     mergeSupabaseCourses,
     getPlayerHoleTeeInfo,
     buildScorecardImportRequestBody,

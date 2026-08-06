@@ -37,7 +37,7 @@ test('join and host UI explain both formats without presenting legacy as the new
   assert.match(app, /Enter a code like DYE-532835, or the 12-character legacy code shown by the host\./);
 });
 
-test('v30.3.90 release identity is consistent in the app shell', () => {
-  assert.match(app, /version: 'v30\.3\.90'/);
-  assert.match(html, /id="appVersionFooter">v30\.3\.90</);
+test('current release identity is consistent in the app shell', () => {
+  assert.match(app, /version: 'v30\.3\.91'/);
+  assert.match(html, /id="appVersionFooter">v30\.3\.91</);
 });

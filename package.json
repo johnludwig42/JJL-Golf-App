@@ -1,6 +1,6 @@
 {
   "name": "the-dye-ledger",
-  "version": "30.3.90",
+  "version": "30.3.91",
   "private": true,
   "type": "module",
   "scripts": {
@@ -22,6 +22,7 @@
     "test:v30.3.88": "node --test tests/course-library.test.js tests/course-library-security-package.test.js",
     "test:v30.3.89": "node --test tests/v30.3.89-shared-match-reliability.test.js tests/shared-match-ledger.test.js tests/shared-match-completion.test.js",
     "test:v30.3.90": "node --test tests/v30.3.90-shared-code-compatibility.test.js tests/final-product-acceptance-shared-remediation.test.js",
+    "test:v30.3.91": "node --test tests/v30.3.91-match-summary-report.test.js tests/report-layout.test.js",
     "test:identity-security": "node --test tests/v30.3.75-identity-security.test.js",
     "test:run": "npm run test",
     "simulate": "node scripts/simulate-rounds.js",

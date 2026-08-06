@@ -277,3 +277,6 @@ FUTURE:
 - [ ] Recover Purgatory Golf Club from an older export, another browser profile, or the inactive staging project if separately authorized.
 - [ ] Design an explicit, previewable historical duplicate-cleanup workflow; do not silently merge or delete records.
 - v30.3.89: in development — harden two-device Shared Match reconciliation and completion parity; add Sync Now, readable sync status, responsive settlements, full Greenies net positions, accurate build timestamps, clearer round-story headings, additive preferred golfer names, and PDF section pagination.
+# v30.3.90 — Shared Match Code Compatibility
+
+- Restore normal Match-tab joining for existing 12-character Shared Match identifiers while keeping `DYE-######` as the sole format generated for new matches.

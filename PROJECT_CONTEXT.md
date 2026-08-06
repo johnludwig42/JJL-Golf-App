@@ -430,3 +430,8 @@ v30.3.89 is a Shared Match Reliability & Reporting release. It adds explicit Rou
 # v30.3.90 Shared Match code compatibility
 
 New Shared Matches use only `DYE-######`. Existing 12-character Shared Match identifiers remain joinable through the normal Match workflow without re-keying an active or historical match. Join codes remain locators, not Account, Golfer Identity, Device, role, participation, or scoring-assignment keys.
+# v30.3.91 Match Summary Clarity & Layout
+
+- Retains separate Course Net and Featured Competition Match Net Classic Scorecards.
+- Truthfully labels double-bogey avoidance and strengthens evidence boundaries for AI recaps.
+- Improves Match Summary hierarchy, reconciliation placement, scorecard readability, and print break controls without changing saved round facts.

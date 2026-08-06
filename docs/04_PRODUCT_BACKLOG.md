@@ -280,3 +280,7 @@ FUTURE:
 # v30.3.90 — Shared Match Code Compatibility
 
 - Restore normal Match-tab joining for existing 12-character Shared Match identifiers while keeping `DYE-######` as the sole format generated for new matches.
+# v30.3.91 — Match Summary Clarity & Layout
+
+- Delivered: dual Classic Scorecard audit views, analytics terminology correction, recap evidence rules, and PDF layout refinements.
+- Manual acceptance: verify a generated four-player Nassau PDF on iPhone and desktop before promotion.

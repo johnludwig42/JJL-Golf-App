@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.90',
-  versionNumber: '30.3.90',
-  cacheName: 'the-dye-ledger-v30.3.90',
-  buildDate: '2026-08-05T23:43:55.000Z',
-  buildLabel: 'Shared Match Code Compatibility'
+  version: 'v30.3.91',
+  versionNumber: '30.3.91',
+  cacheName: 'the-dye-ledger-v30.3.91',
+  buildDate: '2026-08-06T00:38:19.000Z',
+  buildLabel: 'Match Summary Clarity & Layout'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -5477,7 +5477,7 @@ function formatRoundRecapHtml(text) {
   if (!paragraphs.length) return '';
   return paragraphs.map(p => `<p>${escapeHtml(p)}</p>`).join('');
 }
-function buildRoundRecapExport(match, metrics = null, { includeEmpty = false } = {}) {
+function buildRoundRecapExport(match, metrics = null, { includeEmpty = false, embedded = false } = {}) {
   const recap = getStoredRoundRecap(match);
   if (!recap && !includeEmpty) return '';
   const completion = metrics ? getRoundCompletionState(match, metrics) : null;
@@ -5485,15 +5485,14 @@ function buildRoundRecapExport(match, metrics = null, { includeEmpty = false } =
   const incompleteNote = completion?.isIncomplete
     ? `<div class="export-provisional-label">${areAllGamesFinal(match, metrics) ? 'Clinched Early — recap reflects completed holes.' : 'Incomplete Round — recap should be read as provisional.'}</div>`
     : '';
-  return `
-    <section class="export-section export-section-round-recap">
+  const content = `
       <div class="export-section-head">
         <h2>AI Round Recap</h2>
         <div class="export-section-sub">${recap ? `${accepted ? 'Accepted recap' : 'Draft recap'} centered on the Featured Competition, round notes, memories, scores, games, and stats.` : 'No AI recap has been generated for this round.'}</div>
       </div>
       ${incompleteNote}
-      ${recap ? `<div class="export-round-recap-text">${formatRoundRecapHtml(recap)}</div>` : '<div class="export-empty">Generate and review an AI recap from the Scores tab to include it here. Scores, settlement, and memories remain available below.</div>'}
-    </section>`;
+      ${recap ? `<div class="export-round-recap-text">${formatRoundRecapHtml(recap)}</div>` : '<div class="export-empty">Generate and review an AI recap from the Scores tab to include it here. Scores, settlement, and memories remain available below.</div>'}`;
+  return embedded ? `<div class="export-round-recap-embedded">${content}</div>` : `<section class="export-section export-section-round-recap">${content}</section>`;
 }
 
 function buildMatchSummaryAnalyticsHighlights(match, metrics) {
@@ -5504,16 +5503,16 @@ function buildMatchSummaryAnalyticsHighlights(match, metrics) {
     .sort((a, b) => direction === 'min' ? Number(a[key]) - Number(b[key]) : Number(b[key]) - Number(a[key]))[0] || null;
   const scoring = best('scoringAverage', 'min');
   const birdies = best('birdieOrBetterRate');
-  const avoidance = best('bogeyAvoidanceRate');
+  const avoidance = best('doubleBogeyAvoidanceRate');
   const conversion = best('birdieConversionRate', 'max', row => row.totals.greensInRegulation > 0);
   const cards = [
     scoring ? ['Scoring Average', scoring.displayName, Number(scoring.scoringAverage).toFixed(2)] : null,
     birdies ? ['Birdie or Better', birdies.displayName, formatPlayerInsightPercent(birdies.birdieOrBetterRate)] : null,
-    avoidance ? ['Bogey Avoidance', avoidance.displayName, formatPlayerInsightPercent(avoidance.bogeyAvoidanceRate)] : null,
+    avoidance ? ['Double-Bogey Avoidance', avoidance.displayName, formatPlayerInsightPercent(avoidance.doubleBogeyAvoidanceRate)] : null,
     conversion ? ['Birdie Conversion', conversion.displayName, `${formatPlayerInsightPercent(conversion.birdieConversionRate)} (${conversion.totals.convertedGreens}/${conversion.totals.greensInRegulation})`] : null,
   ].filter(Boolean).map(([label, name, value]) => `<div class="game-summary-card"><div class="game-summary-title">${escapeHtml(label)}</div><div class="game-summary-value">${escapeHtml(name)}</div><div class="game-summary-sub">${escapeHtml(value)}</div></div>`).join('');
   const completion = getRoundCompletionState(match, metrics);
-  return `<section class="export-section export-section-analytics-highlights"><div class="export-section-head"><h2>Round Analytics</h2><div class="export-section-sub">${completion.isIncomplete ? 'Provisional highlights from completed, scored holes.' : 'Highlights from completed, scored holes.'} Ties use scorecard order; detailed player statistics appear below.</div></div><div class="game-summary-grid">${cards}</div></section>`;
+  return `<div class="export-section-analytics-highlights"><div class="export-section-head"><h2>Round Analytics</h2><div class="export-section-sub">${completion.isIncomplete ? 'Provisional highlights from completed, scored holes.' : 'Highlights from completed, scored holes.'} Ties use scorecard order; detailed player statistics appear below.</div></div><div class="game-summary-grid">${cards}</div></div>`;
 }
 
 function getPlayerGrossScoreForHole(match, metrics, playerId, holeNumber, selectedHoleIdx = null) {
@@ -6281,7 +6280,7 @@ function buildRoundSnapshot(match, metrics, roundRecord = null) {
   </section>`;
 }
 
-function buildRoundStorySection(match, metrics, record) {
+function buildRoundStorySection(match, metrics, record, { recapHtml = '' } = {}) {
   const story = buildRoundRecordStory(record);
   const capsules = record.players.filter(player => player.signatureStat).map(player => `<li><strong>${escapeHtml(player.displayName)}</strong> — ${escapeHtml(player.signatureStat)}</li>`).join('');
   const awards = buildRoundAwardsRows(match, metrics);
@@ -6290,6 +6289,7 @@ function buildRoundStorySection(match, metrics, record) {
     <div class="round-story-copy"><p>${escapeHtml(story.narrative)}</p></div>
     ${capsules ? `<div class="round-story-capsules"><h3>Player Capsules</h3><ul>${capsules}</ul></div>` : ''}
     ${awards.length ? `<div class="round-story-awards"><h3>Leaders & Awards</h3>${awards.slice(0, 4).map(([label, value]) => `<span><strong>${escapeHtml(label)}</strong> ${value}</span>`).join('')}</div>` : ''}
+    ${recapHtml}
   </section>`;
 }
 
@@ -6685,7 +6685,7 @@ function buildRoundRecapPayload(match, metrics) {
       result: getFeaturedCompetitionResult(match, metrics).result,
     },
     memories: getRoundMemories(match).map(m => ({ text: m.text, category: m.category, holeNumber: m.holeNumber, author: m.createdByName, createdByName: m.createdByName, createdAt: m.createdAt, timestamp: m.timestamp })),
-    recapInstructions: 'Compatibility bridge for the currently deployed function: apply the Dye Ledger recap content specification identified by recapContentSpecVersion. Target 650–850 words when enough supported facts exist, never exceed 900 words, and stay shorter rather than pad a fact-light round. Write a polished, private-club style golf recap with sections when supported: Round Story, Featured Competition, Turning Points, Player Highlights, Game Story, Statistical Notes, Player Improvement Opportunities, Memorable Moments, and Closing Note or Fun Awards. Every item in memories is a high-intent user fact and must be materially represented with its specific names, hole number, and description preserved. Weave each Memory naturally when possible; otherwise include it verbatim in a Round Memories section. Never replace a specific Memory with vague generic language and never invent supporting details. Center the Featured Competition first, distinguish it from Low Gross, Low Net, Money Winner, game winners, and awards, and use Round Notes and Memories for personality. When a player has Stat Tracking enabled and at least three tracked scored holes, specifically review that player for an improvement opportunity grounded in the supplied counts, rates, or approachPerformance evidence. State the sample size, use tentative language for small samples, and do not infer swing mechanics, club choice, physical limitations, intent, or causation from one round. If eligible evidence does not exist, omit coaching rather than guess. When roundContext.weather is present, include one brief natural summary of the recorded conditions and state the supplied temperature in degrees Fahrenheit and humidity percentage when available. Weave those verified conditions into the recap when natural; otherwise add a final Weather section after any Round Memories section. Do not expose coordinates, recite unnecessary raw metrics, imply the snapshot covered the entire round, or claim weather caused an outcome unless a Round Note or Memory explicitly supports that connection. Do not fabricate shots, weather, holes, or emotions not supported by data or notes. For an incomplete round, say completed holes and use the supplied completed-hole list; never say opening holes or front nine unless that exact sequential range is complete. Treat incomplete-round money as provisional unless the relevant game is mathematically decided. If clinched early, explain that the featured competition was decided before all holes were played. Do not fabricate untracked statistics. Deterministic authoritativeFacts override notes, Memories, and generated prose. Keep the tone professional, fun, golf-aware, specific, and mobile-readable.',
+    recapInstructions: 'Compatibility bridge for the currently deployed function: apply the Dye Ledger recap content specification identified by recapContentSpecVersion. Target 650–850 words when enough supported facts exist, never exceed 900 words, and stay shorter rather than pad a fact-light round. Write a polished, private-club style golf recap with sections when supported: Round Story, Featured Competition, Turning Points, Player Highlights, Game Story, Statistical Notes, Player Improvement Opportunities, Memorable Moments, and Closing Note or Fun Awards. Every item in memories is a high-intent user fact and must be materially represented with its specific names, hole number, and description preserved. Weave each Memory naturally when possible; otherwise include it verbatim in a Round Memories section. Never replace a specific Memory with vague generic language and never invent supporting details. Center the Featured Competition first, distinguish it from Low Gross, Low Net, Money Winner, game winners, and awards, and use Round Notes and Memories for personality. For a Nassau, report Front 9, Back 9, and Overall as distinct component results; never collapse them into one composite margin or describe a team payment as an individual award. When a player has Stat Tracking enabled and at least three tracked scored holes, specifically review that player for an improvement opportunity grounded in the supplied counts, rates, or approachPerformance evidence. State the sample size, use tentative language for small samples, and do not infer swing mechanics, club choice, physical limitations, intent, or causation from one round. If eligible evidence does not exist, omit coaching rather than guess. When roundContext.weather is present, include one brief natural summary of the recorded conditions and state the supplied temperature in degrees Fahrenheit and humidity percentage when available. Weave those verified conditions into the recap when natural; otherwise add a final Weather section after any Round Memories section. Do not expose coordinates, recite unnecessary raw metrics, imply the snapshot covered the entire round, or claim weather caused an outcome unless a Round Note or Memory explicitly supports that connection. Do not fabricate shots, weather, holes, or emotions not supported by data or notes. Do not infer ball-striking, putting, course-management quality, swing mechanics, or causes from gross scores alone; only discuss those areas when the corresponding tracked facts support them. For an incomplete round, say completed holes and use the supplied completed-hole list; never say opening holes or front nine unless that exact sequential range is complete. Treat incomplete-round money as provisional unless the relevant game is mathematically decided. If clinched early, explain that the featured competition was decided before all holes were played. Do not fabricate untracked statistics. Deterministic authoritativeFacts override notes, Memories, and generated prose. Keep the tone professional, fun, golf-aware, specific, and mobile-readable.',
     players: playerSummaries,
     games: summarizeSelectedGamesForRecap(match, metrics),
     finalSettlement,
@@ -6850,12 +6850,7 @@ function buildSharedLedgerReportNote(match) {
   const detail = confirmed
     ? 'Shared Match reconciliation: confirmed'
     : `Shared Match reconciliation was not confirmed before this summary was generated.${conflicts ? ` Conflicts: ${conflicts}.` : ''}${missingLocal ? ` Missing local entries: ${missingLocal}.` : ''}${missingRemote ? ` Missing remote entries: ${missingRemote}.` : ''}`;
-  return `<section class="export-section export-section-shared-ledger-note print-keep-together">
-    <div class="export-section-head">
-      <h2>Shared Match Reconciliation</h2>
-      <div class="export-section-sub">${escapeHtml(detail)}${sspConflicts ? ` Shared SSP conflict${sspConflicts === 1 ? '' : 's'} must be resolved before settlement is final.` : (isSneakySandyPoleyEnabled(match) ? ' SSP reconciled from shared facts.' : '')}</div>
-    </div>
-  </section>`;
+  return `<div class="export-shared-ledger-status print-keep-together"><strong>Shared Match:</strong> ${escapeHtml(detail)}${sspConflicts ? ` Shared SSP conflict${sspConflicts === 1 ? '' : 's'} must be resolved before settlement is final.` : (isSneakySandyPoleyEnabled(match) ? ' SSP reconciled from shared facts.' : '')}</div>`;
 }
 
 function buildSneakySandyPoleyExportSummary(match, metrics) {
@@ -7003,18 +6998,17 @@ function buildSummaryExportBody(match, metrics) {
     </section>` : '';
   const html = `
     ${exportRoundSnapshotHtml}
-    ${buildRoundStorySection(match, metrics, roundRecord)}
-    ${buildRoundRecapExport(match, metrics, { includeEmpty: true })}
-    ${buildMatchSummaryAnalyticsHighlights(match, metrics)}
+    ${buildRoundStorySection(match, metrics, roundRecord, { recapHtml: buildRoundRecapExport(match, metrics, { includeEmpty: true, embedded: true }) })}
 
-    <section class="export-section export-section-net-payout">
+    <section class="export-section export-section-results-overview">
+      ${buildMatchSummaryAnalyticsHighlights(match, metrics)}
       <div class="export-section-head">
         <h2>${getRoundCompletionState(match, metrics).isIncomplete ? (areAllGamesFinal(match, metrics) ? 'Final Settlement' : 'Settlement — Provisional') : 'Final Settlement'}</h2>
         ${getRoundCompletionState(match, metrics).isIncomplete ? `<div class="export-section-sub">${areAllGamesFinal(match, metrics) ? 'All selected games are mathematically determined despite unplayed holes.' : 'Based on completed holes only. Some game outcomes may still change.'}</div>` : ''}
       </div>
       ${roundRecord.transactions.length ? `<div class="round-record-settle round-record-settle--section">${roundRecord.transactions.map(row => `<span class="settle-up-chip">${escapeHtml(roundRecord.players.find(player => player.playerId === row.payerId)?.displayName || row.payerId)} → ${escapeHtml(roundRecord.players.find(player => player.playerId === row.payeeId)?.displayName || row.payeeId)} <strong>${formatMoneyAccounting(row.amount)}</strong></span>`).join('')}</div>` : '<div class="export-empty">No settlement yet.</div>'}
+      ${exportSharedLedgerNoteHtml}
     </section>
-
 
     <section class="export-section export-section-games-summary export-section-games-summary-after-recap">
       <div class="export-section-head">
@@ -7026,14 +7020,13 @@ function buildSummaryExportBody(match, metrics) {
     ${buildPressAuditSection(match, metrics, roundRecord)}
 
     <div class="report-layer report-layer--ledger">
-    ${exportSharedLedgerNoteHtml}
     <section class="export-section export-section-classic export-section-classic-summary">
       <div class="export-section-head">
         <div class="export-appendix-label">Ledger / Audit Detail</div>
-        <h2>Classic scorecard · Course Net</h2>
-        <div class="export-section-sub">Gross on top, Course Net below, dots indicate Course Handicap strokes.</div>
+        <h2>Classic Scorecard — Course Net</h2>
+        <div class="export-section-sub">Course Net reflects each golfer’s full Course Handicap and does not determine the Featured Competition. Gross appears above Course Net; dots indicate Course Handicap strokes.</div>
       </div>
-      <div class="fit-stage export-classic-stage" data-fit="width-height" data-fit-min="0.52">
+      <div class="fit-stage export-classic-stage" data-fit="width-height" data-fit-min="0.62">
         <div class="fit-box">
           ${buildClassicScorecard(match, metrics)}
         </div>
@@ -7101,10 +7094,10 @@ function buildClassicOnlyExportBody(match, metrics) {
   return `
     <section class="export-section export-section-classic-only">
       <div class="export-section-head">
-        <h2>Classic scorecard · Course Net</h2>
-        <div class="export-section-sub">Gross on top, Course Net below, dots indicate Course Handicap strokes.</div>
+      <h2>Classic Scorecard — Course Net</h2>
+      <div class="export-section-sub">Course Net reflects each golfer’s full Course Handicap and does not determine the Featured Competition. Gross appears above Course Net; dots indicate Course Handicap strokes.</div>
       </div>
-      <div class="fit-stage export-classic-stage" data-fit="width-height" data-fit-min="0.48">
+      <div class="fit-stage export-classic-stage" data-fit="width-height" data-fit-min="0.62">
         <div class="fit-box">
           ${buildClassicScorecard(match, metrics)}
         </div>
@@ -7522,6 +7515,8 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       text-align: left;
       white-space: normal;
       line-height: 1.15;
+      overflow-wrap: normal;
+      word-break: normal;
     }
     .scorecard-table th.scorecard-sticky-team,
     .scorecard-table td.scorecard-sticky-team {
@@ -7644,6 +7639,8 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     .round-story-awards { display:flex; flex-wrap:wrap; gap:7px; margin-top:12px; }
     .round-story-awards h3 { width:100%; margin:0; }
     .round-story-awards span { padding:6px 8px; background:var(--ink-soft); border:1px solid var(--border); border-radius:8px; font-size:10px; }
+    .export-round-recap-embedded { margin-top:18px; padding-top:16px; border-top:1px solid var(--border); }
+    .export-shared-ledger-status { margin-top:10px; padding:8px 10px; border:1px solid var(--border); border-radius:9px; background:var(--ink-soft); font-size:10px; color:var(--muted); }
     .report-layer--ledger { break-before:page; page-break-before:always; }
     .export-section-net-payout { padding:12px 14px; }
     .export-section-net-payout .export-section-head { margin-bottom:4px; }
@@ -7673,6 +7670,7 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       }
       .gross-game-player-card,
       .gross-game-section,
+      .gross-game-player-summary,
       .gross-game-payment-row,
       .final-net-settlement-row,
       .game-summary-card,
@@ -7802,9 +7800,9 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       .settlement-table th, .settlement-table td,
       .scorecard-table th, .scorecard-table td { padding: 2px 2px; }
       .scorecard-table th.scorecard-sticky-name,
-      .scorecard-table td.scorecard-sticky-name { width: 82px; min-width: 82px; max-width: 82px; }
+      .scorecard-table td.scorecard-sticky-name { width: 108px; min-width: 108px; max-width: 108px; font-size:8px; }
       .scorecard-table th.scorecard-sticky-team,
-      .scorecard-table td.scorecard-sticky-team { width: 44px; min-width: 44px; max-width: 44px; }
+      .scorecard-table td.scorecard-sticky-team { width: 54px; min-width: 54px; max-width: 54px; }
       .scorecard-table th:not(.scorecard-sticky-name):not(.scorecard-sticky-team),
       .scorecard-table td:not(.scorecard-sticky-name):not(.scorecard-sticky-team) { width: 28px; min-width: 28px; max-width: 28px; }
       .score-main { font-size: 8.5px; }
@@ -9261,7 +9259,7 @@ function buildExportMatchNetScorecards(match, metrics) {
     });
     if (!unique.has(signature)) unique.set(signature, option);
   });
-  return [...unique.values()].map(option => `<section class="export-section export-section-classic export-section-match-net"><div class="export-section-head"><h2>Competition scorecard</h2><div class="export-section-sub">${escapeHtml(option.label)} · Gross on top, Match Net below.</div></div><div class="fit-stage export-classic-stage" data-fit="width-height" data-fit-min="0.52"><div class="fit-box">${buildClassicScorecard(match, metrics, { readOnly: true, netMode: 'match', matchGameConfig: option.config })}</div></div></section>`).join('');
+  return [...unique.values()].map(option => `<section class="export-section export-section-classic export-section-match-net"><div class="export-section-head"><h2>Classic Scorecard — Match Net</h2><div class="export-section-sub">Match Net reflects the Featured Competition’s handicap allowance and stroke allocation: ${escapeHtml(option.label)}. Gross appears above Match Net; dots indicate competition strokes.</div></div><div class="fit-stage export-classic-stage" data-fit="width-height" data-fit-min="0.62"><div class="fit-box">${buildClassicScorecard(match, metrics, { readOnly: true, netMode: 'match', matchGameConfig: option.config })}</div></div></section>`).join('');
 }
 function buildClassicScorecard(match, metrics, opts = {}) {
   const tee = metrics?.tee;
@@ -9759,6 +9757,9 @@ function computePlayerRoundInsights(match, metrics) {
       averageToPar: divide(totals.gross - totals.par, totals.scoredHoles),
       birdieOrBetterRate: divide(totals.birdieOrBetter, totals.scoredHoles),
       parOrBetterRate: divide(totals.parOrBetter, totals.scoredHoles),
+      // This measures avoidance of double bogey or worse. Keep the legacy
+      // property as an additive compatibility alias for existing consumers.
+      doubleBogeyAvoidanceRate: divide(totals.bogeyOrBetter, totals.scoredHoles),
       bogeyAvoidanceRate: divide(totals.bogeyOrBetter, totals.scoredHoles),
       birdieConversionRate: divide(totals.convertedGreens, totals.greensInRegulation),
       fairwayHitGirRate: divide(totals.fairwayHitGirs, totals.fairwayHitOpportunities),
@@ -9817,10 +9818,10 @@ function buildPlayerRoundInsights(match, metrics, { exportView = false } = {}) {
       <td>${Number(row.scoringAverage).toFixed(2)}</td>
       <td>${formatPlayerInsightPercent(row.birdieOrBetterRate)}</td>
       <td>${formatPlayerInsightPercent(row.parOrBetterRate)}</td>
-      <td>${formatPlayerInsightPercent(row.bogeyAvoidanceRate)}</td>
+      <td>${formatPlayerInsightPercent(row.doubleBogeyAvoidanceRate)}</td>
       <td>${row.totals.greensInRegulation ? `${formatPlayerInsightPercent(row.birdieConversionRate)} (${row.totals.convertedGreens}/${row.totals.greensInRegulation})` : '—'}</td>
     </tr>`).join('');
-  const table = `<table class="${exportView ? 'export-table ' : ''}player-insights-table" aria-label="Player Insights"><thead><tr><th>Player</th><th>Holes</th><th>Avg</th><th>Birdie+</th><th>Par+</th><th>Bogey Avoid.</th><th>Birdie Conversion</th></tr></thead><tbody>${body}</tbody></table>`;
+  const table = `<table class="${exportView ? 'export-table ' : ''}player-insights-table" aria-label="Player Insights"><thead><tr><th>Player</th><th>Holes</th><th>Avg</th><th>Birdie+</th><th>Par+</th><th>Double-Bogey Avoid.</th><th>Birdie Conversion</th></tr></thead><tbody>${body}</tbody></table>`;
   const approach = buildApproachPerformanceStats(match, metrics, { exportView });
   if (exportView) return `${status}<div class="fit-stage" data-fit="width" data-fit-min="0.78"><div class="fit-box">${table}</div></div>${approach}`;
   return `<div class="player-insights-wrap"><div class="section-subhead">Player insights</div><div class="tiny">Gross results on completed holes. Birdie Conversion is birdie-or-better on a recorded green in regulation.</div>${status}<div class="player-insights-scroll table-scroll-region top-gap" tabindex="0" role="region" aria-label="Player Insights; scroll horizontally for all statistics">${table}</div></div>${approach}`;

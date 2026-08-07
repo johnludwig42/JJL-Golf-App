@@ -258,9 +258,9 @@
             <label class="inline-check top-gap"><input id="smartScoreAdvanceInput" name="smartScoreAdvance" type="checkbox" checked /><span>Smart Score Advance</span></label>
             <label id="smartScoreAdvancePresetWrap" class="smart-score-preset-wrap"><span>Advance timing</span>
               <select id="smartScoreAdvancePresetSelect" name="smartScoreAdvancePreset">
-                <option value="fast">Fast (500 ms)</option>
-                <option value="normal" selected>Normal (750 ms)</option>
-                <option value="relaxed">Relaxed (1000 ms)</option>
+                <option value="fast">Fast (0.75 seconds)</option>
+                <option value="normal" selected>Normal (1.0 second)</option>
+                <option value="relaxed">Relaxed (1.25 seconds)</option>
               </select>
             </label>
             <div id="smartScoreAdvanceSspHint" class="tiny top-gap hidden">Smart Score Advance is disabled because Sneaky / Sandy / Poley requires per-hole game inputs.</div>
@@ -343,6 +343,18 @@
             <details class="play-round-details top-gap">
               <summary>Round details</summary>
               <div id="currentMatchMeta" class="muted top-gap">No active match.</div>
+              <div id="deviceScoreAdvanceControls" class="inset-card top-gap hidden">
+                <div class="section-label">Scoring on This Device</div>
+                <label class="inline-check top-gap"><input id="deviceScoreAdvanceEnabled" type="checkbox" /><span>Auto-advance on this device</span></label>
+                <label class="smart-score-preset-wrap top-gap"><span>Advance timing</span>
+                  <select id="deviceScoreAdvancePreset">
+                    <option value="fast">Fast (0.75 seconds)</option>
+                    <option value="normal">Normal (1.0 second)</option>
+                    <option value="relaxed">Relaxed (1.25 seconds)</option>
+                  </select>
+                </label>
+                <div class="tiny top-gap">Only changes navigation on this device. Scores, match rules, and other devices are not affected.</div>
+              </div>
             </details>
             <div class="actions wrap compact-actions top-gap">
               <button id="finishRoundBtn" type="button" class="secondary">End Round</button>

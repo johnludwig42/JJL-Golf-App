@@ -114,10 +114,10 @@ test('new-match defaults use preferences while explicit source, template, and cu
 
 test('Smart Score Advance timing and haptic capability gates follow saved choices safely', () => {
   const engine = loadLiveEngine();
-  assert.equal(engine.getSmartScoreAdvanceDelay({ smartScoreAdvancePreset: 'fast' }), 500);
-  assert.equal(engine.getSmartScoreAdvanceDelay({ smartScoreAdvancePreset: 'normal' }), 750);
-  assert.equal(engine.getSmartScoreAdvanceDelay({ smartScoreAdvancePreset: 'relaxed' }), 1000);
-  assert.equal(engine.getSmartScoreAdvanceDelay({ smartScoreAdvancePreset: 'invalid' }), 750);
+  assert.equal(engine.getSmartScoreAdvanceDelay({ smartScoreAdvancePreset: 'fast' }), 750);
+  assert.equal(engine.getSmartScoreAdvanceDelay({ smartScoreAdvancePreset: 'normal' }), 1000);
+  assert.equal(engine.getSmartScoreAdvanceDelay({ smartScoreAdvancePreset: 'relaxed' }), 1250);
+  assert.equal(engine.getSmartScoreAdvanceDelay({ smartScoreAdvancePreset: 'invalid' }), 1000);
   const calls = [];
   const device = { vibrate: value => calls.push(value) };
   assert.equal(engine.triggerSmartScoreHaptic({ scoring: { hapticsEnabled: true } }, device), true);
@@ -125,6 +125,19 @@ test('Smart Score Advance timing and haptic capability gates follow saved choice
   assert.equal(engine.triggerSmartScoreHaptic({ scoring: { hapticsEnabled: false } }, device), false);
   assert.deepEqual(calls, [18]);
   assert.equal(engine.triggerSmartScoreHaptic({ scoring: { hapticsEnabled: true } }, {}), false);
+});
+
+test('Shared Match devices can override auto-advance locally without changing match facts', () => {
+  const engine = loadLiveEngine();
+  const storageA = makeStorage();
+  const storageB = makeStorage();
+  const match = { id: 'shared-round', storageMode: 'shared', smartScoreAdvanceEnabled: true, smartScoreAdvancePreset: 'normal' };
+  assert.deepEqual(structuredClone(engine.getEffectiveDeviceScoreAdvanceSettings(match, storageA)), { enabled: true, preset: 'normal', deviceOverride: false });
+  assert.equal(engine.saveDeviceScoreAdvanceOverride(match, { enabled: false, preset: 'relaxed' }, storageA), true);
+  assert.deepEqual(structuredClone(engine.getEffectiveDeviceScoreAdvanceSettings(match, storageA)), { enabled: false, preset: 'relaxed', deviceOverride: true });
+  assert.deepEqual(structuredClone(engine.getEffectiveDeviceScoreAdvanceSettings(match, storageB)), { enabled: true, preset: 'normal', deviceOverride: false });
+  assert.equal(match.smartScoreAdvanceEnabled, true);
+  assert.equal(match.smartScoreAdvancePreset, 'normal');
 });
 
 test('Quick Scoreboard disclosure defaults are personal, deterministic, and do not mutate round data', () => {

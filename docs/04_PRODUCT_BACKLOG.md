@@ -106,6 +106,18 @@ NOW:
 - Conflict/authority rules.
 - Acceptance test matrix from real two-device usage.
 
+FUTURE FOCUSED RELEASE — Shared Match Synchronization Optimization:
+
+- Preserve local-first scoring and the existing parity-gated completion contract; do not treat a successful request as confirmed score parity.
+- Add per-entry synchronization diagnostics and acknowledgement metadata so a score can be traced from local save through cloud acceptance and host reconciliation.
+- Serialize synchronization as local save, pending-score push, cloud acknowledgement, remote pull, and parity verification instead of initiating overlapping push and pull work.
+- Introduce a persistent device-local outbox containing only changed score rows; retry safely after offline use, backgrounding, refresh, or interruption and remove entries only after acknowledgement.
+- Replace full repeated score/player/team payload writes with minimal idempotent changed-row synchronization where compatibility permits.
+- Add immediate remote score-change delivery with bounded polling as a fallback; stop or reduce polling while the app is backgrounded.
+- Add participant ID, Device ID, local revision, source timestamp, and server acceptance timestamp to future additive score attribution contracts without using Device as Account, Golfer Identity, role, participation, or ownership.
+- Add disposable-environment two-browser automation covering delayed Hole 3, every-hole convergence, par-3 Greenies, Stat Tracking, auto-advance, simultaneous saves, offline/reconnect, backgrounding, refresh during pending upload, and final parity.
+- Require evidence from diagnostics or a reproducible test before changing score-conflict or authority behavior.
+
 ## 3. Course Library / Course Management
 
 - v30.3.60 completed: Courses Functionality Audit, Course Library clarity/metadata polish, location-aware dropdown de-dupe, duplicate-save prompts, tee validation, visible tee fallback, and new-round local Course Snapshots.

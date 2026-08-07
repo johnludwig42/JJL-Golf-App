@@ -63,7 +63,7 @@ Press Preferences expose Presses, Trigger, Prompt When Down, Who May Declare, Pa
 
 ## Runtime and view behavior
 
-Smart Score Advance continues to use the match-specific preset: FAST is 500 ms, NORMAL is 750 ms, and RELAXED is 1000 ms. Existing Stat Tracking interaction is unchanged: Stat Tracking prevents automatic next-hole advance. Changing either value in Match Setup does not update Player Preferences.
+Smart Score Advance uses three timing presets: FAST is 750 ms, NORMAL is 1000 ms, and RELAXED is 1250 ms. NORMAL remains the default. Existing Stat Tracking interaction is unchanged: Stat Tracking prevents automatic next-hole advance. Changing either value in Match Setup does not update Player Preferences. During a Shared Match, each device may apply an active-round device-only override. That override remains local, never changes shared match facts, and does not affect another device.
 
 Haptic confirmation is device-local. When enabled, the existing score-commit confirmation pathway requests one short vibration only when `navigator.vibrate` is available. Disabled or unsupported devices perform no vibration and do not throw. Score persistence and visual confirmation remain independent of haptic support.
 

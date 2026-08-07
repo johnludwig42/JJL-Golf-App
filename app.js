@@ -60,11 +60,12 @@ const PLAYER_REGISTRY_SCHEMA_VERSION = 1;
 const SAVED_ROSTER_SCHEMA_VERSION = 1;
 const DEFAULT_SMART_SCORE_ADVANCE = true;
 const SMART_SCORE_ADVANCE_PRESETS = {
-  fast: { label: 'Fast', delay: 500 },
-  normal: { label: 'Normal', delay: 750 },
-  relaxed: { label: 'Relaxed', delay: 1000 }
+  fast: { label: 'Fast', delay: 750 },
+  normal: { label: 'Normal', delay: 1000 },
+  relaxed: { label: 'Relaxed', delay: 1250 }
 };
 const DEFAULT_SMART_SCORE_ADVANCE_PRESET = 'normal';
+const DEVICE_SCORE_ADVANCE_OVERRIDES_STORAGE_KEY = 'dyeLedger.deviceScoreAdvanceOverrides.v1';
 const PLAYER_PREFERENCES_STORAGE_KEY = 'dyeLedger.playerPreferences';
 const PLAYER_PREFERENCES_SCHEMA_VERSION = 4;
 const PLAYER_PREFERENCE_PATHS = new Set([
@@ -554,7 +555,7 @@ function normalizeSmartScoreAdvancePreset(value) {
 }
 
 function getSmartScoreAdvanceDelay(match = getActiveMatch()) {
-  const preset = normalizeSmartScoreAdvancePreset(match?.smartScoreAdvancePreset);
+  const preset = getEffectiveDeviceScoreAdvanceSettings(match).preset;
   return SMART_SCORE_ADVANCE_PRESETS[preset].delay;
 }
 
@@ -663,6 +664,50 @@ function normalizeJoinMatchCode(value = '') {
   // identifier exactly so an in-progress historical match remains joinable.
   if (/^[A-Z0-9]{12}$/.test(compact)) return compact;
   return '';
+}
+
+function readDeviceScoreAdvanceOverrides(storage = localStorage) {
+  try {
+    const parsed = JSON.parse(storage?.getItem?.(DEVICE_SCORE_ADVANCE_OVERRIDES_STORAGE_KEY) || '{}');
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function getDeviceScoreAdvanceOverride(match, storage = localStorage) {
+  if (!match?.id || match.storageMode !== 'shared') return null;
+  const value = readDeviceScoreAdvanceOverrides(storage)[String(match.id)];
+  if (!value || typeof value !== 'object') return null;
+  return {
+    enabled: typeof value.enabled === 'boolean' ? value.enabled : null,
+    preset: value.preset == null ? null : normalizeSmartScoreAdvancePreset(value.preset),
+  };
+}
+
+function getEffectiveDeviceScoreAdvanceSettings(match, storage = localStorage) {
+  const override = getDeviceScoreAdvanceOverride(match, storage);
+  return {
+    enabled: override?.enabled == null ? (match?.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!match.smartScoreAdvanceEnabled) : override.enabled,
+    preset: override?.preset || normalizeSmartScoreAdvancePreset(match?.smartScoreAdvancePreset),
+    deviceOverride: !!override,
+  };
+}
+
+function saveDeviceScoreAdvanceOverride(match, value = {}, storage = localStorage) {
+  if (!match?.id || match.storageMode !== 'shared') return false;
+  try {
+    const overrides = readDeviceScoreAdvanceOverrides(storage);
+    overrides[String(match.id)] = {
+      enabled: value.enabled == null ? getEffectiveDeviceScoreAdvanceSettings(match, storage).enabled : !!value.enabled,
+      preset: normalizeSmartScoreAdvancePreset(value.preset || getEffectiveDeviceScoreAdvanceSettings(match, storage).preset),
+      updatedAt: new Date().toISOString(),
+    };
+    storage?.setItem?.(DEVICE_SCORE_ADVANCE_OVERRIDES_STORAGE_KEY, JSON.stringify(overrides));
+    return true;
+  } catch {
+    return false;
+  }
 }
 function generateSharedMatchCode(random = Math.random) {
   const digits = Array.from({ length: 6 }, () => String(1 + Math.min(8, Math.floor(Number(random()) * 9)))).join('');
@@ -15290,6 +15335,7 @@ function renderCurrentMatch() {
   if (!match) finishConfirmArmed = false;
   syncFinishRoundUi(match);
   if (!match) {
+    syncDeviceScoreAdvanceUi(null);
     if (metaEl) metaEl.textContent = 'No active match.';
     if (progressEl) progressEl.textContent = 'No active match.';
     emptyEl.classList.remove('hidden');
@@ -15298,6 +15344,7 @@ function renderCurrentMatch() {
     renderMemoryQuickCapture(null);
     return;
   }
+  syncDeviceScoreAdvanceUi(match);
   const course = getMatchCourse(match);
   const tee = getMatchTee(match, match.teeId);
   if (ensurePlayInputState(match)) persist({ skipRender: true });
@@ -16030,6 +16077,20 @@ function renderScoreGrid(match, tee, metrics, scoringHoles = null) {
   body.innerHTML = buildTeamGroupedScoreGridRows(match, tee, metrics, visiblePlayers, hole);
 }
 
+function syncDeviceScoreAdvanceUi(match = getActiveMatch()) {
+  const wrap = document.getElementById('deviceScoreAdvanceControls');
+  const enabledInput = document.getElementById('deviceScoreAdvanceEnabled');
+  const presetSelect = document.getElementById('deviceScoreAdvancePreset');
+  if (!wrap || !enabledInput || !presetSelect) return;
+  const visible = !!match && match.storageMode === 'shared';
+  wrap.classList.toggle('hidden', !visible);
+  if (!visible) return;
+  const settings = getEffectiveDeviceScoreAdvanceSettings(match);
+  enabledInput.checked = settings.enabled;
+  presetSelect.value = settings.preset;
+  presetSelect.disabled = !settings.enabled;
+}
+
 function getFeaturedCompetitionStrokeDistribution(match, tee, metrics, playerMetric) {
   const context = getFeaturedCompetitionHandicapContext(match, metrics);
   if (!match || !tee || !playerMetric || context.mode !== 'relative') return null;
@@ -16101,7 +16162,7 @@ function isSmartScoreAdvanceEnabled(match = getActiveMatch()) {
   if (!match) return false;
   if (catchUpScoringState?.matchId === match.id) return false;
   if (isSneakySandyPoleyEnabled(match)) return false;
-  return match.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!match.smartScoreAdvanceEnabled;
+  return getEffectiveDeviceScoreAdvanceSettings(match).enabled;
 }
 
 function isGrossScoreValidValue(value) {
@@ -21006,6 +21067,22 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     renderCurrentMatch();
   });
   document.getElementById('finishRoundBtn').addEventListener('click', handleScoreboardFinishEndRound);
+  document.getElementById('deviceScoreAdvanceEnabled')?.addEventListener('change', e => {
+    const match = getActiveMatch();
+    if (!match?.id || match.storageMode !== 'shared') return;
+    const preset = document.getElementById('deviceScoreAdvancePreset')?.value;
+    if (!saveDeviceScoreAdvanceOverride(match, { enabled: e.target.checked, preset })) return toast('Could not save this device setting.');
+    syncDeviceScoreAdvanceUi(match);
+    toast(`Auto-advance ${e.target.checked ? 'enabled' : 'disabled'} on this device.`);
+  });
+  document.getElementById('deviceScoreAdvancePreset')?.addEventListener('change', e => {
+    const match = getActiveMatch();
+    if (!match?.id || match.storageMode !== 'shared') return;
+    const enabled = document.getElementById('deviceScoreAdvanceEnabled')?.checked;
+    if (!saveDeviceScoreAdvanceOverride(match, { enabled, preset: e.target.value })) return toast('Could not save this device setting.');
+    syncDeviceScoreAdvanceUi(match);
+    toast(`${getSmartScoreAdvancePresetLabel(e.target.value)} auto-advance selected on this device.`);
+  });
   document.getElementById('roundCompleteFinishBtn')?.addEventListener('click', finishRoundFromPrompt);
   document.getElementById('roundCompleteReviewBtn')?.addEventListener('click', reviewFinalHoleFromPrompt);
   document.getElementById('roundEndPrimaryBtn')?.addEventListener('click', handleRoundEndPrimary);
@@ -21844,6 +21921,9 @@ function installDyeLedgerLiveEngineAdapter() {
     getMatchSetupValidationState,
     buildNextRoundDraft,
     getSmartScoreAdvanceDelay,
+    getDeviceScoreAdvanceOverride,
+    getEffectiveDeviceScoreAdvanceSettings,
+    saveDeviceScoreAdvanceOverride,
     shouldTriggerHapticConfirmation,
     triggerSmartScoreHaptic,
     createEmptyMatch,

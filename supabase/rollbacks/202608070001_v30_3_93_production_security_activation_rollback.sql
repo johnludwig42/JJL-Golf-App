@@ -6,6 +6,8 @@ do $$ declare p record; begin
   loop execute format('drop policy %I on public.%I',p.policyname,p.tablename); end loop;
 end $$;
 drop function if exists public.join_shared_match(text,text,text);
+drop trigger if exists stamp_shared_match_owner_before_insert on public.matches;
+drop function if exists public.stamp_shared_match_owner();
 drop function if exists public.shared_match_is_member(text);
 drop function if exists public.shared_match_is_organizer(text);
 drop function if exists public.course_library_can_write();

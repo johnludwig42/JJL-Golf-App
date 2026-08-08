@@ -12065,7 +12065,7 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
     id: match.sharedMatchId || match.id,
     created_at: match.createdAt || createdAt,
     updated_at: createdAt,
-    created_by: null,
+    created_by: organizerUserId || null,
     name: match.name || 'Round',
     match_date: match.date || todayIso(),
     status: match.status || 'active',

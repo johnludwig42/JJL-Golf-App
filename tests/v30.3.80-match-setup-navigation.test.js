@@ -11,11 +11,11 @@ const manifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
 test('post-v30.3.80 release identity retains immutable PWA assets', () => {
-  assert.equal(pkg.version, '30.3.92');
-  assert.equal(manifest.version, 'v30.3.92');
-  assert.match(app, /versionNumber:\s*'30\.3\.92'/);
-  assert.match(worker, /cacheName:\s*'the-dye-ledger-v30\.3\.92'/);
-  ['app-icon-192-v30.3.92.png', 'app-icon-512-v30.3.92.png', 'apple-touch-icon-v30.3.92.png', 'favicon-32-v30.3.92.png', 'favicon-16-v30.3.92.png']
+  assert.equal(pkg.version, '30.3.93');
+  assert.equal(manifest.version, 'v30.3.93');
+  assert.match(app, /versionNumber:\s*'30\.3\.93'/);
+  assert.match(worker, /cacheName:\s*'the-dye-ledger-v30\.3\.93'/);
+  ['app-icon-192-v30.3.93.png', 'app-icon-512-v30.3.93.png', 'apple-touch-icon-v30.3.93.png', 'favicon-32-v30.3.93.png', 'favicon-16-v30.3.93.png']
     .forEach(name => assert.equal(existsSync(new URL(`../branding/${name}`, import.meta.url)), true));
 });
 

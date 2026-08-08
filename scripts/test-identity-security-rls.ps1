@@ -45,4 +45,13 @@ Invoke-SqlFile 'supabase/migrations/202607220003_v30_3_75_catalog_and_shared_tar
 Invoke-SqlFile 'supabase/migrations/202608060001_v30_3_92_beta_account_activation.sql'
 Invoke-SqlFile 'supabase/tests/v30_3_75_identity_rls_test.sql'
 Invoke-SqlFile 'supabase/tests/v30_3_92_beta_account_activation_test.sql'
-Write-Host 'Identity and security migration/RLS test sequence completed successfully.'
+Invoke-SqlFile 'supabase/tests/v30_3_93_security_fixture.sql'
+Invoke-SqlFile 'supabase/migrations/202608070001_v30_3_93_production_security_activation.sql'
+Invoke-SqlFile 'supabase/tests/v30_3_93_security_rls_test.sql'
+# A second application proves the new migration is idempotent.
+Invoke-SqlFile 'supabase/migrations/202608070001_v30_3_93_production_security_activation.sql'
+Invoke-SqlFile 'supabase/rollbacks/202608070001_v30_3_93_production_security_activation_rollback.sql'
+Invoke-SqlFile 'supabase/tests/v30_3_93_rollback_probe.sql'
+# Leave the disposable target in the secure state after validating rollback.
+Invoke-SqlFile 'supabase/migrations/202608070001_v30_3_93_production_security_activation.sql'
+Write-Host 'Identity and security migration/RLS test sequence completed successfully through v30.3.93.'

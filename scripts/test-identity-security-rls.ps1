@@ -26,7 +26,7 @@ function Invoke-SqlFile([string]$RelativePath) {
   $ErrorActionPreference = $priorErrorActionPreference
   $output | ForEach-Object { Write-Host $_ }
   if ($psqlExitCode -ne 0) { throw "psql failed while running $RelativePath" }
-  if (($output -join "`n") -match '(?m)^not ok\b') { throw "pgTAP assertions failed while running $RelativePath" }
+  if (($output -join "`n") -match '(?m)^\s*not ok\b') { throw "pgTAP assertions failed while running $RelativePath" }
 }
 # Exercise the Identity package on top of the real v30.3.75a Course Library
 # baseline instead of a simplified stand-in.
@@ -37,9 +37,12 @@ Invoke-SqlFile 'supabase/tests/v30_3_75_identity_fixture.sql'
 Invoke-SqlFile 'supabase/migrations/202607220001_v30_3_75_identity_foundation.sql'
 Invoke-SqlFile 'supabase/migrations/202607220002_v30_3_75_round_record_security.sql'
 Invoke-SqlFile 'supabase/migrations/202607220003_v30_3_75_catalog_and_shared_target.sql'
+Invoke-SqlFile 'supabase/migrations/202608060001_v30_3_92_beta_account_activation.sql'
 # A second application is the idempotency gate.
 Invoke-SqlFile 'supabase/migrations/202607220001_v30_3_75_identity_foundation.sql'
 Invoke-SqlFile 'supabase/migrations/202607220002_v30_3_75_round_record_security.sql'
 Invoke-SqlFile 'supabase/migrations/202607220003_v30_3_75_catalog_and_shared_target.sql'
+Invoke-SqlFile 'supabase/migrations/202608060001_v30_3_92_beta_account_activation.sql'
 Invoke-SqlFile 'supabase/tests/v30_3_75_identity_rls_test.sql'
+Invoke-SqlFile 'supabase/tests/v30_3_92_beta_account_activation_test.sql'
 Write-Host 'Identity and security migration/RLS test sequence completed successfully.'

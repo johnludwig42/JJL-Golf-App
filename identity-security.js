@@ -5,6 +5,7 @@
   const OTP_RESEND_SECONDS = 60;
   const AUTH_REDIRECT_PATH = './';
   const ACCOUNT_AUTH_STORAGE_KEY = 'dye-ledger-account-auth-v1';
+  const IDENTITY_PROFILE_SELECT = 'golfer_identity_id,claim_status,claimed_by_account_id,display_name,profile,created_at';
 
   function getProjectRef(url) {
     try {
@@ -163,6 +164,11 @@
         emit({ status: 'signed-in' });
         return session;
       },
+      changeEmail() {
+        pendingEmail = '';
+        resendAvailableAt = 0;
+        emit({ status: 'signed-out' });
+      },
       async signOut() {
         if (client?.auth && session) {
           const result = await client.auth.signOut({ scope: 'local' });
@@ -177,6 +183,49 @@
     };
   }
 
+  function createIdentityProfileController({ client, online = () => navigator.onLine } = {}) {
+    const requireService = () => {
+      if (!online()) throw Object.assign(new Error('You are offline. Local scoring remains available.'), { code: 'OFFLINE' });
+      if (!client?.from || !client?.rpc) throw Object.assign(new Error('Golfer Identity service is unavailable. Local scoring remains available.'), { code: 'UNAVAILABLE' });
+    };
+    const normalizeProfile = row => row ? {
+      golferIdentityId: row.golfer_identity_id,
+      claimStatus: row.claim_status,
+      claimedByAccountId: row.claimed_by_account_id,
+      displayName: row.display_name || '',
+      nickname: String(row.profile?.nickname || ''),
+      createdAt: row.created_at,
+    } : null;
+    return {
+      async load(accountId) {
+        requireService();
+        if (!String(accountId || '').trim()) throw new Error('A signed-in Account is required.');
+        const result = await client.from('golfer_identities')
+          .select(IDENTITY_PROFILE_SELECT)
+          .eq('claimed_by_account_id', accountId)
+          .maybeSingle();
+        if (result?.error) throw Object.assign(new Error('Golfer Identity could not be loaded. Local scoring remains available.'), { code: 'PROFILE_UNAVAILABLE' });
+        return normalizeProfile(result?.data);
+      },
+      async create({ accountId, displayName, nickname = '', confirmed = false } = {}) {
+        requireService();
+        if (!String(accountId || '').trim()) throw new Error('A signed-in Account is required.');
+        const name = String(displayName || '').trim().replace(/\s+/g, ' ');
+        const preferredName = String(nickname || '').trim().replace(/\s+/g, ' ');
+        if (name.length < 2 || name.length > 120) throw new Error('Enter your full name.');
+        if (preferredName.length > 80) throw new Error('Nickname must be 80 characters or fewer.');
+        if (confirmed !== true) throw new Error('Confirm that this permanent Golfer Identity represents you.');
+        const result = await client.rpc('create_my_claimed_golfer_identity', {
+          p_display_name: name,
+          p_nickname: preferredName || null,
+        });
+        if (result?.error) throw Object.assign(new Error('Golfer Identity could not be created. Nothing on this device was changed.'), { code: 'PROFILE_CREATE_FAILED' });
+        const row = Array.isArray(result?.data) ? result.data[0] : result?.data;
+        return normalizeProfile(row);
+      },
+    };
+  }
+
   function mountAccountSecurity() {
     const root = document.getElementById('accountSecurityPanel');
     if (!root || root.dataset.accountSecurityMounted === 'true') return;
@@ -184,29 +233,70 @@
     const config = global.__DYE_SUPABASE_CONFIG__ || {};
     const gate = getAccountAuthGate(config);
     const client = gate.enabled && config.url && config.anonKey && global.supabase?.createClient
-      ? global.supabase.createClient(config.url, config.anonKey, { auth: { storageKey: ACCOUNT_AUTH_STORAGE_KEY, persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }, global: { headers: { 'X-Client-Info': 'the-dye-ledger-account-v30.3.75' } } })
+      ? global.supabase.createClient(config.url, config.anonKey, { auth: { storageKey: ACCOUNT_AUTH_STORAGE_KEY, persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }, global: { headers: { 'X-Client-Info': 'the-dye-ledger-account-v30.3.92' } } })
       : null;
     const controller = createAuthController({ client });
+    const profileController = createIdentityProfileController({ client });
     let view = controller.getState();
+    let profileAccountId = '';
+    let profileRequest = 0;
+    let resendTimer = null;
+    const loadProfile = async user => {
+      const accountId = String(user?.id || '');
+      if (!accountId || profileAccountId === accountId) return;
+      profileAccountId = accountId;
+      const request = ++profileRequest;
+      render({ profileLoading: true, profile: null, profileError: '' });
+      try {
+        const profile = await profileController.load(accountId);
+        if (request === profileRequest) render({ profileLoading: false, profile, profileError: '' });
+      } catch (error) {
+        if (request === profileRequest) render({ profileLoading: false, profile: null, profileError: error.message });
+      }
+    };
+    const scheduleResendCountdown = () => {
+      const button = root.querySelector('#accountResendOtpBtn');
+      if (!button) return;
+      const seconds = Math.max(0, Math.ceil((Number(view.resendAvailableAt) - Date.now()) / 1000));
+      button.disabled = seconds > 0;
+      button.textContent = seconds > 0 ? `Resend in ${seconds}s` : 'Resend code';
+      if (seconds > 0) resendTimer = setTimeout(scheduleResendCountdown, 1000);
+    };
     const render = state => {
+      if (resendTimer) { clearTimeout(resendTimer); resendTimer = null; }
       view = { ...view, ...state };
       const user = view.session?.user;
+      const resendSecondsRemaining = Math.max(0, Math.ceil((Number(view.resendAvailableAt) - Date.now()) / 1000));
       root.innerHTML = !gate.enabled
         ? `<h2>Account &amp; Security</h2><div class="strong">Account sign-in unavailable</div><div class="tiny top-gap">${escapeText(gate.reason)} Local scoring remains available.</div>`
+        : user && view.profileLoading
+        ? `<h2>Account &amp; Security</h2><div class="strong">Signed in</div><div class="tiny top-gap">Checking your Golfer Identity… Local scoring remains available.</div><div id="accountFeedback" class="tiny top-gap" role="status" aria-live="polite"></div>`
+        : user && view.profile
+        ? `<h2>Account &amp; Security</h2><div class="strong">Signed in</div><div class="tiny top-gap">${escapeText(user.email || 'Authenticated Account')}</div><div class="account-identity-summary top-gap"><div class="tiny">Your permanent Golfer Identity</div><div class="strong">${escapeText(view.profile.displayName)}</div>${view.profile.nickname ? `<div class="tiny">Preferred name: ${escapeText(view.profile.nickname)}</div>` : ''}</div><div class="tiny top-gap">Your existing local rounds stay on this device. Signing in does not upload, claim, merge, rewrite, or delete them.</div><div class="actions top-gap"><button id="accountSignOutBtn" type="button" class="secondary">Sign out</button></div><div id="accountFeedback" class="tiny top-gap" role="status" aria-live="polite"></div>`
         : user
-        ? `<h2>Account &amp; Security</h2><div class="strong">Signed in</div><div class="tiny top-gap">${escapeText(user.email || 'Authenticated account')}</div><div class="tiny top-gap">Your existing local rounds stay on this device unless you explicitly choose a future cloud action.</div><div class="actions top-gap"><button id="accountSignOutBtn" type="button" class="secondary">Sign out</button></div><div id="accountFeedback" class="tiny top-gap" role="status" aria-live="polite"></div>`
-        : `<h2>Account &amp; Security</h2><div class="tiny">Sign in with a six-digit email code. Local scoring does not require an account.</div><form id="accountEmailForm" class="grid top-gap"><label><span>Email</span><input id="accountEmail" type="email" autocomplete="email" inputmode="email" required /></label><button type="submit">Email me a code</button></form><form id="accountOtpForm" class="grid top-gap ${view.pendingEmail ? '' : 'hidden'}"><label><span>Six-digit code</span><input id="accountOtp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required /></label><button type="submit">Verify code</button></form><div id="accountFeedback" class="tiny top-gap" role="status" aria-live="polite">${navigator.onLine ? 'Signed out.' : 'Offline. Local scoring remains available; sign in when connected.'}</div>`;
+        ? `<h2>Account &amp; Security</h2><div class="strong">Create your Golfer Identity</div><div class="tiny top-gap">This creates the permanent identity that represents you. Your name, email, nickname, phone, and future GHIN details can change; none of them is used to merge identities.</div>${view.profileError ? `<div class="notice warning top-gap" role="status">${escapeText(view.profileError)}</div>` : ''}<form id="accountIdentityForm" class="grid top-gap"><label><span>Full name</span><input id="accountIdentityName" type="text" autocomplete="name" maxlength="120" required /></label><label><span>Nickname <span class="tiny">(optional)</span></span><input id="accountIdentityNickname" type="text" maxlength="80" /></label><label class="account-identity-confirm"><input id="accountIdentityConfirm" type="checkbox" required /><span>I confirm this permanent Golfer Identity represents me.</span></label><button type="submit">Create my Golfer Identity</button></form><div class="tiny top-gap">This will not connect or upload existing players or rounds on this device.</div><div class="actions top-gap"><button id="accountSignOutBtn" type="button" class="secondary">Sign out</button></div><div id="accountFeedback" class="tiny top-gap" role="status" aria-live="polite"></div>`
+        : view.pendingEmail
+        ? `<h2>Account &amp; Security</h2><div class="strong">Check your email</div><div class="tiny top-gap">Enter the six-digit code sent to <strong>${escapeText(view.pendingEmail)}</strong>.</div><form id="accountOtpForm" class="grid top-gap"><label><span>Six-digit code</span><input id="accountOtp" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required autofocus /></label><button type="submit">Verify code</button></form><div class="actions wrap top-gap"><button id="accountChangeEmailBtn" type="button" class="secondary">Change email</button><button id="accountResendOtpBtn" type="button" class="secondary" ${resendSecondsRemaining > 0 ? 'disabled' : ''}>${resendSecondsRemaining > 0 ? `Resend in ${resendSecondsRemaining}s` : 'Resend code'}</button></div><div id="accountFeedback" class="tiny top-gap" role="status" aria-live="polite">${navigator.onLine ? 'Code sent. The address will remain here until you sign in or change it.' : 'Offline. Local scoring remains available; verify when connected.'}</div>`
+        : `<h2>Account &amp; Security</h2><div class="tiny">Sign in with a six-digit email code. Local scoring does not require an account.</div><form id="accountEmailForm" class="grid top-gap"><label><span>Email</span><input id="accountEmail" type="email" autocomplete="email" inputmode="email" required /></label><button type="submit">Email me a code</button></form><div id="accountFeedback" class="tiny top-gap" role="status" aria-live="polite">${navigator.onLine ? 'Signed out.' : 'Offline. Local scoring remains available; sign in when connected.'}</div>`;
       bind();
+      if (!user && view.pendingEmail) scheduleResendCountdown();
     };
     const feedback = message => { const el = root.querySelector('#accountFeedback'); if (el) el.textContent = message; };
     const busy = value => root.querySelectorAll('button,input').forEach(el => { el.disabled = value; });
     const bind = () => {
+      root.querySelector('#accountChangeEmailBtn')?.addEventListener('click', () => controller.changeEmail());
+      root.querySelector('#accountResendOtpBtn')?.addEventListener('click', async () => { busy(true); feedback('Sending a new code...'); try { await controller.requestOtp(view.pendingEmail); render(controller.getState()); feedback('A new code was sent.'); } catch (error) { feedback(error.message); busy(false); } });
       root.querySelector('#accountEmailForm')?.addEventListener('submit', async event => { event.preventDefault(); busy(true); feedback('Sending code…'); try { await controller.requestOtp(root.querySelector('#accountEmail').value); render(controller.getState()); feedback('Code sent. Check your email. You can request another code in one minute.'); } catch (error) { feedback(error.message); busy(false); } });
       root.querySelector('#accountOtpForm')?.addEventListener('submit', async event => { event.preventDefault(); busy(true); feedback('Verifying…'); try { await controller.verifyOtp(root.querySelector('#accountOtp').value); } catch (error) { feedback(error.message); busy(false); } });
+      root.querySelector('#accountIdentityForm')?.addEventListener('submit', async event => { event.preventDefault(); busy(true); feedback('Creating your Golfer Identity…'); try { const profile = await profileController.create({ accountId: view.session?.user?.id, displayName: root.querySelector('#accountIdentityName').value, nickname: root.querySelector('#accountIdentityNickname').value, confirmed: root.querySelector('#accountIdentityConfirm').checked }); render({ profile, profileLoading: false, profileError: '' }); feedback('Your Golfer Identity is ready. Existing local rounds remain unchanged.'); } catch (error) { feedback(error.message); busy(false); } });
       root.querySelector('#accountSignOutBtn')?.addEventListener('click', async () => { busy(true); try { await controller.signOut(); } catch { feedback('Sign-out could not reach the service. Try again when connected.'); busy(false); } });
     };
     const escapeText = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
-    controller.subscribe(render);
+    controller.subscribe(state => {
+      if (!state.session?.user) { profileAccountId = ''; profileRequest += 1; state = { ...state, profile: null, profileLoading: false, profileError: '' }; }
+      render(state);
+      if (state.session?.user) void loadProfile(state.session.user);
+    });
     if (client) {
       client.auth.onAuthStateChange((_event, nextSession) => controller.handleAuthSession(nextSession));
       controller.restore();
@@ -219,6 +309,6 @@
     DOMAIN_SCHEMA_VERSION, ACCOUNT_AUTH_STORAGE_KEY, getProjectRef, getAccountAuthGate, isDurableAccountSession,
     createGolferIdentity, addGolferToLibrary, createRoundAccess,
     createRoundParticipation, createScoringAssignment, createRoundRecordVersion,
-    createAmendment, createAuthController, mountAccountSecurity,
+    createAmendment, createAuthController, createIdentityProfileController, mountAccountSecurity,
   });
 })(typeof window === 'undefined' ? globalThis : window);

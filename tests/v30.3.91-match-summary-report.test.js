@@ -60,8 +60,8 @@ test('shared reconciliation is compact status content rather than a standalone r
   assert.doesNotMatch(app, /<h2>Shared Match Reconciliation<\/h2>/);
 });
 
-test('v30.3.91 release identity is consistent in the application source', () => {
-  assert.match(app, /version: 'v30\.3\.91'/);
-  assert.match(app, /cacheName: 'the-dye-ledger-v30\.3\.91'/);
-  assert.match(app, /buildLabel: 'Match Summary Clarity & Layout'/);
+test('current release identity is consistent in the application source', () => {
+  assert.match(app, /version: 'v30\.3\.92'/);
+  assert.match(app, /cacheName: 'the-dye-ledger-v30\.3\.92'/);
+  assert.match(app, /buildLabel: 'Beta Account Activation'/);
 });

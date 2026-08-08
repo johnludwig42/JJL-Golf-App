@@ -48,6 +48,7 @@ NEXT:
 - Keep Quick Scoreboard intentionally concise rather than duplicating the complete Scores experience.
 - Replace technical Shared Match language with human states such as Hosting, Joined, Waiting, Needs Review, and Synchronized; retain diagnostics behind troubleshooting.
 - Attach restrained Account UX to Beta Account Activation, including explicit local-versus-cloud guidance.
+- v30.3.92 Beta Account Activation is in development: email OTP remains the first provider; first-time users explicitly create their own permanent Golfer Identity; no historical local records are uploaded, claimed, matched, or merged; production activation remains a separate approval gate.
 - Attach Library and Courses information-architecture work to their later ownership/catalog releases instead of redesigning them twice.
 - In the Library and Courses release, add canonical latitude/longitude, provenance, correction controls, and catalog-backed nearby discovery. Permit on-device distance sorting for saved courses when trustworthy coordinates exist.
 

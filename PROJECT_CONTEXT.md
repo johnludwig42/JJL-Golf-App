@@ -233,9 +233,12 @@ v30.3.86 — Scoring Integrity & Audit Remediation
 10. Insights Foundation
    - Versioned filter/result contracts, local legacy adapter, eligibility rules, and data-coverage audit
    - Question-first, deterministic, offline analytics before AI coaching
-11. Beta Account Activation, Account UX & More Navigation
-   - Apply the shared design system first to More
-   - Organize Account & Security, Preferences, Press Preferences, Shared Match & Connectivity, Data & Diagnostics, and About as focused destinations
+11. v30.3.92 — Beta Account Activation (in development)
+   - Preserve six-digit email OTP, session restoration, sign-out, and optional local scoring
+   - Require explicit first-time creation of the Account holder’s own permanent Golfer Identity
+   - Never identify or merge a golfer by name, nickname, email, phone, GHIN, or Device
+   - Keep all historical local player/Round linking and cloud upload deferred
+   - Keep the tracked production-associated Account gate disabled until separate schema and activation approval
 12. Cloud Security & Ownership Activation
 13. Library & Courses Navigation
    - Canonical course coordinates, provenance, correction, and catalog-backed nearby lookup

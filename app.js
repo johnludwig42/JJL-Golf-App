@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.91',
-  versionNumber: '30.3.91',
-  cacheName: 'the-dye-ledger-v30.3.91',
-  buildDate: '2026-08-06T00:38:19.000Z',
-  buildLabel: 'Match Summary Clarity & Layout'
+  version: 'v30.3.92',
+  versionNumber: '30.3.92',
+  cacheName: 'the-dye-ledger-v30.3.92',
+  buildDate: '2026-08-06T23:33:10.814-04:00',
+  buildLabel: 'Beta Account Activation'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;

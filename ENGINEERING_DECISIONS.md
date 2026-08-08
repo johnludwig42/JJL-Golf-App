@@ -540,6 +540,22 @@ Status: Locked.
 
 ---
 
+### 33. Account verification and Golfer Identity creation are separate explicit acts
+
+Email OTP establishes a durable Supabase Auth-backed Account session. It does not itself identify a golfer, claim an existing player, or confer ownership over Device-local records.
+
+After first sign-in, an Account with no claimed Golfer Identity must explicitly confirm creation of the permanent Golfer Identity representing that person. Full name and optional nickname are profile attributes only. Name, nickname, email, phone, GHIN, and Device identifiers must never be used as canonical identity keys or automatic merge criteria.
+
+The onboarding transaction derives Account ownership from `auth.uid()`, rejects anonymous sessions, creates at most one claimed Golfer Identity per Account, and creates the Account-owned Personal Golfer Library relationship. Repeated submission returns the existing identity without rewriting its profile.
+
+Authentication remains optional for local scoring and joined Shared Match Devices. Sign-in and onboarding must not scan, upload, claim, rewrite, deduplicate, merge, or delete existing local players or Rounds. Historical linking, provider linking, privacy workflows, and cloud Round migration require later, separately governed releases.
+
+Tracked production activation remains fail-closed until the exact project, live schema, migration, SMTP/template, redirect, rate-limit, and abuse controls are explicitly approved.
+
+Status: Locked.
+
+---
+
 ## Future Roadmap Ordering
 
 The current strategic order is:

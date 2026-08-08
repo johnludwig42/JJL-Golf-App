@@ -21,3 +21,19 @@ No migration self-applies. Production application requires separate Product Owne
 Stop new writes, preserve identity/history tables, revoke new grants, and use the data-preserving rollback under `supabase/rollbacks`. Do not restore anonymous catalog mutation or delete RoundRecord versions. Prefer a forward fix after records exist.
 
 Phone, SMS, social login, and external provider configuration are out of scope.
+
+## v30.3.92 activation addendum
+
+The tracked application configuration references the existing application Supabase project while Account authentication remains disabled. A different project was previously used for disposable identity testing. Do not infer that either remote project contains the v30.3.75 identity schema: inventory the explicitly selected target before changing the gate.
+
+Before enabling v30.3.92 Account authentication:
+
+1. Obtain separate Product Owner approval naming the exact environment and project reference.
+2. Inventory the target without printing its URL credentials, JWTs, publishable/secret keys, OTPs, or user data.
+3. In a disposable local or explicitly approved non-production environment, apply migrations `202607220001` through `202607220003`, then `202608060001`, twice; run the identity actor tests and onboarding tests.
+4. Verify Auth email uses a branded template that renders `{{ .Token }}` as a six-digit code, not only a magic link. Validate expiry, resend throttling, provider rate limits, CAPTCHA/abuse readiness, delivery/bounces, and the exact redirect allowlist.
+5. Verify Account session storage remains separate from anonymous Shared Match auth and that sign-out affects only the durable Account client.
+6. Verify first-time identity creation, repeat submission, reload, offline failure, and RLS denial for anonymous or unrelated actors.
+7. Re-run installed iPhone PWA data-retention and two-Device Shared Match acceptance before production activation.
+
+Migration `202608060001` is data-preserving and creates no automatic matching path. Its rollback removes only the RPC. After any identity exists, do not delete Account, Golfer Identity, or Personal Golfer Library rows as an application rollback.

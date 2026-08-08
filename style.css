@@ -1524,6 +1524,21 @@ body.sheet-open{overflow:hidden}
 /* v23.8 stat tracking */
 .inline-check{display:flex;align-items:center;gap:10px;font-weight:600}
 .inline-check input{width:18px;height:18px}
+.account-identity-summary{
+  border:1px solid var(--border);
+  border-radius:16px;
+  background:var(--accent-2);
+  padding:14px;
+}
+.account-identity-confirm{
+  display:grid;
+  grid-template-columns:22px minmax(0,1fr);
+  align-items:start;
+  gap:10px;
+  font-weight:600;
+  line-height:1.35;
+}
+.account-identity-confirm input{width:20px;height:20px;margin:1px 0 0}
 .smart-score-preset-wrap{
   display:grid;
   grid-template-columns:minmax(0, 1fr);

@@ -1,5 +1,5 @@
 begin;
-select plan(21);
+select plan(23);
 
 insert into public.course_library_roles(user_id,can_create_drafts,is_maintainer) values
  ('93000000-0000-0000-0000-000000000002',true,false),
@@ -38,6 +38,8 @@ reset role;
 select set_config('request.jwt.claim.sub','93000000-0000-0000-0000-000000000001',true);
 set local role authenticated;
 select is((select count(*)::int from public.matches where id='DYE-930001'),1,'host reads owned Shared Match');
+select lives_ok($$insert into public.matches(id,created_by,status) values ('DYE-930003',null,'active')$$,'current client null owner is safely attributed by trigger');
+select is((select created_by::text from public.matches where id='DYE-930003'),'93000000-0000-0000-0000-000000000001','new Shared Match owner is the authenticated host');
 select lives_ok($$insert into public.audit_log(id,match_id,actor_user_id) values ('audit-host','DYE-930001','93000000-0000-0000-0000-000000000001')$$,'host writes attributed audit event');
 select throws_ok($$insert into public.audit_log(id,match_id,actor_user_id) values ('audit-forged','DYE-930001','93000000-0000-0000-0000-000000000002')$$,'42501',null,'host cannot forge audit attribution');
 reset role;

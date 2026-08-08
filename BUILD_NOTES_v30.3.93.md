@@ -11,7 +11,7 @@
 
 ## Deployment status
 
-The migration has **not** been applied to production. Account activation remains disabled. Production application requires the separate runbook gates, backup, explicit target confirmation, disposable-environment policy tests, and Product Owner approval.
+The reviewed migration was applied to the confirmed Dye Ledger production project on August 8, 2026 after schema/data backup, fresh inventory, disposable-environment policy tests, and Product Owner approval. Postflight counts matched exactly, all 11 protected tables had RLS enabled, no permissive `true` policies or anonymous catalog-write grants remained, and the migration was recorded as `202608070001` in the Supabase ledger. Account activation remains disabled.
 
 ## Compatibility
 
@@ -21,7 +21,7 @@ No localStorage key or local record is rewritten. Sign-in and migration do not u
 
 - Focused security/compatibility suite: 26/26 passed.
 - Full application suite: 350/350 passed.
-- Disposable local SQL suite: legacy Identity/RoundRecord tests passed; v30.3.93 passed 21 actor-level RLS assertions.
+- Disposable local SQL suite: legacy Identity/RoundRecord tests passed; the final compatibility migration passed 23 actor-level RLS assertions.
 - Migration idempotency: v30.3.93 applied twice successfully.
 - Rollback probe: baseline Course, Tee, Hole, Match, and Score rows were preserved; secure migration then reapplied successfully.
 - Release validation and diff whitespace checks passed. Repository lint remained at zero errors and 163 pre-existing warnings.

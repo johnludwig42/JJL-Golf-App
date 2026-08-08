@@ -116,6 +116,17 @@ grant select on public.courses, public.course_tees, public.course_holes to anon,
 grant insert, update, delete on public.courses, public.course_tees, public.course_holes to authenticated;
 
 -- Shared Match membership boundary. SECURITY DEFINER avoids recursive RLS checks.
+create or replace function public.stamp_shared_match_owner()
+returns trigger language plpgsql security invoker set search_path = '' as $$
+begin
+  if new.created_by is null then new.created_by := auth.uid(); end if;
+  return new;
+end $$;
+drop trigger if exists stamp_shared_match_owner_before_insert on public.matches;
+create trigger stamp_shared_match_owner_before_insert before insert on public.matches
+for each row execute function public.stamp_shared_match_owner();
+revoke all on function public.stamp_shared_match_owner() from public, anon, authenticated;
+
 create or replace function public.shared_match_is_member(p_match_id text)
 returns boolean language sql stable security definer set search_path = '' as $$
   select auth.uid() is not null and (

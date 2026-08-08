@@ -17,7 +17,7 @@ const worker = fs.readFileSync('service-worker.js', 'utf8');
 test('Round Progress exposes an explicit Sync Now action and no mojibake disclosure glyph', () => {
   assert.match(html, /id="sharedRoundSyncNowBtn"[^>]*data-retry-shared-sync="1"[^>]*>Sync Now</);
   assert.match(app, /class="shared-sync-disclosure"/);
-  assert.doesNotMatch(app, /Ã¢â€“Â¾/);
+  assert.doesNotMatch(app, /ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¾/);
   assert.match(css, /\.shared-sync-disclosure\{/);
 });
 
@@ -84,8 +84,8 @@ test('PDF preflight moves whole fitting sections to a fresh page', () => {
 });
 
 test('release metadata includes a real non-midnight build timestamp', () => {
-  assert.match(app, /version: 'v30\.3\.92'/);
-  assert.match(worker, /version: 'v30\.3\.92'/);
-  assert.match(app, /buildDate: '2026-08-06T23:33:10\.814-04:00'/);
+  assert.match(app, /version: 'v30\.3\.93'/);
+  assert.match(worker, /version: 'v30\.3\.93'/);
+  assert.match(app, /buildDate: '2026-08-07T12:00:00\.000-04:00'/);
   assert.doesNotMatch(app, /buildDate: '2026-08-05T04:00:00\.000Z'/);
 });

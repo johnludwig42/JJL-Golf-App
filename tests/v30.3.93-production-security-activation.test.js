@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const migration=fs.readFileSync('supabase/migrations/202608070001_v30_3_93_production_security_activation.sql','utf8');
+const rollback=fs.readFileSync('supabase/rollbacks/202608070001_v30_3_93_production_security_activation_rollback.sql','utf8');
+const app=fs.readFileSync('app.js','utf8');
+test('migration is transactional, idempotent, and data preserving',()=>{assert.match(migration,/^begin;/m);assert.match(migration,/^commit;/m);assert.match(migration,/add column if not exists owner_user_id/i);assert.doesNotMatch(migration,/delete from|truncate|drop table/i);assert.doesNotMatch(rollback,/delete from|truncate|drop table/i);});
+test('catalog keeps public reads and removes anonymous writes',()=>{assert.match(migration,/grant select on public\.courses, public\.course_tees, public\.course_holes to anon, authenticated/i);assert.doesNotMatch(migration,/grant[^;]*(insert|update|delete)[^;]*to anon/i);assert.match(migration,/course_library_can_write/i);assert.match(migration,/is_anonymous/i);});
+test('Shared Match is membership scoped and audit attribution is bound',()=>{assert.match(migration,/function public\.join_shared_match/i);assert.match(migration,/shared_match_is_member\(match_id\)/i);assert.doesNotMatch(migration,/using\s*\(true\)|with check\s*\(true\)/i);assert.match(migration,/actor_user_id=auth\.uid\(\)/i);});
+test('join authorization precedes protected bundle fetch',()=>{const start=app.indexOf('async function loadSharedMatchFromCloud');const load=app.slice(start,start+5000);assert.match(app,/client\.rpc\('join_shared_match'/);assert.ok(load.indexOf('authorizeSharedMatchJoin')<load.indexOf('fetchSharedMatchBundleWithRetry'));assert.match(app,/p_device_id: getSharedDeviceId\(\)/);});

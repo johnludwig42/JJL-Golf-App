@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.92',
-  versionNumber: '30.3.92',
-  cacheName: 'the-dye-ledger-v30.3.92',
-  buildDate: '2026-08-06T23:33:10.814-04:00',
-  buildLabel: 'Beta Account Activation'
+  version: 'v30.3.93',
+  versionNumber: '30.3.93',
+  cacheName: 'the-dye-ledger-v30.3.93',
+  buildDate: '2026-08-07T12:00:00.000-04:00',
+  buildLabel: 'Production Security Activation'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -12284,6 +12284,23 @@ async function fetchSharedMatchBundleWithRetry(matchId, { attempts = 3, delayMs 
   }
   throw lastError || new Error('Shared match not found.');
 }
+async function authorizeSharedMatchJoin(matchId) {
+  const canonical = normalizeJoinMatchCode(matchId);
+  if (!canonical) throw new Error('Enter a valid Shared Match code.');
+  const client = await ensureSupabaseClient();
+  if (!client) throw new Error('Shared Match service is unavailable.');
+  const { data, error } = await client.rpc('join_shared_match', {
+    p_match_code: canonical,
+    p_device_id: getSharedDeviceId(),
+    p_device_label: JSON.stringify({
+      sharedDeviceId: getSharedDeviceId(),
+      deviceName: getPreferredSharedDeviceName('Joined Device'),
+      userAgent: navigator.userAgent.slice(0, 120),
+    }),
+  });
+  if (error) throw error;
+  return normalizeMatchCode(data || canonical);
+}
 async function sharedMatchCodeExists(code) {
   const canonical = normalizeJoinMatchCode(code);
   if (!canonical) return true;
@@ -12910,9 +12927,10 @@ async function registerSharedJoinDevice(match, {
   return { registered: !!registered, published };
 }
 async function loadSharedMatchFromCloud(matchId, { activate = true, silent = false, requireRegistration = false } = {}) {
-  const cloudId = normalizeMatchCode(matchId || '');
+  let cloudId = normalizeMatchCode(matchId || '');
   if (!cloudId) throw new Error('Enter a shared match code.');
   console.debug('[SharedJoin]', 'normalized match code', { input: matchId, normalized: cloudId });
+  if (requireRegistration) cloudId = await authorizeSharedMatchJoin(cloudId);
   let bundle = null;
   try {
     bundle = await fetchSharedMatchBundleWithRetry(cloudId);

@@ -10925,6 +10925,9 @@ function hasSupabaseConfig() {
 async function ensureSupabaseClient(options = {}) {
   if (!hasSupabaseConfig()) return null;
   const anonymousAuth = options?.anonymousAuth !== false;
+  if (!supabaseClient && window.__DYE_SUPABASE_CLIENT__) {
+    supabaseClient = window.__DYE_SUPABASE_CLIENT__;
+  }
   if (supabaseClient) {
     if (anonymousAuth) {
       const existing = await supabaseClient.auth.getUser();
@@ -10938,9 +10941,10 @@ async function ensureSupabaseClient(options = {}) {
   if (!supabaseInitPromise) {
     supabaseInitPromise = (async () => {
       const client = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey, {
-        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+        auth: { storageKey: window.DyeLedgerIdentitySecurity?.ACCOUNT_AUTH_STORAGE_KEY || 'dye-ledger-account-auth-v1', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
       });
       supabaseClient = client;
+      window.__DYE_SUPABASE_CLIENT__ = client;
       return client;
     })().catch(err => {
       supabaseInitPromise = null;
@@ -18975,7 +18979,9 @@ function renderSetupSharedAdminPanel() {
   const isHost = isCurrentDeviceMatchHost(match);
   const mode = normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device');
   const code = normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || '');
-  const codeLabel = isLegacySharedMatchCode(code) ? 'Legacy Match Code' : 'Shared Match Code';
+  const isPublished = match.cloudSyncState === 'cloud-synced' && !match.lastSharedSyncError;
+  const canShareCode = isLegacySharedMatchCode(code) || isPublished;
+  const codeLabel = isLegacySharedMatchCode(code) ? 'Legacy Match Code' : (isPublished ? 'Shared Match Code' : 'Unpublished Match Code');
   let participants = getSharedAssignmentParticipants(match);
   let devices = getSharedAssignmentDevices(match);
   if (match.sharedMatchId && hasSupabaseConfig() && isHost && !sharedParticipantPanelRefreshPending) {
@@ -19034,7 +19040,7 @@ function renderSetupSharedAdminPanel() {
       <span class="setup-role-badge">${isHost ? 'Host' : 'Joined'}</span>
     </div>
     <div class="shared-match-panel top-gap shared-match-status-${escapeHtml(sync.tone)}">
-      <div class="shared-match-code"><span>${escapeHtml(codeLabel)}</span><strong>${escapeHtml(code || '—')}</strong><div class="tiny">${isLegacySharedMatchCode(code) ? 'This existing match keeps its original code. Enter it exactly as shown to join.' : 'Players can join this match using the code above.'}</div></div>
+      <div class="shared-match-code"><span>${escapeHtml(codeLabel)}</span><strong>${escapeHtml(code || '—')}</strong><div class="tiny">${isLegacySharedMatchCode(code) ? 'This existing match keeps its original code. Enter it exactly as shown to join.' : isPublished ? 'Players can join this match using the code above.' : 'Not published yet. This code cannot be joined until synchronization succeeds.'}</div></div>
       <div class="shared-status-grid top-gap">
         <div><div class="tiny">Connection</div><strong>${escapeHtml(getSharedOnlineLabel())}</strong></div>
         <div><div class="tiny">Status</div><strong>${escapeHtml(sync.label)}</strong></div>
@@ -19045,8 +19051,8 @@ function renderSetupSharedAdminPanel() {
       <div class="tiny top-gap">${escapeHtml(sync.detail)}</div>
       <div class="shared-readiness-summary top-gap">${getSharedMatchReadinessLines(match, participants).map(line => `<div>${escapeHtml(line)}</div>`).join('')}</div>
       <div class="actions wrap compact-actions top-gap">
-        <button type="button" class="secondary" data-copy-shared-code="${escapeHtml(code)}">Copy Code</button>
-        <button type="button" class="secondary" data-share-shared-code="${escapeHtml(code)}">Share Code</button>
+        <button type="button" class="secondary" data-copy-shared-code="${escapeHtml(code)}" ${canShareCode ? '' : 'disabled'}>Copy Code</button>
+        <button type="button" class="secondary" data-share-shared-code="${escapeHtml(code)}" ${canShareCode ? '' : 'disabled'}>Share Code</button>
         <button type="button" class="secondary" id="setupSyncSharedMatchNowBtn">Retry Sync</button>
         ${isHost && isAssignedPlayersMode(match) ? '<button type="button" class="secondary" data-focus-shared-assignments="1">Manage Assignments</button>' : ''}
         ${isHost ? '<button type="button" data-start-shared-scoring="1">Start Scoring</button>' : ''}
@@ -20612,6 +20618,12 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const scoreEntryMode = getLegacyScoreEntryMode(scoringAccessMode);
     const officialScorerName = String(fd.get('officialScorerName') || '').trim() || 'Official scorer';
     const sharedMatchEnabled = (scoringAccessMode === 'assigned_players' || fd.get('sharedMatchEnabled') === 'on') && hasSupabaseConfig();
+    if (sharedMatchEnabled) {
+      const accountUser = await getSupabaseUser();
+      if (!window.DyeLedgerIdentitySecurity?.isDurableAccountSession?.({ user: accountUser })) {
+        return toast('Sign in under More → Account & Security before creating a Shared Match. Local-only scoring remains available.', 6200);
+      }
+    }
     const validationState = getMatchSetupValidationState({ fd, selectedPlayers, selectedGames, sharedMatchEnabled, scoringAccessMode });
     logMatchFinalizationDiagnostics('pre-build', { selectedPlayers, selectedGames, existing, sharedMatchEnabled, scoringAccessMode, courseId: String(fd.get('courseId') || ''), teeId: String(fd.get('teeId') || ''), holeCount: Number(fd.get('holeCount')) === 9 ? 9 : 18, validationState });
     if (!validationState.ready) {
@@ -20758,8 +20770,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       } catch (cloudErr) {
         console.error(cloudErr);
         match.cloudSyncState = 'local-cache';
+        match.lastSharedSyncError = getSharedFriendlyError(cloudErr);
         persist({ skipRender: true });
-        toast('Shared Match is offline. The round is saved locally and will sync when the connection returns.');
+        toast('Shared Match was not published. The round is saved locally, but its code cannot be joined until synchronization succeeds.', 6200);
       }
     }
     loadMatchEditor(null);

@@ -156,8 +156,8 @@ test('More shows exactly the current and four preceding release notes', () => {
 test('current assets refresh and Play exposes the authoritative End Round workflow', () => {
   const worker = readFileSync(new URL('../service-worker.js', import.meta.url), 'utf8');
   for (const asset of ['manifest.json', 'style.css', 'supabase-config.js', 'identity-security.js', 'app.js']) {
-    assert.match(html, new RegExp(`${asset.replace('.', '\\.') }\\?v=30\\.3\\.93&amp;rev=1`));
-    assert.match(worker, new RegExp(`${asset.replace('.', '\\.') }\\?v=30\\.3\\.93&rev=1`));
+    assert.match(html, new RegExp(`${asset.replace('.', '\\.') }\\?v=30\\.3\\.93&amp;rev=2`));
+    assert.match(worker, new RegExp(`${asset.replace('.', '\\.') }\\?v=30\\.3\\.93&rev=2`));
   }
   assert.match(html, /<details class="play-round-details[\s\S]*?<button id="finishRoundBtn"[^>]*>End Round<\/button>/);
   assert.doesNotMatch(html, /id="confirmFinishRoundBtn"/);

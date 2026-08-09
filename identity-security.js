@@ -233,7 +233,7 @@
     const config = global.__DYE_SUPABASE_CONFIG__ || {};
     const gate = getAccountAuthGate(config);
     const client = gate.enabled && config.url && config.anonKey && global.supabase?.createClient
-      ? (global.__DYE_SUPABASE_CLIENT__ || (global.__DYE_SUPABASE_CLIENT__ = global.supabase.createClient(config.url, config.anonKey, { auth: { storageKey: ACCOUNT_AUTH_STORAGE_KEY, persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }, global: { headers: { 'X-Client-Info': 'the-dye-ledger-account-v30.3.94' } } })))
+      ? (global.__DYE_SUPABASE_CLIENT__ || (global.__DYE_SUPABASE_CLIENT__ = global.supabase.createClient(config.url, config.anonKey, { auth: { storageKey: ACCOUNT_AUTH_STORAGE_KEY, persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }, global: { headers: { 'X-Client-Info': 'the-dye-ledger-account-v30.3.95' } } })))
       : null;
     const controller = createAuthController({ client });
     const profileController = createIdentityProfileController({ client });

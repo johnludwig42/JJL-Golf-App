@@ -54,4 +54,8 @@ Invoke-SqlFile 'supabase/rollbacks/202608070001_v30_3_93_production_security_act
 Invoke-SqlFile 'supabase/tests/v30_3_93_rollback_probe.sql'
 # Leave the disposable target in the secure state after validating rollback.
 Invoke-SqlFile 'supabase/migrations/202608070001_v30_3_93_production_security_activation.sql'
-Write-Host 'Identity and security migration/RLS test sequence completed successfully through v30.3.93.'
+Invoke-SqlFile 'supabase/migrations/202608090001_v30_3_96_identity_shared_publish_remediation.sql'
+# A second application is the v30.3.96 idempotency gate.
+Invoke-SqlFile 'supabase/migrations/202608090001_v30_3_96_identity_shared_publish_remediation.sql'
+Invoke-SqlFile 'supabase/tests/v30_3_96_identity_shared_publish_remediation_test.sql'
+Write-Host 'Identity and security migration/RLS test sequence completed successfully through v30.3.96.'

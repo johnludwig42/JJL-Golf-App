@@ -583,6 +583,14 @@ Status: Current planning assumption.
 
 ---
 
+### 34. Initial Shared Match ownership is established server-side
+
+New cloud Shared Matches require a durable authenticated Account. The initial Owner and organizer membership are established atomically by a narrowly granted server function that derives ownership from `auth.uid()`; browser-supplied ownership is never authoritative. Devices, Participants, roles, and scoring assignments remain separate. Existing local matches remain local until the host explicitly creates or retries a Shared Match publication.
+
+Status: Locked.
+
+---
+
 ## Default Engineering Rule
 
 When in doubt, prefer:

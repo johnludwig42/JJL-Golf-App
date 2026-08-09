@@ -1,23 +1,23 @@
 const BUILD_INFO = {
-  version: 'v30.3.95',
-  versionNumber: '30.3.95',
-  cacheName: 'the-dye-ledger-v30.3.95',
-  buildDate: '2026-08-08T12:00:00.000-04:00'
+  version: 'v30.3.96',
+  versionNumber: '30.3.96',
+  cacheName: 'the-dye-ledger-v30.3.96',
+  buildDate: '2026-08-09T03:44:34.787Z'
 };
 const CACHE_NAME = BUILD_INFO.cacheName;
 const ASSETS = [
   './',
   './index.html',
-  './style.css?v=30.3.95&rev=1',
-  './app.js?v=30.3.95&rev=1',
-  './identity-security.js?v=30.3.95&rev=1',
-  './supabase-config.js?v=30.3.95&rev=1',
-  './manifest.json?v=30.3.95&rev=1',
-  './branding/apple-touch-icon-v30.3.95.png',
-  './branding/favicon-32-v30.3.95.png',
-  './branding/favicon-16-v30.3.95.png',
-  './branding/app-icon-192-v30.3.95.png',
-  './branding/app-icon-512-v30.3.95.png',
+  './style.css?v=30.3.96&rev=1',
+  './app.js?v=30.3.96&rev=1',
+  './identity-security.js?v=30.3.96&rev=1',
+  './supabase-config.js?v=30.3.96&rev=1',
+  './manifest.json?v=30.3.96&rev=1',
+  './branding/apple-touch-icon-v30.3.96.png',
+  './branding/favicon-32-v30.3.96.png',
+  './branding/favicon-16-v30.3.96.png',
+  './branding/app-icon-192-v30.3.96.png',
+  './branding/app-icon-512-v30.3.96.png',
   './players.svg',
   './courses.svg',
   './setup.svg',

@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.95',
-  versionNumber: '30.3.95',
-  cacheName: 'the-dye-ledger-v30.3.95',
-  buildDate: '2026-08-08T12:00:00.000-04:00',
-  buildLabel: 'SSP Calculation Clarity'
+  version: 'v30.3.96',
+  versionNumber: '30.3.96',
+  cacheName: 'the-dye-ledger-v30.3.96',
+  buildDate: '2026-08-09T03:44:34.787Z',
+  buildLabel: 'Identity & Shared Match Publication Repair'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -1156,6 +1156,7 @@ const SHARED_DIAGNOSTIC_REASON_CODES = Object.freeze([
   'RECONNECT',
   'AUTHORITATIVE_OVERWRITE',
   'JOINED_OVERWRITE_PREVENTED',
+  'CLOUD_SYNC_FAILED',
 ]);
 function recordSharedSyncDiagnostic(match, reasonCode, detail = {}, occurredAt = new Date().toISOString()) {
   if (!match || match.storageMode !== 'shared' || !SHARED_DIAGNOSTIC_REASON_CODES.includes(reasonCode)) return null;
@@ -1569,6 +1570,24 @@ function getSharedFriendlyError(err) {
   if (/not found/i.test(raw)) return 'Shared match was not found.';
   if (/permission|policy|auth|jwt|login/i.test(raw)) return 'Cloud permission needs attention.';
   return 'Cloud sync needs attention.';
+}
+function getSharedSafeErrorCode(err) {
+  const raw = String(err?.code || err?.status || '').trim();
+  return /^[A-Za-z0-9_-]{1,40}$/.test(raw) ? raw : 'SYNC_FAILED';
+}
+function recordSharedCloudFailure(match, err, { explicit = false, phase = 'sync' } = {}) {
+  if (!match) return null;
+  const code = getSharedSafeErrorCode(err);
+  const message = getSharedFriendlyError(err);
+  match.lastSharedSyncError = message;
+  match.lastSharedSyncErrorCode = code;
+  recordSharedSyncDiagnostic(match, 'CLOUD_SYNC_FAILED', { phase, code, message });
+  if (explicit) {
+    const safeError = new Error(`${message} Error code: ${code}.`);
+    safeError.name = 'SharedMatchCloudSyncError';
+    return recordAppError(safeError, 'Shared Match Cloud Sync');
+  }
+  return null;
 }
 function getAssignedPlayerNamesForParticipant(match, participantId = getCurrentSharedParticipantId(match)) {
   if (!match || match.storageMode !== 'shared') return [];
@@ -8319,6 +8338,7 @@ function normalizeMatch(match) {
   match.sharedSspConflicts = Array.isArray(match.sharedSspConflicts) ? match.sharedSspConflicts : [];
   match.sharedSspSyncState = String(match.sharedSspSyncState || (isSneakySandyPoleyEnabled(match) && match.storageMode === 'shared' ? 'pending' : 'not-applicable'));
   match.lastSharedSyncError = String(match.lastSharedSyncError || '');
+  match.lastSharedSyncErrorCode = String(match.lastSharedSyncErrorCode || '');
   match.sharedOwnerUserId = match.sharedOwnerUserId || null;
   match.sharedMatchRef = match.sharedMatchRef || match.sharedMatchId || match.id;
   match.sharedMatchCode = normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || '');
@@ -12165,6 +12185,14 @@ async function uploadSharedMatch(match) {
   ensureSharedParticipantRegistered(match, isCurrentDeviceMatchHost(match) ? 'Host Device' : getPreferredSharedDeviceName('Joined Device'));
   migrateSharedPlayerAssignmentsToParticipants(match);
   const payload = buildCloudMatchPayload(match, user?.id || null);
+  if (isCurrentDeviceMatchHost(match)) {
+    const { error: publicationError } = await client.rpc('publish_shared_match_owner', {
+      p_match: payload.matchRow,
+      p_device_id: getSharedDeviceId(),
+      p_device_label: getSharedDeviceLabelPayload(match),
+    });
+    if (publicationError) throw publicationError;
+  }
   // buildCloudMatchPayload() stamps course_snapshot.sharedMatchMeta.memories from
   // LOCAL state only. A raw upsert of matchRow therefore clobbers memories (and can
   // drop devices/assignments) that another device published since our last poll.
@@ -12260,6 +12288,7 @@ async function uploadSharedMatch(match) {
   match.lastCloudSyncAt = new Date().toISOString();
   match.lastSharedScorePushAt = match.lastCloudSyncAt;
   match.lastSharedSyncError = '';
+  match.lastSharedSyncErrorCode = '';
   if (payload.matchRow.course_snapshot.sharedMatchMeta.sspFacts && !(match.sharedSspConflicts || []).length) {
     match.sharedSspBaseline = JSON.parse(JSON.stringify(payload.matchRow.course_snapshot.sharedMatchMeta.sspFacts));
     match.sharedSspSyncState = 'synced';
@@ -13028,7 +13057,7 @@ async function flushSharedMatchSync(matchId, { silent = true } = {}) {
     } catch (err) {
       console.error(err);
       match.cloudSyncState = 'local-cache';
-      match.lastSharedSyncError = getSharedFriendlyError(err);
+      recordSharedCloudFailure(match, err, { explicit: !silent, phase: 'manual-sync' });
       persist({ skipRender: true });
       if (!silent) toast('Cloud sync failed. Changes are still stored locally on this device.');
     }
@@ -20790,7 +20819,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       } catch (cloudErr) {
         console.error(cloudErr);
         match.cloudSyncState = 'local-cache';
-        match.lastSharedSyncError = getSharedFriendlyError(cloudErr);
+        recordSharedCloudFailure(match, cloudErr, { explicit: true, phase: 'initial-publication' });
         persist({ skipRender: true });
         toast('Shared Match was not published. The round is saved locally, but its code cannot be joined until synchronization succeeds.', 6200);
       }

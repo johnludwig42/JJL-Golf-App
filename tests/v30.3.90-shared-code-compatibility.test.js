@@ -38,6 +38,6 @@ test('join and host UI explain both formats without presenting legacy as the new
 });
 
 test('current release identity is consistent in the app shell', () => {
-  assert.match(app, /version: 'v30\.3\.93'/);
-  assert.match(html, /id="appVersionFooter">v30\.3\.93</);
+  assert.match(app, /version: 'v30\.3\.94'/);
+  assert.match(html, /id="appVersionFooter">v30\.3\.94</);
 });

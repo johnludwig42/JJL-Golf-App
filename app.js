@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.93',
-  versionNumber: '30.3.93',
-  cacheName: 'the-dye-ledger-v30.3.93',
-  buildDate: '2026-08-07T12:00:00.000-04:00',
-  buildLabel: 'Production Security Activation'
+  version: 'v30.3.94',
+  versionNumber: '30.3.94',
+  cacheName: 'the-dye-ledger-v30.3.94',
+  buildDate: '2026-08-08T12:00:00.000-04:00',
+  buildLabel: 'SSP Scoring Integrity'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -3220,6 +3220,7 @@ function getDefaultSneakySandyPoleyHoleInput(match, holeNumber = 1) {
     holeNumber: Number(holeNumber) || 1,
     players,
     proxPlayerId: '',
+    proxResolution: '',
     bridge: false,
     rebridge: false,
     bridgeDeclaredByTeamId: '',
@@ -3252,6 +3253,8 @@ function normalizeSneakySandyPoleyHoleInput(match, raw = {}, holeNumber = 1) {
   const allowedIds = new Set(Object.keys(defaults.players));
   const proxPlayerId = String(raw?.proxPlayerId || '');
   defaults.proxPlayerId = allowedIds.has(proxPlayerId) ? proxPlayerId : '';
+  const proxResolution = String(raw?.proxResolution || '');
+  defaults.proxResolution = /^(push|team:[^:]+)$/.test(proxResolution) ? proxResolution.slice(0, 120) : '';
   defaults.bridge = !!raw?.bridge;
   defaults.rebridge = !!raw?.rebridge;
   [
@@ -3315,7 +3318,7 @@ function flattenSharedSspFacts(facts = null) {
       });
     });
     [
-      'proxPlayerId', 'bridge', 'rebridge',
+      'proxPlayerId', 'proxResolution', 'bridge', 'rebridge',
       'bridgeDeclaredByTeamId', 'rebridgeDeclaredByTeamId',
       'bridgeDeclaredAt', 'rebridgeDeclaredAt',
       'bridgeDeclaredByParticipantId', 'rebridgeDeclaredByParticipantId',
@@ -3710,6 +3713,10 @@ function buildSneakySandyPoleyLedger(match, options = {}) {
       else if (!playerInput.greeny) holeWarnings.push('Prox requires an eligible Greeny.');
       else if (!validateOk) holeWarnings.push('Prox requires a validated Greeny recipient.');
       else addCategory(holeLedger, teamId, { category: 'prox', points: 2, playerId, label: `${getPlayerName(playerId)}: Prox` });
+    } else if (validationState.prox.mode === 'team' && validationState.prox.proxTeamId) {
+      const teamId = String(validationState.prox.proxTeamId);
+      if (!holeLedger.basePointsByTeam.hasOwnProperty(teamId)) holeWarnings.push('Prox team is not an SSP team.');
+      else addCategory(holeLedger, teamId, { category: 'prox', points: 2, label: 'Team Prox (closest player not recorded)' });
     }
     const scoredByTeam = teams.map(team => {
       const scores = playerScores.filter(score => String(score.team) === team.id && score.net != null && Number.isFinite(Number(score.net)));
@@ -3765,7 +3772,7 @@ function buildSneakySandyPoleyLedger(match, options = {}) {
       label: priorHonorsTeamId ? `Honors: ${formatSneakySandyPoleyTeamName({ teams }, match, priorHonorsTeamId)}` : 'Honors: Team 1',
     };
     holeLedger.pointsAfterTakeKeepByTeam = { ...holeLedger.basePointsByTeam };
-    if (holeLedger.counted && baseWinner.total > 0) {
+    if (holeLedger.counted) {
       if (baseWinner.teamId) {
         if (!controlTeamId || controlTeamId !== baseWinner.teamId) {
           controlTeamId = baseWinner.teamId;
@@ -3790,6 +3797,7 @@ function buildSneakySandyPoleyLedger(match, options = {}) {
     if (holeLedger.counted) {
       holeLedger.bridge = getSneakySandyPoleyBridgeState(cfg, getSneakySandyPoleyHoleInput(match, holeLedger.holeNumber), holeLedger.warnings, priorHonorsTeamId, teams);
       holeLedger.umbee = getSneakySandyPoleyUmbeeState(cfg, holeLedger, teams, holeLedger.bridge, holeLedger.warnings);
+      holeLedger.authoritativeEligible = holeLedger.sequenceEligible && !holeLedger.unresolved && !holeLedger.bridge?.invalid;
       teams.forEach(team => {
         const bridgeMultiplier = Number(holeLedger.bridge?.multiplier || 1);
         const umbeeMultiplier = holeLedger.umbee?.teamId === team.id ? Number(holeLedger.umbee.multiplier || 1) : 1;
@@ -3797,12 +3805,12 @@ function buildSneakySandyPoleyLedger(match, options = {}) {
         holeLedger.finalMultiplierByTeam[team.id] = finalMultiplier;
         holeLedger.finalPointsByTeam[team.id] = Number(holeLedger.pointsAfterTakeKeepByTeam[team.id] || 0) * finalMultiplier;
         previewFinalTotalsByTeam[team.id] = Number(previewFinalTotalsByTeam[team.id] || 0) + Number(holeLedger.finalPointsByTeam[team.id] || 0);
-        if (holeLedger.sequenceEligible) {
+        if (holeLedger.authoritativeEligible) {
           finalTotalsByTeam[team.id] = Number(finalTotalsByTeam[team.id] || 0) + Number(holeLedger.finalPointsByTeam[team.id] || 0);
         }
       });
     }
-    if (!holeLedger.sequenceEligible) {
+    if (!holeLedger.authoritativeEligible) {
       controlTeamId = authoritativeControlTeamId;
       mostRecentTakeTeamId = authoritativeMostRecentTakeTeamId;
       holeLedger.warnings.push('Live preview only — complete gross scores are required before this hole affects authoritative SSP state.');
@@ -3814,7 +3822,7 @@ function buildSneakySandyPoleyLedger(match, options = {}) {
       margin: runningWinner.margin,
       tied: runningWinner.tied,
     };
-    if (holeLedger.sequenceEligible && !runningWinner.tied && runningWinner.teamId) priorHonorsTeamId = runningWinner.teamId;
+    if (holeLedger.authoritativeEligible && !runningWinner.tied && runningWinner.teamId) priorHonorsTeamId = runningWinner.teamId;
   });
   const totalEntries = Object.entries(totalsByTeam);
   const sortedTotals = totalEntries.slice().sort((a, b) => Number(b[1]) - Number(a[1]));
@@ -3824,7 +3832,7 @@ function buildSneakySandyPoleyLedger(match, options = {}) {
   const sortedFinalTotals = finalEntries.slice().sort((a, b) => Number(b[1]) - Number(a[1]));
   const finalMargin = sortedFinalTotals.length >= 2 ? Math.abs(Number(sortedFinalTotals[0][1]) - Number(sortedFinalTotals[1][1])) : 0;
   const finalTied = !finalMargin;
-  const thru = Object.values(holes).filter(hole => hole.sequenceEligible).length;
+  const thru = Object.values(holes).filter(hole => hole.authoritativeEligible).length;
   const previewEntries = Object.entries(previewFinalTotalsByTeam).sort((a, b) => Number(b[1]) - Number(a[1]));
   const previewMargin = previewEntries.length >= 2 ? Math.abs(Number(previewEntries[0][1]) - Number(previewEntries[1][1])) : 0;
   const previewThru = Object.values(holes).filter(hole => hole.counted).length;
@@ -3856,11 +3864,11 @@ function buildSneakySandyPoleyLedger(match, options = {}) {
       tied: !previewMargin,
     },
     settlement: null,
-    unresolved: Object.values(holes).some(hole => hole.counted && (hole.unresolved || !hole.sequenceEligible || hole.bridge?.invalid))
+    unresolved: Object.values(holes).some(hole => hole.counted && !hole.authoritativeEligible)
       || (Array.isArray(match?.sharedSspConflicts) && match.sharedSspConflicts.length > 0),
     honorsByHole,
     sequenceMode: cfg.sspSequenceMode,
-    sequenceHoleNumbers: sequence.filter(hole => hole.sequenceEligible).map(hole => Number(hole.holeNumber)),
+    sequenceHoleNumbers: sequence.filter(hole => hole.authoritativeEligible).map(hole => Number(hole.holeNumber)),
     entryOrderFallback: cfg.sspSequenceMode === 'entry' && !hasEntryMetadata,
     warnings,
   };
@@ -3948,22 +3956,35 @@ function isSneakySandyPoleyProxEligible(input, playerId) {
 }
 
 const SSP_PROX_TBD_VALUE = '__tbd';
+const SSP_PROX_PUSH_VALUE = '__push';
+const SSP_PROX_TEAM_PREFIX = '__team:';
 
 function resolveSneakySandyPoleyProxSelection(input, players = [], options = {}) {
   const eligiblePlayers = Array.isArray(options.eligiblePlayers) ? options.eligiblePlayers : getSneakySandyPoleyEligibleProxPlayers(input, players);
   const eligibleIds = eligiblePlayers.map(player => String(player.playerId || '')).filter(Boolean);
   const requested = String(options.requestedProxPlayerId ?? input?.proxPlayerId ?? '');
+  const requestedResolution = String(options.requestedProxResolution ?? input?.proxResolution ?? '');
   const forceTbdOnMultiple = !!options.forceTbdOnMultiple;
   if (!eligibleIds.length) {
-    return { proxPlayerId: '', uiValue: '', mode: 'none', eligiblePlayers };
+    return { proxPlayerId: '', proxTeamId: '', proxResolution: '', uiValue: '', mode: 'none', eligiblePlayers };
   }
   if (eligibleIds.length === 1) {
-    return { proxPlayerId: eligibleIds[0], uiValue: eligibleIds[0], mode: 'auto', eligiblePlayers };
+    return { proxPlayerId: eligibleIds[0], proxTeamId: '', proxResolution: '', uiValue: eligibleIds[0], mode: 'auto', eligiblePlayers };
   }
   if (!forceTbdOnMultiple && requested && requested !== SSP_PROX_TBD_VALUE && eligibleIds.includes(requested)) {
-    return { proxPlayerId: requested, uiValue: requested, mode: 'selected', eligiblePlayers };
+    return { proxPlayerId: requested, proxTeamId: '', proxResolution: '', uiValue: requested, mode: 'selected', eligiblePlayers };
   }
-  return { proxPlayerId: '', uiValue: SSP_PROX_TBD_VALUE, mode: 'tbd', eligiblePlayers };
+  const eligibleTeamIds = [...new Set(eligiblePlayers.map(player => String(player.team || player.teamId || '')).filter(Boolean))];
+  if (!forceTbdOnMultiple && requestedResolution === 'push' && eligibleTeamIds.length > 1) {
+    return { proxPlayerId: '', proxTeamId: '', proxResolution: 'push', uiValue: SSP_PROX_PUSH_VALUE, mode: 'push', eligiblePlayers };
+  }
+  if (!forceTbdOnMultiple && requestedResolution.startsWith('team:')) {
+    const teamId = requestedResolution.slice(5);
+    if (eligibleTeamIds.length === 1 && eligibleTeamIds[0] === teamId) {
+      return { proxPlayerId: '', proxTeamId: teamId, proxResolution: `team:${teamId}`, uiValue: `${SSP_PROX_TEAM_PREFIX}${teamId}`, mode: 'team', eligiblePlayers };
+    }
+  }
+  return { proxPlayerId: '', proxTeamId: '', proxResolution: '', uiValue: SSP_PROX_TBD_VALUE, mode: 'tbd', eligiblePlayers };
 }
 
 function buildSneakySandyPoleyTeamDetailsHtml(match, ledger, holeLedger) {
@@ -3986,6 +4007,10 @@ function buildSneakySandyPoleyTeamTilesHtml(ledger, pointsByTeam = {}) {
   return (ledger?.teams || []).map(team => `<div class="ssp-ledger-tile"><span>${escapeHtml(team.name)}</span><strong>${Number(pointsByTeam?.[team.id] || 0)}</strong></div>`).join('');
 }
 
+function buildSneakySandyPoleyCompactPointsText(ledger, pointsByTeam = {}) {
+  return (ledger?.teams || []).map(team => `${team.name} ${Number(pointsByTeam?.[team.id] || 0)}`).join(' / ');
+}
+
 function buildSneakySandyPoleyRunningText(match, ledger, holeLedger, options = {}) {
   const running = holeLedger?.runningLeader || ledger?.finalLeader || {};
   const holeNumber = Number(holeLedger?.holeNumber) || '';
@@ -3999,22 +4024,23 @@ function buildSneakySandyPoleyHolePreviewHtml(match, ledger, holeNumber) {
   if (!ledger.enabled) return '<div class="tiny top-gap">SSP ledger unavailable.</div>';
   const holeLedger = ledger.holes?.[String(holeNumber)];
   if (!holeLedger) return '<div class="tiny top-gap">No SSP ledger row for this hole yet.</div>';
-  const finalTiles = buildSneakySandyPoleyTeamTilesHtml(ledger, holeLedger.finalPointsByTeam);
   const details = buildSneakySandyPoleyTeamDetailsHtml(match, ledger, holeLedger);
   const multiplierText = holeLedger.bridge?.label || '1x';
   const umbeeText = holeLedger.umbee?.active
     ? `${formatSneakySandyPoleyTeamName(ledger, match, holeLedger.umbee.teamId)} ${holeLedger.umbee.reason}`
     : 'None';
+  const takeKeepText = holeLedger.takeKeep?.teamId
+    ? `${formatSneakySandyPoleyTeamName(ledger, match, holeLedger.takeKeep.teamId)} ${holeLedger.takeKeep.type === 'take' ? 'Take +2' : 'Keep +1'}`
+    : 'None';
+  const multiplierSummary = [multiplierText, umbeeText === 'None' ? 'Umbee off' : umbeeText].join(' / ');
   const warnings = (holeLedger.warnings || []).slice(0, 3).map(item => `<div class="ssp-ledger-warning">${escapeHtml(item)}</div>`).join('');
   return `
     <div class="ssp-ledger-preview top-gap">
       <div class="ssp-ledger-head"><span>Hole Points · Hole ${Number(holeNumber) || ''}</span><span class="tiny">Live preview</span></div>
-      <div class="ssp-ledger-mini-row"><span>Points Before Multiplier</span><strong>${escapeHtml(getSneakySandyPoleyTeamDiffText(match, ledger, holeLedger, { beforeMultiplier: true }))}</strong></div>
-      <div class="ssp-ledger-tiles">${buildSneakySandyPoleyTeamTilesHtml(ledger, holeLedger.pointsAfterTakeKeepByTeam)}</div>
-      <div class="ssp-ledger-detail-list">${details}</div>
-      <div class="ssp-ledger-adjustment-line"><span>Multiplier:</span> <strong>${escapeHtml([multiplierText, umbeeText === 'None' ? 'Umbee off' : umbeeText].join(' · '))}</strong></div>
-      <div class="ssp-ledger-mini-row"><span>Final Hole Total</span><strong>${escapeHtml(getSneakySandyPoleyTeamDiffText(match, ledger, holeLedger, { final: true }))}</strong></div>
-      <div class="ssp-ledger-tiles">${finalTiles}</div>
+      <div class="ssp-ledger-mini-row"><span>Raw SSP Points</span><strong>${escapeHtml(buildSneakySandyPoleyCompactPointsText(ledger, holeLedger.basePointsByTeam))}</strong></div>
+      <div class="ssp-ledger-mini-row"><span>Take / Keep</span><strong>${escapeHtml(`${takeKeepText} / ${multiplierSummary}`)}</strong></div>
+      <div class="ssp-ledger-mini-row ssp-ledger-final-row"><span>Final</span><strong>${escapeHtml(buildSneakySandyPoleyCompactPointsText(ledger, holeLedger.finalPointsByTeam))}</strong></div>
+      <details class="ssp-ledger-details"><summary>View point details</summary><div class="ssp-ledger-detail-list">${details}</div></details>
       <div class="ssp-ledger-match-line">${escapeHtml(buildSneakySandyPoleyRunningText(match, ledger, holeLedger, { includesDraft: !!match.__includesUnsavedDraft }))}</div>
       ${warnings ? `<div class="ssp-ledger-warning-list top-gap">${warnings}</div>` : ''}
     </div>`;
@@ -6920,7 +6946,7 @@ function buildSneakySandyPoleyExportSummary(match, metrics) {
       <div class="game-summary-sub">Base ${Number(ledger.baseTotalsByTeam?.[team.id] || 0)} pts</div>
     </div>`).join('');
   const holeRows = countedHoles.map(hole => {
-    const base = teams.map(team => `${team.name} ${Number(hole.pointsAfterTakeKeepByTeam?.[team.id] || 0)}`).join(' / ');
+    const base = teams.map(team => `${team.name} ${Number(hole.basePointsByTeam?.[team.id] || 0)}`).join(' / ');
     const final = teams.map(team => `${team.name} ${Number(hole.finalPointsByTeam?.[team.id] || 0)}`).join(' / ');
     const takeKeep = hole.takeKeep?.teamId ? `${formatSneakySandyPoleyTeamName(ledger, match, hole.takeKeep.teamId)} ${hole.takeKeep.type === 'take' ? 'Take +2' : 'Keep +1'}` : '-';
     const umbee = hole.umbee?.active ? `${formatSneakySandyPoleyTeamName(ledger, match, hole.umbee.teamId)} ${hole.umbee.reason}` : '-';
@@ -6997,14 +7023,14 @@ function buildSneakySandyPoleyAuditDetail(match, metrics) {
   const countedHoles = Object.values(ledger?.holes || {}).filter(hole => hole?.counted);
   if (!ledger?.enabled || teams.length !== 2 || !countedHoles.length) return '';
   const rows = countedHoles.map(hole => {
-    const base = teams.map(team => `${team.name} ${Number(hole.pointsAfterTakeKeepByTeam?.[team.id] || 0)}`).join(' / ');
+    const base = teams.map(team => `${team.name} ${Number(hole.basePointsByTeam?.[team.id] || 0)}`).join(' / ');
     const final = teams.map(team => `${team.name} ${Number(hole.finalPointsByTeam?.[team.id] || 0)}`).join(' / ');
     const takeKeep = hole.takeKeep?.teamId ? `${formatSneakySandyPoleyTeamName(ledger, match, hole.takeKeep.teamId)} ${hole.takeKeep.type === 'take' ? 'Take +2' : 'Keep +1'}` : '—';
     const umbee = hole.umbee?.active ? `${formatSneakySandyPoleyTeamName(ledger, match, hole.umbee.teamId)} ${hole.umbee.reason}` : '—';
     const running = hole.runningLeader?.tied ? 'Tied' : `${formatSneakySandyPoleyTeamName(ledger, match, hole.runningLeader?.teamId)} +${Number(hole.runningLeader?.margin || 0)}`;
     return `<tr><td>${Number(hole.holeNumber) || ''}</td><td>${escapeHtml(base)}</td><td>${escapeHtml(takeKeep)}</td><td>${escapeHtml(hole.bridge?.label || '1x')}</td><td>${escapeHtml(umbee)}</td><td>${escapeHtml(final)}</td><td>${escapeHtml(running)}</td></tr>`;
   }).join('');
-  return `<section class="export-section export-section-ssp-audit"><div class="export-section-head"><h2>SSP Hole-by-Hole Audit</h2><div class="export-section-sub">Counted SSP holes only; missing or pre-SSP holes are not fabricated.</div></div><div class="fit-stage" data-fit="width" data-fit-min="0.72"><div class="fit-box"><table class="export-table ssp-export-table"><thead><tr><th>Hole</th><th>Points Before Multiplier</th><th>Take/Keep</th><th>Multiplier</th><th>Umbee</th><th>Final Hole Total</th><th>Match</th></tr></thead><tbody>${rows}</tbody></table></div></div></section>`;
+  return `<section class="export-section export-section-ssp-audit"><div class="export-section-head"><h2>SSP Hole-by-Hole Audit</h2><div class="export-section-sub">Counted SSP holes only; missing or pre-SSP holes are not fabricated.</div></div><div class="fit-stage" data-fit="width" data-fit-min="0.72"><div class="fit-box"><table class="export-table ssp-export-table"><thead><tr><th>Hole</th><th>Raw SSP Points</th><th>Take/Keep</th><th>Multiplier</th><th>Umbee</th><th>Final Hole Total</th><th>Match</th></tr></thead><tbody>${rows}</tbody></table></div></div></section>`;
 }
 
 function decorateReportSections(html) {
@@ -11950,7 +11976,11 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
       }
     }
     const prox = document.querySelector('[data-ssp-prox]');
-    const requestedProxPlayerId = prox ? String(prox.value || '') : next.proxPlayerId;
+    const requestedProxValue = prox ? String(prox.value || '') : next.proxPlayerId;
+    const requestedProxPlayerId = requestedProxValue.startsWith(SSP_PROX_TEAM_PREFIX) || requestedProxValue === SSP_PROX_PUSH_VALUE ? '' : requestedProxValue;
+    const requestedProxResolution = requestedProxValue === SSP_PROX_PUSH_VALUE
+      ? 'push'
+      : requestedProxValue.startsWith(SSP_PROX_TEAM_PREFIX) ? `team:${requestedProxValue.slice(SSP_PROX_TEAM_PREFIX.length)}` : '';
     document.querySelectorAll('[data-ssp-hole-key]').forEach(input => {
       const key = input.dataset.sspHoleKey || '';
       if (key !== 'bridge' && key !== 'rebridge') return;
@@ -11986,11 +12016,12 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
     const proxState = resolveSneakySandyPoleyValidation(
       match,
       next,
-      (match.players || []).map(player => ({ playerId: player.playerId })),
+      (match.players || []).map(player => ({ playerId: player.playerId, team: player.team })),
       Math.max(0, currentHole - 1),
-      { requestedProxPlayerId, forceTbdOnMultiple: !!options.sspGreenyChanged }
+      { requestedProxPlayerId, requestedProxResolution, forceTbdOnMultiple: !!options.sspGreenyChanged }
     ).prox;
     next.proxPlayerId = proxState.proxPlayerId;
+    next.proxResolution = proxState.proxResolution;
     if (!getSneakySandyPoleyConfig(match)?.allowBridgeRebridge) {
       next.bridge = false;
       next.rebridge = false;
@@ -15849,6 +15880,7 @@ function renderSneakySandyPoleyEntry(match, hole, metrics) {
   const validationState = resolveSneakySandyPoleyValidation(match, input, players, Math.max(0, currentHole - 1));
   const proxState = validationState.prox;
   const proxEligiblePlayers = proxState.eligiblePlayers;
+  const proxEligibleTeamIds = [...new Set(proxEligiblePlayers.map(player => String(player.team || player.teamId || '')).filter(Boolean))];
   const actionKeys = [
     { key: 'sneaky', label: 'Sneaky' },
     { key: 'sandy', label: 'Sandy' },
@@ -15901,11 +15933,13 @@ function renderSneakySandyPoleyEntry(match, hole, metrics) {
       </div>
       <div class="grid two compact-grid top-gap">
         <label><span>Prox</span><select data-ssp-prox ${canEditHoleFacts && proxEligiblePlayers.length ? '' : 'disabled'}>
-          <option value="">None</option>
-          ${proxEligiblePlayers.length > 1 ? `<option value="${SSP_PROX_TBD_VALUE}" ${proxState.uiValue === SSP_PROX_TBD_VALUE ? 'selected' : ''}>TBD</option>` : ''}
+          ${!proxEligiblePlayers.length ? '<option value="">None</option>' : ''}
+          ${proxEligiblePlayers.length > 1 ? `<option value="${SSP_PROX_TBD_VALUE}" ${proxState.uiValue === SSP_PROX_TBD_VALUE ? 'selected' : ''}>Select Prox result...</option>` : ''}
+          ${proxEligiblePlayers.length > 1 && proxEligibleTeamIds.length === 1 ? `<option value="${SSP_PROX_TEAM_PREFIX}${escapeHtml(proxEligibleTeamIds[0])}" ${proxState.mode === 'team' ? 'selected' : ''}>${escapeHtml(formatSneakySandyPoleyTeamName(ledger, match, proxEligibleTeamIds[0]))} Prox &mdash; player not recorded</option>` : ''}
+          ${proxEligiblePlayers.length > 1 && proxEligibleTeamIds.length > 1 ? `<option value="${SSP_PROX_PUSH_VALUE}" ${proxState.mode === 'push' ? 'selected' : ''}>Push &mdash; no Prox points</option>` : ''}
           ${proxEligiblePlayers.map(p => `<option value="${escapeHtml(p.playerId)}" ${proxState.uiValue === p.playerId ? 'selected' : ''}>${escapeHtml(p.player?.name || 'Player')}</option>`).join('')}
         </select></label>
-        ${proxState.mode === 'tbd' ? '<div class="tiny warning-text">Prox selection required from validated Greeny recipients.</div>' : proxState.mode === 'auto' ? '<div class="tiny">Prox auto-resolved because only one eligible Greeny remains.</div>' : proxState.mode === 'none' ? '<div class="tiny">No eligible Prox recipient.</div>' : '<div class="tiny">Prox manually resolved.</div>'}
+        ${proxState.mode === 'tbd' ? '<div class="tiny warning-text">Resolve Prox before this hole becomes authoritative.</div>' : proxState.mode === 'auto' ? '<div class="tiny">Prox auto-resolved because only one eligible Greeny remains.</div>' : proxState.mode === 'team' ? '<div class="tiny">Team Prox awarded; the closest player was not recorded.</div>' : proxState.mode === 'push' ? '<div class="tiny">Prox pushed; no team receives Prox points.</div>' : proxState.mode === 'none' ? '<div class="tiny">No eligible Prox recipient.</div>' : '<div class="tiny">Prox manually resolved.</div>'}
       </div>
       ${buildSneakySandyPoleyHolePreviewHtml(match, ledger, actualHoleNumber)}
     </div>`;
@@ -16856,6 +16890,7 @@ function buildSelectedGamesSummary(match, metrics) {
     const title = getFeaturedGameLabel(match, cfg.key);
     let value = 'Live';
     let sub = '';
+    let gameFinalityBlocked = false;
     if (cfg.key === 'nassau') {
       const diffs = computeNassauDiffsForBasis(metrics, cfg.basis === 'gross' ? 'gross' : 'net', cfg);
       value = completion.isIncomplete ? formatTeamGameStatusScoped(match, metrics, diffs.overall, completion) : formatTeamGameStatus(match, metrics, diffs.overall);
@@ -16932,6 +16967,7 @@ function buildSelectedGamesSummary(match, metrics) {
     } else if (cfg.key === 'sneaky_sandy_poley') {
       const ledger = buildSneakySandyPoleyLedger(match, { metrics });
       const leader = ledger.finalLeader || {};
+      gameFinalityBlocked = !!ledger.unresolved || ledger.settlement?.valid === false;
       value = !leader.thru ? 'Not started' : (leader.tied ? `Tied thru ${leader.thru}` : `${formatSneakySandyPoleyTeamName(ledger, match, leader.teamId)} +${leader.margin} thru ${leader.thru}`);
       const biggestSwing = buildSneakySandyPoleyMomentumData(match, { ledger }).slice().sort((a, b) => Math.abs(b.margin) - Math.abs(a.margin))[0];
       const swingTeam = biggestSwing?.margin > 0 ? ledger.teams?.[0]?.id : ledger.teams?.[1]?.id;
@@ -16945,14 +16981,16 @@ function buildSelectedGamesSummary(match, metrics) {
     const payoutRows = payoutIds.map(id => ({ name: getPlayer(id)?.name || id, amount: Number(payoutGame?.amounts?.[id] || 0) }));
     const winners = payoutRows.filter(row => row.amount > 0.0001).sort((a, b) => b.amount - a.amount);
     const allPositions = payoutRows.sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name));
-    const economic = cfg.key === 'greenies'
+    const economic = gameFinalityBlocked
+      ? 'Settlement pending - resolve SSP facts'
+      : cfg.key === 'greenies'
       ? (allPositions.length
         ? `${completion.isIncomplete ? 'Current' : 'Final'} net position: ${allPositions.map(row => `${row.name} ${formatFinalNetSettlementMoney(row.amount)}`).join(' · ')}`
         : `${completion.isIncomplete ? 'Current' : 'Final'} net position: all players even`)
       : (winners.length
         ? `Current payout: ${winners.map(row => `${row.name} ${formatMoneyAccounting(row.amount)}`).join(' · ')}`
         : 'Current payout: $0.00');
-    return `<div class="game-summary-card"><div class="game-summary-title">${escapeHtml(title)}</div><div class="game-summary-value">${escapeHtml(value)}</div>${sub ? `<div class="game-summary-sub">${escapeHtml(sub)}</div>` : ''}<div class="game-summary-sub game-summary-economic">${escapeHtml(economic)} · ${completion.isIncomplete ? 'Provisional' : 'Final'}</div></div>`;
+    return `<div class="game-summary-card"><div class="game-summary-title">${escapeHtml(title)}</div><div class="game-summary-value">${escapeHtml(value)}</div>${sub ? `<div class="game-summary-sub">${escapeHtml(sub)}</div>` : ''}<div class="game-summary-sub game-summary-economic">${escapeHtml(economic)} · ${completion.isIncomplete || gameFinalityBlocked ? 'Provisional' : 'Final'}</div></div>`;
   });
   return `<div class="game-summary-grid">${cards.join('')}</div>`;
 }

@@ -11,15 +11,23 @@ Status: Product Owner approved July 22, 2026.
 ## Points and control
 
 - Sneaky 1; Sandy 1 and implies Sneaky; Poley 1 and requires double bogey or better; Greeny 1; Prox 2; Low Ball 2; Low Total 2; Birdie 2; Eagle-or-better 4.
-- Take awards 2 points when control changes. Keep awards 1 point when the controlling team wins or an eligible hole ties.
+- Take and Keep are determined from the two teams' raw points on the current hole, never from cumulative match totals.
+- Take awards 2 points when a team that did not win the prior eligible hole wins the current hole. A Take may be earned on the first hole played; that first Take establishes control.
+- Keep awards 1 point when the team controlling the most recent Take wins or ties the current eligible hole after winning or tying the prior eligible hole. Control persists across ties.
+- A completed 0-0 tie awards a Keep to the controlling team when a prior Take exists. An opening 0-0 tie before any Take awards neither Take nor Keep.
+- Only one team may receive a Take or Keep on a hole.
 - Same-team Low Ball ties award that team. Cross-team Low Ball ties push. Low Total ties push.
+
+The authoritative calculation order is: raw SSP category points; Take/Keep; Umbee eligibility; Bridge/Re-Bridge multiplier; Umbee multiplier; final hole points; cumulative match totals; next-hole Honors.
 
 ## Greeny and Prox
 
 - With validation off, a selected Greeny is eligible.
 - With validation on and Stat Tracking on, 0–2 putts validates, 3+ putts invalidates, and missing tracked putts remains provisional.
 - With validation on and Stat Tracking off, selecting Greeny also records scorer-confirmed validation; there is no second confirmation tap.
-- Prox inherits Greeny eligibility: none for zero eligible Greenies, automatic for one, and an explicit selection for multiple.
+- Prox inherits Greeny eligibility: none for zero eligible Greenies and automatic for one.
+- With multiple eligible Greenies on the same team, the scorer may select the closest player or award the team Prox while recording that the closest player is unknown.
+- With eligible Greenies on opposing teams, the scorer may select the closest player or explicitly record a Push. A Push is resolved and awards zero Prox points. TBD remains unresolved and blocks authoritative SSP finality.
 
 ## Bridge, Re-Bridge, and Umbee
 
@@ -34,7 +42,7 @@ Status: Product Owner approved July 22, 2026.
 
 - Assigned scorers control player facts. Participating scoring devices may propose Prox, Bridge/Re-Bridge, and notes.
 - Independent fields merge. Same-field conflicts require host attention. The host publishes the authoritative result.
-- Live previews are permitted, but incomplete gross scoring, invalid declarations, unresolved validation or Prox, and material Shared Match conflicts are provisional and cannot create a final settlement or advance authoritative Take/Keep state.
+- Live previews are permitted, but incomplete gross scoring, invalid declarations, unresolved validation or Prox, and material Shared Match conflicts are provisional and cannot create a final settlement or advance authoritative Take/Keep, cumulative total, or Honors state.
 - The frozen settlement remains per-player, equal-team, zero-sum, and included exactly once.
 
 ## Compatibility

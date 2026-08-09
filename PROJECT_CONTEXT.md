@@ -438,6 +438,10 @@ v30.3.96 repairs the production Identity foundation and initial Shared Match pub
 ## 21. Current development release — v30.3.97
 
 v30.3.97 is a narrow Shared Match join hotfix. After the authenticated `join_shared_match` RPC admits the joining Device, the browser no longer attempts a second direct membership insert that the least-privilege RLS policy correctly rejects. Ordinary post-join membership refresh, scoring assignments, synchronization, local-only scoring, existing rounds, and all historical cloud rows remain unchanged. This release has no database migration and makes no scoring or settlement change.
+
+## 22. Current development release — v30.3.98
+
+v30.3.98 is a focused joined-score reconciliation hotfix. Routine membership refresh is update-only, and joined Devices upload authorized score entries without rewriting host-owned Match, team, player, assignment, or notes records. Pending scores remain local after failure and can be replayed with Sync Now after upgrade. This release has no database migration and makes no scoring, handicap, game, settlement, recap, or reporting calculation change.
 # v30.3.90 Shared Match code compatibility
 
 New Shared Matches use only `DYE-######`. Existing 12-character Shared Match identifiers remain joinable through the normal Match workflow without re-keying an active or historical match. Join codes remain locators, not Account, Golfer Identity, Device, role, participation, or scoring-assignment keys.

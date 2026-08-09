@@ -7,18 +7,18 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=30.3.97&amp;rev=1" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v30.3.97.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v30.3.97.png" />
-  <link rel="shortcut icon" href="./branding/favicon-32-v30.3.97.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v30.3.97.png" />
-  <link rel="stylesheet" href="style.css?v=30.3.97&amp;rev=1" />
+  <link rel="manifest" href="manifest.json?v=30.3.98&amp;rev=1" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v30.3.98.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v30.3.98.png" />
+  <link rel="shortcut icon" href="./branding/favicon-32-v30.3.98.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v30.3.98.png" />
+  <link rel="stylesheet" href="style.css?v=30.3.98&amp;rev=1" />
 </head>
 <body>
   <div class="app-chrome"><header class="app-header compact-header">
     <div class="brand-wrap">
       <div class="brand-mark">
-        <img src="./branding/apple-touch-icon-v30.3.97.png" alt="The Dye Ledger" />
+        <img src="./branding/apple-touch-icon-v30.3.98.png" alt="The Dye Ledger" />
       </div>
       <div>
       <h1>The Dye Ledger</h1>
@@ -917,7 +917,7 @@
       <div class="card tight-card app-updates-card" data-experience-section="support">
         <h2>App Updates</h2>
         <div class="app-update-summary">
-          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.97</strong></div>
+          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v30.3.98</strong></div>
           <div><span class="muted-label">Build Date</span><strong id="appBuildTimestamp">loading…</strong></div>
           <div><span class="muted-label">Cache</span><span id="appActiveCacheName" class="break-word">checking…</span></div>
           <div><span class="muted-label">Update Available</span><strong id="appUpdateAvailableStatus">checking…</strong></div>
@@ -964,11 +964,11 @@
     </section>
   </main>
   <script id="appReleaseNotesData" type="application/json">[
+    {"version":"v30.3.98","summary":"Restores joined-device score reconciliation by limiting routine uploads to authorized score writes while preserving server-authoritative membership admission."},
     {"version":"v30.3.97","summary":"Fixes authenticated Shared Match joining by keeping initial membership admission inside the secure server function without weakening RLS."},
     {"version":"v30.3.96","summary":"Repairs Account identity activation and makes initial Shared Match publication server-authoritative with safer sync diagnostics."},
     {"version":"v30.3.95","summary":"Separates SSP Take/Keep adjustments from multipliers in the compact live hole calculation."},
-    {"version":"v30.3.94","summary":"Corrects SSP Take/Keep control, adds resolved Prox team/push outcomes, and keeps unresolved SSP results provisional."},
-    {"version":"v30.3.93","summary":"Adds membership-scoped Shared Match access, a secure join boundary, protected Course Catalog writes, and trustworthy audit attribution."}
+    {"version":"v30.3.94","summary":"Corrects SSP Take/Keep control, adds resolved Prox team/push outcomes, and keeps unresolved SSP results provisional."}
   ]</script>
 
 
@@ -985,7 +985,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v30.3.97</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
+    <span id="appVersionFooter">v30.3.98</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
@@ -1130,8 +1130,8 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=30.3.97&amp;rev=1"></script>
-  <script src="identity-security.js?v=30.3.97&amp;rev=1"></script>
-  <script src="app.js?v=30.3.97&amp;rev=1"></script>
+  <script src="supabase-config.js?v=30.3.98&amp;rev=1"></script>
+  <script src="identity-security.js?v=30.3.98&amp;rev=1"></script>
+  <script src="app.js?v=30.3.98&amp;rev=1"></script>
 </body>
 </html>

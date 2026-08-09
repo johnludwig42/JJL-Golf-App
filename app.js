@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.97',
-  versionNumber: '30.3.97',
-  cacheName: 'the-dye-ledger-v30.3.97',
-  buildDate: '2026-08-09T15:00:00.000Z',
-  buildLabel: 'Secure Shared Match Join Hotfix'
+  version: 'v30.3.98',
+  versionNumber: '30.3.98',
+  cacheName: 'the-dye-ledger-v30.3.98',
+  buildDate: '2026-08-09T15:30:00.000Z',
+  buildLabel: 'Joined Score Reconciliation Hotfix'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -1015,19 +1015,16 @@ async function upsertSharedMembershipForCurrentDevice(match, { role = null } = {
   ensureSharedParticipantRegistered(match, isCurrentDeviceMatchHost(match) ? 'Host Device' : getPreferredSharedDeviceName('Joined Device'));
   const now = new Date().toISOString();
   const memberRole = role || (isCurrentDeviceMatchHost(match) ? 'organizer' : 'team_scorer');
-  const membership = {
-    id: `${match.sharedMatchId}:member:${user.id}:${getSharedDeviceId()}`,
-    match_id: match.sharedMatchId,
-    user_id: user.id,
+  const membershipId = `${match.sharedMatchId}:member:${user.id}:${getSharedDeviceId()}`;
+  // Membership admission belongs exclusively to publish_shared_match_owner and
+  // join_shared_match. A browser refresh may update its existing row, but must
+  // never fall back to inserting a new membership through the table API.
+  const { error } = await client.from('match_memberships').update({
     role: memberRole === 'organizer' ? 'organizer' : 'team_scorer',
-    team_id: null,
-    team_number: null,
     status: 'active',
-    joined_at: now,
     last_seen_at: now,
     device_label: getSharedDeviceLabelPayload(match),
-  };
-  const { error } = await client.from('match_memberships').upsert(membership, { onConflict: 'id' });
+  }).eq('id', membershipId).eq('user_id', user.id);
   if (error) throw error;
   return true;
 }
@@ -12178,6 +12175,17 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
   } : null;
   return { matchRow, teams, players, scoreEntries, notesRow, membership };
 }
+function getSharedCloudWritePlan(match) {
+  const isHost = isCurrentDeviceMatchHost(match);
+  return {
+    match: isHost,
+    membership: false,
+    teams: isHost,
+    players: isHost,
+    scores: true,
+    notes: isHost,
+  };
+}
 async function uploadSharedMatch(match) {
   const client = await ensureSupabaseClient();
   if (!client) throw new Error('Supabase is not configured.');
@@ -12185,7 +12193,8 @@ async function uploadSharedMatch(match) {
   ensureSharedParticipantRegistered(match, isCurrentDeviceMatchHost(match) ? 'Host Device' : getPreferredSharedDeviceName('Joined Device'));
   migrateSharedPlayerAssignmentsToParticipants(match);
   const payload = buildCloudMatchPayload(match, user?.id || null);
-  if (isCurrentDeviceMatchHost(match)) {
+  const writePlan = getSharedCloudWritePlan(match);
+  if (writePlan.match) {
     const { error: publicationError } = await client.rpc('publish_shared_match_owner', {
       p_match: payload.matchRow,
       p_device_id: getSharedDeviceId(),
@@ -12258,28 +12267,30 @@ async function uploadSharedMatch(match) {
     console.warn('Could not merge live shared metadata before upload; proceeding with local snapshot.', err);
   }
   let response = { error: null };
-  if (isCurrentDeviceMatchHost(match)) {
+  if (writePlan.match) {
     response = await client.from('matches').upsert(payload.matchRow, { onConflict: 'id' });
     if (response.error) throw response.error;
   }
-  if (payload.membership) {
+  if (writePlan.membership && payload.membership) {
     response = await client.from('match_memberships').upsert(payload.membership, { onConflict: 'id' });
     if (response.error) throw response.error;
   }
-  if (payload.teams.length) {
+  if (writePlan.teams && payload.teams.length) {
     response = await client.from('match_teams').upsert(payload.teams, { onConflict: 'id' });
     if (response.error) throw response.error;
   }
-  if (payload.players.length) {
+  if (writePlan.players && payload.players.length) {
     response = await client.from('match_players').upsert(payload.players, { onConflict: 'id' });
     if (response.error) throw response.error;
   }
-  if (payload.scoreEntries.length) {
+  if (writePlan.scores && payload.scoreEntries.length) {
     response = await client.from('score_entries').upsert(payload.scoreEntries, { onConflict: 'id' });
     if (response.error) throw response.error;
   }
-  response = await client.from('match_notes').upsert(payload.notesRow, { onConflict: 'match_id' });
-  if (response.error) throw response.error;
+  if (writePlan.notes) {
+    response = await client.from('match_notes').upsert(payload.notesRow, { onConflict: 'match_id' });
+    if (response.error) throw response.error;
+  }
   match.storageMode = 'shared';
   match.sharedMatchId = payload.matchRow.id;
   match.sharedMatchRef = payload.matchRow.id;

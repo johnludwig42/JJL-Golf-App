@@ -84,8 +84,8 @@ test('PDF preflight moves whole fitting sections to a fresh page', () => {
 });
 
 test('release metadata includes a real non-midnight build timestamp', () => {
-  assert.match(app, /version: 'v30\.3\.94'/);
-  assert.match(worker, /version: 'v30\.3\.94'/);
+  assert.match(app, /version: 'v30\.3\.95'/);
+  assert.match(worker, /version: 'v30\.3\.95'/);
   assert.match(app, /buildDate: '2026-08-08T12:00:00\.000-04:00'/);
   assert.doesNotMatch(app, /buildDate: '2026-08-05T04:00:00\.000Z'/);
 });

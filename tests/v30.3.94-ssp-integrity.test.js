@@ -9,12 +9,12 @@ const rules = fs.readFileSync('docs/SSP_RULES_v30.3.76.md', 'utf8');
 const review = fs.readFileSync('docs/architecture/CONSTITUTIONAL_REVIEW_v30.3.94.md', 'utf8');
 const notes = fs.readFileSync('BUILD_NOTES_v30.3.94.md', 'utf8');
 
-test('v30.3.94 runtime and PWA shell are version-aligned', () => {
-  assert.match(app, /version: 'v30\.3\.94'/);
-  assert.match(index, /app\.js\?v=30\.3\.94&amp;rev=1/);
-  assert.match(serviceWorker, /cacheName: 'the-dye-ledger-v30\.3\.94'/);
+test('current runtime and PWA shell remain version-aligned after v30.3.94', () => {
+  assert.match(app, /version: 'v30\.3\.95'/);
+  assert.match(index, /app\.js\?v=30\.3\.95&amp;rev=1/);
+  assert.match(serviceWorker, /cacheName: 'the-dye-ledger-v30\.3\.95'/);
   for (const asset of ['app-icon-192', 'app-icon-512', 'apple-touch-icon', 'favicon-32', 'favicon-16']) {
-    assert.equal(fs.existsSync(`branding/${asset}-v30.3.94.png`), true);
+    assert.equal(fs.existsSync(`branding/${asset}-v30.3.95.png`), true);
   }
 });
 
@@ -45,6 +45,7 @@ test('SSP implementation persists explicit Prox resolution and labels the audit 
 test('live SSP preview is compact while retaining an expandable point audit', () => {
   assert.match(app, /<span>Raw SSP Points<\/span>/);
   assert.match(app, /<span>Take \/ Keep<\/span>/);
+  assert.match(app, /<span>Multipliers<\/span>/);
   assert.match(app, /<span>Final<\/span>/);
   assert.match(app, /<summary>View point details<\/summary>/);
   assert.doesNotMatch(app, /<span>Points Before Multiplier<\/span>/);

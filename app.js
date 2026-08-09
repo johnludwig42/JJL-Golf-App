@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.94',
-  versionNumber: '30.3.94',
-  cacheName: 'the-dye-ledger-v30.3.94',
+  version: 'v30.3.95',
+  versionNumber: '30.3.95',
+  cacheName: 'the-dye-ledger-v30.3.95',
   buildDate: '2026-08-08T12:00:00.000-04:00',
-  buildLabel: 'SSP Scoring Integrity'
+  buildLabel: 'SSP Calculation Clarity'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -3883,21 +3883,6 @@ function formatSneakySandyPoleyTeamName(ledger, match, teamId) {
   return team?.name || getTeamLabel(match, Number(teamId) || 1);
 }
 
-function getSneakySandyPoleyTeamDiffText(match, ledger, holeLedger = null, options = {}) {
-  const teams = ledger?.teams || [];
-  if (teams.length !== 2) return '';
-  const points = options.final
-    ? (holeLedger?.finalPointsByTeam || ledger.finalTotalsByTeam || ledger.totalsByTeam || {})
-    : options.beforeMultiplier
-      ? (holeLedger?.pointsAfterTakeKeepByTeam || {})
-      : (holeLedger?.basePointsByTeam || ledger.totalsByTeam || {});
-  const a = Number(points[teams[0].id] || 0);
-  const b = Number(points[teams[1].id] || 0);
-  if (a === b) return 'Tied';
-  const leader = a > b ? teams[0] : teams[1];
-  return `${leader.name} +${Math.abs(a - b)}`;
-}
-
 function getSneakySandyPoleyStatus(match, metrics = null) {
   const ledger = buildSneakySandyPoleyLedger(match, { metrics });
   if (!ledger.enabled) return '';
@@ -4003,10 +3988,6 @@ function buildSneakySandyPoleyTeamDetailsHtml(match, ledger, holeLedger) {
   return sections || '<div class="tiny">No base points calculated for this hole yet.</div>';
 }
 
-function buildSneakySandyPoleyTeamTilesHtml(ledger, pointsByTeam = {}) {
-  return (ledger?.teams || []).map(team => `<div class="ssp-ledger-tile"><span>${escapeHtml(team.name)}</span><strong>${Number(pointsByTeam?.[team.id] || 0)}</strong></div>`).join('');
-}
-
 function buildSneakySandyPoleyCompactPointsText(ledger, pointsByTeam = {}) {
   return (ledger?.teams || []).map(team => `${team.name} ${Number(pointsByTeam?.[team.id] || 0)}`).join(' / ');
 }
@@ -4038,7 +4019,8 @@ function buildSneakySandyPoleyHolePreviewHtml(match, ledger, holeNumber) {
     <div class="ssp-ledger-preview top-gap">
       <div class="ssp-ledger-head"><span>Hole Points · Hole ${Number(holeNumber) || ''}</span><span class="tiny">Live preview</span></div>
       <div class="ssp-ledger-mini-row"><span>Raw SSP Points</span><strong>${escapeHtml(buildSneakySandyPoleyCompactPointsText(ledger, holeLedger.basePointsByTeam))}</strong></div>
-      <div class="ssp-ledger-mini-row"><span>Take / Keep</span><strong>${escapeHtml(`${takeKeepText} / ${multiplierSummary}`)}</strong></div>
+      <div class="ssp-ledger-mini-row"><span>Take / Keep</span><strong>${escapeHtml(takeKeepText)}</strong></div>
+      <div class="ssp-ledger-mini-row"><span>Multipliers</span><strong>${escapeHtml(multiplierSummary)}</strong></div>
       <div class="ssp-ledger-mini-row ssp-ledger-final-row"><span>Final</span><strong>${escapeHtml(buildSneakySandyPoleyCompactPointsText(ledger, holeLedger.finalPointsByTeam))}</strong></div>
       <details class="ssp-ledger-details"><summary>View point details</summary><div class="ssp-ledger-detail-list">${details}</div></details>
       <div class="ssp-ledger-match-line">${escapeHtml(buildSneakySandyPoleyRunningText(match, ledger, holeLedger, { includesDraft: !!match.__includesUnsavedDraft }))}</div>

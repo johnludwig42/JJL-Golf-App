@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.96',
-  versionNumber: '30.3.96',
-  cacheName: 'the-dye-ledger-v30.3.96',
-  buildDate: '2026-08-09T03:44:34.787Z',
-  buildLabel: 'Identity & Shared Match Publication Repair'
+  version: 'v30.3.97',
+  versionNumber: '30.3.97',
+  cacheName: 'the-dye-ledger-v30.3.97',
+  buildDate: '2026-08-09T15:00:00.000Z',
+  buildLabel: 'Secure Shared Match Join Hotfix'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -12955,7 +12955,10 @@ async function registerSharedJoinDevice(match, {
 } = {}) {
   if (!match || match.storageMode !== 'shared') return { registered: false, published: false };
   ensureSharedParticipantRegistered(match, isHost(match) ? 'Host Device' : getPreferredSharedDeviceName('Joined Device'));
-  const registered = await register(match);
+  // authorizeSharedMatchJoin() already created the authenticated membership
+  // through the security-definer join boundary. Re-inserting it directly from
+  // the browser would correctly fail the membership RLS admission policy.
+  const registered = requireRegistration ? true : await register(match);
   if (requireRegistration && !registered) throw new Error('This device could not be registered for the Shared Match. Tap Retry Join.');
   let published = false;
   if (requireRegistration) {

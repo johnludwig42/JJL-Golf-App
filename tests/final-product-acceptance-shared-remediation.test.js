@@ -152,17 +152,17 @@ test('1,000 generated Match Codes are canonical, zero-free, collision-aware, nor
     isHost: () => false,
   });
   assert.deepEqual(structuredClone(joinResult), { registered: true, published: true });
-  assert.deepEqual(joinCalls, ['register:DYE-532835', 'publish:DYE-532835', 'merge:DYE-532835:true']);
-  await assert.rejects(
-    engine.registerSharedJoinDevice(joinMatch, {
-      requireRegistration: true,
-      register: async () => false,
-      publish: async () => assert.fail('failed registration must not publish'),
-      merge: async () => assert.fail('failed registration must not merge'),
-      isHost: () => false,
-    }),
-    /could not be registered.*Retry Join/
-  );
+  assert.deepEqual(joinCalls, ['publish:DYE-532835', 'merge:DYE-532835:true']);
+  const refreshCalls = [];
+  const refreshResult = await engine.registerSharedJoinDevice(joinMatch, {
+    requireRegistration: false,
+    register: async () => { refreshCalls.push('register'); return false; },
+    publish: async () => { refreshCalls.push('publish'); },
+    merge: async () => { refreshCalls.push('merge'); },
+    isHost: () => false,
+  });
+  assert.deepEqual(structuredClone(refreshResult), { registered: false, published: true });
+  assert.deepEqual(refreshCalls, ['register', 'publish', 'merge']);
   assert.match(app, /requireRegistration: true/);
   assert.match(app, /This device could not be registered for the Shared Match\. Tap Retry Join\./);
 });

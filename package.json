@@ -1,6 +1,6 @@
 {
   "name": "the-dye-ledger",
-  "version": "30.3.96",
+  "version": "30.3.97",
   "private": true,
   "type": "module",
   "scripts": {
@@ -28,6 +28,7 @@
     "test:v30.3.94": "node --test tests/v30.3.94-ssp-integrity.test.js tests/ssp-ledger.test.js tests/ssp-shared-match.test.js",
     "test:v30.3.95": "node --test tests/v30.3.95-ssp-preview.test.js tests/v30.3.94-ssp-integrity.test.js tests/ssp-ledger.test.js tests/ssp-shared-match.test.js",
     "test:v30.3.96": "node --test tests/v30.3.96-identity-shared-publish-remediation.test.js tests/v30.3.93-production-security-activation.test.js tests/v30.3.92-beta-account-activation.test.js tests/v30.3.89-shared-match-reliability.test.js",
+    "test:v30.3.97": "node --test tests/v30.3.97-shared-join-admission.test.js tests/v30.3.96-identity-shared-publish-remediation.test.js tests/v30.3.93-production-security-activation.test.js tests/v30.3.89-shared-match-reliability.test.js",
     "test:identity-security": "node --test tests/v30.3.75-identity-security.test.js",
     "test:run": "npm run test",
     "simulate": "node scripts/simulate-rounds.js",

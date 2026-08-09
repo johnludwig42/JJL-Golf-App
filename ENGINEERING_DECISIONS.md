@@ -639,3 +639,11 @@ Status: Approved and implemented locally for v30.3.89; no production data or pol
 AI Recap weather addendum: Verified match-start weather is a required recap fact when present. Generated prose may integrate it naturally; otherwise the client appends a deterministic final Weather section after any missing-Memory fallback. The fallback uses only recorded conditions, temperature, humidity, and wind, labels the timing as match startup, excludes coordinates, and never blocks recap availability when weather was not captured.
 
 Cloud catalog pagination addendum: Browser catalog reads must not assume a single Supabase response contains every `course_holes` row. Hole rows are retrieved in deterministic, bounded pages until exhaustion. A cloud tee that is missing any expected hole cannot replace a complete local tee. This guard affects retrieval and local merging only; it performs no cloud deletion, rewrite, or cleanup.
+
+## v30.3.97 — Initial Shared Match admission has one authority
+
+The authenticated `join_shared_match` security-definer RPC is the sole writer for initial Shared Match membership admission. Once it succeeds, the client may hydrate the match and register local Device state, but it must not repeat admission through a direct browser insert. Later membership refreshes remain membership-scoped and continue through the existing RLS-protected path.
+
+Rationale: Admission policy belongs at one auditable server boundary. Granting joining clients a general membership insert path would weaken least privilege and could allow unauthorized membership creation.
+
+Compatibility and safety: Joined golfers still need not be Round Owners. Device, Account, Golfer Identity, Participant, and scoring assignment remain distinct. Existing matches, memberships, local records, and scores are not rewritten or deleted. No production migration is required.

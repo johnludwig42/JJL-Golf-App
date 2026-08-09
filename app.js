@@ -13,11 +13,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.98',
-  versionNumber: '30.3.98',
-  cacheName: 'the-dye-ledger-v30.3.98',
-  buildDate: '2026-08-09T15:30:00.000Z',
-  buildLabel: 'Joined Score Reconciliation Hotfix'
+  version: 'v30.3.99',
+  versionNumber: '30.3.99',
+  cacheName: 'the-dye-ledger-v30.3.99',
+  buildDate: '2026-08-09T12:18:24.564Z',
+  buildLabel: 'Canonical Shared Match Code Hotfix'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -659,10 +659,6 @@ function normalizeMatchCode(value = '') {
 function normalizeJoinMatchCode(value = '') {
   const compact = String(value || '').trim().toUpperCase();
   if (/^DYE-[1-9]{6}$/.test(compact)) return compact;
-  // Shared Matches created before canonical DYE codes used the app's
-  // 12-character local-first identifier as the cloud row ID. Preserve that
-  // identifier exactly so an in-progress historical match remains joinable.
-  if (/^[A-Z0-9]{12}$/.test(compact)) return compact;
   return '';
 }
 
@@ -726,6 +722,16 @@ function isCanonicalSharedMatchCode(value = '') {
 }
 function isLegacySharedMatchCode(value = '') {
   return /^[A-Z0-9]{12}$/.test(String(value || '').trim().toUpperCase());
+}
+function getReusableCanonicalSharedMatchCode(match = null) {
+  if (!match || match.storageMode !== 'shared') return '';
+  const code = normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || '');
+  return isCanonicalSharedMatchCode(code) ? code : '';
+}
+function isLegacySharedMatchRecord(match = null) {
+  if (!match || match.storageMode !== 'shared') return false;
+  const code = normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || '');
+  return isLegacySharedMatchCode(code);
 }
 
 function getDefaultSharedDeviceLabel(match = null, deviceId = null) {
@@ -19043,8 +19049,9 @@ function renderSetupSharedAdminPanel() {
   const mode = normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device');
   const code = normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || '');
   const isPublished = match.cloudSyncState === 'cloud-synced' && !match.lastSharedSyncError;
-  const canShareCode = isLegacySharedMatchCode(code) || isPublished;
-  const codeLabel = isLegacySharedMatchCode(code) ? 'Legacy Match Code' : (isPublished ? 'Shared Match Code' : 'Unpublished Match Code');
+  const legacyCode = isLegacySharedMatchCode(code);
+  const canShareCode = !legacyCode && isPublished;
+  const codeLabel = legacyCode ? 'Unsupported Legacy Code' : (isPublished ? 'Shared Match Code' : 'Unpublished Match Code');
   let participants = getSharedAssignmentParticipants(match);
   let devices = getSharedAssignmentDevices(match);
   if (match.sharedMatchId && hasSupabaseConfig() && isHost && !sharedParticipantPanelRefreshPending) {
@@ -19103,7 +19110,7 @@ function renderSetupSharedAdminPanel() {
       <span class="setup-role-badge">${isHost ? 'Host' : 'Joined'}</span>
     </div>
     <div class="shared-match-panel top-gap shared-match-status-${escapeHtml(sync.tone)}">
-      <div class="shared-match-code"><span>${escapeHtml(codeLabel)}</span><strong>${escapeHtml(code || '—')}</strong><div class="tiny">${isLegacySharedMatchCode(code) ? 'This existing match keeps its original code. Enter it exactly as shown to join.' : isPublished ? 'Players can join this match using the code above.' : 'Not published yet. This code cannot be joined until synchronization succeeds.'}</div></div>
+      <div class="shared-match-code"><span>${escapeHtml(codeLabel)}</span><strong>${escapeHtml(code || '—')}</strong><div class="tiny">${legacyCode ? 'This pre-beta code is no longer joinable. Choose Create New Match to receive a DYE-###### code.' : isPublished ? 'Players can join this match using the code above.' : 'Not published yet. This code cannot be joined until synchronization succeeds.'}</div></div>
       <div class="shared-status-grid top-gap">
         <div><div class="tiny">Connection</div><strong>${escapeHtml(getSharedOnlineLabel())}</strong></div>
         <div><div class="tiny">Status</div><strong>${escapeHtml(sync.label)}</strong></div>
@@ -20439,7 +20446,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const input = document.getElementById('setupJoinMatchCodeInput');
     const deviceName = setStoredSharedDeviceName(String(nameInput?.value || '').trim() || 'Joined Device');
     const matchId = normalizeJoinMatchCode(input?.value || '');
-    if (!matchId) return toast('Enter a code like DYE-532835, or the 12-character legacy code shown by the host.');
+    if (!matchId) return toast('Enter a Shared Match code like DYE-532835.');
     try {
       const joined = await loadSharedMatchFromCloud(matchId, { activate: true, silent: false, requireRegistration: true });
       setupWorkflowMode = 'join';
@@ -20686,6 +20693,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       if (!window.DyeLedgerIdentitySecurity?.isDurableAccountSession?.({ user: accountUser })) {
         return toast('Sign in under More → Account & Security before creating a Shared Match. Local-only scoring remains available.', 6200);
       }
+      if (isLegacySharedMatchRecord(existing)) {
+        return toast('Legacy Shared Match codes cannot be reused. Choose Create New Match to receive a DYE-###### code.', 6200);
+      }
     }
     const validationState = getMatchSetupValidationState({ fd, selectedPlayers, selectedGames, sharedMatchEnabled, scoringAccessMode });
     logMatchFinalizationDiagnostics('pre-build', { selectedPlayers, selectedGames, existing, sharedMatchEnabled, scoringAccessMode, courseId: String(fd.get('courseId') || ''), teeId: String(fd.get('teeId') || ''), holeCount: Number(fd.get('holeCount')) === 9 ? 9 : 18, validationState });
@@ -20794,10 +20804,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     clearMatchTeeErrors();
     if (sharedMatchEnabled) {
       const localDeviceId = getSharedDeviceId();
-      match.sharedMatchCode = existing
-        ? normalizeMatchCode(existing.sharedMatchCode || existing.sharedMatchRef || existing.sharedMatchId || '')
-        : await generateUniqueSharedMatchCode(sharedMatchCodeExists);
-      match.sharedMatchId = existing?.sharedMatchId || match.sharedMatchCode;
+      const reusableCode = getReusableCanonicalSharedMatchCode(existing);
+      match.sharedMatchCode = reusableCode || await generateUniqueSharedMatchCode(sharedMatchCodeExists);
+      match.sharedMatchId = match.sharedMatchCode;
       match.sharedMatchRef = match.sharedMatchCode;
       match.sharedHostDeviceId = existing?.sharedHostDeviceId || localDeviceId;
       ensureSharedParticipantRegistered(match, 'Host Device');
@@ -22192,6 +22201,8 @@ function installDyeLedgerLiveEngineAdapter() {
     generateSharedMatchCode,
     generateUniqueSharedMatchCode,
     isCanonicalSharedMatchCode,
+    getReusableCanonicalSharedMatchCode,
+    isLegacySharedMatchRecord,
     fetchSharedMatchBundleWithRetry,
     registerSharedJoinDevice,
     getMomentumRangeOptions,

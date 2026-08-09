@@ -442,6 +442,10 @@ v30.3.97 is a narrow Shared Match join hotfix. After the authenticated `join_sha
 ## 22. Current development release — v30.3.98
 
 v30.3.98 is a focused joined-score reconciliation hotfix. Routine membership refresh is update-only, and joined Devices upload authorized score entries without rewriting host-owned Match, team, player, assignment, or notes records. Pending scores remain local after failure and can be replayed with Sync Now after upgrade. This release has no database migration and makes no scoring, handicap, game, settlement, recap, or reporting calculation change.
+
+## 23. Current development release — v30.3.99
+
+v30.3.99 makes `DYE-######` the only code issued when a Match becomes shared for the first time. New Shared Matches, local-to-shared conversions, and subsequent rounds receive a fresh canonical code. Existing canonical Shared Matches retain their code when edited. Legacy Shared Match records are not migrated or reused through normal setup; the user is directed to Create New Match. No local or cloud records are deleted.
 # v30.3.90 Shared Match code compatibility
 
 New Shared Matches use only `DYE-######`. Existing 12-character Shared Match identifiers remain joinable through the normal Match workflow without re-keying an active or historical match. Join codes remain locators, not Account, Golfer Identity, Device, role, participation, or scoring-assignment keys.

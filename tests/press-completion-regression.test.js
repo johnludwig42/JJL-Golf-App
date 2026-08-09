@@ -170,11 +170,11 @@ test('UI/save source locks, current icon references, cache paths, and branding d
   assert.match(app, /disabled aria-disabled="true"/);
   assert.match(app, /validatePressEditContract\(existing, selectedGames/);
   assert.equal((html.match(/rel="apple-touch-icon"/g) || []).length, 1);
-  assert.match(html, /<img src="\.\/branding\/apple-touch-icon-v30\.3\.98\.png" alt="The Dye Ledger"/);
-  assert.match(html, /rel="apple-touch-icon"[^>]+href="\.\/branding\/apple-touch-icon-v30\.3\.98\.png"/);
+  assert.match(html, /<img src="\.\/branding\/apple-touch-icon-v30\.3\.99\.png" alt="The Dye Ledger"/);
+  assert.match(html, /rel="apple-touch-icon"[^>]+href="\.\/branding\/apple-touch-icon-v30\.3\.99\.png"/);
   assert.doesNotMatch(html, /<img src="\.\/branding\/app-icon-192\.png" alt="The Dye Ledger"/);
-  assert.match(worker, /branding\/apple-touch-icon-v30\.3\.98\.png/);
-  assert.match(worker, /the-dye-ledger-v30\.3\.98/);
+  assert.match(worker, /branding\/apple-touch-icon-v30\.3\.99\.png/);
+  assert.match(worker, /the-dye-ledger-v30\.3\.99/);
   assert.match(branding, /Header \/ iPhone source[^\n]*`branding\/apple-touch-icon\.png`/);
   assert.match(branding, /Existing Home Screen icons may remain cached until the user removes and re-adds the app from Safari/);
   assert.equal(createHash('sha256').update(appleIcon).digest('hex'), 'd38a80dad54f65b47c46eef6c952e02f8fbf94d8b52338a567dcb4664224ba95');

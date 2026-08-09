@@ -3581,6 +3581,24 @@ main,
   color:#123a28;
   text-align:right;
 }
+.ssp-ledger-final-row{
+  padding-top:7px;
+  border-top:1px solid rgba(11,93,59,.14);
+}
+.ssp-ledger-details{
+  margin-top:2px;
+  border-top:1px solid rgba(11,93,59,.12);
+}
+.ssp-ledger-details summary{
+  padding-top:8px;
+  color:var(--accent);
+  font-size:.78rem;
+  font-weight:850;
+  cursor:pointer;
+}
+.ssp-ledger-details[open] summary{
+  margin-bottom:7px;
+}
 .ssp-ledger-adjustment-line,
 .ssp-ledger-match-line{
   margin-top:8px;

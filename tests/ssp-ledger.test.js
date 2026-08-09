@@ -78,7 +78,7 @@ function getLedger(seedOptions) {
 
 function resolveProx(input, options = {}) {
   const engine = loadLiveEngine();
-  const players = ['p1', 'p2', 'p3', 'p4'].map(playerId => ({ playerId }));
+  const players = ['p1', 'p2', 'p3', 'p4'].map((playerId, idx) => ({ playerId, team: idx < 2 ? 1 : 2 }));
   return engine.resolveSneakySandyPoleyProxSelection(input, players, options);
 }
 
@@ -118,6 +118,28 @@ test('Prox resolver uses None, auto-select, TBD, and selected states from Greeny
   const recalculated = resolveProx({ proxPlayerId: 'p1', players: { p1: { greeny: false }, p2: { greeny: true } } });
   assert.equal(recalculated.mode, 'auto');
   assert.equal(recalculated.proxPlayerId, 'p2');
+});
+
+test('Prox resolver supports same-team unknown player and opposing-team push without conflating either with TBD', () => {
+  const sameTeam = resolveProx({
+    proxResolution: 'team:1',
+    players: { p1: { greeny: true }, p2: { greeny: true } },
+  });
+  assert.equal(sameTeam.mode, 'team');
+  assert.equal(sameTeam.proxTeamId, '1');
+  assert.equal(sameTeam.proxPlayerId, '');
+
+  const push = resolveProx({
+    proxResolution: 'push',
+    players: { p1: { greeny: true }, p3: { greeny: true } },
+  });
+  assert.equal(push.mode, 'push');
+  assert.equal(push.proxPlayerId, '');
+
+  const tbd = resolveProx({
+    players: { p1: { greeny: true }, p3: { greeny: true } },
+  });
+  assert.equal(tbd.mode, 'tbd');
 });
 
 test('manual Sneaky, Sandy, and Poley awards validate against gross score', () => {
@@ -250,6 +272,22 @@ test('TBD Prox awards no points until an eligible Greeny player is selected', ()
   assert.equal(selectedCategories.find(row => row.category === 'prox')?.points, 2);
 });
 
+test('same-team unknown Prox awards the team while opposing-team Push awards no Prox and both resolve finality', () => {
+  const teamLedger = getLedger({
+    scores: { p1: [4], p2: [4], p3: [4], p4: [4] },
+    inputs: { 1: { proxResolution: 'team:1', players: { p1: { greeny: true }, p2: { greeny: true } } } },
+  });
+  assert.equal(teamLedger.holes['1'].categoriesByTeam['1'].filter(row => row.category === 'prox').length, 1);
+  assert.equal(teamLedger.holes['1'].unresolved, false);
+
+  const pushLedger = getLedger({
+    scores: { p1: [4], p2: [4], p3: [4], p4: [4] },
+    inputs: { 1: { proxResolution: 'push', players: { p1: { greeny: true }, p3: { greeny: true } } } },
+  });
+  assert.equal(Object.values(pushLedger.holes['1'].categoriesByTeam).flat().some(row => row.category === 'prox'), false);
+  assert.equal(pushLedger.holes['1'].unresolved, false);
+});
+
 test('automatic Birdie, Eagle, Low Ball, and Low Total stack into base totals', () => {
   const ledger = getLedger({
     scores: { p1: [3], p2: [2], p3: [4], p4: [5] },
@@ -318,6 +356,38 @@ test('Take and Keep are not awarded when base points are unavailable', () => {
   assert.equal(ledger.holes['1'].takeKeep.type, null);
   assert.equal(ledger.holes['1'].finalPointsByTeam['1'], 0);
   assert.equal(ledger.holes['1'].finalPointsByTeam['2'], 0);
+});
+
+test('completed 0-0 tie awards Keep only when a prior Take established control', () => {
+  const ledger = getLedger({
+    scores: { p1: [4, 4], p2: [4, 4], p3: [4, 4], p4: [4, 4] },
+    inputs: { 1: { players: { p1: { sneaky: true } } } },
+  });
+  assert.equal(ledger.holes['1'].takeKeep.type, 'take');
+  assert.equal(ledger.holes['1'].takeKeep.teamId, '1');
+  assert.equal(ledger.holes['2'].basePointsByTeam['1'], 0);
+  assert.equal(ledger.holes['2'].basePointsByTeam['2'], 0);
+  assert.equal(ledger.holes['2'].takeKeep.type, 'keep');
+  assert.equal(ledger.holes['2'].takeKeep.teamId, '1');
+
+  const openingTie = getLedger({ scores: { p1: [4], p2: [4], p3: [4], p4: [4] } });
+  assert.equal(openingTie.holes['1'].takeKeep.type, null);
+});
+
+test('unresolved SSP facts preview locally without changing the authoritative Take and Keep chain', () => {
+  const ledger = getLedger({
+    scores: { p1: [4, 4, 4], p2: [4, 4, 4], p3: [4, 4, 4], p4: [4, 4, 4] },
+    inputs: {
+      1: { players: { p1: { sneaky: true } } },
+      2: { players: { p3: { sneaky: true, greeny: true }, p4: { greeny: true } } },
+      3: { players: { p1: { sneaky: true } } },
+    },
+  });
+  assert.equal(ledger.holes['2'].unresolved, true);
+  assert.equal(ledger.holes['2'].authoritativeEligible, false);
+  assert.equal(ledger.holes['3'].takeKeep.type, 'keep');
+  assert.equal(ledger.holes['3'].takeKeep.teamId, '1');
+  assert.equal(Array.from(ledger.sequenceHoleNumbers).join(','), '1,3');
 });
 
 test('Honors follow cumulative final points and carry forward on ties', () => {
@@ -705,7 +775,23 @@ test('SSP audit is isolated in the appendix rather than sharing the leaderboard 
   const report = engine.buildSummaryExportBody(match, metrics);
   assert.doesNotMatch(summary, /ssp-export-table/);
   assert.match(audit, /SSP Hole-by-Hole Audit/);
+  assert.match(audit, /Raw SSP Points/);
+  assert.doesNotMatch(audit, /Points Before Multiplier/);
   assert.match(audit, /ssp-export-table/);
   assert.ok(report.indexOf('Appendix / Audit Detail') < report.indexOf('SSP Hole-by-Hole Audit'));
   assert.notEqual(report.indexOf('export-section-leaderboards'), report.indexOf('export-section-ssp-audit'));
+});
+
+test('unresolved SSP report remains provisional and never presents a final zero-dollar payout', () => {
+  const engine = loadLiveEngine();
+  const allPar = Array.from({ length: 18 }, () => 4);
+  const state = engine.seedState(buildSeed({
+    scores: { p1: allPar, p2: allPar, p3: allPar, p4: allPar },
+    inputs: { 1: { players: { p1: { greeny: true }, p2: { greeny: true } } } },
+  }));
+  const match = state.matches[0];
+  const html = engine.buildSelectedGamesSummary(match, engine.computeMatchMetrics(match));
+  assert.match(html, /Settlement pending - resolve SSP facts/);
+  assert.match(html, /Provisional/);
+  assert.doesNotMatch(html, /Current payout: \$0\.00.*Final/);
 });

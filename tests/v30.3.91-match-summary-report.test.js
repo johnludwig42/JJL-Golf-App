@@ -61,7 +61,7 @@ test('shared reconciliation is compact status content rather than a standalone r
 });
 
 test('current release identity is consistent in the application source', () => {
-  assert.match(app, /version: 'v30\.3\.93'/);
-  assert.match(app, /cacheName: 'the-dye-ledger-v30\.3\.93'/);
+  assert.match(app, /version: 'v30\.3\.94'/);
+  assert.match(app, /cacheName: 'the-dye-ledger-v30\.3\.94'/);
   assert.match(app, /buildLabel: 'Production Security Activation'/);
 });

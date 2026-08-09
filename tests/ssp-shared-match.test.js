@@ -50,6 +50,20 @@ test('overlapping SSP edits are detected and local value is not silently overwri
   assert.equal(result.facts.inputs['5'].proxPlayerId, 'p2');
 });
 
+test('explicit Prox Push and team resolution synchronize as distinct additive facts', () => {
+  const engine = loadLiveEngine();
+  const base = facts();
+  const local = facts({ inputs: structuredClone(base.inputs), sourceDeviceId: 'device-a' });
+  local.inputs['5'].proxPlayerId = '';
+  local.inputs['5'].proxResolution = 'push';
+  const remote = facts({ inputs: structuredClone(base.inputs), sourceDeviceId: 'device-b' });
+  remote.inputs['5'].notes = 'Remote note';
+  const result = engine.reconcileSharedSspFacts(local, remote, base);
+  assert.equal(result.conflicts.length, 0);
+  assert.equal(result.facts.inputs['5'].proxResolution, 'push');
+  assert.equal(result.facts.inputs['5'].notes, 'Remote note');
+});
+
 test('matches without SSP facts remain unaffected', () => {
   const engine = loadLiveEngine();
   assert.deepEqual(JSON.parse(JSON.stringify(engine.reconcileSharedSspFacts(null, null, null))), { facts: null, conflicts: [] });

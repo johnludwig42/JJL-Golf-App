@@ -75,7 +75,7 @@ test('compact trust states use the five accepted golfer-facing labels and reserv
   const match = makeSharedMatch();
   assert.equal(engine.getSharedSyncStatus(match).label, 'Saved Locally');
   match.cloudSyncState = 'syncing';
-  assert.equal(engine.getSharedSyncStatus(match).label, 'Syncing');
+  assert.equal(engine.getSharedSyncStatus(match).label, 'Checking for updates');
   match.cloudSyncState = 'cloud-synced';
   match.sharedLedgerParity = { status: 'confirmed', parityConfirmed: true };
   assert.equal(engine.getSharedSyncStatus(match).label, 'Synced');

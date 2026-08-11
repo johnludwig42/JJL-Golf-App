@@ -489,6 +489,16 @@ Status: Locked.
 
 ---
 
+### 35. Shared Match score delivery is acknowledged and idempotent
+
+A Shared Match score is locally durable before network delivery. Each changed player/hole is retained in a versioned Device outbox under a permanent operation ID until the authoritative server returns an acknowledgement. Duplicate and reordered delivery must be harmless. The server derives Account attribution, validates active Device membership and scoring assignment, commits atomically, and advances a monotonic Match revision.
+
+Realtime is a private wake-up signal, not score authority. Bounded polling, foreground, reconnect, and manual Sync remain recovery paths. Device presence is separate from score confirmation and parity. Broad Match metadata failure must not imply that an acknowledged score was lost.
+
+Status: Approved for v31.0.01.
+
+---
+
 ### 30. Use intent-based navigation and progressive disclosure
 
 As product capability grows, major golfer workflows must not expose implementation structure as one long form or one undifferentiated page.

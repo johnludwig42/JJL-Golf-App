@@ -446,6 +446,10 @@ v30.3.98 is a focused joined-score reconciliation hotfix. Routine membership ref
 ## 23. Current development release — v30.3.99
 
 v30.3.99 makes `DYE-######` the only code issued when a Match becomes shared for the first time. New Shared Matches, local-to-shared conversions, and subsequent rounds receive a fresh canonical code. Existing canonical Shared Matches retain their code when edited. Legacy Shared Match records are not migrated or reused through normal setup; the user is directed to Create New Match. No local or cloud records are deleted.
+
+## 24. Current development release — v31.0.01
+
+v31.0.01 is the Shared Match Reliability Foundation release. It adds a durable changed-score outbox, atomic idempotent server acknowledgements, monotonic Match revisions, private Realtime wake-up notifications, bounded polling fallback, and an independent Device heartbeat. Existing local rounds and scoring calculations are preserved. The additive migration is tracked but not applied to any environment by implementation.
 # v30.3.90 Shared Match code compatibility
 
 New Shared Matches use only `DYE-######`. Existing 12-character Shared Match identifiers remain joinable through the normal Match workflow without re-keying an active or historical match. Join codes remain locators, not Account, Golfer Identity, Device, role, participation, or scoring-assignment keys.

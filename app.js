@@ -3,6 +3,8 @@ const STORAGE_KEY = 'the-dye-ledger-v20';
 const STATE_BACKUP_STORAGE_KEY = `${STORAGE_KEY}:last-known-good`;
 const FINISH_RECOVERY_STORAGE_KEY = `${STORAGE_KEY}:finish-recovery`;
 const SETUP_DRAFT_STORAGE_KEY = `${STORAGE_KEY}:setup-draft`;
+const SHARED_SCORE_OUTBOX_STORAGE_KEY = `${STORAGE_KEY}:shared-score-outbox:v1`;
+const SHARED_SCORE_OUTBOX_SCHEMA_VERSION = 1;
 const STORAGE_FAILURE_MESSAGE = 'We couldn\'t save this change locally. Your current screen is still open—please keep the app open and try again.';
 const localPersistenceDiagnostics = {
   storageAvailable: true,
@@ -13,11 +15,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v30.3.99',
-  versionNumber: '30.3.99',
-  cacheName: 'the-dye-ledger-v30.3.99',
-  buildDate: '2026-08-09T12:18:24.564Z',
-  buildLabel: 'Canonical Shared Match Code Hotfix'
+  version: 'v31.0.01',
+  versionNumber: '31.0.01',
+  cacheName: 'the-dye-ledger-v31.0.01',
+  buildDate: '2026-08-10T12:30:51.177Z',
+  buildLabel: 'Shared Match Reliability Foundation'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -526,8 +528,13 @@ const SHARED_MATCH_SYNC_DEBOUNCE_MS = 200;
 const SHARED_PARTICIPANT_REFRESH_MS = 30000;
 const SHARED_CONNECTION_FAST_REFRESH_MS = 3000;
 const SHARED_CONNECTION_FAST_REFRESH_DURATION_MS = 60000;
-const SHARED_SCORE_REFRESH_MS = 30000;
+const SHARED_SCORE_REFRESH_MS = 10000;
+const SHARED_PRESENCE_HEARTBEAT_MS = 30000;
 let sharedScoreRefreshTimer = null;
+let sharedPresenceHeartbeatTimer = null;
+let sharedPresenceHeartbeatInflight = null;
+let sharedRealtimeChannel = null;
+let sharedRealtimeMatchId = '';
 const SHARED_DEVICE_ID_KEY = 'the-dye-ledger-shared-device-id';
 const SHARED_DEVICE_NAME_KEY = 'dyeLedgerSharedDeviceName';
 const SHARED_PARTICIPANT_ID_PREFIX = 'dyeLedgerSharedParticipantId:';
@@ -1160,6 +1167,10 @@ const SHARED_DIAGNOSTIC_REASON_CODES = Object.freeze([
   'AUTHORITATIVE_OVERWRITE',
   'JOINED_OVERWRITE_PREVENTED',
   'CLOUD_SYNC_FAILED',
+  'SCORE_QUEUED',
+  'SCORE_ACKNOWLEDGED',
+  'SCORE_RETRY_SCHEDULED',
+  'PRESENCE_HEARTBEAT_FAILED',
 ]);
 function recordSharedSyncDiagnostic(match, reasonCode, detail = {}, occurredAt = new Date().toISOString()) {
   if (!match || match.storageMode !== 'shared' || !SHARED_DIAGNOSTIC_REASON_CODES.includes(reasonCode)) return null;
@@ -1175,6 +1186,69 @@ function getSharedScoreWriteMeta(match, playerId, holeNumber) {
   const row = raw && typeof raw === 'object' ? raw[getSharedPlayerHoleKey(playerId, holeNumber)] : null;
   return row && typeof row === 'object' ? row : null;
 }
+function readSharedScoreOutbox(storage = localStorage) {
+  const result = readJsonStorageRecord(storage, SHARED_SCORE_OUTBOX_STORAGE_KEY);
+  if (!result.ok || result.missing || !result.value || typeof result.value !== 'object') {
+    return { schemaVersion: SHARED_SCORE_OUTBOX_SCHEMA_VERSION, operations: [] };
+  }
+  return {
+    schemaVersion: SHARED_SCORE_OUTBOX_SCHEMA_VERSION,
+    operations: (Array.isArray(result.value.operations) ? result.value.operations : []).filter(row =>
+      row && typeof row === 'object' && row.operationId && row.matchId && row.playerId && Number(row.holeNumber) > 0
+    ).slice(-1000),
+  };
+}
+function writeSharedScoreOutbox(outbox, storage = localStorage) {
+  return writeJsonStorageRecord(storage, SHARED_SCORE_OUTBOX_STORAGE_KEY, {
+    schemaVersion: SHARED_SCORE_OUTBOX_SCHEMA_VERSION,
+    operations: (Array.isArray(outbox?.operations) ? outbox.operations : []).slice(-1000),
+  });
+}
+function createSharedScoreOperationId() {
+  try { if (crypto?.randomUUID) return crypto.randomUUID(); } catch {}
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+function getSharedScoreOutboxOperations(matchOrId = null, storage = localStorage) {
+  const matchId = typeof matchOrId === 'string' ? matchOrId : (matchOrId?.sharedMatchId || matchOrId?.id || '');
+  return readSharedScoreOutbox(storage).operations.filter(row => String(row.matchId) === String(matchId));
+}
+function queueSharedScoreOperation(match, playerId, holeNumber, options = {}, storage = localStorage) {
+  if (!match || match.storageMode !== 'shared' || options.source === 'remote') return null;
+  const matchId = String(match.sharedMatchId || match.id || '');
+  const key = getSharedPlayerHoleKey(playerId, holeNumber);
+  const outbox = readSharedScoreOutbox(storage);
+  const prior = outbox.operations.find(row => String(row.matchId) === matchId && row.key === key);
+  const operation = {
+    operationId: createSharedScoreOperationId(),
+    matchId,
+    key,
+    playerId: String(playerId),
+    holeNumber: Number(holeNumber),
+    participantId: String(options.participantId || getCurrentSharedParticipantId(match) || ''),
+    deviceId: String(options.deviceId || getSharedDeviceId() || ''),
+    clientRevision: Math.max(1, Number(prior?.clientRevision || 0) + 1),
+    queuedAt: String(options.updatedAt || new Date().toISOString()),
+    attempts: 0,
+    lastAttemptAt: null,
+  };
+  outbox.operations = outbox.operations.filter(row => !(String(row.matchId) === matchId && row.key === key));
+  outbox.operations.push(operation);
+  const saved = writeSharedScoreOutbox(outbox, storage);
+  if (!saved.ok) notifyLocalSaveFailure();
+  recordSharedSyncDiagnostic(match, 'SCORE_QUEUED', { playerId: operation.playerId, holeNumber: operation.holeNumber, incomingId: operation.operationId });
+  return operation;
+}
+function acknowledgeSharedScoreOperations(match, operationIds = [], storage = localStorage) {
+  const accepted = new Set(operationIds.map(String));
+  if (!accepted.size) return 0;
+  const outbox = readSharedScoreOutbox(storage);
+  const before = outbox.operations.length;
+  outbox.operations = outbox.operations.filter(row => !accepted.has(String(row.operationId)));
+  writeSharedScoreOutbox(outbox, storage);
+  const removed = before - outbox.operations.length;
+  if (match && removed) recordSharedSyncDiagnostic(match, 'SCORE_ACKNOWLEDGED', { count: removed });
+  return removed;
+}
 function stampSharedScoreWrite(match, playerId, holeNumber, options = {}) {
   if (!match || match.storageMode !== 'shared' || !playerId || !holeNumber) return null;
   match.sharedScoreWriteState = match.sharedScoreWriteState && typeof match.sharedScoreWriteState === 'object' ? match.sharedScoreWriteState : {};
@@ -1185,6 +1259,7 @@ function stampSharedScoreWrite(match, playerId, holeNumber, options = {}) {
     source: String(options.source || 'local'),
   };
   match.sharedScoreWriteState[getSharedPlayerHoleKey(playerId, holeNumber)] = row;
+  if (row.source !== 'remote') queueSharedScoreOperation(match, playerId, holeNumber, row);
   return row;
 }
 function sharedTimestampMs(value) {
@@ -1519,17 +1594,18 @@ function getSharedSyncStatus(match) {
     return { label: 'Saved Locally', detail: 'This match is stored on this device.', tone: 'warning', pending: 0, state: 'saved-locally' };
   }
   const stateLabel = String(match.cloudSyncState || 'local-cache');
-  const pending = stateLabel === 'pending-sync' || sharedMatchSyncTimers.has(match.id) || sharedMatchSyncDirty.get(match.id) ? 1 : 0;
+  const queuedScores = getSharedScoreOutboxOperations(match).length;
+  const pending = queuedScores || (stateLabel === 'pending-sync' || sharedMatchSyncTimers.has(match.id) || sharedMatchSyncDirty.get(match.id) ? 1 : 0);
   const lastError = String(match.lastSharedSyncError || '').trim();
   if (navigator.onLine === false) {
-    if (pending || stateLabel === 'pending-sync') return { label: 'Saved Locally', detail: 'Scores are saved on this phone and will retry automatically when connected.', tone: 'warning', pending, state: 'saved-locally' };
+    if (pending || stateLabel === 'pending-sync') return { label: 'Saved on this device', detail: `${queuedScores || pending} score entr${(queuedScores || pending) === 1 ? 'y is' : 'ies are'} safely queued and will send automatically when connected.`, tone: 'warning', pending, state: 'saved-locally' };
     return { label: 'Offline', detail: 'Scoring remains available on this device. Reconnect when convenient.', tone: 'offline', pending, state: 'offline' };
   }
   if (stateLabel === 'syncing' || sharedMatchSyncInflight.has(match.id)) {
-    return { label: 'Syncing', detail: 'Sending saved changes and checking the latest round state.', tone: 'working', pending, state: 'syncing' };
+    return { label: queuedScores ? `Sending ${queuedScores} score${queuedScores === 1 ? '' : 's'}` : 'Checking for updates', detail: 'Saved changes remain on this device until the server confirms them.', tone: 'working', pending, state: 'syncing' };
   }
   if (pending || stateLabel === 'pending-sync') {
-    return { label: 'Saved Locally', detail: 'Scores are saved on this phone. Keep scoring or tap Retry Sync.', tone: 'warning', pending, state: 'saved-locally' };
+    return { label: 'Saved on this device', detail: `${queuedScores || pending} score entr${(queuedScores || pending) === 1 ? 'y is' : 'ies are'} queued. Retrying automatically; Sync Now is also available.`, tone: 'warning', pending, state: 'saved-locally' };
   }
   if (lastError) {
     return { label: 'Needs Attention', detail: `${lastError} Scores are still saved on this phone.`, tone: 'attention', pending, state: 'needs-attention' };
@@ -1553,9 +1629,10 @@ function getSharedSyncStatus(match) {
   return { label: 'Needs Attention', detail: 'Shared Match status should be checked before continuing.', tone: 'attention', pending, state: 'needs-attention' };
 }
 function getSharedPendingEntryCount(match) {
+  const queued = getSharedScoreOutboxOperations(match).length;
   const parity = match?.sharedLedgerParity;
-  if (!parity || typeof parity !== 'object') return 0;
-  return Math.max(0,
+  if (!parity || typeof parity !== 'object') return queued;
+  return Math.max(queued,
     Number(parity.missingRemote?.length || 0)
     + Number(parity.missingLocal?.length || 0)
     + Number(parity.conflicts?.length || 0));
@@ -8352,6 +8429,8 @@ function normalizeMatch(match) {
   match.sharedPlayerAssignments = match.sharedPlayerAssignments && typeof match.sharedPlayerAssignments === 'object' ? match.sharedPlayerAssignments : {};
   match.sharedPlayerAssignmentState = match.sharedPlayerAssignmentState && typeof match.sharedPlayerAssignmentState === 'object' ? match.sharedPlayerAssignmentState : {};
   match.sharedScoreWriteState = match.sharedScoreWriteState && typeof match.sharedScoreWriteState === 'object' ? match.sharedScoreWriteState : {};
+  match.sharedScoreOutboxInitialized = match.sharedScoreOutboxInitialized === true || !!match.lastCloudSyncAt || !!match.lastSharedScorePullAt;
+  match.sharedServerRevision = Math.max(0, Number(match.sharedServerRevision || 0));
   match.sharedSyncDiagnostics = Array.isArray(match.sharedSyncDiagnostics) ? match.sharedSyncDiagnostics.slice(-200) : [];
   match.sessionId = String(match.sessionId || match.id || uid());
   match.sessionName = String(match.sessionName || 'Session');
@@ -12192,6 +12271,58 @@ function getSharedCloudWritePlan(match) {
     notes: isHost,
   };
 }
+function isMissingSharedScoreRpc(error) {
+  const code = String(error?.code || '');
+  const message = String(error?.message || error?.details || '');
+  return code === 'PGRST202' || /submit_shared_score_operations|function.*not found|schema cache/i.test(message);
+}
+function buildPendingSharedScoreOperations(match, scoreEntries = [], storage = localStorage) {
+  const byKey = new Map(scoreEntries.map(entry => [getSharedPlayerHoleKey(entry.player_id, entry.hole_number), entry]));
+  return getSharedScoreOutboxOperations(match, storage).map(operation => {
+    const scoreEntry = byKey.get(operation.key);
+    return scoreEntry ? {
+      operation_id: operation.operationId,
+      client_revision: operation.clientRevision,
+      device_id: operation.deviceId,
+      participant_id: operation.participantId,
+      queued_at: operation.queuedAt,
+      score_entry: scoreEntry,
+    } : null;
+  }).filter(Boolean);
+}
+async function submitPendingSharedScoreOperations(client, match, scoreEntries = [], { storage = localStorage } = {}) {
+  const operations = buildPendingSharedScoreOperations(match, scoreEntries, storage);
+  if (!operations.length) return { submitted: 0, acknowledged: 0, fallback: false };
+  const outbox = readSharedScoreOutbox(storage);
+  const attempted = new Set(operations.map(row => String(row.operation_id)));
+  outbox.operations = outbox.operations.map(row => attempted.has(String(row.operationId))
+    ? { ...row, attempts: Number(row.attempts || 0) + 1, lastAttemptAt: new Date().toISOString() }
+    : row);
+  writeSharedScoreOutbox(outbox, storage);
+  let acknowledgedIds = [];
+  let fallback = false;
+  const { data, error } = await client.rpc('submit_shared_score_operations', {
+    p_match_id: String(match.sharedMatchId || match.id),
+    p_device_id: getSharedDeviceId(),
+    p_operations: operations,
+  });
+  if (error && !isMissingSharedScoreRpc(error)) throw error;
+  if (error) {
+    fallback = true;
+    const response = await client.from('score_entries').upsert(operations.map(row => row.score_entry), { onConflict: 'id' });
+    if (response.error) throw response.error;
+    acknowledgedIds = operations.map(row => row.operation_id);
+  } else {
+    const receipts = Array.isArray(data) ? data : (Array.isArray(data?.receipts) ? data.receipts : []);
+    acknowledgedIds = receipts.map(row => row?.operation_id || row?.operationId).filter(Boolean);
+    if (!acknowledgedIds.length) throw new Error('Score acknowledgement was not returned. Scores remain queued safely.');
+    const revision = Math.max(0, ...receipts.map(row => Number(row?.match_revision || row?.matchRevision || 0)));
+    if (revision) match.sharedServerRevision = Math.max(Number(match.sharedServerRevision || 0), revision);
+  }
+  const acknowledged = acknowledgeSharedScoreOperations(match, acknowledgedIds, storage);
+  match.lastSharedScorePushAt = new Date().toISOString();
+  return { submitted: operations.length, acknowledged, fallback };
+}
 async function uploadSharedMatch(match) {
   const client = await ensureSupabaseClient();
   if (!client) throw new Error('Supabase is not configured.');
@@ -12290,8 +12421,17 @@ async function uploadSharedMatch(match) {
     if (response.error) throw response.error;
   }
   if (writePlan.scores && payload.scoreEntries.length) {
-    response = await client.from('score_entries').upsert(payload.scoreEntries, { onConflict: 'id' });
-    if (response.error) throw response.error;
+    const pending = getSharedScoreOutboxOperations(match);
+    if (pending.length) {
+      await submitPendingSharedScoreOperations(client, match, payload.scoreEntries);
+      match.sharedScoreOutboxInitialized = true;
+    } else if (!match.sharedScoreOutboxInitialized) {
+      // Seed a pre-v31 Shared Match once. Every later save uses only the changed
+      // rows retained in the durable device outbox until acknowledged.
+      response = await client.from('score_entries').upsert(payload.scoreEntries, { onConflict: 'id' });
+      if (response.error) throw response.error;
+      match.sharedScoreOutboxInitialized = true;
+    }
   }
   if (writePlan.notes) {
     response = await client.from('match_notes').upsert(payload.notesRow, { onConflict: 'match_id' });
@@ -12448,6 +12588,8 @@ function hydrateMatchFromCloudBundle(bundle) {
     sharedPlayerAssignments: sharedMeta.playerAssignments && typeof sharedMeta.playerAssignments === 'object' ? sharedMeta.playerAssignments : {},
     sharedPlayerAssignmentState: sharedMeta.playerAssignmentState && typeof sharedMeta.playerAssignmentState === 'object' ? clonePlain(sharedMeta.playerAssignmentState) : {},
     sharedScoreWriteState: {},
+    sharedScoreOutboxInitialized: true,
+    sharedServerRevision: Number(matchRow?.shared_revision || 0),
     sharedSyncDiagnostics: [],
     memories: Array.isArray(sharedMeta.memories) ? sharedMeta.memories.map(m => normalizeRoundMemory(m)).filter(Boolean) : [],
     roundContext: normalizeRoundContext(sharedMeta.roundContext || {}),
@@ -12571,6 +12713,28 @@ async function refreshActiveSharedScores({ silent = true, render = true } = {}) 
   if (render && (scoresChanged || metadataChanged)) renderAll();
   return scoresChanged || metadataChanged;
 }
+async function ensureSharedRealtimeSubscription(match = getActiveMatch()) {
+  const matchId = String(match?.sharedMatchId || '');
+  if (!match || match.storageMode !== 'shared' || !matchId || !hasSupabaseConfig()) return false;
+  if (sharedRealtimeChannel && sharedRealtimeMatchId === matchId) return true;
+  const client = await ensureSupabaseClient();
+  if (!client?.channel) return false;
+  if (sharedRealtimeChannel) {
+    try { await client.removeChannel(sharedRealtimeChannel); } catch {}
+    sharedRealtimeChannel = null;
+  }
+  try { await client.realtime?.setAuth?.(); } catch {}
+  const onScoreChange = () => refreshActiveSharedScores({ silent: true, render: true });
+  sharedRealtimeMatchId = matchId;
+  sharedRealtimeChannel = client.channel(`shared-match:${matchId}`, { config: { private: true } })
+    .on('broadcast', { event: 'INSERT' }, onScoreChange)
+    .on('broadcast', { event: 'UPDATE' }, onScoreChange)
+    .subscribe(status => {
+      match.sharedRealtimeState = String(status || '').toLowerCase();
+      if (status === 'SUBSCRIBED') heartbeatActiveSharedParticipant({ silent: true });
+    });
+  return true;
+}
 async function reconcileSharedMatchBeforeSummary(match, { silent = true } = {}) {
   if (!match || match.storageMode !== 'shared') return { parityConfirmed: true, status: 'not-shared' };
   const checkedAt = new Date().toISOString();
@@ -12613,12 +12777,12 @@ async function reconcileSharedMatchBeforeSummary(match, { silent = true } = {}) 
 }
 function startSharedScoreRefresh() {
   if (sharedScoreRefreshTimer) return;
-  sharedScoreRefreshTimer = window.setInterval(() => {
+  sharedScoreRefreshTimer = window.setInterval(async () => {
     if (document.visibilityState === 'hidden') return;
     const match = getActiveMatch();
     if (!match || match.storageMode !== 'shared' || match.status === 'complete') return;
-    const activePanel = document.querySelector('.panel.active')?.id || '';
-    if (activePanel !== 'score' && activePanel !== 'leaderboard') return;
+    await ensureSharedRealtimeSubscription(match);
+    if (getSharedScoreOutboxOperations(match).length) await flushSharedMatchSync(match.id, { silent: true });
     refreshActiveSharedScores({ silent: true, render: true });
   }, SHARED_SCORE_REFRESH_MS);
 }
@@ -12896,6 +13060,35 @@ async function refreshActiveSharedParticipants({ silent = true } = {}) {
     return false;
   }
 }
+async function heartbeatActiveSharedParticipant({ silent = true } = {}) {
+  const match = getActiveMatch();
+  if (!match || match.storageMode !== 'shared' || match.status === 'complete' || document.visibilityState === 'hidden') return false;
+  if (sharedPresenceHeartbeatInflight) return sharedPresenceHeartbeatInflight;
+  sharedPresenceHeartbeatInflight = (async () => {
+    try {
+      const updated = await upsertSharedMembershipForCurrentDevice(match);
+      if (updated) {
+        const now = new Date().toISOString();
+        ensureSharedDeviceRegistered(match);
+        const current = getSharedParticipantByDeviceId(match, getSharedDeviceId());
+        if (current) current.lastSeenAt = now;
+        persist({ skipRender: true });
+      }
+      return updated;
+    } catch (err) {
+      recordSharedSyncDiagnostic(match, 'PRESENCE_HEARTBEAT_FAILED', { code: getSharedSafeErrorCode(err) });
+      if (!silent) toast('Device status could not be refreshed. Scores remain safely stored.');
+      return false;
+    } finally {
+      sharedPresenceHeartbeatInflight = null;
+    }
+  })();
+  return sharedPresenceHeartbeatInflight;
+}
+function startSharedPresenceHeartbeat() {
+  if (sharedPresenceHeartbeatTimer) return;
+  sharedPresenceHeartbeatTimer = window.setInterval(() => heartbeatActiveSharedParticipant({ silent: true }), SHARED_PRESENCE_HEARTBEAT_MS);
+}
 function startSharedParticipantRefresh() {
   if (sharedParticipantRefreshTimer) return;
   sharedParticipantRefreshTimer = window.setInterval(() => {
@@ -13129,9 +13322,14 @@ window.addEventListener('pagehide', () => {
   scheduleSharedMatchSync(active, { immediate: true, silent: true });
 });
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState !== 'hidden') return;
   const active = getActiveMatch();
   if (!active || active.storageMode !== 'shared') return;
+  if (document.visibilityState !== 'hidden') {
+    heartbeatActiveSharedParticipant({ silent: true });
+    scheduleSharedMatchSync(active, { immediate: true, silent: true });
+    refreshActiveSharedScores({ silent: true });
+    return;
+  }
   try { applyCurrentHoleDomToMatch(active); } catch (err) {}
   persist({ skipRender: true });
   scheduleSharedMatchSync(active, { immediate: true, silent: true });
@@ -13151,12 +13349,14 @@ window.addEventListener('online', () => {
     scheduleSharedMatchSync(active, { immediate: true, silent: true });
   }
   refreshActiveSharedParticipants({ silent: true });
+  heartbeatActiveSharedParticipant({ silent: true });
   refreshActiveSharedScores({ silent: true });
 });
 window.addEventListener('focus', () => {
   const active = getActiveMatch();
   if (active?.storageMode === 'shared' && (active.lastSharedSyncError || active.cloudSyncState === 'pending-sync')) scheduleSharedMatchSync(active, { immediate: true, silent: true });
   refreshActiveSharedParticipants({ silent: true });
+  heartbeatActiveSharedParticipant({ silent: true });
   refreshActiveSharedScores({ silent: true });
 });
 
@@ -13857,7 +14057,8 @@ function renderAll() {
   syncNewMatchConflictUi();
   updateCloudConfigUi();
   startSharedParticipantRefresh();
-startSharedScoreRefresh();
+  startSharedScoreRefresh();
+  startSharedPresenceHeartbeat();
   renderScorecardImportReview();
   updateScorecardImportStatus();
   scheduleTeamPayoutSplitPaneSync();
@@ -22205,6 +22406,13 @@ function installDyeLedgerLiveEngineAdapter() {
     isLegacySharedMatchRecord,
     fetchSharedMatchBundleWithRetry,
     registerSharedJoinDevice,
+    readSharedScoreOutbox,
+    writeSharedScoreOutbox,
+    getSharedScoreOutboxOperations,
+    queueSharedScoreOperation,
+    acknowledgeSharedScoreOperations,
+    buildPendingSharedScoreOperations,
+    submitPendingSharedScoreOperations,
     getMomentumRangeOptions,
     getMomentumChartKeyForRange,
     canEditGreenies,

@@ -177,7 +177,7 @@ test('complete 9- and 18-hole rounds route normally while incomplete and reloade
     const incomplete = roundFixture(holeCount, false, 'shared');
     assert.equal(incomplete.engine.getFinishRoundRoutingMode(incomplete.live, incomplete.metrics), 'early');
   }
-  assert.match(app, /showRoundEndPrompt\(getFinishRoundRoutingMode\(match\), match\)/);
+  assert.match(app, /showRoundEndPrompt\(mode \|\| getFinishRoundRoutingMode\(match\), match\)/);
 });
 
 test('Scores momentum reuses the shared renderer for Front 9, Back 9, and Full 18 at full card width', () => {

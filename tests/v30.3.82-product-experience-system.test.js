@@ -58,8 +58,8 @@ test('print restores the complete Scores record independent of selected destinat
 });
 
 test('v30.3.82 Product Experience remains present after the current PWA upgrade', () => {
-  assert.match(app, /version: 'v30\.3\.84'/);
-  assert.match(html, /apple-touch-icon-v30\.3\.84\.png/);
-  assert.match(html, /style\.css\?v=30\.3\.84&amp;rev=2/);
+  assert.match(app, /version: 'v31\.0\.04'/);
+  assert.match(html, /apple-touch-icon-v31\.0\.04\.png/);
+  assert.match(html, /style\.css\?v=31\.0\.04&amp;rev=1/);
   assert.match(notes, /v30\.3\.82/);
 });

@@ -60,8 +60,8 @@ test('final-hole save is user-driven and never opens a finish prompt automatical
   assert.doesNotMatch(app, /else showRoundEndPrompt\('early', match\)/);
   assert.match(app, /match\.roundFinishPromptDismissedAt = match\.roundFinishPromptDismissedAt \|\| new Date\(\)\.toISOString\(\)/);
   assert.doesNotMatch(app, /dataCompletion\.isReadyToFinish\) showRoundCompletePrompt\(match\)/);
-  assert.match(app, /All scores entered\. Use End Round when ready\./);
-  assert.match(app, /scoringFinishBtn\.textContent = reopenedEdit \? 'Save \/ End Round' : 'End Round'/);
+  assert.match(app, /All scores entered\. Review and complete the round when ready\./);
+  assert.match(app, /scoringFinishBtn\.textContent = reopenedEdit \? 'Save Completed Round' : 'Complete Round'/);
 });
 
 test('historical v30.3.77 PWA assets remain immutable copies of canonical artwork', () => {

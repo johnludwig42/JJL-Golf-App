@@ -36,7 +36,7 @@ test('Play stat matrix uses interaction provenance without a review checkbox', (
   assert.match(app, /Putts begin as editable suggestions/);
   assert.match(app, /entryCompleted = true/);
   assert.match(app, /puttsSource: normalizePuttsSource/);
-  assert.match(app, /All scores entered\. Use End Round when ready\./);
+  assert.match(app, /All scores entered\. Review and complete the round when ready\./);
 });
 
 test('active local Memories retain revisions while completed and Shared Match Memories are append-only', () => {

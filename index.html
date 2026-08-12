@@ -7,18 +7,18 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=31.0.03&amp;rev=1" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v31.0.03.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v31.0.03.png" />
-  <link rel="shortcut icon" href="./branding/favicon-32-v31.0.03.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v31.0.03.png" />
-  <link rel="stylesheet" href="style.css?v=31.0.03&amp;rev=1" />
+  <link rel="manifest" href="manifest.json?v=31.0.04&amp;rev=1" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v31.0.04.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v31.0.04.png" />
+  <link rel="shortcut icon" href="./branding/favicon-32-v31.0.04.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v31.0.04.png" />
+  <link rel="stylesheet" href="style.css?v=31.0.04&amp;rev=1" />
 </head>
 <body>
   <div class="app-chrome"><header class="app-header compact-header">
     <div class="brand-wrap">
       <div class="brand-mark">
-        <img src="./branding/apple-touch-icon-v31.0.03.png" alt="The Dye Ledger" />
+        <img src="./branding/apple-touch-icon-v31.0.04.png" alt="The Dye Ledger" />
       </div>
       <div>
       <h1>The Dye Ledger</h1>
@@ -357,7 +357,8 @@
               </div>
             </details>
             <div class="actions wrap compact-actions top-gap">
-              <button id="finishRoundBtn" type="button" class="secondary">End Round</button>
+              <button id="finishRoundBtn" type="button">Complete Round</button>
+              <button id="endRoundEarlyBtn" type="button" class="secondary">End Round Early</button>
             </div>
           </section>
           <div id="holeJumpTiles" class="hole-jump-tiles top-gap hidden" aria-hidden="true"></div>
@@ -422,7 +423,8 @@
             <div class="scoreboard-round-actions">
               <div id="scoreboardRoundState" class="tiny">Round is live.</div>
               <div class="actions wrap compact-actions">
-                <button id="scoreboardFinishRoundBtn" type="button" class="secondary">Finish / End Round</button>
+                <button id="scoreboardFinishRoundBtn" type="button">Complete Round</button>
+                <button id="scoreboardEndRoundEarlyBtn" type="button" class="secondary">End Round Early</button>
                 <button id="scoreboardConfirmFinishRoundBtn" type="button" class="secondary hidden">Confirm Finish</button>
               </div>
             </div>
@@ -431,6 +433,7 @@
             <div class="section-label">Round Complete ✓</div>
             <div id="postRoundActionsInlineText" class="tiny top-gap">What would you like to do next?</div>
             <div class="post-round-actions top-gap">
+              <button id="postRoundInlineLedgerBtn" type="button" class="secondary">Open Ledger Entry</button>
               <button id="postRoundInlineGenerateRecapBtn" type="button">Generate AI Recap</button>
               <button id="postRoundInlineViewSummaryBtn" type="button">📊 View Match Summary</button>
               <button id="postRoundInlineAnotherRoundBtn" type="button" class="secondary">🏌️ Play Another Round with This Group</button>
@@ -918,7 +921,7 @@
       <div class="card tight-card app-updates-card" data-experience-section="support">
         <h2>App Updates</h2>
         <div class="app-update-summary">
-          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v31.0.03</strong></div>
+          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v31.0.04</strong></div>
           <div><span class="muted-label">Build Date</span><strong id="appBuildTimestamp">loading…</strong></div>
           <div><span class="muted-label">Cache</span><span id="appActiveCacheName" class="break-word">checking…</span></div>
           <div><span class="muted-label">Update Available</span><strong id="appUpdateAvailableStatus">checking…</strong></div>
@@ -965,12 +968,11 @@
     </section>
   </main>
   <script id="appReleaseNotesData" type="application/json">[
+    {"version":"v31.0.04","summary":"Makes completing a round or ending early explicit, reviewable, host-controlled, and recovery-safe."},
     {"version":"v31.0.03","summary":"Refines Ledger Entry storytelling, signed Nassau margins, and first-hole weather capture."},
     {"version":"v31.0.02","summary":"Adds the Ledger Entry as the recommended export with explicit handicap bases, provenance, nested Press ledgers, and print-safe reporting."},
     {"version":"v31.0.01","summary":"Adds durable score delivery, server acknowledgements, live change notifications, independent device presence, and faster Shared Match convergence."},
-    {"version":"v30.3.99","summary":"Makes DYE-###### the only code for newly shared matches and prevents local record IDs from being labeled as legacy match codes."},
-    {"version":"v30.3.98","summary":"Restores joined-device score reconciliation by limiting routine uploads to authorized score writes while preserving server-authoritative membership admission."},
-    {"version":"v30.3.97","summary":"Fixes authenticated Shared Match joining by keeping initial membership admission inside the secure server function without weakening RLS."}
+    {"version":"v30.3.99","summary":"Makes DYE-###### the only code for newly shared matches and prevents local record IDs from being labeled as legacy match codes."}
   ]</script>
 
 
@@ -987,7 +989,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v31.0.03</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
+    <span id="appVersionFooter">v31.0.04</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
@@ -1037,10 +1039,11 @@
   </div>
 
   <div id="roundEndPrompt" class="modal-backdrop hidden" aria-hidden="true">
-    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="roundEndPromptTitle">
+    <div class="modal-card round-end-review-sheet" role="dialog" aria-modal="true" aria-labelledby="roundEndPromptTitle" aria-describedby="roundEndPromptText">
       <div class="modal-body">
         <h3 id="roundEndPromptTitle">Round Complete</h3>
         <div id="roundEndPromptText" class="tiny top-gap">Generate Match Summary?</div>
+        <div id="roundEndReviewSummary" class="round-end-review-summary top-gap" aria-live="polite"></div>
         <div id="roundEndReasonChoices" class="round-end-reason-choices hidden top-gap"></div>
         <div class="actions wrap top-gap">
           <button id="roundEndPrimaryBtn" type="button">Finish Round</button>
@@ -1056,6 +1059,8 @@
         <h3 id="postRoundActionsTitle">Round Complete ✓</h3>
         <div id="postRoundActionsText" class="tiny top-gap">What would you like to do?</div>
         <div class="post-round-actions top-gap">
+          <button id="postRoundLedgerBtn" type="button" class="secondary">Open Ledger Entry</button>
+          <button id="postRoundReturnBtn" type="button" class="secondary">Return to Completed Round</button>
           <button id="postRoundViewSummaryBtn" type="button">📊 View Match Summary</button>
           <button id="postRoundAnotherRoundBtn" type="button" class="secondary">🏌️ Play Another Round with This Group</button>
           <button id="postRoundNewMatchBtn" type="button" class="secondary">➕ Create New Match</button>
@@ -1132,8 +1137,8 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=31.0.03&amp;rev=1"></script>
-  <script src="identity-security.js?v=31.0.03&amp;rev=1"></script>
-  <script src="app.js?v=31.0.03&amp;rev=1"></script>
+  <script src="supabase-config.js?v=31.0.04&amp;rev=1"></script>
+  <script src="identity-security.js?v=31.0.04&amp;rev=1"></script>
+  <script src="app.js?v=31.0.04&amp;rev=1"></script>
 </body>
 </html>

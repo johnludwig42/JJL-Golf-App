@@ -5205,6 +5205,18 @@ main {
 #roundEndPrompt .modal-body {
   box-sizing: border-box;
 }
+.round-end-review-summary { display:grid; gap:10px; text-align:left; }
+.round-end-review-status { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:12px; border-radius:14px; background:#eaf5ee; border:1px solid rgba(11,93,59,.22); }
+.round-end-review-status.provisional { background:#fff7e8; border-color:rgba(180,83,9,.28); }
+.round-end-review-status span { font-size:.8rem; text-align:right; color:var(--muted); }
+.round-end-review-facts { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:0; }
+.round-end-review-facts>div { padding:10px; border:1px solid var(--line); border-radius:12px; background:rgba(255,255,255,.72); }
+.round-end-review-facts dt { font-size:.72rem; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+.round-end-review-facts dd { margin:3px 0 0; font-weight:750; }
+.round-end-review-summary h4 { margin:0 0 6px; }
+.round-end-review-summary ul { margin:0; padding-left:20px; }
+.round-end-review-ok { margin:0; color:#176b45; font-weight:700; }
+.round-end-issue-link { min-height:44px; padding:6px 0; border:0; background:transparent; color:#0b5d3b; text-decoration:underline; text-align:left; }
 .round-end-reason-choices,
 .round-end-reason-grid {
   min-width: 0;

@@ -15,11 +15,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.03',
-  versionNumber: '31.0.03',
-  cacheName: 'the-dye-ledger-v31.0.03',
-  buildDate: '2026-08-12T00:11:25-04:00',
-  buildLabel: 'Ledger Story & Weather Refinements'
+  version: 'v31.0.04',
+  versionNumber: '31.0.04',
+  cacheName: 'the-dye-ledger-v31.0.04',
+  buildDate: '2026-08-12T01:15:00-04:00',
+  buildLabel: 'End-of-Round Experience'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -4356,6 +4356,37 @@ function describeRoundDataCompletion(completion) {
   return labels.length ? labels.join('; ') : 'All required round information is complete';
 }
 
+function getRoundFinalizationAuthority(match) {
+  if (!match) return { allowed: false, code: 'NO_ROUND', label: 'No active round' };
+  if (match.storageMode !== 'shared') return { allowed: true, code: 'LOCAL', label: 'Saved on this device' };
+  if (isCurrentDeviceMatchHost(match)) return { allowed: true, code: 'HOST', label: 'Host controls finalization' };
+  return { allowed: false, code: 'JOINED', label: 'Waiting for the host to complete the round' };
+}
+
+function buildRoundEndReviewHtml(match, mode, completion = getRoundDataCompletionState(match)) {
+  const metrics = computeMatchMetrics(match);
+  const scoreRows = getMissingScoreEntries(match, metrics);
+  const scorePreview = scoreRows.slice(0, 8).map(row => `<li><button type="button" class="round-end-issue-link" data-review-hole="${escapeHtml(row.holeNumber)}">Hole ${escapeHtml(row.holeNumber)} · ${escapeHtml(row.playerName)} score</button></li>`).join('');
+  const stats = completion.unresolved.find(item => item.type === 'stats');
+  const games = completion.unresolved.filter(item => !['scores', 'stats'].includes(item.type));
+  const allGamesFinal = areAllGamesFinal(match, metrics);
+  const provisional = !completion.scoresComplete || !allGamesFinal;
+  const authority = getRoundFinalizationAuthority(match);
+  return `<div class="round-end-review-status ${provisional ? 'provisional' : 'final'}"><strong>${provisional ? 'Provisional result' : 'Final result ready'}</strong><span>${escapeHtml(authority.label)}</span></div>
+    <dl class="round-end-review-facts"><div><dt>Progress</dt><dd>${escapeHtml(completion.scoreCompletion?.label || `${completedHoles(match)} holes completed`)}</dd></div><div><dt>Settlement</dt><dd>${provisional ? 'May remain provisional' : 'Ready to save'}</dd></div></dl>
+    ${scoreRows.length ? `<section><h4>Missing scores</h4><ul>${scorePreview}${scoreRows.length > 8 ? `<li>${scoreRows.length - 8} more</li>` : ''}</ul></section>` : '<p class="round-end-review-ok">✓ All required scores are entered.</p>'}
+    ${stats ? `<p><strong>Enabled statistics:</strong> ${escapeHtml(stats.label)}. Untouched entries will be excluded from summaries.</p>` : '<p class="round-end-review-ok">✓ Enabled statistics are recorded.</p>'}
+    ${games.length ? `<p><strong>Needs review:</strong> ${escapeHtml(games.map(item => item.label).join('; '))}.</p>` : '<p class="round-end-review-ok">✓ Required game facts are resolved.</p>'}`;
+}
+
+function getReviewHolePosition(match, holeNumber, tee = null) {
+  const targetHole = Number(holeNumber);
+  if (!match || !Number.isFinite(targetHole)) return 1;
+  const scoringHoles = getSelectedScoringHoles(match, tee || getTee(match.courseId, match.teeId));
+  const selectedIndex = scoringHoles.findIndex(hole => Number(hole?.holeNumber) === targetHole);
+  return selectedIndex >= 0 ? selectedIndex + 1 : Math.max(1, Math.min(scoringHoles.length || 1, targetHole));
+}
+
 function shouldInferRotatedHoleSequenceStart(match, position, tee = null) {
   const count = getPlayableHoleCount(match, tee || getTee(match?.courseId, match?.teeId));
   const pos = Number(position) || 1;
@@ -6278,7 +6309,36 @@ function buildFrozenRoundRecord(match, metrics, frozenAt = new Date().toISOStrin
   record.settledAt = match.completedAt || frozenAt;
   record.source = { appVersion: APP_VERSION, schema: 'RoundRecord', derivation: 'trusted-final-settlement' };
   record.meta.status = 'final';
+  record.finalizationReceipt = buildFinalizationReceipt(match, record);
   return record;
+}
+
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function settlementFingerprint(settlement) {
+  const source = stableJson(settlement || {});
+  let hash = 2166136261;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `fnv1a32:${(hash >>> 0).toString(16).padStart(8, '0')}`;
+}
+
+function buildFinalizationReceipt(match, record) {
+  return {
+    schemaVersion: 1,
+    roundId: String(match?.id || record?.meta?.roundId || ''),
+    completedAt: match?.completedAt || record?.settledAt || null,
+    settlementFingerprint: settlementFingerprint(record?.settlement),
+    source: match?.storageMode === 'shared' ? 'shared-host' : 'local-device',
+  };
 }
 function freezeRoundRecordIfEligible(match, metrics = null) {
   const effectiveMetrics = metrics || computeMatchMetrics(match);
@@ -15667,6 +15727,8 @@ function finishRoundFromPrompt() {
 function syncFinishRoundUi(match = getActiveMatch()) {
   const scoringFinishBtn = document.getElementById('finishRoundBtn');
   const scoreboardFinishBtn = document.getElementById('scoreboardFinishRoundBtn');
+  const scoringEarlyBtn = document.getElementById('endRoundEarlyBtn');
+  const scoreboardEarlyBtn = document.getElementById('scoreboardEndRoundEarlyBtn');
   const scoreboardConfirmBtn = document.getElementById('scoreboardConfirmFinishRoundBtn');
   const setupFinishBtn = document.getElementById('setupFinishRoundBtn');
   const setupConfirmBtn = document.getElementById('setupConfirmFinishRoundBtn');
@@ -15679,6 +15741,7 @@ function syncFinishRoundUi(match = getActiveMatch()) {
   const activeRound = hasActiveRound(match);
   const reopenedEdit = !!match?.previousCompletedAt;
   const dataCompletion = hasMatch && !isComplete ? getRoundDataCompletionState(match) : null;
+  const authority = hasMatch ? getRoundFinalizationAuthority(match) : { allowed: false };
   const show = (el, visible) => {
     if (!el) return;
     el.classList.toggle('hidden', !visible);
@@ -15687,21 +15750,25 @@ function syncFinishRoundUi(match = getActiveMatch()) {
     el.disabled = !visible;
     el.setAttribute('aria-hidden', visible ? 'false' : 'true');
   };
-  show(scoringFinishBtn, hasMatch && !isComplete && activeRound);
-  show(scoreboardFinishBtn, hasMatch && !isComplete && activeRound);
+  show(scoringFinishBtn, hasMatch && !isComplete && activeRound && dataCompletion?.scoresComplete);
+  show(scoreboardFinishBtn, hasMatch && !isComplete && activeRound && dataCompletion?.scoresComplete);
+  show(scoringEarlyBtn, hasMatch && !isComplete && activeRound && !dataCompletion?.scoresComplete);
+  show(scoreboardEarlyBtn, hasMatch && !isComplete && activeRound && !dataCompletion?.scoresComplete);
   show(scoreboardConfirmBtn, false);
   show(setupFinishBtn, false);
   show(setupConfirmBtn, false);
   show(postRoundInline, hasMatch && isComplete);
-  if (scoreboardFinishBtn) scoreboardFinishBtn.textContent = reopenedEdit ? 'Save / End Round' : 'End Round';
-  if (scoringFinishBtn) scoringFinishBtn.textContent = reopenedEdit ? 'Save / End Round' : 'End Round';
+  if (scoreboardFinishBtn) scoreboardFinishBtn.textContent = reopenedEdit ? 'Save Completed Round' : 'Complete Round';
+  if (scoringFinishBtn) scoringFinishBtn.textContent = reopenedEdit ? 'Save Completed Round' : 'Complete Round';
+  [scoringFinishBtn, scoreboardFinishBtn, scoringEarlyBtn, scoreboardEarlyBtn].forEach(button => { if (button) { button.disabled = !authority.allowed; button.setAttribute('aria-disabled', authority.allowed ? 'false' : 'true'); } });
   if (postRoundInlineText && hasMatch && isComplete) postRoundInlineText.textContent = `${completedHoles(match)} holes completed. What would you like to do next?`;
   if (scoreboardRoundActions) scoreboardRoundActions.classList.toggle('no-active-round', !activeRound && !isComplete);
   if (scoreboardRoundState) {
     if (!activeRound && !isComplete) scoreboardRoundState.textContent = 'No active round. Start scoring to generate reports and summaries.';
     else if (isComplete) scoreboardRoundState.textContent = 'Round complete. Next-step options are available below.';
-    else if (reopenedEdit) scoreboardRoundState.textContent = 'Editing previously completed round. Finish / End Round will overwrite the saved round.';
-    else if (dataCompletion?.scoresComplete) scoreboardRoundState.textContent = 'All scores entered. Use End Round when ready.';
+    else if (reopenedEdit) scoreboardRoundState.textContent = 'Editing a previously completed round. Saving again will preserve the prior result in history.';
+    else if (!authority.allowed) scoreboardRoundState.textContent = authority.label;
+    else if (dataCompletion?.scoresComplete) scoreboardRoundState.textContent = 'All scores entered. Review and complete the round when ready.';
     else scoreboardRoundState.textContent = `${completedHoles(match)}/${getRequestedHoleCount(match)} holes completed.`;
   }
 }
@@ -15714,6 +15781,8 @@ function hideRoundEndPrompt() {
 }
 function showRoundEndPrompt(mode, match = getActiveMatch()) {
   if (!match) return toast('No active match.');
+  const authority = getRoundFinalizationAuthority(match);
+  if (!authority.allowed) return toast(authority.label + '.');
   const requested = getRequestedHoleCount(match);
   const completed = completedHoles(match);
   const modal = document.getElementById('roundEndPrompt');
@@ -15722,6 +15791,7 @@ function showRoundEndPrompt(mode, match = getActiveMatch()) {
   const primary = document.getElementById('roundEndPrimaryBtn');
   const secondary = document.getElementById('roundEndSecondaryBtn');
   const reasonBox = document.getElementById('roundEndReasonChoices');
+  const review = document.getElementById('roundEndReviewSummary');
   if (!modal || !title || !text || !primary || !secondary) {
     if (mode === 'early') {
       const ok = window.confirm(`End Round Early?\n\n${completed} of ${requested} holes completed.\n\nOK = End Round\nCancel = Continue Playing`);
@@ -15734,13 +15804,14 @@ function showRoundEndPrompt(mode, match = getActiveMatch()) {
     return;
   }
   modal.dataset.roundEndMode = mode;
+  const dataCompletion = getRoundDataCompletionState(match);
+  if (review) review.innerHTML = buildRoundEndReviewHtml(match, mode, dataCompletion);
   if (reasonBox) {
     reasonBox.innerHTML = '';
     reasonBox.classList.add('hidden');
   }
   if (mode === 'early') {
     title.textContent = 'End Round Early?';
-    const dataCompletion = getRoundDataCompletionState(match);
     text.textContent = `${completed} of ${requested} holes completed. ${describeRoundDataCompletion(dataCompletion)}. Finishing now may leave reports or settlements provisional. Why did the round end early?`;
     if (reasonBox) {
       reasonBox.classList.remove('hidden');
@@ -15755,11 +15826,10 @@ function showRoundEndPrompt(mode, match = getActiveMatch()) {
       ];
       reasonBox.innerHTML = `<div class="round-end-reason-grid">${options.map(([value,label]) => `<label class="round-end-reason-option"><input type="radio" name="roundEndReason" value="${value}" ${value === currentReason ? 'checked' : ''}> <span>${label}</span></label>`).join('')}</div>`;
     }
-    primary.textContent = 'End Round';
+    primary.textContent = 'Confirm End Round Early';
     secondary.textContent = 'Continue Playing';
   } else {
     title.textContent = 'Round Complete';
-    const dataCompletion = getRoundDataCompletionState(match);
     const unresolvedStats = dataCompletion.unresolved.filter(item => item.type === 'stats');
     text.textContent = unresolvedStats.length
       ? `${requested} of ${requested} holes scored. ${describeRoundDataCompletion(dataCompletion)}. You may review potentially missing stats now or complete the round; untouched statistics will be excluded from stat summaries.`
@@ -15771,10 +15841,10 @@ function showRoundEndPrompt(mode, match = getActiveMatch()) {
   modal.setAttribute('aria-hidden', 'false');
   setTimeout(() => { try { primary.focus({ preventScroll: true }); } catch (_) {} }, 0);
 }
-function handleScoreboardFinishEndRound() {
+function handleScoreboardFinishEndRound(mode = '') {
   const match = getActiveMatch();
   if (!match) return toast('No active match.');
-  showRoundEndPrompt(getFinishRoundRoutingMode(match), match);
+  showRoundEndPrompt(mode || getFinishRoundRoutingMode(match), match);
 }
 function getFinishRoundRoutingMode(match, metrics = null) {
   if (!match) return 'early';
@@ -15784,6 +15854,8 @@ async function handleRoundEndPrimary() {
   const match = getActiveMatch();
   const modal = document.getElementById('roundEndPrompt');
   const mode = modal?.dataset?.roundEndMode || '';
+  const authority = getRoundFinalizationAuthority(match);
+  if (!authority.allowed) { hideRoundEndPrompt(); return toast(authority.label + '.'); }
   if (match) {
     if (mode === 'early') match.roundEndReason = document.querySelector('input[name="roundEndReason"]:checked')?.value || 'endedEarly';
     else match.roundEndReason = 'completed';
@@ -15875,6 +15947,7 @@ function createFinishRecoveryMarker(candidate) {
     preparedAt: new Date().toISOString(),
     candidateCompletedAt: candidate.completedAt,
     snapshotRequired: isFrozenRoundRecord(candidate.roundRecordSnapshot),
+    recoveryMode: 'confirm-or-rollback',
   };
 }
 
@@ -15892,7 +15965,8 @@ function completeActiveRound() {
     }
     normalizeMatch(match);
     if (!persist({ skipRender: true })) throw new Error('ACTIVE_ROUND_SAVE_FAILED');
-    const { candidate, wasReopened } = buildFinishedMatchCandidate(match);
+    const { candidate, metrics, wasReopened } = buildFinishedMatchCandidate(match);
+    candidate.finalizationReceipt = clonePlain(candidate.roundRecordSnapshot?.finalizationReceipt || buildFinalizationReceipt(candidate, buildRoundRecord(candidate, metrics)));
     const marker = createFinishRecoveryMarker(candidate);
     const markerWrite = writeJsonStorageRecord(localStorage, FINISH_RECOVERY_STORAGE_KEY, marker);
     if (!markerWrite.ok) throw new Error(`FINISH_MARKER_WRITE_FAILED: ${markerWrite.errorMessage}`);
@@ -16098,7 +16172,7 @@ function renderCurrentMatch() {
   const holeCount = getPlayableHoleCount(match, tee);
   const scoringHoles = getSelectedScoringHoles(match, tee);
   const reopenedNote = match.previousCompletedAt
-    ? ' · Reopened from completed round (Finish Round will overwrite the saved round)'
+    ? ' · Reopened from completed round (the prior result remains preserved in history)'
     : '';
   const timing = getRoundElapsedTimeState(match, metrics);
   const compactElapsedAvailable = timing.available && Number(timing.elapsedMs) <= 12 * 60 * 60 * 1000;
@@ -21542,6 +21616,15 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('topCancelMatchSetupBtn')?.addEventListener('click', cancelMatchSetupChanges);
   const postRoundSummaryBtn = document.getElementById('postRoundViewSummaryBtn');
   if (postRoundSummaryBtn) postRoundSummaryBtn.addEventListener('click', viewCompletedMatchSummary);
+  document.getElementById('postRoundLedgerBtn')?.addEventListener('click', () => {
+    const match = getActiveMatch();
+    if (match) openUnifiedExport(match, 'ledger');
+  });
+  document.getElementById('postRoundReturnBtn')?.addEventListener('click', () => {
+    hidePostRoundActions();
+    activateTab('score');
+    renderCurrentMatch();
+  });
   const postRoundAnotherBtn = document.getElementById('postRoundAnotherRoundBtn');
   if (postRoundAnotherBtn) postRoundAnotherBtn.addEventListener('click', startAnotherRoundWithSameGroup);
   const postRoundNewBtn = document.getElementById('postRoundNewMatchBtn');
@@ -21550,6 +21633,10 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   if (postRoundJoinBtn) postRoundJoinBtn.addEventListener('click', () => startJoinNewMatchSetup());
   const postRoundInlineSummaryBtn = document.getElementById('postRoundInlineViewSummaryBtn');
   if (postRoundInlineSummaryBtn) postRoundInlineSummaryBtn.addEventListener('click', viewCompletedMatchSummary);
+  document.getElementById('postRoundInlineLedgerBtn')?.addEventListener('click', () => {
+    const match = getActiveMatch();
+    if (match) openUnifiedExport(match, 'ledger');
+  });
   document.getElementById('postRoundInlineGenerateRecapBtn')?.addEventListener('click', async () => {
     activateTab('leaderboard');
     const story = document.getElementById('roundStoryCard');
@@ -21834,7 +21921,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (!ok) return renderCurrentMatch();
     renderCurrentMatch();
   });
-  document.getElementById('finishRoundBtn').addEventListener('click', handleScoreboardFinishEndRound);
+  document.getElementById('finishRoundBtn').addEventListener('click', () => handleScoreboardFinishEndRound('complete'));
+  document.getElementById('endRoundEarlyBtn')?.addEventListener('click', () => handleScoreboardFinishEndRound('early'));
   document.getElementById('deviceScoreAdvanceEnabled')?.addEventListener('change', e => {
     const match = getActiveMatch();
     if (!match?.id || match.storageMode !== 'shared') return;
@@ -21855,8 +21943,22 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('roundCompleteReviewBtn')?.addEventListener('click', reviewFinalHoleFromPrompt);
   document.getElementById('roundEndPrimaryBtn')?.addEventListener('click', handleRoundEndPrimary);
   document.getElementById('roundEndSecondaryBtn')?.addEventListener('click', handleRoundEndSecondary);
+  document.getElementById('roundEndReviewSummary')?.addEventListener('click', event => {
+    const target = event.target.closest('[data-review-hole]');
+    if (!target) return;
+    const match = getActiveMatch();
+    if (!match) return;
+    currentHole = getReviewHolePosition(match, target.dataset.reviewHole);
+    match.currentHole = currentHole;
+    hideRoundEndPrompt();
+    persist({ skipRender: true });
+    activateTab('score');
+    renderCurrentMatch();
+    scrollToActiveHoleScoringTop();
+  });
   const scoreboardFinishRoundBtn = document.getElementById('scoreboardFinishRoundBtn');
-  if (scoreboardFinishRoundBtn) scoreboardFinishRoundBtn.addEventListener('click', handleScoreboardFinishEndRound);
+  if (scoreboardFinishRoundBtn) scoreboardFinishRoundBtn.addEventListener('click', () => handleScoreboardFinishEndRound('complete'));
+  document.getElementById('scoreboardEndRoundEarlyBtn')?.addEventListener('click', () => handleScoreboardFinishEndRound('early'));
   const scoreboardConfirmFinishRoundBtn = document.getElementById('scoreboardConfirmFinishRoundBtn');
   if (scoreboardConfirmFinishRoundBtn) scoreboardConfirmFinishRoundBtn.addEventListener('click', completeActiveRound);
   document.getElementById('leaderboard')?.addEventListener('click', e => {
@@ -22239,6 +22341,11 @@ function getServiceWorkerVersion(worker) {
   catch { return ''; }
 }
 
+function shouldOfferServiceWorkerUpdate(workerVersion) {
+  const normalized = String(workerVersion || '').trim().replace(/^v/i, '');
+  return !normalized || normalized !== APP_VERSION_NUMBER;
+}
+
 function consumeAppUpdateConfirmation() {
   if (appUpdateConfirmationConsumed) return;
   appUpdateConfirmationConsumed = true;
@@ -22314,6 +22421,13 @@ async function resumeActiveSharedMatchOnStartup() {
 }
 
 function showUpdateBanner(options = {}) {
+  const registration = window.dyeLedgerServiceWorkerRegistration || swRegistration;
+  const availableVersion = getServiceWorkerVersion(registration?.waiting || registration?.installing);
+  if (!shouldOfferServiceWorkerUpdate(availableVersion)) {
+    window.dyeLedgerUpdateAvailable = false;
+    hideUpdateBanner();
+    return false;
+  }
   window.dyeLedgerUpdateAvailable = true;
   if (options.deferred) pendingDeferredAppReload = true;
   setUpdateBannerContent({ deferred: !!options.deferred || pendingDeferredAppReload });
@@ -22322,6 +22436,7 @@ function showUpdateBanner(options = {}) {
   if (!banner) return;
   banner.classList.remove('hidden');
   appUpdateBannerVisible = true;
+  return true;
 }
 
 function hideUpdateBanner() {
@@ -22802,6 +22917,8 @@ function installDyeLedgerLiveEngineAdapter() {
     buildSneakySandyPoleyAuditDetail,
     buildExportMomentum,
     buildRoundRecord,
+    buildRoundEndReviewHtml,
+    getReviewHolePosition,
     buildFrozenRoundRecord,
     freezeRoundRecordIfEligible,
     getEffectiveRoundRecord,
@@ -22824,6 +22941,8 @@ function installDyeLedgerLiveEngineAdapter() {
     formatRoundRecapWeatherLine,
     buildFinishedMatchCandidate,
     createFinishRecoveryMarker,
+    settlementFingerprint,
+    shouldOfferServiceWorkerUpdate,
     markRoundReopenedForEditing,
     buildExecutiveDriverRows,
     buildSelectedGamesSummary,

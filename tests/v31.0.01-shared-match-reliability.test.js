@@ -5,6 +5,7 @@ import test from 'node:test';
 import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
 
 const app = fs.readFileSync('app.js', 'utf8');
+const serviceWorker = fs.readFileSync('service-worker.js', 'utf8');
 const migration = fs.readFileSync('supabase/migrations/202608100001_v31_0_01_shared_match_reliability.sql', 'utf8');
 
 function memoryStorage() {
@@ -19,10 +20,10 @@ function memoryStorage() {
 test('v31 identifies the release and uses a dedicated immutable cache', () => {
   const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
   const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
-  assert.equal(pkg.version, '31.0.03');
-  assert.equal(manifest.version, 'v31.0.03');
-  assert.match(app, /Ledger Entry Report/);
-  assert.match(app, /the-dye-ledger-v31\.0\.03/);
+  assert.equal(pkg.version, '31.0.04');
+  assert.equal(manifest.version, 'v31.0.04');
+  assert.match(app, /function buildLedgerEntryReportModel/);
+  assert.match(serviceWorker, /the-dye-ledger-v31\.0\.04/);
 });
 
 test('durable outbox replaces a superseded player-hole operation and survives reload', () => {

@@ -37,6 +37,6 @@ test('join and host UI present DYE codes as the sole supported format', () => {
 });
 
 test('current release identity is consistent in the app shell', () => {
-  assert.match(app, /version: 'v31\.0\.03'/);
-  assert.match(html, /id="appVersionFooter">v31\.0\.03</);
+  assert.match(app, /version: 'v31\.0\.04'/);
+  assert.match(html, /id="appVersionFooter">v31\.0\.04</);
 });

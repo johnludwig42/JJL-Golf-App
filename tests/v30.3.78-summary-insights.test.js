@@ -49,10 +49,10 @@ test('approved Scores sections are independent closed-by-default disclosures and
 });
 
 test('End Round placement preserves the authoritative completion workflow', () => {
-  assert.match(html, /id="scoreboardFinishRoundBtn"[^>]*>Finish \/ End Round<\/button>/);
+  assert.match(html, /id="scoreboardFinishRoundBtn"[^>]*>Complete Round<\/button>/);
   assert.ok(html.indexOf('id="scoreboardFinishRoundBtn"') < html.indexOf('print-section-match-status'));
-  assert.match(app, /scoringFinishBtn\.textContent = reopenedEdit \? 'Save \/ End Round' : 'End Round'/);
-  assert.match(app, /scoreboardFinishRoundBtn\.addEventListener\('click', handleScoreboardFinishEndRound\)/);
+  assert.match(app, /scoringFinishBtn\.textContent = reopenedEdit \? 'Save Completed Round' : 'Complete Round'/);
+  assert.match(app, /scoreboardFinishRoundBtn\.addEventListener\('click', \(\) => handleScoreboardFinishEndRound\('complete'\)\)/);
 });
 
 test('Player Insights derive exact completed-hole rates and GIR-based birdie conversion without mutating the round', () => {

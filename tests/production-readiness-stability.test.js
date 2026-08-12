@@ -54,11 +54,11 @@ function roundFixture(engine) {
 }
 
 test('current release identity is consistent across runtime, cache, manifest, and package metadata', () => {
-  assert.equal(pkg.version, '31.0.03');
-  assert.equal(manifest.version, 'v31.0.03');
-  assert.match(app, /versionNumber:\s*'31\.0\.03'/);
-  assert.match(worker, /v31\.0\.03/);
-  assert.match(html, /id="appVersionLabel">v31\.0\.03/);
+  assert.equal(pkg.version, '31.0.04');
+  assert.equal(manifest.version, 'v31.0.04');
+  assert.match(app, /versionNumber:\s*'31\.0\.04'/);
+  assert.match(worker, /v31\.0\.04/);
+  assert.match(html, /id="appVersionLabel">v31\.0\.04/);
 });
 
 test('critical state writes are all-or-error and preserve the prior durable payload on failure', () => {

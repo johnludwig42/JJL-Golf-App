@@ -231,7 +231,7 @@ test('Scoring by Hole Par calculates exact gross averages, relative-to-par value
   const exportView = view.engine.buildScoringByParSummary(view.match, view.metrics, { exportView: true });
   assert.match(exportView, /export-table scoring-by-par-table/);
   assert.doesNotMatch(exportView, /scoring-by-par-cards/);
-  const matchSummary = view.engine.buildUnifiedExportDocument(view.match, view.metrics);
+  const matchSummary = view.engine.buildUnifiedExportDocument(view.match, view.metrics, 'summary');
   assert.ok(matchSummary.indexOf('Player leaderboard') < matchSummary.indexOf('Scoring by Hole Par'));
   assert.ok(matchSummary.indexOf('Scoring by Hole Par') < matchSummary.indexOf('Score Distribution'));
   assert.match(matchSummary, /4\.67 \(\+0\.67\).*3 holes/);

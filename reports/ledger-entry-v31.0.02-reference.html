@@ -1,0 +1,205 @@
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>The Dye Ledger — Chatham Hills, August 9, 2026</title>
+<style>
+@font-face{font-family:'Archivo';font-style:normal;font-weight:500;src:url('../ledger-report/fonts/archivo-latin-500-normal.woff2') format('woff2')}
+@font-face{font-family:'Archivo';font-style:normal;font-weight:600;src:url('../ledger-report/fonts/archivo-latin-600-normal.woff2') format('woff2')}
+@font-face{font-family:'Archivo';font-style:normal;font-weight:700;src:url('../ledger-report/fonts/archivo-latin-700-normal.woff2') format('woff2')}
+@font-face{font-family:'Inter';font-style:normal;font-weight:400;src:url('../ledger-report/fonts/inter-latin-400-normal.woff2') format('woff2')}
+@font-face{font-family:'Inter';font-style:normal;font-weight:500;src:url('../ledger-report/fonts/inter-latin-500-normal.woff2') format('woff2')}
+@font-face{font-family:'Inter';font-style:normal;font-weight:600;src:url('../ledger-report/fonts/inter-latin-600-normal.woff2') format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:400;src:url('../ledger-report/fonts/ibm-plex-mono-latin-400-normal.woff2') format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:500;src:url('../ledger-report/fonts/ibm-plex-mono-latin-500-normal.woff2') format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-weight:600;src:url('../ledger-report/fonts/ibm-plex-mono-latin-600-normal.woff2') format('woff2')}
+:root{
+  --ink:#14211C; --paper:#FAFAF8; --sideA:#2C4A6E; --sideB:#1E6B4F;
+  --brass:#B0821F; --rule:#D8D8D0; --muted:#6E736C; --faint:#F0F0EA;
+  --disp:'Archivo',system-ui,sans-serif; --body:'Inter',system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{background:#2E322C;font-family:var(--body);color:var(--ink);font-size:9pt;line-height:1.45}
+
+@page{size:letter;margin:0}
+.page{width:8.5in;height:11in;padding:.5in .55in .42in;background:var(--paper);
+  position:relative;overflow:hidden;display:flex;flex-direction:column}
+@media screen{.page{margin:22px auto;box-shadow:0 2px 30px rgba(0,0,0,.45)}}
+@media print{.page{margin:0;box-shadow:none;break-after:page;page-break-after:always}
+  .page:last-child{break-after:auto;page-break-after:auto}}
+.flow{flex:1 1 auto;overflow:hidden}
+#probe{position:absolute;left:-9999px;top:0;visibility:hidden}
+
+.tie{height:5px;background:var(--ink)}
+.sechead{padding-top:14px}
+.sec{font-family:var(--disp);font-weight:600;font-size:7.5pt;letter-spacing:.16em;
+  text-transform:uppercase;margin:0;padding:8px 0 7px}
+.sec small{font-family:var(--body);font-weight:400;letter-spacing:.02em;
+  text-transform:none;color:var(--muted);font-size:7.5pt;margin-left:10px}
+.sec .cont{color:var(--brass);font-family:var(--mono);font-size:6.4pt;
+  letter-spacing:.1em;margin-left:8px}
+/* continuation marker on a split fragment's repeated header */
+thead[data-cont] th:first-child::after,
+[data-cont]::after{content:" cont.";color:var(--brass);font-weight:400;
+  font-family:var(--mono);font-size:5.6pt;letter-spacing:.06em}
+
+.masthead{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:7px}
+.wordmark{font-family:var(--disp);font-weight:700;font-size:11pt;letter-spacing:.22em}
+.wordmark em{font-style:normal;font-weight:500;letter-spacing:.14em;color:var(--muted);
+  font-size:8pt;margin-left:9px}
+.mast-meta{font-family:var(--mono);font-size:7.5pt;color:var(--muted);letter-spacing:.04em}
+.final{display:inline-block;background:var(--ink);color:var(--paper);
+  font-family:var(--disp);font-weight:600;font-size:6.5pt;letter-spacing:.18em;
+  padding:2px 7px;margin-left:9px;vertical-align:1px}
+.foot{padding-top:8px;border-top:1px solid var(--rule);display:flex;
+  justify-content:space-between;font-family:var(--mono);font-size:6.6pt;
+  color:var(--muted);letter-spacing:.06em}
+
+.strip-wrap{padding:11px 0 4px}
+.eyebrow{font-family:var(--disp);font-weight:600;font-size:7pt;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--muted)}
+/* --h1-size floor is 13pt: it must stay at least 2pt above the 11pt wordmark. */
+h1{font-family:var(--disp);font-weight:700;font-size:var(--h1-size,19pt);line-height:1.04;
+  letter-spacing:-.022em;margin:5px 0 6px}
+.deck{font-size:9.5pt;color:var(--muted);max-width:6.1in}
+
+.strip{display:grid;gap:0;padding:0;margin:0;border-top:1px solid var(--rule);
+  border-bottom:1px solid var(--rule)}
+.scol{padding:7px 0 6px}
+.scol+.scol{padding-left:16px;border-left:1px solid var(--rule)}
+.sname{font-family:var(--disp);font-weight:700;font-size:10pt;letter-spacing:-.01em}
+.sname i{display:inline-block;width:8px;height:8px;margin-right:6px}
+.sstats{font-family:var(--mono);font-size:7.5pt;color:var(--muted);margin-top:2px}
+.sstats b{color:var(--ink);font-weight:600}
+
+.callout{border-left:4px solid var(--brass);padding:6px 0 6px 11px}
+.callout .k{font-family:var(--disp);font-weight:600;font-size:6.8pt;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--brass)}
+.callout p{font-size:9pt;margin-top:2px}
+.callout b{font-weight:600}
+
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+th{font-family:var(--disp);font-weight:600;font-size:6.3pt;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--muted);padding:0 4px 3px;
+  border-bottom:1px solid var(--ink);vertical-align:bottom;line-height:1.2}
+td{font-family:var(--mono);font-size:8pt;padding:3.1px 4px;
+  border-bottom:1px solid var(--faint);font-variant-numeric:tabular-nums}
+/* Alignment: names left, numerics right, headers match their column. */
+th.n,td.n{text-align:right}
+th.l,td.l{text-align:left}
+th.c,td.c{text-align:center}
+td.l{font-family:var(--body);font-size:8.5pt;white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis}
+tr:last-child td{border-bottom:none}
+.dense td{padding:2.1px 4px;font-size:7.6pt}
+.dense td.l{font-size:8.1pt}
+.nm i{display:inline-block;width:6px;height:6px;margin-right:5px}
+/* side identity: shape first, colour second (greyscale + colour-blind safe) */
+.sd{display:inline-block;width:6px;height:6px;margin-right:5px;vertical-align:1px}
+.sd1{border-radius:50%}
+.sd2{transform:rotate(45deg)}
+.sd3{border-radius:50%;background:transparent!important;box-shadow:inset 0 0 0 1.4px currentColor}
+.sname .sd{width:8px;height:8px;margin-right:6px;vertical-align:0}
+.final.prov{background:var(--brass)}
+.pos{color:var(--sideB);font-weight:600}
+.neg{color:var(--brass)}
+.dim{color:var(--muted)}
+.note{font-family:var(--mono);font-size:6.6pt;color:var(--muted);
+  letter-spacing:.03em;line-height:1.55}
+
+.split{display:grid;grid-template-columns:1fr 1.02fr;gap:24px;align-items:start}
+.subhead{font-family:var(--disp);font-weight:600;font-size:6.4pt;letter-spacing:.11em;
+  text-transform:uppercase;color:var(--muted);padding-bottom:3px;
+  border-bottom:1px solid var(--ink);margin-bottom:2px}
+.subhead span{float:right;text-transform:none;letter-spacing:.02em;font-family:var(--body);
+  font-weight:400;font-size:7pt}
+.pay{font-family:var(--mono);font-size:8pt;display:flex;justify-content:space-between;
+  padding:3.4px 0;border-bottom:1px solid var(--faint)}
+.pay em{font-style:normal;font-family:var(--body);font-size:8.5pt}
+.pay em .dim{font-size:8pt}
+.recon{margin-top:5px;padding-top:5px;border-top:1px solid var(--ink);
+  font-family:var(--mono);font-size:7.2pt;display:flex;justify-content:space-between;
+  color:var(--muted)}
+
+.awards{display:grid;gap:0}
+.aw{padding:6px 10px 5px 0;border-right:1px solid var(--rule)}
+.aw:last-child{border-right:none}
+.aw .k{font-family:var(--disp);font-weight:600;font-size:6.2pt;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted)}
+.aw .v{font-family:var(--disp);font-weight:600;font-size:9pt;margin-top:2px;line-height:1.15}
+.aw .n{font-family:var(--mono);font-size:11pt;font-weight:600}
+
+.prose{font-size:9.3pt;line-height:1.58;column-count:2;column-gap:26px;
+  column-rule:1px solid var(--rule);text-align:justify;hyphens:auto}
+.prose p{margin-bottom:6px;break-inside:avoid}
+.prose p:first-child::first-letter{font-family:var(--disp);font-weight:700;font-size:25pt;
+  float:left;line-height:.82;margin:2px 5px 0 0}
+
+.mem{display:grid;grid-template-columns:46px 1fr;gap:0 12px;padding:3.4px 0;
+  border-bottom:1px solid var(--faint);align-items:baseline}
+.mem .h{font-family:var(--mono);font-size:6.8pt;color:var(--brass);font-weight:600;
+  letter-spacing:.06em}
+.mem .t{font-size:8.6pt;font-style:italic;line-height:1.45}
+.wx{border-left:4px solid var(--ink);padding:5px 0 5px 11px;margin-bottom:6px}
+.wx .k{font-family:var(--disp);font-weight:600;font-size:6.4pt;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--muted)}
+.wx .t{font-size:8.8pt;margin-top:1px}
+
+.dist{display:grid;gap:9px;align-items:center;padding:2.6px 0;font-size:8pt;
+  grid-template-columns:var(--distname,1.3in) 1fr auto}
+.dist .who{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dist .bar{display:flex;height:11px}
+.dist .bar span{display:block}
+.dist .tail{font-family:var(--mono);font-size:7.2pt;color:var(--muted);
+  white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
+.legend{display:flex;gap:13px;font-family:var(--mono);font-size:6.6pt;
+  color:var(--muted);margin-top:6px;flex-wrap:nowrap}
+.legend i{display:inline-block;width:7px;height:7px;margin-right:4px}
+
+/* Classic scorecard marks: circles under par, squares over. */
+.sc{width:100%;table-layout:fixed;border-collapse:collapse;font-family:var(--mono)}
+.sc th,.sc td{border:none;padding:0;text-align:center}
+.sc thead th{font-size:6.2pt;font-weight:600;color:var(--ink);text-transform:none;
+  letter-spacing:0;padding:2.5px 0;border-bottom:1px solid var(--ink);font-family:var(--mono)}
+.sc thead th:first-child{text-align:left;padding-left:2px}
+.sc .rowmeta td{font-size:5.9pt;color:var(--muted);padding:1.6px 0;
+  border-bottom:1px solid var(--faint)}
+.sc .rowmeta td:first-child{text-align:left;font-family:var(--disp);font-weight:600;
+  font-size:5.6pt;letter-spacing:.1em;text-transform:uppercase;padding-left:2px}
+.sc tbody tr{border-bottom:1px solid var(--faint)}
+.sc .pl{text-align:left;padding:4px 0 4px 2px;font-family:var(--body);font-size:6.9pt;
+  line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sc .pl b{font-weight:600;display:block}
+.sc .pl em{font-style:normal;font-size:5.8pt;color:var(--muted)}
+.sc .cell{padding:5px 2px;line-height:1.05}
+.sc .g,.sc .n{display:block}
+.sc .n{color:var(--muted);margin-top:3px}
+.mk{display:inline-flex;align-items:center;justify-content:center;
+  box-sizing:border-box;width:12.5px;height:12.5px;line-height:1;
+  font-size:7pt;font-weight:600;font-variant-numeric:tabular-nums}
+.mk.wide{font-size:5.7pt;letter-spacing:-.2px}
+.sc .n .mk{width:11px;height:11px;font-size:6.2pt}
+.sc .n .mk.wide{font-size:5.1pt}
+.mk.c1{border:.9pt solid var(--ink);border-radius:50%}
+.mk.c2{border:.9pt solid var(--ink);border-radius:50%;
+  box-shadow:0 0 0 1px var(--paper),0 0 0 1.9px var(--ink)}
+.mk.s1{border:.9pt solid var(--ink)}
+.mk.s2{border:.9pt solid var(--ink);box-shadow:0 0 0 1px var(--paper),0 0 0 1.9px var(--ink)}
+.mk.c1,.mk.c2{color:var(--sideB)}
+.sc .stk{color:var(--brass);font-weight:600}
+.sc .tot{background:var(--faint)}
+.sc .brd{border-right:1px solid var(--rule)}
+.scnote{font-family:var(--mono);font-size:6.4pt;color:var(--muted);margin-top:5px;
+  letter-spacing:.03em;line-height:1.5}
+.mklegend{display:flex;gap:16px;align-items:center;font-family:var(--mono);
+  font-size:6.4pt;color:var(--muted);padding:8px 3px 3px}
+.mklegend span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.mklegend .mk{flex:0 0 auto}
+</style>
+
+<div id="probe"></div>
+<div id="doc"></div>
+<script src="../ledger-report/bootstrap.js?v=31.0.02"></script>
+<script type="module" src="../ledger-report/pack.js?v=31.0.02"></script>
+<script type="module" src="../ledger-report/engines.js?v=31.0.02"></script>
+<script type="module" src="../ledger-report/report.js?v=31.0.02"></script>

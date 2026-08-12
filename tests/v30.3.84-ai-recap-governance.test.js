@@ -131,10 +131,10 @@ test('content acceptance matrix covers normal, incomplete, social, statistical, 
 });
 
 test('current metadata and immutable PWA assets remain consistent', () => {
-  assert.equal(pkg.version, '31.0.01');
-  assert.equal(manifest.version, 'v31.0.01');
-  assert.match(app, /version: 'v31\.0\.01'/);
-  for (const name of ['app-icon-192-v31.0.01.png', 'app-icon-512-v31.0.01.png', 'apple-touch-icon-v31.0.01.png', 'favicon-32-v31.0.01.png', 'favicon-16-v31.0.01.png']) {
+  assert.equal(pkg.version, '31.0.02');
+  assert.equal(manifest.version, 'v31.0.02');
+  assert.match(app, /version: 'v31\.0\.02'/);
+  for (const name of ['app-icon-192-v31.0.02.png', 'app-icon-512-v31.0.02.png', 'apple-touch-icon-v31.0.02.png', 'favicon-32-v31.0.02.png', 'favicon-16-v31.0.02.png']) {
     assert.equal(existsSync(new URL(`../branding/${name}`, import.meta.url)), true, name);
   }
 });
@@ -148,7 +148,7 @@ test('Add Memory uses the Quick Scoreboard floating mobile-window treatment', ()
 test('More shows exactly the current and four preceding release notes', () => {
   const source = html.match(/<script id="appReleaseNotesData" type="application\/json">([\s\S]*?)<\/script>/)?.[1];
   const notes = JSON.parse(source);
-  assert.deepEqual(notes.slice(0, 5).map(note => note.version), ['v31.0.01', 'v30.3.99', 'v30.3.98', 'v30.3.97', 'v30.3.96']);
+  assert.deepEqual(notes.slice(0, 5).map(note => note.version), ['v31.0.02', 'v31.0.01', 'v30.3.99', 'v30.3.98', 'v30.3.97']);
   assert.match(app, /function renderAppReleaseNotes\(\)/);
   assert.match(app, /renderAppReleaseNotes\(\);\s*\n\s*renderAll\(\);/);
 });
@@ -156,8 +156,8 @@ test('More shows exactly the current and four preceding release notes', () => {
 test('current assets refresh and Play exposes the authoritative End Round workflow', () => {
   const worker = readFileSync(new URL('../service-worker.js', import.meta.url), 'utf8');
   for (const asset of ['manifest.json', 'style.css', 'supabase-config.js', 'identity-security.js', 'app.js']) {
-    assert.match(html, new RegExp(`${asset.replace('.', '\\.') }\\?v=31\\.0\\.01&amp;rev=1`));
-    assert.match(worker, new RegExp(`${asset.replace('.', '\\.') }\\?v=31\\.0\\.01&rev=1`));
+    assert.match(html, new RegExp(`${asset.replace('.', '\\.') }\\?v=31\\.0\\.02&amp;rev=1`));
+    assert.match(worker, new RegExp(`${asset.replace('.', '\\.') }\\?v=31\\.0\\.02&rev=1`));
   }
   assert.match(html, /<details class="play-round-details[\s\S]*?<button id="finishRoundBtn"[^>]*>End Round<\/button>/);
   assert.doesNotMatch(html, /id="confirmFinishRoundBtn"/);

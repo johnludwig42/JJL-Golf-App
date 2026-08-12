@@ -7,7 +7,7 @@ const packPages = globalThis.packPages;
 const runGame = globalThis.runGame;
 const REFERENCE_ROUND = {
   meta:{ course:"Chatham Hills", layout:"Gold", date:"2026-08-09",
-    weather:{ note:"Clear, 70°F, 93% humidity, wind 2 mph south.", recordedAt:"match startup" } },
+    weather:{ note:"Clear, 70°F, 93% humidity, wind 2 mph south.", recordedAt:"first completed hole" } },
   holes:[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18],
   card:{
     yds:[396,145,360,450,556,420,544,195,453,390,208,422,505,155,423,440,555,412],
@@ -483,11 +483,23 @@ add("recap", ()=>{
   const w=h("div",{class:"prose"});
   const supplied = String(ROUND.meta.story || ROUND.meta.recap || "").trim();
   const beats = supplied
-    ? supplied.split(/\n\s*\n/).map(text=>text.trim()).filter(Boolean)
+    ? storyParagraphs(supplied)
     : recapBeats();
   beats.forEach(b=>w.appendChild(h("p",{"data-row":"",text:b})));
   return w;
 });   /* not splittable: column-count makes per-row measurement unreliable */
+
+function storyParagraphs(text){
+  const explicit=String(text||"").split(/\n\s*\n/).map(v=>v.trim()).filter(Boolean);
+  if(explicit.length>1) return explicit;
+  const sentences=String(text||"").match(/[^.!?]+[.!?]+(?:[\"'’”)]*)|[^.!?]+$/g)
+    ?.map(v=>v.trim()).filter(Boolean)||[];
+  if(sentences.length<4) return explicit;
+  const paragraphCount=Math.min(4,Math.max(3,Math.ceil(sentences.length/3)));
+  const size=Math.ceil(sentences.length/paragraphCount), paragraphs=[];
+  for(let i=0;i<sentences.length;i+=size) paragraphs.push(sentences.slice(i,i+size).join(" "));
+  return paragraphs;
+}
 
 function recapBeats(){
   const beats=[];
@@ -993,6 +1005,27 @@ function layoutThenPrint(){
     setTimeout(()=>{ try{ window.print(); }catch(e){} },260);
   }
 }
+function returnToOriginatingMatch(){
+  const status=document.getElementById("returnToMatchStatus");
+  let opener=null;
+  try{ opener=window.opener && !window.opener.closed ? window.opener : null; }catch(e){}
+  if(opener){
+    try{ opener.focus(); }catch(e){}
+    try{ window.close(); }catch(e){}
+    setTimeout(()=>{
+      if(window.closed) return;
+      try{ window.location.assign(opener.location.href); return; }catch(e){}
+      if(status) status.hidden=false;
+    },120);
+    return;
+  }
+  try{
+    window.location.assign(new URL("../",window.location.href).href);
+  }catch(e){
+    if(status) status.hidden=false;
+  }
+}
+document.getElementById("returnToMatchBtn")?.addEventListener("click",returnToOriginatingMatch);
 if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>setTimeout(layoutThenPrint,40));
 else window.addEventListener("load",()=>setTimeout(layoutThenPrint,40));
 

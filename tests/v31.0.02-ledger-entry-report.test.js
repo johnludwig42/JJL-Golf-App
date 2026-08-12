@@ -7,6 +7,7 @@ const source = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const shell = readFileSync(new URL('../ledger-report/shell.html', import.meta.url), 'utf8');
 const renderer = readFileSync(new URL('../ledger-report/report.js', import.meta.url), 'utf8');
+const edgeFunction = readFileSync(new URL('../supabase/functions/round-recap/index.ts', import.meta.url), 'utf8');
 
 function fixture({ complete = true, presses = true } = {}) {
   const engine = loadLiveEngine();
@@ -144,6 +145,33 @@ test('Ledger Story generation is version-bound, non-mutating, and isolated from 
   assert.match(source, /getLedgerEntryStoryCacheKey\(record\)/);
   assert.match(source, /reportPurpose: 'ledger-story'/);
   assert.match(source, /Target 300–400 words and never exceed 450/);
+  assert.match(source, /exactly 3–5 natural paragraphs separated by blank lines/);
+  assert.match(source, /signed holes-up results such as \+2 or \+3/);
+  assert.match(renderer, /function storyParagraphs\(text\)/);
+  assert.match(renderer, /storyParagraphs\(supplied\)/);
+  assert.match(shell, /\.prose p\{margin-bottom:6px;break-inside:auto\}/);
   assert.match(source, /reportModel\.meta\.story = ledgerStory\.text/);
+  assert.match(source, /function validateGreeniesNarrativeClaims\(match, metrics, recapText\)/);
+  assert.match(source, /FALSE_GREENIES_COUNT/);
+  assert.match(source, /UNVERIFIABLE_GREENIES_COUNT/);
+  assert.match(source, /issues\.push\(\.\.\.validateGreeniesNarrativeClaims\(match, metrics, recap\)\)/);
+  assert.match(source, /const requestStory = async \(repair = null\)/);
+  assert.match(source, /blockingIssues\.map\(issue => \(\{ code: issue\.code, message: issue\.message \}\)\)/);
+  assert.match(source, /provenance: 'audited-generated-narrative'/);
+  assert.match(edgeFunction, /Greenies counts must come only from authoritativeFacts\.greenieWinners/);
+  assert.match(shell, /id="returnToMatchBtn"[^>]*>‹ Return to Match<\/button>/);
+  assert.match(shell, /@media print\{[\s\S]*?\.report-nav\{display:none!important\}/);
+  assert.match(renderer, /function returnToOriginatingMatch\(\)/);
+  assert.match(renderer, /window\.location\.assign\(new URL\("\.\.\/",window\.location\.href\)\.href\)/);
   assert.doesNotMatch(source.slice(source.indexOf('async function prepareLedgerEntryStory'), source.indexOf('function buildLegacyRoundSnapshot')), /persist\(|roundRecapGenerated\s*=|roundRecapFinal\s*=/);
+});
+
+test('weather capture starts with the first completed hole rather than Match Setup', () => {
+  const setupStart = source.indexOf("toast(wasEditingMatch ? 'Round setup updated.'");
+  assert.ok(setupStart > 0);
+  assert.doesNotMatch(source.slice(setupStart - 400, setupStart), /scheduleWeatherCaptureForMatch\(match\.id\)/);
+  assert.match(source, /function shouldCaptureWeatherAfterFirstSavedHole\(match\)/);
+  assert.match(source, /match\.playedHoleOrder\.length === 1/);
+  assert.match(source, /if \(shouldCaptureWeatherAfterFirstSavedHole\(match\)\) scheduleWeatherCaptureForMatch\(match\.id\)/);
+  assert.match(source, /Recorded after the first completed hole/);
 });

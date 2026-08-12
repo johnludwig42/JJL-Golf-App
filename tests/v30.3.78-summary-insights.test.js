@@ -25,7 +25,7 @@ test('hole navigation scrolls to the active-hole header only after a successful 
   assert.match(html, /id="activeHoleScoringTop" class="score-hole-nav/);
   assert.match(app, /function scrollToActiveHoleScoringTop\(\{ behavior = 'smooth' \} = \{\}\)/);
   assert.match(app, /prefers-reduced-motion: reduce/);
-  assert.match(app, /if \(!persist\(\)\) return false;\s*if \(currentHole !== savedPosition\) scrollToActiveHoleScoringTop\(\);/);
+  assert.match(app, /if \(!persist\(\)\) return false;[\s\S]{0,220}if \(currentHole !== savedPosition\) scrollToActiveHoleScoringTop\(\);/);
   const savePersist = app.indexOf('if (!persist()) return false;');
   const savedHoleScroll = app.indexOf('if (currentHole !== savedPosition) scrollToActiveHoleScoringTop();', savePersist);
   assert.ok(savePersist >= 0 && savedHoleScroll > savePersist);

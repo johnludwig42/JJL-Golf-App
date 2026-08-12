@@ -14,7 +14,7 @@ test('current runtime and PWA shell remain version-aligned after v30.3.94', () =
   assert.match(index, /app\.js\?v=30\.3\.95&amp;rev=1/);
   assert.match(serviceWorker, /cacheName: 'the-dye-ledger-v30\.3\.95'/);
   for (const asset of ['app-icon-192', 'app-icon-512', 'apple-touch-icon', 'favicon-32', 'favicon-16']) {
-    assert.equal(fs.existsSync(`branding/${asset}-v31.0.02.png`), true);
+    assert.equal(fs.existsSync(`branding/${asset}-v31.0.03.png`), true);
   }
 });
 

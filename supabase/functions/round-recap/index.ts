@@ -22,8 +22,11 @@ function buildSystemInstructions(purpose = '') {
   const ledgerStory = purpose === 'ledger-story' ? [
     'Write The Story of the Round for the Ledger Entry report.',
     'Target 300–400 words and never exceed 450 words.',
+    'Write exactly 3–5 natural paragraphs separated by blank lines. Do not use headings or bullet lists.',
     'Use the factual precision, pacing, and polish of a major golf publication, without invented drama.',
     'Open with the Featured Competition result; explain the decisive stretch and pivotal holes; recognize supported player and round highlights; close with what defined the round.',
+    'For Nassau, express each completed Front, Back, and Overall margin as a signed holes-up result such as +2 or +3. Never use closed-match notation such as 2 & 0 for a Nassau component.',
+    'Greenies counts must come only from authoritativeFacts.greenieWinners or the Greenies game summary counts. If stating a numerical Greenies count, use exactly one player and one count in that sentence so the client can audit it.',
     'Do not repeat a full Match Summary recap or produce a list of report sections.',
   ] : [];
   return [

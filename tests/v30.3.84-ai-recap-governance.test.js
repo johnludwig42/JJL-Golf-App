@@ -93,9 +93,9 @@ test('verified weather is appended after uncovered Memories and is not duplicate
   match.roundContext = { weather: { conditionsText: 'Partly cloudy', temperature: 78, humidity: 64, windSpeed: 9, windDirection: 225 } };
   const uncovered = engine.ensureRoundRecapRequiredFacts(match, 'A short provisional round was played.');
   assert.match(uncovered, /Round Memories[\s\S]*Alex holed a long putt on 1\.[\s\S]*Weather[\s\S]*78°F[\s\S]*64% humidity/);
-  assert.match(uncovered, /Recorded at match startup/);
+  assert.match(uncovered, /Recorded after the first completed hole/);
 
-  const integrated = 'A short provisional round was played. Alex holed a long putt on 1. Conditions at match startup were partly cloudy at 78°F with 64% humidity.';
+  const integrated = 'A short provisional round was played. Alex holed a long putt on 1. Conditions after the first completed hole were partly cloudy at 78°F with 64% humidity.';
   assert.equal(engine.ensureRoundRecapRequiredFacts(match, integrated), integrated);
 });
 
@@ -131,10 +131,10 @@ test('content acceptance matrix covers normal, incomplete, social, statistical, 
 });
 
 test('current metadata and immutable PWA assets remain consistent', () => {
-  assert.equal(pkg.version, '31.0.02');
-  assert.equal(manifest.version, 'v31.0.02');
-  assert.match(app, /version: 'v31\.0\.02'/);
-  for (const name of ['app-icon-192-v31.0.02.png', 'app-icon-512-v31.0.02.png', 'apple-touch-icon-v31.0.02.png', 'favicon-32-v31.0.02.png', 'favicon-16-v31.0.02.png']) {
+  assert.equal(pkg.version, '31.0.03');
+  assert.equal(manifest.version, 'v31.0.03');
+  assert.match(app, /version: 'v31\.0\.03'/);
+  for (const name of ['app-icon-192-v31.0.03.png', 'app-icon-512-v31.0.03.png', 'apple-touch-icon-v31.0.03.png', 'favicon-32-v31.0.03.png', 'favicon-16-v31.0.03.png']) {
     assert.equal(existsSync(new URL(`../branding/${name}`, import.meta.url)), true, name);
   }
 });
@@ -148,7 +148,7 @@ test('Add Memory uses the Quick Scoreboard floating mobile-window treatment', ()
 test('More shows exactly the current and four preceding release notes', () => {
   const source = html.match(/<script id="appReleaseNotesData" type="application\/json">([\s\S]*?)<\/script>/)?.[1];
   const notes = JSON.parse(source);
-  assert.deepEqual(notes.slice(0, 5).map(note => note.version), ['v31.0.02', 'v31.0.01', 'v30.3.99', 'v30.3.98', 'v30.3.97']);
+  assert.deepEqual(notes.slice(0, 5).map(note => note.version), ['v31.0.03', 'v31.0.02', 'v31.0.01', 'v30.3.99', 'v30.3.98']);
   assert.match(app, /function renderAppReleaseNotes\(\)/);
   assert.match(app, /renderAppReleaseNotes\(\);\s*\n\s*renderAll\(\);/);
 });
@@ -156,8 +156,8 @@ test('More shows exactly the current and four preceding release notes', () => {
 test('current assets refresh and Play exposes the authoritative End Round workflow', () => {
   const worker = readFileSync(new URL('../service-worker.js', import.meta.url), 'utf8');
   for (const asset of ['manifest.json', 'style.css', 'supabase-config.js', 'identity-security.js', 'app.js']) {
-    assert.match(html, new RegExp(`${asset.replace('.', '\\.') }\\?v=31\\.0\\.02&amp;rev=1`));
-    assert.match(worker, new RegExp(`${asset.replace('.', '\\.') }\\?v=31\\.0\\.02&rev=1`));
+    assert.match(html, new RegExp(`${asset.replace('.', '\\.') }\\?v=31\\.0\\.03&amp;rev=1`));
+    assert.match(worker, new RegExp(`${asset.replace('.', '\\.') }\\?v=31\\.0\\.03&rev=1`));
   }
   assert.match(html, /<details class="play-round-details[\s\S]*?<button id="finishRoundBtn"[^>]*>End Round<\/button>/);
   assert.doesNotMatch(html, /id="confirmFinishRoundBtn"/);

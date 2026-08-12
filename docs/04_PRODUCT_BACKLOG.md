@@ -297,3 +297,14 @@ FUTURE:
 
 - Delivered: dual Classic Scorecard audit views, analytics terminology correction, recap evidence rules, and PDF layout refinements.
 - Manual acceptance: verify a generated four-player Nassau PDF on iPhone and desktop before promotion.
+
+# v31.0.02 — Ledger Entry Report
+
+- [x] Make Ledger Entry the default and recommended Export type.
+- [x] Preserve Match Summary and Classic Scorecard.
+- [x] Declare Gross, full Course Handicap, 100% off-low, and selected Featured Competition bases.
+- [x] Separate points and dollars and reconcile each independently.
+- [x] Render Presses as separate nested ledgers.
+- [x] Include recap, memory, weather, and provenance without private identifiers.
+- [x] Preserve incomplete-round truth with PROVISIONAL treatment.
+- [x] Complete browser PDF fit and visual acceptance on real app fixtures (Chrome 151; eight-page reference PDF inspected).

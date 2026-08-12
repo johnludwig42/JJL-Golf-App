@@ -15,11 +15,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.01',
-  versionNumber: '31.0.01',
-  cacheName: 'the-dye-ledger-v31.0.01',
-  buildDate: '2026-08-10T12:30:51.177Z',
-  buildLabel: 'Shared Match Reliability Foundation'
+  version: 'v31.0.02',
+  versionNumber: '31.0.02',
+  cacheName: 'the-dye-ledger-v31.0.02',
+  buildDate: '2026-08-11T20:39:46-04:00',
+  buildLabel: 'Ledger Entry Report'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -6234,7 +6234,15 @@ function buildRoundRecord(match, metrics) {
     players: playerRecords, teams: teamRecords, holes, games, events, transactions,
     pressTransactions: (ctx.payoutGames || []).filter(game => game.meta?.press).flatMap(game => (game.meta.settlement?.transactions || []).map(row => ({ ...clonePlain(row), rootGameId: game.meta.press.rootGameId, pressDepth: game.meta.press.pressDepth }))),
     settlement: { netPositions: Object.fromEntries(Object.entries(ctx.finalTotals || {}).map(([id, amount]) => [String(id), Number(amount || 0)])), payments: transactions, crossFoot: Number(crossFoot.toFixed(2)) },
-    notes: { hostLog: String(match?.roundRecapNotes || ''), photos: clonePlain(match?.roundPhotos || []), weather: clonePlain(match?.roundContext?.weather || null), aiRecap: getStoredRoundRecap(match) || null, aiRecapStatus: String(match?.roundRecapFinal || '').trim() ? 'accepted' : (getStoredRoundRecap(match) ? 'draft' : 'none') }
+    notes: {
+      hostLog: String(match?.roundRecapNotes || ''),
+      memories: clonePlain(getRoundMemories(match)),
+      photos: clonePlain(match?.roundPhotos || []),
+      weather: clonePlain(match?.roundContext?.weather || null),
+      aiRecap: getStoredRoundRecap(match) || null,
+      aiRecapStatus: String(match?.roundRecapFinal || '').trim() ? 'accepted' : (getStoredRoundRecap(match) ? 'draft' : 'fallback'),
+      recapProvenance: String(match?.roundRecapFinal || match?.roundRecapGenerated || match?.roundRecap || '').trim() ? 'generated-narrative' : 'deterministic-fallback'
+    }
   };
 }
 function isFrozenRoundRecord(record) {
@@ -6278,6 +6286,240 @@ function freezeRoundRecordIfEligible(match, metrics = null) {
 function getEffectiveRoundRecord(match, metrics = null) {
   if (isFrozenRoundRecord(match?.roundRecordSnapshot)) return clonePlain(match.roundRecordSnapshot);
   return buildRoundRecord(match, metrics || computeMatchMetrics(match));
+}
+
+function buildLedgerEntryReportModel(match, metrics = null) {
+  const effectiveMetrics = metrics || computeMatchMetrics(match);
+  if (!match || !effectiveMetrics?.tee) return null;
+  const record = getEffectiveRoundRecord(match, effectiveMetrics);
+  const holes = Array.isArray(record?.holes) ? record.holes : [];
+  const selectedCourseHoles = getSelectedScoringHoles(match, effectiveMetrics.tee);
+  const holeNumbers = holes.map((hole, index) => Number(hole?.holeNumber || index + 1));
+  const playerMetrics = Array.isArray(effectiveMetrics.players) ? effectiveMetrics.players : [];
+  const teamMetrics = Array.isArray(effectiveMetrics.teams) ? effectiveMetrics.teams : [];
+  const teamKeys = teamMetrics.map(team => `T${Number(team.team) || 1}`);
+  const sides = Object.fromEntries(teamMetrics.map((team, index) => [teamKeys[index], {
+    name: getTeamLabel(match, team.team),
+    color: index === 0 ? '#2C4A6E' : index === 1 ? '#1E6B4F' : '#6E736C',
+  }]));
+  const completedScoresByPlayer = playerId => holes.map(hole => {
+    const score = (hole?.scores || []).find(row => String(row?.playerId) === String(playerId));
+    return Number.isFinite(Number(score?.gross)) && Number(score.gross) > 0 ? Number(score.gross) : null;
+  });
+  const strokeArray = (playerMetric, field, resolver = null) => holes.map((hole, index) => {
+    const score = (hole?.scores || []).find(row => String(row?.playerId) === String(playerMetric.playerId));
+    if (resolver) return Math.max(0, Number(resolver(hole, index, score)) || 0);
+    return Math.max(0, Number(score?.[field]) || 0);
+  });
+  const courseHandicaps = playerMetrics.map(player => Number(player.courseHdcp)).filter(Number.isFinite);
+  const lowCourseHandicap = courseHandicaps.length ? Math.min(...courseHandicaps) : 0;
+  const players = playerMetrics.map((playerMetric, index) => {
+    const recordPlayer = (record.players || []).find(player => String(player.playerId) === String(playerMetric.playerId)) || {};
+    const courseHandicap = Number(playerMetric.courseHdcp ?? recordPlayer.courseHandicap) || 0;
+    const courseNet = strokeArray(playerMetric, 'courseStrokesReceived');
+    const featured = strokeArray(playerMetric, '', (hole, holeIndex) => {
+      const fallbackHole = selectedCourseHoles[holeIndex] || hole;
+      const playerHole = getPlayerHole(match, playerMetric, holeIndex, effectiveMetrics.tee) || fallbackHole;
+      return getFeaturedCompetitionStrokeAllowance(match, effectiveMetrics, playerMetric, Number(playerHole?.strokeIndex || hole?.strokeIndex));
+    });
+    const offLow = strokeArray(playerMetric, '', hole => holeStrokeAllowanceForPlayer(Number(hole?.strokeIndex), Math.max(0, courseHandicap - lowCourseHandicap), 0));
+    const teamIndex = Math.max(0, teamMetrics.findIndex(team => Number(team.team) === Number(playerMetric.team)));
+    return {
+      id: String(playerMetric.playerId),
+      name: recordPlayer.displayName || playerMetric.player?.name || `Player ${index + 1}`,
+      side: teamKeys[teamIndex] || teamKeys[0] || 'FIELD',
+      tee: playerMetric.tee?.name || playerMetric.tee?.teeName || effectiveMetrics.tee?.name || effectiveMetrics.tee?.teeName || 'Tee',
+      index: Number(playerMetric.player?.index ?? recordPlayer.index) || 0,
+      ch: courseHandicap,
+      ph: featured.reduce((sum, strokes) => sum + strokes, 0),
+      gross: completedScoresByPlayer(playerMetric.playerId),
+      strokes: { courseNet, featured, offLow },
+    };
+  });
+  if (!Object.keys(sides).length) sides.FIELD = { name: 'Field', color: '#2C4A6E' };
+  players.forEach(player => { if (!sides[player.side]) player.side = Object.keys(sides)[0]; });
+
+  const gameMoney = gameRecord => Object.fromEntries(players.map(player => [player.id, Number(gameRecord?.amounts?.[player.id]) || 0]));
+  const sideRows = teamMetrics.slice(0, 2).map((team, index) => ({
+    key: teamKeys[index],
+    playerIds: players.filter(player => player.side === teamKeys[index]).map(player => player.id),
+  }));
+  const selectedGames = getOrderedSelectedGames(match);
+  const featuredKey = resolveFeaturedCompetitionKey(match, effectiveMetrics);
+  const games = selectedGames.map((config, gameIndex) => {
+    const frozen = (record.games || []).find(game => String(game.gameId) === String(config.key));
+    const common = {
+      id: String(config.key || `game-${gameIndex + 1}`),
+      name: getFeaturedGameLabel(match, config.key) || getGameLabel(config.key),
+      featured: String(config.key) === String(featuredKey),
+      scope: ['greenies', 'skins', 'net_skins'].includes(config.key) ? 'individual' : 'team',
+      unit: 'dollars',
+      money: gameMoney(frozen),
+    };
+    if (config.key === 'nassau') {
+      const policy = normalizeNassauConfig(config, match);
+      const segments = [];
+      const front = holeNumbers.filter(hole => hole <= 9);
+      const back = holeNumbers.filter(hole => hole > 9);
+      if (front.length) segments.push({ label: front.length === holeNumbers.length ? 'Match' : 'Front', holes: front });
+      if (back.length) segments.push({ label: 'Back', holes: back });
+      return {
+        ...common, type: 'nassau', sides: sideRows, segments,
+        bestN: normalizeCountingBalls(policy.countingBalls, 1),
+        allowance: { key: 'featured', label: `${policy.basis === 'gross' ? 'Gross' : `Best ${normalizeCountingBalls(policy.countingBalls, 1)} · ${policy.handicapAllowancePercent}% off the low`}` },
+        stakePerSegment: Number(policy.stakesOverall ?? policy.stakesFront ?? policy.stake ?? 0) || 0,
+      };
+    }
+    if (['team_match', 'singles_match'].includes(config.key) && sideRows.length === 2) {
+      return {
+        ...common, type: 'matchplay', sides: sideRows,
+        segments: [{ label: 'Match', holes: holeNumbers.slice() }], bestN: Number(config.countingBalls || 1),
+        allowance: { key: 'featured', label: getFeaturedCompetitionStrokeNote(match, effectiveMetrics).replace(/^Game strokes:\s*/i, '') },
+        stakePerSegment: Number(config.stake || config.wager || 0) || 0,
+      };
+    }
+    if (config.key === 'greenies') {
+      const winners = config.winnersByHole || match.greeniesWinners || {};
+      return {
+        ...common, type: 'greenies', allowance: { key: 'featured', label: 'Gross' },
+        detail: {
+          stakePerPlayer: Number(config.stakePerPlayer ?? config.stake ?? 0) || 0,
+          winners: Object.fromEntries(Object.entries(winners).map(([hole, winner]) => [String(hole), typeof winner === 'object' ? String(winner.winner || winner.playerId || '') : String(winner || '')]).filter(([, winner]) => winner)),
+          holes: holeNumbers.filter((hole, index) => Number(holes[index]?.par) === 3),
+        },
+      };
+    }
+    if (config.key === 'nine_point') {
+      const result = computeNinePointResults(match, effectiveMetrics, config);
+      return {
+        ...common, type: 'ninepoint', scope: 'individual', unit: 'points', lowWins: false,
+        allowance: { key: config.basis === 'gross' ? 'courseNet' : 'featured', label: config.basis === 'gross' ? 'Gross' : 'Game Net' },
+        pointValue: Number(result.stakePerPoint || config.stakePerPoint || 0),
+        settlementMode: 'headToHead',
+        pointsByHole: Object.fromEntries(players.map(player => [player.id, result.holes.map(hole => hole.completed ? Number(hole.points?.[player.id] || 0) : null)])),
+        segments: [{ label: 'Round', holes: holeNumbers.slice() }],
+      };
+    }
+    if (['skins', 'net_skins'].includes(config.key) && config.skinsType !== 'team') {
+      const result = computeSkinResults(match, effectiveMetrics, config);
+      return {
+        ...common, type: 'skins', scope: 'individual',
+        allowance: { key: config.key === 'skins' ? 'courseNet' : 'featured', label: config.key === 'skins' ? 'Gross' : 'Game Net' },
+        detail: {
+          stakePerPlayer: Number(config.stakePerPlayer ?? config.stake ?? 0) || 0,
+          carryover: result.carryoverMode === 'carry',
+          winners: Object.fromEntries(result.winnersByHole.filter(row => row.winnerType === 'player').map(row => [String(row.holeNumber), String(row.winner)])),
+          holes: holeNumbers.slice(),
+        },
+      };
+    }
+    return {
+      ...common, type: 'settlement', featured: false,
+      allowance: { key: 'featured', label: 'Recorded result and settlement' },
+    };
+  });
+  if (!games.some(game => game.featured)) {
+    games.push({
+      id: 'stroke-net', name: 'Stroke Play · Course Net', type: 'strokeplay', featured: true,
+      scope: 'individual', unit: 'strokes', lowWins: true, allowance: { key: 'courseNet', label: 'Full Course Handicap' },
+      pointsByHole: Object.fromEntries(players.map(player => [player.id, player.gross.map((gross, index) => gross == null ? null : gross - player.strokes.courseNet[index] - Number(holes[index]?.par || 0))])),
+      money: Object.fromEntries(players.map(player => [player.id, 0])), segments: [{ label: 'Round', holes: holeNumbers.slice() }],
+    });
+  }
+  const parentNassau = games.find(game => game.type === 'nassau');
+  (record.games || []).filter(game => game.type === 'press').forEach((press, index) => {
+    if (!parentNassau || sideRows.length !== 2) return;
+    const start = Number(press.holeStart || press.config?.startingHole || 1);
+    const end = Number(press.holeEnd || press.config?.endingHole || holeNumbers.at(-1));
+    const pressHoles = holeNumbers.filter(hole => hole >= start && hole <= end);
+    games.push({
+      id: String(press.gameId || `press-${index + 1}`), name: `Press · H${start}–H${end}`,
+      type: 'matchplay', featured: false, scope: 'team', sides: sideRows,
+      segments: [{ label: `Press H${start}–H${end}`, holes: pressHoles }], bestN: parentNassau.bestN,
+      allowance: clonePlain(parentNassau.allowance), stakePerSegment: Number(press.stake || press.config?.wagerAmount || 0) || 0,
+      unit: 'dollars', money: gameMoney(press), parentGameId: parentNassau.id,
+    });
+  });
+  const course = effectiveMetrics.course || match.courseSnapshot || {};
+  const tee = effectiveMetrics.tee || {};
+  const weather = record.notes?.weather;
+  const weatherText = formatRoundWeatherDisplay(match).replace(/^Weather:\s*/i, '');
+  return {
+    meta: {
+      course: course.name || course.courseName || match.courseName || 'Golf Course',
+      layout: tee.name || tee.teeName || match.layoutName || 'Round',
+      date: record.meta?.date || match.date || new Date().toISOString().slice(0, 10),
+      weather: weather || weatherText ? { note: weatherText || String(weather?.summary || weather?.description || ''), recordedAt: 'match startup' } : null,
+      recap: record.notes?.aiRecap || null,
+      recapProvenance: record.notes?.recapProvenance || 'deterministic-fallback',
+    },
+    holes: holeNumbers,
+    card: {
+      yds: holes.map((hole, index) => Number(hole?.yards ?? selectedCourseHoles[index]?.yardage ?? selectedCourseHoles[index]?.yards) || 0),
+      par: holes.map((hole, index) => Number(hole?.par ?? selectedCourseHoles[index]?.par) || 0),
+      si: holes.map((hole, index) => Number(hole?.strokeIndex ?? selectedCourseHoles[index]?.strokeIndex) || 0),
+    },
+    sides,
+    players,
+    games,
+    memories: (record.notes?.memories || []).map(memory => ({ hole: Number(memory.holeNumber || memory.hole || 0), text: String(memory.text || memory.note || memory.description || '') })).filter(memory => memory.text),
+    payments: (record.transactions || []).map(payment => ({ from: String(payment.payerId), to: String(payment.payeeId), amt: Number(payment.amount) || 0 })),
+  };
+}
+
+const ledgerEntryStoryCache = new Map();
+function getLedgerEntryStoryCacheKey(record) {
+  const source = JSON.stringify(record || {});
+  let hash = 2166136261;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${record?.recordId || record?.roundId || 'round'}:${record?.schemaVersion || 1}:${(hash >>> 0).toString(16)}`;
+}
+function buildLedgerEntryFactsOnlyStory(record) {
+  const story = buildRoundRecordStory(record);
+  const highlights = (record?.players || [])
+    .filter(player => player?.signatureStat)
+    .slice(0, 4)
+    .map(player => `${player.displayName}: ${player.signatureStat}.`);
+  return [story?.narrative, ...highlights].filter(Boolean).join('\n\n')
+    || 'The recorded scorecard, competitions, and settlement are preserved in this Ledger Entry.';
+}
+function buildLedgerEntryStoryPayload(match, metrics) {
+  const payload = buildRoundRecapPayload(match, metrics);
+  return {
+    ...payload,
+    reportPurpose: 'ledger-story',
+    recapInstructions: 'Write The Story of the Round for a Ledger Entry. Use only supplied authoritative facts. Target 300–400 words and never exceed 450. Write with the factual precision, pacing, and polish of a major golf publication without inventing shots, quotations, emotions, motives, or drama. Open with the Featured Competition result, explain the decisive stretch and pivotal holes, recognize supported player and round highlights, and close with a concise perspective on what defined the round. Keep Low Gross, Course Net, Featured Net, game results, points, dollars, and settlement distinct. Mention Memories, recorded match-start weather, and tracked statistics only when supplied and genuinely relevant. State provisional scope for incomplete rounds. Return a self-contained narrative rather than repeating the full Match Summary recap or listing report sections.',
+  };
+}
+async function prepareLedgerEntryStory(match, metrics) {
+  const record = getEffectiveRoundRecord(match, metrics);
+  const cacheKey = getLedgerEntryStoryCacheKey(record);
+  const cached = ledgerEntryStoryCache.get(cacheKey);
+  if (cached) return cached;
+  const fallback = { text: buildLedgerEntryFactsOnlyStory(record), provenance: 'deterministic-fallback', cacheKey };
+  if (navigator.onLine === false || !getRoundRecapUrl()) return fallback;
+  try {
+    const response = await fetch(getRoundRecapUrl(), {
+      method: 'POST',
+      headers: getRoundRecapHeaders(),
+      body: JSON.stringify({ match: buildLedgerEntryStoryPayload(match, metrics), purpose: 'ledger-story' }),
+    });
+    const data = await response.json().catch(() => ({}));
+    const text = String(data?.story || data?.recap || data?.text || '').trim();
+    if (!response.ok || data?.success === false || !text) return fallback;
+    const wordCount = text.split(/\s+/).filter(Boolean).length;
+    const blockingIssues = validateRoundRecapContent(match, metrics, text).issues
+      .filter(issue => ['FALSE_FULL_ROUND', 'FALSE_FINAL_SETTLEMENT'].includes(issue.code));
+    if (wordCount > 500 || blockingIssues.length) return fallback;
+    const generated = { text, provenance: 'generated-narrative', cacheKey };
+    ledgerEntryStoryCache.set(cacheKey, generated);
+    return generated;
+  } catch (_) {
+    return fallback;
+  }
 }
 function buildLegacyRoundSnapshot(match, metrics) {
   if (!metrics) return '';
@@ -7125,6 +7367,117 @@ function decorateReportSections(html) {
   });
 }
 
+function getLedgerEntryStatus(record, match, metrics) {
+  const completion = getRoundCompletionState(match, metrics);
+  if (record?.meta?.status === 'final') return 'FINAL';
+  if (areAllGamesFinal(match, metrics) && completion.completedHoleCount > 0) return 'CLINCHED EARLY';
+  return 'PROVISIONAL';
+}
+
+function getLedgerEntryFeaturedBasis(match, metrics) {
+  const context = getFeaturedCompetitionHandicapContext(match, metrics);
+  if (!context?.config) return { label: 'Gross / no featured handicap basis', config: null };
+  if (context.mode === 'course' || context.config.courseNetMode) {
+    return { label: 'Full Course Handicap', config: context.config };
+  }
+  const allowance = normalizeHandicapAllowancePercent(context.config.handicapAllowancePercent, match?.allowance);
+  return { label: `${allowance}% off the low`, config: context.config };
+}
+
+function buildLedgerEntryRecap(match, metrics, record) {
+  const generated = String(record?.notes?.ledgerEntryStory || record?.notes?.aiRecap || '').trim();
+  const recap = generated || buildLedgerEntryFactsOnlyStory(record);
+  const provenance = generated ? 'AI-generated Ledger Story' : 'Deterministic facts-only story';
+  return `<div class="ledger-entry-recap" data-ledger-provenance="${generated ? 'generated-narrative' : 'derived-calculation'}"><div class="ledger-entry-provenance">${escapeHtml(provenance)}</div>${formatRoundRecapHtml(recap)}</div>`;
+}
+
+function buildLedgerEntryRecordedContext(record) {
+  const memories = Array.isArray(record?.notes?.memories) ? record.notes.memories : [];
+  const weather = normalizeRoundWeatherSnapshot(record?.notes?.weather);
+  if (!memories.length && !weather) return '';
+  const memoryRows = memories.map(memory => `<li>${memory.holeNumber ? `<strong>H${escapeHtml(memory.holeNumber)}</strong> ` : ''}${escapeHtml(memory.text || '')}</li>`).join('');
+  const weatherBits = weather ? [
+    weather.conditionsText,
+    weather.temperature == null ? '' : `${weather.temperature}°F`,
+    weather.humidity == null ? '' : `${weather.humidity}% humidity`,
+    weather.windSpeed == null ? '' : `Wind ${weather.windSpeed} mph${getWindDirectionText(weather.windDirection) ? ` ${getWindDirectionText(weather.windDirection)}` : ''}`
+  ].filter(Boolean) : [];
+  return `<section class="export-section ledger-entry-context report-section--avoid-break" data-ledger-section="recorded-context">
+    <div class="export-section-head"><h2>From the Round</h2><div class="export-section-sub">Recorded during play. Memories are shown verbatim; weather is the match-start snapshot.</div></div>
+    ${memoryRows ? `<div class="ledger-entry-context-block"><h3>Memories</h3><ul>${memoryRows}</ul></div>` : ''}
+    ${weatherBits.length ? `<div class="ledger-entry-context-block"><h3>Weather</h3><p>${escapeHtml(weatherBits.join(' · '))}</p></div>` : ''}
+  </section>`;
+}
+
+function buildLedgerTeamBasisTable(match, metrics, record) {
+  if (!Array.isArray(record?.teams) || record.teams.length < 2) return '';
+  const basis = getLedgerEntryFeaturedBasis(match, metrics);
+  const config100 = basis.config ? { ...basis.config, courseNetMode: false, handicapAllowancePercent: 100 } : null;
+  const playerMetricById = new Map((metrics?.players || []).map(player => [String(player.playerId), player]));
+  const rows = record.teams.map(team => {
+    const members = new Set((team.playerIds || []).map(String));
+    let gross = 0, courseNet = 0, offLow100 = 0, featuredNet = 0, scored = 0;
+    (record.holes || []).forEach(hole => (hole.scores || []).forEach(score => {
+      if (!members.has(String(score.playerId)) || !Number.isFinite(Number(score.gross)) || Number(score.gross) <= 0) return;
+      const metric = playerMetricById.get(String(score.playerId));
+      gross += Number(score.gross); scored += 1;
+      courseNet += Number.isFinite(Number(score.courseNet)) ? Number(score.courseNet) : Number(score.gross);
+      featuredNet += Number.isFinite(Number(score.matchNet)) ? Number(score.matchNet) : Number(score.gross);
+      const strokes100 = metric && config100 ? getGameRelativeStrokeAllowance(hole.strokeIndex, metric, metrics, config100) : 0;
+      offLow100 += Number(score.gross) - Number(strokes100 || 0);
+    }));
+    return `<tr><td>${escapeHtml(team.displayName)}</td><td>${scored ? gross : '-'}</td><td>${scored ? courseNet : '-'}</td><td>${scored && config100 ? offLow100 : '-'}</td><td>${scored && basis.config ? featuredNet : '-'}</td></tr>`;
+  }).join('');
+  return `<section class="export-section report-section--avoid-break" data-ledger-section="team-bases"><div class="export-section-head"><h2>Team Totals</h2><div class="export-section-sub">Each net column declares its handicap basis. Only the Featured Competition settles the featured result.</div></div><div class="fit-stage" data-fit="width" data-fit-min="0.84"><div class="fit-box"><table class="export-table"><thead><tr><th>Team</th><th>Gross</th><th>Net - Full CH</th><th>Net - 100% Off Low</th><th>Net - ${escapeHtml(basis.label)}</th></tr></thead><tbody>${rows}</tbody></table></div></div></section>`;
+}
+
+function buildLedgerEntrySettlement(record, match, metrics) {
+  const status = getLedgerEntryStatus(record, match, metrics);
+  return `<section class="export-section ledger-entry-settlement report-section--avoid-break" data-ledger-section="settlement" data-ledger-unit="dollars"><div class="export-section-head"><h2>Settlement</h2><div class="export-section-sub">${escapeHtml(status)} - Game positions reconcile independently from optimized payments.</div></div>${buildExportFinalNetSettlementSummary(match, metrics)}</section>`;
+}
+
+function buildLedgerEntryBody(match, metrics) {
+  const record = getEffectiveRoundRecord(match, metrics);
+  const completion = getRoundCompletionState(match, metrics);
+  const basis = getLedgerEntryFeaturedBasis(match, metrics);
+  const scoreDistributionTitle = 'Score ' + 'Distribution';
+  const scoreDistribution = completion.completedHoleCount >= 6 ? buildExportScoreDistributionSummary(match, metrics) : '';
+  const statTracking = buildExportStatTrackingSummary(match, metrics);
+  const showNinePoint = (match.selectedGames || []).some(game => game.key === 'nine_point');
+  const ninePoint = showNinePoint ? `<section class="export-section export-section-nine-point"><div class="export-section-head"><h2>9-Point Ledger</h2><div class="export-section-sub">Points are authoritative; dollars equal points x the configured stake and reconcile separately.</div></div>${buildNinePointScorecard(match, metrics)}</section>` : '';
+  return `
+    <div class="ledger-entry-contract" data-ledger-entry-version="1" data-ledger-status="${escapeHtml(getLedgerEntryStatus(record, match, metrics))}" data-ledger-featured-basis="${escapeHtml(basis.label)}"></div>
+    <div class="ledger-entry-page-start ledger-entry-result-page" data-ledger-page-subject="Result"></div>
+    ${buildRoundSnapshot(match, metrics, record)}
+    ${buildLedgerEntrySettlement(record, match, metrics)}
+    <section class="export-section report-section--avoid-break" data-ledger-section="highlights"><div class="export-section-head"><h2>Highlights</h2><div class="export-section-sub">Ties remain ties and are never resolved by row order.</div></div>${buildMatchSummaryAnalyticsHighlights(match, metrics)}</section>
+
+    <div class="ledger-entry-page-start" data-ledger-page-subject="Round Story"></div>
+    ${buildRoundStorySection(match, metrics, record, { recapHtml: buildLedgerEntryRecap(match, metrics, record) })}
+    ${buildLedgerEntryRecordedContext(record)}
+
+    <div class="ledger-entry-page-start" data-ledger-page-subject="Leaderboards"></div>
+    <section class="export-section export-section-leaderboards"><div class="export-section-head"><h2>Player Leaderboard</h2><div class="export-section-sub">Ranked by Course Net using each golfer's full Course Handicap.</div></div>${buildExportPlayerLeaderboard(match, metrics)}</section>
+    ${scoreDistribution ? `<section class="export-section export-section-score-distribution"><div class="export-section-head"><h2>${scoreDistributionTitle}</h2><div class="export-section-sub">Gross scores relative to par; completed holes only.</div></div>${scoreDistribution}</section>` : ''}
+    ${buildLedgerTeamBasisTable(match, metrics, record)}
+
+    <div class="ledger-entry-page-start" data-ledger-page-subject="Games"></div>
+    <section class="export-section export-section-games-summary"><div class="export-section-head"><h2>Games</h2><div class="export-section-sub">Every competitive result declares its handicap basis and unit. Featured basis: ${escapeHtml(basis.label)}.</div></div>${buildSelectedGamesSummary(match, metrics)}</section>
+    ${buildExportMomentum(match, metrics)}
+    ${ninePoint}
+    ${buildSneakySandyPoleyAuditDetail(match, metrics)}
+    ${buildPressAuditSection(match, metrics, record)}
+
+    <div class="ledger-entry-page-start" data-ledger-page-subject="Statistics"></div>
+    <section class="export-section export-section-player-insights"><div class="export-section-head"><h2>Player Statistics</h2><div class="export-section-sub">Gross scoring facts from completed holes. Tracked statistics appear only when recorded.</div></div>${buildPlayerRoundInsights(match, metrics, { exportView: true })}${buildScoringByParSummary(match, metrics, { exportView: true })}</section>
+    ${statTracking ? `<section class="export-section export-section-stat-tracking"><div class="export-section-head"><h2>Stat Tracking</h2><div class="export-section-sub">Recorded tracked fields only; missing fields are omitted rather than estimated.</div></div>${statTracking}</section>` : ''}
+
+    <div class="ledger-entry-page-start" data-ledger-page-subject="Appendix"></div>
+    <section class="export-section export-section-classic export-section-classic-summary"><div class="export-section-head"><div class="export-appendix-label">Appendix</div><h2>Classic Scorecard - Course Net</h2><div class="export-section-sub">Full Course Handicap. Gross appears above Course Net; dots indicate Course Handicap strokes.</div></div><div class="fit-stage export-classic-stage" data-fit="width-height" data-fit-min="0.62"><div class="fit-box">${buildClassicScorecard(match, metrics)}</div></div></section>
+    ${buildExportMatchNetScorecards(match, metrics)}
+  `;
+}
+
 function buildSummaryExportBody(match, metrics) {
   const roundRecord = getEffectiveRoundRecord(match, metrics);
   const completion = getRoundCompletionState(match, metrics);
@@ -7257,17 +7610,18 @@ function buildClassicOnlyExportBody(match, metrics) {
     </section>${buildExportMatchNetScorecards(match, metrics)}`;
 }
 
-function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
-  const requestedView = printView === 'scorecard' ? 'scorecard' : 'summary';
+function buildUnifiedExportDocument(match, metrics, printView = 'ledger') {
+  const requestedView = ['ledger', 'summary', 'scorecard'].includes(printView) ? printView : 'ledger';
   const courseName = metrics?.course?.name || 'No course';
   const teeName = metrics?.tee?.teeName || 'No tee';
   const holeCount = getPlayableHoleCount(match, metrics?.tee);
-  const pageTitle = escapeHtml(`${match?.name || 'Round'} — ${requestedView === 'scorecard' ? 'Classic Scorecard' : 'Match Summary'}`);
+  const reportLabel = requestedView === 'scorecard' ? 'Classic Scorecard' : (requestedView === 'summary' ? 'Match Summary' : 'Ledger Entry');
+  const pageTitle = escapeHtml(`${reportLabel} — ${courseName}`);
   const pageSub = escapeHtml(`${match?.date || todayIso()} · ${courseName} · ${teeName} · ${holeCount} holes`);
-  const pageMeta = escapeHtml(`${metrics ? `${metrics.completed}/${holeCount} holes completed` : 'Scorecard ready to print'}${match?.status === 'complete' ? ' · Final' : ' · Live'} · ${requestedView === 'scorecard' ? 'Classic scorecard only' : 'Full match summary'}`);
+  const pageMeta = escapeHtml(`${metrics ? `${metrics.completed}/${holeCount} holes completed` : 'Scorecard ready to print'}${match?.status === 'complete' ? ' · Final' : ' · Live'} · ${reportLabel}`);
   const bodyHtml = requestedView === 'scorecard'
     ? buildClassicOnlyExportBody(match, metrics)
-    : buildSummaryExportBody(match, metrics);
+    : (requestedView === 'summary' ? buildSummaryExportBody(match, metrics) : buildLedgerEntryBody(match, metrics));
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -7796,6 +8150,17 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     .report-layer--ledger { break-before:page; page-break-before:always; }
     .export-section-net-payout { padding:12px 14px; }
     .export-section-net-payout .export-section-head { margin-bottom:4px; }
+    .ledger-entry-page-start { display:block; height:0; margin:0; padding:0; border:0; break-before:page; page-break-before:always; }
+    .ledger-entry-result-page { break-before:auto; page-break-before:auto; }
+    .ledger-entry-contract { display:none; }
+    .ledger-entry-provenance { color:var(--muted); font-size:9px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; margin-bottom:8px; }
+    .ledger-entry-recap { margin-top:12px; border-top:1px solid var(--border); padding-top:12px; }
+    .ledger-entry-context-block { border:1px solid var(--border); border-radius:12px; padding:10px; margin-top:8px; }
+    .ledger-entry-context-block h3 { margin-top:0; }
+    .ledger-entry-context-block ul { margin:0; padding-left:18px; }
+    .ledger-entry-context-block li + li { margin-top:5px; }
+    .export-shell[data-export-view="ledger"] { max-width:820px; }
+    .export-shell[data-export-view="ledger"] .export-header { border-bottom:2px solid #0b5d3b; }
     @media print {
       .export-page-break-before-gross-game-detail {
         display: block !important;
@@ -7845,7 +8210,7 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
     }
 
     @media print {
-      @page { size: landscape; margin: 8mm; }
+      ${requestedView === 'ledger' ? '@page { size: letter portrait; margin: 8mm; }' : '@page { size: landscape; margin: 8mm; }'}
       html, body { background: #fff; }
       body { padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .export-toolbar, .export-return-status { display: none !important; }
@@ -7910,6 +8275,25 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       .round-snapshot-recap-teaser { display: none !important; }
       .ssp-momentum-line { fill: none !important; stroke: #0b5d3b !important; }
       .ssp-momentum-dot { fill: #fff !important; stroke: #0b5d3b !important; }
+      .ledger-entry-page-start { break-before:page !important; page-break-before:always !important; }
+      .ledger-entry-result-page { break-before:auto !important; page-break-before:auto !important; }
+      .export-shell[data-export-view="ledger"] .round-record-momentum-line,
+      .export-shell[data-export-view="ledger"] .ssp-momentum-line { stroke:#111 !important; }
+      .export-shell[data-export-view="ledger"] .round-record-momentum-dot,
+      .export-shell[data-export-view="ledger"] .ssp-momentum-dot { fill:#fff !important; stroke:#111 !important; stroke-width:2px; }
+      .export-shell[data-export-view="ledger"] .export-header { padding-bottom:6px; margin-bottom:6px; }
+      .export-shell[data-export-view="ledger"] .export-header-player-card { padding:4px 6px; }
+      .export-shell[data-export-view="ledger"] .report-layer--hero { padding:12px; }
+      .export-shell[data-export-view="ledger"] .round-record-result { margin-top:10px; font-size:24px; }
+      .export-shell[data-export-view="ledger"] .round-record-storyline { margin-top:5px; font-size:12px; }
+      .export-shell[data-export-view="ledger"] .round-record-turning { margin-top:7px; padding:6px 9px; }
+      .export-shell[data-export-view="ledger"] .round-record-settle { margin-top:7px; }
+      .export-shell[data-export-view="ledger"] .settle-up-chip { padding:4px 7px; }
+      .export-shell[data-export-view="ledger"] .round-record-footer { margin-top:8px; padding-top:6px; }
+      .export-shell[data-export-view="ledger"] .ledger-entry-settlement { padding-top:6px; padding-bottom:6px; margin-bottom:6px; }
+      .export-shell[data-export-view="ledger"] .final-net-settlement-card { padding:7px; gap:5px; }
+      .export-shell[data-export-view="ledger"] .final-net-settlement-row { padding:4px 7px; }
+      .export-shell[data-export-view="ledger"] [data-ledger-section="highlights"] { padding-top:6px; }
       .export-section-ssp-audit { break-before: page; page-break-before: always; }
       .export-section-leaderboards h3 { break-after: avoid; page-break-after: avoid; }
       .export-section-head h2 { font-size: 13px; }
@@ -7973,14 +8357,14 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
       <div class="export-title">${pageTitle}</div>
       <div class="export-sub">${pageSub}</div>
       <div class="export-meta">${pageMeta}</div>
-      ${requestedView === 'summary' ? buildExportHeaderPlayers(match, metrics) : ''}
+      ${requestedView !== 'scorecard' ? buildExportHeaderPlayers(match, metrics) : ''}
     </div>
     ${bodyHtml}
   </div>
   <script>
     (function () {
       const AUTO_PRINT_DELAY = 260;
-      const PRINT_PAGE_HEIGHT_MM = 215.9;
+      const PRINT_PAGE_HEIGHT_MM = ${requestedView === 'ledger' ? '279.4' : '215.9'};
       const PRINT_PAGE_MARGIN_MM = 8;
       const SECTION_GAP_PX = 10;
       function mmToPx(mm) {
@@ -8053,7 +8437,11 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
         const printableHeight = getPrintablePageHeightPx();
         const header = document.querySelector('.export-header');
         let used = header ? Math.ceil(header.getBoundingClientRect().height) + SECTION_GAP_PX : 0;
-        document.querySelectorAll('.export-section').forEach(function (section) {
+        document.querySelectorAll('.ledger-entry-page-start, .export-section').forEach(function (section) {
+          if (section.classList.contains('ledger-entry-page-start')) {
+            used = 0;
+            return;
+          }
           section.classList.remove('export-auto-page-before');
           const forced = section.classList.contains('export-force-page-before')
             || section.classList.contains('export-section-classic-summary')
@@ -8153,7 +8541,7 @@ function buildUnifiedExportDocument(match, metrics, printView = 'summary') {
 </html>`;
 }
 
-async function openUnifiedExport(match, printView = 'summary') {
+async function openUnifiedExport(match, printView = 'ledger') {
   const metrics = computeMatchMetrics(match);
   if (!metrics) {
     toast('No round selected to share.');
@@ -8169,12 +8557,34 @@ async function openUnifiedExport(match, printView = 'summary') {
     return;
   }
   exportWindow.document.open();
-  exportWindow.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Preparing Match Summary</title></head><body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:24px;"><strong>Reconciling shared scores...</strong><div style="margin-top:8px;color:#5a667a;">Pulling latest shared scores before creating the summary.</div></body></html>');
+  exportWindow.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Preparing Export</title></head><body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:24px;"><strong>Reconciling shared scores...</strong><div style="margin-top:8px;color:#5a667a;">Pulling latest shared scores before creating the report.</div></body></html>');
   exportWindow.document.close();
   if (match.storageMode === 'shared' && printView !== 'scorecard') {
     await reconcileSharedMatchBeforeSummary(match, { silent: false });
   }
   const refreshedMetrics = computeMatchMetrics(match) || metrics;
+  if (printView === 'ledger') {
+    exportWindow.document.body.innerHTML = '<strong>Preparing The Story of the Round…</strong><div style="margin-top:8px;color:#5a667a;">Using the authoritative scorecard, competitions, settlement, Memories, and recorded context.</div>';
+    const ledgerStory = await prepareLedgerEntryStory(match, refreshedMetrics);
+    const reportModel = buildLedgerEntryReportModel(match, refreshedMetrics);
+    if (!reportModel) {
+      exportWindow.close();
+      toast('Ledger Entry is not available for this round.');
+      return;
+    }
+    reportModel.meta.story = ledgerStory.text;
+    reportModel.meta.storyProvenance = ledgerStory.provenance;
+    window.__DYE_LEDGER_PENDING_REPORT__ = reportModel;
+    window.__DYE_LEDGER_AUTO_PRINT__ = true;
+    try {
+      exportWindow.location.replace(new URL(`ledger-report/shell.html?v=${encodeURIComponent(String(APP_VERSION || '').replace(/^v/i, ''))}`, window.location.href).href);
+      exportWindow.focus();
+    } catch (error) {
+      exportWindow.close();
+      toast('Ledger Entry could not be opened.');
+    }
+    return;
+  }
   const exportHtml = buildUnifiedExportDocument(match, refreshedMetrics, printView);
   try {
     const versionQuery = String(APP_VERSION || '').replace(/^v/i, '');
@@ -8223,7 +8633,8 @@ function prepareScoreboardPrintLayout(printView = 'summary') {
 function openPrintScorecard(matchId, printView = null) {
   const match = getMatch(matchId || state.activeMatchId);
   if (!match) return toast('No round selected to share.');
-  const requestedView = (printView || match.printView || document.getElementById('scoreboardPrintViewSelect')?.value || 'summary') === 'scorecard' ? 'scorecard' : 'summary';
+  const candidateView = printView || match.printView || document.getElementById('scoreboardPrintViewSelect')?.value || 'ledger';
+  const requestedView = ['ledger', 'summary', 'scorecard'].includes(candidateView) ? candidateView : 'ledger';
   match.printView = requestedView;
   syncScoreboardPrintControls(requestedView);
   persist({ skipRender: true });
@@ -10893,7 +11304,7 @@ function renderLeaderboard() {
     `).join('') : '';
   }
 
-  const activePrintView = (match.printView === 'scorecard') ? 'scorecard' : 'summary';
+  const activePrintView = ['ledger', 'summary', 'scorecard'].includes(match.printView) ? match.printView : 'ledger';
   syncScoreboardPrintControls(activePrintView);
   applyScoreboardPrintView(activePrintView);
   renderRoundMemoriesPanel(match);
@@ -17348,7 +17759,7 @@ function normalizeDraftTeeAssignments({ courseId = null, forceDefault = false } 
   return next;
 }
 function syncScoreboardPrintControls(printView = null) {
-  const resolvedView = printView === 'scorecard' ? 'scorecard' : 'summary';
+  const resolvedView = ['ledger', 'summary', 'scorecard'].includes(printView) ? printView : 'ledger';
   const select = document.getElementById('scoreboardPrintViewSelect');
   const button = document.getElementById('scoreboardShareRoundBtn');
   const hint = document.getElementById('scoreboardPrintViewHint');
@@ -17356,7 +17767,9 @@ function syncScoreboardPrintControls(printView = null) {
   if (button) button.textContent = 'Share Match';
   if (hint) hint.textContent = resolvedView === 'scorecard'
     ? 'Classic Scorecard selected. It will open ready to save or share as a PDF.'
-    : 'Match Summary selected. It will open ready to save or share as a PDF.';
+    : (resolvedView === 'summary'
+      ? 'Match Summary selected. It will open ready to save or share as a PDF.'
+      : 'Ledger Entry selected. Recommended format with the result, story, games, statistics, settlement, and scorecards.');
 }
 
 function renderTeamNameInputs(teamCount = Number(document.getElementById('teamCountSelect')?.value || 1), teamNames = []) {
@@ -20228,7 +20641,7 @@ function installHandlers() {
   });
 
 document.getElementById('scoreboardPrintViewSelect').addEventListener('change', e => {
-  const requestedView = e.target.value === 'scorecard' ? 'scorecard' : 'summary';
+  const requestedView = ['ledger', 'summary', 'scorecard'].includes(e.target.value) ? e.target.value : 'ledger';
   const match = getActiveMatch();
   if (match) {
     match.printView = requestedView;
@@ -22318,6 +22731,8 @@ function installDyeLedgerLiveEngineAdapter() {
     formatMomentumMoneyValue,
     buildRoundRecapExport,
     buildMatchSummaryAnalyticsHighlights,
+    buildLedgerEntryBody,
+    buildLedgerEntryReportModel,
     buildUnifiedExportDocument,
     buildQuickScoreDistribution,
     getTeamDisplayName,

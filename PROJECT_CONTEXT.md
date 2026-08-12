@@ -450,6 +450,10 @@ v30.3.99 makes `DYE-######` the only code issued when a Match becomes shared for
 ## 24. Current development release — v31.0.01
 
 v31.0.01 is the Shared Match Reliability Foundation release. It adds a durable changed-score outbox, atomic idempotent server acknowledgements, monotonic Match revisions, private Realtime wake-up notifications, bounded polling fallback, and an independent Device heartbeat. Existing local rounds and scoring calculations are preserved. The additive migration is tracked but not applied to any environment by implementation.
+
+## 25. Current development release — v31.0.02
+
+v31.0.02 is the Ledger Entry reporting release. Ledger Entry becomes the default and recommended Export type while Match Summary and Classic Scorecard remain available. The report declares handicap basis, unit, and provenance; renders Presses as separate nested ledgers; includes an accepted AI recap or deterministic fallback; and reads memories and weather from the effective RoundRecord. It is read-only, supports completed local rounds and Shared Matches, and introduces no database migration.
 # v30.3.90 Shared Match code compatibility
 
 New Shared Matches use only `DYE-######`. Existing 12-character Shared Match identifiers remain joinable through the normal Match workflow without re-keying an active or historical match. Join codes remain locators, not Account, Golfer Identity, Device, role, participation, or scoring-assignment keys.

@@ -1,6 +1,6 @@
 {
   "name": "the-dye-ledger",
-  "version": "31.0.01",
+  "version": "31.0.02",
   "private": true,
   "type": "module",
   "scripts": {
@@ -32,6 +32,9 @@
     "test:v30.3.98": "node --test tests/v30.3.98-joined-score-reconciliation.test.js tests/v30.3.97-shared-join-admission.test.js tests/v30.3.96-identity-shared-publish-remediation.test.js tests/v30.3.89-shared-match-reliability.test.js",
     "test:v30.3.99": "node --test tests/v30.3.99-canonical-shared-code.test.js tests/v30.3.98-joined-score-reconciliation.test.js tests/v30.3.90-shared-code-compatibility.test.js",
     "test:v31.0.01": "node --test tests/v31.0.01-shared-match-reliability.test.js tests/v30.3.98-joined-score-reconciliation.test.js tests/v30.3.89-shared-match-reliability.test.js",
+    "test:v31.0.02": "node --test tests/v31.0.02-ledger-entry-report.test.js tests/report-layout.test.js",
+    "build:ledger-entry-fixture": "node scripts/generate-ledger-entry-fixture.js",
+    "check:layout": "npm run build:ledger-entry-fixture && node scripts/check-ledger-entry-layout.mjs",
     "test:identity-security": "node --test tests/v30.3.75-identity-security.test.js",
     "test:run": "npm run test",
     "simulate": "node scripts/simulate-rounds.js",
@@ -50,7 +53,11 @@
     "test:course-security-package": "node --test tests/course-library-security-package.test.js"
   },
   "devDependencies": {
+    "@fontsource/archivo": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
     "eslint": "^9.0.0",
+    "puppeteer-core": "^23.0.0",
     "supabase": "^2.109.1"
   }
 }

@@ -15,7 +15,17 @@ function failure(status: number, code: string, error: string) {
   return json(status, { success: false, code, error });
 }
 
-function buildSystemInstructions() {
+function buildSystemInstructions(purpose = '') {
+  const rules = purpose === 'ledger-story'
+    ? contentSpec.rules.filter(rule => !rule.startsWith('Every saved Memory must') && !rule.startsWith('When Stat Tracking is enabled'))
+    : contentSpec.rules;
+  const ledgerStory = purpose === 'ledger-story' ? [
+    'Write The Story of the Round for the Ledger Entry report.',
+    'Target 300–400 words and never exceed 450 words.',
+    'Use the factual precision, pacing, and polish of a major golf publication, without invented drama.',
+    'Open with the Featured Competition result; explain the decisive stretch and pivotal holes; recognize supported player and round highlights; close with what defined the round.',
+    'Do not repeat a full Match Summary recap or produce a list of report sections.',
+  ] : [];
   return [
     `You write private round recaps for The Dye Ledger under content specification ${contentSpec.version}.`,
     `Authority order: ${contentSpec.authorityOrder.join(' > ')}.`,
@@ -23,7 +33,8 @@ function buildSystemInstructions() {
     `Target length: ${contentSpec.targetWords}.`,
     `Maximum ${contentSpec.maximumWords} words.`,
     `Supported sections: ${contentSpec.sections.join('; ')}.`,
-    ...contentSpec.rules.map(rule => `Rule: ${rule}`),
+    ...rules.map(rule => `Rule: ${rule}`),
+    ...ledgerStory,
     'Return JSON with one string field named recap.',
   ].join('\n');
 }
@@ -35,6 +46,7 @@ Deno.serve(async request => {
     const body = await request.json();
     const match = body?.match;
     const repair = body?.repair && typeof body.repair === 'object' ? body.repair : null;
+    const purpose = String(body?.purpose || match?.reportPurpose || '');
     if (!match || typeof match !== 'object') return failure(400, 'INVALID_PAYLOAD', 'A round recap payload is required.');
     if (match.recapContentSpecVersion !== contentSpec.version) return failure(409, 'CONTENT_SPEC_MISMATCH', 'Unsupported recap content specification.');
     if (!match.authoritativeFacts || !Array.isArray(match.players)) return failure(400, 'INVALID_PAYLOAD', 'Authoritative round facts are required.');
@@ -55,7 +67,7 @@ Deno.serve(async request => {
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model,
-        instructions: [buildSystemInstructions(), repairInstructions].filter(Boolean).join('\n\n'),
+        instructions: [buildSystemInstructions(purpose), repairInstructions].filter(Boolean).join('\n\n'),
         input: JSON.stringify(match),
         text: { format: { type: 'json_schema', name: 'round_recap', strict: true, schema: { type: 'object', properties: { recap: { type: 'string' } }, required: ['recap'], additionalProperties: false } } },
       }),
@@ -64,7 +76,7 @@ Deno.serve(async request => {
     if (!response.ok) return failure(response.status === 429 ? 429 : 502, response.status === 429 ? 'RATE_LIMITED' : 'PROVIDER_FAILED', 'Round Recap generation failed.');
     const recap = parseRecapResponse(result);
     if (!recap) return failure(502, 'EMPTY_PROVIDER_RESPONSE', 'Round Recap returned no text.');
-    return json(200, { success: true, recap, contentSpecVersion: contentSpec.version, state: 'draft' });
+    return json(200, { success: true, recap, ...(purpose === 'ledger-story' ? { story: recap } : {}), contentSpecVersion: contentSpec.version, state: 'draft' });
   } catch {
     return failure(400, 'REQUEST_PROCESSING_FAILED', 'Round Recap request could not be processed.');
   }

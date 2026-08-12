@@ -15,11 +15,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.02',
-  versionNumber: '31.0.02',
-  cacheName: 'the-dye-ledger-v31.0.02',
-  buildDate: '2026-08-11T20:39:46-04:00',
-  buildLabel: 'Ledger Entry Report'
+  version: 'v31.0.03',
+  versionNumber: '31.0.03',
+  cacheName: 'the-dye-ledger-v31.0.03',
+  buildDate: '2026-08-12T00:11:25-04:00',
+  buildLabel: 'Ledger Story & Weather Refinements'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -2851,6 +2851,12 @@ function scheduleWeatherCaptureForMatch(matchId) {
   window.setTimeout(() => { captureWeatherForMatch(matchId).catch(() => {}); }, 0);
 }
 
+function shouldCaptureWeatherAfterFirstSavedHole(match) {
+  if (!match || match.captureWeatherContext === false || match?.roundContext?.weather) return false;
+  if (normalizeRoundWeatherStatus(match?.roundContext?.weatherStatus).state === 'pending') return false;
+  return Array.isArray(match.playedHoleOrder) && match.playedHoleOrder.length === 1;
+}
+
 function getPlayerIndexText(player) {
   return Number(player?.index || 0).toFixed(1);
 }
@@ -5591,7 +5597,7 @@ function formatRoundRecapWeatherLine(match) {
     const direction = getWindDirectionText(weather.windDirection);
     details.push(`wind ${weather.windSpeed} mph${direction ? ` ${direction}` : ''}`);
   }
-  return details.length ? `Recorded at match startup: ${details.join(', ')}.` : String(weather.summary || '').trim();
+  return details.length ? `Recorded after the first completed hole: ${details.join(', ')}.` : String(weather.summary || '').trim();
 }
 function ensureRoundRecapRequiredFacts(match, recapText) {
   const recapWithMemories = ensureRoundRecapMemoryCoverage(match, recapText);
@@ -6449,7 +6455,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
       course: course.name || course.courseName || match.courseName || 'Golf Course',
       layout: tee.name || tee.teeName || match.layoutName || 'Round',
       date: record.meta?.date || match.date || new Date().toISOString().slice(0, 10),
-      weather: weather || weatherText ? { note: weatherText || String(weather?.summary || weather?.description || ''), recordedAt: 'match startup' } : null,
+      weather: weather || weatherText ? { note: weatherText || String(weather?.summary || weather?.description || ''), recordedAt: 'first completed hole' } : null,
       recap: record.notes?.aiRecap || null,
       recapProvenance: record.notes?.recapProvenance || 'deterministic-fallback',
     },
@@ -6491,7 +6497,7 @@ function buildLedgerEntryStoryPayload(match, metrics) {
   return {
     ...payload,
     reportPurpose: 'ledger-story',
-    recapInstructions: 'Write The Story of the Round for a Ledger Entry. Use only supplied authoritative facts. Target 300–400 words and never exceed 450. Write with the factual precision, pacing, and polish of a major golf publication without inventing shots, quotations, emotions, motives, or drama. Open with the Featured Competition result, explain the decisive stretch and pivotal holes, recognize supported player and round highlights, and close with a concise perspective on what defined the round. Keep Low Gross, Course Net, Featured Net, game results, points, dollars, and settlement distinct. Mention Memories, recorded match-start weather, and tracked statistics only when supplied and genuinely relevant. State provisional scope for incomplete rounds. Return a self-contained narrative rather than repeating the full Match Summary recap or listing report sections.',
+    recapInstructions: 'Write The Story of the Round for a Ledger Entry. Use only supplied authoritative facts. Target 300–400 words and never exceed 450. Write exactly 3–5 natural paragraphs separated by blank lines, with no headings or bullet lists. Write with the factual precision, pacing, and polish of a major golf publication without inventing shots, quotations, emotions, motives, or drama. Open with the Featured Competition result, explain the decisive stretch and pivotal holes, recognize supported player and round highlights, and close with a concise perspective on what defined the round. Express completed Nassau component margins as signed holes-up results such as +2 or +3; never use closed-match notation such as 2 & 0 for a Nassau component. Keep Low Gross, Course Net, Featured Net, game results, points, dollars, and settlement distinct. Greenies counts must come only from authoritativeFacts.greenieWinners or the Greenies game summary counts; when stating a numerical count, use one player and one count in that sentence so it can be audited. Mention Memories, weather recorded after the first completed hole, and tracked statistics only when supplied and genuinely relevant. State provisional scope for incomplete rounds. Return a self-contained narrative rather than repeating the full Match Summary recap or listing report sections.',
   };
 }
 async function prepareLedgerEntryStory(match, metrics) {
@@ -6501,20 +6507,35 @@ async function prepareLedgerEntryStory(match, metrics) {
   if (cached) return cached;
   const fallback = { text: buildLedgerEntryFactsOnlyStory(record), provenance: 'deterministic-fallback', cacheKey };
   if (navigator.onLine === false || !getRoundRecapUrl()) return fallback;
-  try {
+  const requestStory = async (repair = null) => {
     const response = await fetch(getRoundRecapUrl(), {
       method: 'POST',
       headers: getRoundRecapHeaders(),
-      body: JSON.stringify({ match: buildLedgerEntryStoryPayload(match, metrics), purpose: 'ledger-story' }),
+      body: JSON.stringify({ match: buildLedgerEntryStoryPayload(match, metrics), purpose: 'ledger-story', ...(repair ? { repair } : {}) }),
     });
     const data = await response.json().catch(() => ({}));
     const text = String(data?.story || data?.recap || data?.text || '').trim();
-    if (!response.ok || data?.success === false || !text) return fallback;
+    if (!response.ok || data?.success === false || !text) return null;
+    return text;
+  };
+  try {
+    let text = await requestStory();
+    if (!text) return fallback;
     const wordCount = text.split(/\s+/).filter(Boolean).length;
-    const blockingIssues = validateRoundRecapContent(match, metrics, text).issues
-      .filter(issue => ['FALSE_FULL_ROUND', 'FALSE_FINAL_SETTLEMENT'].includes(issue.code));
-    if (wordCount > 500 || blockingIssues.length) return fallback;
-    const generated = { text, provenance: 'generated-narrative', cacheKey };
+    if (wordCount > 500) return fallback;
+    const isBlockingFactIssue = issue => /^FALSE_|^UNVERIFIABLE_/.test(String(issue?.code || ''));
+    let blockingIssues = validateRoundRecapContent(match, metrics, text).issues.filter(isBlockingFactIssue);
+    if (blockingIssues.length) {
+      const repaired = await requestStory({
+        priorRecap: text,
+        issues: blockingIssues.map(issue => ({ code: issue.code, message: issue.message })),
+      });
+      if (!repaired || repaired.split(/\s+/).filter(Boolean).length > 500) return fallback;
+      text = repaired;
+      blockingIssues = validateRoundRecapContent(match, metrics, text).issues.filter(isBlockingFactIssue);
+    }
+    if (blockingIssues.length) return fallback;
+    const generated = { text, provenance: 'audited-generated-narrative', cacheKey };
     ledgerEntryStoryCache.set(cacheKey, generated);
     return generated;
   } catch (_) {
@@ -6940,6 +6961,34 @@ function setRoundRecapFailure(match, { status = 0, code = '', message = '' } = {
   match.roundRecapStatus = message || getRoundRecapFailureMessage(Number(status) || 0, safeCode);
 }
 
+function validateGreeniesNarrativeClaims(match, metrics, recapText) {
+  const greenies = summarizeSelectedGamesForRecap(match, metrics).find(game => game.key === 'greenies');
+  const counts = greenies?.summary?.counts && typeof greenies.summary.counts === 'object' ? greenies.summary.counts : null;
+  if (!counts) return [];
+  const numberWords = Object.freeze({ zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18 });
+  const numberPattern = /\b(?:\d+|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen)\b/gi;
+  const sentences = String(recapText || '').split(/(?<=[.!?])\s+|\n+/).map(sentence => sentence.trim()).filter(sentence => /green(?:y|ie)s?/i.test(sentence));
+  const issues = [];
+  sentences.forEach(sentence => {
+    const namedPlayers = Object.keys(counts).filter(name => name && sentence.toLocaleLowerCase().includes(String(name).toLocaleLowerCase()));
+    const values = [...sentence.matchAll(numberPattern)].map(match => {
+      const token = String(match[0]).toLocaleLowerCase();
+      return /^\d+$/.test(token) ? Number(token) : numberWords[token];
+    }).filter(Number.isFinite);
+    if (!values.length) return;
+    if (namedPlayers.length !== 1 || values.length !== 1) {
+      issues.push({ code: 'UNVERIFIABLE_GREENIES_COUNT', message: `A numerical Greenies claim cannot be matched unambiguously to one player: "${sentence.slice(0, 180)}"` });
+      return;
+    }
+    const player = namedPlayers[0];
+    const expected = Number(counts[player] || 0);
+    if (values[0] !== expected) {
+      issues.push({ code: 'FALSE_GREENIES_COUNT', message: `${player} is described with ${values[0]} Greenies, but the authoritative hole winners total ${expected}.` });
+    }
+  });
+  return issues;
+}
+
 function validateRoundRecapContent(match, metrics, recapText) {
   const recap = String(recapText || '').trim();
   const issues = [];
@@ -6973,6 +7022,7 @@ function validateRoundRecapContent(match, metrics, recapText) {
   if (coachingEligible && !/\b(?:improvement|practice focus|next-round focus|opportunity)\b/i.test(recap)) {
     issues.push({ code: 'MISSING_IMPROVEMENT_REVIEW', message: 'Stat Tracking has enough evidence for player improvement opportunities, but the recap does not include them.' });
   }
+  issues.push(...validateGreeniesNarrativeClaims(match, metrics, recap));
   return { valid: issues.length === 0, issues, specVersion: ROUND_RECAP_CONTENT_SPEC_VERSION };
 }
 
@@ -7403,7 +7453,7 @@ function buildLedgerEntryRecordedContext(record) {
     weather.windSpeed == null ? '' : `Wind ${weather.windSpeed} mph${getWindDirectionText(weather.windDirection) ? ` ${getWindDirectionText(weather.windDirection)}` : ''}`
   ].filter(Boolean) : [];
   return `<section class="export-section ledger-entry-context report-section--avoid-break" data-ledger-section="recorded-context">
-    <div class="export-section-head"><h2>From the Round</h2><div class="export-section-sub">Recorded during play. Memories are shown verbatim; weather is the match-start snapshot.</div></div>
+    <div class="export-section-head"><h2>From the Round</h2><div class="export-section-sub">Recorded during play. Memories are shown verbatim; weather is the opening-play snapshot.</div></div>
     ${memoryRows ? `<div class="ledger-entry-context-block"><h3>Memories</h3><ul>${memoryRows}</ul></div>` : ''}
     ${weatherBits.length ? `<div class="ledger-entry-context-block"><h3>Weather</h3><p>${escapeHtml(weatherBits.join(' · '))}</p></div>` : ''}
   </section>`;
@@ -21470,7 +21520,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     } else {
       activateTab('score');
     }
-    if (!editingMatchId) scheduleWeatherCaptureForMatch(match.id);
+    // Weather capture begins with play, not during Match Setup.
     toast(wasEditingMatch ? 'Round setup updated.' : (sharedMatchEnabled ? 'Shared round started. Assign devices, then tap Start Scoring.' : 'Round started. Open Play to record scores.'));
     } catch (err) {
       logMatchFinalizationDiagnostics('exception', { error: err });
@@ -21579,6 +21629,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
     match.currentHole = currentHole;
     if (!persist()) return false;
+    if (shouldCaptureWeatherAfterFirstSavedHole(match)) scheduleWeatherCaptureForMatch(match.id);
     if (currentHole !== savedPosition) scrollToActiveHoleScoringTop();
     scheduleSharedMatchSync(match, { immediate: true, silent: true });
     if (match.storageMode === 'shared') refreshActiveSharedScores({ silent: true, render: false });

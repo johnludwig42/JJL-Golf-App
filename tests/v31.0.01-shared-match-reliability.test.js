@@ -19,10 +19,10 @@ function memoryStorage() {
 test('v31 identifies the release and uses a dedicated immutable cache', () => {
   const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
   const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
-  assert.equal(pkg.version, '31.0.02');
-  assert.equal(manifest.version, 'v31.0.02');
+  assert.equal(pkg.version, '31.0.03');
+  assert.equal(manifest.version, 'v31.0.03');
   assert.match(app, /Ledger Entry Report/);
-  assert.match(app, /the-dye-ledger-v31\.0\.02/);
+  assert.match(app, /the-dye-ledger-v31\.0\.03/);
 });
 
 test('durable outbox replaces a superseded player-hole operation and survives reload', () => {

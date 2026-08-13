@@ -6085,6 +6085,10 @@ html.quick-scoreboard-open,body.quick-scoreboard-open{overflow:hidden!important;
 .approach-performance-table thead th{background:#f4f8f6}
 .approach-performance-table thead th:first-child{z-index:3}
 .approach-performance-table tbody tr:last-child td{border-bottom:0}
+.ledger-stat-group{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
+.ledger-stat-group:first-of-type{margin-top:8px;padding-top:0;border-top:0}
+.ledger-stat-group h3{margin:0 0 3px;color:var(--ink)}
+.ledger-stat-table{margin-top:9px}
 @media print{
   .player-insights-scroll{overflow:visible!important;border:0}
   .player-insights-table{min-width:0}

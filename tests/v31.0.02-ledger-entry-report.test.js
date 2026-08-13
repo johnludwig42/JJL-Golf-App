@@ -22,8 +22,13 @@ function fixture({ complete = true, presses = true } = {}) {
     id: complete ? 'ledger-final' : 'ledger-provisional', name: 'Ledger Entry Fixture', date: '2026-08-11',
     courseId: course.id, teeId: 'ledger-tee', holeCount: 18, status: complete ? 'complete' : 'active',
     format: 'teams', teamCount: 2, playersPerTeam: 2, teamNames: ['North', 'South'], allowance: 100,
+    statTrackingEnabled: true, statTrackingPlayerIds: players.map(player => player.id), statReviewContractVersion: 1,
     selectedGames: [{ key: 'nassau', basis: 'net', countingBalls: 2, handicapAllowanceMode: 'recommended', handicapAllowancePercent: 85, stakesFront: 5, stakesBack: 5, stakesOverall: 10, pressesEnabled: presses }],
-    players: players.map((player, playerIndex) => ({ playerId: player.id, team: playerIndex < 2 ? 1 : 2, teeId: 'ledger-tee', scores: holes.map((hole, holeIndex) => ({ holeNumber: hole.holeNumber, gross: holeIndex < scored ? hole.par + ((holeIndex + playerIndex) % 3 === 0 ? 1 : 0) : null })) })),
+    players: players.map((player, playerIndex) => ({
+      playerId: player.id, team: playerIndex < 2 ? 1 : 2, teeId: 'ledger-tee',
+      scores: holes.map((hole, holeIndex) => ({ holeNumber: hole.holeNumber, gross: holeIndex < scored ? hole.par + ((holeIndex + playerIndex) % 3 === 0 ? 1 : 0) : null })),
+      stats: holes.map((hole, holeIndex) => holeIndex < scored ? ({ entryCompleted: true, fairway: hole.par >= 4 && (holeIndex + playerIndex) % 2 === 0, green: (holeIndex + playerIndex) % 3 !== 0, putts: 1 + ((holeIndex + playerIndex) % 3), upAndDown: (holeIndex + playerIndex) % 5 === 0, sandy: (holeIndex + playerIndex) % 7 === 0, penaltyStrokes: (holeIndex + playerIndex) % 11 === 0 ? 1 : 0 }) : ({ entryCompleted: false })),
+    })),
     memories: [{ id: 'memory-1', holeNumber: 7, text: 'A long birdie putt turned the match.' }],
     roundContext: { weather: { conditionsText: 'Clear', temperature: 74, humidity: 52, windSpeed: 8, windDirection: 225 } },
     roundRecapFinal: 'North and South traded momentum before the closing stretch decided the result.',
@@ -164,6 +169,30 @@ test('Ledger Story generation is version-bound, non-mutating, and isolated from 
   assert.match(renderer, /function returnToOriginatingMatch\(\)/);
   assert.match(renderer, /window\.location\.assign\(new URL\("\.\.\/",window\.location\.href\)\.href\)/);
   assert.doesNotMatch(source.slice(source.indexOf('async function prepareLedgerEntryStory'), source.indexOf('function buildLegacyRoundSnapshot')), /persist\(|roundRecapGenerated\s*=|roundRecapFinal\s*=/);
+});
+
+test('tracked statistics appear in Ledger Statistics and inform both story paths', () => {
+  const final = fixture();
+  assert.match(final.html, /<h3>Scoring<\/h3>/);
+  assert.match(final.html, /<h3>Ball Striking<\/h3>/);
+  assert.match(final.html, /<h3>Short Game &amp; Putting<\/h3>/);
+  assert.match(final.html, /Tracked Holes/);
+  assert.match(final.html, /Fairways/);
+  assert.match(final.html, /GIR/);
+  assert.match(final.html, /Total Putts/);
+  assert.match(final.html, /Birdie\+ Conversion on GIR/);
+  assert.match(final.html, /regardless of putt count/);
+  assert.match(final.html, /\d+% \(\d+\/\d+\)/);
+  const facts = final.engine.buildTrackedStatisticsStoryFacts(final.match, final.metrics);
+  assert.equal(facts.length, 4);
+  assert.ok(facts.every(fact => fact.trackedHoles === 18));
+  assert.ok(facts.every(fact => fact.greenOpportunities === 18));
+  const payload = final.engine.buildLedgerEntryStoryPayload(final.match, final.metrics);
+  assert.deepEqual(payload.trackedStatistics, facts);
+  assert.match(payload.trackedStatisticsInstruction, /never interpret an unrecorded field as zero/);
+  const fallback = final.engine.buildLedgerEntryFactsOnlyStory(final.record, final.match, final.metrics);
+  assert.match(fallback, /recorded statistics included/);
+  assert.match(fallback, /greens in regulation/);
 });
 
 test('weather capture starts with the first completed hole rather than Match Setup', () => {

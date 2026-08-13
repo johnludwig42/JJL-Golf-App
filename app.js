@@ -6543,13 +6543,16 @@ function getLedgerEntryStoryCacheKey(record) {
   }
   return `${record?.recordId || record?.roundId || 'round'}:${record?.schemaVersion || 1}:${(hash >>> 0).toString(16)}`;
 }
-function buildLedgerEntryFactsOnlyStory(record) {
+function buildLedgerEntryFactsOnlyStory(record, match = null, metrics = null) {
   const story = buildRoundRecordStory(record);
   const highlights = (record?.players || [])
     .filter(player => player?.signatureStat)
     .slice(0, 4)
     .map(player => `${player.displayName}: ${player.signatureStat}.`);
-  return [story?.narrative, ...highlights].filter(Boolean).join('\n\n')
+  const trackedStatistics = match && metrics
+    ? buildTrackedStatisticsStoryFacts(match, metrics).slice(0, 4).map(describeTrackedStatisticsForStory).filter(Boolean)
+    : [];
+  return [story?.narrative, ...highlights, ...trackedStatistics].filter(Boolean).join('\n\n')
     || 'The recorded scorecard, competitions, and settlement are preserved in this Ledger Entry.';
 }
 function buildLedgerEntryStoryPayload(match, metrics) {
@@ -6557,6 +6560,8 @@ function buildLedgerEntryStoryPayload(match, metrics) {
   return {
     ...payload,
     reportPurpose: 'ledger-story',
+    trackedStatistics: buildTrackedStatisticsStoryFacts(match, metrics),
+    trackedStatisticsInstruction: 'Use relevant recorded tracked statistics to help explain the round. State the tracked-hole sample, and never interpret an unrecorded field as zero.',
     recapInstructions: 'Write The Story of the Round for a Ledger Entry. Use only supplied authoritative facts. Target 300–400 words and never exceed 450. Write exactly 3–5 natural paragraphs separated by blank lines, with no headings or bullet lists. Write with the factual precision, pacing, and polish of a major golf publication without inventing shots, quotations, emotions, motives, or drama. Open with the Featured Competition result, explain the decisive stretch and pivotal holes, recognize supported player and round highlights, and close with a concise perspective on what defined the round. Express completed Nassau component margins as signed holes-up results such as +2 or +3; never use closed-match notation such as 2 & 0 for a Nassau component. Keep Low Gross, Course Net, Featured Net, game results, points, dollars, and settlement distinct. Greenies counts must come only from authoritativeFacts.greenieWinners or the Greenies game summary counts; when stating a numerical count, use one player and one count in that sentence so it can be audited. Mention Memories, weather recorded after the first completed hole, and tracked statistics only when supplied and genuinely relevant. State provisional scope for incomplete rounds. Return a self-contained narrative rather than repeating the full Match Summary recap or listing report sections.',
   };
 }
@@ -6565,7 +6570,7 @@ async function prepareLedgerEntryStory(match, metrics) {
   const cacheKey = getLedgerEntryStoryCacheKey(record);
   const cached = ledgerEntryStoryCache.get(cacheKey);
   if (cached) return cached;
-  const fallback = { text: buildLedgerEntryFactsOnlyStory(record), provenance: 'deterministic-fallback', cacheKey };
+  const fallback = { text: buildLedgerEntryFactsOnlyStory(record, match, metrics), provenance: 'deterministic-fallback', cacheKey };
   if (navigator.onLine === false || !getRoundRecapUrl()) return fallback;
   const requestStory = async (repair = null) => {
     const response = await fetch(getRoundRecapUrl(), {
@@ -7496,7 +7501,7 @@ function getLedgerEntryFeaturedBasis(match, metrics) {
 
 function buildLedgerEntryRecap(match, metrics, record) {
   const generated = String(record?.notes?.ledgerEntryStory || record?.notes?.aiRecap || '').trim();
-  const recap = generated || buildLedgerEntryFactsOnlyStory(record);
+  const recap = generated || buildLedgerEntryFactsOnlyStory(record, match, metrics);
   const provenance = generated ? 'AI-generated Ledger Story' : 'Deterministic facts-only story';
   return `<div class="ledger-entry-recap" data-ledger-provenance="${generated ? 'generated-narrative' : 'derived-calculation'}"><div class="ledger-entry-provenance">${escapeHtml(provenance)}</div>${formatRoundRecapHtml(recap)}</div>`;
 }
@@ -7552,7 +7557,6 @@ function buildLedgerEntryBody(match, metrics) {
   const basis = getLedgerEntryFeaturedBasis(match, metrics);
   const scoreDistributionTitle = 'Score ' + 'Distribution';
   const scoreDistribution = completion.completedHoleCount >= 6 ? buildExportScoreDistributionSummary(match, metrics) : '';
-  const statTracking = buildExportStatTrackingSummary(match, metrics);
   const showNinePoint = (match.selectedGames || []).some(game => game.key === 'nine_point');
   const ninePoint = showNinePoint ? `<section class="export-section export-section-nine-point"><div class="export-section-head"><h2>9-Point Ledger</h2><div class="export-section-sub">Points are authoritative; dollars equal points x the configured stake and reconcile separately.</div></div>${buildNinePointScorecard(match, metrics)}</section>` : '';
   return `
@@ -7579,8 +7583,7 @@ function buildLedgerEntryBody(match, metrics) {
     ${buildPressAuditSection(match, metrics, record)}
 
     <div class="ledger-entry-page-start" data-ledger-page-subject="Statistics"></div>
-    <section class="export-section export-section-player-insights"><div class="export-section-head"><h2>Player Statistics</h2><div class="export-section-sub">Gross scoring facts from completed holes. Tracked statistics appear only when recorded.</div></div>${buildPlayerRoundInsights(match, metrics, { exportView: true })}${buildScoringByParSummary(match, metrics, { exportView: true })}</section>
-    ${statTracking ? `<section class="export-section export-section-stat-tracking"><div class="export-section-head"><h2>Stat Tracking</h2><div class="export-section-sub">Recorded tracked fields only; missing fields are omitted rather than estimated.</div></div>${statTracking}</section>` : ''}
+    <section class="export-section export-section-player-insights export-section-stat-tracking"><div class="export-section-head"><h2>Player Statistics</h2><div class="export-section-sub">Organized by scoring, ball striking, and short game. Every percentage includes its recorded sample.</div></div>${buildLedgerEntryStatisticsSections(match, metrics)}${buildScoringByParSummary(match, metrics, { exportView: true })}</section>
 
     <div class="ledger-entry-page-start" data-ledger-page-subject="Appendix"></div>
     <section class="export-section export-section-classic export-section-classic-summary"><div class="export-section-head"><div class="export-appendix-label">Appendix</div><h2>Classic Scorecard - Course Net</h2><div class="export-section-sub">Full Course Handicap. Gross appears above Course Net; dots indicate Course Handicap strokes.</div></div><div class="fit-stage export-classic-stage" data-fit="width-height" data-fit-min="0.62"><div class="fit-box">${buildClassicScorecard(match, metrics)}</div></div></section>
@@ -10327,7 +10330,7 @@ function computeStatTrackingSummary(match, metrics) {
   const trackedPlayers = (metrics?.players || []).filter(playerMetric => isPlayerStatTrackingEnabled(match, playerMetric.playerId));
   const summary = trackedPlayers.map(playerMetric => {
     const playerRef = match.players.find(row => row.playerId === playerMetric.playerId);
-    const totals = { fairwaysHit: 0, fairwayOpps: 0, greens: 0, putts: 0, penaltyStrokes: 0, upAndDowns: 0, sandies: 0 };
+    const totals = { trackedHoles: 0, fairwaysHit: 0, fairwayOpps: 0, greens: 0, greenOpps: 0, putts: 0, puttOpps: 0, penaltyStrokes: 0, upAndDowns: 0, sandies: 0 };
     (metrics?.holeResults || []).forEach((holeResult, holeIdx) => {
       if (!holeResult?.completed) return;
       const scoreObj = holeResult?.playerScores?.find(ps => ps.playerId === playerMetric.playerId);
@@ -10335,13 +10338,18 @@ function computeStatTrackingSummary(match, metrics) {
       const hole = getPlayerHole(match, playerMetric, holeIdx, metrics?.tee) || metrics?.tee?.holes?.[holeIdx] || null;
       const stat = getPlayerStatEntry(playerRef, holeIdx);
       if (Number(match?.statReviewContractVersion || 0) >= 1 && !stat.entryCompleted) return;
+      totals.trackedHoles += 1;
       const par = Number(hole?.par) || Number(scoreObj?.par) || 0;
       if (par === 4 || par === 5) {
         totals.fairwayOpps += 1;
         if (stat.fairway) totals.fairwaysHit += 1;
       }
+      totals.greenOpps += 1;
       if (stat.green) totals.greens += 1;
-      if (Number.isFinite(stat.putts)) totals.putts += stat.putts;
+      if (Number.isFinite(stat.putts)) {
+        totals.putts += stat.putts;
+        totals.puttOpps += 1;
+      }
       if (Number.isFinite(Number(stat.penaltyStrokes))) totals.penaltyStrokes += Number(stat.penaltyStrokes);
       if (stat.upAndDown) totals.upAndDowns += 1;
       if (stat.sandy) totals.sandies += 1;
@@ -10349,6 +10357,37 @@ function computeStatTrackingSummary(match, metrics) {
     return { playerMetric, totals };
   });
   return summary;
+}
+
+function buildTrackedStatisticsStoryFacts(match, metrics) {
+  if (!isStatTrackingEnabled(match)) return [];
+  return computeStatTrackingSummary(match, metrics)
+    .filter(({ totals }) => Number(totals?.trackedHoles || 0) > 0)
+    .map(({ playerMetric, totals }) => ({
+      playerId: String(playerMetric.playerId),
+      playerName: playerMetric.player?.name || getPlayer(playerMetric.playerId)?.name || 'Player',
+      trackedHoles: Number(totals.trackedHoles || 0),
+      fairwaysHit: Number(totals.fairwaysHit || 0),
+      fairwayOpportunities: Number(totals.fairwayOpps || 0),
+      greensInRegulation: Number(totals.greens || 0),
+      greenOpportunities: Number(totals.greenOpps || 0),
+      totalPutts: Number(totals.putts || 0),
+      puttingHoles: Number(totals.puttOpps || 0),
+      upAndDowns: Number(totals.upAndDowns || 0),
+      sandies: Number(totals.sandies || 0),
+      penaltyStrokes: Number(totals.penaltyStrokes || 0),
+    }));
+}
+
+function describeTrackedStatisticsForStory(fact) {
+  const details = [];
+  if (fact.fairwayOpportunities) details.push(`${fact.fairwaysHit} of ${fact.fairwayOpportunities} fairways`);
+  if (fact.greenOpportunities) details.push(`${fact.greensInRegulation} of ${fact.greenOpportunities} greens in regulation`);
+  if (fact.puttingHoles) details.push(`${fact.totalPutts} putts across ${fact.puttingHoles} tracked holes`);
+  if (fact.upAndDowns) details.push(`${fact.upAndDowns} up-and-down${fact.upAndDowns === 1 ? '' : 's'}`);
+  if (fact.sandies) details.push(`${fact.sandies} sandy${fact.sandies === 1 ? '' : 's'}`);
+  if (fact.penaltyStrokes) details.push(`${fact.penaltyStrokes} penalty stroke${fact.penaltyStrokes === 1 ? '' : 's'}`);
+  return details.length ? `${fact.playerName}'s recorded statistics included ${details.join(', ')}.` : '';
 }
 
 function computeScoreDistributionSummary(match, metrics) {
@@ -10450,6 +10489,36 @@ function computePlayerRoundInsights(match, metrics) {
 
 function formatPlayerInsightPercent(rate) {
   return Number.isFinite(Number(rate)) ? `${(Number(rate) * 100).toFixed(0)}%` : '—';
+}
+
+function formatLedgerStatRate(successes, opportunities) {
+  const numerator = Number(successes || 0);
+  const denominator = Number(opportunities || 0);
+  return denominator > 0 ? `${formatPlayerInsightPercent(numerator / denominator)} (${numerator}/${denominator})` : '—';
+}
+
+function buildLedgerEntryStatisticsSections(match, metrics) {
+  const insights = computePlayerRoundInsights(match, metrics).filter(row => row.totals.scoredHoles > 0);
+  if (!insights.length) return '';
+  const trackedByPlayer = new Map(computeStatTrackingSummary(match, metrics).map(row => [String(row.playerMetric.playerId), row.totals]));
+  const scoringRows = insights.map(row => {
+    const tracked = trackedByPlayer.get(String(row.playerId));
+    return `<tr><td><strong>${escapeHtml(row.displayName)}</strong></td><td>${row.totals.scoredHoles}</td><td>${Number(row.scoringAverage).toFixed(2)}</td><td>${formatLedgerStatRate(row.totals.birdieOrBetter, row.totals.scoredHoles)}</td><td>${formatLedgerStatRate(row.totals.parOrBetter, row.totals.scoredHoles)}</td><td>${formatLedgerStatRate(row.totals.bogeyOrBetter, row.totals.scoredHoles)}</td><td>${tracked?.trackedHoles ? Number(tracked.penaltyStrokes || 0) : '—'}</td></tr>`;
+  }).join('');
+  const trackedInsights = insights.filter(row => Number(trackedByPlayer.get(String(row.playerId))?.trackedHoles || 0) > 0);
+  const ballStrikingRows = trackedInsights.map(row => {
+    const tracked = trackedByPlayer.get(String(row.playerId));
+    return `<tr><td><strong>${escapeHtml(row.displayName)}</strong></td><td>${tracked.trackedHoles}</td><td>${formatLedgerStatRate(tracked.fairwaysHit, tracked.fairwayOpps)}</td><td>${formatLedgerStatRate(tracked.greens, tracked.greenOpps)}</td><td>${formatLedgerStatRate(row.totals.convertedGreens, row.totals.greensInRegulation)}</td><td>${formatApproachRate(row.fairwayHitGirRate, row.totals.fairwayHitGirs, row.totals.fairwayHitOpportunities)}</td><td>${formatApproachRate(row.fairwayMissedGirRate, row.totals.fairwayMissedGirs, row.totals.fairwayMissedOpportunities)}</td><td>${formatFairwayGirAdvantage(row.fairwayGirAdvantage)}</td></tr>`;
+  }).join('');
+  const shortGameRows = trackedInsights.map(row => {
+    const tracked = trackedByPlayer.get(String(row.playerId));
+    const averagePutts = tracked.puttOpps ? (tracked.putts / tracked.puttOpps).toFixed(2) : '—';
+    return `<tr><td><strong>${escapeHtml(row.displayName)}</strong></td><td>${tracked.trackedHoles}</td><td>${tracked.puttOpps ? tracked.putts : '—'}</td><td>${averagePutts}</td><td>${tracked.upAndDowns}</td><td>${tracked.sandies}</td></tr>`;
+  }).join('');
+  const table = (label, headings, rows, description) => `<section class="ledger-stat-group report-section--avoid-break" data-ledger-stat-group="${escapeHtml(label.toLowerCase().replace(/[^a-z]+/g, '-'))}"><h3>${escapeHtml(label)}</h3><div class="export-section-sub">${escapeHtml(description)}</div><div class="fit-stage" data-fit="width" data-fit-min="0.75"><div class="fit-box"><table class="export-table ledger-stat-table"><thead><tr>${headings.map(heading => `<th>${escapeHtml(heading)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div></div></section>`;
+  return `${table('Scoring', ['Player', 'Holes', 'Average', 'Birdie+', 'Par+', 'Double-Bogey Avoid.', 'Penalty Strokes'], scoringRows, 'Completed, scored holes only. Rates include their supporting fraction; penalties appear only for recorded tracked holes.')}
+    ${ballStrikingRows ? table('Ball Striking', ['Player', 'Tracked Holes', 'Fairways', 'GIR', 'Birdie+ Conversion on GIR', 'GIR · Fairway Hit', 'GIR · Fairway Missed', 'Fairway GIR Advantage'], ballStrikingRows, 'Recorded tracked holes only. Birdie+ Conversion on GIR means birdie or better after a recorded GIR, regardless of putt count.') : ''}
+    ${shortGameRows ? table('Short Game & Putting', ['Player', 'Tracked Holes', 'Total Putts', 'Putts / Tracked Hole', 'Up & Downs', 'Sandies'], shortGameRows, 'Recorded tracked holes only; untouched fields are omitted rather than interpreted as zero.') : ''}`;
 }
 
 function formatFairwayGirAdvantage(rate) {
@@ -10590,34 +10659,15 @@ function buildExportStatTrackingSummary(match, metrics) {
   if (!completedLimit) return '';
   const trackedPlayers = (metrics?.players || []).filter(playerMetric => isPlayerStatTrackingEnabled(match, playerMetric.playerId));
   if (!trackedPlayers.length) return '';
+  const summaryByPlayer = new Map(computeStatTrackingSummary(match, metrics).map(row => [String(row.playerMetric.playerId), row.totals]));
   const rows = trackedPlayers.map(playerMetric => {
-    const playerRef = match.players.find(row => row.playerId === playerMetric.playerId);
-    const totals = { fairwaysHit: 0, fairwayOpps: 0, greens: 0, greenOpps: 0, putts: 0, puttOpps: 0, penaltyStrokes: 0, upAndDowns: 0, sandies: 0 };
-    (metrics?.holeResults || []).forEach((holeResult, holeIdx) => {
-      if (!holeResult?.completed) return;
-      const scoreObj = holeResult?.playerScores?.find(ps => ps.playerId === playerMetric.playerId);
-      if (!Number.isFinite(Number(scoreObj?.gross))) return;
-      const hole = getPlayerHole(match, playerMetric, holeIdx, metrics?.tee) || metrics?.tee?.holes?.[holeIdx] || null;
-      const stat = getPlayerStatEntry(playerRef, holeIdx);
-      const par = Number(hole?.par) || Number(scoreObj?.par) || 0;
-      if (par === 4 || par === 5) {
-        totals.fairwayOpps += 1;
-        if (stat.fairway) totals.fairwaysHit += 1;
-      }
-      totals.greenOpps += 1;
-      if (stat.green) totals.greens += 1;
-      if (Number.isFinite(Number(stat.putts))) {
-        totals.putts += Number(stat.putts);
-        totals.puttOpps += 1;
-      }
-      if (Number.isFinite(Number(stat.penaltyStrokes))) totals.penaltyStrokes += Number(stat.penaltyStrokes);
-      if (stat.upAndDown) totals.upAndDowns += 1;
-      if (stat.sandy) totals.sandies += 1;
-    });
+    const totals = summaryByPlayer.get(String(playerMetric.playerId));
+    if (!totals || !Number(totals.trackedHoles)) return '';
     const avgPutts = totals.puttOpps ? (totals.putts / totals.puttOpps).toFixed(1) : '—';
     return `
       <tr>
         <td><strong>${escapeHtml(playerMetric.player.name)}</strong></td>
+        <td>${totals.trackedHoles}</td>
         <td>${totals.fairwaysHit} / ${totals.fairwayOpps}</td>
         <td>${totals.greens} / ${totals.greenOpps}</td>
         <td>${totals.putts}</td>
@@ -10633,7 +10683,7 @@ function buildExportStatTrackingSummary(match, metrics) {
       <div class="fit-box">
         <table class="export-table export-stat-summary-table">
           <thead>
-            <tr><th>Player</th><th>Fairways</th><th>GIR</th><th>Total Putts</th><th>Avg Putts</th><th>Up & Downs</th><th>Sandies</th><th>Penalty</th></tr>
+            <tr><th>Player</th><th>Tracked Holes</th><th>Fairways</th><th>GIR</th><th>Total Putts</th><th>Avg Putts</th><th>Up & Downs</th><th>Sandies</th><th>Penalty</th></tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
@@ -22899,6 +22949,11 @@ function installDyeLedgerLiveEngineAdapter() {
     buildMatchSummaryAnalyticsHighlights,
     buildLedgerEntryBody,
     buildLedgerEntryReportModel,
+    buildLedgerEntryStoryPayload,
+    buildLedgerEntryFactsOnlyStory,
+    buildTrackedStatisticsStoryFacts,
+    buildExportStatTrackingSummary,
+    buildLedgerEntryStatisticsSections,
     buildUnifiedExportDocument,
     buildQuickScoreDistribution,
     getTeamDisplayName,

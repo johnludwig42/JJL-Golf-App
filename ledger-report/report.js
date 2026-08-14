@@ -56,6 +56,22 @@ const REFERENCE_ROUND = {
             {from:"jl",to:"le",amt:11},{from:"jl",to:"cd",amt:8},
             {from:"bw",to:"cd",amt:3}]
 };
+REFERENCE_ROUND.players.forEach((p,index)=>{
+  const deltas=p.gross.map((score,hole)=>score-REFERENCE_ROUND.card.par[hole]);
+  const greens=Math.max(4,10-index%4);
+  p.statistics={
+    scoredHoles:18, gross:p.gross.reduce((a,b)=>a+b,0),
+    birdieOrBetter:deltas.filter(v=>v<0).length,
+    parOrBetter:deltas.filter(v=>v<=0).length,
+    bogeyOrBetter:deltas.filter(v=>v<2).length,
+    greensInRegulation:greens, convertedGreens:Math.min(deltas.filter(v=>v<0).length,greens),
+    fairwayHitOpportunities:7, fairwayHitGirs:4,
+    fairwayMissedOpportunities:7, fairwayMissedGirs:2,
+    fairwayGirAdvantage:2/7,
+    tracked:{trackedHoles:18,fairwaysHit:7,fairwayOpps:14,greens,greenOpps:18,
+      putts:31+index%4,puttOpps:18,penaltyStrokes:index%3,upAndDowns:3,sandies:1},
+  };
+});
 const ROUND = globalThis.__DYE_LEDGER_ROUND__ || REFERENCE_ROUND;
 document.title = `The Dye Ledger — ${ROUND.meta.course}, ${new Intl.DateTimeFormat('en-US', {
   month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC',
@@ -207,11 +223,14 @@ add("hero", ()=>{
   const label = FEAT ? `${FEAT.name} · ${FEAT.allowance.label}` : "No featured competition";
   w.appendChild(h("div",{class:"eyebrow",text:"Featured Competition · "+label}));
   let head;
-  if(WINK) head = `${SIDES[WINK].name} take it, ${Math.abs(MARGIN.total)}&nbsp;up`;
+  if(WINK) head = `${SIDES[WINK].name} — ${Math.abs(MARGIN.total)}&nbsp;up`;
   else if(MARGIN) head = "All square";
   else {
     const lo = P.slice().sort((a,b)=>a.cnetT-b.cnetT)[0];
-    head = `${lo.name} takes the card, net ${lo.cnetT}`;
+    const tied = P.filter(p=>p.cnetT===lo.cnetT);
+    head = tied.length>1
+      ? `${listw(tied.map(p=>p.name))} — tied low net, ${lo.cnetT}`
+      : `${lo.name} — low net, ${lo.cnetT}`;
   }
   w.appendChild(h("h1",{html:head}));
   w.appendChild(h("p",{class:"deck",text:deckText()}));
@@ -265,7 +284,7 @@ if(HAS_SIDES) add("strip", ()=>{
       `<div class="sname"><i style="background:${SIDES[k].color}"></i>${SIDES[k].name}</div>
        <div class="sstats">GROSS <b>${g}</b> &nbsp;·&nbsp; NET (FULL CH) <b>${n}</b>
        ${segTxt?" &nbsp;·&nbsp; "+segTxt:""}</div>
-       <div class="sstats" style="margin-top:1px">${t.map(p=>initials(p.name)).join(" · ")}</div>`}));
+       <div class="sstats" style="margin-top:1px">${t.map(p=>`${initials(p.name)} · ${p.tee}`).join(" &nbsp; | &nbsp; ")}</div>`}));
   });
   outer.appendChild(w);
   return outer;
@@ -311,6 +330,12 @@ function chartFrame(inner, yAxis, footLabels){
     ${footLabels}</svg>`;
 }
 
+function yAxisLabel(label){
+  const mid=(CH.y0+CH.y1)/2;
+  return `<text x="10" y="${mid}" text-anchor="middle" transform="rotate(-90 10 ${mid})"
+    font-family="Archivo" font-weight="600" font-size="6.2" letter-spacing=".8" fill="#6E736C">${label}</text>`;
+}
+
 function chartSVG(){
   if(FR.archetype==="margin") return marginChart();
   if(FR.archetype==="cumulative") return cumulativeChart();
@@ -354,7 +379,7 @@ function marginChart(){
       font-size="6.6" letter-spacing=".8" fill="#14211C">AS</text>
     <text x="${x1}" y="${Y(MARGIN.total)-8}" text-anchor="end" font-family="Archivo" font-weight="700"
       font-size="10" fill="${WINK?SIDES[WINK].color:'#6E736C'}">${Math.abs(MARGIN.total)} UP</text>`;
-  return chartFrame(inner,"",segLab);
+  return chartFrame(inner,yAxisLabel("MATCH MARGIN · HOLES"),segLab);
 }
 
 function cumulativeChart(){
@@ -379,7 +404,9 @@ function cumulativeChart(){
   const band = tp?`<rect x="${X(tp.i)}" y="${y0}" width="${X(tp.i+1)-X(tp.i)}" height="${y1-y0}"
     fill="#B0821F" opacity=".13"/><text x="${(X(tp.i)+X(tp.i+1))/2}" y="${y0-6}" text-anchor="middle"
     font-family="Archivo" font-weight="600" font-size="6.6" letter-spacing="1.4" fill="#B0821F">TURNING POINT</text>`:"";
-  return chartFrame(`${band}${paths}${tags}`,"",
+  const ticks=[lo,(lo+hi)/2,hi].map(v=>`<line x1="${x0}" y1="${Y(v)}" x2="${x1}" y2="${Y(v)}" stroke="#E4E4DC" stroke-width=".5"/>
+    <text x="${x0-8}" y="${Y(v)+2.6}" text-anchor="end" font-family="IBM Plex Mono" font-size="6.5" fill="#6E736C">${Math.round(v*10)/10}</text>`).join("");
+  return chartFrame(`${ticks}${band}${paths}${tags}`,yAxisLabel(`CUMULATIVE ${String(FR.unit).toUpperCase()}`),
     `<text x="${x0}" y="${CH.segY}" font-family="Archivo" font-weight="600" font-size="6.4"
       letter-spacing="1.4" fill="#6E736C">CUMULATIVE ${String(FR.unit).toUpperCase()} · TOP THREE EMPHASISED</text>`);
 }
@@ -397,7 +424,9 @@ function discreteChart(){
       <text x="${(X(p.i)+X(p.i+1))/2}" y="${Y(p.value)-3}" text-anchor="middle"
       font-family="IBM Plex Mono" font-size="6" fill="#14211C">${usd(p.value)}</text>`;
   }).join("");
-  return chartFrame(`<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#14211C" stroke-width="1.2"/>${bars}`,"",
+  const axis=`<text x="${x0-8}" y="${y1+2.6}" text-anchor="end" font-family="IBM Plex Mono" font-size="6.5" fill="#6E736C">0</text>
+    <text x="${x0-8}" y="${Y(hi)+2.6}" text-anchor="end" font-family="IBM Plex Mono" font-size="6.5" fill="#6E736C">${hi}</text>`;
+  return chartFrame(`<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#14211C" stroke-width="1.2"/>${bars}${axis}`,yAxisLabel(FR.unit==="dollars"?"POT VALUE · $":`VALUE · ${String(FR.unit).toUpperCase()}`),
     `<text x="${x0}" y="${CH.segY}" font-family="Archivo" font-weight="600" font-size="6.4"
       letter-spacing="1.4" fill="#6E736C">POT PER HOLE · CARRYOVERS STACKED</text>`);
 }
@@ -457,18 +486,20 @@ add("awards", ()=>{
   const cards=[];
   const lowG = RANKABLE.slice().sort((a,b)=>a.tot-b.tot)[0];
   const lowN = RANKABLE.slice().sort((a,b)=>a.cnetT-b.cnetT)[0];
-  const tieG = RANKABLE.filter(p=>p.tot===lowG.tot).length>1;
-  const tieN = RANKABLE.filter(p=>p.cnetT===lowN.cnetT).length>1;
-  cards.push(["Low gross",lowG.name,lowG.tot,tieG]);
-  cards.push(["Low net · full CH",lowN.name,lowN.cnetT,tieN]);
+  const namesAt=(rows,key,value)=>rows.filter(p=>p[key]===value).map(p=>p.name);
+  const grossNames=namesAt(RANKABLE,"tot",lowG.tot), netNames=namesAt(RANKABLE,"cnetT",lowN.cnetT);
+  cards.push(["Low gross",listw(grossNames),lowG.tot,grossNames.length>1]);
+  cards.push(["Low net · full CH",listw(netNames),lowN.cnetT,netNames.length>1]);
   if(NH>9){
     const f=RANKABLE.slice().sort((a,b)=>a.out-b.out)[0], b=RANKABLE.slice().sort((a,b)=>a.inn-b.inn)[0];
-    cards.push(["Best front",f.name,f.out,RANKABLE.filter(p=>p.out===f.out).length>1]);
-    cards.push(["Best back",b.name,b.inn,RANKABLE.filter(p=>p.inn===b.inn).length>1]);
+    const fn=namesAt(RANKABLE,"out",f.out), bn=namesAt(RANKABLE,"inn",b.inn);
+    cards.push(["Best front",listw(fn),f.out,fn.length>1]);
+    cards.push(["Best back",listw(bn),b.inn,bn.length>1]);
   }
-  const bird = P.map(p=>({p,n:p.delta.filter(d=>d<0).length})).sort((a,b)=>b.n-a.n)[0];
-  cards.push(["Most birdies",bird.p.name,bird.n,
-    P.filter(p=>p.delta.filter(d=>d<0).length===bird.n).length>1]);
+  const birdRows=P.map(p=>({name:p.name,n:p.delta.filter(d=>d<0).length}));
+  const bird=Math.max(...birdRows.map(row=>row.n));
+  const birdNames=birdRows.filter(row=>row.n===bird).map(row=>row.name);
+  cards.push(["Most birdies",listw(birdNames),bird,birdNames.length>1]);
   const w=h("div",{class:"awards",style:`grid-template-columns:repeat(${cards.length},1fr)`});
   cards.forEach(([k,v,n,t])=>w.appendChild(h("div",{class:"aw",
     html:`<div class="k">${k}${t?" (T)":""}</div><div class="v">${v}</div><div class="n">${n}</div>`})));
@@ -804,9 +835,9 @@ SIDEGAMES.forEach((g,gi)=>{
 
 /* ---- player statistics ---- */
 add("statsh", ()=>secHead("Player statistics",
-  "Gross, all holes. Par-type cells show average and deviation."),
+  "Scoring plus recorded ball-striking, short-game and putting statistics."),
   {keepWithNext:true, breakBefore:true, label:"Statistics"});
-add("stats", ()=>{
+if(!P.some(p=>p.statistics)) add("stats", ()=>{
   const types=[3,4,5].filter(t=>C.par.includes(t));
   const idxOf=t=>C.par.map((v,i)=>v===t?i:-1).filter(i=>i>=0);
   const nameW=26, restW=(100-nameW)/(5+types.length);
@@ -829,6 +860,33 @@ add("stats", ()=>{
   w.innerHTML=`<table class="dense"><colgroup>${cols.map(c=>`<col style="width:${c[2]}">`).join("")}</colgroup>
     <thead data-rowhead><tr>${cols.map(c=>`<th class="${c[0]}">${c[1]}</th>`).join("")}</tr></thead>
     <tbody>${rows}</tbody></table>`;
+  return w;
+}, {splittable:true, minRows:3});
+
+if(P.some(p=>p.statistics)) add("stats", ()=>{
+  const w=h("div");
+  const rate=(n,d)=>d?`${Math.round(n/d*100)}% <span class="dim">(${n}/${d})</span>`:"—";
+  const table=(title,note,heads,rows)=>`<div class="subhead" data-ledger-stat-group="${title.toLowerCase().replace(/[^a-z]+/g,"-")}">${title}<span>${note}</span></div>
+    <table class="dense"><thead data-rowhead><tr>${heads.map((x,i)=>`<th class="${i?"n":"l"}">${x}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table>`;
+  const scoring=P.map(p=>{ const s=p.statistics, holes=s.scoredHoles||p.nPlayed;
+    return `<tr data-row><td class="l">${nameCell(p)}</td><td class="n">${holes}</td><td class="n">${(p.tot/holes).toFixed(2)}</td>
+      <td class="n">${rate(s.birdieOrBetter,holes)}</td><td class="n">${rate(s.parOrBetter,holes)}</td><td class="n">${rate(s.bogeyOrBetter,holes)}</td>
+      <td class="n">${s.tracked?.trackedHoles?s.tracked.penaltyStrokes:"—"}</td></tr>`; }).join("");
+  w.innerHTML=table("Scoring","Completed, scored holes; rates show count/sample.",
+    ["Player","Holes","Gross avg","Birdie+","Par+","Double avoid.","Penalty"],scoring);
+  const tracked=P.filter(p=>p.statistics?.tracked?.trackedHoles);
+  if(tracked.length){
+    const ball=tracked.map(p=>{ const s=p.statistics,t=s.tracked; return `<tr data-row><td class="l">${nameCell(p)}</td><td class="n">${t.trackedHoles}</td>
+      <td class="n">${rate(t.fairwaysHit,t.fairwayOpps)}</td><td class="n">${rate(t.greens,t.greenOpps)}</td><td class="n">${rate(s.convertedGreens,s.greensInRegulation)}</td>
+      <td class="n">${rate(s.fairwayHitGirs,s.fairwayHitOpportunities)}</td><td class="n">${rate(s.fairwayMissedGirs,s.fairwayMissedOpportunities)}</td>
+      <td class="n">${Number.isFinite(s.fairwayGirAdvantage)?`${s.fairwayGirAdvantage>=0?"+":""}${Math.round(s.fairwayGirAdvantage*100)} pp`:"—"}</td></tr>`; }).join("");
+    w.innerHTML+=table("Ball Striking","Recorded tracked holes only; GIR birdie conversion includes par-5 greens reached in two.",
+      ["Player","Tracked","Fairways","GIR","Birdie+ / GIR","GIR / FW hit","GIR / FW miss","FW advantage"],ball);
+    const short=tracked.map(p=>{ const t=p.statistics.tracked; return `<tr data-row><td class="l">${nameCell(p)}</td><td class="n">${t.trackedHoles}</td>
+      <td class="n">${t.puttOpps?t.putts:"—"}</td><td class="n">${t.puttOpps?(t.putts/t.puttOpps).toFixed(2):"—"}</td><td class="n">${t.upAndDowns}</td><td class="n">${t.sandies}</td></tr>`; }).join("");
+    w.innerHTML+=table("Short Game & Putting","Recorded tracked holes only; untouched fields are omitted.",
+      ["Player","Tracked","Putts","Putts / hole","Up & downs","Sandies"],short);
+  }
   return w;
 }, {splittable:true, minRows:3});
 
@@ -887,7 +945,7 @@ add("sc2", ()=>{ const w=h("div");
 /* ==========================================================================
    Layout: measure every block, pack into pages, emit.
    ========================================================================== */
-const SLUG = `${ROUND.meta.course} · ${ROUND.meta.layout} · ${fmtDate(ROUND.meta.date)}`;
+const SLUG = `${ROUND.meta.course} · ${fmtDate(ROUND.meta.date)}`;
 
 function makePage(n, total, label){
   const pg=h("div",{class:"page"});

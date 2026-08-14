@@ -6379,6 +6379,10 @@ function buildLedgerEntryReportModel(match, metrics = null) {
   });
   const courseHandicaps = playerMetrics.map(player => Number(player.courseHdcp)).filter(Number.isFinite);
   const lowCourseHandicap = courseHandicaps.length ? Math.min(...courseHandicaps) : 0;
+  const insightByPlayer = new Map(computePlayerRoundInsights(match, effectiveMetrics)
+    .map(row => [String(row.playerId), row]));
+  const trackedByPlayer = new Map(computeStatTrackingSummary(match, effectiveMetrics)
+    .map(row => [String(row.playerMetric.playerId), row.totals]));
   const players = playerMetrics.map((playerMetric, index) => {
     const recordPlayer = (record.players || []).find(player => String(player.playerId) === String(playerMetric.playerId)) || {};
     const courseHandicap = Number(playerMetric.courseHdcp ?? recordPlayer.courseHandicap) || 0;
@@ -6390,6 +6394,8 @@ function buildLedgerEntryReportModel(match, metrics = null) {
     });
     const offLow = strokeArray(playerMetric, '', hole => holeStrokeAllowanceForPlayer(Number(hole?.strokeIndex), Math.max(0, courseHandicap - lowCourseHandicap), 0));
     const teamIndex = Math.max(0, teamMetrics.findIndex(team => Number(team.team) === Number(playerMetric.team)));
+    const insight = insightByPlayer.get(String(playerMetric.playerId));
+    const tracked = trackedByPlayer.get(String(playerMetric.playerId)) || null;
     return {
       id: String(playerMetric.playerId),
       name: recordPlayer.displayName || playerMetric.player?.name || `Player ${index + 1}`,
@@ -6400,6 +6406,11 @@ function buildLedgerEntryReportModel(match, metrics = null) {
       ph: featured.reduce((sum, strokes) => sum + strokes, 0),
       gross: completedScoresByPlayer(playerMetric.playerId),
       strokes: { courseNet, featured, offLow },
+      statistics: insight ? {
+        ...insight.totals,
+        fairwayGirAdvantage: insight.fairwayGirAdvantage,
+        tracked,
+      } : null,
     };
   });
   if (!Object.keys(sides).length) sides.FIELD = { name: 'Field', color: '#2C4A6E' };
@@ -6510,12 +6521,15 @@ function buildLedgerEntryReportModel(match, metrics = null) {
   const tee = effectiveMetrics.tee || {};
   const weather = record.notes?.weather;
   const weatherText = formatRoundWeatherDisplay(match).replace(/^Weather:\s*/i, '');
+  const humidity = Number(weather?.humidity ?? match?.roundContext?.weather?.humidity);
+  const weatherNote = [weatherText, Number.isFinite(humidity) ? `Humidity ${Math.round(humidity)}%` : '']
+    .filter(Boolean).join(' · ');
   return {
     meta: {
       course: course.name || course.courseName || match.courseName || 'Golf Course',
       layout: tee.name || tee.teeName || match.layoutName || 'Round',
       date: record.meta?.date || match.date || new Date().toISOString().slice(0, 10),
-      weather: weather || weatherText ? { note: weatherText || String(weather?.summary || weather?.description || ''), recordedAt: 'first completed hole' } : null,
+      weather: weather || weatherNote ? { note: weatherNote || String(weather?.summary || weather?.description || ''), recordedAt: 'first completed hole' } : null,
       recap: record.notes?.aiRecap || null,
       recapProvenance: record.notes?.recapProvenance || 'deterministic-fallback',
     },

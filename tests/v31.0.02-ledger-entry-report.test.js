@@ -131,18 +131,29 @@ test('dedicated Ledger Entry adapter maps existing authoritative facts without c
   assert.ok(model.players.every(player => player.strokes.courseNet.length === 18));
   assert.ok(model.players.every(player => player.strokes.featured.length === 18));
   assert.ok(model.players.every(player => player.strokes.offLow.length === 18));
+  assert.ok(model.players.every(player => player.statistics?.scoredHoles === 18));
+  assert.ok(model.players.every(player => player.statistics?.tracked?.trackedHoles === 18));
   assert.equal(model.games[0].type, 'nassau');
   assert.equal(model.games[0].bestN, 2);
   assert.match(model.games[0].allowance.label, /85% off the low/);
   assert.ok(model.games.some(game => game.type === 'matchplay' && game.parentGameId === 'nassau'), 'press is a separate nested ledger');
   assert.ok(model.memories.some(memory => memory.hole === 7));
   assert.match(model.meta.weather.note, /74/);
+  assert.match(model.meta.weather.note, /Humidity \d+%/);
   assert.ok(model.payments.every(payment => payment.from && payment.to && payment.amt > 0));
   assert.match(shell, /Content-Security-Policy/);
   assert.match(shell, /fonts\/archivo-latin-700-normal\.woff2/);
   assert.match(renderer, /ROUND\.meta\.recap/);
   assert.match(renderer, /ROUND\.meta\.story \|\| ROUND\.meta\.recap/);
   assert.doesNotMatch(renderer, /localStorage|supabase|fetch\(/);
+  assert.match(renderer, /data-ledger-stat-group/);
+  assert.match(renderer, /Birdie\+ \/ GIR/);
+  assert.match(renderer, /p\.tee/);
+  assert.match(renderer, /MATCH MARGIN · HOLES/);
+  assert.match(renderer, /CUMULATIVE \$\{String\(FR\.unit\)\.toUpperCase\(\)\}/);
+  assert.match(renderer, /POT VALUE · \$/);
+  assert.match(renderer, /listw\(grossNames\)/);
+  assert.doesNotMatch(renderer, /ROUND\.meta\.course} · \$\{ROUND\.meta\.layout}/);
 });
 
 test('Ledger Story generation is version-bound, non-mutating, and isolated from the Match Summary recap', () => {

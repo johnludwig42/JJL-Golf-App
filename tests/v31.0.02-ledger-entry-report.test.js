@@ -143,6 +143,9 @@ test('dedicated Ledger Entry adapter maps existing authoritative facts without c
   assert.ok(model.payments.every(payment => payment.from && payment.to && payment.amt > 0));
   assert.match(shell, /Content-Security-Policy/);
   assert.match(shell, /fonts\/archivo-latin-700-normal\.woff2/);
+  for (const asset of ['bootstrap.js', 'pack.js', 'engines.js', 'report.js']) {
+    assert.match(shell, new RegExp(`${asset.replace('.', '\\.')}\\?v=31\\.0\\.04`), `${asset} must use the current release cache key`);
+  }
   assert.match(renderer, /ROUND\.meta\.recap/);
   assert.match(renderer, /ROUND\.meta\.story \|\| ROUND\.meta\.recap/);
   assert.doesNotMatch(renderer, /localStorage|supabase|fetch\(/);

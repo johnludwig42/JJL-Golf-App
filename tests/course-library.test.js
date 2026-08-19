@@ -245,6 +245,45 @@ test('cloud refresh preserves pending local tee repairs for an established cloud
   assert.equal(state.courses[0].tees[0].par, 72);
 });
 
+test('course publishing selects local drafts without rewriting downloaded catalog courses', () => {
+  const engine = loadLiveEngine();
+  const catalog = course('cloud-course', 'Catalog Course', 'Noblesville');
+  catalog.source = 'supabase';
+  catalog.cloudCourseId = catalog.id;
+  catalog.cloudSyncState = 'synced';
+  const local = course('local-course', 'Local Course', 'Carmel');
+  local.source = 'manual';
+  local.cloudSyncState = 'pending-sync';
+
+  assert.equal(engine.isCourseCloudWriteCandidate(catalog), false);
+  assert.equal(engine.isCourseCloudWriteCandidate(local), true);
+  assert.equal(engine.isCourseCloudWriteCandidate({ id: 'new', name: 'Unsaved Local', tees: [] }), true);
+  assert.equal(engine.isCourseCloudWriteCandidate({ id: 'blank', name: '' }), false);
+});
+
+test('course publishing distinguishes sign-in and Course Library authorization', async () => {
+  const engine = loadLiveEngine();
+  const signedOut = await engine.getCourseLibraryWriteAccess({
+    auth: { getUser: async () => ({ data: { user: null }, error: null }) },
+    rpc: async () => ({ data: false, error: null }),
+  });
+  assert.equal(signedOut.code, 'SIGN_IN_REQUIRED');
+
+  const unauthorized = await engine.getCourseLibraryWriteAccess({
+    auth: { getUser: async () => ({ data: { user: { id: 'account-1', is_anonymous: false, app_metadata: {} } }, error: null }) },
+    rpc: async () => ({ data: false, error: null }),
+  });
+  assert.equal(unauthorized.code, 'NOT_AUTHORIZED');
+
+  const authorized = await engine.getCourseLibraryWriteAccess({
+    auth: { getUser: async () => ({ data: { user: { id: 'account-1', is_anonymous: false, app_metadata: {} } }, error: null }) },
+    rpc: async name => ({ data: name === 'course_library_can_write', error: null }),
+  });
+  assert.equal(authorized.allowed, true);
+  assert.equal(authorized.code, 'AUTHORIZED');
+  assert.equal(authorized.userId, 'account-1');
+});
+
 test('Play status line stays hidden when no competition is selected', () => {
   const engine = loadLiveEngine();
   const libraryCourse = course();

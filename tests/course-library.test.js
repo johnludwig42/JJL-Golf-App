@@ -261,6 +261,27 @@ test('course publishing selects local drafts without rewriting downloaded catalo
   assert.equal(engine.isCourseCloudWriteCandidate({ id: 'blank', name: '' }), false);
 });
 
+test('course publishing repairs stale pending flags left on downloaded catalog courses', () => {
+  const engine = loadLiveEngine();
+  const catalog = course('cloud-course', 'Catalog Course', 'Noblesville');
+  catalog.source = 'supabase';
+  catalog.cloudCourseId = catalog.id;
+  catalog.cloudSyncState = 'pending-sync';
+  catalog.cloudSyncError = 'Duplicate cloud course detected';
+
+  assert.equal(engine.isCourseCloudWriteCandidate(catalog), false);
+
+  const refreshed = JSON.parse(JSON.stringify(catalog));
+  refreshed.cloudSyncState = 'synced';
+  refreshed.cloudSyncError = '';
+  const state = engine.seedState({ players: [], courses: [catalog], matches: [], activeMatchId: null });
+  engine.mergeSupabaseCourses([refreshed]);
+
+  assert.equal(state.courses.length, 1);
+  assert.equal(state.courses[0].cloudSyncState, 'synced');
+  assert.equal(state.courses[0].cloudSyncError, '');
+});
+
 test('course publishing distinguishes sign-in and Course Library authorization', async () => {
   const engine = loadLiveEngine();
   const signedOut = await engine.getCourseLibraryWriteAccess({

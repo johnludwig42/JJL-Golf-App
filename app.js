@@ -11795,7 +11795,7 @@ function mergeSupabaseCourses(cloudCourses = []) {
     ));
     if (duplicateIdx >= 0) {
       const existing = state.courses[duplicateIdx];
-      const preserveLocalChanges = ['local-draft', 'pending-sync'].includes(String(existing.cloudSyncState || ''));
+      const preserveLocalChanges = isCourseCloudWriteCandidate(existing);
       if (preserveLocalChanges) {
         state.courses[duplicateIdx] = {
           ...existing,
@@ -12030,6 +12030,10 @@ function isSupabaseCourse(course = {}) {
 }
 function isCourseCloudWriteCandidate(course = {}) {
   if (!String(course?.name || '').trim()) return false;
+  // A prior bulk-sync bug marked downloaded catalog rows as pending. Their
+  // cloud identity/source is authoritative evidence that they are cache rows,
+  // not locally authored drafts, so do not attempt to write them back.
+  if (String(course?.source || '').toLowerCase() === 'supabase') return false;
   const stateLabel = String(course?.cloudSyncState || '').toLowerCase();
   if (['local-draft', 'pending-sync'].includes(stateLabel)) return true;
   return !getCourseStableIdentity(course) && !isSupabaseCourse(course);

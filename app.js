@@ -12028,6 +12028,25 @@ function findMatchingCloudCourseRows(cloudRows = [], course = {}) {
 function isSupabaseCourse(course = {}) {
   return String(course?.source || '').toLowerCase() === 'supabase' || !!course?.cloudCourseId || course?.cloudSyncState === 'synced';
 }
+function isCourseCloudWriteCandidate(course = {}) {
+  if (!String(course?.name || '').trim()) return false;
+  const stateLabel = String(course?.cloudSyncState || '').toLowerCase();
+  if (['local-draft', 'pending-sync'].includes(stateLabel)) return true;
+  return !getCourseStableIdentity(course) && !isSupabaseCourse(course);
+}
+async function getCourseLibraryWriteAccess(client) {
+  if (!client?.auth?.getUser) return { allowed: false, code: 'CLIENT_UNAVAILABLE', message: 'Cloud course publishing is unavailable on this device.' };
+  const { data, error } = await client.auth.getUser();
+  if (error) return { allowed: false, code: 'AUTH_UNAVAILABLE', message: 'Account status could not be verified. Check the connection and try again.' };
+  const user = data?.user || null;
+  const anonymous = !user || user.is_anonymous === true || user.app_metadata?.provider === 'anonymous';
+  if (anonymous) return { allowed: false, code: 'SIGN_IN_REQUIRED', message: 'Sign in with your permanent Account before publishing local courses.' };
+  if (!client.rpc) return { allowed: false, code: 'AUTHORIZATION_UNAVAILABLE', message: 'Course Library publishing authorization could not be verified.' };
+  const { data: canWrite, error: capabilityError } = await client.rpc('course_library_can_write');
+  if (capabilityError) return { allowed: false, code: 'AUTHORIZATION_UNAVAILABLE', message: 'Course Library publishing authorization could not be verified.' };
+  if (canWrite !== true) return { allowed: false, code: 'NOT_AUTHORIZED', message: 'This Account is not yet authorized to publish Course Library drafts.' };
+  return { allowed: true, code: 'AUTHORIZED', userId: String(user.id || '') };
+}
 function getCloudTeeMatchKey(tee = {}) {
   return [tee.teeName, tee.gender || 'M'].map(v => String(v || '').trim().toLowerCase()).join('|');
 }
@@ -12282,6 +12301,30 @@ async function syncCourseLibrary() {
   try {
     const client = await ensureSupabaseClient({ anonymousAuth: false });
     if (!client) throw new Error('Supabase client unavailable.');
+    const namedCourses = state.courses.filter(c => c?.name);
+    const localCourses = namedCourses.filter(isCourseCloudWriteCandidate);
+    summary.current = namedCourses.length - localCourses.length;
+    if (!localCourses.length) {
+      uiState.cloudCoursesStatus = 'Cloud sync complete. No local course changes are waiting to publish.';
+      const currentSummary = finishSummary(summary);
+      renderAll();
+      renderLocalCourseSyncResult(currentSummary);
+      toast('No local course changes are waiting to publish.');
+      return currentSummary;
+    }
+    const writeAccess = await getCourseLibraryWriteAccess(client);
+    if (!writeAccess.allowed) {
+      localCourses.forEach(course => markCoursePendingSync(course, writeAccess.message));
+      summary.failed = localCourses.length;
+      summary.errors.push(writeAccess.message);
+      persist({ skipRender: true });
+      uiState.cloudCoursesStatus = writeAccess.message;
+      const accessSummary = finishSummary(summary);
+      renderAll();
+      renderLocalCourseSyncResult(accessSummary);
+      toast(writeAccess.message);
+      return accessSummary;
+    }
     let phaseStarted = courseSyncNow();
     const { data: cloudRows, error: cloudError } = await client.from('courses').select('*');
     addCourseSyncTiming(diagnostics.phases, 'cloudLookupMs', phaseStarted);
@@ -12295,16 +12338,7 @@ async function syncCourseLibrary() {
       if (!cloudByNameKey.has(key)) cloudByNameKey.set(key, []);
       cloudByNameKey.get(key).push(row);
     });
-    const localCourses = state.courses.filter(c => c?.name);
     addCourseSyncTiming(diagnostics.phases, 'localScanMs', phaseStarted);
-    if (!localCourses.length) {
-      uiState.cloudCoursesStatus = 'No local courses found to sync.';
-      renderCourses();
-      const emptySummary = finishSummary(summary);
-      renderLocalCourseSyncResult(emptySummary);
-      toast('No local courses found to sync.');
-      return emptySummary;
-    }
     for (const course of localCourses) {
       const courseTiming = {
         courseName: String(course?.name || 'Course').trim() || 'Course',
@@ -14932,18 +14966,21 @@ function renderCourses() {
   const statusDisplayMessage = getCourseLibraryStatusDisplayMessage(statusMessage);
   const statusClass = getCourseLibraryStatusClass(statusMessage);
   const cloudReachable = isCourseCloudReachableStatus(statusMessage);
+  const cloudConfigured = hasSupabaseConfig();
   [cloudStatus, setupCloudStatus].filter(Boolean).forEach(node => {
     node.textContent = statusDisplayMessage;
     node.className = `course-library-status tiny top-gap ${statusClass}`;
   });
   if (cloudBtn) cloudBtn.disabled = uiState.cloudCoursesLoading || !hasSupabaseConfig();
   [syncLocalCoursesBtn, syncLocalCoursesMoreBtn].filter(Boolean).forEach(btn => {
-    btn.disabled = uiState.cloudCoursesLoading || !cloudReachable;
+    btn.disabled = uiState.cloudCoursesLoading || !cloudConfigured;
   });
-  if (cloudCourseSyncActions) cloudCourseSyncActions.classList.toggle('hidden', !cloudReachable);
+  if (cloudCourseSyncActions) cloudCourseSyncActions.classList.toggle('hidden', !cloudConfigured);
   if (cloudCourseSyncUnavailable) {
     cloudCourseSyncUnavailable.classList.toggle('hidden', cloudReachable);
-    cloudCourseSyncUnavailable.textContent = hasSupabaseConfig() ? 'Cloud sync unavailable. Local courses are still available.' : 'Cloud sync unavailable. Local courses are still available.';
+    cloudCourseSyncUnavailable.textContent = cloudConfigured
+      ? 'Cloud connection needs attention. Local courses remain available; use Publish Local Changes to retry.'
+      : 'Cloud sync unavailable. Local courses are still available.';
   }
   const query = getCourseSearchValue();
   const matchesQuery = course => {
@@ -23036,6 +23073,8 @@ function installDyeLedgerLiveEngineAdapter() {
     mergeCloudTeePreservingCompleteLocal,
     fetchAllSupabaseRows,
     mergeSupabaseCourses,
+    isCourseCloudWriteCandidate,
+    getCourseLibraryWriteAccess,
     getPlayerHoleTeeInfo,
     buildScorecardImportRequestBody,
     getScorecardImportReviewWarnings,

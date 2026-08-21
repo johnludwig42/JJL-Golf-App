@@ -5,6 +5,7 @@ import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
 
 const source = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const holeUpsertMigration = readFileSync(new URL('../supabase/migrations/202608210001_v31_0_05_course_hole_upsert_key.sql', import.meta.url), 'utf8');
+const atomicPublishMigration = readFileSync(new URL('../supabase/migrations/202608210002_v31_0_05_atomic_course_draft_publish.sql', import.meta.url), 'utf8');
 
 function holes() {
   return Array.from({ length: 18 }, (_, index) => ({ holeNumber: index + 1, par: index % 4 === 2 ? 3 : 4, strokeIndex: index + 1, yardage: 150 + index * 10 }));
@@ -60,6 +61,23 @@ test('production schema provides the conflict key required by batched hole uploa
   assert.doesNotMatch(holeUpsertMigration, /update\s+public\.course_holes/i);
 });
 
+test('draft publishing is atomic, authorized, and retains local recovery until verification', () => {
+  assert.match(atomicPublishMigration, /create or replace function public\.publish_course_draft_atomic\(p_course jsonb\)/i);
+  assert.match(atomicPublishMigration, /security definer\s+set search_path = ''/i);
+  assert.match(atomicPublishMigration, /not public\.course_library_can_write\(\)/i);
+  assert.match(atomicPublishMigration, /on conflict \(tee_id, hole_number\) do update/i);
+  assert.match(source, /saveCoursePublishRecovery\(course\)/);
+  assert.match(source, /await verifyPublishedCourse\(client, cloudCourseId, course\)/);
+  assert.ok(source.indexOf('clearCoursePublishRecovery(course.id)') > source.indexOf('await verifyPublishedCourse(client, cloudCourseId, course)'));
+});
+
+test('incomplete cloud tees are not fabricated and unfinished courses remain visible', () => {
+  assert.match(source, /cloudHoleCoverageIncomplete: hasExplicitCloudHoles && holes\.length === 0/);
+  assert.match(source, /tee\.holes\.length \|\| tee\.cloudHoleCoverageIncomplete/);
+  assert.match(source, /\['Local Changes', 'Needs Attention', 'Draft Uploaded'\]/);
+  assert.match(source, /if \(course\.cloudIncomplete\) return 'Needs Attention'/);
+});
+
 test('course cloud operations retry once and remain bounded', async () => {
   const engine = loadLiveEngine();
   let attempts = 0;
@@ -82,6 +100,6 @@ test('sync refresh is scoped and maintainer approval is protected', () => {
   assert.match(source, /client\.rpc\('publish_course', \{ p_course_id: cloudCourseId \}\)/);
   assert.match(source, /Approved catalog courses are protected/);
   assert.match(source, /Publishing course \$\{courseIndex \+ 1\} of \$\{localCourses\.length\}/);
-  assert.match(syncSource, /course save`, \{ retries: existingCourse \? 1 : 0 \}/);
-  assert.match(syncSource, /tee save`, \{ retries: existingTee \? 1 : 0 \}/);
+  assert.match(syncSource, /publishCourseAtomically\(client, course, existingCourse\)/);
+  assert.match(syncSource, /retries: 0/);
 });

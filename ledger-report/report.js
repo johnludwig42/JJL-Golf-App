@@ -223,7 +223,11 @@ add("hero", ()=>{
   const label = FEAT ? `${FEAT.name} · ${FEAT.allowance.label}` : "No featured competition";
   w.appendChild(h("div",{class:"eyebrow",text:"Featured Competition · "+label}));
   let head;
-  if(WINK) head = `${SIDES[WINK].name} — ${Math.abs(MARGIN.total)}&nbsp;up`;
+  if(WINK){
+    const swept = FEAT?.type==="nassau" && MARGIN.segments.length>1 && MARGIN.segments.every(segment=>WINK===FEAT.sides[1].key ? segment.margin>0 : segment.margin<0);
+    const verb = sideOf(WINK).length===1 ? "sweeps" : "sweep";
+    head = swept ? `${SIDES[WINK].name} ${verb} the Nassau` : `${SIDES[WINK].name} — ${Math.abs(MARGIN.total)}&nbsp;up`;
+  }
   else if(MARGIN) head = "All square";
   else {
     const lo = P.slice().sort((a,b)=>a.cnetT-b.cnetT)[0];
@@ -240,31 +244,42 @@ add("hero", ()=>{
 function deckText(){
   const parts=[];
   if(WINK){
-    const wg=sideOf(WINK).reduce((a,p)=>a+p.tot,0), lg=sideOf(LOSEK).reduce((a,p)=>a+p.tot,0);
-    const segs = MARGIN.segments.filter(s=> WINK===FEAT.sides[1].key ? s.margin>0 : s.margin<0).length;
-    const segPhrase = MARGIN.segments.length===1 ? "over the nine"
-      : segs===MARGIN.segments.length ? "on both nines"
-      : segs? "on one nine and halved the other" : "on the aggregate";
     if(HAS_MONEY){
-      const lost = -sideMoney(LOSEK);
-      parts.push(lost>0
-        ? (lg<wg ? `${SIDES[LOSEK].name} shot the better golf and still lost ${usd(lost)}.`
-                 : `${SIDES[WINK].name} won it ${segPhrase} and took ${usd(lost)} off the ${SIDES[LOSEK].name}.`)
-        : (lg<wg ? `${SIDES[LOSEK].name} shot the better golf and lost the match anyway.`
-                 : `${SIDES[WINK].name} won it ${segPhrase}.`));
-      if(SIDEGAMES.length){
-        const names = listw(SIDEGAMES.map(g=>g.name.toLowerCase()));
-        parts.push(`They lost the ${FEAT.name} ${segPhrase}; the ${names} settled separately.`);
-      }
-      parts.push(`${cap(plur(PAY.length,"payment"))} settle ${plur(ROUND.games.length,"game")}.`);
+      const winnerPosition=sideMoney(WINK);
+      parts.push(winnerPosition>0
+        ? `${SIDES[WINK].name} finished ${usd(winnerPosition)} ahead of ${SIDES[LOSEK].name} after all recorded games.`
+        : winnerPosition<0
+          ? `${SIDES[LOSEK].name} finished ${usd(winnerPosition)} ahead of ${SIDES[WINK].name} after the side games were settled.`
+          : `${SIDES[WINK].name} and ${SIDES[LOSEK].name} finished even after all recorded games.`);
+      SIDEGAMES.map(sideGameDeckResult).filter(Boolean).forEach(result=>parts.push(result));
     } else {
-      parts.push(lg<wg
-        ? `${SIDES[LOSEK].name} shot the better golf and lost anyway.`
-        : `${SIDES[WINK].name} won it ${segPhrase}.`);
       parts.push("No wagers recorded on this round.");
+      SIDEGAMES.map(sideGameDeckResult).filter(Boolean).forEach(result=>parts.push(result));
     }
   } else parts.push("No featured competition on this round. Scoring and awards below.");
   return parts.join(" ");
+}
+function sideGameDeckResult(game){
+  if(!game?.R || game.R.archetype!=="discrete") return "";
+  const countsBySide=Object.fromEntries(SIDEKEYS.map(key=>[key,0]));
+  game.R.per.forEach(result=>{
+    const side=result.winner ? S(result.winner)?.side : null;
+    if(side && side in countsBySide) countsBySide[side]+=1;
+  });
+  if(HAS_SIDES){
+    const [first,second]=SIDEKEYS;
+    const firstCount=countsBySide[first]||0, secondCount=countsBySide[second]||0;
+    if(firstCount===0 && secondCount===0) return `No ${game.name} winners were recorded.`;
+    if(firstCount===secondCount) return `${game.name} split ${firstCount}–${secondCount}.`;
+    const winner=firstCount>secondCount?first:second;
+    const loser=winner===first?second:first;
+    return `${game.name} went ${countsBySide[winner]}–${countsBySide[loser]} to ${SIDES[winner].name}.`;
+  }
+  const ranked=Object.entries(game.R.counts||{}).sort((a,b)=>b[1]-a[1]);
+  if(!ranked.length) return `No ${game.name} winners were recorded.`;
+  const top=ranked[0][1];
+  const leaders=ranked.filter(([,count])=>count===top).map(([id])=>S(id)?.name||id);
+  return `${listw(leaders)} ${leaders.length===1?"led":"shared the lead in"} ${game.name} with ${top}.`;
 }
 
 /* ---- side strip ---- */

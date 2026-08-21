@@ -6,6 +6,8 @@ v30.3.60 does **not** provide a central canonical Course Catalog or cloud-owned 
 
 The **Course Library** contains reusable saved course setup: course/location, tees, rating/slope, and hole yardage/par/stroke index. It is stored locally and may optionally synchronize with the shared cloud course tables. Manual entry and AI scorecard import save locally first.
 
+Course draft publication is atomic: the course, tees, and holes succeed or roll back together. Before publication, the device stores a separate recovery snapshot. That snapshot is retained through any error and is cleared only after the cloud copy is read back, all tee and hole facts match, and the verified local state is saved. Cloud tees with missing holes remain explicitly incomplete and must never be expanded with default or inferred hole facts.
+
 When a new round is finalized, the app creates a **Round Course Snapshot** containing the selected course and every tee used by the round’s players. Scoring, Play, scorecards, and reports prefer this saved copy so later Library edits do not rewrite that round’s course facts. Shared Match payloads publish the same snapshot.
 
 Legacy rounds without `courseSnapshot` remain compatible by resolving their saved Library course and tee IDs. If a requested tee is missing, the app safely uses the first available tee and exposes the fallback in Play metadata.

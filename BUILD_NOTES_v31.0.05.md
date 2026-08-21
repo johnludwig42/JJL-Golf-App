@@ -9,11 +9,16 @@
 - Refreshes only affected courses after publication instead of downloading the entire catalog.
 - Shows Local Changes, Draft Uploaded, Approved, and Needs Attention states.
 - Adds a protected maintainer-only approval action using the existing `publish_course` RPC.
+- Publishes each draft course, its tees, and its holes in one database transaction so a failed request cannot create a partial cloud draft.
+- Retains an independent pre-publish local recovery copy until the cloud course is read back and every tee and hole matches.
+- Keeps unfinished and problem courses visible ahead of recently played courses and offers a Restore Local Course action when recovery data exists.
+- Treats zero-hole and partial cloud tees as incomplete instead of filling them with default hole data.
 
 ## Persistence and compatibility
 
 - Existing local courses, downloaded catalog courses, Round Course Snapshots, matches, and completed RoundRecords remain compatible.
 - Failed uploads remain saved locally and eligible for retry.
+- Verified cloud parity is required before a local course is labeled Draft Uploaded.
 - Includes an additive schema migration for the `(tee_id, hole_number)` uniqueness key required by conflict-safe hole writes.
 - The migration stops without changing data if duplicate hole rows are detected; it never performs automatic duplicate deletion, catalog cleanup, or a production data rewrite.
 

@@ -6566,8 +6566,36 @@ function buildLedgerEntryStoryPayload(match, metrics) {
     reportPurpose: 'ledger-story',
     trackedStatistics: buildTrackedStatisticsStoryFacts(match, metrics),
     trackedStatisticsInstruction: 'Use relevant recorded tracked statistics to help explain the round. State the tracked-hole sample, and never interpret an unrecorded field as zero.',
-    recapInstructions: 'Write The Story of the Round for a Ledger Entry. Use only supplied authoritative facts. Target 300–400 words and never exceed 450. Write exactly 3–5 natural paragraphs separated by blank lines, with no headings or bullet lists. Write with the factual precision, pacing, and polish of a major golf publication without inventing shots, quotations, emotions, motives, or drama. Open with the Featured Competition result, explain the decisive stretch and pivotal holes, recognize supported player and round highlights, and close with a concise perspective on what defined the round. Express completed Nassau component margins as signed holes-up results such as +2 or +3; never use closed-match notation such as 2 & 0 for a Nassau component. Keep Low Gross, Course Net, Featured Net, game results, points, dollars, and settlement distinct. Greenies counts must come only from authoritativeFacts.greenieWinners or the Greenies game summary counts; when stating a numerical count, use one player and one count in that sentence so it can be audited. Mention Memories, weather recorded after the first completed hole, and tracked statistics only when supplied and genuinely relevant. State provisional scope for incomplete rounds. Return a self-contained narrative rather than repeating the full Match Summary recap or listing report sections.',
+    recapInstructions: 'Write The Story of the Round for a Ledger Entry. Use only supplied authoritative facts. Target 300–400 words and never exceed 450. Write exactly 3–5 natural paragraphs separated by blank lines, with no headings or bullet lists. Write with the factual precision, pacing, and polish of a major golf publication without inventing shots, quotations, emotions, motives, or drama. Open with the Featured Competition result, explain the decisive stretch and pivotal holes, recognize supported player and round highlights, and close with a concise perspective on what defined the round. Express completed Nassau component margins as signed holes-up results such as +2 or +3; never use closed-match notation such as 2 & 0 for a Nassau component. Keep Low Gross, Course Net, Featured Net, game results, points, dollars, and settlement distinct. Do not discuss Greenies; the client adds their recorded results deterministically. Mention Memories, weather recorded after the first completed hole, and tracked statistics only when supplied and genuinely relevant. State provisional scope for incomplete rounds. Return a self-contained narrative rather than repeating the full Match Summary recap or listing report sections.',
   };
+}
+function addVerifiedGreeniesToLedgerStory(match, metrics, recapText) {
+  const greenies = summarizeSelectedGamesForRecap(match, metrics).find(game => game.key === 'greenies');
+  const counts = greenies?.summary?.counts && typeof greenies.summary.counts === 'object' ? greenies.summary.counts : null;
+  if (!counts) return String(recapText || '').trim();
+  const winners = Array.isArray(greenies?.summary?.winners) ? greenies.summary.winners : [];
+  const holesByPlayer = new Map();
+  winners.forEach(row => {
+    const player = String(row?.player || '').trim();
+    const hole = Number(row?.hole);
+    if (!player || !Number.isFinite(hole)) return;
+    if (!holesByPlayer.has(player)) holesByPlayer.set(player, []);
+    holesByPlayer.get(player).push(hole);
+  });
+  const verified = Object.entries(counts).filter(([, count]) => Number(count) > 0).map(([player, count]) => {
+    const holes = (holesByPlayer.get(player) || []).sort((a, b) => a - b);
+    const holeText = holes.length === 1 ? ` on hole ${holes[0]}` : (holes.length > 1 ? ` on holes ${holes.join(' and ')}` : '');
+    return `${player} won ${Number(count)} ${Number(count) === 1 ? 'Greenie' : 'Greenies'}${holeText}.`;
+  });
+  if (!verified.length) verified.push('No Greenies winners were recorded.');
+  const paragraphs = String(recapText || '').trim().split(/\n\s*\n+/).map(paragraph => {
+    const sentences = paragraph.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [];
+    return sentences.filter(sentence => !/green(?:y|ie)s?/i.test(sentence)).join(' ').trim();
+  }).filter(Boolean);
+  if (!paragraphs.length) return verified.join(' ');
+  const gameParagraphIndex = Math.min(1, paragraphs.length - 1);
+  paragraphs[gameParagraphIndex] = `${paragraphs[gameParagraphIndex]} ${verified.join(' ')}`.trim();
+  return paragraphs.join('\n\n');
 }
 async function prepareLedgerEntryStory(match, metrics) {
   if (navigator.onLine === false) throw new Error('The Story of the Round requires an internet connection.');
@@ -6598,7 +6626,7 @@ async function prepareLedgerEntryStory(match, metrics) {
       window.clearTimeout(timeoutId);
     }
   };
-  let text = await requestStory();
+  let text = addVerifiedGreeniesToLedgerStory(match, metrics, await requestStory());
   if (text.split(/\s+/).filter(Boolean).length > 500) throw new Error('The generated Story was too long to fit the Ledger Entry. Please try again.');
   const isBlockingFactIssue = issue => /^FALSE_|^UNVERIFIABLE_/.test(String(issue?.code || ''));
   let blockingIssues = validateRoundRecapContent(match, metrics, text).issues.filter(isBlockingFactIssue);
@@ -6608,7 +6636,7 @@ async function prepareLedgerEntryStory(match, metrics) {
       issues: blockingIssues.map(issue => ({ code: issue.code, message: issue.message })),
     });
     if (repaired.split(/\s+/).filter(Boolean).length > 500) throw new Error('The corrected Story was too long to fit the Ledger Entry. Please try again.');
-    text = repaired;
+    text = addVerifiedGreeniesToLedgerStory(match, metrics, repaired);
     blockingIssues = validateRoundRecapContent(match, metrics, text).issues.filter(isBlockingFactIssue);
   }
   if (blockingIssues.length) {
@@ -7047,7 +7075,21 @@ function validateGreeniesNarrativeClaims(match, metrics, recapText) {
   const sentences = String(recapText || '').split(/(?<=[.!?])\s+|\n+/).map(sentence => sentence.trim()).filter(sentence => /green(?:y|ie)s?/i.test(sentence));
   const issues = [];
   sentences.forEach(sentence => {
-    const namedPlayers = Object.keys(counts).filter(name => name && sentence.toLocaleLowerCase().includes(String(name).toLocaleLowerCase()));
+    const lowerSentence = sentence.toLocaleLowerCase();
+    const occupied = [];
+    const namedPlayers = Object.keys(counts).filter(Boolean).sort((a, b) => String(b).length - String(a).length).filter(name => {
+      const lowerName = String(name).toLocaleLowerCase();
+      let start = lowerSentence.indexOf(lowerName);
+      while (start >= 0) {
+        const end = start + lowerName.length;
+        if (!occupied.some(range => start < range.end && end > range.start)) {
+          occupied.push({ start, end });
+          return true;
+        }
+        start = lowerSentence.indexOf(lowerName, start + 1);
+      }
+      return false;
+    });
     const values = [...sentence.matchAll(countPattern)].map(match => {
       const token = String(match[1]).toLocaleLowerCase();
       return /^\d+$/.test(token) ? Number(token) : numberWords[token];
@@ -23036,6 +23078,7 @@ function installDyeLedgerLiveEngineAdapter() {
     buildLedgerEntryBody,
     buildLedgerEntryReportModel,
     buildLedgerEntryStoryPayload,
+    addVerifiedGreeniesToLedgerStory,
     buildLedgerEntryFactsOnlyStory,
     buildTrackedStatisticsStoryFacts,
     buildExportStatTrackingSummary,

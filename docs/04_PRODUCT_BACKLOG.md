@@ -172,6 +172,11 @@ NEXT:
 
 ## Near-term Play and Stat Capture redesign
 
+- Establish interchangeable Play input modes over one authoritative Play controller and Round data contract. Input modes may render and collect facts differently, but they must not independently calculate handicaps, competition results, settlement, synchronization, derived statistics, or reports.
+- Preserve the current Play experience as **Classic Mode**, optimized for entering and reviewing several golfers together. Introduce the redesigned current-hole-first experience as **Player Mode**, optimized around compact group scoring with one expanded golfer.
+- Let the scorekeeper choose Classic or Player Mode as a device preference and switch safely during an active round without losing unsaved work or changing shared Round facts. Keep the Play input-mode preference separate from the None, Casual, Enhanced, and Grind Stat Capture selection.
+- Treat Classic Mode as a compatibility surface after Player Mode launches: continue reliability, accessibility, and calculation-integrity fixes, while directing mode-specific innovation to Player Mode unless a feature is required across every input surface.
+- Define and test a reusable input-mode contract before building Player Mode. Future Quick Score, solo, voice-assisted, watch/compact-device, scorekeeper, and post-round entry modes must use the same controller rather than duplicate scoring or synchronization rules.
 - Replace six equally prominent persistent tabs with three lifecycle-based primary destinations; keep less-frequent destinations in More.
 - Make Play a compact current-hole workspace with a hole selector, par and stroke index, Featured Competition status, Shared Match status, team identity, and bold stroke dots rather than “pops.”
 - Keep every golfer in compact one-tap score rows and expand only the selected golfer's stat controls. Preserve visible Undo and a dominant Next Hole action; move Memories out of the permanent scoring block.
@@ -181,6 +186,7 @@ NEXT:
 - Keep fairway direction, penalty strokes, bunker/lie involvement, and green miss direction explicit. Prefer the full three-by-three green dispersion grid; retain Short, Left, Green, Right, Long as the compact fallback.
 - Use captured coverage to support fairways, GIR, dispersion, putting, penalties, scrambling, sand saves, Birdie-or-Better Conversion on GIR, fairway-conditioned GIR, and evidence-bounded Story insights. A par 5 reached in two and completed with two putts is both GIR and a successful birdie-or-better conversion.
 - Prototype and approve the exact Casual, Enhanced, and Grind field sets before changing the live scoring engine.
+- Required implementation order: (1) inventory and extract shared Play read/write/validation behavior, (2) define the input-mode contract and safe unsaved-draft handoff, (3) wrap the existing UI as Classic Mode without behavior changes, (4) build Player Mode against that contract, and (5) run calculation-parity, mode-switching, offline, Shared Match, accessibility, and full regression testing before making Player Mode the recommended default.
 
 ## 5. Competition Engine
 

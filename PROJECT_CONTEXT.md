@@ -403,7 +403,7 @@ ChatGPT for product/architecture/review; Codex for implementation; GitHub Deskto
 Production baseline when PROJECT_CONTEXT.md was created: v30.3.42.
 
 Near-term roadmap:
-Course Library Stabilization, lifecycle-based navigation and four-mode Stat Capture/score-entry redesign, Trip Mode, beta hardening, then broader competition and Event Edition work.
+Course Library Stabilization, lifecycle-based navigation and interchangeable Play input modes with four-mode Stat Capture, Trip Mode, beta hardening, then broader competition and Event Edition work. Preserve the current Play experience as Classic Mode and introduce the redesigned current-hole-first experience as Player Mode. Both—and any future input modes—must use one authoritative Play controller and Round data contract so presentation choices never duplicate or change scoring, handicap, competition, settlement, synchronization, derived-statistic, or reporting logic. The Play input-mode preference remains separate from None, Casual, Enhanced, and Grind Stat Capture.
 
 Course Library Stabilization is the immediate priority before further Stat Capture or score-entry work: prevent approved catalog rewrites; batch tee/hole writes; add bounded progress, timeout, retry, and recovery states; distinguish Local, Draft Uploaded, Approved, and Needs Attention; add a protected maintainer approval action; refresh only the affected course; verify the complete two-device create/upload/approve/anonymous-download/edit workflow; and audit the 19 catalog courses reported as updated during the August 2026 live upload test. Do not silently merge, delete, or rewrite production catalog records during remediation.
 

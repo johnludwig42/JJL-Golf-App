@@ -30,4 +30,10 @@ The intended architecture is:
 
 Cloud identity, canonical matching, legacy snapshot migration, dedicated 9-hole course authoring, and Starting Hole / Play Routing / Gambling Segment Basis remain future releases.
 
+## v31.0.05 Course Library stabilization
+
+Publishing now selects only explicit local changes. Approved catalog courses are protected from normal browser editing, deletion, and write-back. Local uploads remain cloud drafts until a maintainer uses the protected approval action. Course cards distinguish Local Changes, Draft Uploaded, Approved, and Needs Attention.
+
+A tee's hole rows are written as one conflict-safe batch using the existing tee/hole uniqueness contract. Cloud operations have bounded timeouts; idempotent reads, updates, and hole batches may retry once, while ambiguous new parent inserts stop for explicit reconciliation rather than risk a duplicate. Publication displays per-course progress, and failures preserve the local draft for a later retry. After successful publication, the app reloads only the affected course IDs; Download Cloud Courses remains the explicit full-catalog refresh.
+
 The future central catalog would introduce stable canonical facility/course identity. A future personal User Course Library would layer favorites, defaults, preferred tees, and controlled user adjustments on that catalog. A future migration may harden legacy rounds with snapshots only where historical facts can be established without guessing. None of those future layers are implemented in v30.3.60.

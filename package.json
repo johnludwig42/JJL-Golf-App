@@ -1,6 +1,6 @@
 {
   "name": "the-dye-ledger",
-  "version": "31.0.04",
+  "version": "31.0.05",
   "private": true,
   "type": "module",
   "scripts": {
@@ -34,6 +34,7 @@
     "test:v31.0.01": "node --test tests/v31.0.01-shared-match-reliability.test.js tests/v30.3.98-joined-score-reconciliation.test.js tests/v30.3.89-shared-match-reliability.test.js",
     "test:v31.0.02": "node --test tests/v31.0.02-ledger-entry-report.test.js tests/report-layout.test.js",
     "test:v31.0.04": "node --test tests/v31.0.04-end-of-round-experience.test.js tests/shared-match-completion.test.js tests/v30.3.77-pwa-round-completion.test.js",
+    "test:v31.0.05": "node --test tests/v31.0.05-course-library-stabilization.test.js tests/course-library.test.js tests/course-library-security-package.test.js",
     "build:ledger-entry-fixture": "node scripts/generate-ledger-entry-fixture.js",
     "check:layout": "npm run build:ledger-entry-fixture && node scripts/check-ledger-entry-layout.mjs",
     "test:identity-security": "node --test tests/v30.3.75-identity-security.test.js",

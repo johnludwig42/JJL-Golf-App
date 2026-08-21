@@ -146,8 +146,8 @@ test('dedicated Ledger Entry adapter maps existing authoritative facts without c
   for (const asset of ['bootstrap.js', 'pack.js', 'engines.js', 'report.js']) {
     assert.match(shell, new RegExp(`${asset.replace('.', '\\.')}\\?v=31\\.0\\.04`), `${asset} must use the current release cache key`);
   }
-  assert.match(shell, /bootstrap\.js\?v=31\.0\.04&amp;rev=5/);
-  assert.match(shell, /report\.js\?v=31\.0\.04&amp;rev=5/);
+  assert.match(shell, /bootstrap\.js\?v=31\.0\.05/);
+  assert.match(shell, /report\.js\?v=31\.0\.05/);
   assert.match(renderer, /ROUND\.meta\.recap/);
   assert.match(renderer, /ROUND\.meta\.story \|\| ROUND\.meta\.recap/);
   assert.doesNotMatch(renderer, /localStorage|supabase|fetch\(/);

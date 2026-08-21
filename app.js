@@ -15,11 +15,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.04',
-  versionNumber: '31.0.04',
-  cacheName: 'the-dye-ledger-v31.0.04',
-  buildDate: '2026-08-12T01:15:00-04:00',
-  buildLabel: 'End-of-Round Experience'
+  version: 'v31.0.05',
+  versionNumber: '31.0.05',
+  cacheName: 'the-dye-ledger-v31.0.05',
+  buildDate: '2026-08-21T12:00:00-04:00',
+  buildLabel: 'Course Library Stabilization'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -2518,6 +2518,7 @@ const uiState = {
   cloudCoursesLoading: false,
   cloudCoursesLastLoadAt: 0,
   courseLibraryDiagnostics: { cloudCourses: 0, localCourses: 0, renderedCourseOptions: 0 },
+  courseLibraryMaintainer: false,
   courseSyncTimers: {},
   scorecardImportData: null,
   scorecardImportFileName: '',
@@ -11755,6 +11756,8 @@ function normalizeCloudCourseRow(row = {}) {
     tees: [],
     source: 'supabase',
     cloudCourseId: id,
+    cloudPublicationStatus: String(row.publication_status || 'approved').toLowerCase(),
+    cloudOwnerUserId: String(row.owner_user_id || ''),
   };
 }
 function normalizeCloudTeeRow(row = {}, courseName = '') {
@@ -11912,6 +11915,8 @@ async function loadSupabaseCourses({ silent = false } = {}) {
   try {
     const client = await ensureSupabaseClient({ anonymousAuth: false });
     if (!client) throw new Error('Supabase client unavailable.');
+    const libraryAccess = await getCourseLibraryWriteAccess(client);
+    uiState.courseLibraryMaintainer = libraryAccess.allowed && libraryAccess.isMaintainer === true;
     const [{ data: courseRows, error: courseError }, { data: teeRows, error: teeError }, holeRows] = await Promise.all([
       client.from('courses').select('*').order('name'),
       client.from('course_tees').select('*').order('tee_name'),
@@ -12101,12 +12106,45 @@ function findMatchingCloudCourseRows(cloudRows = [], course = {}) {
 function isSupabaseCourse(course = {}) {
   return String(course?.source || '').toLowerCase() === 'supabase' || !!course?.cloudCourseId || course?.cloudSyncState === 'synced';
 }
+
+async function refreshSupabaseCoursesByIds(client, courseIds = []) {
+  const ids = [...new Set((courseIds || []).map(String).filter(Boolean))];
+  if (!client || !ids.length) return { added: 0, updated: 0 };
+  const [{ data: courseRows, error: courseError }, { data: teeRows, error: teeError }, { data: holeRows, error: holeError }] = await Promise.all([
+    client.from('courses').select('*').in('id', ids),
+    client.from('course_tees').select('*').in('course_id', ids),
+    client.from('course_holes').select('*').in('course_id', ids),
+  ]);
+  if (courseError) throw courseError;
+  if (teeError) throw teeError;
+  if (holeError) throw holeError;
+  const holesByTee = new Map();
+  (holeRows || []).forEach(row => {
+    const teeId = String(row.tee_id || '');
+    if (!holesByTee.has(teeId)) holesByTee.set(teeId, []);
+    holesByTee.get(teeId).push({ holeNumber: Number(row.hole_number) || 1, yardage: Number(row.yardage) || null, par: Number(row.par) || null, strokeIndex: Number(row.handicap_index ?? row.stroke_index) || null });
+  });
+  const teesByCourse = new Map();
+  (teeRows || []).forEach(row => {
+    const courseId = String(row.course_id || '');
+    if (!teesByCourse.has(courseId)) teesByCourse.set(courseId, []);
+    teesByCourse.get(courseId).push({ ...row, holes: (holesByTee.get(String(row.id)) || []).sort((a, b) => a.holeNumber - b.holeNumber) });
+  });
+  const courses = (courseRows || []).map(row => {
+    const course = normalizeCloudCourseRow(row);
+    course.tees = getSortedTeesByYardage({ tees: (teesByCourse.get(course.id) || []).map(tee => normalizeCloudTeeRow(tee, course.name)) });
+    course.strokeIndexes = course.tees.map(tee => extractStrokeTemplate(tee.holes)).find(Boolean) || null;
+    return course;
+  });
+  return mergeSupabaseCourses(courses);
+}
 function isCourseCloudWriteCandidate(course = {}) {
   if (!String(course?.name || '').trim()) return false;
   // A prior bulk-sync bug marked downloaded catalog rows as pending. Their
   // cloud identity/source is authoritative evidence that they are cache rows,
   // not locally authored drafts, so do not attempt to write them back.
   if (String(course?.source || '').toLowerCase() === 'supabase') return false;
+  if (String(course?.cloudPublicationStatus || '').toLowerCase() === 'approved') return false;
   const stateLabel = String(course?.cloudSyncState || '').toLowerCase();
   if (['local-draft', 'pending-sync'].includes(stateLabel)) return true;
   return !getCourseStableIdentity(course) && !isSupabaseCourse(course);
@@ -12122,7 +12160,8 @@ async function getCourseLibraryWriteAccess(client) {
   const { data: canWrite, error: capabilityError } = await client.rpc('course_library_can_write');
   if (capabilityError) return { allowed: false, code: 'AUTHORIZATION_UNAVAILABLE', message: 'Course Library publishing authorization could not be verified.' };
   if (canWrite !== true) return { allowed: false, code: 'NOT_AUTHORIZED', message: 'This Account is not yet authorized to publish Course Library drafts.' };
-  return { allowed: true, code: 'AUTHORIZED', userId: String(user.id || '') };
+  const { data: isMaintainer, error: maintainerError } = await client.rpc('course_library_is_maintainer');
+  return { allowed: true, code: 'AUTHORIZED', userId: String(user.id || ''), isMaintainer: !maintainerError && isMaintainer === true };
 }
 function getCloudTeeMatchKey(tee = {}) {
   return [tee.teeName, tee.gender || 'M'].map(v => String(v || '').trim().toLowerCase()).join('|');
@@ -12178,6 +12217,7 @@ async function insertOrUpdateCloudCourse(client, course, existingCourse = null) 
   const payload = buildCloudCoursePayload(course);
   if (existingCourse?.id || course.cloudCourseId) {
     const id = String(existingCourse?.id || course.cloudCourseId);
+    if (existingCourse && !cloudCourseNeedsUpdate(course, existingCourse)) return existingCourse;
     const updatePayload = removeBlankUpdateFields(payload, existingCourse || {}, ['name', 'updated_at']);
     const { data, error } = await client.from('courses').update(updatePayload).eq('id', id).select('*').single();
     if (error) throw error;
@@ -12191,6 +12231,7 @@ async function insertOrUpdateCloudTee(client, courseId, tee, existingTee = null)
   const payload = buildCloudTeePayload(courseId, tee);
   if (existingTee?.id || tee.cloudTeeId) {
     const id = String(existingTee?.id || tee.cloudTeeId);
+    if (existingTee && !cloudTeeNeedsUpdate(courseId, tee, existingTee)) return existingTee;
     const updatePayload = removeBlankUpdateFields(payload, existingTee || {}, ['course_id', 'tee_name', 'updated_at']);
     const { data, error } = await client.from('course_tees').update(updatePayload).eq('id', id).select('*').single();
     if (error) throw error;
@@ -12203,24 +12244,9 @@ async function insertOrUpdateCloudTee(client, courseId, tee, existingTee = null)
 async function insertOrUpdateCloudTeeHoles(client, courseId, teeId, tee) {
   const holePayloads = buildCloudHolePayloads(courseId, teeId, tee);
   if (!holePayloads.length) return { inserted: 0, updated: 0 };
-  const { data: existingRows, error: loadError } = await client.from('course_holes').select('*').eq('tee_id', String(teeId));
-  if (loadError) throw loadError;
-  const existingByHole = new Map((existingRows || []).map(row => [Number(row.hole_number), row]));
-  const summary = { inserted: 0, updated: 0 };
-  for (const payload of holePayloads) {
-    const existing = existingByHole.get(Number(payload.hole_number));
-    if (existing?.id) {
-      const updatePayload = removeBlankUpdateFields(payload, existing, ['course_id', 'tee_id', 'hole_number', 'updated_at']);
-      const { error } = await client.from('course_holes').update(updatePayload).eq('id', existing.id);
-      if (error) throw error;
-      summary.updated += 1;
-    } else {
-      const { error } = await client.from('course_holes').insert(payload);
-      if (error) throw error;
-      summary.inserted += 1;
-    }
-  }
-  return summary;
+  const { data, error } = await client.from('course_holes').upsert(holePayloads, { onConflict: 'tee_id,hole_number' }).select('id,hole_number');
+  if (error) throw error;
+  return { written: Array.isArray(data) ? data.length : holePayloads.length };
 }
 async function findCloudCourseRow(client, course) {
   const name = String(course?.name || '').trim();
@@ -12251,13 +12277,21 @@ async function syncCourseToSupabase(course, { silent = true } = {}) {
     renderCourses();
     const client = await ensureSupabaseClient({ anonymousAuth: false });
     if (!client) throw new Error('Supabase client unavailable.');
-    const existingCourse = await findCloudCourseRow(client, course);
-    const savedCourse = await insertOrUpdateCloudCourse(client, course, existingCourse);
+    const writeAccess = await getCourseLibraryWriteAccess(client);
+    if (!writeAccess.allowed) throw new Error(writeAccess.message);
+    uiState.courseLibraryMaintainer = writeAccess.isMaintainer === true;
+    const existingCourse = await runCourseCloudOperation(() => findCloudCourseRow(client, course), 'Cloud course lookup');
+    if (existingCourse && isProtectedCloudCourse(existingCourse)) {
+      markCourseFromCloudRow(course, existingCourse);
+      persist({ skipRender: true });
+      renderAll();
+      return { current: true, protected: true };
+    }
+    const savedCourse = await runCourseCloudOperation(() => insertOrUpdateCloudCourse(client, course, existingCourse), 'Course save', { retries: existingCourse ? 1 : 0 });
     const cloudCourseId = String(savedCourse?.id || existingCourse?.id || course.cloudCourseId || '');
     if (!cloudCourseId) throw new Error('Cloud course save did not return a course id.');
     course.cloudCourseId = cloudCourseId;
-    course.cloudSyncState = 'synced';
-    course.cloudSyncError = '';
+    markCourseFromCloudRow(course, savedCourse || existingCourse || { id: cloudCourseId, publication_status: 'draft' });
 
     let existingTees = [];
     const { data: teeRows, error: teeLoadError } = await client.from('course_tees').select('*').eq('course_id', cloudCourseId);
@@ -12266,16 +12300,12 @@ async function syncCourseToSupabase(course, { silent = true } = {}) {
     for (const tee of (course.tees || [])) {
       if (!tee?.teeName) continue;
       const existingTee = existingTees.find(row => getCloudTeeMatchKey({ teeName: row.tee_name, gender: row.gender }) === getCloudTeeMatchKey(tee));
-      const savedTee = await insertOrUpdateCloudTee(client, cloudCourseId, tee, existingTee);
+      const savedTee = await runCourseCloudOperation(() => insertOrUpdateCloudTee(client, cloudCourseId, tee, existingTee), `${tee.teeName} tee save`, { retries: existingTee ? 1 : 0 });
       const cloudTeeId = String(savedTee?.id || existingTee?.id || tee.cloudTeeId || '');
       if (!cloudTeeId) continue;
       tee.cloudTeeId = cloudTeeId;
       tee.source = 'supabase';
-      try {
-        await insertOrUpdateCloudTeeHoles(client, cloudCourseId, cloudTeeId, tee);
-      } catch (holeErr) {
-        console.warn('Course tee synced, but hole detail sync failed:', holeErr);
-      }
+      await runCourseCloudOperation(() => insertOrUpdateCloudTeeHoles(client, cloudCourseId, cloudTeeId, tee), `${tee.teeName} hole save`);
     }
     uiState.cloudCoursesStatus = 'Cloud Course Library: Connected ✓';
     persist({ skipRender: true });
@@ -12402,6 +12432,7 @@ async function syncCourseLibrary() {
       toast(writeAccess.message);
       return accessSummary;
     }
+    uiState.courseLibraryMaintainer = writeAccess.isMaintainer === true;
     let phaseStarted = courseSyncNow();
     const { data: cloudRows, error: cloudError } = await client.from('courses').select('*');
     addCourseSyncTiming(diagnostics.phases, 'cloudLookupMs', phaseStarted);
@@ -12416,7 +12447,10 @@ async function syncCourseLibrary() {
       cloudByNameKey.get(key).push(row);
     });
     addCourseSyncTiming(diagnostics.phases, 'localScanMs', phaseStarted);
-    for (const course of localCourses) {
+    const affectedCourseIds = [];
+    for (const [courseIndex, course] of localCourses.entries()) {
+      uiState.cloudCoursesStatus = `Publishing course ${courseIndex + 1} of ${localCourses.length}: ${course.name}…`;
+      renderCourses();
       const courseTiming = {
         courseName: String(course?.name || 'Course').trim() || 'Course',
         totalMs: 0,
@@ -12451,21 +12485,30 @@ async function syncCourseLibrary() {
           if (candidates.length > 1) throw makeDuplicateCloudCourseError(course, candidates);
           existingCourse = candidates[0] || null;
         }
+        if (existingCourse && isProtectedCloudCourse(existingCourse)) {
+          markCourseFromCloudRow(course, existingCourse);
+          summary.current += 1;
+          courseTiming.status = 'approved catalog · protected';
+          affectedCourseIds.push(String(existingCourse.id));
+          continue;
+        }
+        if (existingCourse?.publication_status === 'draft' && existingCourse?.owner_user_id && String(existingCourse.owner_user_id) !== writeAccess.userId) {
+          throw new Error('This cloud draft belongs to another Account and cannot be updated.');
+        }
         const wasExisting = !!existingCourse;
         const wasPending = course.cloudSyncState === 'pending-sync';
         phaseStarted = courseSyncNow();
-        const savedCourse = await insertOrUpdateCloudCourse(client, course, existingCourse);
+        const savedCourse = await runCourseCloudOperation(() => insertOrUpdateCloudCourse(client, course, existingCourse), `${course.name} course save`, { retries: existingCourse ? 1 : 0 });
         addCourseSyncTiming(diagnostics.phases, 'courseWriteMs', phaseStarted);
         addCourseSyncTiming(courseTiming, 'courseWriteMs', phaseStarted);
         const cloudCourseId = String(savedCourse?.id || existingCourse?.id || course.cloudCourseId || '');
         if (!cloudCourseId) throw new Error('Cloud course save did not return a course id.');
-        course.cloudCourseId = cloudCourseId;
-        course.cloudSyncState = 'synced';
-        course.cloudSyncError = '';
+        markCourseFromCloudRow(course, savedCourse || existingCourse || { id: cloudCourseId, publication_status: 'draft', owner_user_id: writeAccess.userId });
+        affectedCourseIds.push(cloudCourseId);
 
         let existingTees = [];
         phaseStarted = courseSyncNow();
-        const { data: teeRows, error: teeLoadError } = await client.from('course_tees').select('*').eq('course_id', cloudCourseId);
+        const { data: teeRows, error: teeLoadError } = await runCourseCloudOperation(() => client.from('course_tees').select('*').eq('course_id', cloudCourseId), `${course.name} tee lookup`);
         addCourseSyncTiming(diagnostics.phases, 'teeSyncMs', phaseStarted);
         addCourseSyncTiming(courseTiming, 'teeSyncMs', phaseStarted);
         if (teeLoadError) throw teeLoadError;
@@ -12476,7 +12519,7 @@ async function syncCourseLibrary() {
           const existingTee = tee.cloudTeeId
             ? existingTees.find(row => String(row.id) === String(tee.cloudTeeId)) || null
             : existingTees.find(row => getCloudTeeMatchKey({ teeName: row.tee_name, gender: row.gender }) === getCloudTeeMatchKey(tee)) || null;
-          const savedTee = await insertOrUpdateCloudTee(client, cloudCourseId, tee, existingTee);
+          const savedTee = await runCourseCloudOperation(() => insertOrUpdateCloudTee(client, cloudCourseId, tee, existingTee), `${course.name} ${tee.teeName} tee save`, { retries: existingTee ? 1 : 0 });
           addCourseSyncTiming(diagnostics.phases, 'teeSyncMs', phaseStarted);
           addCourseSyncTiming(courseTiming, 'teeSyncMs', phaseStarted);
           const cloudTeeId = String(savedTee?.id || existingTee?.id || tee.cloudTeeId || '');
@@ -12484,7 +12527,7 @@ async function syncCourseLibrary() {
           tee.cloudTeeId = cloudTeeId;
           tee.source = 'supabase';
           phaseStarted = courseSyncNow();
-          await insertOrUpdateCloudTeeHoles(client, cloudCourseId, cloudTeeId, tee);
+          await runCourseCloudOperation(() => insertOrUpdateCloudTeeHoles(client, cloudCourseId, cloudTeeId, tee), `${course.name} ${tee.teeName} hole save`);
           addCourseSyncTiming(diagnostics.phases, 'holeSyncMs', phaseStarted);
           addCourseSyncTiming(courseTiming, 'holeSyncMs', phaseStarted);
         }
@@ -12513,7 +12556,7 @@ async function syncCourseLibrary() {
     }
     persist({ skipRender: true });
     phaseStarted = courseSyncNow();
-    await loadSupabaseCourses({ silent: true });
+    await runCourseCloudOperation(() => refreshSupabaseCoursesByIds(client, affectedCourseIds), 'Updated course refresh');
     addCourseSyncTiming(diagnostics.phases, 'refreshMs', phaseStarted);
     uiState.cloudCoursesStatus = `Cloud sync complete: ${summary.uploaded} uploaded, ${summary.updated} updated, ${summary.current} already current, ${summary.failed} require attention.`;
     const finishedSummary = finishSummary(summary);
@@ -15085,6 +15128,9 @@ function renderCourses() {
     const recentText = lastPlayedAt ? `Last Played: ${formatRelativeCourseDate(lastPlayedAt)}` : 'Saved Course';
     const holeCount = getCourseHoleCount(c);
     const sourceLabel = (c.cloudCourseId || c.source === 'supabase') ? 'Cloud + device' : 'This device';
+    const libraryState = getCourseLibraryStateLabel(c);
+    const canApproveDraft = uiState.courseLibraryMaintainer && libraryState === 'Draft Uploaded' && !!c.cloudCourseId;
+    const approvedReadOnly = libraryState === 'Approved';
     return `
     <div class="item compact-item library-item-card course-card ${expanded ? 'expanded' : 'collapsed'}">
       <div class="item-header compact-item-header library-item-header course-card-header">
@@ -15093,18 +15139,19 @@ function renderCourses() {
           <span class="library-item-identity">
             <span class="item-title" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</span>
             <span class="muted course-meta-line">${escapeHtml([c.city, c.state].filter(Boolean).join(', ') || c.country || 'Course')}</span>
-            <span class="tiny course-meta-line">${escapeHtml(sourceLabel)} · ${escapeHtml(recentText)} · ${holeCount || '—'} holes · ${sortedTees.length} tee${sortedTees.length === 1 ? '' : 's'}</span>
+            <span class="tiny course-meta-line"><strong>${escapeHtml(libraryState)}</strong> · ${escapeHtml(sourceLabel)} · ${escapeHtml(recentText)} · ${holeCount || '—'} holes · ${sortedTees.length} tee${sortedTees.length === 1 ? '' : 's'}</span>
           </span>
         </button>
         <div class="actions wrap compact-actions library-item-actions-inline">
-          <button class="secondary" data-edit-course="${c.id}">Edit course</button>
-          <button class="secondary" data-new-tee="${c.id}">Add Tee Manually</button>
+          <button class="secondary" data-edit-course="${c.id}" ${approvedReadOnly ? 'disabled title="Approved catalog courses are protected."' : ''}>Edit course</button>
+          <button class="secondary" data-new-tee="${c.id}" ${approvedReadOnly ? 'disabled title="Approved catalog courses are protected."' : ''}>Add Tee Manually</button>
+          ${canApproveDraft ? `<button data-approve-course="${c.id}">Approve</button>` : ''}
           <details class="library-item-more-actions">
             <summary>More actions</summary>
             <div class="library-item-more-menu">
               <button class="secondary danger-lite" data-delete-course-local="${c.id}">Delete from this device</button>
-              <button class="secondary danger-lite" data-delete-course-cloud="${c.id}" ${c.cloudCourseId ? '' : 'disabled title="Publish this course before cloud deletion is available."'}>Delete cloud copy</button>
-              <button class="secondary danger-lite" data-delete-course-all="${c.id}" ${c.cloudCourseId ? '' : 'disabled title="Publish this course before cloud deletion is available."'}>Delete everywhere</button>
+              <button class="secondary danger-lite" data-delete-course-cloud="${c.id}" ${c.cloudCourseId && !approvedReadOnly ? '' : 'disabled title="Approved catalog courses are protected."'}>Delete cloud copy</button>
+              <button class="secondary danger-lite" data-delete-course-all="${c.id}" ${c.cloudCourseId && !approvedReadOnly ? '' : 'disabled title="Approved catalog courses are protected."'}>Delete everywhere</button>
             </div>
           </details>
         </div>
@@ -15116,9 +15163,9 @@ function renderCourses() {
             <div class="tiny">Par ${t.par} · Rating ${formatRatingValue(t.rating)} · Slope ${t.slope}${getTeeTotalYardage(t) ? ` · ${formatYardageValue(getTeeTotalYardage(t))} yds` : ''}</div>
             <div class="tiny">${strokeIndexSummary(t.holes, c)}</div>
             <div class="actions wrap compact-actions top-gap">
-              <button class="secondary" data-edit-tee="${c.id}|${t.id}">Edit tee</button>
-              <button class="secondary" data-copy-tee="${c.id}|${t.id}">Copy tee</button>
-              <button class="secondary" data-delete-tee="${c.id}|${t.id}">Delete tee</button>
+              <button class="secondary" data-edit-tee="${c.id}|${t.id}" ${approvedReadOnly ? 'disabled' : ''}>Edit tee</button>
+              <button class="secondary" data-copy-tee="${c.id}|${t.id}" ${approvedReadOnly ? 'disabled' : ''}>Copy tee</button>
+              <button class="secondary" data-delete-tee="${c.id}|${t.id}" ${approvedReadOnly ? 'disabled' : ''}>Delete tee</button>
             </div>
           </div>
         `).join('') : '<div class="tiny">No tees saved yet.</div>'}
@@ -15150,6 +15197,37 @@ function removeLocalCourse(courseId) {
   normalizeState();
   persist();
   return before !== state.courses.length;
+}
+async function approveCourseLibraryDraft(courseId) {
+  const course = getCourse(courseId);
+  const cloudCourseId = getCourseCloudId(course);
+  if (!course || !cloudCourseId) return toast('Upload this course draft before approving it.');
+  if (!window.confirm(`Approve ${course.name || 'this course'} for the shared Course Library?\n\nApproved courses are protected from normal browser edits.`)) return;
+  if (uiState.cloudCoursesLoading) return toast('Course Library is already working. Please wait.');
+  uiState.cloudCoursesLoading = true;
+  uiState.cloudCoursesStatus = `Approving ${course.name}…`;
+  renderCourses();
+  try {
+    const client = await ensureSupabaseClient({ anonymousAuth: false });
+    if (!client) throw new Error('Supabase client unavailable.');
+    const access = await getCourseLibraryWriteAccess(client);
+    if (!access.allowed || !access.isMaintainer) throw new Error('This Account is not authorized to approve Course Library drafts.');
+    const { error } = await runCourseCloudOperation(() => client.rpc('publish_course', { p_course_id: cloudCourseId }), 'Course approval', { retries: 0 });
+    if (error) throw error;
+    await runCourseCloudOperation(() => refreshSupabaseCoursesByIds(client, [cloudCourseId]), 'Approved course refresh');
+    uiState.cloudCoursesStatus = `${course.name} is approved and available in the shared Course Library.`;
+    persist({ skipRender: true });
+    renderAll();
+    toast('Course approved.');
+  } catch (error) {
+    course.cloudSyncError = error?.message || 'Course approval failed.';
+    uiState.cloudCoursesStatus = 'Course approval needs attention. The draft remains unchanged.';
+    renderCourses();
+    toast('Course approval needs attention.');
+  } finally {
+    uiState.cloudCoursesLoading = false;
+    renderCourses();
+  }
 }
 async function deleteCloudCourseById(course, { clearLocalCloudIds = false } = {}) {
   const cloudCourseId = getCourseCloudId(course);
@@ -16018,6 +16096,64 @@ function showRoundEndPrompt(mode, match = getActiveMatch()) {
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
   setTimeout(() => { try { primary.focus({ preventScroll: true }); } catch (_) {} }, 0);
+}
+function getCourseLibraryStateLabel(course = {}) {
+  if (course.cloudSyncError) return 'Needs Attention';
+  const publication = String(course.cloudPublicationStatus || '').toLowerCase();
+  if (publication === 'approved') return 'Approved';
+  if (publication === 'draft' || course.cloudSyncState === 'draft-uploaded') return 'Draft Uploaded';
+  if (['local-draft', 'pending-sync'].includes(String(course.cloudSyncState || '').toLowerCase())) return 'Local Changes';
+  return getCourseStableIdentity(course) ? 'Cloud' : 'Local';
+}
+function isProtectedCloudCourse(row = {}) {
+  const status = String(row?.publication_status || row?.cloudPublicationStatus || '').toLowerCase();
+  const source = String(row?.source || '').toLowerCase();
+  return ['approved', 'archived', 'rejected'].includes(status) || ['legacy', 'maintainer'].includes(source);
+}
+function markCourseFromCloudRow(course, row = {}) {
+  if (!course || !row?.id) return course;
+  course.cloudCourseId = String(row.id);
+  course.cloudPublicationStatus = String(row.publication_status || course.cloudPublicationStatus || 'draft').toLowerCase();
+  course.cloudOwnerUserId = String(row.owner_user_id || course.cloudOwnerUserId || '');
+  course.cloudSyncState = course.cloudPublicationStatus === 'approved' ? 'approved' : 'draft-uploaded';
+  course.cloudSyncError = '';
+  return course;
+}
+function isSameCloudField(left, right) {
+  const normalize = value => value === null || value === undefined || String(value).trim() === '' ? '' : String(value).trim();
+  return normalize(left) === normalize(right);
+}
+function cloudCourseNeedsUpdate(course, existing = {}) {
+  const payload = buildCloudCoursePayload(course);
+  return ['name', 'city', 'state', 'country'].some(key => !isSameCloudField(payload[key], existing[key]));
+}
+function cloudTeeNeedsUpdate(courseId, tee, existing = {}) {
+  const payload = buildCloudTeePayload(courseId, tee);
+  return ['course_id', 'tee_name', 'rating', 'slope', 'total_yards'].some(key => !isSameCloudField(payload[key], existing[key]));
+}
+async function runCourseCloudOperation(operation, label, { timeoutMs = 15000, retries = 1 } = {}) {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    let timeoutId;
+    try {
+      return await Promise.race([
+        Promise.resolve().then(operation),
+        new Promise((_, reject) => {
+          timeoutId = window.setTimeout(() => {
+            const error = new Error(`${label} timed out. Please retry.`);
+            error.code = 'COURSE_SYNC_TIMEOUT';
+            reject(error);
+          }, timeoutMs);
+        }),
+      ]);
+    } catch (error) {
+      lastError = error;
+      if (attempt >= retries) throw error;
+    } finally {
+      if (timeoutId) window.clearTimeout(timeoutId);
+    }
+  }
+  throw lastError;
 }
 function handleScoreboardFinishEndRound(mode = '') {
   const match = getActiveMatch();
@@ -20752,11 +20888,13 @@ function installHandlers() {
       return;
     }
     const editCourse = e.target.dataset.editCourse;
+    const approveCourse = e.target.dataset.approveCourse;
     const deleteLocalCourse = e.target.dataset.deleteCourseLocal;
     const deleteCloudCourse = e.target.dataset.deleteCourseCloud;
     const deleteCourseAll = e.target.dataset.deleteCourseAll;
     const newTee = e.target.dataset.newTee; const editTee = e.target.dataset.editTee; const copyTee = e.target.dataset.copyTee; const deleteTee = e.target.dataset.deleteTee;
     if (editCourse) loadCourseEditor(editCourse);
+    if (approveCourse) { approveCourseLibraryDraft(approveCourse); return; }
     if (deleteLocalCourse) { handleDeleteLocalCourse(deleteLocalCourse); return; }
     if (deleteCloudCourse) { handleDeleteCloudCourse(deleteCloudCourse); return; }
     if (deleteCourseAll) { handleDeleteCourseEverywhere(deleteCourseAll); return; }
@@ -23153,6 +23291,14 @@ function installDyeLedgerLiveEngineAdapter() {
     mergeSupabaseCourses,
     isCourseCloudWriteCandidate,
     getCourseLibraryWriteAccess,
+    isProtectedCloudCourse,
+    markCourseFromCloudRow,
+    cloudCourseNeedsUpdate,
+    cloudTeeNeedsUpdate,
+    insertOrUpdateCloudTeeHoles,
+    refreshSupabaseCoursesByIds,
+    runCourseCloudOperation,
+    getCourseLibraryStateLabel,
     getPlayerHoleTeeInfo,
     buildScorecardImportRequestBody,
     getScorecardImportReviewWarnings,

@@ -69,8 +69,8 @@ test('finalization retains rollback recovery marker, frozen snapshot, and determ
 
 test('same-version service workers do not produce an update offer', () => {
   const engine = loadLiveEngine();
-  assert.equal(engine.shouldOfferServiceWorkerUpdate('31.0.04'), false);
-  assert.equal(engine.shouldOfferServiceWorkerUpdate('v31.0.04'), false);
+  assert.equal(engine.shouldOfferServiceWorkerUpdate('31.0.05'), false);
+  assert.equal(engine.shouldOfferServiceWorkerUpdate('v31.0.05'), false);
   assert.equal(engine.shouldOfferServiceWorkerUpdate('31.0.05'), true);
   assert.equal(engine.shouldOfferServiceWorkerUpdate(''), true);
 });
@@ -84,11 +84,11 @@ test('completed-round destination exposes summary, ledger, return, and new-match
 });
 
 test('release identity and immutable PWA assets are aligned', () => {
-  assert.equal(pkg.version, '31.0.04');
-  assert.equal(manifest.version, 'v31.0.04');
-  assert.match(app, /version: 'v31\.0\.04'/);
-  assert.match(worker, /cacheName: 'the-dye-ledger-v31\.0\.04'/);
+  assert.equal(pkg.version, '31.0.05');
+  assert.equal(manifest.version, 'v31.0.05');
+  assert.match(app, /version: 'v31\.0\.05'/);
+  assert.match(worker, /cacheName: 'the-dye-ledger-v31\.0\.05'/);
   for (const name of ['app-icon-192', 'app-icon-512', 'apple-touch-icon', 'favicon-32', 'favicon-16']) {
-    assert.equal(existsSync(new URL(`../branding/${name}-v31.0.04.png`, import.meta.url)), true);
+    assert.equal(existsSync(new URL(`../branding/${name}-v31.0.05.png`, import.meta.url)), true);
   }
 });

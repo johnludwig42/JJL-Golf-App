@@ -6547,16 +6547,6 @@ function buildLedgerEntryReportModel(match, metrics = null) {
   };
 }
 
-const ledgerEntryStoryCache = new Map();
-function getLedgerEntryStoryCacheKey(record) {
-  const source = JSON.stringify(record || {});
-  let hash = 2166136261;
-  for (let index = 0; index < source.length; index += 1) {
-    hash ^= source.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return `${record?.recordId || record?.roundId || 'round'}:${record?.schemaVersion || 1}:${(hash >>> 0).toString(16)}`;
-}
 function buildLedgerEntryFactsOnlyStory(record, match = null, metrics = null) {
   const story = buildRoundRecordStory(record);
   const highlights = (record?.players || [])
@@ -6580,46 +6570,49 @@ function buildLedgerEntryStoryPayload(match, metrics) {
   };
 }
 async function prepareLedgerEntryStory(match, metrics) {
-  const record = getEffectiveRoundRecord(match, metrics);
-  const cacheKey = getLedgerEntryStoryCacheKey(record);
-  const cached = ledgerEntryStoryCache.get(cacheKey);
-  if (cached) return cached;
-  const fallback = { text: buildLedgerEntryFactsOnlyStory(record, match, metrics), provenance: 'deterministic-fallback', cacheKey };
-  if (navigator.onLine === false || !getRoundRecapUrl()) return fallback;
+  if (navigator.onLine === false) throw new Error('The Story of the Round requires an internet connection.');
+  if (!getRoundRecapUrl()) throw new Error('Configure Supabase before generating The Story of the Round.');
   const requestStory = async (repair = null) => {
-    const response = await fetch(getRoundRecapUrl(), {
-      method: 'POST',
-      headers: getRoundRecapHeaders(),
-      body: JSON.stringify({ match: buildLedgerEntryStoryPayload(match, metrics), purpose: 'ledger-story', ...(repair ? { repair } : {}) }),
-    });
-    const data = await response.json().catch(() => ({}));
-    const text = String(data?.story || data?.recap || data?.text || '').trim();
-    if (!response.ok || data?.success === false || !text) return null;
-    return text;
-  };
-  try {
-    let text = await requestStory();
-    if (!text) return fallback;
-    const wordCount = text.split(/\s+/).filter(Boolean).length;
-    if (wordCount > 500) return fallback;
-    const isBlockingFactIssue = issue => /^FALSE_|^UNVERIFIABLE_/.test(String(issue?.code || ''));
-    let blockingIssues = validateRoundRecapContent(match, metrics, text).issues.filter(isBlockingFactIssue);
-    if (blockingIssues.length) {
-      const repaired = await requestStory({
-        priorRecap: text,
-        issues: blockingIssues.map(issue => ({ code: issue.code, message: issue.message })),
+    const controller = new window.AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 45000);
+    try {
+      const response = await fetch(getRoundRecapUrl(), {
+        method: 'POST',
+        headers: getRoundRecapHeaders(),
+        body: JSON.stringify({ match: buildLedgerEntryStoryPayload(match, metrics), purpose: 'ledger-story', ...(repair ? { repair } : {}) }),
+        signal: controller.signal,
       });
-      if (!repaired || repaired.split(/\s+/).filter(Boolean).length > 500) return fallback;
-      text = repaired;
-      blockingIssues = validateRoundRecapContent(match, metrics, text).issues.filter(isBlockingFactIssue);
+      const data = await response.json().catch(() => ({}));
+      const text = String(data?.story || data?.recap || data?.text || '').trim();
+      if (!response.ok || data?.success === false || !text) {
+        const failure = new Error(getRoundRecapFailureMessage(response.status, data?.code));
+        failure.status = response.status;
+        failure.code = data?.code || '';
+        throw failure;
+      }
+      return text;
+    } catch (error) {
+      if (error?.name === 'AbortError') throw new Error('The Story of the Round timed out. Please check the connection and try again.');
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
     }
-    if (blockingIssues.length) return fallback;
-    const generated = { text, provenance: 'audited-generated-narrative', cacheKey };
-    ledgerEntryStoryCache.set(cacheKey, generated);
-    return generated;
-  } catch (_) {
-    return fallback;
+  };
+  let text = await requestStory();
+  if (text.split(/\s+/).filter(Boolean).length > 500) throw new Error('The generated Story was too long to fit the Ledger Entry. Please try again.');
+  const isBlockingFactIssue = issue => /^FALSE_|^UNVERIFIABLE_/.test(String(issue?.code || ''));
+  let blockingIssues = validateRoundRecapContent(match, metrics, text).issues.filter(isBlockingFactIssue);
+  if (blockingIssues.length) {
+    const repaired = await requestStory({
+      priorRecap: text,
+      issues: blockingIssues.map(issue => ({ code: issue.code, message: issue.message })),
+    });
+    if (repaired.split(/\s+/).filter(Boolean).length > 500) throw new Error('The corrected Story was too long to fit the Ledger Entry. Please try again.');
+    text = repaired;
+    blockingIssues = validateRoundRecapContent(match, metrics, text).issues.filter(isBlockingFactIssue);
   }
+  if (blockingIssues.length) throw new Error('The generated Story could not be verified against the recorded round. Please try again.');
+  return { text, provenance: 'audited-generated-narrative' };
 }
 function buildLegacyRoundSnapshot(match, metrics) {
   if (!metrics) return '';
@@ -8668,6 +8661,22 @@ function buildUnifiedExportDocument(match, metrics, printView = 'ledger') {
 </html>`;
 }
 
+function shouldUseSameTabLedgerReport() {
+  const mobileUserAgent = /Android|iPhone|iPad|iPod|Mobile/i.test(String(navigator.userAgent || ''));
+  const standalone = window.matchMedia?.('(display-mode: standalone)')?.matches || navigator.standalone === true;
+  const compactCoarsePointer = window.matchMedia?.('(pointer: coarse)')?.matches && window.innerWidth <= 900;
+  return mobileUserAgent || standalone || compactCoarsePointer;
+}
+function storeLedgerReportTransfer(reportModel, { autoPrint = true } = {}) {
+  const transferKey = `dye-ledger-report-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  sessionStorage.setItem(transferKey, JSON.stringify({
+    report: reportModel,
+    autoPrint: !!autoPrint,
+    returnUrl: window.location.href,
+    createdAt: new Date().toISOString(),
+  }));
+  return transferKey;
+}
 async function openUnifiedExport(match, printView = 'ledger') {
   const metrics = computeMatchMetrics(match);
   if (!metrics) {
@@ -8678,24 +8687,35 @@ async function openUnifiedExport(match, printView = 'ledger') {
     toast('Classic scorecard is not available for this round.');
     return;
   }
-  const exportWindow = window.open('', '_blank');
-  if (!exportWindow) {
+  const sameTabLedger = printView === 'ledger' && shouldUseSameTabLedgerReport();
+  const exportWindow = sameTabLedger ? null : window.open('', '_blank');
+  if (!sameTabLedger && !exportWindow) {
     toast('Please allow pop-ups to share this round.');
     return;
   }
-  exportWindow.document.open();
-  exportWindow.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Preparing Export</title></head><body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:24px;"><strong>Reconciling shared scores...</strong><div style="margin-top:8px;color:#5a667a;">Pulling latest shared scores before creating the report.</div></body></html>');
-  exportWindow.document.close();
+  if (exportWindow) {
+    exportWindow.document.open();
+    exportWindow.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Preparing Export</title></head><body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:24px;"><strong>Reconciling shared scores...</strong><div style="margin-top:8px;color:#5a667a;">Pulling latest shared scores before creating the report.</div></body></html>');
+    exportWindow.document.close();
+  }
   if (match.storageMode === 'shared' && printView !== 'scorecard') {
     await reconcileSharedMatchBeforeSummary(match, { silent: false });
   }
   const refreshedMetrics = computeMatchMetrics(match) || metrics;
   if (printView === 'ledger') {
-    exportWindow.document.body.innerHTML = '<strong>Preparing The Story of the Round…</strong><div style="margin-top:8px;color:#5a667a;">Using the authoritative scorecard, competitions, settlement, Memories, and recorded context.</div>';
-    const ledgerStory = await prepareLedgerEntryStory(match, refreshedMetrics);
+    if (exportWindow) exportWindow.document.body.innerHTML = '<strong>Preparing The Story of the Round…</strong><div style="margin-top:8px;color:#5a667a;">Using the authoritative scorecard, competitions, settlement, Memories, and recorded context.</div>';
+    toast('Generating a fresh Story of the Round…', 45000);
+    let ledgerStory;
+    try {
+      ledgerStory = await prepareLedgerEntryStory(match, refreshedMetrics);
+    } catch (error) {
+      if (exportWindow) exportWindow.close();
+      toast(String(error?.message || 'The Story of the Round could not be generated. Please try again.'), 7200);
+      return;
+    }
     const reportModel = buildLedgerEntryReportModel(match, refreshedMetrics);
     if (!reportModel) {
-      exportWindow.close();
+      if (exportWindow) exportWindow.close();
       toast('Ledger Entry is not available for this round.');
       return;
     }
@@ -8704,10 +8724,16 @@ async function openUnifiedExport(match, printView = 'ledger') {
     window.__DYE_LEDGER_PENDING_REPORT__ = reportModel;
     window.__DYE_LEDGER_AUTO_PRINT__ = true;
     try {
-      exportWindow.location.replace(new URL(`ledger-report/shell.html?v=${encodeURIComponent(String(APP_VERSION || '').replace(/^v/i, ''))}`, window.location.href).href);
-      exportWindow.focus();
+      const transferKey = storeLedgerReportTransfer(reportModel);
+      const reportUrl = new URL(`ledger-report/shell.html?v=${encodeURIComponent(String(APP_VERSION || '').replace(/^v/i, ''))}`, window.location.href);
+      reportUrl.searchParams.set('reportKey', transferKey);
+      if (sameTabLedger) window.location.assign(reportUrl.href);
+      else {
+        exportWindow.location.replace(reportUrl.href);
+        exportWindow.focus();
+      }
     } catch (error) {
-      exportWindow.close();
+      if (exportWindow) exportWindow.close();
       toast('Ledger Entry could not be opened.');
     }
     return;

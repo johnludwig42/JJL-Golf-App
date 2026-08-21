@@ -146,6 +146,8 @@ test('dedicated Ledger Entry adapter maps existing authoritative facts without c
   for (const asset of ['bootstrap.js', 'pack.js', 'engines.js', 'report.js']) {
     assert.match(shell, new RegExp(`${asset.replace('.', '\\.')}\\?v=31\\.0\\.04`), `${asset} must use the current release cache key`);
   }
+  assert.match(shell, /bootstrap\.js\?v=31\.0\.04&amp;rev=2/);
+  assert.match(shell, /report\.js\?v=31\.0\.04&amp;rev=2/);
   assert.match(renderer, /ROUND\.meta\.recap/);
   assert.match(renderer, /ROUND\.meta\.story \|\| ROUND\.meta\.recap/);
   assert.doesNotMatch(renderer, /localStorage|supabase|fetch\(/);
@@ -160,8 +162,7 @@ test('dedicated Ledger Entry adapter maps existing authoritative facts without c
 });
 
 test('Ledger Story generation is version-bound, non-mutating, and isolated from the Match Summary recap', () => {
-  assert.match(source, /const ledgerEntryStoryCache = new Map\(\)/);
-  assert.match(source, /getLedgerEntryStoryCacheKey\(record\)/);
+  assert.doesNotMatch(source, /ledgerEntryStoryCache|getLedgerEntryStoryCacheKey/);
   assert.match(source, /reportPurpose: 'ledger-story'/);
   assert.match(source, /Target 300–400 words and never exceed 450/);
   assert.match(source, /exactly 3–5 natural paragraphs separated by blank lines/);
@@ -177,12 +178,31 @@ test('Ledger Story generation is version-bound, non-mutating, and isolated from 
   assert.match(source, /const requestStory = async \(repair = null\)/);
   assert.match(source, /blockingIssues\.map\(issue => \(\{ code: issue\.code, message: issue\.message \}\)\)/);
   assert.match(source, /provenance: 'audited-generated-narrative'/);
+  assert.match(source, /Generating a fresh Story of the Round/);
+  assert.match(source, /window\.AbortController/);
+  assert.match(source, /45000/);
+  assert.doesNotMatch(source.slice(source.indexOf('async function prepareLedgerEntryStory'), source.indexOf('function decorateReportSections')), /deterministic-fallback|buildLedgerEntryFactsOnlyStory/);
   assert.match(edgeFunction, /Greenies counts must come only from authoritativeFacts\.greenieWinners/);
   assert.match(shell, /id="returnToMatchBtn"[^>]*>‹ Return to Match<\/button>/);
   assert.match(shell, /@media print\{[\s\S]*?\.report-nav\{display:none!important\}/);
   assert.match(renderer, /function returnToOriginatingMatch\(\)/);
   assert.match(renderer, /window\.location\.assign\(new URL\("\.\.\/",window\.location\.href\)\.href\)/);
   assert.doesNotMatch(source.slice(source.indexOf('async function prepareLedgerEntryStory'), source.indexOf('function buildLegacyRoundSnapshot')), /persist\(|roundRecapGenerated\s*=|roundRecapFinal\s*=/);
+});
+
+test('Ledger Entry uses a mobile-safe same-tab transfer after fresh story generation', () => {
+  const bootstrap = readFileSync(new URL('../ledger-report/bootstrap.js', import.meta.url), 'utf8');
+  assert.match(source, /function shouldUseSameTabLedgerReport\(\)/);
+  assert.match(source, /mobileUserAgent \|\| standalone \|\| compactCoarsePointer/);
+  assert.match(source, /sessionStorage\.setItem\(transferKey/);
+  assert.match(source, /reportUrl\.searchParams\.set\('reportKey', transferKey\)/);
+  assert.match(source, /if \(sameTabLedger\) window\.location\.assign\(reportUrl\.href\)/);
+  assert.match(bootstrap, /sessionStorage\.getItem\(transferKey\)/);
+  assert.match(bootstrap, /10 \* 60 \* 1000/);
+  assert.match(bootstrap, /__DYE_LEDGER_RETURN_URL__/);
+  assert.match(bootstrap, /__DYE_LEDGER_REPORT_TRANSFER_KEY__/);
+  assert.match(renderer, /globalThis\.__DYE_LEDGER_RETURN_URL__/);
+  assert.match(renderer, /sessionStorage\.removeItem\(globalThis\.__DYE_LEDGER_REPORT_TRANSFER_KEY__\)/);
 });
 
 test('tracked statistics appear in Ledger Statistics and inform both story paths', () => {

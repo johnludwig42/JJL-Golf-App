@@ -1065,6 +1065,9 @@ function layoutThenPrint(){
 }
 function returnToOriginatingMatch(){
   const status=document.getElementById("returnToMatchStatus");
+  if(globalThis.__DYE_LEDGER_REPORT_TRANSFER_KEY__){
+    try{ sessionStorage.removeItem(globalThis.__DYE_LEDGER_REPORT_TRANSFER_KEY__); }catch(e){}
+  }
   let opener=null;
   try{ opener=window.opener && !window.opener.closed ? window.opener : null; }catch(e){}
   if(opener){
@@ -1076,6 +1079,9 @@ function returnToOriginatingMatch(){
       if(status) status.hidden=false;
     },120);
     return;
+  }
+  if(globalThis.__DYE_LEDGER_RETURN_URL__){
+    try{ window.location.assign(globalThis.__DYE_LEDGER_RETURN_URL__); return; }catch(e){}
   }
   try{
     window.location.assign(new URL("../",window.location.href).href);

@@ -146,8 +146,8 @@ test('dedicated Ledger Entry adapter maps existing authoritative facts without c
   for (const asset of ['bootstrap.js', 'pack.js', 'engines.js', 'report.js']) {
     assert.match(shell, new RegExp(`${asset.replace('.', '\\.')}\\?v=31\\.0\\.04`), `${asset} must use the current release cache key`);
   }
-  assert.match(shell, /bootstrap\.js\?v=31\.0\.04&amp;rev=2/);
-  assert.match(shell, /report\.js\?v=31\.0\.04&amp;rev=2/);
+  assert.match(shell, /bootstrap\.js\?v=31\.0\.04&amp;rev=3/);
+  assert.match(shell, /report\.js\?v=31\.0\.04&amp;rev=3/);
   assert.match(renderer, /ROUND\.meta\.recap/);
   assert.match(renderer, /ROUND\.meta\.story \|\| ROUND\.meta\.recap/);
   assert.doesNotMatch(renderer, /localStorage|supabase|fetch\(/);
@@ -203,6 +203,27 @@ test('Ledger Entry uses a mobile-safe same-tab transfer after fresh story genera
   assert.match(bootstrap, /__DYE_LEDGER_REPORT_TRANSFER_KEY__/);
   assert.match(renderer, /globalThis\.__DYE_LEDGER_RETURN_URL__/);
   assert.match(renderer, /sessionStorage\.removeItem\(globalThis\.__DYE_LEDGER_REPORT_TRANSFER_KEY__\)/);
+});
+
+test('Ledger Story Greenies audit distinguishes a count from hole numbers in the same sentence', () => {
+  const result = fixture();
+  result.match.selectedGames.push({ key: 'greenies', participants: result.match.players.map(player => player.playerId) });
+  result.match.greeniesWinners = { 3: 'p1', 7: 'p1' };
+
+  const accurate = result.engine.validateRoundRecapContent(
+    result.match,
+    result.metrics,
+    'Alex Ledger claimed two Greenies by winning on holes 3 and 7.'
+  );
+  assert.equal(accurate.issues.some(issue => /GREENIES_COUNT/.test(issue.code)), false);
+
+  const inaccurate = result.engine.validateRoundRecapContent(
+    result.match,
+    result.metrics,
+    'Alex Ledger claimed three Greenies by winning on holes 3 and 7.'
+  );
+  assert.equal(inaccurate.issues.some(issue => issue.code === 'FALSE_GREENIES_COUNT'), true);
+  assert.match(source, /blockingIssues\.map\(issue => issue\.message\)/);
 });
 
 test('tracked statistics appear in Ledger Statistics and inform both story paths', () => {

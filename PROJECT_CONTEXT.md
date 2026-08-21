@@ -403,7 +403,9 @@ ChatGPT for product/architecture/review; Codex for implementation; GitHub Deskto
 Production baseline when PROJECT_CONTEXT.md was created: v30.3.42.
 
 Near-term roadmap:
-Weather Context, Scoring & Setup Polish, Preferences, Competition Engine Audit, Wolf, Sixes/Round Robin, Best Ball, Production Hardening, Event Edition.
+Course Library Stabilization, lifecycle-based navigation and four-mode Stat Capture/score-entry redesign, Trip Mode, beta hardening, then broader competition and Event Edition work.
+
+Course Library Stabilization is the immediate priority before further Stat Capture or score-entry work: prevent approved catalog rewrites; batch tee/hole writes; add bounded progress, timeout, retry, and recovery states; distinguish Local, Draft Uploaded, Approved, and Needs Attention; add a protected maintainer approval action; refresh only the affected course; verify the complete two-device create/upload/approve/anonymous-download/edit workflow; and audit the 19 catalog courses reported as updated during the August 2026 live upload test. Do not silently merge, delete, or rewrite production catalog records during remediation.
 
 Product philosophy:
 iPhone-first, offline-first, local-first, effortless scoring, competition, player improvement, memories/storytelling, Maximize Return on Effort, Remember for the Golfer.

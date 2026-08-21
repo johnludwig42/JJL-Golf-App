@@ -122,6 +122,15 @@ FUTURE FOCUSED RELEASE — Shared Match Synchronization Optimization:
 ## 3. Course Library / Course Management
 
 - v30.3.60 completed: Courses Functionality Audit, Course Library clarity/metadata polish, location-aware dropdown de-dupe, duplicate-save prompts, tee validation, visible tee fallback, and new-round local Course Snapshots.
+- Immediate stabilization priority before Stat Capture/score-entry redesign and beta work:
+  - Prevent approved catalog courses from being rewritten during local draft publication.
+  - Batch tee and hole writes; the August 2026 live test took 148.8 seconds, including 137.7 seconds for hole synchronization.
+  - Add bounded progress, timeout, retry, interruption recovery, and truthful completion states.
+  - Show Local, Draft Uploaded, Approved, and Needs Attention states in Course Management.
+  - Add a protected in-app maintainer review and approval action with attribution.
+  - Refresh only the affected course after upload or approval instead of reloading the entire catalog.
+  - Test create, upload draft, approve, anonymous download, edit, and safe republish across two devices.
+  - Audit the 19 existing courses reported as updated during the live test; preserve all production rows and require review before any cleanup or correction.
 - Future: canonical Course Catalog, personal Library favorites/defaults/preferred tees with identity, legacy snapshot migration/hardening, authoritative duplicate matching, and dedicated 9-hole course authoring.
 - Architecture boundary: v30.3.60 remains a local Course Library plus new-round snapshots. Central canonical identity, cloud user ownership, and legacy snapshot migration are explicitly deferred.
 

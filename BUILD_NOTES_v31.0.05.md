@@ -14,8 +14,8 @@
 
 - Existing local courses, downloaded catalog courses, Round Course Snapshots, matches, and completed RoundRecords remain compatible.
 - Failed uploads remain saved locally and eligible for retry.
-- No schema migration, automatic duplicate deletion, catalog cleanup, or production data rewrite is included.
-- The existing `(tee_id, hole_number)` uniqueness constraint remains the authority for conflict-safe hole writes.
+- Includes an additive schema migration for the `(tee_id, hole_number)` uniqueness key required by conflict-safe hole writes.
+- The migration stops without changing data if duplicate hole rows are detected; it never performs automatic duplicate deletion, catalog cleanup, or a production data rewrite.
 
 ## Automated verification
 

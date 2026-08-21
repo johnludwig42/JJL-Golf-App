@@ -170,6 +170,18 @@ NEXT:
 - Usual partners/groups.
 - Future identity model.
 
+## Near-term Play and Stat Capture redesign
+
+- Replace six equally prominent persistent tabs with three lifecycle-based primary destinations; keep less-frequent destinations in More.
+- Make Play a compact current-hole workspace with a hole selector, par and stroke index, Featured Competition status, Shared Match status, team identity, and bold stroke dots rather than “pops.”
+- Keep every golfer in compact one-tap score rows and expand only the selected golfer's stat controls. Preserve visible Undo and a dominant Next Hole action; move Memories out of the permanent scoring block.
+- Support four modes: None (gross only), Casual (gross, putts, and penalties with defensible derivation), Enhanced (Casual plus fairway direction, green dispersion, bunker/lie, and short-game outcomes), and Grind (more granular shot context). Restrict Grind to a scorekeeper responsible for no more than two golfers.
+- Enter the minimum facts and derive everything defensibly. GIR is calculated from gross and putts; missing putts propagate unknown rather than miss; genuine edge-case overrides retain calculated-versus-corrected provenance.
+- Version the round's stat-definition contract. Count putts by lie, treat conceded putts as strokes and putts, exclude fringe from GIR, and treat fringe putter strokes as around-the-green shots.
+- Keep fairway direction, penalty strokes, bunker/lie involvement, and green miss direction explicit. Prefer the full three-by-three green dispersion grid; retain Short, Left, Green, Right, Long as the compact fallback.
+- Use captured coverage to support fairways, GIR, dispersion, putting, penalties, scrambling, sand saves, Birdie-or-Better Conversion on GIR, fairway-conditioned GIR, and evidence-bounded Story insights. A par 5 reached in two and completed with two putts is both GIR and a successful birdie-or-better conversion.
+- Prototype and approve the exact Casual, Enhanced, and Grind field sets before changing the live scoring engine.
+
 ## 5. Competition Engine
 
 NEXT:

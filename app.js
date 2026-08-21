@@ -6611,7 +6611,10 @@ async function prepareLedgerEntryStory(match, metrics) {
     text = repaired;
     blockingIssues = validateRoundRecapContent(match, metrics, text).issues.filter(isBlockingFactIssue);
   }
-  if (blockingIssues.length) throw new Error('The generated Story could not be verified against the recorded round. Please try again.');
+  if (blockingIssues.length) {
+    const details = blockingIssues.map(issue => issue.message).filter(Boolean).join(' ');
+    throw new Error(`The generated Story could not be verified against the recorded round.${details ? ` ${details}` : ''} Please try again.`);
+  }
   return { text, provenance: 'audited-generated-narrative' };
 }
 function buildLegacyRoundSnapshot(match, metrics) {
@@ -7035,16 +7038,18 @@ function setRoundRecapFailure(match, { status = 0, code = '', message = '' } = {
 
 function validateGreeniesNarrativeClaims(match, metrics, recapText) {
   const greenies = summarizeSelectedGamesForRecap(match, metrics).find(game => game.key === 'greenies');
-  const counts = greenies?.summary?.counts && typeof greenies.summary.counts === 'object' ? greenies.summary.counts : null;
-  if (!counts) return [];
+  const recordedCounts = greenies?.summary?.counts && typeof greenies.summary.counts === 'object' ? greenies.summary.counts : null;
+  if (!recordedCounts) return [];
+  const counts = Object.fromEntries((metrics?.players || []).map(playerMetric => [playerMetric?.player?.name || getPlayer(playerMetric?.playerId)?.name || '', 0]).filter(([name]) => name));
+  Object.entries(recordedCounts).forEach(([name, count]) => { counts[name] = Number(count) || 0; });
   const numberWords = Object.freeze({ zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18 });
-  const numberPattern = /\b(?:\d+|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen)\b/gi;
+  const countPattern = /\b(\d+|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen)\s+green(?:y|ie)s?\b/gi;
   const sentences = String(recapText || '').split(/(?<=[.!?])\s+|\n+/).map(sentence => sentence.trim()).filter(sentence => /green(?:y|ie)s?/i.test(sentence));
   const issues = [];
   sentences.forEach(sentence => {
     const namedPlayers = Object.keys(counts).filter(name => name && sentence.toLocaleLowerCase().includes(String(name).toLocaleLowerCase()));
-    const values = [...sentence.matchAll(numberPattern)].map(match => {
-      const token = String(match[0]).toLocaleLowerCase();
+    const values = [...sentence.matchAll(countPattern)].map(match => {
+      const token = String(match[1]).toLocaleLowerCase();
       return /^\d+$/.test(token) ? Number(token) : numberWords[token];
     }).filter(Number.isFinite);
     if (!values.length) return;

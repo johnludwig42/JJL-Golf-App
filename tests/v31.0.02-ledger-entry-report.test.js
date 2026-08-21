@@ -146,8 +146,8 @@ test('dedicated Ledger Entry adapter maps existing authoritative facts without c
   for (const asset of ['bootstrap.js', 'pack.js', 'engines.js', 'report.js']) {
     assert.match(shell, new RegExp(`${asset.replace('.', '\\.')}\\?v=31\\.0\\.04`), `${asset} must use the current release cache key`);
   }
-  assert.match(shell, /bootstrap\.js\?v=31\.0\.04&amp;rev=4/);
-  assert.match(shell, /report\.js\?v=31\.0\.04&amp;rev=4/);
+  assert.match(shell, /bootstrap\.js\?v=31\.0\.04&amp;rev=5/);
+  assert.match(shell, /report\.js\?v=31\.0\.04&amp;rev=5/);
   assert.match(renderer, /ROUND\.meta\.recap/);
   assert.match(renderer, /ROUND\.meta\.story \|\| ROUND\.meta\.recap/);
   assert.doesNotMatch(renderer, /localStorage|supabase|fetch\(/);
@@ -182,7 +182,7 @@ test('Ledger Story generation is version-bound, non-mutating, and isolated from 
   assert.match(source, /window\.AbortController/);
   assert.match(source, /45000/);
   assert.doesNotMatch(source.slice(source.indexOf('async function prepareLedgerEntryStory'), source.indexOf('function decorateReportSections')), /deterministic-fallback|buildLedgerEntryFactsOnlyStory/);
-  assert.match(edgeFunction, /Greenies counts must come only from authoritativeFacts\.greenieWinners/);
+  assert.match(edgeFunction, /Do not discuss Greenies/);
   assert.match(shell, /id="returnToMatchBtn"[^>]*>‹ Return to Match<\/button>/);
   assert.match(shell, /@media print\{[\s\S]*?\.report-nav\{display:none!important\}/);
   assert.match(renderer, /function returnToOriginatingMatch\(\)/);
@@ -224,6 +224,34 @@ test('Ledger Story Greenies audit distinguishes a count from hole numbers in the
   );
   assert.equal(inaccurate.issues.some(issue => issue.code === 'FALSE_GREENIES_COUNT'), true);
   assert.match(source, /blockingIssues\.map\(issue => issue\.message\)/);
+});
+
+test('Ledger Story replaces variable Greenies prose with deterministic recorded results', () => {
+  const result = fixture();
+  result.match.selectedGames.push({ key: 'greenies', participants: result.match.players.map(player => player.playerId) });
+  result.match.greeniesWinners = { 3: 'p1', 7: 'p1', 11: 'p2' };
+  const story = result.engine.addVerifiedGreeniesToLedgerStory(
+    result.match,
+    result.metrics,
+    'North controlled the featured match.\n\nAlex won two Greenies, while Blake took another one. The teams traded pars through the middle stretch.\n\nThe closing holes settled the round.'
+  );
+  assert.doesNotMatch(story, /took another one/);
+  assert.match(story, /Alex Ledger won 2 Greenies on holes 3 and 7\./);
+  assert.match(story, /Blake Ledger won 1 Greenie on hole 11\./);
+  assert.match(story, /The teams traded pars through the middle stretch\./);
+  assert.equal(story.split(/\n\s*\n+/).length, 3);
+  assert.equal(result.engine.validateRoundRecapContent(result.match, result.metrics, story).issues.some(issue => /GREENIES_COUNT/.test(issue.code)), false);
+  assert.match(result.engine.buildLedgerEntryStoryPayload(result.match, result.metrics).recapInstructions, /Do not discuss Greenies/);
+  assert.match(edgeFunction, /Do not discuss Greenies/);
+});
+
+test('Ledger Story records no Greenies winners without fabricating a count', () => {
+  const result = fixture();
+  result.match.selectedGames.push({ key: 'greenies', participants: result.match.players.map(player => player.playerId) });
+  result.match.greeniesWinners = {};
+  const story = result.engine.addVerifiedGreeniesToLedgerStory(result.match, result.metrics, 'The match stayed close.\n\nNo side game changed the result.\n\nThe finish decided the day.');
+  assert.match(story, /No Greenies winners were recorded\./);
+  assert.doesNotMatch(story, /0 Greenies/);
 });
 
 test('Ledger hero names each side explicitly and summarizes actual side-game results', () => {

@@ -146,8 +146,8 @@ test('dedicated Ledger Entry adapter maps existing authoritative facts without c
   for (const asset of ['bootstrap.js', 'pack.js', 'engines.js', 'report.js']) {
     assert.match(shell, new RegExp(`${asset.replace('.', '\\.')}\\?v=31\\.0\\.04`), `${asset} must use the current release cache key`);
   }
-  assert.match(shell, /bootstrap\.js\?v=31\.0\.04&amp;rev=3/);
-  assert.match(shell, /report\.js\?v=31\.0\.04&amp;rev=3/);
+  assert.match(shell, /bootstrap\.js\?v=31\.0\.04&amp;rev=4/);
+  assert.match(shell, /report\.js\?v=31\.0\.04&amp;rev=4/);
   assert.match(renderer, /ROUND\.meta\.recap/);
   assert.match(renderer, /ROUND\.meta\.story \|\| ROUND\.meta\.recap/);
   assert.doesNotMatch(renderer, /localStorage|supabase|fetch\(/);
@@ -224,6 +224,15 @@ test('Ledger Story Greenies audit distinguishes a count from hole numbers in the
   );
   assert.equal(inaccurate.issues.some(issue => issue.code === 'FALSE_GREENIES_COUNT'), true);
   assert.match(source, /blockingIssues\.map\(issue => issue\.message\)/);
+});
+
+test('Ledger hero names each side explicitly and summarizes actual side-game results', () => {
+  assert.match(renderer, /head = swept \? `\$\{SIDES\[WINK\]\.name\} \$\{verb\} the Nassau`/);
+  assert.match(renderer, /function sideGameDeckResult\(game\)/);
+  assert.match(renderer, /game\.R\.per\.forEach/);
+  assert.match(renderer, /`\$\{game\.name\} went \$\{countsBySide\[winner\]\}–\$\{countsBySide\[loser\]\} to \$\{SIDES\[winner\]\.name\}\.`/);
+  assert.match(renderer, /`\$\{game\.name\} split \$\{firstCount\}–\$\{secondCount\}\.`/);
+  assert.doesNotMatch(renderer, /They lost the \$\{FEAT\.name\}/);
 });
 
 test('tracked statistics appear in Ledger Statistics and inform both story paths', () => {

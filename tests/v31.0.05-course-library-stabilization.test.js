@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
 
 const source = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+const holeUpsertMigration = readFileSync(new URL('../supabase/migrations/202608210001_v31_0_05_course_hole_upsert_key.sql', import.meta.url), 'utf8');
 
 function holes() {
   return Array.from({ length: 18 }, (_, index) => ({ holeNumber: index + 1, par: index % 4 === 2 ? 3 : 4, strokeIndex: index + 1, yardage: 150 + index * 10 }));
@@ -50,6 +51,13 @@ test('all tee holes are sent in one conflict-safe batch', async () => {
   assert.equal(calls[0].payload.length, 18);
   assert.equal(calls[0].options.onConflict, 'tee_id,hole_number');
   assert.equal(result.written, 18);
+});
+
+test('production schema provides the conflict key required by batched hole uploads', () => {
+  assert.match(holeUpsertMigration, /group by tee_id, hole_number\s+having count\(\*\) > 1/i);
+  assert.match(holeUpsertMigration, /unique \(tee_id, hole_number\)/i);
+  assert.doesNotMatch(holeUpsertMigration, /delete\s+from\s+public\.course_holes/i);
+  assert.doesNotMatch(holeUpsertMigration, /update\s+public\.course_holes/i);
 });
 
 test('course cloud operations retry once and remain bounded', async () => {

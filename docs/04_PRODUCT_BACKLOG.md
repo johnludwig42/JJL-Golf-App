@@ -1,5 +1,12 @@
 # The Dye Ledger Product Backlog
 
+## v31.0.06 Play Input-Mode Foundation
+
+- Completed: shared Play input-mode registry/controller boundary.
+- Completed: current Play experience preserved as Classic Mode.
+- Completed: device-only mode preference, safe fallback, and save-before-switch contract.
+- Next: build Player Mode as a renderer over the same controller without duplicating scoring, statistics, synchronization, or reporting.
+
 Version: 1.0
 Status: Living Document
 

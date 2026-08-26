@@ -16,11 +16,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.05',
-  versionNumber: '31.0.05',
-  cacheName: 'the-dye-ledger-v31.0.05',
-  buildDate: '2026-08-21T12:00:00-04:00',
-  buildLabel: 'Course Library Stabilization'
+  version: 'v31.0.06',
+  versionNumber: '31.0.06',
+  cacheName: 'the-dye-ledger-v31.0.06',
+  buildDate: '2026-08-25T12:00:00-04:00',
+  buildLabel: 'Play Input-Mode Foundation'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -70,8 +70,19 @@ const SMART_SCORE_ADVANCE_PRESETS = {
 const DEFAULT_SMART_SCORE_ADVANCE_PRESET = 'normal';
 const DEVICE_SCORE_ADVANCE_OVERRIDES_STORAGE_KEY = 'dyeLedger.deviceScoreAdvanceOverrides.v1';
 const PLAYER_PREFERENCES_STORAGE_KEY = 'dyeLedger.playerPreferences';
-const PLAYER_PREFERENCES_SCHEMA_VERSION = 4;
+const PLAYER_PREFERENCES_SCHEMA_VERSION = 5;
+const PLAY_INPUT_MODE_SCHEMA_VERSION = 1;
+const PLAY_INPUT_MODES = Object.freeze({
+  CLASSIC: Object.freeze({ key: 'CLASSIC', label: 'Classic Mode', available: true, renderer: 'renderClassicPlayInputMode' }),
+  PLAYER: Object.freeze({ key: 'PLAYER', label: 'Player Mode', available: false, renderer: 'renderPlayerPlayInputMode' }),
+});
+function normalizePlayInputMode(value, { requireAvailable = true } = {}) {
+  const requested = String(value || '').trim().toUpperCase();
+  const mode = PLAY_INPUT_MODES[requested] || PLAY_INPUT_MODES.CLASSIC;
+  return requireAvailable && !mode.available ? PLAY_INPUT_MODES.CLASSIC.key : mode.key;
+}
 const PLAYER_PREFERENCE_PATHS = new Set([
+  'scoring.playInputMode',
   'scoring.smartScoreAdvanceEnabled',
   'scoring.smartScoreAdvancePreset',
   'scoring.hapticsEnabled',
@@ -99,6 +110,7 @@ function getDefaultPlayerPreferences() {
   return {
     schemaVersion: PLAYER_PREFERENCES_SCHEMA_VERSION,
     scoring: {
+      playInputMode: PLAY_INPUT_MODES.CLASSIC.key,
       smartScoreAdvanceEnabled: true,
       smartScoreAdvancePreset: 'NORMAL',
       hapticsEnabled: true,
@@ -129,6 +141,7 @@ function normalizePlayerPreferences(raw) {
     schemaVersion: PLAYER_PREFERENCES_SCHEMA_VERSION,
     scoring: {
       ...scoring,
+      playInputMode: normalizePlayInputMode(scoring.playInputMode),
       smartScoreAdvanceEnabled: typeof scoring.smartScoreAdvanceEnabled === 'boolean' ? scoring.smartScoreAdvanceEnabled : true,
       smartScoreAdvancePreset: ['FAST', 'NORMAL', 'RELAXED'].includes(preset) ? preset : 'NORMAL',
       hapticsEnabled: typeof scoring.hapticsEnabled === 'boolean' ? scoring.hapticsEnabled : true,
@@ -16488,6 +16501,80 @@ function confirmPendingPress() {
   closePressConfirmation(); persistCurrentMatch({ applyDom: false, immediateShared: true }); renderCurrentMatch(); toast('Press created.');
 }
 
+function createPlayInputController(match, { tee = null, metrics = null, scoringHoles = null } = {}) {
+  const holes = Array.isArray(scoringHoles) ? scoringHoles : getSelectedScoringHoles(match, tee || getMatchTee(match, match?.teeId));
+  return Object.freeze({
+    schemaVersion: PLAY_INPUT_MODE_SCHEMA_VERSION,
+    roundId: String(match?.id || ''),
+    get currentPosition() { return currentHole; },
+    get holeCount() { return holes.length || getRequestedHoleCount(match); },
+    get scoringHoles() { return holes; },
+    get metrics() { return metrics; },
+    readGross(playerId, position = currentHole) {
+      const player = (match?.players || []).find(row => String(row.playerId) === String(playerId));
+      return player?.scores?.[Math.max(0, Number(position) - 1)]?.gross ?? null;
+    },
+    readStat(playerId, position = currentHole) {
+      const player = (match?.players || []).find(row => String(row.playerId) === String(playerId));
+      return clonePlain(player?.stats?.[Math.max(0, Number(position) - 1)] || {});
+    },
+    canEditPlayer(playerId) { return canCurrentDeviceEditPlayer(match, playerId); },
+    save(options = {}) { return persistCurrentMatch({ applyDom: true, ...options }); },
+  });
+}
+function getPreferredPlayInputMode(preferences = getPlayerPreferences()) {
+  return normalizePlayInputMode(normalizePlayerPreferences(preferences).scoring.playInputMode);
+}
+function renderPlayInputModeSelector(activeMode = getPreferredPlayInputMode()) {
+  const select = document.getElementById('playInputModeSelect');
+  const help = document.getElementById('playInputModeHelp');
+  if (!select) return;
+  select.innerHTML = Object.values(PLAY_INPUT_MODES).map(mode => `<option value="${mode.key}" ${mode.key === activeMode ? 'selected' : ''} ${mode.available ? '' : 'disabled'}>${mode.label}${mode.available ? '' : ' · Coming next'}</option>`).join('');
+  select.value = activeMode;
+  if (help) help.textContent = activeMode === 'CLASSIC' ? 'Current multi-golfer score entry. Mode choice is stored only on this device.' : 'Player-focused score entry.';
+}
+function renderClassicPlayInputMode({ match, tee, metrics, scoringHoles, hole, controller }) {
+  renderScoreGrid(match, tee, metrics, scoringHoles);
+  renderPressActions(match, metrics);
+  const playMatchSummary = document.getElementById('playMatchSummary');
+  if (playMatchSummary) {
+    const statusOptions = getMatchStatusOptions(match);
+    playMatchSummary.innerHTML = buildFeaturedMatchStatus(match, metrics, match.matchStatusGame || statusOptions[0]?.key || 'team_match');
+  }
+  renderSneakySandyPoleyEntry(match, hole, metrics);
+  renderStatTrackingEntry(match, hole, metrics);
+  renderSneakySandyPoleyNote(match, hole, metrics);
+  renderGreeniesEntry(match, hole);
+  renderHoleJumpTiles(match);
+  initializePlayInputs();
+  const saveBtn = document.getElementById('saveScoresBtn');
+  if (saveBtn) saveBtn.disabled = getScoreAccessState(match).role === 'viewer';
+  applyPendingScoreCommitFocus();
+  return controller;
+}
+function renderPlayInputMode(context) {
+  const requestedMode = getPreferredPlayInputMode();
+  const activeMode = normalizePlayInputMode(requestedMode);
+  const host = document.getElementById('scoreEntryWrap');
+  if (host) host.dataset.playInputMode = activeMode;
+  renderPlayInputModeSelector(activeMode);
+  const controller = createPlayInputController(context.match, context);
+  if (activeMode === PLAY_INPUT_MODES.CLASSIC.key) return renderClassicPlayInputMode({ ...context, controller });
+  return renderClassicPlayInputMode({ ...context, controller });
+}
+async function switchPlayInputMode(nextMode) {
+  const normalized = normalizePlayInputMode(nextMode);
+  if (normalized !== String(nextMode || '').toUpperCase()) return { changed: false, mode: getPreferredPlayInputMode(), reason: 'unavailable' };
+  const current = getPreferredPlayInputMode();
+  if (normalized === current) return { changed: false, mode: current };
+  const match = getActiveMatch();
+  if (match && !await persistCurrentMatch({ applyDom: true, silent: true })) return { changed: false, mode: current, reason: 'save-failed' };
+  const saved = updatePlayerPreference('scoring.playInputMode', normalized);
+  if (!saved) return { changed: false, mode: current, reason: 'preference-save-failed' };
+  renderCurrentMatch();
+  return { changed: true, mode: normalized };
+}
+
 function renderCurrentMatch() {
   const match = getActiveMatch();
   const metaEl = document.getElementById('currentMatchMeta');
@@ -16555,24 +16642,7 @@ function renderCurrentMatch() {
   if (match.storageMode === 'shared') console.debug('[SharedStatGate]', 'renderCurrentMatch shared gate summary', describeSharedAssignmentState(match));
   renderScoreAccessCard(match);
   renderMemoryQuickCapture(match);
-  renderScoreGrid(match, tee, metrics, scoringHoles);
-  // Render Press after the current-hole inputs so stale values from the prior hole
-  // cannot make an untouched active hole appear started.
-  renderPressActions(match, metrics);
-  const playMatchSummary = document.getElementById('playMatchSummary');
-  if (playMatchSummary) {
-    const statusOptions = getMatchStatusOptions(match);
-    playMatchSummary.innerHTML = buildFeaturedMatchStatus(match, metrics, match.matchStatusGame || statusOptions[0]?.key || 'team_match');
-  }
-  renderSneakySandyPoleyEntry(match, hole, metrics);
-  renderStatTrackingEntry(match, hole, metrics);
-  renderSneakySandyPoleyNote(match, hole, metrics);
-  renderGreeniesEntry(match, hole);
-  renderHoleJumpTiles(match);
-  initializePlayInputs();
-  const saveBtn = document.getElementById('saveScoresBtn');
-  if (saveBtn) saveBtn.disabled = getScoreAccessState(match).role === 'viewer';
-  applyPendingScoreCommitFocus();
+  renderPlayInputMode({ match, tee, metrics, scoringHoles, hole });
 }
 
 
@@ -22340,6 +22410,14 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     renderPlayerPreferences(saved);
     toast('Preference saved');
   });
+  document.getElementById('playInputModeSelect')?.addEventListener('change', async event => {
+    const prior = getPreferredPlayInputMode();
+    const result = await switchPlayInputMode(event.target.value);
+    if (!result.changed && result.reason) {
+      event.target.value = prior;
+      toast(result.reason === 'unavailable' ? 'That score entry mode is not available yet.' : 'Score entry mode was not changed because the current hole could not be saved safely.');
+    }
+  });
   document.getElementById('resetPlayerPreferencesBtn')?.addEventListener('click', openResetPlayerPreferencesDialog);
   document.getElementById('cancelResetPlayerPreferencesBtn')?.addEventListener('click', closeResetPlayerPreferencesDialog);
   document.getElementById('resetPlayerPreferencesDialog')?.addEventListener('click', event => { if (event.target?.id === 'resetPlayerPreferencesDialog') closeResetPlayerPreferencesDialog(); });
@@ -23300,6 +23378,10 @@ function installDyeLedgerLiveEngineAdapter() {
     settlementFingerprint,
     shouldOfferServiceWorkerUpdate,
     markRoundReopenedForEditing,
+    normalizePlayInputMode,
+    getPreferredPlayInputMode,
+    createPlayInputController,
+    switchPlayInputMode,
     buildExecutiveDriverRows,
     buildSelectedGamesSummary,
     buildPressAuditSection,

@@ -293,6 +293,7 @@
             <label for="playInputModeSelect"><span class="section-label">Score Entry</span><select id="playInputModeSelect" aria-label="Score entry mode"></select></label>
             <div id="playInputModeHelp" class="tiny"></div>
           </div>
+          <header id="playerModeHoleHeader" class="player-mode-hole-header hidden" aria-label="Current hole"></header>
           <div id="activeHoleScoringTop" class="score-hole-nav actions wrap compact-actions">
             <button id="prevHoleBtn" type="button" class="secondary">◀ Prev</button>
             <div id="currentHoleBadge" class="badge big-badge">Hole 1</div>
@@ -301,16 +302,17 @@
           <div id="catchUpScoringBar" class="catch-up-scoring-bar hidden" aria-live="polite"></div>
           <div id="holeSummary" class="tiny top-gap"></div>
           <aside id="playMatchSummary" class="play-match-summary top-gap" aria-label="Match Summary"></aside>
+          <div id="playerModeScoreList" class="player-mode-score-list hidden" aria-label="Player scores"></div>
           <div id="sharedAssignmentDiagnosticsPlay" class="top-gap hidden"></div>
           <div id="greeniesEntryWrap" class="top-gap hidden"></div>
-          <div class="score-section-head score-entry-head">
+          <div id="classicScoreEntryHead" class="score-section-head score-entry-head">
             <div>
               <div class="tiny">Gross score entry for the current hole.</div>
               <div id="playStrokeBasisNote" class="tiny">Featured Competition strokes will appear when a match is active.</div>
             </div>
             <div class="play-report-actions"><button id="quickScoreboardBtn" type="button" class="secondary compact-icon-btn">Scoreboard</button><button id="playPressBtn" type="button" class="secondary compact-icon-btn hidden" aria-label="Press">Press</button></div>
           </div>
-          <div class="score-grid-wrap top-gap">
+          <div id="classicScoreGridWrap" class="score-grid-wrap top-gap">
             <table class="score-grid">
               <thead>
                 <tr>
@@ -326,10 +328,15 @@
           <div id="sneakySandyPoleyEntryWrap" class="top-gap hidden"></div>
           <div id="statTrackingEntryWrap" class="top-gap hidden"></div>
           <div id="sneakySandyPoleyNoteWrap" class="top-gap hidden"></div>
-          <div class="actions top-gap wrap compact-actions">
+          <div id="classicHoleActions" class="actions top-gap wrap compact-actions">
             <button id="saveScoresBtn" type="button">Save Hole Scores</button>
             <div class="tiny">Next automatically saves the current hole.</div>
           </div>
+          <nav id="playerModeBottomActions" class="player-mode-bottom-actions hidden" aria-label="Player Mode hole actions">
+            <button type="button" class="secondary" data-player-mode-previous>← Previous</button>
+            <button type="button" data-player-mode-save-next>Save &amp; Next Hole</button>
+            <button type="button" class="secondary" data-player-mode-scoreboard>Scoreboard</button>
+          </nav>
           <div id="scoreAccessCard" class="card inset-card top-gap hidden" aria-label="Other scores and stats visibility controls"></div>
           <div id="memoryQuickCaptureWrap" class="memory-quick-capture top-gap hidden"></div>
           <section id="playRoundProgress" class="play-round-progress top-gap" aria-labelledby="playRoundProgressTitle">

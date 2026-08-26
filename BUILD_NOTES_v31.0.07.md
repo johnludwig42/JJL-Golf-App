@@ -6,6 +6,9 @@ Player Mode is now a selectable Play experience built on the shared v31.0.06 inp
 
 ## Player Mode
 
+- Dedicated Player Mode card markup replaces the incompatible Classic table layout, preventing narrow-screen clipping.
+- Mobile hierarchy now prioritizes the hole header, featured result, team score lanes, selected-player detail, and sticky hole actions.
+- The persistent mode selector is hidden while Player Mode is active; Classic remains available from the Player Mode overflow menu and Player Preferences.
 - Current-hole, tap-first gross score choices for every visible golfer.
 - One selected golfer expands into detailed stat entry.
 - Team, tee, and handicap strokes remain visible; strokes use bold dots rather than “pops.”

@@ -2,6 +2,8 @@
 
 Player Mode is an input adapter, not a second scoring system. It may select a golfer, render tap targets, collect explicit hole facts, and request a save. It must not duplicate scoring, handicap, competition, settlement, synchronization, or report calculations.
 
+Player Mode owns dedicated semantic card markup. It must not render its cards through the Classic score table or inherit that table's horizontal overflow behavior.
+
 ## Tracking levels
 
 - **None:** gross scores only.

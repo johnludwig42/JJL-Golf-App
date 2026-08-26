@@ -16599,6 +16599,14 @@ function renderPlayInputModeSelector(activeMode = getPreferredPlayInputMode()) {
 }
 function renderClassicPlayInputMode({ match, tee, metrics, scoringHoles, hole, controller }) {
   document.getElementById('scoreEntryWrap')?.classList.remove('player-input-mode-active');
+  document.body?.classList.remove('player-mode-play-active');
+  document.querySelector('.play-input-mode-bar')?.classList.remove('hidden');
+  document.getElementById('activeHoleScoringTop')?.classList.remove('hidden');
+  document.getElementById('classicScoreEntryHead')?.classList.remove('hidden');
+  document.getElementById('classicScoreGridWrap')?.classList.remove('hidden');
+  document.getElementById('classicHoleActions')?.classList.remove('hidden');
+  document.getElementById('playerModeScoreList')?.classList.add('hidden');
+  document.getElementById('playerModeBottomActions')?.classList.add('hidden');
   renderScoreGrid(match, tee, metrics, scoringHoles);
   renderPressActions(match, metrics);
   const playMatchSummary = document.getElementById('playMatchSummary');
@@ -16639,13 +16647,30 @@ function buildPlayerModeScoreChoices(par, gross) {
   if (Number.isFinite(Number(gross)) && Number(gross) > 0 && !values.includes(Number(gross))) values.push(Number(gross));
   return values.sort((left, right) => left - right);
 }
+function getPlayerModeScoreLabel(score, par) {
+  const difference = Number(score) - Number(par);
+  if (difference <= -2) return difference === -2 ? 'Eagle' : `${Math.abs(difference)} under`;
+  if (difference === -1) return 'Birdie';
+  if (difference === 0) return 'Par';
+  if (difference === 1) return 'Bogey';
+  return `+${difference}`;
+}
 
 function renderPlayerModeScoreGrid(match, tee, metrics, hole) {
   const body = document.getElementById('scoreGridBody');
-  if (!body) return;
+  const list = document.getElementById('playerModeScoreList');
+  if (!body || !list) return;
+  body.innerHTML = '';
+  list.classList.remove('hidden');
   const visible = getVisibleScoringPlayers(match, metrics?.players || [], { stats: false });
   const selected = getPlayerModeSelectedPlayer(match, metrics);
-  body.innerHTML = visible.map(playerMetric => {
+  const groups = new Map();
+  visible.forEach(playerMetric => {
+    const team = Math.max(1, Number(playerMetric.team) || 1);
+    if (!groups.has(team)) groups.set(team, []);
+    groups.get(team).push(playerMetric);
+  });
+  list.innerHTML = [...groups.entries()].sort(([left], [right]) => left - right).map(([team, players]) => `<section class="player-mode-team" data-player-mode-team="${team}"><header><strong>${escapeHtml(getTeamLabel(match, team))}</strong><span><b>●</b> = match stroke</span></header>${players.map(playerMetric => {
     const playerRef = match.players.find(row => String(row.playerId) === String(playerMetric.playerId));
     const score = playerRef?.scores?.[currentHole - 1]?.gross;
     const playerHole = getPlayerHole(match, playerMetric, currentHole - 1, tee) || hole;
@@ -16654,20 +16679,12 @@ function renderPlayerModeScoreGrid(match, tee, metrics, hole) {
     const canEdit = canEditPlayerScore(match, playerMetric.team, playerMetric.playerId);
     const isSelected = String(selected?.playerId) === String(playerMetric.playerId);
     const choices = buildPlayerModeScoreChoices(par, score);
-    return `<tr class="player-mode-score-row ${isSelected ? 'is-selected' : ''} ${canEdit ? '' : 'score-row-readonly'}" data-player-mode-row="${escapeHtml(playerMetric.playerId)}">
-      <td colspan="4">
-        <div class="player-mode-row-head">
-          <button type="button" class="player-mode-player-select" data-player-mode-select="${escapeHtml(playerMetric.playerId)}" aria-pressed="${isSelected}" title="Show detailed entry for ${escapeHtml(playerMetric.player?.name || 'Player')}"><strong>${escapeHtml(playerMetric.player?.name || 'Player')}</strong><span>${escapeHtml(getTeamLabel(match, playerMetric.team))}</span></button>
-          <span class="player-mode-tee">${escapeHtml(getPlayerHoleTeeInfo(match, playerMetric, currentHole - 1, tee).label)}</span>
-          <span class="player-mode-strokes" aria-label="${strokes} handicap stroke${strokes === 1 ? '' : 's'}">${strokes > 0 ? '●'.repeat(strokes) : '—'}</span>
-        </div>
-        <div class="player-mode-score-choices" role="group" aria-label="Gross score for ${escapeHtml(playerMetric.player?.name || 'Player')}">
-          ${choices.map(value => `<button type="button" data-player-score-value="${value}" data-player-score-player="${escapeHtml(playerMetric.playerId)}" class="${Number(score) === value ? 'is-active' : ''}" ${canEdit ? '' : 'disabled'}>${value}</button>`).join('')}
-          <label class="player-mode-more-score"><span>More</span><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" min="1" max="25" data-score-player="${escapeHtml(playerMetric.playerId)}" data-score-locked="${canEdit ? '0' : '1'}" data-hole-par="${par}" value="${score || ''}" ${canEdit ? '' : 'disabled'} /></label>
-        </div>
-      </td>
-    </tr>`;
-  }).join('');
+    const net = Number.isFinite(Number(score)) && Number(score) > 0 ? Number(score) - strokes : null;
+    return `<article class="player-mode-score-row ${isSelected ? 'is-selected' : ''} ${canEdit ? '' : 'score-row-readonly'}" data-player-mode-row="${escapeHtml(playerMetric.playerId)}">
+      <div class="player-mode-row-head"><button type="button" class="player-mode-player-select" data-player-mode-select="${escapeHtml(playerMetric.playerId)}" aria-pressed="${isSelected}" title="Show detailed entry for ${escapeHtml(playerMetric.player?.name || 'Player')}"><strong>${escapeHtml(playerMetric.player?.name || 'Player')}</strong><span>${Number.isFinite(net) ? `${score} gross · ${net} match net` : 'Score needed'}</span></button><span class="player-mode-strokes" aria-label="${strokes} handicap stroke${strokes === 1 ? '' : 's'}">${strokes > 0 ? '●'.repeat(strokes) : ''}</span></div>
+      <div class="player-mode-score-choices" role="group" aria-label="Gross score for ${escapeHtml(playerMetric.player?.name || 'Player')}">${choices.map(value => `<button type="button" data-player-score-value="${value}" data-player-score-player="${escapeHtml(playerMetric.playerId)}" class="${Number(score) === value ? 'is-active' : ''}" ${canEdit ? '' : 'disabled'}>${value}</button>`).join('')}<label class="player-mode-more-score"><span>Other</span><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" min="1" max="25" data-score-player="${escapeHtml(playerMetric.playerId)}" data-score-locked="${canEdit ? '0' : '1'}" data-hole-par="${par}" value="${score || ''}" ${canEdit ? '' : 'disabled'} /></label></div>
+    </article>`;
+  }).join('')}</section>`).join('');
 }
 
 function renderPlayerModeStatEntry(match, hole, metrics) {
@@ -16686,13 +16703,18 @@ function renderPlayerModeStatEntry(match, hole, metrics) {
   const playerHole = getPlayerHole(match, selected, currentHole - 1, metrics?.tee) || hole;
   const par = Number(playerHole?.par || hole?.par || 4);
   const canEdit = canEditPlayerScore(match, selected.team, selected.playerId);
+  const strokes = getFeaturedCompetitionStrokeAllowance(match, metrics, selected, playerHole?.strokeIndex);
+  const net = Number.isFinite(Number(gross)) && Number(gross) > 0 ? Number(gross) - strokes : null;
+  const scoreChoices = buildPlayerModeScoreChoices(par, gross);
   const derived = deriveGreenInRegulation({ gross, putts: stat.putts, par, puttsSource: stat.puttsSource, override: stat.greenOverride });
   const choice = (key, value, label, active, constrained = false) => `<button type="button" data-player-stat-choice="${escapeHtml(key)}" data-player-stat-value="${escapeHtml(value)}" data-stat-player-id="${escapeHtml(selected.playerId)}" class="${active ? 'is-active' : ''}" ${(canEdit && !constrained) ? '' : 'disabled'}>${escapeHtml(label)}</button>`;
   const advanced = mode.active === 'ENHANCED' || mode.active === 'GRIND';
   const grind = mode.active === 'GRIND';
   wrap.classList.remove('hidden');
   wrap.innerHTML = `<div class="card inset-card player-mode-stat-card" data-player-stat-mode="${mode.active}">
-    <div class="item-header compact-item-header"><div><div class="section-label">${escapeHtml(selected.player?.name || 'Player')} · ${mode.active.charAt(0) + mode.active.slice(1).toLowerCase()} stats</div><div class="tiny">Putts count only from the putting surface. Conceded putts count as a stroke and a putt.</div></div></div>
+    <div class="player-mode-detail-head"><div><strong>${escapeHtml(selected.player?.name || 'Player')}</strong><span class="player-mode-stat-badge">${mode.active.charAt(0) + mode.active.slice(1).toLowerCase()}</span></div><span>${escapeHtml(getPlayerHoleTeeInfo(match, selected, currentHole - 1, metrics?.tee).label)}${strokes > 0 ? ` · ${'●'.repeat(strokes)}` : ''}${Number.isFinite(net) ? ` · net ${net}` : ''}</span></div>
+    <div class="player-mode-stat-section"><span class="player-mode-stat-label">Gross Score</span><div class="player-mode-score-choices player-mode-detail-score" role="group" aria-label="Gross score for ${escapeHtml(selected.player?.name || 'Player')}">${scoreChoices.map(value => `<button type="button" data-player-score-value="${value}" data-player-score-player="${escapeHtml(selected.playerId)}" class="${Number(gross) === value ? 'is-active' : ''}" ${canEdit ? '' : 'disabled'}><b>${value}</b><small>${escapeHtml(getPlayerModeScoreLabel(value, par))}</small></button>`).join('')}<button type="button" data-player-mode-other-player="${escapeHtml(selected.playerId)}" ${canEdit ? '' : 'disabled'}><b>Other</b></button></div></div>
+    <div class="tiny">Putts count only from the putting surface. Conceded putts count as a stroke and a putt.</div>
     ${mode.grindRestricted ? '<div class="player-mode-warning">Grind requires this device to score no more than two golfers. Enhanced controls are shown.</div>' : ''}
     <div class="player-mode-stat-section"><span class="player-mode-stat-label">Putts</span><div class="player-mode-stat-options">${[0,1,2,3,4].map(value => choice('putts', value, value, stat.puttsSource !== 'default' && stat.putts === value)).join('')}</div></div>
     <input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="putts" data-putts-source="${escapeHtml(stat.puttsSource)}" value="${stat.putts}" />
@@ -16710,12 +16732,23 @@ function renderPlayerModeStatEntry(match, hole, metrics) {
 
 function renderPlayerPlayInputMode({ match, tee, metrics, scoringHoles, hole, controller }) {
   document.getElementById('scoreEntryWrap')?.classList.add('player-input-mode-active');
+  document.body?.classList.add('player-mode-play-active');
+  document.querySelector('.play-input-mode-bar')?.classList.add('hidden');
+  document.getElementById('activeHoleScoringTop')?.classList.add('hidden');
+  document.getElementById('classicScoreEntryHead')?.classList.add('hidden');
+  document.getElementById('classicScoreGridWrap')?.classList.add('hidden');
+  document.getElementById('classicHoleActions')?.classList.add('hidden');
+  document.getElementById('playerModeBottomActions')?.classList.remove('hidden');
   renderPlayerModeScoreGrid(match, tee, metrics, hole);
   renderPressActions(match, metrics);
   const playMatchSummary = document.getElementById('playMatchSummary');
   if (playMatchSummary) {
     const statusOptions = getMatchStatusOptions(match);
-    playMatchSummary.innerHTML = buildFeaturedMatchStatus(match, metrics, match.matchStatusGame || statusOptions[0]?.key || 'team_match');
+    const gameKey = match.matchStatusGame || statusOptions[0]?.key || 'team_match';
+    const featuredLabel = getFeaturedGameLabel(match, gameKey);
+    const rawStatus = getPrimaryMatchStatusLine(match, metrics) || 'Not started';
+    const headline = rawStatus.replace(/^[^:]+:\s*/, '') || rawStatus;
+    playMatchSummary.innerHTML = `<div class="player-mode-featured-label">Featured · ${escapeHtml(featuredLabel)}</div><div class="player-mode-featured-result">${escapeHtml(headline)}</div><div class="player-mode-featured-through">${Number(metrics?.completed || 0) ? `through ${Number(metrics.completed)}` : 'Not started'}</div>`;
   }
   renderSneakySandyPoleyEntry(match, hole, metrics);
   renderPlayerModeStatEntry(match, hole, metrics);
@@ -17207,7 +17240,8 @@ function buildLiveScoringStatusLine(match, metrics) {
 
 function renderHoleSelector(match, scoringHoles = []) {
   const badge = document.getElementById('currentHoleBadge');
-  if (!badge) return;
+  const playerHeader = document.getElementById('playerModeHoleHeader');
+  if (!badge && !playerHeader) return;
   const holes = Array.isArray(scoringHoles) && scoringHoles.length ? scoringHoles : getSelectedScoringHoles(match, getTee(match?.courseId, match?.teeId));
   const maxHole = holes.length || getRequestedHoleCount(match) || 18;
   const options = Array.from({ length: maxHole }, (_, idx) => {
@@ -17215,7 +17249,17 @@ function renderHoleSelector(match, scoringHoles = []) {
     const displayHole = holes[idx]?.holeNumber || holeNo;
     return `<option value="${holeNo}" ${holeNo === currentHole ? 'selected' : ''}>Hole ${displayHole}</option>`;
   }).join('');
-  badge.innerHTML = `<label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select>`;
+  const isPlayerMode = getPreferredPlayInputMode() === PLAY_INPUT_MODES.PLAYER.key;
+  if (isPlayerMode && playerHeader) {
+    const hole = holes[currentHole - 1] || null;
+    const yardage = Number(hole?.yardage);
+    playerHeader.classList.remove('hidden');
+    playerHeader.innerHTML = `<div class="player-mode-hole-title"><label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select><div class="player-mode-hole-meta">Par ${Number(hole?.par) || '—'}${Number.isFinite(yardage) && yardage > 0 ? ` · ${formatYardageValue(yardage)} yd` : ''} · SI ${Number(hole?.strokeIndex) || '—'}</div></div><div class="player-mode-save-state" aria-live="polite">Saved ✓</div><button type="button" class="secondary player-mode-overflow" data-player-mode-overflow aria-expanded="false" aria-controls="playerModeOverflowMenu" aria-label="More Play actions">•••</button><div id="playerModeOverflowMenu" class="player-mode-overflow-menu hidden"><button type="button" class="secondary" data-player-mode-use-classic>Use Classic Mode</button><button type="button" class="secondary" data-player-mode-scoreboard>Open Scoreboard</button></div>`;
+    if (badge) badge.innerHTML = '';
+    return;
+  }
+  playerHeader?.classList.add('hidden');
+  if (badge) badge.innerHTML = `<label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select>`;
 }
 
 function renderSneakySandyPoleyEntry(match, hole, metrics) {
@@ -20657,6 +20701,7 @@ function activateTab(tabId) {
   const closedCompletedSummary = tabId === 'setup' && closeCompletedSummarySession();
   document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tabId));
   document.querySelectorAll('.panel').forEach(el => el.classList.toggle('active', el.id === tabId));
+  document.body?.classList.toggle('player-mode-play-active', tabId === 'score' && getPreferredPlayInputMode() === PLAY_INPUT_MODES.PLAYER.key);
   if (closedCompletedSummary) renderAll();
   updateAppChromeOffset();
   syncFinishRoundUi(getActiveMatch());
@@ -21567,6 +21612,38 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }, '#gameConfigs');
   });
   document.getElementById('score').addEventListener('click', e => {
+    const overflowButton = e.target.closest('[data-player-mode-overflow]');
+    if (overflowButton) {
+      const menu = document.getElementById('playerModeOverflowMenu');
+      const opening = !!menu?.classList.contains('hidden');
+      menu?.classList.toggle('hidden', !opening);
+      overflowButton.setAttribute('aria-expanded', String(opening));
+      return;
+    }
+    if (e.target.closest('[data-player-mode-use-classic]')) {
+      switchPlayInputMode(PLAY_INPUT_MODES.CLASSIC.key);
+      return;
+    }
+    if (e.target.closest('[data-player-mode-previous]')) {
+      saveCurrentHole({ targetHole: 'previous', silent: true });
+      return;
+    }
+    if (e.target.closest('[data-player-mode-save-next]')) {
+      saveCurrentHole({ advance: true, silent: true });
+      return;
+    }
+    if (e.target.closest('[data-player-mode-scoreboard]')) {
+      openQuickScoreboardView();
+      return;
+    }
+    const otherScore = e.target.closest('[data-player-mode-other-player]');
+    if (otherScore) {
+      const row = document.querySelector(`[data-player-mode-row="${cssEscape(otherScore.dataset.playerModeOtherPlayer || '')}"]`);
+      const input = row?.querySelector('input[data-score-player]');
+      input?.focus({ preventScroll: false });
+      input?.select?.();
+      return;
+    }
     const playerSelect = e.target.closest('[data-player-mode-select]');
     if (playerSelect) {
       playerModeSelectedPlayerId = String(playerSelect.dataset.playerModeSelect || '');

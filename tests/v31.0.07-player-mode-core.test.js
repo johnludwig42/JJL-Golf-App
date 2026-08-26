@@ -38,11 +38,32 @@ test('Player Mode delegates to shared inputs and preserves explicit directional 
   assert.match(app, /function renderPlayerPlayInputMode/);
   assert.match(app, /data-score-player=/);
   assert.match(app, /data-stat-key="fairwayResult"/);
-  assert.match(app, /data-stat-key="greenResult"/);
   assert.match(app, /data-stat-key="greenOverride"/);
+  assert.match(app, /data-stat-key="approachResult"/);
   assert.match(app, /Grind requires this device to score no more than two golfers/);
   assert.match(css, /player-input-mode-active/);
   assert.doesNotMatch(app, /function computePlayerModeMetrics|function syncPlayerMode|function buildPlayerModeReport/);
+});
+
+test('Player Mode keeps par centered and uses consistent six-choice score and putt controls', () => {
+  assert.match(app, /\[par - 2, par - 1, par, par \+ 1, par \+ 2\]/);
+  assert.match(app, /\[0,1,2,3,4\]\.map\(value => choice\('putts'/);
+  assert.match(app, /player-mode-more-stat/);
+  assert.match(css, /box-shadow:0 4px 10px rgba\(0,55,35,.22\),inset 0 0 0 2px/);
+});
+
+test('Enhanced and Grind preserve nine-position approach dispersion for reports and story facts', () => {
+  const engine = loadLiveEngine();
+  assert.deepEqual(structuredClone(engine.getApproachDispersionSummary({
+    approachOpps: 6,
+    approachMisses: 5,
+    approachPositions: { '1': 1, '2': 1, '3': 0, '4': 2, '5': 1, '6': 0, '7': 1, '8': 0, '9': 0 },
+  })), { tracked: 6, misses: 5, short: 2, left: 4, right: 0, long: 1, dominant: ['left'] });
+  assert.match(app, /\['7','8','9','4','5','6','1','2','3'\]\.map\(approachChoice\)/);
+  assert.match(app, /function getApproachDispersionSummary/);
+  assert.match(app, /Approach Misses/);
+  assert.match(app, /most common recorded approach miss/);
+  assert.match(app, /Unknown approach locations remain outside dispersion denominators|approachResult/);
 });
 
 test('Player Mode uses dedicated card markup instead of the Classic score table', () => {
@@ -56,5 +77,7 @@ test('Player Mode uses dedicated card markup instead of the Classic score table'
   assert.match(renderer, /<article class="player-mode-score-row/);
   assert.doesNotMatch(renderer, /<tr|<td/);
   assert.match(css, /player-mode-bottom-actions/);
-  assert.match(css, /body\.player-mode-play-active \.app-footer\{display:none\}/);
+  assert.match(css, /body\.player-mode-play-active \.app-footer-version\{display:none\}/);
+  const playerModeStyles = css.split(/\r?\n/).filter(line => /player-mode|play-input-mode-bar/.test(line)).join('\n');
+  assert.doesNotMatch(playerModeStyles, /var\(--(?:ink|panel|line)\)/);
 });

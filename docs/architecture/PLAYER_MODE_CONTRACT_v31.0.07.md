@@ -8,7 +8,7 @@ Player Mode owns dedicated semantic card markup. It must not render its cards th
 
 - **None:** gross scores only.
 - **Casual:** putts, penalties, tee-shot result, and calculated GIR.
-- **Enhanced:** Casual plus five-way green result and recovery outcomes.
+- **Enhanced:** Casual plus a nine-position approach result and recovery outcomes. Position 5 is computed GIR; the other eight positions explicitly capture miss direction.
 - **Grind:** Enhanced plus bunker involvement and future shot-context extensions. It is restricted to devices scoring no more than two golfers.
 
 ## Definitions
@@ -18,6 +18,8 @@ Player Mode owns dedicated semantic card markup. It must not render its cards th
 - GIR requires the ball to be on the putting surface with at least two strokes remaining relative to par.
 - GIR is derived only when gross score, par, and user-confirmed putts are known. Unknown inputs remain unknown.
 - GIR overrides are reserved for edge cases and preserve correction provenance.
+- Approach locations use a keypad orientation: 7/8/9 long, 4/6 left/right, 1/2/3 short, and 5 on the green.
+- Unknown approach locations remain outside dispersion denominators. A computed GIR may populate position 5, but the app never invents a miss location.
 
 ## Compatibility
 

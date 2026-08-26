@@ -3218,6 +3218,7 @@ function buildEmptyStats(count = 18) {
     greenResult: 'UNKNOWN',
     approachResult: 'UNKNOWN',
     bunkerInvolved: false,
+    recoveryLie: 'UNKNOWN',
     greenSource: 'unknown',
     greenOverride: null,
   }));
@@ -4234,6 +4235,7 @@ function normalizeHoleStat(stat = {}, idx = 0) {
     greenResult: ['ON', 'SHORT', 'LEFT', 'RIGHT', 'LONG', 'UNKNOWN'].includes(String(stat?.greenResult || '').toUpperCase()) ? String(stat.greenResult).toUpperCase() : (stat?.green ? 'ON' : 'UNKNOWN'),
     approachResult: ['1','2','3','4','5','6','7','8','9','UNKNOWN'].includes(String(stat?.approachResult || '').toUpperCase()) ? String(stat.approachResult).toUpperCase() : (stat?.green ? '5' : 'UNKNOWN'),
     bunkerInvolved: !!stat?.bunkerInvolved,
+    recoveryLie: ['ROUGH', 'BUNKER', 'FRINGE', 'OTHER', 'UNKNOWN'].includes(String(stat?.recoveryLie || '').toUpperCase()) ? String(stat.recoveryLie).toUpperCase() : (stat?.bunkerInvolved ? 'BUNKER' : 'UNKNOWN'),
     greenSource: ['calculated', 'override', 'legacy', 'unknown'].includes(String(stat?.greenSource || '').toLowerCase()) ? String(stat.greenSource).toLowerCase() : (Object.prototype.hasOwnProperty.call(stat || {}, 'green') ? 'legacy' : 'unknown'),
     greenOverride: typeof stat?.greenOverride === 'boolean' ? stat.greenOverride : null,
   };
@@ -4248,6 +4250,18 @@ function deriveGreenInRegulation({ gross, putts, par, puttsSource = 'default', o
     return { value: null, source: 'unknown' };
   }
   return { value: numericGross - numericPutts <= numericPar - 2, source: 'calculated' };
+}
+
+function deriveScramblingResult({ gross, par, green, greenSource = 'unknown', recoveryLie = 'UNKNOWN' } = {}) {
+  const knownGreen = String(greenSource || 'unknown').toLowerCase() !== 'unknown';
+  const numericGross = Number(gross);
+  const numericPar = Number(par);
+  if (!knownGreen || green !== false || !Number.isFinite(numericGross) || numericGross <= 0 || !Number.isFinite(numericPar) || numericPar <= 0) {
+    return { opportunity: false, success: false, sandyOpportunity: false, sandySuccess: false };
+  }
+  const success = numericGross <= numericPar;
+  const sandyOpportunity = String(recoveryLie || '').toUpperCase() === 'BUNKER';
+  return { opportunity: true, success, sandyOpportunity, sandySuccess: sandyOpportunity && success };
 }
 
 function isStatTrackingEnabled(match) {
@@ -10482,7 +10496,7 @@ function computeStatTrackingSummary(match, metrics) {
   const trackedPlayers = (metrics?.players || []).filter(playerMetric => isPlayerStatTrackingEnabled(match, playerMetric.playerId));
   const summary = trackedPlayers.map(playerMetric => {
     const playerRef = match.players.find(row => row.playerId === playerMetric.playerId);
-    const totals = { trackedHoles: 0, fairwaysHit: 0, fairwayOpps: 0, greens: 0, greenOpps: 0, putts: 0, puttOpps: 0, penaltyStrokes: 0, upAndDowns: 0, sandies: 0, approachOpps: 0, approachMisses: 0, approachPositions: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 0, '8': 0, '9': 0 } };
+    const totals = { trackedHoles: 0, fairwaysHit: 0, fairwayOpps: 0, greens: 0, greenOpps: 0, putts: 0, puttOpps: 0, penaltyStrokes: 0, upAndDowns: 0, scramblingOpps: 0, sandies: 0, sandSaveOpps: 0, recoveryByLie: { ROUGH: { opportunities: 0, successes: 0 }, BUNKER: { opportunities: 0, successes: 0 }, FRINGE: { opportunities: 0, successes: 0 }, OTHER: { opportunities: 0, successes: 0 } }, approachOpps: 0, approachMisses: 0, approachPositions: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 0, '8': 0, '9': 0 } };
     (metrics?.holeResults || []).forEach((holeResult, holeIdx) => {
       if (!holeResult?.completed) return;
       const scoreObj = holeResult?.playerScores?.find(ps => ps.playerId === playerMetric.playerId);
@@ -10511,8 +10525,16 @@ function computeStatTrackingSummary(match, metrics) {
         totals.puttOpps += 1;
       }
       if (Number.isFinite(Number(stat.penaltyStrokes))) totals.penaltyStrokes += Number(stat.penaltyStrokes);
-      if (stat.upAndDown) totals.upAndDowns += 1;
-      if (stat.sandy) totals.sandies += 1;
+      const recovery = deriveScramblingResult({ gross: scoreObj.gross, par, green: stat.green, greenSource: stat.greenSource, recoveryLie: stat.recoveryLie });
+      if (recovery.opportunity) totals.scramblingOpps += 1;
+      if (recovery.success) totals.upAndDowns += 1;
+      if (recovery.sandyOpportunity) totals.sandSaveOpps += 1;
+      if (recovery.sandySuccess) totals.sandies += 1;
+      const recoveryLie = String(stat.recoveryLie || 'UNKNOWN').toUpperCase();
+      if (recovery.opportunity && totals.recoveryByLie[recoveryLie]) {
+        totals.recoveryByLie[recoveryLie].opportunities += 1;
+        if (recovery.success) totals.recoveryByLie[recoveryLie].successes += 1;
+      }
     });
     return { playerMetric, totals };
   });
@@ -10548,7 +10570,10 @@ function buildTrackedStatisticsStoryFacts(match, metrics) {
       totalPutts: Number(totals.putts || 0),
       puttingHoles: Number(totals.puttOpps || 0),
       upAndDowns: Number(totals.upAndDowns || 0),
+      scramblingOpportunities: Number(totals.scramblingOpps || 0),
       sandies: Number(totals.sandies || 0),
+      sandSaveOpportunities: Number(totals.sandSaveOpps || 0),
+      recoveryByLie: clonePlain(totals.recoveryByLie || {}),
       penaltyStrokes: Number(totals.penaltyStrokes || 0),
       approachDispersion: getApproachDispersionSummary(totals),
     }));
@@ -10559,8 +10584,10 @@ function describeTrackedStatisticsForStory(fact) {
   if (fact.fairwayOpportunities) details.push(`${fact.fairwaysHit} of ${fact.fairwayOpportunities} fairways`);
   if (fact.greenOpportunities) details.push(`${fact.greensInRegulation} of ${fact.greenOpportunities} greens in regulation`);
   if (fact.puttingHoles) details.push(`${fact.totalPutts} putts across ${fact.puttingHoles} tracked holes`);
-  if (fact.upAndDowns) details.push(`${fact.upAndDowns} up-and-down${fact.upAndDowns === 1 ? '' : 's'}`);
-  if (fact.sandies) details.push(`${fact.sandies} sandy${fact.sandies === 1 ? '' : 's'}`);
+  if (fact.scramblingOpportunities) details.push(`${fact.upAndDowns} of ${fact.scramblingOpportunities} scrambling opportunities converted`);
+  if (fact.sandSaveOpportunities) details.push(`${fact.sandies} of ${fact.sandSaveOpportunities} sand saves converted`);
+  const recoveryHighlights = Object.entries(fact.recoveryByLie || {}).filter(([, row]) => Number(row?.opportunities || 0) > 0).map(([lie, row]) => `${Number(row.successes || 0)} of ${Number(row.opportunities || 0)} from ${lie.toLowerCase()}`);
+  if (recoveryHighlights.length) details.push(`recovery conversions of ${recoveryHighlights.join(', ')}`);
   if (fact.penaltyStrokes) details.push(`${fact.penaltyStrokes} penalty stroke${fact.penaltyStrokes === 1 ? '' : 's'}`);
   if (fact.approachDispersion?.misses >= 2 && fact.approachDispersion.dominant.length === 1) details.push(`${fact.approachDispersion.dominant[0]} was the most common recorded approach miss`);
   return details.length ? `${fact.playerName}'s recorded statistics included ${details.join(', ')}.` : '';
@@ -10691,12 +10718,19 @@ function buildLedgerEntryStatisticsSections(match, metrics) {
   const shortGameRows = trackedInsights.map(row => {
     const tracked = trackedByPlayer.get(String(row.playerId));
     const averagePutts = tracked.puttOpps ? (tracked.putts / tracked.puttOpps).toFixed(2) : '—';
-    return `<tr><td><strong>${escapeHtml(row.displayName)}</strong></td><td>${tracked.trackedHoles}</td><td>${tracked.puttOpps ? tracked.putts : '—'}</td><td>${averagePutts}</td><td>${tracked.upAndDowns}</td><td>${tracked.sandies}</td></tr>`;
+    return `<tr><td><strong>${escapeHtml(row.displayName)}</strong></td><td>${tracked.trackedHoles}</td><td>${tracked.puttOpps ? tracked.putts : '—'}</td><td>${averagePutts}</td><td>${formatLedgerStatRate(tracked.upAndDowns, tracked.scramblingOpps)}</td><td>${formatLedgerStatRate(tracked.sandies, tracked.sandSaveOpps)}</td></tr>`;
+  }).join('');
+  const recoveryRows = trackedInsights.map(row => {
+    const tracked = trackedByPlayer.get(String(row.playerId));
+    const byLie = tracked.recoveryByLie || {};
+    const lieRate = key => formatLedgerStatRate(Number(byLie[key]?.successes || 0), Number(byLie[key]?.opportunities || 0));
+    return `<tr><td><strong>${escapeHtml(row.displayName)}</strong></td><td>${formatLedgerStatRate(tracked.upAndDowns, tracked.scramblingOpps)}</td><td>${lieRate('ROUGH')}</td><td>${lieRate('BUNKER')}</td><td>${lieRate('FRINGE')}</td><td>${lieRate('OTHER')}</td></tr>`;
   }).join('');
   const table = (label, headings, rows, description) => `<section class="ledger-stat-group report-section--avoid-break" data-ledger-stat-group="${escapeHtml(label.toLowerCase().replace(/[^a-z]+/g, '-'))}"><h3>${escapeHtml(label)}</h3><div class="export-section-sub">${escapeHtml(description)}</div><div class="fit-stage" data-fit="width" data-fit-min="0.75"><div class="fit-box"><table class="export-table ledger-stat-table"><thead><tr>${headings.map(heading => `<th>${escapeHtml(heading)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div></div></section>`;
   return `${table('Scoring', ['Player', 'Holes', 'Average', 'Birdie+', 'Par+', 'Double-Bogey Avoid.', 'Penalty Strokes'], scoringRows, 'Completed, scored holes only. Rates include their supporting fraction; penalties appear only for recorded tracked holes.')}
     ${ballStrikingRows ? table('Ball Striking', ['Player', 'Tracked Holes', 'Fairways', 'GIR', 'Birdie+ Conversion on GIR', 'GIR · Fairway Hit', 'GIR · Fairway Missed', 'Fairway GIR Advantage'], ballStrikingRows, 'Recorded tracked holes only. Birdie+ Conversion on GIR means birdie or better after a recorded GIR, regardless of putt count.') : ''}
-    ${shortGameRows ? table('Short Game & Putting', ['Player', 'Tracked Holes', 'Total Putts', 'Putts / Tracked Hole', 'Up & Downs', 'Sandies'], shortGameRows, 'Recorded tracked holes only; untouched fields are omitted rather than interpreted as zero.') : ''}`;
+    ${shortGameRows ? table('Short Game & Putting', ['Player', 'Tracked Holes', 'Total Putts', 'Putts / Tracked Hole', 'Scrambling', 'Sand Saves'], shortGameRows, 'Scrambling is par or better after a recorded missed GIR. Sand saves use recorded bunker recovery lies as the opportunity denominator.') : ''}
+    ${recoveryRows ? table('Recovery Performance', ['Player', 'Overall Scrambling', 'From Rough', 'From Bunker', 'From Fringe', 'From Other'], recoveryRows, 'Recorded missed-GIR opportunities grouped by the selected recovery lie. Unknown recovery lies remain in overall scrambling but are excluded from lie-specific denominators.') : ''}`;
 }
 
 function formatFairwayGirAdvantage(rate) {
@@ -10852,8 +10886,8 @@ function buildExportStatTrackingSummary(match, metrics) {
         <td>${totals.greens} / ${totals.greenOpps}</td>
         <td>${totals.putts}</td>
         <td>${avgPutts}</td>
-        <td>${totals.upAndDowns}</td>
-        <td>${totals.sandies}</td>
+        <td>${formatLedgerStatRate(totals.upAndDowns, totals.scramblingOpps)}</td>
+        <td>${formatLedgerStatRate(totals.sandies, totals.sandSaveOpps)}</td>
         <td>${totals.penaltyStrokes}</td>
         <td>${approachText}</td>
       </tr>`;
@@ -10864,7 +10898,7 @@ function buildExportStatTrackingSummary(match, metrics) {
       <div class="fit-box">
         <table class="export-table export-stat-summary-table">
           <thead>
-            <tr><th>Player</th><th>Tracked Holes</th><th>Fairways</th><th>GIR</th><th>Total Putts</th><th>Avg Putts</th><th>Up & Downs</th><th>Sandies</th><th>Penalty</th><th>Approach Misses</th></tr>
+            <tr><th>Player</th><th>Tracked Holes</th><th>Fairways</th><th>GIR</th><th>Total Putts</th><th>Avg Putts</th><th>Scrambling</th><th>Sand Saves</th><th>Penalty</th><th>Approach Misses</th></tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
@@ -12810,7 +12844,7 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
     }
   });
   if (isStatTrackingEnabled(match)) {
-    document.querySelectorAll('input[data-stat-player][data-stat-key]').forEach(input => {
+    document.querySelectorAll('input[data-stat-player][data-stat-key], select[data-stat-player][data-stat-key]').forEach(input => {
       const playerId = input.dataset.statPlayer;
       const key = input.dataset.statKey;
       const playerRef = match.players.find(p => p.playerId === playerId);
@@ -12843,6 +12877,9 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
         currentStat.greenOverride = input.value === '' ? null : input.value === 'true';
       } else if (key === 'bunkerInvolved') {
         currentStat.bunkerInvolved = !!input.checked;
+      } else if (key === 'recoveryLie') {
+        currentStat.recoveryLie = ['ROUGH', 'BUNKER', 'FRINGE', 'OTHER', 'UNKNOWN'].includes(String(input.value || '').toUpperCase()) ? String(input.value).toUpperCase() : 'UNKNOWN';
+        currentStat.bunkerInvolved = currentStat.recoveryLie === 'BUNKER';
       } else {
         currentStat[key] = !!input.checked;
         currentStat.puttsSource = normalizePuttsSource(currentStat.puttsSource || 'default', 'default');
@@ -12863,6 +12900,9 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
       const derived = deriveGreenInRegulation({ gross: score, putts: stat.putts, par: playerHole?.par || holeMeta?.par, puttsSource: stat.puttsSource, override: stat.greenOverride });
       stat.green = derived.value === true;
       stat.greenSource = derived.source;
+      const recovery = deriveScramblingResult({ gross: score, par: playerHole?.par || holeMeta?.par, green: derived.value, greenSource: derived.source, recoveryLie: stat.recoveryLie });
+      stat.upAndDown = recovery.success;
+      stat.sandy = recovery.sandySuccess;
       if (derived.value === true) {
         stat.greenResult = 'ON';
         stat.approachResult = '5';
@@ -16658,7 +16698,7 @@ function renderClassicPlayInputMode({ match, tee, metrics, scoringHoles, hole, c
   document.getElementById('scoreEntryWrap')?.classList.remove('player-input-mode-active');
   document.body?.classList.remove('player-mode-play-active');
   document.querySelector('.play-input-mode-bar')?.classList.remove('hidden');
-  document.getElementById('activeHoleScoringTop')?.classList.remove('hidden');
+  document.getElementById('activeHoleScoringTop')?.classList.add('hidden');
   document.getElementById('classicScoreEntryHead')?.classList.remove('hidden');
   document.getElementById('classicScoreGridWrap')?.classList.remove('hidden');
   document.getElementById('classicHoleActions')?.classList.remove('hidden');
@@ -16769,11 +16809,13 @@ function renderPlayerModeStatEntry(match, hole, metrics) {
   const otherScoreSelected = Number.isFinite(Number(gross)) && Number(gross) > 0 && !scoreChoices.includes(Number(gross));
   const derived = deriveGreenInRegulation({ gross, putts: stat.putts, par, puttsSource: stat.puttsSource, override: stat.greenOverride });
   const choice = (key, value, label, active, constrained = false) => `<button type="button" data-player-stat-choice="${escapeHtml(key)}" data-player-stat-value="${escapeHtml(value)}" data-stat-player-id="${escapeHtml(selected.playerId)}" class="${active ? 'is-active' : ''}" ${(canEdit && !constrained) ? '' : 'disabled'}>${escapeHtml(label)}</button>`;
-  const fairwayHitChoice = `<button type="button" data-player-stat-choice="fairwayResult" data-player-stat-value="HIT" data-stat-player-id="${escapeHtml(selected.playerId)}" class="${stat.fairwayResult === 'HIT' ? 'is-active' : ''}" ${canEdit ? '' : 'disabled'}><svg class="fairway-hit-icon" viewBox="0 0 28 22" aria-hidden="true"><path d="M7 19c2-6 3-11 4-16h2v8c4-2 7-1 10 1-3 1-6 2-10 1v6z" fill="currentColor"/><path d="M3 20c5-3 17-3 22 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Hit</span></button>`;
+  const fairwayHitChoice = `<button type="button" data-player-stat-choice="fairwayResult" data-player-stat-value="HIT" data-stat-player-id="${escapeHtml(selected.playerId)}" class="${stat.fairwayResult === 'HIT' ? 'is-active' : ''}" ${canEdit ? '' : 'disabled'}><span class="fairway-hit-check" aria-hidden="true">✓</span><span>Hit</span></button>`;
   const approachLabels = { '7': 'Deep Left', '8': 'Long', '9': 'Deep Right', '4': 'Left', '5': 'GIR', '6': 'Right', '1': 'Short Left', '2': 'Short', '3': 'Short Right' };
   const approachChoice = value => `<button type="button" data-player-stat-choice="approachResult" data-player-stat-value="${value}" data-stat-player-id="${escapeHtml(selected.playerId)}" class="${(value === '5' ? derived.value === true : stat.approachResult === value) ? 'is-active' : ''} ${value === '5' ? 'is-derived' : ''}" ${(canEdit && value !== '5' && derived.value !== true) ? '' : 'disabled'}><b>${value}</b><small>${escapeHtml(approachLabels[value])}</small></button>`;
   const advanced = statTrackingModeIncludesApproachGrid(mode.active);
   const grind = mode.active === 'GRIND';
+  const recovery = deriveScramblingResult({ gross, par, green: derived.value, greenSource: derived.source, recoveryLie: stat.recoveryLie });
+  const recoveryChoice = (value, label) => choice('recoveryLie', value, label, stat.recoveryLie === value);
   wrap.classList.remove('hidden');
   wrap.innerHTML = `<div class="card inset-card player-mode-stat-card" data-player-stat-mode="${mode.active}">
     <div class="player-mode-detail-head"><div><strong>${escapeHtml(selected.player?.name || 'Player')}</strong><span class="player-mode-stat-badge">${mode.active.charAt(0) + mode.active.slice(1).toLowerCase()}</span></div><span>${escapeHtml(getPlayerHoleTeeInfo(match, selected, currentHole - 1, metrics?.tee).label)}${strokes > 0 ? ` · ${'●'.repeat(strokes)}` : ''}${Number.isFinite(net) ? ` · net ${net}` : ''}</span></div>
@@ -16786,10 +16828,9 @@ function renderPlayerModeStatEntry(match, hole, metrics) {
     ${(par === 4 || par === 5) ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Fairway</span><div class="player-mode-stat-options player-mode-fairway-options">${choice('fairwayResult','LEFT','↶  Left',stat.fairwayResult === 'LEFT')}${fairwayHitChoice}${choice('fairwayResult','RIGHT','Right  ↷',stat.fairwayResult === 'RIGHT')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="fairwayResult" value="${escapeHtml(stat.fairwayResult)}" />` : ''}
     <div class="player-mode-derived"><span>GIR</span><strong>${derived.value === null ? 'Unknown' : (derived.value ? 'Yes' : 'No')}</strong><small>${derived.source === 'calculated' ? 'Calculated from gross score and putts' : derived.source === 'override' ? 'Manual correction' : 'Enter score and putts to calculate'}</small></div>
     ${advanced ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Approach</span><div class="player-mode-approach-grid" role="group" aria-label="Approach result">${['7','8','9','4','5','6','1','2','3'].map(approachChoice).join('')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="approachResult" value="${escapeHtml(stat.approachResult)}" />` : ''}
-    ${advanced ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Recovery</span><div class="player-mode-stat-options">${choice('upAndDown','true','Up & down',stat.upAndDown,derived.value === true)}${choice('sandy','true','Sandy',stat.sandy,derived.value === true)}</div></div><input type="checkbox" class="visually-hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="upAndDown" ${stat.upAndDown ? 'checked' : ''} /><input type="checkbox" class="visually-hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="sandy" ${stat.sandy ? 'checked' : ''} />` : ''}
-    ${grind ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Lie involvement</span><div class="player-mode-stat-options">${choice('bunkerInvolved','true','Bunker',stat.bunkerInvolved)}</div></div><input type="checkbox" class="visually-hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="bunkerInvolved" ${stat.bunkerInvolved ? 'checked' : ''} />` : ''}
+    ${advanced && derived.value === false ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Recovery lie</span><div class="player-mode-stat-options player-mode-recovery-options">${recoveryChoice('ROUGH','Rough')}${recoveryChoice('BUNKER','Bunker')}${recoveryChoice('FRINGE','Fringe')}${recoveryChoice('OTHER','Other')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="recoveryLie" value="${escapeHtml(stat.recoveryLie)}" /><div class="player-mode-derived"><span>Scrambling</span><strong>${recovery.success ? 'Converted' : 'Not converted'}</strong><small>Calculated from missed GIR and gross score${recovery.sandyOpportunity ? ' · Sand save opportunity' : ''}</small></div>` : ''}
     <details class="player-mode-gir-override"><summary>Correct GIR for an edge case</summary><div class="player-mode-stat-options">${choice('greenOverride','','Calculated',stat.greenOverride === null)}${choice('greenOverride','true','Force GIR',stat.greenOverride === true)}${choice('greenOverride','false','Force miss',stat.greenOverride === false)}</div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="greenOverride" value="${stat.greenOverride === null ? '' : String(stat.greenOverride)}" /></details>
-    <div class="player-mode-readback">${derived.value === null ? 'GIR remains unknown until both gross score and putts are recorded.' : `${derived.value ? 'Green in regulation' : (stat.approachResult !== 'UNKNOWN' ? `Missed ${String(approachLabels[stat.approachResult] || '').toLowerCase()}` : 'Missed GIR')}${stat.puttsSource !== 'default' ? ` · ${stat.putts} putt${stat.putts === 1 ? '' : 's'}` : ''}${stat.penaltyStrokes ? ` · ${stat.penaltyStrokes} penalty stroke${stat.penaltyStrokes === 1 ? '' : 's'}` : ''}.`}</div>
+    <div class="player-mode-readback">${derived.value === null ? 'GIR remains unknown until both gross score and putts are recorded.' : `${derived.value ? 'Green in regulation' : (stat.approachResult !== 'UNKNOWN' ? `Missed ${String(approachLabels[stat.approachResult] || '').toLowerCase()}` : 'Missed GIR')}${recovery.opportunity ? ` · scramble ${recovery.success ? 'converted' : 'not converted'}` : ''}${stat.puttsSource !== 'default' ? ` · ${stat.putts} putt${stat.putts === 1 ? '' : 's'}` : ''}${stat.penaltyStrokes ? ` · ${stat.penaltyStrokes} penalty stroke${stat.penaltyStrokes === 1 ? '' : 's'}` : ''}.`}</div>
   </div>`;
 }
 
@@ -17315,13 +17356,13 @@ function renderHoleSelector(match, scoringHoles = [], metrics = null) {
     return `<option value="${holeNo}" ${holeNo === currentHole ? 'selected' : ''}>Hole ${displayHole}</option>`;
   }).join('');
   const isPlayerMode = getEffectivePlayInputMode(match) === PLAY_INPUT_MODES.PLAYER.key;
-  if (isPlayerMode && playerHeader) {
+  if (playerHeader) {
     const hole = holes[currentHole - 1] || null;
     const yardage = Number(hole?.yardage);
     const compactMatchStatus = metrics ? getPrimaryMatchStatusLine(match, metrics) : '';
     playerHeader.classList.remove('hidden');
     const roundStatMode = normalizeStatTrackingMode(match.statTrackingMode || (match.statTrackingEnabled ? 'CASUAL' : 'NONE'));
-    playerHeader.innerHTML = `<div class="player-mode-hole-title"><label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select><div class="player-mode-hole-meta">Par ${Number(hole?.par) || '—'}${Number.isFinite(yardage) && yardage > 0 ? ` · ${formatYardageValue(yardage)} yd` : ''} · SI ${Number(hole?.strokeIndex) || '—'}</div>${compactMatchStatus ? `<div class="player-mode-header-match-status"><span>Match</span><strong>${escapeHtml(compactMatchStatus)}</strong></div>` : ''}</div><div class="player-mode-save-state" aria-live="polite">Saved ✓</div><button type="button" class="secondary player-mode-overflow" data-player-mode-overflow aria-expanded="false" aria-controls="playerModeOverflowMenu" aria-label="More Play actions">•••</button><div id="playerModeOverflowMenu" class="player-mode-overflow-menu hidden"><label><span class="tiny">Stat tracking mode</span><select id="playerModeRoundStatModeSelect" aria-label="Active round stat tracking mode">${Object.values(STAT_TRACKING_MODES).map(mode => `<option value="${mode.key}" ${mode.key === roundStatMode ? 'selected' : ''}>${mode.label}</option>`).join('')}</select></label><button type="button" class="secondary" data-player-mode-use-classic>Use Classic Mode</button><button type="button" class="secondary" data-player-mode-scoreboard>Open Scoreboard</button></div>`;
+    playerHeader.innerHTML = `<div class="player-mode-hole-title"><label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select><div class="player-mode-hole-meta">Par ${Number(hole?.par) || '—'}${Number.isFinite(yardage) && yardage > 0 ? ` · ${formatYardageValue(yardage)} yd` : ''} · SI ${Number(hole?.strokeIndex) || '—'}</div>${compactMatchStatus ? `<div class="player-mode-header-match-status"><span>Match</span><strong>${escapeHtml(compactMatchStatus)}</strong></div>` : ''}</div><div class="player-mode-save-state" aria-live="polite">Saved ✓</div><button type="button" class="secondary player-mode-overflow" data-player-mode-overflow aria-expanded="false" aria-controls="playerModeOverflowMenu" aria-label="More Play actions">•••</button><div id="playerModeOverflowMenu" class="player-mode-overflow-menu hidden"><button type="button" data-player-mode-save-next>Save &amp; Next Hole</button><label><span class="tiny">Stat tracking mode</span><select id="playerModeRoundStatModeSelect" aria-label="Active round stat tracking mode">${Object.values(STAT_TRACKING_MODES).map(mode => `<option value="${mode.key}" ${mode.key === roundStatMode ? 'selected' : ''}>${mode.label}</option>`).join('')}</select></label><button type="button" class="secondary" data-play-mode-switch="${isPlayerMode ? 'CLASSIC' : 'PLAYER'}">Use ${isPlayerMode ? 'Classic' : 'Player'} Mode</button><button type="button" class="secondary" data-player-mode-scoreboard>Open Scoreboard</button></div>`;
     if (badge) badge.innerHTML = '';
     return;
   }
@@ -17469,10 +17510,9 @@ function renderStatTrackingEntry(match, hole, metrics) {
   const columns = [
     ...(canShowFairway ? [{ key: 'fairway', label: 'FW' }] : []),
     { key: 'green', label: 'GIR' },
-    { key: 'upAndDown', label: 'U&D' },
-    { key: 'sandy', label: 'Sandy' },
     { key: 'putts', label: 'Putts' },
     { key: 'penaltyStrokes', label: 'Pen' },
+    { key: 'recoveryLie', label: 'Recovery Lie' },
   ];
   const stepper = (playerId, key, value, disabled, extraAttrs = '') => `
     <div class="stat-stepper ${disabled ? 'is-disabled' : ''}" role="group" aria-label="${escapeHtml(key === 'putts' ? 'Putts' : 'Penalty strokes')}">
@@ -17504,6 +17544,11 @@ function renderStatTrackingEntry(match, hole, metrics) {
                 const canEdit = canEditPlayerScore(match, p.team, p.playerId);
                 const playerName = p.player?.name || 'Player';
                 const teamLabel = getTeamLabel(match, p.team);
+                const gross = matchPlayer?.scores?.[currentHole - 1]?.gross;
+                const playerHole = getPlayerHole(match, p, currentHole - 1, metrics?.tee) || hole;
+                const par = Number(playerHole?.par || hole?.par || 0);
+                const derived = deriveGreenInRegulation({ gross, putts: stat.putts, par, puttsSource: stat.puttsSource, override: stat.greenOverride });
+                const recovery = deriveScramblingResult({ gross, par, green: derived.value, greenSource: derived.source, recoveryLie: stat.recoveryLie });
                 return `<tr class="${canEdit ? '' : 'is-readonly'}">
                   <th class="stat-player-col" scope="row">
                     <span class="stat-matrix-player-name">${escapeHtml(playerName)}</span>
@@ -17516,7 +17561,14 @@ function renderStatTrackingEntry(match, hole, metrics) {
                     if (col.key === 'penaltyStrokes') {
                       return `<td>${stepper(p.playerId, 'penaltyStrokes', Number.isFinite(Number(stat.penaltyStrokes)) ? Number(stat.penaltyStrokes) : 0, !canEdit)}</td>`;
                     }
-                    const label = col.key === 'fairway' ? 'Fairway hit' : col.key === 'green' ? 'Green in regulation' : col.key === 'upAndDown' ? 'Up and down' : 'Sandy';
+                    if (col.key === 'green') {
+                      return `<td><div class="stat-derived-cell" aria-label="Green in regulation"><strong>${derived.value === null ? '—' : (derived.value ? '✓' : 'No')}</strong><small>${derived.value === null ? 'Enter score + putts' : 'Calculated'}</small></div></td>`;
+                    }
+                    if (col.key === 'recoveryLie') {
+                      if (derived.value !== false) return `<td><span class="tiny">${derived.value === true ? 'Not needed' : 'Pending GIR'}</span></td>`;
+                      return `<td><select class="stat-recovery-select" data-stat-player="${escapeHtml(p.playerId)}" data-stat-key="recoveryLie" aria-label="Recovery lie for ${escapeHtml(playerName)}" ${canEdit ? '' : 'disabled'}><option value="UNKNOWN" ${stat.recoveryLie === 'UNKNOWN' ? 'selected' : ''}>Select…</option><option value="ROUGH" ${stat.recoveryLie === 'ROUGH' ? 'selected' : ''}>Rough</option><option value="BUNKER" ${stat.recoveryLie === 'BUNKER' ? 'selected' : ''}>Bunker</option><option value="FRINGE" ${stat.recoveryLie === 'FRINGE' ? 'selected' : ''}>Fringe</option><option value="OTHER" ${stat.recoveryLie === 'OTHER' ? 'selected' : ''}>Other</option></select><small class="stat-recovery-result">Scramble ${recovery.success ? '✓' : 'No'}${recovery.sandyOpportunity ? ' · sand save opportunity' : ''}</small></td>`;
+                    }
+                    const label = 'Fairway hit';
                     return `<td><label class="stat-matrix-check" aria-label="${escapeHtml(label)}"><input type="checkbox" data-stat-player="${escapeHtml(p.playerId)}" data-stat-key="${escapeHtml(col.key)}" ${stat[col.key] ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span></span></label></td>`;
                   }).join('')}
                 </tr>`;
@@ -17525,7 +17577,7 @@ function renderStatTrackingEntry(match, hole, metrics) {
           </table>
         </div>
       </div>
-      <div class="tiny top-gap">Putts begin as editable suggestions. A player's statistics are included after you interact with one of that player's stat controls.</div>
+      <div class="tiny top-gap">GIR, scrambling, and sand saves are calculated. Enter putts and, after a missed GIR, select the recovery lie. Older manually recorded recovery results remain readable.</div>
     </div>`;
 }
 
@@ -21738,6 +21790,11 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       switchPlayInputMode(PLAY_INPUT_MODES.CLASSIC.key);
       return;
     }
+    const modeSwitch = e.target.closest('[data-play-mode-switch]');
+    if (modeSwitch) {
+      switchPlayInputMode(modeSwitch.dataset.playModeSwitch);
+      return;
+    }
     if (e.target.closest('[data-player-mode-previous]')) {
       saveCurrentHole({ targetHole: 'previous', silent: true });
       return;
@@ -21873,6 +21930,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       match.statReviewContractVersion = 1;
       persist({ skipRender: true });
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
+      renderCurrentMatch();
       return;
     }
     const jumpHole = e.target.closest('[data-jump-hole]')?.dataset.jumpHole;
@@ -21890,7 +21948,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       saveCurrentHole({ targetHole: selectedHole, silent: true });
       return;
     }
-    if (e.target && e.target.matches('input[data-stat-player][data-stat-key]')) {
+    if (e.target && e.target.matches('input[data-stat-player][data-stat-key], select[data-stat-player][data-stat-key]')) {
       const match = getActiveMatch();
       if (!match) return;
       if (e.target.matches('input[type="checkbox"]')) {
@@ -21905,6 +21963,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       match.statReviewContractVersion = 1;
       persist({ skipRender: true });
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
+      renderCurrentMatch();
     }
     if (e.target && e.target.matches('[data-ssp-player][data-ssp-key], [data-ssp-prox], [data-ssp-hole-key]')) {
       const match = getActiveMatch();
@@ -23790,6 +23849,7 @@ function installDyeLedgerLiveEngineAdapter() {
     normalizePlayInputMode,
     normalizeStatTrackingMode,
     deriveGreenInRegulation,
+    deriveScramblingResult,
         getEffectivePlayerStatTrackingMode,
         statTrackingModeIncludesApproachGrid,
         getPreferredPlayInputMode,

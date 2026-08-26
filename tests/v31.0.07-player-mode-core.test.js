@@ -68,8 +68,22 @@ test('Player Mode keeps par centered and uses consistent six-choice score and pu
   assert.match(app, /\[0,1,2,3,4\]\.map\(value => choice\('putts'/);
   assert.match(app, /player-mode-more-stat/);
   assert.match(css, /box-shadow:0 4px 10px rgba\(0,55,35,.22\),inset 0 0 0 2px/);
-  assert.match(app, /class="fairway-hit-icon"/);
+  assert.match(app, /class="fairway-hit-check"/);
   assert.doesNotMatch(app, /🌲\s+Hit/);
+});
+
+test('scrambling and sand saves derive from missed GIR, score, and recovery lie', () => {
+  const engine = loadLiveEngine();
+  assert.deepEqual(structuredClone(engine.deriveScramblingResult({ gross: 4, par: 4, green: false, greenSource: 'calculated', recoveryLie: 'ROUGH' })), { opportunity: true, success: true, sandyOpportunity: false, sandySuccess: false });
+  assert.deepEqual(structuredClone(engine.deriveScramblingResult({ gross: 5, par: 4, green: false, greenSource: 'calculated', recoveryLie: 'BUNKER' })), { opportunity: true, success: false, sandyOpportunity: true, sandySuccess: false });
+  assert.deepEqual(structuredClone(engine.deriveScramblingResult({ gross: 3, par: 3, green: true, greenSource: 'calculated', recoveryLie: 'BUNKER' })), { opportunity: false, success: false, sandyOpportunity: false, sandySuccess: false });
+  assert.match(app, /data-stat-key="recoveryLie"/);
+  assert.match(app, /Calculated from missed GIR and gross score/);
+  const classicStats = app.slice(app.indexOf('function renderStatTrackingEntry'), app.indexOf('function renderGreeniesEntry'));
+  assert.match(classicStats, /data-stat-key="recoveryLie"/);
+  assert.match(classicStats, /Scramble \$\{recovery\.success/);
+  assert.match(classicStats, /Enter score \+ putts/);
+  assert.doesNotMatch(classicStats, /key: 'upAndDown'|key: 'sandy'/);
 });
 
 test('Enhanced and Grind preserve nine-position approach dispersion for reports and story facts', () => {
@@ -103,6 +117,9 @@ test('Player Mode uses dedicated card markup instead of the Classic score table'
   assert.match(app, /player-mode-header-match-status/);
   assert.match(app, /player-mode-name-line/);
   assert.match(app, /player-mode-fast-score-choices/);
+  assert.match(app, /data-player-mode-save-next>Save &amp; Next Hole/);
+  assert.match(app, /data-play-mode-switch=/);
+  assert.match(app, /Saved ✓/);
   assert.match(css, /body\.player-mode-play-active \.app-footer-version\{display:none\}/);
   const playerModeStyles = css.split(/\r?\n/).filter(line => /player-mode|play-input-mode-bar/.test(line)).join('\n');
   assert.doesNotMatch(playerModeStyles, /var\(--(?:ink|panel|line)\)/);

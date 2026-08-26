@@ -118,7 +118,13 @@ test('Player Mode uses dedicated card markup instead of the Classic score table'
   assert.match(app, /player-mode-name-line/);
   assert.match(app, /player-mode-fast-score-choices/);
   assert.match(app, /data-player-mode-save-next>Save &amp; Next Hole/);
-  assert.match(app, /data-play-mode-switch=/);
+  assert.match(app, /id="playerModeRoundScoringModeSelect"/);
+  assert.match(app, /id="playerModeRoundStatModeSelect"/);
+  const overflowMarkup = app.slice(app.indexOf('id="playerModeOverflowMenu"'), app.indexOf('if (badge) badge.innerHTML'));
+  assert.ok(overflowMarkup.indexOf('Open Scoreboard') < overflowMarkup.indexOf('Scoring mode'));
+  assert.ok(overflowMarkup.indexOf('Scoring mode') < overflowMarkup.indexOf('Stat mode'));
+  assert.doesNotMatch(overflowMarkup, /Save &amp; Next Hole/);
+  assert.match(app, /derived\.value \? '✓' : '✕'/);
   assert.match(app, /Saved ✓/);
   assert.match(css, /body\.player-mode-play-active \.app-footer-version\{display:none\}/);
   const playerModeStyles = css.split(/\r?\n/).filter(line => /player-mode|play-input-mode-bar/.test(line)).join('\n');

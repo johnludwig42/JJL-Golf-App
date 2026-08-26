@@ -16697,7 +16697,7 @@ function renderPlayInputModeSelector(activeMode = getPreferredPlayInputMode()) {
 function renderClassicPlayInputMode({ match, tee, metrics, scoringHoles, hole, controller }) {
   document.getElementById('scoreEntryWrap')?.classList.remove('player-input-mode-active');
   document.body?.classList.remove('player-mode-play-active');
-  document.querySelector('.play-input-mode-bar')?.classList.remove('hidden');
+  document.querySelector('.play-input-mode-bar')?.classList.add('hidden');
   document.getElementById('activeHoleScoringTop')?.classList.add('hidden');
   document.getElementById('classicScoreEntryHead')?.classList.remove('hidden');
   document.getElementById('classicScoreGridWrap')?.classList.remove('hidden');
@@ -16826,7 +16826,7 @@ function renderPlayerModeStatEntry(match, hole, metrics) {
     <div class="player-mode-stat-section"><span class="player-mode-stat-label">Penalty strokes</span><div class="player-mode-stat-options">${[0,1,2].map(value => choice('penaltyStrokes', value, value, stat.penaltyStrokes === value)).join('')}</div></div>
     <input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="penaltyStrokes" value="${stat.penaltyStrokes}" />
     ${(par === 4 || par === 5) ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Fairway</span><div class="player-mode-stat-options player-mode-fairway-options">${choice('fairwayResult','LEFT','↶  Left',stat.fairwayResult === 'LEFT')}${fairwayHitChoice}${choice('fairwayResult','RIGHT','Right  ↷',stat.fairwayResult === 'RIGHT')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="fairwayResult" value="${escapeHtml(stat.fairwayResult)}" />` : ''}
-    <div class="player-mode-derived"><span>GIR</span><strong>${derived.value === null ? 'Unknown' : (derived.value ? 'Yes' : 'No')}</strong><small>${derived.source === 'calculated' ? 'Calculated from gross score and putts' : derived.source === 'override' ? 'Manual correction' : 'Enter score and putts to calculate'}</small></div>
+    <div class="player-mode-derived player-mode-gir-result"><span>GIR</span><strong aria-label="${derived.value === null ? 'GIR unknown' : (derived.value ? 'Green in regulation' : 'Missed green in regulation')}">${derived.value === null ? '—' : (derived.value ? '✓' : '✕')}</strong><small>${derived.source === 'calculated' ? 'Calculated from gross score and putts' : derived.source === 'override' ? 'Manual correction' : 'Enter score and putts to calculate'}</small></div>
     ${advanced ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Approach</span><div class="player-mode-approach-grid" role="group" aria-label="Approach result">${['7','8','9','4','5','6','1','2','3'].map(approachChoice).join('')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="approachResult" value="${escapeHtml(stat.approachResult)}" />` : ''}
     ${advanced && derived.value === false ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Recovery lie</span><div class="player-mode-stat-options player-mode-recovery-options">${recoveryChoice('ROUGH','Rough')}${recoveryChoice('BUNKER','Bunker')}${recoveryChoice('FRINGE','Fringe')}${recoveryChoice('OTHER','Other')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="recoveryLie" value="${escapeHtml(stat.recoveryLie)}" /><div class="player-mode-derived"><span>Scrambling</span><strong>${recovery.success ? 'Converted' : 'Not converted'}</strong><small>Calculated from missed GIR and gross score${recovery.sandyOpportunity ? ' · Sand save opportunity' : ''}</small></div>` : ''}
     <details class="player-mode-gir-override"><summary>Correct GIR for an edge case</summary><div class="player-mode-stat-options">${choice('greenOverride','','Calculated',stat.greenOverride === null)}${choice('greenOverride','true','Force GIR',stat.greenOverride === true)}${choice('greenOverride','false','Force miss',stat.greenOverride === false)}</div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="greenOverride" value="${stat.greenOverride === null ? '' : String(stat.greenOverride)}" /></details>
@@ -17362,7 +17362,7 @@ function renderHoleSelector(match, scoringHoles = [], metrics = null) {
     const compactMatchStatus = metrics ? getPrimaryMatchStatusLine(match, metrics) : '';
     playerHeader.classList.remove('hidden');
     const roundStatMode = normalizeStatTrackingMode(match.statTrackingMode || (match.statTrackingEnabled ? 'CASUAL' : 'NONE'));
-    playerHeader.innerHTML = `<div class="player-mode-hole-title"><label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select><div class="player-mode-hole-meta">Par ${Number(hole?.par) || '—'}${Number.isFinite(yardage) && yardage > 0 ? ` · ${formatYardageValue(yardage)} yd` : ''} · SI ${Number(hole?.strokeIndex) || '—'}</div>${compactMatchStatus ? `<div class="player-mode-header-match-status"><span>Match</span><strong>${escapeHtml(compactMatchStatus)}</strong></div>` : ''}</div><div class="player-mode-save-state" aria-live="polite">Saved ✓</div><button type="button" class="secondary player-mode-overflow" data-player-mode-overflow aria-expanded="false" aria-controls="playerModeOverflowMenu" aria-label="More Play actions">•••</button><div id="playerModeOverflowMenu" class="player-mode-overflow-menu hidden"><button type="button" data-player-mode-save-next>Save &amp; Next Hole</button><label><span class="tiny">Stat tracking mode</span><select id="playerModeRoundStatModeSelect" aria-label="Active round stat tracking mode">${Object.values(STAT_TRACKING_MODES).map(mode => `<option value="${mode.key}" ${mode.key === roundStatMode ? 'selected' : ''}>${mode.label}</option>`).join('')}</select></label><button type="button" class="secondary" data-play-mode-switch="${isPlayerMode ? 'CLASSIC' : 'PLAYER'}">Use ${isPlayerMode ? 'Classic' : 'Player'} Mode</button><button type="button" class="secondary" data-player-mode-scoreboard>Open Scoreboard</button></div>`;
+    playerHeader.innerHTML = `<div class="player-mode-hole-title"><label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select><div class="player-mode-hole-meta">Par ${Number(hole?.par) || '—'}${Number.isFinite(yardage) && yardage > 0 ? ` · ${formatYardageValue(yardage)} yd` : ''} · SI ${Number(hole?.strokeIndex) || '—'}</div>${compactMatchStatus ? `<div class="player-mode-header-match-status"><span>Match</span><strong>${escapeHtml(compactMatchStatus)}</strong></div>` : ''}</div><div class="player-mode-header-actions"><div class="player-mode-header-meta"><div class="player-mode-save-state" aria-live="polite">Saved ✓</div><button type="button" class="secondary player-mode-overflow" data-player-mode-overflow aria-expanded="false" aria-controls="playerModeOverflowMenu" aria-label="More Play actions">•••</button></div><button type="button" class="player-mode-header-save-next" data-player-mode-save-next>Save &amp; Next Hole</button></div><div id="playerModeOverflowMenu" class="player-mode-overflow-menu hidden"><button type="button" class="secondary" data-player-mode-scoreboard>Open Scoreboard</button><label><span class="tiny">Scoring mode</span><select id="playerModeRoundScoringModeSelect" aria-label="Active round scoring mode">${Object.values(PLAY_INPUT_MODES).filter(mode => mode.available).map(mode => `<option value="${mode.key}" ${mode.key === (isPlayerMode ? 'PLAYER' : 'CLASSIC') ? 'selected' : ''}>${mode.label.replace(' Mode','')}</option>`).join('')}</select></label><label><span class="tiny">Stat mode</span><select id="playerModeRoundStatModeSelect" aria-label="Active round stat mode">${Object.values(STAT_TRACKING_MODES).map(mode => `<option value="${mode.key}" ${mode.key === roundStatMode ? 'selected' : ''}>${mode.label}</option>`).join('')}</select></label></div>`;
     if (badge) badge.innerHTML = '';
     return;
   }
@@ -17562,7 +17562,7 @@ function renderStatTrackingEntry(match, hole, metrics) {
                       return `<td>${stepper(p.playerId, 'penaltyStrokes', Number.isFinite(Number(stat.penaltyStrokes)) ? Number(stat.penaltyStrokes) : 0, !canEdit)}</td>`;
                     }
                     if (col.key === 'green') {
-                      return `<td><div class="stat-derived-cell" aria-label="Green in regulation"><strong>${derived.value === null ? '—' : (derived.value ? '✓' : 'No')}</strong><small>${derived.value === null ? 'Enter score + putts' : 'Calculated'}</small></div></td>`;
+                      return `<td><div class="stat-derived-cell" aria-label="${derived.value === null ? 'GIR unknown' : (derived.value ? 'Green in regulation' : 'Missed green in regulation')}"><strong class="stat-derived-symbol ${derived.value === false ? 'is-miss' : ''}">${derived.value === null ? '—' : (derived.value ? '✓' : '✕')}</strong><small>${derived.value === null ? 'Enter score + putts' : 'Calculated'}</small></div></td>`;
                     }
                     if (col.key === 'recoveryLie') {
                       if (derived.value !== false) return `<td><span class="tiny">${derived.value === true ? 'Not needed' : 'Pending GIR'}</span></td>`;
@@ -21644,7 +21644,16 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       return;
     }
   });
-  document.getElementById('score').addEventListener('change', e => {
+  document.getElementById('score').addEventListener('change', async e => {
+    if (e.target.id === 'playerModeRoundScoringModeSelect') {
+      const prior = getEffectivePlayInputMode();
+      const result = await switchPlayInputMode(e.target.value);
+      if (!result.changed && result.reason) {
+        e.target.value = prior;
+        toast(result.reason === 'unavailable' ? 'That scoring mode is not available.' : 'Scoring mode was not changed because the current hole could not be saved safely.');
+      }
+      return;
+    }
     if (e.target.id === 'playerModeRoundStatModeSelect') {
       const match = getActiveMatch();
       if (!match) return;

@@ -34,6 +34,24 @@ test('Player Mode and all four stat detail levels are selectable device preferen
   for (const mode of ['NONE', 'CASUAL', 'ENHANCED', 'GRIND']) assert.match(html, new RegExp(`name="scoring\\.statTrackingMode" value="${mode}"`));
 });
 
+test('Match Setup inherits but can override score keeping and stat tracking modes per round', () => {
+  const engine = loadLiveEngine();
+  const defaults = engine.getNewMatchDefaultsFromPreferences({ scoring: { playInputMode: 'PLAYER', statTrackingMode: 'ENHANCED', statTrackingDefault: true } });
+  assert.equal(defaults.playInputMode, 'PLAYER');
+  assert.equal(defaults.statTrackingMode, 'ENHANCED');
+  const overridden = engine.mergeNewMatchDefaults({ playInputMode: 'CLASSIC', statTrackingMode: 'GRIND' }, { scoring: { playInputMode: 'PLAYER', statTrackingMode: 'CASUAL' } });
+  assert.equal(overridden.playInputMode, 'CLASSIC');
+  assert.equal(overridden.statTrackingMode, 'GRIND');
+  assert.match(html, /id="roundPlayInputModeSelect" name="roundPlayInputMode"/);
+  assert.match(html, /id="roundStatTrackingModeSelect" name="roundStatTrackingMode"/);
+  assert.match(app, /match\.playInputMode = normalized/);
+  assert.match(app, /match\.statTrackingMode = normalizeStatTrackingMode\(e\.target\.value\)/);
+  assert.equal(engine.getEffectivePlayInputMode({ playInputMode: 'PLAYER' }), 'PLAYER');
+  const holeSelector = app.slice(app.indexOf('function renderHoleSelector'), app.indexOf('function renderSneakySandyPoleyEntry'));
+  assert.match(holeSelector, /getEffectivePlayInputMode\(match\)/);
+  assert.doesNotMatch(holeSelector, /getPreferredPlayInputMode\(\)/);
+});
+
 test('Player Mode delegates to shared inputs and preserves explicit directional facts', () => {
   assert.match(app, /function renderPlayerPlayInputMode/);
   assert.match(app, /data-score-player=/);
@@ -50,6 +68,8 @@ test('Player Mode keeps par centered and uses consistent six-choice score and pu
   assert.match(app, /\[0,1,2,3,4\]\.map\(value => choice\('putts'/);
   assert.match(app, /player-mode-more-stat/);
   assert.match(css, /box-shadow:0 4px 10px rgba\(0,55,35,.22\),inset 0 0 0 2px/);
+  assert.match(app, /class="fairway-hit-icon"/);
+  assert.doesNotMatch(app, /🌲\s+Hit/);
 });
 
 test('Enhanced and Grind preserve nine-position approach dispersion for reports and story facts', () => {

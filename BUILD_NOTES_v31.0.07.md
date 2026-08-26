@@ -15,9 +15,11 @@ Player Mode is now a selectable Play experience built on the shared v31.0.06 inp
 - Team, tee, and handicap strokes remain visible; strokes use bold dots rather than “pops.”
 - Featured competition status and Shared Match controls remain authoritative and shared.
 - None, Casual, Enhanced, and Grind stat-detail preferences are available.
+- Games & Stat Tracking now exposes round-specific Score Keeping and Stat Tracking modes initialized from the device defaults in More → Preferences.
+- Changing modes for an active round preserves all recorded scores and statistical facts; Player Mode also exposes the active stat level in its overflow menu.
 - Grind falls back to Enhanced when the device is responsible for more than two golfers.
 - Putts use the same six-choice rhythm as gross score: 0 through 4 plus Other.
-- Fairway choices include directional visuals, and Enhanced/Grind use a 3×3 approach keypad with computed GIR at the center.
+- Fairway choices include directional visuals and a consistent fairway/flag icon rather than a device-dependent emoji. Enhanced/Grind use a 3×3 approach keypad with computed GIR at the center.
 
 ## Stat integrity
 

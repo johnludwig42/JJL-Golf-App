@@ -215,7 +215,12 @@
             <div id="gameConfigs" class="top-gap"></div>
             <section class="advanced-option-group top-gap">
               <div class="section-label">Stat Tracking</div>
-              <div class="tiny">Turn on per-hole stat tracking and choose which players should be tracked.</div>
+              <div class="tiny">Choose this round's score-entry experience and level of statistical detail. New rounds begin with your preferences from More.</div>
+              <div class="grid two compact-grid top-gap">
+                <label><span>Score keeping mode</span><select id="roundPlayInputModeSelect" name="roundPlayInputMode"><option value="CLASSIC">Classic</option><option value="PLAYER">Player</option></select></label>
+                <label><span>Stat tracking mode</span><select id="roundStatTrackingModeSelect" name="roundStatTrackingMode"><option value="NONE">None</option><option value="CASUAL">Casual</option><option value="ENHANCED">Enhanced</option><option value="GRIND">Grind</option></select></label>
+              </div>
+              <div id="roundTrackingModeHelp" class="tiny top-gap">Grind is intended only when this device scores no more than two golfers.</div>
               <label class="inline-check top-gap"><input id="enableStatTrackingInput" name="enableStatTracking" type="checkbox" /><span>Enable Stat Tracking</span></label>
               <div id="statTrackingPlayersWrap" class="top-gap hidden"></div>
             </section>

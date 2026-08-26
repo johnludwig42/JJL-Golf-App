@@ -236,6 +236,8 @@ function getPlayerPreferencesDiagnostics(storage = localStorage) {
 function getNewMatchDefaultsFromPreferences(preferences = getPlayerPreferences()) {
   const normalized = normalizePlayerPreferences(preferences);
   return {
+    playInputMode: normalized.scoring.playInputMode,
+    statTrackingMode: normalized.scoring.statTrackingMode,
     smartScoreAdvanceEnabled: normalized.scoring.smartScoreAdvanceEnabled,
     smartScoreAdvancePreset: normalized.scoring.smartScoreAdvancePreset.toLowerCase(),
     statTrackingEnabled: normalized.scoring.statTrackingDefault,
@@ -248,6 +250,8 @@ function getNewMatchDefaultsFromPreferences(preferences = getPlayerPreferences()
 function mergeNewMatchDefaults(explicitValues = {}, preferences = getPlayerPreferences()) {
   const defaults = getNewMatchDefaultsFromPreferences(preferences);
   return {
+    playInputMode: explicitValues.playInputMode == null ? defaults.playInputMode : normalizePlayInputMode(explicitValues.playInputMode),
+    statTrackingMode: explicitValues.statTrackingMode == null ? defaults.statTrackingMode : normalizeStatTrackingMode(explicitValues.statTrackingMode),
     smartScoreAdvanceEnabled: explicitValues.smartScoreAdvanceEnabled == null ? defaults.smartScoreAdvanceEnabled : !!explicitValues.smartScoreAdvanceEnabled,
     smartScoreAdvancePreset: explicitValues.smartScoreAdvancePreset == null ? defaults.smartScoreAdvancePreset : normalizeSmartScoreAdvancePreset(explicitValues.smartScoreAdvancePreset),
     statTrackingEnabled: explicitValues.statTrackingEnabled == null ? defaults.statTrackingEnabled : !!explicitValues.statTrackingEnabled,
@@ -3124,6 +3128,8 @@ function sanitizeSetupDraft(input, preferences = getPlayerPreferences()) {
     scoringAccessMode: normalizeScoringAccessMode(input.scoringAccessMode || input.scoreEntryMode || base.scoringAccessMode),
     officialScorerName: String(input.officialScorerName || base.officialScorerName).slice(0, 80),
     statTrackingEnabled: typeof input.statTrackingEnabled === 'boolean' ? input.statTrackingEnabled : base.statTrackingEnabled,
+    playInputMode: normalizePlayInputMode(input.playInputMode || base.playInputMode),
+    statTrackingMode: normalizeStatTrackingMode(input.statTrackingMode || base.statTrackingMode),
     smartScoreAdvanceEnabled: typeof input.smartScoreAdvanceEnabled === 'boolean' ? input.smartScoreAdvanceEnabled : base.smartScoreAdvanceEnabled,
     smartScoreAdvancePreset: normalizeSmartScoreAdvancePreset(input.smartScoreAdvancePreset || base.smartScoreAdvancePreset),
     captureWeatherContext: typeof input.captureWeatherContext === 'boolean' ? input.captureWeatherContext : base.captureWeatherContext,
@@ -8940,6 +8946,8 @@ function createEmptyMatch(overrides = {}) {
     scoreEntryMode: getLegacyScoreEntryMode(normalizeScoringAccessMode(overrides.scoringAccessMode || overrides.scoreEntryMode || 'single_device')),
     officialScorerName: String(overrides.officialScorerName || 'Official scorer').trim() || 'Official scorer',
     statTrackingEnabled: !!overrides.statTrackingEnabled,
+    playInputMode: normalizePlayInputMode(overrides.playInputMode || getPreferredPlayInputMode()),
+    statTrackingMode: normalizeStatTrackingMode(overrides.statTrackingMode || getPlayerPreferences().scoring.statTrackingMode),
     smartScoreAdvanceEnabled: overrides.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!overrides.smartScoreAdvanceEnabled,
     smartScoreAdvancePreset: normalizeSmartScoreAdvancePreset(overrides.smartScoreAdvancePreset),
     captureWeatherContext: overrides.captureWeatherContext !== false,
@@ -9043,6 +9051,7 @@ function normalizeMatch(match) {
   if (match.scoringAccessMode === 'single_device' && (match.activeScoreRole === 'team_scorer' || match.activeScoreRole === 'assigned_player_scorer')) match.activeScoreRole = 'official_scorer';
   match.activeScoreTeam = Math.min(Math.max(1, Number(match.activeScoreTeam) || 1), Math.max(1, Number(match.teamCount) || 1));
   match.statTrackingEnabled = !!match.statTrackingEnabled;
+  match.playInputMode = normalizePlayInputMode(match.playInputMode || getPreferredPlayInputMode());
   match.statTrackingMode = normalizeStatTrackingMode(match.statTrackingMode || (match.statTrackingEnabled ? 'CASUAL' : 'NONE'));
   match.smartScoreAdvanceEnabled = match.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!match.smartScoreAdvanceEnabled;
   match.smartScoreAdvancePreset = normalizeSmartScoreAdvancePreset(match.smartScoreAdvancePreset);
@@ -15594,6 +15603,8 @@ function createBlankSetupDraft(preferences = getPlayerPreferences()) {
     scoreEntryMode: 'single_device',
     officialScorerName: 'Official scorer',
     statTrackingEnabled: preferenceDefaults.statTrackingEnabled,
+    playInputMode: preferenceDefaults.playInputMode,
+    statTrackingMode: preferenceDefaults.statTrackingMode,
     smartScoreAdvanceEnabled: preferenceDefaults.smartScoreAdvanceEnabled,
     smartScoreAdvancePreset: preferenceDefaults.smartScoreAdvancePreset,
     captureWeatherContext: preferenceDefaults.captureWeatherContext,
@@ -15650,6 +15661,8 @@ function buildNextRoundDraft(prior) {
     scoreEntryMode: getLegacyScoreEntryMode(prior.scoringAccessMode || prior.scoreEntryMode || 'single_device'),
     officialScorerName: prior.officialScorerName || 'Official scorer',
     statTrackingEnabled: !!prior.statTrackingEnabled,
+    playInputMode: normalizePlayInputMode(prior.playInputMode || getPreferredPlayInputMode()),
+    statTrackingMode: normalizeStatTrackingMode(prior.statTrackingMode || getPlayerPreferences().scoring.statTrackingMode),
     smartScoreAdvanceEnabled: prior.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!prior.smartScoreAdvanceEnabled,
     smartScoreAdvancePreset: normalizeSmartScoreAdvancePreset(prior.smartScoreAdvancePreset),
     captureWeatherContext: prior.captureWeatherContext !== false,
@@ -16630,6 +16643,9 @@ function createPlayInputController(match, { tee = null, metrics = null, scoringH
 function getPreferredPlayInputMode(preferences = getPlayerPreferences()) {
   return normalizePlayInputMode(normalizePlayerPreferences(preferences).scoring.playInputMode);
 }
+function getEffectivePlayInputMode(match = getActiveMatch()) {
+  return normalizePlayInputMode(match?.playInputMode || getPreferredPlayInputMode());
+}
 function renderPlayInputModeSelector(activeMode = getPreferredPlayInputMode()) {
   const select = document.getElementById('playInputModeSelect');
   const help = document.getElementById('playInputModeHelp');
@@ -16750,6 +16766,7 @@ function renderPlayerModeStatEntry(match, hole, metrics) {
   const otherScoreSelected = Number.isFinite(Number(gross)) && Number(gross) > 0 && !scoreChoices.includes(Number(gross));
   const derived = deriveGreenInRegulation({ gross, putts: stat.putts, par, puttsSource: stat.puttsSource, override: stat.greenOverride });
   const choice = (key, value, label, active, constrained = false) => `<button type="button" data-player-stat-choice="${escapeHtml(key)}" data-player-stat-value="${escapeHtml(value)}" data-stat-player-id="${escapeHtml(selected.playerId)}" class="${active ? 'is-active' : ''}" ${(canEdit && !constrained) ? '' : 'disabled'}>${escapeHtml(label)}</button>`;
+  const fairwayHitChoice = `<button type="button" data-player-stat-choice="fairwayResult" data-player-stat-value="HIT" data-stat-player-id="${escapeHtml(selected.playerId)}" class="${stat.fairwayResult === 'HIT' ? 'is-active' : ''}" ${canEdit ? '' : 'disabled'}><svg class="fairway-hit-icon" viewBox="0 0 28 22" aria-hidden="true"><path d="M7 19c2-6 3-11 4-16h2v8c4-2 7-1 10 1-3 1-6 2-10 1v6z" fill="currentColor"/><path d="M3 20c5-3 17-3 22 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Hit</span></button>`;
   const approachLabels = { '7': 'Deep Left', '8': 'Long', '9': 'Deep Right', '4': 'Left', '5': 'GIR', '6': 'Right', '1': 'Short Left', '2': 'Short', '3': 'Short Right' };
   const approachChoice = value => `<button type="button" data-player-stat-choice="approachResult" data-player-stat-value="${value}" data-stat-player-id="${escapeHtml(selected.playerId)}" class="${(value === '5' ? derived.value === true : stat.approachResult === value) ? 'is-active' : ''} ${value === '5' ? 'is-derived' : ''}" ${(canEdit && value !== '5' && derived.value !== true) ? '' : 'disabled'}><b>${value}</b><small>${escapeHtml(approachLabels[value])}</small></button>`;
   const advanced = mode.active === 'ENHANCED' || mode.active === 'GRIND';
@@ -16763,7 +16780,7 @@ function renderPlayerModeStatEntry(match, hole, metrics) {
     <div class="player-mode-stat-section"><span class="player-mode-stat-label">Putts</span><div class="player-mode-stat-options player-mode-six-options">${[0,1,2,3,4].map(value => choice('putts', value, value, stat.puttsSource !== 'default' && stat.putts === value)).join('')}<label class="player-mode-more-stat"><span>Other</span><input class="stat-putts-input" type="tel" inputmode="numeric" min="0" max="9" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="putts" data-putts-source="${escapeHtml(stat.puttsSource)}" value="${stat.puttsSource === 'default' ? '' : stat.putts}" ${canEdit ? '' : 'disabled'} /></label></div></div>
     <div class="player-mode-stat-section"><span class="player-mode-stat-label">Penalty strokes</span><div class="player-mode-stat-options">${[0,1,2].map(value => choice('penaltyStrokes', value, value, stat.penaltyStrokes === value)).join('')}</div></div>
     <input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="penaltyStrokes" value="${stat.penaltyStrokes}" />
-    ${(par === 4 || par === 5) ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Fairway</span><div class="player-mode-stat-options player-mode-fairway-options">${choice('fairwayResult','LEFT','↶  Left',stat.fairwayResult === 'LEFT')}${choice('fairwayResult','HIT','🌲  Hit',stat.fairwayResult === 'HIT')}${choice('fairwayResult','RIGHT','Right  ↷',stat.fairwayResult === 'RIGHT')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="fairwayResult" value="${escapeHtml(stat.fairwayResult)}" />` : ''}
+    ${(par === 4 || par === 5) ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Fairway</span><div class="player-mode-stat-options player-mode-fairway-options">${choice('fairwayResult','LEFT','↶  Left',stat.fairwayResult === 'LEFT')}${fairwayHitChoice}${choice('fairwayResult','RIGHT','Right  ↷',stat.fairwayResult === 'RIGHT')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="fairwayResult" value="${escapeHtml(stat.fairwayResult)}" />` : ''}
     <div class="player-mode-derived"><span>GIR</span><strong>${derived.value === null ? 'Unknown' : (derived.value ? 'Yes' : 'No')}</strong><small>${derived.source === 'calculated' ? 'Calculated from gross score and putts' : derived.source === 'override' ? 'Manual correction' : 'Enter score and putts to calculate'}</small></div>
     ${advanced ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Approach</span><div class="player-mode-approach-grid" role="group" aria-label="Approach result">${['7','8','9','4','5','6','1','2','3'].map(approachChoice).join('')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="approachResult" value="${escapeHtml(stat.approachResult)}" />` : ''}
     ${advanced ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Recovery</span><div class="player-mode-stat-options">${choice('upAndDown','true','Up & down',stat.upAndDown,derived.value === true)}${choice('sandy','true','Sandy',stat.sandy,derived.value === true)}</div></div><input type="checkbox" class="visually-hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="upAndDown" ${stat.upAndDown ? 'checked' : ''} /><input type="checkbox" class="visually-hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="sandy" ${stat.sandy ? 'checked' : ''} />` : ''}
@@ -16805,7 +16822,7 @@ function renderPlayerPlayInputMode({ match, tee, metrics, scoringHoles, hole, co
   return controller;
 }
 function renderPlayInputMode(context) {
-  const requestedMode = getPreferredPlayInputMode();
+  const requestedMode = getEffectivePlayInputMode(context.match);
   const activeMode = normalizePlayInputMode(requestedMode);
   const host = document.getElementById('scoreEntryWrap');
   if (host) host.dataset.playInputMode = activeMode;
@@ -16816,13 +16833,15 @@ function renderPlayInputMode(context) {
 }
 async function switchPlayInputMode(nextMode) {
   const normalized = normalizePlayInputMode(nextMode);
-  if (normalized !== String(nextMode || '').toUpperCase()) return { changed: false, mode: getPreferredPlayInputMode(), reason: 'unavailable' };
-  const current = getPreferredPlayInputMode();
-  if (normalized === current) return { changed: false, mode: current };
+  if (normalized !== String(nextMode || '').toUpperCase()) return { changed: false, mode: getEffectivePlayInputMode(), reason: 'unavailable' };
   const match = getActiveMatch();
+  const current = getEffectivePlayInputMode(match);
+  if (normalized === current) return { changed: false, mode: current };
   if (match && !await persistCurrentMatch({ applyDom: true, silent: true })) return { changed: false, mode: current, reason: 'save-failed' };
-  const saved = updatePlayerPreference('scoring.playInputMode', normalized);
-  if (!saved) return { changed: false, mode: current, reason: 'preference-save-failed' };
+  if (match) {
+    match.playInputMode = normalized;
+    if (!persist({ skipRender: true })) return { changed: false, mode: current, reason: 'save-failed' };
+  }
   renderCurrentMatch();
   return { changed: true, mode: normalized };
 }
@@ -17292,12 +17311,13 @@ function renderHoleSelector(match, scoringHoles = []) {
     const displayHole = holes[idx]?.holeNumber || holeNo;
     return `<option value="${holeNo}" ${holeNo === currentHole ? 'selected' : ''}>Hole ${displayHole}</option>`;
   }).join('');
-  const isPlayerMode = getPreferredPlayInputMode() === PLAY_INPUT_MODES.PLAYER.key;
+  const isPlayerMode = getEffectivePlayInputMode(match) === PLAY_INPUT_MODES.PLAYER.key;
   if (isPlayerMode && playerHeader) {
     const hole = holes[currentHole - 1] || null;
     const yardage = Number(hole?.yardage);
     playerHeader.classList.remove('hidden');
-    playerHeader.innerHTML = `<div class="player-mode-hole-title"><label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select><div class="player-mode-hole-meta">Par ${Number(hole?.par) || '—'}${Number.isFinite(yardage) && yardage > 0 ? ` · ${formatYardageValue(yardage)} yd` : ''} · SI ${Number(hole?.strokeIndex) || '—'}</div></div><div class="player-mode-save-state" aria-live="polite">Saved ✓</div><button type="button" class="secondary player-mode-overflow" data-player-mode-overflow aria-expanded="false" aria-controls="playerModeOverflowMenu" aria-label="More Play actions">•••</button><div id="playerModeOverflowMenu" class="player-mode-overflow-menu hidden"><button type="button" class="secondary" data-player-mode-use-classic>Use Classic Mode</button><button type="button" class="secondary" data-player-mode-scoreboard>Open Scoreboard</button></div>`;
+    const roundStatMode = normalizeStatTrackingMode(match.statTrackingMode || (match.statTrackingEnabled ? 'CASUAL' : 'NONE'));
+    playerHeader.innerHTML = `<div class="player-mode-hole-title"><label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select><div class="player-mode-hole-meta">Par ${Number(hole?.par) || '—'}${Number.isFinite(yardage) && yardage > 0 ? ` · ${formatYardageValue(yardage)} yd` : ''} · SI ${Number(hole?.strokeIndex) || '—'}</div></div><div class="player-mode-save-state" aria-live="polite">Saved ✓</div><button type="button" class="secondary player-mode-overflow" data-player-mode-overflow aria-expanded="false" aria-controls="playerModeOverflowMenu" aria-label="More Play actions">•••</button><div id="playerModeOverflowMenu" class="player-mode-overflow-menu hidden"><label><span class="tiny">Stat tracking mode</span><select id="playerModeRoundStatModeSelect" aria-label="Active round stat tracking mode">${Object.values(STAT_TRACKING_MODES).map(mode => `<option value="${mode.key}" ${mode.key === roundStatMode ? 'selected' : ''}>${mode.label}</option>`).join('')}</select></label><button type="button" class="secondary" data-player-mode-use-classic>Use Classic Mode</button><button type="button" class="secondary" data-player-mode-scoreboard>Open Scoreboard</button></div>`;
     if (badge) badge.innerHTML = '';
     return;
   }
@@ -18732,6 +18752,8 @@ function captureCurrentSetupDraft() {
     scoringAccessMode,
     officialScorerName: String(fd.get('officialScorerName') || ''),
     statTrackingEnabled: fd.get('enableStatTracking') === 'on',
+    playInputMode: normalizePlayInputMode(fd.get('roundPlayInputMode')),
+    statTrackingMode: normalizeStatTrackingMode(fd.get('roundStatTrackingMode')),
     smartScoreAdvanceEnabled: fd.get('smartScoreAdvance') === 'on',
     smartScoreAdvancePreset: getSmartScoreAdvancePresetFromSetup(),
     captureWeatherContext: fd.get('captureWeatherContext') === 'on',
@@ -19132,6 +19154,31 @@ function collectStatTrackingPlayerIdsFromSetup(selectedPlayers = null) {
   const players = Array.isArray(selectedPlayers) ? selectedPlayers : getSelectedPlayersFromSetup();
   return players.map(row => String(row.playerId || '')).filter(Boolean);
 }
+function syncRoundTrackingModeSetup(source = '', values = null) {
+  const playSelect = document.getElementById('roundPlayInputModeSelect');
+  const statSelect = document.getElementById('roundStatTrackingModeSelect');
+  const enabledToggle = document.getElementById('enableStatTrackingInput');
+  const help = document.getElementById('roundTrackingModeHelp');
+  if (!playSelect || !statSelect || !enabledToggle) return;
+  if (values) {
+    playSelect.value = normalizePlayInputMode(values.playInputMode || getPreferredPlayInputMode());
+    statSelect.value = normalizeStatTrackingMode(values.statTrackingMode || getPlayerPreferences().scoring.statTrackingMode);
+    enabledToggle.checked = values.statTrackingEnabled == null ? statSelect.value !== 'NONE' : !!values.statTrackingEnabled;
+  }
+  if (source === 'mode') enabledToggle.checked = statSelect.value !== 'NONE';
+  if (source === 'toggle') {
+    if (!enabledToggle.checked) statSelect.value = 'NONE';
+    else if (statSelect.value === 'NONE') {
+      const preferred = normalizeStatTrackingMode(getPlayerPreferences().scoring.statTrackingMode);
+      statSelect.value = preferred === 'NONE' ? 'CASUAL' : preferred;
+    }
+  }
+  if (!enabledToggle.checked && statSelect.value !== 'NONE') statSelect.value = 'NONE';
+  const selectedCount = getSelectedPlayersFromSetup().length;
+  if (help) help.textContent = statSelect.value === 'GRIND' && selectedCount > 2
+    ? `Grind will safely use Enhanced on this device while it is scoring ${selectedCount} golfers. Grind activates only at two or fewer.`
+    : 'Grind is available only when this device scores no more than two golfers.';
+}
 function renderStatTrackingPlayerSelector(explicitIds = null) {
   const wrap = document.getElementById('statTrackingPlayersWrap');
   if (!wrap) return;
@@ -19296,6 +19343,8 @@ function buildTemplateFromCurrentSetup(nameOverride = '') {
     scoringAccessMode: normalizeScoringAccessMode(fd.get('scoreEntryMode') || 'single_device'),
     officialScorerName: String(fd.get('officialScorerName') || '').trim() || 'Official scorer',
     statTrackingEnabled: fd.get('enableStatTracking') === 'on',
+    playInputMode: normalizePlayInputMode(fd.get('roundPlayInputMode')),
+    statTrackingMode: normalizeStatTrackingMode(fd.get('roundStatTrackingMode')),
     smartScoreAdvanceEnabled: selectedGames.some(g => g.key === 'sneaky_sandy_poley') ? false : fd.get('smartScoreAdvance') === 'on',
     smartScoreAdvancePreset: getSmartScoreAdvancePresetFromSetup(),
     captureWeatherContext: fd.get('captureWeatherContext') === 'on',
@@ -19334,6 +19383,8 @@ function applyMatchTemplate(templateId) {
     scoringAccessMode: normalizeScoringAccessMode(template.scoringAccessMode || 'single_device'),
     officialScorerName: template.officialScorerName || 'Official scorer',
     statTrackingEnabled: preferenceDefaults.statTrackingEnabled,
+    playInputMode: normalizePlayInputMode(template.playInputMode || preferenceDefaults.playInputMode),
+    statTrackingMode: normalizeStatTrackingMode(template.statTrackingMode || preferenceDefaults.statTrackingMode),
     smartScoreAdvanceEnabled: template.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!template.smartScoreAdvanceEnabled,
     smartScoreAdvancePreset: preferenceDefaults.smartScoreAdvancePreset,
     captureWeatherContext: preferenceDefaults.captureWeatherContext,
@@ -20880,6 +20931,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
     const sharedMatchToggle = document.getElementById('sharedMatchEnabled'); if (sharedMatchToggle) sharedMatchToggle.checked = draft.storageMode === 'shared';
     document.getElementById('officialScorerNameInput').value = draft.officialScorerName || 'Official scorer';
     const statToggle = document.getElementById('enableStatTrackingInput'); if (statToggle) statToggle.checked = !!draft.statTrackingEnabled;
+    syncRoundTrackingModeSetup('', draft);
     const smartToggle = document.getElementById('smartScoreAdvanceInput'); if (smartToggle) smartToggle.checked = draft.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!draft.smartScoreAdvanceEnabled;
     const weatherToggle = document.getElementById('captureWeatherContextInput'); if (weatherToggle) weatherToggle.checked = draft.captureWeatherContext !== false;
     syncSmartScoreAdvancePresetUi(draft);
@@ -20915,6 +20967,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
   const sharedMatchToggle = document.getElementById('sharedMatchEnabled'); if (sharedMatchToggle) sharedMatchToggle.checked = match.storageMode === 'shared';
   document.getElementById('officialScorerNameInput').value = match.officialScorerName || 'Official scorer';
   const statToggle = document.getElementById('enableStatTrackingInput'); if (statToggle) statToggle.checked = !!match.statTrackingEnabled;
+  syncRoundTrackingModeSetup('', match);
   const smartToggle = document.getElementById('smartScoreAdvanceInput'); if (smartToggle) smartToggle.checked = match.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!match.smartScoreAdvanceEnabled;
   const weatherToggle = document.getElementById('captureWeatherContextInput'); if (weatherToggle) weatherToggle.checked = match.captureWeatherContext !== false;
   syncSmartScoreAdvancePresetUi(match);
@@ -21536,6 +21589,15 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
   document.getElementById('score').addEventListener('change', e => {
+    if (e.target.id === 'playerModeRoundStatModeSelect') {
+      const match = getActiveMatch();
+      if (!match) return;
+      match.statTrackingMode = normalizeStatTrackingMode(e.target.value);
+      match.statTrackingEnabled = match.statTrackingMode !== 'NONE';
+      if (match.statTrackingEnabled && !Array.isArray(match.statTrackingPlayerIds)) match.statTrackingPlayerIds = (match.players || []).map(player => String(player.playerId));
+      persist();
+      return;
+    }
     if (e.target.matches('[data-greenies-winner]')) {
       document.querySelectorAll('[data-greenies-winner]').forEach(el => { if (el !== e.target) el.checked = false; });
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
@@ -21568,9 +21630,14 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       if (!enforcePressSetupLimitInput(e.target)) return;
       document.querySelectorAll(`[data-game-config][data-field="${e.target.dataset.field}"]`).forEach(input => { if (input !== e.target) input.value = e.target.value; });
     }
-    if (e.target && (e.target.id === 'enableStatTrackingInput' || e.target.matches('[data-player-slot], [data-stat-track-player]'))) renderStatTrackingPlayerSelector();
+    if (e.target?.id === 'roundStatTrackingModeSelect') syncRoundTrackingModeSetup('mode');
+    if (e.target?.id === 'enableStatTrackingInput') syncRoundTrackingModeSetup('toggle');
+    if (e.target && (e.target.id === 'enableStatTrackingInput' || e.target.id === 'roundStatTrackingModeSelect' || e.target.matches('[data-player-slot], [data-stat-track-player]'))) {
+      syncRoundTrackingModeSetup();
+      renderStatTrackingPlayerSelector();
+    }
     if (e.target && (e.target.id === 'smartScoreAdvanceInput' || e.target.id === 'smartScoreAdvancePresetSelect')) syncSmartScoreAdvancePresetUi();
-    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #featuredCompetitionSelect, #scoreEntryModeSelect, #officialScorerNameInput, #sharedMatchEnabled, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-game-config], #enableStatTrackingInput, #smartScoreAdvanceInput, #smartScoreAdvancePresetSelect, #captureWeatherContextInput, [data-stat-track-player]')) {
+    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #featuredCompetitionSelect, #scoreEntryModeSelect, #roundPlayInputModeSelect, #roundStatTrackingModeSelect, #officialScorerNameInput, #sharedMatchEnabled, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-game-config], #enableStatTrackingInput, #smartScoreAdvanceInput, #smartScoreAdvancePresetSelect, #captureWeatherContextInput, [data-stat-track-player]')) {
       setTimeout(() => { renderSetupHandicapPreview(); renderGamesPicker(collectSelectedGames()); renderFeaturedCompetitionSetup(collectSelectedGames()); renderTodaysMatchSummary(); renderRoundPreferenceSummary(); }, 0);
     }
   });
@@ -22215,6 +22282,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       scoreEntryMode,
       officialScorerName,
       statTrackingEnabled: fd.get('enableStatTracking') === 'on',
+      playInputMode: normalizePlayInputMode(fd.get('roundPlayInputMode')),
+      statTrackingMode: normalizeStatTrackingMode(fd.get('roundStatTrackingMode')),
       smartScoreAdvanceEnabled: validatedSelectedGames.some(g => g.key === 'sneaky_sandy_poley') ? false : fd.get('smartScoreAdvance') === 'on',
       smartScoreAdvancePreset: getSmartScoreAdvancePresetFromSetup(),
       captureWeatherContext: fd.get('captureWeatherContext') === 'on',
@@ -22746,7 +22815,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     toast('Preference saved');
   });
   document.getElementById('playInputModeSelect')?.addEventListener('change', async event => {
-    const prior = getPreferredPlayInputMode();
+    const prior = getEffectivePlayInputMode();
     const result = await switchPlayInputMode(event.target.value);
     if (!result.changed && result.reason) {
       event.target.value = prior;
@@ -23718,7 +23787,8 @@ function installDyeLedgerLiveEngineAdapter() {
     normalizeStatTrackingMode,
     deriveGreenInRegulation,
     getEffectivePlayerStatTrackingMode,
-    getPreferredPlayInputMode,
+        getPreferredPlayInputMode,
+        getEffectivePlayInputMode,
     createPlayInputController,
     switchPlayInputMode,
     buildExecutiveDriverRows,

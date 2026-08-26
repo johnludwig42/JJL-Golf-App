@@ -6,6 +6,8 @@ Player Mode owns dedicated semantic card markup. It must not render its cards th
 
 ## Tracking levels
 
+More → Preferences supplies device defaults. Match Setup may override Score Keeping Mode and Stat Tracking Mode for a specific round without changing those defaults. Mode changes are presentation/capture changes only and must never clear already recorded scores or stats.
+
 - **None:** gross scores only.
 - **Casual:** putts, penalties, tee-shot result, and calculated GIR.
 - **Enhanced:** Casual plus a nine-position approach result and recovery outcomes. Position 5 is computed GIR; the other eight positions explicitly capture miss direction.

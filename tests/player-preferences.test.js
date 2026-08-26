@@ -19,8 +19,8 @@ test('preference defaults and normalization are complete, deterministic, immutab
   const engine = loadLiveEngine();
   const defaults = engine.getDefaultPlayerPreferences();
   assert.deepEqual(structuredClone(defaults), {
-    schemaVersion: 5,
-    scoring: { playInputMode: 'CLASSIC', smartScoreAdvanceEnabled: true, smartScoreAdvancePreset: 'NORMAL', hapticsEnabled: true, statTrackingDefault: false },
+    schemaVersion: 6,
+    scoring: { playInputMode: 'CLASSIC', statTrackingMode: 'CASUAL', smartScoreAdvanceEnabled: true, smartScoreAdvancePreset: 'NORMAL', hapticsEnabled: true, statTrackingDefault: false },
     press: structuredClone(engine.normalizePressConfig({})),
     roundDefaults: { sharedMatchEnabled: false, captureWeatherContext: true },
     quickScoreboard: { classicScorecardExpanded: false, scoreDistributionExpanded: false, momentumExpanded: false },
@@ -44,7 +44,7 @@ test('preference storage reads, saves, reloads, updates nested fields, survives 
   const engine = loadLiveEngine();
   const storage = makeStorage({ unrelated: 'keep' });
   const first = engine.getPlayerPreferences(storage);
-  assert.equal(JSON.parse(storage.snapshot()[key]).schemaVersion, 5);
+  assert.equal(JSON.parse(storage.snapshot()[key]).schemaVersion, 6);
   const saved = engine.savePlayerPreferences({ ...first, scoring: { ...first.scoring, hapticsEnabled: false } }, storage);
   assert.equal(saved.scoring.hapticsEnabled, false);
   assert.equal(engine.getPlayerPreferences(storage).scoring.hapticsEnabled, false);
@@ -65,7 +65,7 @@ test('reset restores only known values while preserving unknown fields and unrel
   const storage = makeStorage({ unrelated: 'saved-match-data' });
   engine.savePlayerPreferences({ schemaVersion: 7, futureTop: 1, scoring: { smartScoreAdvancePreset: 'RELAXED', hapticsEnabled: false, statTrackingDefault: true, future: 'keep' }, quickScoreboard: { classicScorecardExpanded: true, scoreDistributionExpanded: true, momentumExpanded: true, future: 'keep' } }, storage);
   const reset = engine.resetPlayerPreferences(storage);
-  assert.deepEqual(structuredClone({ scoring: reset.scoring, roundDefaults: reset.roundDefaults, quickScoreboard: reset.quickScoreboard }), structuredClone({ scoring: { playInputMode: 'CLASSIC', smartScoreAdvanceEnabled: true, smartScoreAdvancePreset: 'NORMAL', hapticsEnabled: true, statTrackingDefault: false, future: 'keep' }, roundDefaults: { sharedMatchEnabled: false, captureWeatherContext: true }, quickScoreboard: { classicScorecardExpanded: false, scoreDistributionExpanded: false, momentumExpanded: false, future: 'keep' } }));
+  assert.deepEqual(structuredClone({ scoring: reset.scoring, roundDefaults: reset.roundDefaults, quickScoreboard: reset.quickScoreboard }), structuredClone({ scoring: { playInputMode: 'CLASSIC', statTrackingMode: 'CASUAL', smartScoreAdvanceEnabled: true, smartScoreAdvancePreset: 'NORMAL', hapticsEnabled: true, statTrackingDefault: false, future: 'keep' }, roundDefaults: { sharedMatchEnabled: false, captureWeatherContext: true }, quickScoreboard: { classicScorecardExpanded: false, scoreDistributionExpanded: false, momentumExpanded: false, future: 'keep' } }));
   assert.equal(reset.futureTop, 1);
   assert.equal(storage.snapshot().unrelated, 'saved-match-data');
 });
@@ -166,7 +166,7 @@ test('More UI exposes scoring, Press, and Quick Scoreboard preferences with feed
   const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   const card = html.slice(html.indexOf('class="card tight-card player-preferences-card"'), html.indexOf('</section>', html.indexOf('class="card tight-card player-preferences-card"')));
   assert.match(card, /Player Preferences/);
-  assert.equal((card.match(/data-preference-control=/g) || []).length, 15);
+  assert.equal((card.match(/data-preference-control=/g) || []).length, 16);
   for (const label of ['Scoring Preferences', 'Score Entry Mode', 'Smart Score Advance', 'Stat Tracking', 'Haptics', 'Press Preferences', 'Presses', 'Trigger', 'Prompt When Down', 'Who May Declare', 'Parent Availability', 'Declaration Timing', 'Maximum Presses', 'Maximum Re-Presses', 'Round Defaults', 'Shared Match default', 'Weather context', 'Classic Scorecard', 'Score Distribution', 'Momentum Charts', 'Reset to Defaults']) assert.match(card, new RegExp(label));
   assert.doesNotMatch(card, /Press Stake|Root Stake|Parent Stake/);
   assert.match(card, /These settings become the default for new rounds\. Any round may override them during Round Setup\./);

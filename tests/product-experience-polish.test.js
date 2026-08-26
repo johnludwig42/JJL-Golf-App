@@ -49,14 +49,14 @@ test('Library course tools are visually cohesive and maintenance is disclosed', 
 });
 
 test('Home Screen branding is shared by the header while install assets remain complete', () => {
-  assert.match(html, /src="\.\/branding\/apple-touch-icon-v31\.0\.06\.png" alt="The Dye Ledger"/);
-  assert.match(html, /href="\.\/branding\/apple-touch-icon-v31\.0\.06\.png"/);
+  assert.match(html, /src="\.\/branding\/apple-touch-icon-v31\.0\.07\.png" alt="The Dye Ledger"/);
+  assert.match(html, /href="\.\/branding\/apple-touch-icon-v31\.0\.07\.png"/);
   assert.deepEqual(manifest.icons.map(icon => icon.src), [
-    './branding/app-icon-192-v31.0.06.png',
-    './branding/app-icon-512-v31.0.06.png',
-    './branding/apple-touch-icon-v31.0.06.png',
+    './branding/app-icon-192-v31.0.07.png',
+    './branding/app-icon-512-v31.0.07.png',
+    './branding/apple-touch-icon-v31.0.07.png',
   ]);
-  for (const asset of ['app-icon-192-v31.0.06.png', 'app-icon-512-v31.0.06.png', 'apple-touch-icon-v31.0.06.png', 'favicon-32-v31.0.06.png', 'favicon-16-v31.0.06.png']) {
+  for (const asset of ['app-icon-192-v31.0.07.png', 'app-icon-512-v31.0.07.png', 'apple-touch-icon-v31.0.07.png', 'favicon-32-v31.0.07.png', 'favicon-16-v31.0.07.png']) {
     assert.match(serviceWorker, new RegExp(`branding/${asset.replace('.', '\\.')}`));
   }
 });

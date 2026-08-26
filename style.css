@@ -347,6 +347,7 @@ main{padding-bottom:calc(64px + env(safe-area-inset-bottom) + var(--keyboard-off
 .player-mode-header-match-status{display:flex;align-items:baseline;gap:7px;margin-top:7px;font-size:.78rem}.player-mode-header-match-status span{color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em}.player-mode-header-match-status strong{color:var(--accent);overflow-wrap:anywhere}
 .player-mode-save-state{padding-top:10px;color:var(--accent);font-weight:700;font-size:.85rem;white-space:nowrap}
 .player-mode-overflow{width:48px;min-width:48px;height:48px;padding:0;font-size:1.1rem}
+.fairway-hit-check{font-size:1.35rem;font-weight:900;line-height:1}
 .player-mode-overflow-menu{position:absolute;z-index:12;right:0;top:60px;display:grid;gap:6px;width:190px;padding:8px;border:1px solid var(--border);border-radius:12px;background:var(--card);box-shadow:0 12px 30px rgba(0,0,0,.16)}
 .player-input-mode-active #playMatchSummary{margin:14px 0 18px;padding:18px 14px;border-left:5px solid #1261a0;border-right:5px solid #b17a00;border-radius:8px;background:var(--card);text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.06)}
 .player-input-mode-active #playMatchSummary .tiny{font-size:.82rem}.player-mode-score-list{display:grid;gap:16px;margin-top:4px;overflow:visible}
@@ -1615,6 +1616,7 @@ body.sheet-open{overflow:hidden}
 .stat-player-card.is-readonly{opacity:.7}
 .stat-player-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
 .stat-check-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.stat-derived-cell{display:grid;justify-items:center;gap:2px;min-width:72px}.stat-derived-cell strong{font-size:1rem;color:var(--accent)}.stat-derived-cell small,.stat-recovery-result{display:block;margin-top:3px;font-size:.62rem;line-height:1.15;color:var(--muted)}.stat-recovery-select{min-width:112px;padding:7px 8px;font-size:.78rem}
 .stat-putts-field{display:flex;flex-direction:column;gap:6px}
 .stat-putts-input,.stat-penalty-input{max-width:90px;width:90px}
 .stat-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}

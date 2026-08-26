@@ -341,11 +341,12 @@ main{padding-bottom:calc(64px + env(safe-area-inset-bottom) + var(--keyboard-off
 .player-mode-readback{padding:11px;border:1px solid var(--border);border-radius:10px;font-size:.82rem}.player-mode-warning{padding:10px;border-radius:10px;background:#fff3cd;color:var(--text);font-size:.78rem}
 .player-mode-gir-override summary{cursor:pointer;font-size:.78rem;color:var(--muted)}.player-mode-gir-override .player-mode-stat-options{margin-top:8px}.preference-segments-four{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media(max-width:520px){.player-mode-score-choices{grid-template-columns:repeat(6,minmax(38px,1fr))}.player-mode-stat-options.player-mode-five-options{grid-template-columns:repeat(3,minmax(0,1fr))}.preference-segments-four{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.player-mode-hole-header{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:start;gap:12px;padding:8px 2px 14px;border-bottom:1px solid var(--border)}
+.player-mode-hole-header{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:12px;padding:8px 2px 14px;border-bottom:1px solid var(--border)}
 .player-mode-hole-title .hole-select{width:auto;min-width:145px;padding:4px 34px 4px 0;border:0;background-color:transparent;font-size:1.65rem;font-weight:800;color:var(--text)}
 .player-mode-hole-meta{margin-top:3px;font-size:.9rem;color:var(--muted)}
 .player-mode-header-match-status{display:flex;align-items:baseline;gap:7px;margin-top:7px;font-size:.78rem}.player-mode-header-match-status span{color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em}.player-mode-header-match-status strong{color:var(--accent);overflow-wrap:anywhere}
 .player-mode-save-state{padding-top:10px;color:var(--accent);font-weight:700;font-size:.85rem;white-space:nowrap}
+.player-mode-header-actions{display:grid;justify-items:stretch;gap:8px;min-width:150px}.player-mode-header-meta{display:flex;align-items:start;justify-content:flex-end;gap:9px}.player-mode-header-save-next{min-height:42px;padding:8px 12px;font-size:.78rem;white-space:nowrap}.player-mode-gir-result strong{font-size:2rem;line-height:1}.player-mode-gir-result strong[aria-label^="Missed"]{color:#9b2c2c}
 .player-mode-overflow{width:48px;min-width:48px;height:48px;padding:0;font-size:1.1rem}
 .fairway-hit-check{font-size:1.35rem;font-weight:900;line-height:1}
 .player-mode-overflow-menu{position:absolute;z-index:12;right:0;top:60px;display:grid;gap:6px;width:190px;padding:8px;border:1px solid var(--border);border-radius:12px;background:var(--card);box-shadow:0 12px 30px rgba(0,0,0,.16)}
@@ -365,7 +366,7 @@ main{padding-bottom:calc(64px + env(safe-area-inset-bottom) + var(--keyboard-off
 .player-mode-bottom-actions button{min-height:50px;padding:8px;font-size:.78rem}.player-mode-bottom-actions [data-player-mode-save-next]{font-size:.9rem}
 body.player-mode-play-active .app-footer-version{display:none}
 .player-input-mode-active #holeSummary,.player-input-mode-active #memoryQuickCaptureWrap{display:none!important}
-@media(max-width:430px){.player-mode-hole-header{grid-template-columns:minmax(0,1fr) auto auto}.player-mode-hole-title .hole-select{font-size:1.45rem}.player-mode-score-choices{gap:5px}.player-mode-score-choices>button{min-height:48px;padding:4px;font-size:.92rem}.player-mode-team>header span{font-size:.66rem}.player-mode-bottom-actions{grid-template-columns:.9fr 1.6fr .9fr}.player-mode-bottom-actions button{font-size:.72rem}}
+@media(max-width:430px){.player-mode-hole-header{grid-template-columns:minmax(0,1fr) minmax(126px,auto)}.player-mode-hole-title .hole-select{font-size:1.45rem}.player-mode-header-actions{min-width:126px}.player-mode-header-save-next{padding:7px 8px;font-size:.7rem}.player-mode-score-choices{gap:5px}.player-mode-score-choices>button{min-height:48px;padding:4px;font-size:.92rem}.player-mode-team>header span{font-size:.66rem}.player-mode-bottom-actions{grid-template-columns:.9fr 1.6fr .9fr}.player-mode-bottom-actions button{font-size:.72rem}}
 .leaderboard-cards { display: grid; gap: 10px; }
 .hole-momentum {
   display: grid;
@@ -1616,7 +1617,7 @@ body.sheet-open{overflow:hidden}
 .stat-player-card.is-readonly{opacity:.7}
 .stat-player-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
 .stat-check-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.stat-derived-cell{display:grid;justify-items:center;gap:2px;min-width:72px}.stat-derived-cell strong{font-size:1rem;color:var(--accent)}.stat-derived-cell small,.stat-recovery-result{display:block;margin-top:3px;font-size:.62rem;line-height:1.15;color:var(--muted)}.stat-recovery-select{min-width:112px;padding:7px 8px;font-size:.78rem}
+.stat-derived-cell{display:grid;justify-items:center;gap:2px;min-width:72px}.stat-derived-cell strong{font-size:1rem;color:var(--accent)}.stat-derived-cell .stat-derived-symbol{font-size:1.75rem;line-height:1}.stat-derived-cell .stat-derived-symbol.is-miss{color:#9b2c2c}.stat-derived-cell small,.stat-recovery-result{display:block;margin-top:3px;font-size:.62rem;line-height:1.15;color:var(--muted)}.stat-recovery-select{min-width:112px;padding:7px 8px;font-size:.78rem}
 .stat-putts-field{display:flex;flex-direction:column;gap:6px}
 .stat-putts-input,.stat-penalty-input{max-width:90px;width:90px}
 .stat-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}

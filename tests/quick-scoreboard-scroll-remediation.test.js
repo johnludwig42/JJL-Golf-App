@@ -126,15 +126,15 @@ function sha256(bytes) {
 }
 
 test('header, Apple, desktop PWA, favicon, worker cache, and branding documentation agree without changing artwork bytes', () => {
-  assert.match(htmlSource, /<img src="\.\/branding\/apple-touch-icon-v31\.0\.06\.png" alt="The Dye Ledger"/);
+  assert.match(htmlSource, /<img src="\.\/branding\/apple-touch-icon-v31\.0\.07\.png" alt="The Dye Ledger"/);
   assert.equal(count(htmlSource, /rel="apple-touch-icon"/g), 1);
-  assert.match(htmlSource, /rel="apple-touch-icon"[^>]+href="\.\/branding\/apple-touch-icon-v31\.0\.06\.png"/);
+  assert.match(htmlSource, /rel="apple-touch-icon"[^>]+href="\.\/branding\/apple-touch-icon-v31\.0\.07\.png"/);
   assert.doesNotMatch(htmlSource, /brand-mark[\s\S]{0,200}app-icon-192/);
 
   const expected = [
-    ['./branding/app-icon-192-v31.0.06.png', '192x192'],
-    ['./branding/app-icon-512-v31.0.06.png', '512x512'],
-    ['./branding/apple-touch-icon-v31.0.06.png', '180x180'],
+    ['./branding/app-icon-192-v31.0.07.png', '192x192'],
+    ['./branding/app-icon-512-v31.0.07.png', '512x512'],
+    ['./branding/apple-touch-icon-v31.0.07.png', '180x180'],
   ];
   assert.deepEqual(manifest.icons.map(icon => [icon.src, icon.sizes]), expected);
   for (const [src, sizes] of expected) {
@@ -146,9 +146,9 @@ test('header, Apple, desktop PWA, favicon, worker cache, and branding documentat
     assert.deepEqual(pngDimensions(bytes), { width, height });
     assert.match(worker, new RegExp(src.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
-  assert.match(worker, /cacheName: 'the-dye-ledger-v31\.0\.06'/);
-  assert.match(htmlSource, /favicon-32-v31\.0\.06\.png/);
-  assert.match(htmlSource, /favicon-16-v31\.0\.06\.png/);
+  assert.match(worker, /cacheName: 'the-dye-ledger-v31\.0\.07'/);
+  assert.match(htmlSource, /favicon-32-v31\.0\.07\.png/);
+  assert.match(htmlSource, /favicon-16-v31\.0\.07\.png/);
 
   const master = readFileSync(new URL('../branding/app-icon-master.png', import.meta.url));
   const desktop512 = readFileSync(new URL('../branding/app-icon-512.png', import.meta.url));

@@ -342,3 +342,9 @@ FUTURE:
 - [x] Include recap, memory, weather, and provenance without private identifiers.
 - [x] Preserve incomplete-round truth with PROVISIONAL treatment.
 - [x] Complete browser PDF fit and visual acceptance on real app fixtures (Chrome 151; eight-page reference PDF inspected).
+# v31.0.07 Player Mode core (implemented, pending acceptance)
+
+- Player Mode now uses the shared Play controller with tap-first group scoring and focused golfer detail.
+- None, Casual, Enhanced, and Grind detail levels are defined; Grind enforces the two-golfer-per-device safeguard.
+- GIR derivation, null propagation, directional facts, and override provenance are established.
+- Follow-up Player Mode refinement remains: visual acceptance, undo placement, tighter fast-lane spacing, and richer Grind shot context.

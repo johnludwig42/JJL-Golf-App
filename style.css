@@ -312,6 +312,11 @@ main{padding-bottom:calc(64px + env(safe-area-inset-bottom) + var(--keyboard-off
 }
 .picker-check input { width: auto; margin: 0; }
 .score-hole-nav { align-items: center; justify-content: space-between; }
+.play-input-mode-bar{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-bottom:8px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--surface-soft,#f6f8f7)}
+.play-input-mode-bar label{display:flex;align-items:center;gap:8px;margin:0}
+.play-input-mode-bar select{width:auto;min-width:150px;margin:0}
+.play-input-mode-bar .tiny{max-width:420px;text-align:right}
+@media (max-width:600px){.play-input-mode-bar{align-items:stretch;flex-direction:column;gap:4px}.play-input-mode-bar label{justify-content:space-between}.play-input-mode-bar .tiny{text-align:left}}
 .leaderboard-cards { display: grid; gap: 10px; }
 .hole-momentum {
   display: grid;

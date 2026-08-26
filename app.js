@@ -3210,6 +3210,7 @@ function buildEmptyStats(count = 18) {
     sandy: false,
     fairwayResult: 'UNKNOWN',
     greenResult: 'UNKNOWN',
+    approachResult: 'UNKNOWN',
     bunkerInvolved: false,
     greenSource: 'unknown',
     greenOverride: null,
@@ -4225,6 +4226,7 @@ function normalizeHoleStat(stat = {}, idx = 0) {
     entryCompleted: !!stat?.entryCompleted,
     fairwayResult: ['HIT', 'MISS', 'LEFT', 'RIGHT', 'UNKNOWN', 'NA'].includes(String(stat?.fairwayResult || '').toUpperCase()) ? String(stat.fairwayResult).toUpperCase() : (Object.prototype.hasOwnProperty.call(stat || {}, 'fairway') ? (stat?.fairway ? 'HIT' : 'MISS') : 'UNKNOWN'),
     greenResult: ['ON', 'SHORT', 'LEFT', 'RIGHT', 'LONG', 'UNKNOWN'].includes(String(stat?.greenResult || '').toUpperCase()) ? String(stat.greenResult).toUpperCase() : (stat?.green ? 'ON' : 'UNKNOWN'),
+    approachResult: ['1','2','3','4','5','6','7','8','9','UNKNOWN'].includes(String(stat?.approachResult || '').toUpperCase()) ? String(stat.approachResult).toUpperCase() : (stat?.green ? '5' : 'UNKNOWN'),
     bunkerInvolved: !!stat?.bunkerInvolved,
     greenSource: ['calculated', 'override', 'legacy', 'unknown'].includes(String(stat?.greenSource || '').toLowerCase()) ? String(stat.greenSource).toLowerCase() : (Object.prototype.hasOwnProperty.call(stat || {}, 'green') ? 'legacy' : 'unknown'),
     greenOverride: typeof stat?.greenOverride === 'boolean' ? stat.greenOverride : null,
@@ -10471,7 +10473,7 @@ function computeStatTrackingSummary(match, metrics) {
   const trackedPlayers = (metrics?.players || []).filter(playerMetric => isPlayerStatTrackingEnabled(match, playerMetric.playerId));
   const summary = trackedPlayers.map(playerMetric => {
     const playerRef = match.players.find(row => row.playerId === playerMetric.playerId);
-    const totals = { trackedHoles: 0, fairwaysHit: 0, fairwayOpps: 0, greens: 0, greenOpps: 0, putts: 0, puttOpps: 0, penaltyStrokes: 0, upAndDowns: 0, sandies: 0 };
+    const totals = { trackedHoles: 0, fairwaysHit: 0, fairwayOpps: 0, greens: 0, greenOpps: 0, putts: 0, puttOpps: 0, penaltyStrokes: 0, upAndDowns: 0, sandies: 0, approachOpps: 0, approachMisses: 0, approachPositions: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 0, '8': 0, '9': 0 } };
     (metrics?.holeResults || []).forEach((holeResult, holeIdx) => {
       if (!holeResult?.completed) return;
       const scoreObj = holeResult?.playerScores?.find(ps => ps.playerId === playerMetric.playerId);
@@ -10489,6 +10491,12 @@ function computeStatTrackingSummary(match, metrics) {
         totals.greenOpps += 1;
         if (stat.green) totals.greens += 1;
       }
+      const approachResult = String(stat.approachResult || 'UNKNOWN');
+      if (Object.prototype.hasOwnProperty.call(totals.approachPositions, approachResult)) {
+        totals.approachPositions[approachResult] += 1;
+        totals.approachOpps += 1;
+        if (approachResult !== '5') totals.approachMisses += 1;
+      }
       if (Number.isFinite(stat.putts) && stat.puttsSource !== 'default') {
         totals.putts += stat.putts;
         totals.puttOpps += 1;
@@ -10500,6 +10508,20 @@ function computeStatTrackingSummary(match, metrics) {
     return { playerMetric, totals };
   });
   return summary;
+}
+
+function getApproachDispersionSummary(totals) {
+  const positions = totals?.approachPositions || {};
+  const count = key => Number(positions[String(key)] || 0);
+  const short = count(1) + count(2) + count(3);
+  const left = count(1) + count(4) + count(7);
+  const right = count(3) + count(6) + count(9);
+  const long = count(7) + count(8) + count(9);
+  const misses = Number(totals?.approachMisses || 0);
+  const tendencies = [{ label: 'short', value: short }, { label: 'left', value: left }, { label: 'right', value: right }, { label: 'long', value: long }];
+  const max = Math.max(0, ...tendencies.map(row => row.value));
+  const dominant = max > 0 ? tendencies.filter(row => row.value === max).map(row => row.label) : [];
+  return { tracked: Number(totals?.approachOpps || 0), misses, short, left, right, long, dominant };
 }
 
 function buildTrackedStatisticsStoryFacts(match, metrics) {
@@ -10519,6 +10541,7 @@ function buildTrackedStatisticsStoryFacts(match, metrics) {
       upAndDowns: Number(totals.upAndDowns || 0),
       sandies: Number(totals.sandies || 0),
       penaltyStrokes: Number(totals.penaltyStrokes || 0),
+      approachDispersion: getApproachDispersionSummary(totals),
     }));
 }
 
@@ -10530,6 +10553,7 @@ function describeTrackedStatisticsForStory(fact) {
   if (fact.upAndDowns) details.push(`${fact.upAndDowns} up-and-down${fact.upAndDowns === 1 ? '' : 's'}`);
   if (fact.sandies) details.push(`${fact.sandies} sandy${fact.sandies === 1 ? '' : 's'}`);
   if (fact.penaltyStrokes) details.push(`${fact.penaltyStrokes} penalty stroke${fact.penaltyStrokes === 1 ? '' : 's'}`);
+  if (fact.approachDispersion?.misses >= 2 && fact.approachDispersion.dominant.length === 1) details.push(`${fact.approachDispersion.dominant[0]} was the most common recorded approach miss`);
   return details.length ? `${fact.playerName}'s recorded statistics included ${details.join(', ')}.` : '';
 }
 
@@ -10809,6 +10833,8 @@ function buildExportStatTrackingSummary(match, metrics) {
     const totals = summaryByPlayer.get(String(playerMetric.playerId));
     if (!totals || !Number(totals.trackedHoles)) return '';
     const avgPutts = totals.puttOpps ? (totals.putts / totals.puttOpps).toFixed(1) : '—';
+    const approach = getApproachDispersionSummary(totals);
+    const approachText = approach.misses ? `S ${approach.short} · L ${approach.left} · R ${approach.right} · Long ${approach.long}` : '—';
     return `
       <tr>
         <td><strong>${escapeHtml(playerMetric.player.name)}</strong></td>
@@ -10820,6 +10846,7 @@ function buildExportStatTrackingSummary(match, metrics) {
         <td>${totals.upAndDowns}</td>
         <td>${totals.sandies}</td>
         <td>${totals.penaltyStrokes}</td>
+        <td>${approachText}</td>
       </tr>`;
   }).join('');
   if (!rows) return '';
@@ -10828,7 +10855,7 @@ function buildExportStatTrackingSummary(match, metrics) {
       <div class="fit-box">
         <table class="export-table export-stat-summary-table">
           <thead>
-            <tr><th>Player</th><th>Tracked Holes</th><th>Fairways</th><th>GIR</th><th>Total Putts</th><th>Avg Putts</th><th>Up & Downs</th><th>Sandies</th><th>Penalty</th></tr>
+            <tr><th>Player</th><th>Tracked Holes</th><th>Fairways</th><th>GIR</th><th>Total Putts</th><th>Avg Putts</th><th>Up & Downs</th><th>Sandies</th><th>Penalty</th><th>Approach Misses</th></tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
@@ -10849,10 +10876,12 @@ function buildPlayerHoleStatSummaryTable(match, metrics, playerMetric, completed
     const par = Number(hole?.par) || Number(scoreObj?.par) || 0;
     const fairwayEligible = par === 4 || par === 5;
     const mark = (value) => value ? '✓' : '';
+    const approachLabels = { '1': 'Short L', '2': 'Short', '3': 'Short R', '4': 'Left', '5': 'GIR', '6': 'Right', '7': 'Long L', '8': 'Long', '9': 'Long R' };
     return {
       hole: escapeHtml(hole?.holeNumber || holeIdx + 1),
       fw: fairwayEligible ? (stat.fairwayResult === 'UNKNOWN' ? '—' : mark(stat.fairway)) : '—',
       gir: stat.greenSource === 'unknown' ? '—' : mark(stat.green),
+      approach: approachLabels[String(stat.approachResult || '')] || '—',
       putts: Number.isFinite(Number(stat.putts)) && stat.puttsSource !== 'default' ? Number(stat.putts) : '—',
       upDown: mark(stat.upAndDown),
       sandy: mark(stat.sandy),
@@ -10865,6 +10894,7 @@ function buildPlayerHoleStatSummaryTable(match, metrics, playerMetric, completed
     <tr>
       <td>${row.fw}</td>
       <td>${row.gir}</td>
+      <td>${row.approach}</td>
       <td>${row.putts}</td>
       <td>${row.upDown}</td>
       <td>${row.sandy}</td>
@@ -10878,7 +10908,7 @@ function buildPlayerHoleStatSummaryTable(match, metrics, playerMetric, completed
       </table>
       <div class="player-hole-stat-scroll" tabindex="0" aria-label="Scrollable hole-by-hole player statistics">
         <table class="player-hole-stat-table player-hole-stat-values">
-          <thead><tr><th>FW</th><th>GIR</th><th>Putts</th><th>U&amp;D</th><th>Sandy</th><th>Pen</th></tr></thead>
+          <thead><tr><th>FW</th><th>GIR</th><th>Approach</th><th>Putts</th><th>U&amp;D</th><th>Sandy</th><th>Pen</th></tr></thead>
           <tbody>${valueRows}</tbody>
         </table>
       </div>
@@ -10908,6 +10938,7 @@ function buildStatTrackingSummary(match, metrics) {
         <div><span>Up and downs</span><strong>${totals.upAndDowns}</strong></div>
         <div><span>Sandies</span><strong>${totals.sandies}</strong></div>
         <div><span>Penalty strokes</span><strong>${totals.penaltyStrokes}</strong></div>
+        ${(() => { const approach = getApproachDispersionSummary(totals); return `<div><span>Approach misses</span><strong>${approach.misses || '—'}</strong></div><div><span>Miss pattern</span><strong>${approach.misses ? `S ${approach.short} · L ${approach.left} · R ${approach.right} · Long ${approach.long}` : '—'}</strong></div>`; })()}
       </div>
       <details class="player-hole-stat-details top-gap">
         <summary>Hole-by-hole stats</summary>
@@ -12795,6 +12826,10 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
         currentStat.fairway = currentStat.fairwayResult === 'HIT';
       } else if (key === 'greenResult') {
         currentStat.greenResult = ['ON', 'SHORT', 'LEFT', 'RIGHT', 'LONG', 'UNKNOWN'].includes(String(input.value || '').toUpperCase()) ? String(input.value).toUpperCase() : 'UNKNOWN';
+      } else if (key === 'approachResult') {
+        currentStat.approachResult = ['1','2','3','4','5','6','7','8','9'].includes(String(input.value || '')) ? String(input.value) : 'UNKNOWN';
+        const legacyGreenResult = ({ '1': 'SHORT', '2': 'SHORT', '3': 'SHORT', '4': 'LEFT', '5': 'ON', '6': 'RIGHT', '7': 'LONG', '8': 'LONG', '9': 'LONG' })[currentStat.approachResult];
+        if (legacyGreenResult) currentStat.greenResult = legacyGreenResult;
       } else if (key === 'greenOverride') {
         currentStat.greenOverride = input.value === '' ? null : input.value === 'true';
       } else if (key === 'bunkerInvolved') {
@@ -12819,7 +12854,13 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
       const derived = deriveGreenInRegulation({ gross: score, putts: stat.putts, par: playerHole?.par || holeMeta?.par, puttsSource: stat.puttsSource, override: stat.greenOverride });
       stat.green = derived.value === true;
       stat.greenSource = derived.source;
-      if (derived.value === true && stat.greenResult === 'UNKNOWN') stat.greenResult = 'ON';
+      if (derived.value === true) {
+        stat.greenResult = 'ON';
+        stat.approachResult = '5';
+      } else if (stat.approachResult === '5') {
+        stat.approachResult = 'UNKNOWN';
+        stat.greenResult = 'UNKNOWN';
+      }
       if (JSON.stringify(playerRef.stats?.[currentHole - 1] || {}) !== JSON.stringify(stat)) {
         playerRef.stats[currentHole - 1] = stat;
         mutated = true;
@@ -16643,8 +16684,7 @@ function getPlayerModeSelectedPlayer(match, metrics) {
 }
 
 function buildPlayerModeScoreChoices(par, gross) {
-  const values = [...new Set([par - 1, par, par + 1, par + 2, par + 3].filter(value => value > 0))];
-  if (Number.isFinite(Number(gross)) && Number(gross) > 0 && !values.includes(Number(gross))) values.push(Number(gross));
+  const values = [...new Set([par - 2, par - 1, par, par + 1, par + 2].filter(value => value > 0))];
   return values.sort((left, right) => left - right);
 }
 function getPlayerModeScoreLabel(score, par) {
@@ -16679,10 +16719,11 @@ function renderPlayerModeScoreGrid(match, tee, metrics, hole) {
     const canEdit = canEditPlayerScore(match, playerMetric.team, playerMetric.playerId);
     const isSelected = String(selected?.playerId) === String(playerMetric.playerId);
     const choices = buildPlayerModeScoreChoices(par, score);
+    const otherSelected = Number.isFinite(Number(score)) && Number(score) > 0 && !choices.includes(Number(score));
     const net = Number.isFinite(Number(score)) && Number(score) > 0 ? Number(score) - strokes : null;
     return `<article class="player-mode-score-row ${isSelected ? 'is-selected' : ''} ${canEdit ? '' : 'score-row-readonly'}" data-player-mode-row="${escapeHtml(playerMetric.playerId)}">
       <div class="player-mode-row-head"><button type="button" class="player-mode-player-select" data-player-mode-select="${escapeHtml(playerMetric.playerId)}" aria-pressed="${isSelected}" title="Show detailed entry for ${escapeHtml(playerMetric.player?.name || 'Player')}"><strong>${escapeHtml(playerMetric.player?.name || 'Player')}</strong><span>${Number.isFinite(net) ? `${score} gross · ${net} match net` : 'Score needed'}</span></button><span class="player-mode-strokes" aria-label="${strokes} handicap stroke${strokes === 1 ? '' : 's'}">${strokes > 0 ? '●'.repeat(strokes) : ''}</span></div>
-      <div class="player-mode-score-choices" role="group" aria-label="Gross score for ${escapeHtml(playerMetric.player?.name || 'Player')}">${choices.map(value => `<button type="button" data-player-score-value="${value}" data-player-score-player="${escapeHtml(playerMetric.playerId)}" class="${Number(score) === value ? 'is-active' : ''}" ${canEdit ? '' : 'disabled'}>${value}</button>`).join('')}<label class="player-mode-more-score"><span>Other</span><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" min="1" max="25" data-score-player="${escapeHtml(playerMetric.playerId)}" data-score-locked="${canEdit ? '0' : '1'}" data-hole-par="${par}" value="${score || ''}" ${canEdit ? '' : 'disabled'} /></label></div>
+      <div class="player-mode-score-choices" role="group" aria-label="Gross score for ${escapeHtml(playerMetric.player?.name || 'Player')}">${choices.map(value => `<button type="button" data-player-score-value="${value}" data-player-score-player="${escapeHtml(playerMetric.playerId)}" class="${Number(score) === value ? 'is-active' : ''}" ${canEdit ? '' : 'disabled'}>${value}</button>`).join('')}<label class="player-mode-more-score ${otherSelected ? 'is-active' : ''}"><span>${otherSelected ? escapeHtml(String(score)) : 'Other'}</span><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" min="1" max="25" data-score-player="${escapeHtml(playerMetric.playerId)}" data-score-locked="${canEdit ? '0' : '1'}" data-hole-par="${par}" value="${score || ''}" ${canEdit ? '' : 'disabled'} /></label></div>
     </article>`;
   }).join('')}</section>`).join('');
 }
@@ -16706,27 +16747,29 @@ function renderPlayerModeStatEntry(match, hole, metrics) {
   const strokes = getFeaturedCompetitionStrokeAllowance(match, metrics, selected, playerHole?.strokeIndex);
   const net = Number.isFinite(Number(gross)) && Number(gross) > 0 ? Number(gross) - strokes : null;
   const scoreChoices = buildPlayerModeScoreChoices(par, gross);
+  const otherScoreSelected = Number.isFinite(Number(gross)) && Number(gross) > 0 && !scoreChoices.includes(Number(gross));
   const derived = deriveGreenInRegulation({ gross, putts: stat.putts, par, puttsSource: stat.puttsSource, override: stat.greenOverride });
   const choice = (key, value, label, active, constrained = false) => `<button type="button" data-player-stat-choice="${escapeHtml(key)}" data-player-stat-value="${escapeHtml(value)}" data-stat-player-id="${escapeHtml(selected.playerId)}" class="${active ? 'is-active' : ''}" ${(canEdit && !constrained) ? '' : 'disabled'}>${escapeHtml(label)}</button>`;
+  const approachLabels = { '7': 'Deep Left', '8': 'Long', '9': 'Deep Right', '4': 'Left', '5': 'GIR', '6': 'Right', '1': 'Short Left', '2': 'Short', '3': 'Short Right' };
+  const approachChoice = value => `<button type="button" data-player-stat-choice="approachResult" data-player-stat-value="${value}" data-stat-player-id="${escapeHtml(selected.playerId)}" class="${(value === '5' ? derived.value === true : stat.approachResult === value) ? 'is-active' : ''} ${value === '5' ? 'is-derived' : ''}" ${(canEdit && value !== '5' && derived.value !== true) ? '' : 'disabled'}><b>${value}</b><small>${escapeHtml(approachLabels[value])}</small></button>`;
   const advanced = mode.active === 'ENHANCED' || mode.active === 'GRIND';
   const grind = mode.active === 'GRIND';
   wrap.classList.remove('hidden');
   wrap.innerHTML = `<div class="card inset-card player-mode-stat-card" data-player-stat-mode="${mode.active}">
     <div class="player-mode-detail-head"><div><strong>${escapeHtml(selected.player?.name || 'Player')}</strong><span class="player-mode-stat-badge">${mode.active.charAt(0) + mode.active.slice(1).toLowerCase()}</span></div><span>${escapeHtml(getPlayerHoleTeeInfo(match, selected, currentHole - 1, metrics?.tee).label)}${strokes > 0 ? ` · ${'●'.repeat(strokes)}` : ''}${Number.isFinite(net) ? ` · net ${net}` : ''}</span></div>
-    <div class="player-mode-stat-section"><span class="player-mode-stat-label">Gross Score</span><div class="player-mode-score-choices player-mode-detail-score" role="group" aria-label="Gross score for ${escapeHtml(selected.player?.name || 'Player')}">${scoreChoices.map(value => `<button type="button" data-player-score-value="${value}" data-player-score-player="${escapeHtml(selected.playerId)}" class="${Number(gross) === value ? 'is-active' : ''}" ${canEdit ? '' : 'disabled'}><b>${value}</b><small>${escapeHtml(getPlayerModeScoreLabel(value, par))}</small></button>`).join('')}<button type="button" data-player-mode-other-player="${escapeHtml(selected.playerId)}" ${canEdit ? '' : 'disabled'}><b>Other</b></button></div></div>
+    <div class="player-mode-stat-section"><span class="player-mode-stat-label">Gross Score</span><div class="player-mode-score-choices player-mode-detail-score" role="group" aria-label="Gross score for ${escapeHtml(selected.player?.name || 'Player')}">${scoreChoices.map(value => `<button type="button" data-player-score-value="${value}" data-player-score-player="${escapeHtml(selected.playerId)}" class="${Number(gross) === value ? 'is-active' : ''}" ${canEdit ? '' : 'disabled'}><b>${value}</b><small>${escapeHtml(getPlayerModeScoreLabel(value, par))}</small></button>`).join('')}<button type="button" class="${otherScoreSelected ? 'is-active' : ''}" data-player-mode-other-player="${escapeHtml(selected.playerId)}" ${canEdit ? '' : 'disabled'}><b>${otherScoreSelected ? escapeHtml(String(gross)) : 'Other'}</b></button></div></div>
     <div class="tiny">Putts count only from the putting surface. Conceded putts count as a stroke and a putt.</div>
     ${mode.grindRestricted ? '<div class="player-mode-warning">Grind requires this device to score no more than two golfers. Enhanced controls are shown.</div>' : ''}
-    <div class="player-mode-stat-section"><span class="player-mode-stat-label">Putts</span><div class="player-mode-stat-options">${[0,1,2,3,4].map(value => choice('putts', value, value, stat.puttsSource !== 'default' && stat.putts === value)).join('')}</div></div>
-    <input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="putts" data-putts-source="${escapeHtml(stat.puttsSource)}" value="${stat.putts}" />
+    <div class="player-mode-stat-section"><span class="player-mode-stat-label">Putts</span><div class="player-mode-stat-options player-mode-six-options">${[0,1,2,3,4].map(value => choice('putts', value, value, stat.puttsSource !== 'default' && stat.putts === value)).join('')}<label class="player-mode-more-stat"><span>Other</span><input class="stat-putts-input" type="tel" inputmode="numeric" min="0" max="9" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="putts" data-putts-source="${escapeHtml(stat.puttsSource)}" value="${stat.puttsSource === 'default' ? '' : stat.putts}" ${canEdit ? '' : 'disabled'} /></label></div></div>
     <div class="player-mode-stat-section"><span class="player-mode-stat-label">Penalty strokes</span><div class="player-mode-stat-options">${[0,1,2].map(value => choice('penaltyStrokes', value, value, stat.penaltyStrokes === value)).join('')}</div></div>
     <input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="penaltyStrokes" value="${stat.penaltyStrokes}" />
-    ${(par === 4 || par === 5) ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Tee shot</span><div class="player-mode-stat-options">${choice('fairwayResult','LEFT','Left',stat.fairwayResult === 'LEFT')}${choice('fairwayResult','HIT','Fairway',stat.fairwayResult === 'HIT')}${choice('fairwayResult','RIGHT','Right',stat.fairwayResult === 'RIGHT')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="fairwayResult" value="${escapeHtml(stat.fairwayResult)}" />` : ''}
+    ${(par === 4 || par === 5) ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Fairway</span><div class="player-mode-stat-options player-mode-fairway-options">${choice('fairwayResult','LEFT','↶  Left',stat.fairwayResult === 'LEFT')}${choice('fairwayResult','HIT','🌲  Hit',stat.fairwayResult === 'HIT')}${choice('fairwayResult','RIGHT','Right  ↷',stat.fairwayResult === 'RIGHT')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="fairwayResult" value="${escapeHtml(stat.fairwayResult)}" />` : ''}
     <div class="player-mode-derived"><span>GIR</span><strong>${derived.value === null ? 'Unknown' : (derived.value ? 'Yes' : 'No')}</strong><small>${derived.source === 'calculated' ? 'Calculated from gross score and putts' : derived.source === 'override' ? 'Manual correction' : 'Enter score and putts to calculate'}</small></div>
-    ${advanced ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Green result</span><div class="player-mode-stat-options player-mode-five-options">${choice('greenResult','ON','On green',derived.value === true,true)}${['SHORT','LEFT','RIGHT','LONG'].map(value => choice('greenResult', value, value.charAt(0) + value.slice(1).toLowerCase(), stat.greenResult === value, derived.value === true)).join('')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="greenResult" value="${escapeHtml(stat.greenResult)}" />` : ''}
+    ${advanced ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Approach</span><div class="player-mode-approach-grid" role="group" aria-label="Approach result">${['7','8','9','4','5','6','1','2','3'].map(approachChoice).join('')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="approachResult" value="${escapeHtml(stat.approachResult)}" />` : ''}
     ${advanced ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Recovery</span><div class="player-mode-stat-options">${choice('upAndDown','true','Up & down',stat.upAndDown,derived.value === true)}${choice('sandy','true','Sandy',stat.sandy,derived.value === true)}</div></div><input type="checkbox" class="visually-hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="upAndDown" ${stat.upAndDown ? 'checked' : ''} /><input type="checkbox" class="visually-hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="sandy" ${stat.sandy ? 'checked' : ''} />` : ''}
     ${grind ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Lie involvement</span><div class="player-mode-stat-options">${choice('bunkerInvolved','true','Bunker',stat.bunkerInvolved)}</div></div><input type="checkbox" class="visually-hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="bunkerInvolved" ${stat.bunkerInvolved ? 'checked' : ''} />` : ''}
     <details class="player-mode-gir-override"><summary>Correct GIR for an edge case</summary><div class="player-mode-stat-options">${choice('greenOverride','','Calculated',stat.greenOverride === null)}${choice('greenOverride','true','Force GIR',stat.greenOverride === true)}${choice('greenOverride','false','Force miss',stat.greenOverride === false)}</div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="greenOverride" value="${stat.greenOverride === null ? '' : String(stat.greenOverride)}" /></details>
-    <div class="player-mode-readback">${derived.value === null ? 'GIR remains unknown until both gross score and putts are recorded.' : `Reached the green ${derived.value ? 'in regulation' : 'after the regulation threshold'}${stat.penaltyStrokes ? ` · ${stat.penaltyStrokes} penalty stroke${stat.penaltyStrokes === 1 ? '' : 's'}` : ''}.`}</div>
+    <div class="player-mode-readback">${derived.value === null ? 'GIR remains unknown until both gross score and putts are recorded.' : `${derived.value ? 'Green in regulation' : (stat.approachResult !== 'UNKNOWN' ? `Missed ${String(approachLabels[stat.approachResult] || '').toLowerCase()}` : 'Missed GIR')}${stat.puttsSource !== 'default' ? ` · ${stat.putts} putt${stat.putts === 1 ? '' : 's'}` : ''}${stat.penaltyStrokes ? ` · ${stat.penaltyStrokes} penalty stroke${stat.penaltyStrokes === 1 ? '' : 's'}` : ''}.`}</div>
   </div>`;
 }
 
@@ -23611,7 +23654,8 @@ function installDyeLedgerLiveEngineAdapter() {
     emailAppDiagnostics,
     computePlayerRoundInsights,
     buildPlayerRoundInsights,
-    buildStatTrackingSummary,
+        buildStatTrackingSummary,
+        getApproachDispersionSummary,
     buildScoreDistributionPresentation,
     formatYardageValue,
     formatMomentumMoneyValue,

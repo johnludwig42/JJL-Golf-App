@@ -44,3 +44,17 @@ test('Player Mode delegates to shared inputs and preserves explicit directional 
   assert.match(css, /player-input-mode-active/);
   assert.doesNotMatch(app, /function computePlayerModeMetrics|function syncPlayerMode|function buildPlayerModeReport/);
 });
+
+test('Player Mode uses dedicated card markup instead of the Classic score table', () => {
+  assert.match(html, /id="playerModeHoleHeader"/);
+  assert.match(html, /id="playerModeScoreList"/);
+  assert.match(html, /id="classicScoreGridWrap"/);
+  assert.match(html, /id="playerModeBottomActions"/);
+  const renderer = app.slice(app.indexOf('function renderPlayerModeScoreGrid'), app.indexOf('function renderPlayerModeStatEntry'));
+  assert.match(renderer, /list\.innerHTML/);
+  assert.match(renderer, /<section class="player-mode-team"/);
+  assert.match(renderer, /<article class="player-mode-score-row/);
+  assert.doesNotMatch(renderer, /<tr|<td/);
+  assert.match(css, /player-mode-bottom-actions/);
+  assert.match(css, /body\.player-mode-play-active \.app-footer\{display:none\}/);
+});

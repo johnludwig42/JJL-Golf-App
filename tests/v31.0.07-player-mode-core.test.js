@@ -74,6 +74,9 @@ test('Player Mode keeps par centered and uses consistent six-choice score and pu
 
 test('Enhanced and Grind preserve nine-position approach dispersion for reports and story facts', () => {
   const engine = loadLiveEngine();
+  assert.equal(engine.statTrackingModeIncludesApproachGrid('ENHANCED'), true);
+  assert.equal(engine.statTrackingModeIncludesApproachGrid('GRIND'), true);
+  assert.equal(engine.statTrackingModeIncludesApproachGrid('CASUAL'), false);
   assert.deepEqual(structuredClone(engine.getApproachDispersionSummary({
     approachOpps: 6,
     approachMisses: 5,
@@ -97,6 +100,9 @@ test('Player Mode uses dedicated card markup instead of the Classic score table'
   assert.match(renderer, /<article class="player-mode-score-row/);
   assert.doesNotMatch(renderer, /<tr|<td/);
   assert.match(css, /player-mode-bottom-actions/);
+  assert.match(app, /player-mode-header-match-status/);
+  assert.match(app, /player-mode-name-line/);
+  assert.match(app, /player-mode-fast-score-choices/);
   assert.match(css, /body\.player-mode-play-active \.app-footer-version\{display:none\}/);
   const playerModeStyles = css.split(/\r?\n/).filter(line => /player-mode|play-input-mode-bar/.test(line)).join('\n');
   assert.doesNotMatch(playerModeStyles, /var\(--(?:ink|panel|line)\)/);

@@ -35,6 +35,26 @@ function memoryStorage(seed = {}, fail = () => false) {
   };
 }
 
+function capacityStorage(seed = {}, capacity = Infinity) {
+  const rows = new Map(Object.entries(seed).map(([key, value]) => [key, String(value)]));
+  return {
+    getItem(key) { return rows.has(key) ? rows.get(key) : null; },
+    setItem(key, value) {
+      const next = String(value);
+      const usedWithoutKey = [...rows.entries()].reduce((total, [rowKey, rowValue]) => total + (rowKey === key ? 0 : rowValue.length), 0);
+      if (usedWithoutKey + next.length > capacity) {
+        const error = new Error('simulated storage capacity exceeded');
+        error.name = 'QuotaExceededError';
+        throw error;
+      }
+      rows.set(key, next);
+    },
+    removeItem(key) { rows.delete(key); },
+    value(key) { return rows.get(key); },
+    has(key) { return rows.has(key); },
+  };
+}
+
 function roundFixture(engine) {
   const holes = Array.from({ length: 9 }, (_, index) => ({ holeNumber: index + 1, par: 4, strokeIndex: index + 1, yardage: 390 }));
   const course = { id: 'course', name: 'Trust Club', tees: [{ id: 'tee', teeName: 'Ledger', par: 36, rating: 36, slope: 113, holes }] };
@@ -68,10 +88,74 @@ test('critical state writes are all-or-error and preserve the prior durable payl
   const next = { matches: [{ id: 'active', status: 'complete' }], activeMatchId: 'active' };
   const result = engine.persistStateSnapshot(next, storage);
   assert.equal(result.ok, false);
-  assert.equal(result.stage, 'primary-write');
+  assert.equal(result.stage, 'primary-write-retry');
   assert.match(result.errorMessage, /quota/i);
   assert.deepEqual(JSON.parse(storage.value(PRIMARY)), prior);
   assert.equal(storage.has(BACKUP), false);
+});
+
+test('completed-round growth reclaims a redundant backup before reporting a quota failure', () => {
+  const engine = loadLiveEngine();
+  const prior = { matches: [{ id: 'active', status: 'active', scores: 'x'.repeat(800) }], activeMatchId: 'active' };
+  const next = {
+    matches: [{ id: 'active', status: 'complete', scores: 'x'.repeat(800), roundRecordSnapshot: { ledger: 'y'.repeat(350) } }],
+    activeMatchId: 'active',
+  };
+  const priorPayload = JSON.stringify(prior);
+  const nextPayload = JSON.stringify(next);
+  const storage = capacityStorage({ [PRIMARY]: priorPayload, [BACKUP]: priorPayload }, nextPayload.length + 20);
+
+  const result = engine.persistStateSnapshot(next, storage);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.backupPruned, true);
+  assert.deepEqual(JSON.parse(storage.value(PRIMARY)), next);
+  assert.equal(storage.has(BACKUP), false, 'the redundant copy stays absent so it cannot immediately consume the reclaimed capacity');
+});
+
+test('quota retry still preserves the prior primary when even one completed-round copy cannot fit', () => {
+  const engine = loadLiveEngine();
+  const prior = { matches: [{ id: 'active', status: 'active' }], activeMatchId: 'active' };
+  const next = { matches: [{ id: 'active', status: 'complete', roundRecordSnapshot: { ledger: 'z'.repeat(1000) } }], activeMatchId: 'active' };
+  const priorPayload = JSON.stringify(prior);
+  const storage = capacityStorage({ [PRIMARY]: priorPayload, [BACKUP]: priorPayload }, priorPayload.length + 50);
+
+  const result = engine.persistStateSnapshot(next, storage);
+
+  assert.equal(result.ok, false);
+  assert.equal(result.stage, 'primary-write-retry');
+  assert.deepEqual(JSON.parse(storage.value(PRIMARY)), prior, 'the active round remains the durable recovery copy');
+});
+
+test('finish transaction can reclaim both the backup and recovery marker while preserving atomic completion', () => {
+  const engine = loadLiveEngine();
+  const prior = { matches: [{ id: 'active', status: 'active', scores: 'x'.repeat(500) }], activeMatchId: 'active' };
+  const next = { matches: [{ id: 'active', status: 'complete', scores: 'x'.repeat(500), roundRecordSnapshot: { ledger: 'y'.repeat(300) } }], activeMatchId: 'active' };
+  const marker = { roundId: 'active', stage: 'prepared', snapshotRequired: true };
+  const priorPayload = JSON.stringify(prior);
+  const nextPayload = JSON.stringify(next);
+  const storage = capacityStorage({ [PRIMARY]: priorPayload, [BACKUP]: priorPayload }, nextPayload.length + 5);
+
+  const result = engine.persistFinishedStateSnapshot(next, marker, storage);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.finishMarkerPruned, true);
+  assert.deepEqual(JSON.parse(storage.value(PRIMARY)), next);
+  assert.equal(storage.has(BACKUP), false);
+  assert.equal(storage.has(FINISH), false);
+});
+
+test('failed finish transaction never replaces the durable active round', () => {
+  const engine = loadLiveEngine();
+  const prior = { matches: [{ id: 'active', status: 'active' }], activeMatchId: 'active' };
+  const next = { matches: [{ id: 'active', status: 'complete', roundRecordSnapshot: { ledger: 'z'.repeat(1000) } }], activeMatchId: 'active' };
+  const priorPayload = JSON.stringify(prior);
+  const storage = capacityStorage({ [PRIMARY]: priorPayload, [BACKUP]: priorPayload }, priorPayload.length + 50);
+
+  const result = engine.persistFinishedStateSnapshot(next, { roundId: 'active', stage: 'prepared' }, storage);
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(JSON.parse(storage.value(PRIMARY)), prior);
 });
 
 test('state recovery falls back from malformed primary data and sanitizes partial records', () => {

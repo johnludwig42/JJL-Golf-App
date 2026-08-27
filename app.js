@@ -3085,16 +3085,39 @@ function persistStateSnapshot(snapshot, storage = localStorage, options = {}) {
   } catch (error) {
     return { ok: false, savedAt, error, errorMessage: getStorageErrorMessage(error), stage: 'serialize' };
   }
+  let backupPruned = false;
   try {
     storage.setItem(STORAGE_KEY, payload);
   } catch (error) {
-    return { ok: false, savedAt, error, errorMessage: getStorageErrorMessage(error), stage: 'primary-write' };
+    // The last-known-good record is a full copy of state. A completed round is
+    // larger because it gains its frozen Ledger snapshot, so devices close to
+    // their storage limit can have enough room for the authoritative record but
+    // not for both copies. localStorage replacement is atomic: the prior primary
+    // is still intact after a quota failure. Reclaim only the redundant backup
+    // and retry before reporting that the round could not be saved.
+    if (error?.name !== 'QuotaExceededError' || options.pruneBackupOnQuota === false) {
+      return { ok: false, savedAt, error, errorMessage: getStorageErrorMessage(error), stage: 'primary-write' };
+    }
+    try {
+      storage.removeItem(STATE_BACKUP_STORAGE_KEY);
+      backupPruned = true;
+      storage.setItem(STORAGE_KEY, payload);
+    } catch (retryError) {
+      return {
+        ok: false,
+        savedAt,
+        error: retryError,
+        errorMessage: getStorageErrorMessage(retryError),
+        stage: 'primary-write-retry',
+        backupPruned,
+      };
+    }
   }
   let backupError = null;
-  if (options.writeBackup !== false) {
+  if (options.writeBackup !== false && !backupPruned) {
     try { storage.setItem(STATE_BACKUP_STORAGE_KEY, payload); } catch (error) { backupError = getStorageErrorMessage(error); }
   }
-  return { ok: true, savedAt, backupError };
+  return { ok: true, savedAt, backupError, backupPruned };
 }
 
 function writeJsonStorageRecord(storage, key, value) {
@@ -3222,6 +3245,29 @@ function buildEmptyStats(count = 18) {
     greenSource: 'unknown',
     greenOverride: null,
   }));
+}
+
+function persistFinishedStateSnapshot(snapshot, marker, storage = localStorage) {
+  let markerWrite = writeJsonStorageRecord(storage, FINISH_RECOVERY_STORAGE_KEY, marker);
+  if (!markerWrite.ok && markerWrite.error?.name === 'QuotaExceededError') {
+    // The active round remains in the primary record. Removing its redundant
+    // backup creates room for the tiny interruption marker without sacrificing
+    // the authoritative recovery copy.
+    try { storage.removeItem(STATE_BACKUP_STORAGE_KEY); } catch {}
+    markerWrite = writeJsonStorageRecord(storage, FINISH_RECOVERY_STORAGE_KEY, marker);
+  }
+  if (!markerWrite.ok) return { ...markerWrite, stage: 'finish-marker-write' };
+
+  let completedWrite = persistStateSnapshot(snapshot, storage);
+  if (!completedWrite.ok && completedWrite.error?.name === 'QuotaExceededError') {
+    // The marker is useful only while there is room for it. The primary setItem
+    // is itself atomic, so retrying without the marker either saves the complete
+    // round or leaves the prior active round untouched.
+    try { storage.removeItem(FINISH_RECOVERY_STORAGE_KEY); } catch {}
+    completedWrite = persistStateSnapshot(snapshot, storage, { writeBackup: false });
+    return { ...completedWrite, finishMarkerPruned: true };
+  }
+  return completedWrite;
 }
 
 function getDefaultSneakySandyPoleyConfig() {
@@ -10496,7 +10542,8 @@ function computeStatTrackingSummary(match, metrics) {
   const trackedPlayers = (metrics?.players || []).filter(playerMetric => isPlayerStatTrackingEnabled(match, playerMetric.playerId));
   const summary = trackedPlayers.map(playerMetric => {
     const playerRef = match.players.find(row => row.playerId === playerMetric.playerId);
-    const totals = { trackedHoles: 0, fairwaysHit: 0, fairwayOpps: 0, greens: 0, greenOpps: 0, putts: 0, puttOpps: 0, penaltyStrokes: 0, upAndDowns: 0, scramblingOpps: 0, sandies: 0, sandSaveOpps: 0, recoveryByLie: { ROUGH: { opportunities: 0, successes: 0 }, BUNKER: { opportunities: 0, successes: 0 }, FRINGE: { opportunities: 0, successes: 0 }, OTHER: { opportunities: 0, successes: 0 } }, approachOpps: 0, approachMisses: 0, approachPositions: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 0, '8': 0, '9': 0 } };
+    const emptyOutcome = () => ({ opportunities: 0, scoreToPar: 0, girs: 0, penalties: 0 });
+    const totals = { trackedHoles: 0, fairwaysHit: 0, fairwayOpps: 0, greens: 0, greenOpps: 0, unknownGirHoles: 0, putts: 0, puttOpps: 0, onePutts: 0, threePutts: 0, girPutts: 0, girPuttOpps: 0, missedGirPutts: 0, missedGirPuttOpps: 0, penaltyStrokes: 0, upAndDowns: 0, scramblingOpps: 0, missingRecoveryLies: 0, sandies: 0, sandSaveOpps: 0, fairwayOutcomes: { HIT: emptyOutcome(), LEFT: emptyOutcome(), RIGHT: emptyOutcome() }, recoveryByLie: { ROUGH: { opportunities: 0, successes: 0 }, BUNKER: { opportunities: 0, successes: 0 }, FRINGE: { opportunities: 0, successes: 0 }, OTHER: { opportunities: 0, successes: 0 } }, parTypes: { '3': emptyOutcome(), '4': emptyOutcome(), '5': emptyOutcome() }, approachOpps: 0, approachMisses: 0, approachPositions: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 0, '8': 0, '9': 0 }, approachOutcomes: { '1': emptyOutcome(), '2': emptyOutcome(), '3': emptyOutcome(), '4': emptyOutcome(), '5': emptyOutcome(), '6': emptyOutcome(), '7': emptyOutcome(), '8': emptyOutcome(), '9': emptyOutcome() } };
     (metrics?.holeResults || []).forEach((holeResult, holeIdx) => {
       if (!holeResult?.completed) return;
       const scoreObj = holeResult?.playerScores?.find(ps => ps.playerId === playerMetric.playerId);
@@ -10506,23 +10553,39 @@ function computeStatTrackingSummary(match, metrics) {
       if (Number(match?.statReviewContractVersion || 0) >= 1 && !stat.entryCompleted) return;
       totals.trackedHoles += 1;
       const par = Number(hole?.par) || Number(scoreObj?.par) || 0;
+      const scoreToPar = Number(scoreObj.gross) - par;
+      const parType = totals.parTypes[String(par)];
+      if (parType) { parType.opportunities += 1; parType.scoreToPar += scoreToPar; parType.penalties += Number(stat.penaltyStrokes || 0); }
       if (par === 4 || par === 5) {
         totals.fairwayOpps += 1;
         if (stat.fairway) totals.fairwaysHit += 1;
+        const fairwayOutcome = totals.fairwayOutcomes[String(stat.fairwayResult || '')];
+        if (fairwayOutcome) { fairwayOutcome.opportunities += 1; fairwayOutcome.scoreToPar += scoreToPar; fairwayOutcome.penalties += Number(stat.penaltyStrokes || 0); }
       }
       if (stat.greenSource !== 'unknown') {
         totals.greenOpps += 1;
-        if (stat.green) totals.greens += 1;
-      }
+        if (stat.green) { totals.greens += 1; if (parType) parType.girs += 1; }
+        const fairwayOutcome = totals.fairwayOutcomes[String(stat.fairwayResult || '')];
+        if (fairwayOutcome && stat.green) fairwayOutcome.girs += 1;
+      } else totals.unknownGirHoles += 1;
       const approachResult = String(stat.approachResult || 'UNKNOWN');
       if (Object.prototype.hasOwnProperty.call(totals.approachPositions, approachResult)) {
         totals.approachPositions[approachResult] += 1;
         totals.approachOpps += 1;
         if (approachResult !== '5') totals.approachMisses += 1;
+        const outcome = totals.approachOutcomes[approachResult];
+        outcome.opportunities += 1;
+        outcome.scoreToPar += scoreToPar;
+        outcome.penalties += Number(stat.penaltyStrokes || 0);
+        if (stat.green) outcome.girs += 1;
       }
       if (Number.isFinite(stat.putts) && stat.puttsSource !== 'default') {
         totals.putts += stat.putts;
         totals.puttOpps += 1;
+        if (stat.putts === 1) totals.onePutts += 1;
+        if (stat.putts >= 3) totals.threePutts += 1;
+        if (stat.greenSource !== 'unknown' && stat.green) { totals.girPutts += stat.putts; totals.girPuttOpps += 1; }
+        if (stat.greenSource !== 'unknown' && !stat.green) { totals.missedGirPutts += stat.putts; totals.missedGirPuttOpps += 1; }
       }
       if (Number.isFinite(Number(stat.penaltyStrokes))) totals.penaltyStrokes += Number(stat.penaltyStrokes);
       const recovery = deriveScramblingResult({ gross: scoreObj.gross, par, green: stat.green, greenSource: stat.greenSource, recoveryLie: stat.recoveryLie });
@@ -10531,6 +10594,7 @@ function computeStatTrackingSummary(match, metrics) {
       if (recovery.sandyOpportunity) totals.sandSaveOpps += 1;
       if (recovery.sandySuccess) totals.sandies += 1;
       const recoveryLie = String(stat.recoveryLie || 'UNKNOWN').toUpperCase();
+      if (recovery.opportunity && recoveryLie === 'UNKNOWN') totals.missingRecoveryLies += 1;
       if (recovery.opportunity && totals.recoveryByLie[recoveryLie]) {
         totals.recoveryByLie[recoveryLie].opportunities += 1;
         if (recovery.success) totals.recoveryByLie[recoveryLie].successes += 1;
@@ -10569,11 +10633,22 @@ function buildTrackedStatisticsStoryFacts(match, metrics) {
       greenOpportunities: Number(totals.greenOpps || 0),
       totalPutts: Number(totals.putts || 0),
       puttingHoles: Number(totals.puttOpps || 0),
+      onePutts: Number(totals.onePutts || 0),
+      threePutts: Number(totals.threePutts || 0),
+      girPutts: Number(totals.girPutts || 0),
+      girPuttOpportunities: Number(totals.girPuttOpps || 0),
+      missedGirPutts: Number(totals.missedGirPutts || 0),
+      missedGirPuttOpportunities: Number(totals.missedGirPuttOpps || 0),
       upAndDowns: Number(totals.upAndDowns || 0),
       scramblingOpportunities: Number(totals.scramblingOpps || 0),
       sandies: Number(totals.sandies || 0),
       sandSaveOpportunities: Number(totals.sandSaveOpps || 0),
       recoveryByLie: clonePlain(totals.recoveryByLie || {}),
+      fairwayOutcomes: clonePlain(totals.fairwayOutcomes || {}),
+      approachOutcomes: clonePlain(totals.approachOutcomes || {}),
+      parTypes: clonePlain(totals.parTypes || {}),
+      unknownGirHoles: Number(totals.unknownGirHoles || 0),
+      missingRecoveryLies: Number(totals.missingRecoveryLies || 0),
       penaltyStrokes: Number(totals.penaltyStrokes || 0),
       approachDispersion: getApproachDispersionSummary(totals),
     }));
@@ -10584,12 +10659,17 @@ function describeTrackedStatisticsForStory(fact) {
   if (fact.fairwayOpportunities) details.push(`${fact.fairwaysHit} of ${fact.fairwayOpportunities} fairways`);
   if (fact.greenOpportunities) details.push(`${fact.greensInRegulation} of ${fact.greenOpportunities} greens in regulation`);
   if (fact.puttingHoles) details.push(`${fact.totalPutts} putts across ${fact.puttingHoles} tracked holes`);
+  if (fact.puttingHoles >= 3 && fact.threePutts) details.push(`${fact.threePutts} three-putt${fact.threePutts === 1 ? '' : 's'}`);
   if (fact.scramblingOpportunities) details.push(`${fact.upAndDowns} of ${fact.scramblingOpportunities} scrambling opportunities converted`);
   if (fact.sandSaveOpportunities) details.push(`${fact.sandies} of ${fact.sandSaveOpportunities} sand saves converted`);
   const recoveryHighlights = Object.entries(fact.recoveryByLie || {}).filter(([, row]) => Number(row?.opportunities || 0) > 0).map(([lie, row]) => `${Number(row.successes || 0)} of ${Number(row.opportunities || 0)} from ${lie.toLowerCase()}`);
   if (recoveryHighlights.length) details.push(`recovery conversions of ${recoveryHighlights.join(', ')}`);
   if (fact.penaltyStrokes) details.push(`${fact.penaltyStrokes} penalty stroke${fact.penaltyStrokes === 1 ? '' : 's'}`);
-  if (fact.approachDispersion?.misses >= 2 && fact.approachDispersion.dominant.length === 1) details.push(`${fact.approachDispersion.dominant[0]} was the most common recorded approach miss`);
+  const directionalFairways = ['LEFT', 'RIGHT'].map(key => ({ key, value: Number(fact.fairwayOutcomes?.[key]?.opportunities || 0) }));
+  const fairwayMisses = directionalFairways.reduce((sum, row) => sum + row.value, 0);
+  const dominantFairway = directionalFairways.sort((a, b) => b.value - a.value);
+  if (fairwayMisses >= 3 && dominantFairway[0].value >= dominantFairway[1].value + 2) details.push(`${dominantFairway[0].key.toLowerCase()} was the dominant recorded tee-shot miss`);
+  if (fact.approachDispersion?.misses >= 3 && fact.approachDispersion.dominant.length === 1) details.push(`${fact.approachDispersion.dominant[0]} was the most common recorded approach miss`);
   return details.length ? `${fact.playerName}'s recorded statistics included ${details.join(', ')}.` : '';
 }
 
@@ -10726,11 +10806,50 @@ function buildLedgerEntryStatisticsSections(match, metrics) {
     const lieRate = key => formatLedgerStatRate(Number(byLie[key]?.successes || 0), Number(byLie[key]?.opportunities || 0));
     return `<tr><td><strong>${escapeHtml(row.displayName)}</strong></td><td>${formatLedgerStatRate(tracked.upAndDowns, tracked.scramblingOpps)}</td><td>${lieRate('ROUGH')}</td><td>${lieRate('BUNKER')}</td><td>${lieRate('FRINGE')}</td><td>${lieRate('OTHER')}</td></tr>`;
   }).join('');
+  const averageToPar = outcome => Number(outcome?.opportunities || 0) ? `${Number(outcome.scoreToPar || 0) >= 0 ? '+' : '−'}${Math.abs(Number(outcome.scoreToPar || 0) / Number(outcome.opportunities)).toFixed(2)}` : '—';
+  const outcomeGir = outcome => formatLedgerStatRate(Number(outcome?.girs || 0), Number(outcome?.opportunities || 0));
+  const teeRows = trackedInsights.map(row => {
+    const tracked = trackedByPlayer.get(String(row.playerId));
+    const outcomes = tracked.fairwayOutcomes || {};
+    const left = Number(outcomes.LEFT?.opportunities || 0); const right = Number(outcomes.RIGHT?.opportunities || 0);
+    const tendency = left + right < 3 ? 'Limited sample' : left >= right + 2 ? 'Left' : right >= left + 2 ? 'Right' : 'Two-way';
+    return `<tr><td><strong>${escapeHtml(row.displayName)}</strong></td><td>${Number(outcomes.HIT?.opportunities || 0)}</td><td>${left}</td><td>${right}</td><td>${escapeHtml(tendency)}</td></tr>`;
+  }).join('');
+  const consequenceRows = trackedInsights.map(row => {
+    const outcomes = trackedByPlayer.get(String(row.playerId)).fairwayOutcomes || {};
+    const cell = key => `${averageToPar(outcomes[key])} · GIR ${outcomeGir(outcomes[key])}${Number(outcomes[key]?.penalties || 0) ? ` · ${Number(outcomes[key].penalties)} pen` : ''}`;
+    return `<tr><td><strong>${escapeHtml(row.displayName)}</strong></td><td>${cell('HIT')}</td><td>${cell('LEFT')}</td><td>${cell('RIGHT')}</td></tr>`;
+  }).join('');
+  const approachGridRows = trackedInsights.map(row => {
+    const tracked = trackedByPlayer.get(String(row.playerId));
+    return `<tr><td><strong>${escapeHtml(row.displayName)}</strong></td>${['7','8','9','4','5','6','1','2','3'].map(key => `<td>${Number(tracked.approachPositions?.[key] || 0)}</td>`).join('')}</tr>`;
+  }).join('');
+  const puttingRows = trackedInsights.map(row => {
+    const tracked = trackedByPlayer.get(String(row.playerId));
+    const avg = (putts, opps) => Number(opps || 0) ? (Number(putts || 0) / Number(opps)).toFixed(2) : '—';
+    return `<tr><td><strong>${escapeHtml(row.displayName)}</strong></td><td>${formatLedgerStatRate(tracked.onePutts, tracked.puttOpps)}</td><td>${formatLedgerStatRate(tracked.threePutts, tracked.puttOpps)}</td><td>${avg(tracked.girPutts, tracked.girPuttOpps)}</td><td>${avg(tracked.missedGirPutts, tracked.missedGirPuttOpps)}</td></tr>`;
+  }).join('');
+  const parTypeRows = trackedInsights.map(row => {
+    const types = trackedByPlayer.get(String(row.playerId)).parTypes || {};
+    const cell = key => `${averageToPar(types[key])} · GIR ${outcomeGir(types[key])}`;
+    return `<tr><td><strong>${escapeHtml(row.displayName)}</strong></td><td>${cell('3')}</td><td>${cell('4')}</td><td>${cell('5')}</td></tr>`;
+  }).join('');
+  const completenessRows = trackedInsights.map(row => {
+    const tracked = trackedByPlayer.get(String(row.playerId));
+    const directional = Object.values(tracked.fairwayOutcomes || {}).reduce((sum, outcome) => sum + Number(outcome?.opportunities || 0), 0);
+    return `<tr><td><strong>${escapeHtml(row.displayName)}</strong></td><td>${tracked.trackedHoles}</td><td>${directional} / ${tracked.fairwayOpps}</td><td>${tracked.approachOpps} / ${tracked.trackedHoles}</td><td>${tracked.unknownGirHoles}</td><td>${tracked.missingRecoveryLies}</td></tr>`;
+  }).join('');
   const table = (label, headings, rows, description) => `<section class="ledger-stat-group report-section--avoid-break" data-ledger-stat-group="${escapeHtml(label.toLowerCase().replace(/[^a-z]+/g, '-'))}"><h3>${escapeHtml(label)}</h3><div class="export-section-sub">${escapeHtml(description)}</div><div class="fit-stage" data-fit="width" data-fit-min="0.75"><div class="fit-box"><table class="export-table ledger-stat-table"><thead><tr>${headings.map(heading => `<th>${escapeHtml(heading)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div></div></section>`;
   return `${table('Scoring', ['Player', 'Holes', 'Average', 'Birdie+', 'Par+', 'Double-Bogey Avoid.', 'Penalty Strokes'], scoringRows, 'Completed, scored holes only. Rates include their supporting fraction; penalties appear only for recorded tracked holes.')}
     ${ballStrikingRows ? table('Ball Striking', ['Player', 'Tracked Holes', 'Fairways', 'GIR', 'Birdie+ Conversion on GIR', 'GIR · Fairway Hit', 'GIR · Fairway Missed', 'Fairway GIR Advantage'], ballStrikingRows, 'Recorded tracked holes only. Birdie+ Conversion on GIR means birdie or better after a recorded GIR, regardless of putt count.') : ''}
     ${shortGameRows ? table('Short Game & Putting', ['Player', 'Tracked Holes', 'Total Putts', 'Putts / Tracked Hole', 'Scrambling', 'Sand Saves'], shortGameRows, 'Scrambling is par or better after a recorded missed GIR. Sand saves use recorded bunker recovery lies as the opportunity denominator.') : ''}
-    ${recoveryRows ? table('Recovery Performance', ['Player', 'Overall Scrambling', 'From Rough', 'From Bunker', 'From Fringe', 'From Other'], recoveryRows, 'Recorded missed-GIR opportunities grouped by the selected recovery lie. Unknown recovery lies remain in overall scrambling but are excluded from lie-specific denominators.') : ''}`;
+    ${recoveryRows ? table('Recovery Performance', ['Player', 'Overall Scrambling', 'From Rough', 'From Bunker', 'From Fringe', 'From Other'], recoveryRows, 'Recorded missed-GIR opportunities grouped by the selected recovery lie. Unknown recovery lies remain in overall scrambling but are excluded from lie-specific denominators.') : ''}
+    ${teeRows ? table('Tee-Shot Dispersion', ['Player', 'Fairway', 'Miss Left', 'Miss Right', 'Pattern'], teeRows, 'Par 4 and par 5 holes with a recorded tee-shot result. A directional pattern requires at least three misses and a margin of two.') : ''}
+    ${consequenceRows ? table('Tee-Shot Consequences', ['Player', 'After Fairway', 'After Miss Left', 'After Miss Right'], consequenceRows, 'Average score relative to par, GIR rate, and recorded penalties following each tee-shot result. These are descriptive outcomes, not strokes gained.') : ''}
+    ${approachGridRows ? table('Approach Dispersion · 3×3', ['Player', 'Long L', 'Long', 'Long R', 'Left', 'GIR', 'Right', 'Short L', 'Short', 'Short R'], approachGridRows, 'Exact recorded approach locations. The grid is oriented from the golfer’s perspective; unknown locations are excluded.') : ''}
+    ${puttingRows ? table('Putting Context', ['Player', 'One-Putt Rate', 'Three-Putt Rate', 'Putts / GIR', 'Putts / Missed GIR'], puttingRows, 'Recorded surface putts only. Unknown putt entries and unknown GIR results are excluded from the applicable denominator.') : ''}
+    ${parTypeRows ? table('Performance by Par', ['Player', 'Par 3', 'Par 4', 'Par 5'], parTypeRows, 'Average score relative to par and GIR rate for completed tracked holes of each par type.') : ''}
+    ${completenessRows ? table('Tracking Completeness', ['Player', 'Tracked Holes', 'Tee Direction', 'Approach Location', 'Unknown GIR', 'Missing Recovery Lie'], completenessRows, 'Coverage disclosure for interpreting the statistics above. Missing facts are never counted as failures.') : ''}`;
 }
 
 function formatFairwayGirAdvantage(rate) {
@@ -16481,12 +16600,10 @@ function completeActiveRound() {
     const { candidate, metrics, wasReopened } = buildFinishedMatchCandidate(match);
     candidate.finalizationReceipt = clonePlain(candidate.roundRecordSnapshot?.finalizationReceipt || buildFinalizationReceipt(candidate, buildRoundRecord(candidate, metrics)));
     const marker = createFinishRecoveryMarker(candidate);
-    const markerWrite = writeJsonStorageRecord(localStorage, FINISH_RECOVERY_STORAGE_KEY, marker);
-    if (!markerWrite.ok) throw new Error(`FINISH_MARKER_WRITE_FAILED: ${markerWrite.errorMessage}`);
     const candidateState = clonePlain(state);
     candidateState.matches = (candidateState.matches || []).map(row => row.id === candidate.id ? candidate : row);
     candidateState.activeMatchId = candidate.id;
-    const completedWrite = persistStateSnapshot(candidateState, localStorage);
+    const completedWrite = persistFinishedStateSnapshot(candidateState, marker, localStorage);
     if (!completedWrite.ok) {
       localPersistenceDiagnostics.lastFailedLocalSave = completedWrite.savedAt;
       localPersistenceDiagnostics.lastFailureMessage = completedWrite.errorMessage;
@@ -23678,6 +23795,7 @@ function installDyeLedgerLiveEngineAdapter() {
     reconcileInterruptedFinishState,
     loadStateFromStorage,
     persistStateSnapshot,
+    persistFinishedStateSnapshot,
     writeJsonStorageRecord,
     sanitizeSetupDraft,
     loadSetupDraft,

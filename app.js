@@ -18,7 +18,7 @@ const localPersistenceDiagnostics = {
 const BUILD_INFO = {
   version: 'v31.0.07',
   versionNumber: '31.0.07',
-  cacheName: 'the-dye-ledger-v31.0.07',
+  cacheName: 'the-dye-ledger-v31.0.07-r3',
   buildDate: '2026-08-25T15:00:00-04:00',
   buildLabel: 'Player Mode Core Score Entry'
 };

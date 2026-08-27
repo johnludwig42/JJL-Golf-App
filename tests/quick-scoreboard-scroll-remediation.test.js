@@ -146,7 +146,7 @@ test('header, Apple, desktop PWA, favicon, worker cache, and branding documentat
     assert.deepEqual(pngDimensions(bytes), { width, height });
     assert.match(worker, new RegExp(src.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
-  assert.match(worker, /cacheName: 'the-dye-ledger-v31\.0\.07'/);
+  assert.match(worker, /cacheName: 'the-dye-ledger-v31\.0\.07-r3'/);
   assert.match(htmlSource, /favicon-32-v31\.0\.07\.png/);
   assert.match(htmlSource, /favicon-16-v31\.0\.07\.png/);
 

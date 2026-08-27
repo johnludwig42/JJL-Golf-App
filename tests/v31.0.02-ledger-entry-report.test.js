@@ -269,6 +269,12 @@ test('tracked statistics appear in Ledger Statistics and inform both story paths
   assert.match(final.html, /<h3>Ball Striking<\/h3>/);
   assert.match(final.html, /<h3>Short Game &amp; Putting<\/h3>/);
   assert.match(final.html, /<h3>Recovery Performance<\/h3>/);
+  assert.match(final.html, /<h3>Tee-Shot Dispersion<\/h3>/);
+  assert.match(final.html, /<h3>Tee-Shot Consequences<\/h3>/);
+  assert.match(final.html, /<h3>Approach Dispersion · 3×3<\/h3>/);
+  assert.match(final.html, /<h3>Putting Context<\/h3>/);
+  assert.match(final.html, /<h3>Performance by Par<\/h3>/);
+  assert.match(final.html, /<h3>Tracking Completeness<\/h3>/);
   assert.match(final.html, /Tracked Holes/);
   assert.match(final.html, /Fairways/);
   assert.match(final.html, /GIR/);
@@ -280,6 +286,8 @@ test('tracked statistics appear in Ledger Statistics and inform both story paths
   assert.match(final.html, /From Bunker/);
   assert.match(final.html, /From Fringe/);
   assert.match(final.html, /Unknown recovery lies remain in overall scrambling/);
+  assert.match(final.html, /These are descriptive outcomes, not strokes gained/);
+  assert.match(final.html, /Missing facts are never counted as failures/);
   assert.match(final.html, /\d+% \(\d+\/\d+\)/);
   const facts = final.engine.buildTrackedStatisticsStoryFacts(final.match, final.metrics);
   assert.equal(facts.length, 4);

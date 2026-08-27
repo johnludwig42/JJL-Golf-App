@@ -9,12 +9,12 @@ const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const manifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
 
-test('v31.0.07 release identity and immutable assets are complete', () => {
-  assert.equal(pkg.version, '31.0.07');
-  assert.equal(manifest.version, 'v31.0.07');
-  assert.match(app, /buildLabel: 'Player Mode Core Score Entry'/);
+test('v31.0.08 release identity and immutable assets are complete', () => {
+  assert.equal(pkg.version, '31.0.08');
+  assert.equal(manifest.version, 'v31.0.08');
+  assert.match(app, /buildLabel: 'Player Mode Accordion Entry'/);
   for (const name of ['app-icon-192', 'app-icon-512', 'apple-touch-icon', 'favicon-32', 'favicon-16']) {
-    assert.equal(existsSync(new URL(`../branding/${name}-v31.0.07.png`, import.meta.url)), true);
+    assert.equal(existsSync(new URL(`../branding/${name}-v31.0.08.png`, import.meta.url)), true);
   }
 });
 
@@ -103,7 +103,7 @@ test('Enhanced and Grind preserve nine-position approach dispersion for reports 
   assert.match(app, /Unknown approach locations remain outside dispersion denominators|approachResult/);
 });
 
-test('Player Mode uses dedicated card markup instead of the Classic score table', () => {
+test('Player Mode uses one collapsible score-and-stat card per golfer without changing Classic markup', () => {
   assert.match(html, /id="playerModeHoleHeader"/);
   assert.match(html, /id="playerModeScoreList"/);
   assert.match(html, /id="classicScoreGridWrap"/);
@@ -112,11 +112,16 @@ test('Player Mode uses dedicated card markup instead of the Classic score table'
   assert.match(renderer, /list\.innerHTML/);
   assert.match(renderer, /<section class="player-mode-team"/);
   assert.match(renderer, /<article class="player-mode-score-row/);
+  assert.match(renderer, /player-mode-accordion-trigger/);
+  assert.match(renderer, /data-player-mode-detail-slot/);
+  assert.match(renderer, /player-mode-collapsed-summary/);
+  assert.doesNotMatch(renderer, /player-mode-fast-score-choices/);
   assert.doesNotMatch(renderer, /<tr|<td/);
   assert.match(css, /player-mode-bottom-actions/);
   assert.match(app, /player-mode-header-match-status/);
   assert.match(app, /player-mode-name-line/);
-  assert.match(app, /player-mode-fast-score-choices/);
+  assert.match(app, /player-mode-player-detail/);
+  assert.match(app, /'__COLLAPSED__'/);
   assert.match(app, /data-player-mode-save-next>Save &amp; Next Hole/);
   assert.match(app, /id="playerModeRoundScoringModeSelect"/);
   assert.match(app, /id="playerModeRoundStatModeSelect"/);

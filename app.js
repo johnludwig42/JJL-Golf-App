@@ -6676,9 +6676,18 @@ function buildLedgerEntryFactsOnlyStory(record, match = null, metrics = null) {
     .slice(0, 4)
     .map(player => `${player.displayName}: ${player.signatureStat}.`);
   const trackedStatistics = match && metrics
-    ? buildTrackedStatisticsStoryFacts(match, metrics).slice(0, 4).map(describeTrackedStatisticsForStory).filter(Boolean)
+    ? buildTrackedStatisticsStoryFacts(match, metrics).slice(0, 2).map(describeTrackedStatisticsForStory).filter(Boolean)
     : [];
-  return [story?.narrative, ...highlights, ...trackedStatistics].filter(Boolean).join('\n\n')
+  const turning = story?.turningPoint ? describeRoundRecordEvent(record, story.turningPoint) : '';
+  const opening = story?.narrative || `${buildRoundRecordResultLine(record)}.`;
+  const turningParagraph = turning ? `The round’s defining turn came on hole ${Number(story.turningPoint.holeNumber)}. ${turning}` : '';
+  const highlightParagraph = highlights.length ? `The scorecard supplied the individual highlights as well. ${highlights.join(' ')}` : '';
+  const statisticsParagraph = trackedStatistics.length ? `The recorded statistics add context without changing the result. ${trackedStatistics.join(' ')}` : '';
+  const memories = Array.isArray(record?.notes?.memories) ? record.notes.memories.filter(memory => String(memory?.text || memory?.description || '').trim()) : [];
+  const closing = memories.length
+    ? `${memories.length} saved round ${memories.length === 1 ? 'memory preserves' : 'memories preserve'} additional context from the day. Together, the scorecard, competition ledger, and recorded details define this round.`
+    : 'Together, the scorecard, competition ledger, and recorded details define this round.';
+  return [opening, turningParagraph, highlightParagraph, statisticsParagraph, closing].filter(Boolean).slice(0, 5).join('\n\n')
     || 'The recorded scorecard, competitions, and settlement are preserved in this Ledger Entry.';
 }
 function getLedgerEntryStoryFallbackReason(error, { offline = false, configured = true } = {}) {
@@ -10888,18 +10897,21 @@ function buildLedgerEntryStatisticsSections(match, metrics) {
   const teeRows = trackedInsights.map(row => {
     const tracked = trackedByPlayer.get(String(row.playerId));
     const outcomes = tracked.fairwayOutcomes || {};
-    const left = Number(outcomes.LEFT?.opportunities || 0); const right = Number(outcomes.RIGHT?.opportunities || 0);
-    const tendency = left + right < 3 ? 'Limited sample' : left >= right + 2 ? 'Left' : right >= left + 2 ? 'Right' : 'Two-way';
-    return `<tr><td><strong>${escapeHtml(row.displayName)}</strong></td><td>${Number(outcomes.HIT?.opportunities || 0)}</td><td>${left}</td><td>${right}</td><td>${escapeHtml(tendency)}</td></tr>`;
-  }).join('');
-  const consequenceRows = trackedInsights.map(row => {
-    const outcomes = trackedByPlayer.get(String(row.playerId)).fairwayOutcomes || {};
-    const cell = key => `${averageToPar(outcomes[key])} · GIR ${outcomeGir(outcomes[key])}${Number(outcomes[key]?.penalties || 0) ? ` · ${Number(outcomes[key].penalties)} pen` : ''}`;
+    const keys = ['HIT', 'LEFT', 'RIGHT'];
+    const known = keys.reduce((sum, key) => sum + Number(outcomes[key]?.opportunities || 0), 0);
+    const cell = key => {
+      const outcome = outcomes[key] || {};
+      const count = Number(outcome.opportunities || 0);
+      return count ? `${formatLedgerStatRate(count, known)} · ${averageToPar(outcome)} avg` : '—';
+    };
     return `<tr><td><strong>${escapeHtml(row.displayName)}</strong></td><td>${cell('HIT')}</td><td>${cell('LEFT')}</td><td>${cell('RIGHT')}</td></tr>`;
   }).join('');
+  const allApproachKeys = ['7','8','9','4','5','6','1','2','3'];
+  const approachKeys = allApproachKeys.filter(key => trackedInsights.some(row => Number(trackedByPlayer.get(String(row.playerId))?.approachPositions?.[key] || 0) > 0));
   const approachGridRows = trackedInsights.map(row => {
     const tracked = trackedByPlayer.get(String(row.playerId));
-    return `<tr><td><strong>${escapeHtml(row.displayName)}</strong></td>${['7','8','9','4','5','6','1','2','3'].map(key => `<td>${Number(tracked.approachPositions?.[key] || 0)}</td>`).join('')}</tr>`;
+    const known = allApproachKeys.reduce((sum, key) => sum + Number(tracked.approachPositions?.[key] || 0), 0);
+    return `<tr><td><strong>${escapeHtml(row.displayName)}</strong></td>${approachKeys.map(key => `<td>${formatLedgerStatRate(Number(tracked.approachPositions?.[key] || 0), known)}</td>`).join('')}</tr>`;
   }).join('');
   const puttingRows = trackedInsights.map(row => {
     const tracked = trackedByPlayer.get(String(row.playerId));
@@ -10921,9 +10933,8 @@ function buildLedgerEntryStatisticsSections(match, metrics) {
     ${ballStrikingRows ? table('Ball Striking', ['Player', 'Tracked Holes', 'Fairways', 'GIR', 'Birdie+ Conversion on GIR', 'GIR · Fairway Hit', 'GIR · Fairway Missed', 'Fairway GIR Advantage'], ballStrikingRows, 'Recorded tracked holes only. Birdie+ Conversion on GIR means birdie or better after a recorded GIR, regardless of putt count.') : ''}
     ${shortGameRows ? table('Short Game & Putting', ['Player', 'Tracked Holes', 'Total Putts', 'Putts / Tracked Hole', 'Scrambling', 'Sand Saves'], shortGameRows, 'Scrambling is par or better after a recorded missed GIR. Sand saves use recorded bunker recovery lies as the opportunity denominator.') : ''}
     ${recoveryRows ? table('Recovery Performance', ['Player', 'Overall Scrambling', 'From Rough', 'From Bunker', 'From Fringe', 'From Other'], recoveryRows, 'Recorded missed-GIR opportunities grouped by the selected recovery lie. Unknown recovery lies remain in overall scrambling but are excluded from lie-specific denominators.') : ''}
-    ${teeRows ? table('Tee-Shot Dispersion', ['Player', 'Fairway', 'Miss Left', 'Miss Right', 'Pattern'], teeRows, 'Par 4 and par 5 holes with a recorded tee-shot result. A directional pattern requires at least three misses and a margin of two.') : ''}
-    ${consequenceRows ? table('Tee-Shot Consequences', ['Player', 'After Fairway', 'After Miss Left', 'After Miss Right'], consequenceRows, 'Average score relative to par, GIR rate, and recorded penalties following each tee-shot result. These are descriptive outcomes, not strokes gained.') : ''}
-    ${approachGridRows ? table('Approach Dispersion · 3×3', ['Player', 'Long L', 'Long', 'Long R', 'Left', 'GIR', 'Right', 'Short L', 'Short', 'Short R'], approachGridRows, 'Exact recorded approach locations. The grid is oriented from the golfer’s perspective; unknown locations are excluded.') : ''}
+    ${teeRows ? table('Tee-Shot Results', ['Player', 'Hit', 'Miss Left', 'Miss Right'], teeRows, 'Frequency uses the same denominator of recorded par-4 and par-5 tee-shot outcomes; average is score relative to par after that result.') : ''}
+    ${approachGridRows ? table('Approach Dispersion · 3×3', ['Player', ...approachKeys.map(key => ({'7':'Long L','8':'Long','9':'Long R','4':'Left','5':'GIR','6':'Right','1':'Short L','2':'Short','3':'Short R'}[key]))], approachGridRows, 'Exact recorded approach locations shown as percentage and count of known locations. Empty targets are omitted; unknown locations are excluded and disclosed.') : ''}
     ${puttingRows ? table('Putting Context', ['Player', 'One-Putt Rate', 'Three-Putt Rate', 'Putts / GIR', 'Putts / Missed GIR'], puttingRows, 'Recorded surface putts only. Unknown putt entries and unknown GIR results are excluded from the applicable denominator.') : ''}
     ${parTypeRows ? table('Performance by Par', ['Player', 'Par 3', 'Par 4', 'Par 5'], parTypeRows, 'Average score relative to par and GIR rate for completed tracked holes of each par type.') : ''}
     ${completenessRows ? table('Tracking Completeness', ['Player', 'Tracked Holes', 'Tee Direction', 'Approach Location', 'Unknown GIR', 'Missing Recovery Lie'], completenessRows, 'Coverage disclosure for interpreting the statistics above. Missing facts are never counted as failures.') : ''}`;
@@ -17028,7 +17039,7 @@ function renderPlayerModeScoreGrid(match, tee, metrics, hole) {
     if (!groups.has(team)) groups.set(team, []);
     groups.get(team).push(playerMetric);
   });
-  list.innerHTML = [...groups.entries()].sort(([left], [right]) => left - right).map(([team, players]) => `<section class="player-mode-team" data-player-mode-team="${team}"><header><strong>${escapeHtml(getTeamLabel(match, team))}</strong><span><b>●</b> = match stroke</span></header>${players.map(playerMetric => {
+  list.innerHTML = [...groups.entries()].sort(([left], [right]) => left - right).map(([team, players]) => `<section class="player-mode-team" data-player-mode-team="${team}"><header><strong>${escapeHtml(getTeamLabel(match, team))}</strong></header>${players.map(playerMetric => {
     const playerRef = match.players.find(row => String(row.playerId) === String(playerMetric.playerId));
     const score = playerRef?.scores?.[currentHole - 1]?.gross;
     const playerHole = getPlayerHole(match, playerMetric, currentHole - 1, tee) || hole;
@@ -17038,8 +17049,9 @@ function renderPlayerModeScoreGrid(match, tee, metrics, hole) {
     const isSelected = String(selected?.playerId) === String(playerMetric.playerId);
     const net = Number.isFinite(Number(score)) && Number(score) > 0 ? Number(score) - strokes : null;
     const entryStatus = getPlayerModeEntryStatus(match, metrics, playerMetric, score, par);
+    const strokeText = strokes === 1 ? '= match stroke' : '= match strokes';
     return `<article class="player-mode-score-row player-mode-accordion-row ${isSelected ? 'is-selected is-expanded' : 'is-collapsed'} ${canEdit ? '' : 'score-row-readonly'}" data-player-mode-row="${escapeHtml(playerMetric.playerId)}">
-      <div class="player-mode-row-head"><button type="button" class="player-mode-player-select player-mode-accordion-trigger" data-player-mode-select="${escapeHtml(playerMetric.playerId)}" aria-expanded="${isSelected}" aria-controls="playerModeDetail-${escapeHtml(playerMetric.playerId)}" title="${isSelected ? 'Collapse' : 'Open'} entry for ${escapeHtml(playerMetric.player?.name || 'Player')}"><span class="player-mode-name-line"><strong>${escapeHtml(playerMetric.player?.name || 'Player')}</strong><span class="player-mode-strokes" aria-label="${strokes} handicap stroke${strokes === 1 ? '' : 's'}">${strokes > 0 ? '●'.repeat(strokes) : ''}</span></span><span class="player-mode-collapsed-summary"><span class="player-mode-entry-status" data-status="${entryStatus.key}">${entryStatus.complete ? '<b aria-hidden="true">✓</b>' : ''}${escapeHtml(entryStatus.label)}</span>${Number.isFinite(net) ? `<small>${score} gross · ${net} match net</small>` : '<small>Tap to enter this player</small>'}</span><span class="player-mode-accordion-chevron" aria-hidden="true">${isSelected ? '⌃' : '⌄'}</span></button></div>
+      <div class="player-mode-row-head"><button type="button" class="player-mode-player-select player-mode-accordion-trigger" data-player-mode-select="${escapeHtml(playerMetric.playerId)}" aria-expanded="${isSelected}" aria-controls="playerModeDetail-${escapeHtml(playerMetric.playerId)}" title="${isSelected ? 'Collapse' : 'Open'} entry for ${escapeHtml(playerMetric.player?.name || 'Player')}"><span class="player-mode-name-line"><strong>${escapeHtml(playerMetric.player?.name || 'Player')}</strong>${strokes > 0 ? `<span class="player-mode-strokes" aria-label="Receives ${strokes} match stroke${strokes === 1 ? '' : 's'}"><span aria-hidden="true">${'●'.repeat(strokes)}</span> <small>${strokeText}</small></span>` : ''}</span><span class="player-mode-collapsed-summary"><span class="player-mode-entry-status" data-status="${entryStatus.key}">${entryStatus.complete ? '<b aria-hidden="true">✓</b>' : ''}${escapeHtml(entryStatus.label)}</span>${Number.isFinite(net) ? `<small>${score} gross · ${net} match net</small>` : '<small>Tap to enter this player</small>'}</span><span class="player-mode-accordion-chevron" aria-hidden="true">${isSelected ? '⌃' : '⌄'}</span></button></div>
       ${isSelected ? `<div id="playerModeDetail-${escapeHtml(playerMetric.playerId)}" class="player-mode-detail-slot" data-player-mode-detail-slot="${escapeHtml(playerMetric.playerId)}"></div>` : ''}
     </article>`;
   }).join('')}</section>`).join('');

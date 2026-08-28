@@ -88,7 +88,7 @@ REFERENCE_ROUND.players.forEach((p,index)=>{
   };
 });
 const ROUND = globalThis.__DYE_LEDGER_ROUND__ || REFERENCE_ROUND;
-document.title = `Ledger Entry — ${ROUND.meta.course}, ${new Intl.DateTimeFormat('en-US', {
+document.title = `Ledger Entry Report — ${ROUND.meta.course}, ${new Intl.DateTimeFormat('en-US', {
   month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC',
 }).format(new Date(`${ROUND.meta.date}T12:00:00Z`))}`;
 
@@ -125,6 +125,9 @@ const plur = (n,w) => wn(n)+" "+w+(n===1?"":"s");
 const an = s => (/^[aeiou]/i.test(s)?"an ":"a ")+s;
 const initials = full => { const t=full.trim().split(/\s+/);
   return t.length<2 ? full : t[0]+" "+t[t.length-1][0]+"."; };
+const headerCompetitionLabel = (name, allowance) => composeCompetitionLabel(name, allowance)
+  .replace(/\s*·\s*Featured Competition settings\s*$/i, "")
+  .trim();
 
 /* stroke allocation supplied by the engine, keyed by basis */
 const alloc = (h) => C.si.map(s => Math.floor(h/NH) + (s <= h-Math.floor(h/NH)*NH ? 1:0));
@@ -235,7 +238,7 @@ const add = (id, build, opts={}) => BLOCKS.push({id,build,...opts});
 /* ---- hero ---- */
 add("hero", ()=>{
   const w = h("div",{style:"padding-bottom:2px"});
-  const label = FEAT ? composeCompetitionLabel(FEAT.name, FEAT.allowance.label) : "No featured competition";
+  const label = FEAT ? headerCompetitionLabel(FEAT.name, FEAT.allowance.label) : "No featured competition";
   w.appendChild(h("div",{class:"eyebrow",text:"Featured Competition · "+label}));
   let head;
   if(WINK){
@@ -322,7 +325,7 @@ if(HAS_SIDES) add("strip", ()=>{
 
 /* ---- featured competition chart ---- */
 if(FR) add("charth", ()=>{ const perspective=getWinningMarginPerspective(MARGIN||{}); const side=FEAT.sides?.[perspective.sideIndex]; return secHead("Featured Competition by hole",
-  `${composeCompetitionLabel(FEAT.name, FEAT.allowance.label)}${MARGIN&&side?` · Winning Side perspective: ${SIDES[side.key].name}`:""}`); }, {keepWithNext:true, label:"Result"});
+  `${headerCompetitionLabel(FEAT.name, FEAT.allowance.label)}${MARGIN&&side?` · Winning Side perspective: ${SIDES[side.key].name}`:""}`); }, {keepWithNext:true, label:"Result"});
 if(FR) add("chart", ()=>{ const w=h("div"); w.innerHTML=chartSVG(); return w; });
 
 /* One geometry for every archetype. The label stack below the plot was carrying
@@ -896,10 +899,9 @@ if(!P.some(p=>p.statistics)) add("stats", ()=>{
 const TRACKED_PLAYERS=P.filter(p=>p.statistics?.tracked?.trackedHoles);
 function buildTrackedStatisticsPage(page){
   const w=h("div",{class:`ledger-stat-page ledger-stat-page-${page}`});
-  const MIN_RATE_SAMPLE=5;
   const obj=v=>v&&typeof v==="object"?v:{};
   const num=v=>Number.isFinite(Number(v))?Number(v):0;
-  const rate=(n,d)=>!num(d)?"—":num(d)<MIN_RATE_SAMPLE?`<span class="dim">(${num(n)}/${num(d)})</span>`:`${Math.round(num(n)/num(d)*100)}% <span class="dim">(${num(n)}/${num(d)})</span>`;
+  const rate=(n,d)=>!num(d)?"—":`${Math.round(num(n)/num(d)*100)}% <span class="dim">(${num(n)}/${num(d)})</span>`;
   const avg=(n,d)=>num(d)?(num(n)/num(d)).toFixed(2):"—";
   const signed=v=>num(v)===0?"E":`${num(v)>0?"+":""}${num(v).toFixed(2)}`;
   const table=(title,note,heads,rows)=>`<div class="subhead" data-ledger-stat-group="${title.toLowerCase().replace(/[^a-z]+/g,"-")}">${title}<span>${note}</span></div>
@@ -932,22 +934,20 @@ function buildTrackedStatisticsPage(page){
 
     const fwKeys=["HIT","LEFT","RIGHT"];
     if(tracked.some(p=>fwKeys.some(k=>num(obj(obj(p.statistics.tracked).fairwayOutcomes)[k]?.opportunities)))){
-      const rows=tracked.map(p=>{ const f=obj(obj(p.statistics.tracked).fairwayOutcomes); return `<tr data-row><td class="l">${nameCell(p)}</td>${fwKeys.map(k=>`<td class="n">${num(obj(f[k]).opportunities)||"—"}</td>`).join("")}</tr>`; }).join("");
-      if(page==="patterns") w.innerHTML+=table("Tee-Shot Dispersion","Recorded par-4 and par-5 tee-shot outcomes.",
+      const rows=tracked.map(p=>{ const t=obj(p.statistics.tracked),f=obj(t.fairwayOutcomes); const known=fwKeys.reduce((total,k)=>total+num(obj(f[k]).opportunities),0); return `<tr data-row><td class="l">${nameCell(p)}</td>${fwKeys.map(k=>{const x=obj(f[k]),count=num(x.opportunities);return `<td class="n">${count?`${rate(count,known)} <span class="dim">· ${signed(num(x.scoreToPar)/count)} avg</span>`:"—"}</td>`;}).join("")}</tr>`; }).join("");
+      if(page==="patterns") w.innerHTML+=table("Tee-Shot Results","Frequency uses the same denominator of recorded par-4 and par-5 tee-shot outcomes; average is score relative to par after that result.",
         ["Player","Hit","Miss left","Miss right"],rows);
-      const consequence=tracked.map(p=>{ const f=obj(obj(p.statistics.tracked).fairwayOutcomes); return `<tr data-row><td class="l">${nameCell(p)}</td>${fwKeys.map(k=>{const x=obj(f[k]);return `<td class="n">${num(x.opportunities)?`${signed(num(x.scoreToPar)/num(x.opportunities))} <span class="dim">· ${rate(num(x.opportunities)-num(x.penaltyHoles),x.opportunities)} clean</span>`:"—"}</td>`;}).join("")}</tr>`; }).join("");
-      if(page==="patterns") w.innerHTML+=table("Tee-Shot Consequences","Average score to par; “clean” means no recorded penalty on the hole.",
-        ["Player","Hit","Miss left","Miss right"],consequence);
     }
 
-    const posKeys=["7","8","9","4","5","6","1","2","3"];
+    const allPosKeys=["7","8","9","4","5","6","1","2","3"];
+    const posKeys=allPosKeys.filter(k=>tracked.some(p=>num(obj(obj(p.statistics.tracked).approachPositions)[k])));
     if(tracked.some(p=>posKeys.some(k=>num(obj(obj(p.statistics.tracked).approachPositions)[k])))){
-      const rows=tracked.map(p=>{ const a=obj(obj(p.statistics.tracked).approachPositions); return `<tr data-row><td class="l">${nameCell(p)}</td>${posKeys.map(k=>`<td class="n">${num(a[k])||"—"}</td>`).join("")}</tr>`; }).join("");
+      const rows=tracked.map(p=>{ const a=obj(obj(p.statistics.tracked).approachPositions),known=allPosKeys.reduce((total,k)=>total+num(a[k]),0); return `<tr data-row><td class="l">${nameCell(p)}</td>${posKeys.map(k=>`<td class="n">${num(a[k])?rate(a[k],known):"—"}</td>`).join("")}</tr>`; }).join("");
       if(page==="patterns") w.innerHTML+=table("Approach Dispersion","3×3 target map: 7–9 long, 4–6 pin-high, 1–3 short; 5 is GIR. Unknown locations are excluded and disclosed below.",
-        ["Player","7","8","9","4","5 GIR","6","1","2","3"],rows);
+        ["Player",...posKeys.map(k=>k==="5"?"5 GIR":k)],rows);
     }
 
-    if(tracked.some(p=>posKeys.some(k=>num(obj(obj(p.statistics.tracked).approachOutcomes)[k]?.scramblingOpps)))){
+    if(tracked.some(p=>allPosKeys.some(k=>num(obj(obj(p.statistics.tracked).approachOutcomes)[k]?.scramblingOpps)))){
       const axes={Short:["1","2","3"],Left:["1","4","7"],Right:["3","6","9"],Long:["7","8","9"]};
       const rows=tracked.map(p=>{ const a=obj(obj(p.statistics.tracked).approachOutcomes); return `<tr data-row><td class="l">${nameCell(p)}</td>${Object.values(axes).map(keys=>{const d=keys.reduce((z,k)=>{const x=obj(a[k]);z.o+=num(x.scramblingOpps);z.s+=num(x.scrambles);return z;},{o:0,s:0});return `<td class="n">${rate(d.s,d.o)}</td>`;}).join("")}</tr>`; }).join("");
       if(page==="patterns") w.innerHTML+=table("Scrambling by Approach Miss","Directional axes overlap at corner misses; GIR is excluded.",
@@ -1045,7 +1045,7 @@ const SLUG = `${ROUND.meta.course} · ${fmtDate(ROUND.meta.date)}`;
 function makePage(n, total, label){
   const pg=h("div",{class:"page"});
   pg.appendChild(h("div",{class:"masthead",html:
-    `<div class="wordmark">THE DYE LEDGER<span>LEDGER ENTRY</span>${label?`<em>${label}</em>`:""}</div>
+    `<div class="wordmark">LEDGER ENTRY REPORT${label?`<em>${label}</em>`:""}</div>
      <div class="mast-meta">${SLUG}${n===1?`<span class="final${COMPLETE?"":" prov"}">${COMPLETE?"FINAL":"PROVISIONAL"}</span>`:""}</div>`}));
   pg.appendChild(h("div",{class:"tie"}));
   const flow=h("div",{class:"flow"});
@@ -1092,10 +1092,10 @@ function layout(){
     const cs=getComputedStyle(node);
     const mgn=(parseFloat(cs.marginTop)||0)+(parseFloat(cs.marginBottom)||0);
     const height=Math.ceil(node.getBoundingClientRect().height+mgn);
-    const rowHeights=rows.map(v=>Math.ceil(v));
+    const rowHeights=rows.map(v=>Math.ceil(v)+1);
     const nonRowHeight=Math.max(0,height-rowHeights.reduce((a,b)=>a+b,0));
     const m={height,
-             headerH:Math.max(Math.ceil(headH),nonRowHeight),rows:rowHeights};
+             headerH:Math.max(Math.ceil(headH),nonRowHeight)+(b.splittable?10:0),rows:rowHeights};
     probe.removeChild(node);
     cache.set(b.id,m);
     return m;
@@ -1117,8 +1117,6 @@ function layout(){
       if(s.block.splittable && (s.continued||s.resumed))
         sliceRows(node,s.rowStart,s.rowEnd,s.continued,s.resumed);
       flow.appendChild(node);
-      if(s.resumed) flow.appendChild(h("div",{class:"note",
-        style:"text-align:right;padding-top:3px",text:"continued →"}));
     });
     doc.appendChild(pg);
   });

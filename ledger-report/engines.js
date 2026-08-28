@@ -82,11 +82,20 @@ function marginEngine(game, ctx) {
   if (winner !== null) {
     const gain = r => (!r.scored ? 0
       : winner === 1 ? Math.max(0, r.a - r.b) : Math.max(0, r.b - r.a));
-    turning = per.filter(r => r.scored)
-      .map(r => ({ i: r.i, hole: r.hole, gain: gain(r),
-                   score: gain(r) * (1 + (holesScored - 1 - r.i) / holesScored) }))
-      .sort((x, y) => y.score - x.score)[0];
+    const winnerIsAhead = value => winner === 1 ? value > 0 : value < 0;
+    turning = per.filter(r => r.scored && gain(r) > 0)
+      .map(r => ({ i: r.i, hole: r.hole, gain: gain(r) }))
+      .find(candidate => winnerIsAhead(cum[candidate.i + 1])
+        && cum.slice(candidate.i + 1).every(winnerIsAhead));
+    /* A completed margin win always has a first permanent lead. Keep a
+       defensive fallback for malformed/partial legacy inputs. */
+    if (!turning) turning = per.filter(r => r.scored && gain(r) > 0).at(-1) || null;
     if (!turning || turning.gain === 0) turning = null;
+  } else {
+    /* A tied match has no winning side. The last contested hole is the most
+       honest event to highlight without fabricating a decisive winner. */
+    const lastContested = per.filter(r => r.scored && r.win !== null).at(-1);
+    if (lastContested) turning = { i: lastContested.i, hole: lastContested.hole, gain: Math.abs(lastContested.a - lastContested.b), tied: true };
   }
   let lastLevel = 0;
   cum.forEach((v, i) => { if (v === 0) lastLevel = i; });
@@ -200,6 +209,7 @@ function runGame(game, ctx) {
 }
 
 globalThis.runGame = runGame;
+export { runGame, marginEngine, cumulativeEngine, discreteEngine, ARCHETYPE, isNum, played };
 if (typeof module !== "undefined")
   module.exports = { runGame, marginEngine, cumulativeEngine, discreteEngine, ARCHETYPE,
                      isNum, played };

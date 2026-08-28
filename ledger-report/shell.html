@@ -1,6 +1,6 @@
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
-<title>The Dye Ledger — Chatham Hills, August 9, 2026</title>
+<title>Ledger Entry — Chatham Hills, August 9, 2026</title>
 <style>
 @font-face{font-family:'Archivo';font-style:normal;font-weight:500;src:url('./fonts/archivo-latin-500-normal.woff2') format('woff2')}
 @font-face{font-family:'Archivo';font-style:normal;font-weight:600;src:url('./fonts/archivo-latin-600-normal.woff2') format('woff2')}
@@ -27,6 +27,7 @@ body{background:#2E322C;font-family:var(--body);color:var(--ink);font-size:9pt;l
   background:var(--paper);color:var(--ink);padding:8px 12px;font:600 9pt var(--disp);cursor:pointer}
 .report-nav button:focus-visible{outline:3px solid #E5C567;outline-offset:2px}
 .report-nav-status{font:400 7.5pt var(--body);color:rgba(255,255,255,.78)}
+.report-missing{width:8.5in;min-height:11in;margin:22px auto;padding:1in;background:var(--paper)}
 
 @page{size:letter;margin:0}
 .page{width:8.5in;height:11in;padding:.5in .55in .42in;background:var(--paper);
@@ -52,7 +53,7 @@ thead[data-cont] th:first-child::after,
 
 .masthead{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:7px}
 .wordmark{font-family:var(--disp);font-weight:700;font-size:11pt;letter-spacing:.22em}
-.wordmark em{font-style:normal;font-weight:500;letter-spacing:.14em;color:var(--muted);
+.wordmark span,.wordmark em{font-style:normal;font-weight:500;letter-spacing:.14em;color:var(--muted);
   font-size:8pt;margin-left:9px}
 .mast-meta{font-family:var(--mono);font-size:7.5pt;color:var(--muted);letter-spacing:.04em}
 .final{display:inline-block;background:var(--ink);color:var(--paper);
@@ -120,6 +121,11 @@ tr:last-child td{border-bottom:none}
   border-bottom:1px solid var(--ink);margin-bottom:2px}
 .subhead span{float:right;text-transform:none;letter-spacing:.02em;font-family:var(--body);
   font-weight:400;font-size:7pt}
+.ledger-stat-page .subhead{margin-top:15px;padding:7px 8px 5px;background:var(--faint);border-bottom:1px solid var(--ink);display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.ledger-stat-page .subhead:first-child{margin-top:2px}
+.ledger-stat-page .subhead span{float:none;max-width:68%;text-align:right;line-height:1.35}
+.ledger-stat-page table{margin-top:5px}
+.ledger-stat-page .dense td{padding-top:3.6px;padding-bottom:3.6px}
 .pay{font-family:var(--mono);font-size:8pt;display:flex;justify-content:space-between;
   padding:3.4px 0;border-bottom:1px solid var(--faint)}
 .pay em{font-style:normal;font-family:var(--body);font-size:8.5pt}
@@ -206,11 +212,12 @@ tr:last-child td{border-bottom:none}
 
 <nav class="report-nav" aria-label="Ledger Entry actions">
   <button id="returnToMatchBtn" type="button">‹ Return to Match</button>
+  <span class="report-nav-status">For a clean PDF, turn off browser headers and footers in the print dialog.</span>
   <span id="returnToMatchStatus" class="report-nav-status" hidden>Close this tab to return to the match.</span>
 </nav>
 <div id="probe"></div>
 <div id="doc"></div>
-<script src="./bootstrap.js?v=31.0.10"></script>
-<script type="module" src="./pack.js?v=31.0.10"></script>
-<script type="module" src="./engines.js?v=31.0.10"></script>
-<script type="module" src="./report.js?v=31.0.10"></script>
+<script src="./bootstrap.js?v=31.0.12"></script>
+<script type="module" src="./pack.js?v=31.0.12"></script>
+<script type="module" src="./engines.js?v=31.0.12"></script>
+<script type="module" src="./report.js?v=31.0.12"></script>

@@ -9,10 +9,10 @@ Read these sources before changing code:
 
 ## Current release
 
-- Development branch: `release/v31.0.11`
-- Release: v31.0.11 — Player Memories and Four-Golfer Grind
+- Development branch: `release/v31.0.12`
+- Release: v31.0.12 — Ledger Entry Correctness and Readability
 - Static, dependency-free, local-first PWA; Node is development tooling only
-- No v31.0.11 database migration
+- No v31.0.12 database migration
 
 ## Non-negotiable invariants
 
@@ -23,7 +23,7 @@ Read these sources before changing code:
 - Shared Match remains authority-scoped, outbox-backed, idempotent, and parity-gated at completion.
 - Course draft publishing remains atomic and retains local recovery until verified cloud parity.
 - Ledger Entry never accepts an unverified generated story. When online generation fails, it uses the deterministic authoritative-facts story.
-- Grind is limited to two golfers editable by one scorekeeper; otherwise use Enhanced.
+- Grind is limited to four golfers editable by one scorekeeper; otherwise use Enhanced.
 - Every release gets a new cache name and immutable branding filenames.
 
 ## Required workflow

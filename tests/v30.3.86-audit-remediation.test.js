@@ -78,8 +78,8 @@ test('iPhone installation dialog has balanced structural tags', () => {
 });
 
 test('current release metadata is immutable and consistently labeled', () => {
-  assert.match(app, /version: 'v31\.0\.08'/);
-  assert.match(app, /buildDate: '2026-08-27T12:00:00-04:00'/);
-  assert.match(app, /buildLabel: 'Player Mode Accordion Entry'/);
+  assert.match(app, /version: 'v31\.0\.09'/);
+  assert.match(app, /buildDate: '2026-08-27T16:00:00-04:00'/);
+  assert.match(app, /buildLabel: 'Release Assurance and Offline Ledger Reliability'/);
   assert.doesNotMatch(app.slice(0, 1000), /new Date\(\)\.toISOString\(\)/);
 });

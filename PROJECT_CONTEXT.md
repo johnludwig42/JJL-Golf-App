@@ -175,10 +175,10 @@ Recent releases:
 - v30.3.41 — Effortless Scoring Polish
 - v30.3.42 — Duplicate Course Dropdown Fix and initial documentation work
 
-Current release implementation (updated August 4, 2026):
+Current release implementation (updated August 27, 2026):
 
 ```text
-v30.3.86 — Scoring Integrity & Audit Remediation
+v31.0.09 — Release Assurance & Offline Ledger Reliability
 ```
 
 ## 8. Near-Term Roadmap
@@ -456,6 +456,38 @@ v31.0.01 is the Shared Match Reliability Foundation release. It adds a durable c
 ## 25. Current development release — v31.0.02
 
 v31.0.02 is the Ledger Entry reporting release. Ledger Entry becomes the default and recommended Export type while Match Summary and Classic Scorecard remain available. The report declares handicap basis, unit, and provenance; renders Presses as separate nested ledgers; includes an accepted AI recap or deterministic fallback; and reads memories and weather from the effective RoundRecord. It is read-only, supports completed local rounds and Shared Matches, and introduces no database migration.
+
+## 26. Completed release — v31.0.04
+
+v31.0.04 makes completing or ending a round explicit, reviewable, host-controlled, and recovery-safe. It preserves completed-round facts and provides clear routes to the summary, Ledger Entry, prior round, or a new Match.
+
+## 27. Completed release — v31.0.05
+
+v31.0.05 stabilizes Course Library publishing with protected approved records, atomic draft publishing, batched tee and hole writes, scoped refresh, progress, retry, and local recovery. Its two production migrations must remain applied and operationally verified.
+
+## 28. Completed release — v31.0.06
+
+v31.0.06 establishes interchangeable Play input modes over one authoritative controller and Round data contract. Classic Mode remains the safe baseline; presentation modes must never duplicate scoring, handicap, competition, settlement, synchronization, derived-statistic, or reporting logic.
+
+## 29. Completed release — v31.0.07
+
+v31.0.07 introduces Player Mode, None/Casual/Enhanced/Grind stat capture, derived GIR, explicit directional facts, and the two-editable-golfer Grind safeguard.
+
+## 30. Completed release — v31.0.08
+
+v31.0.08 removes duplicate Player Mode score entry and uses one collapsible score-and-stat card per golfer. Classic Mode and all shared calculation, persistence, synchronization, and reporting paths remain unchanged.
+
+## 31. Current development release — v31.0.09
+
+v31.0.09 is a release-assurance and offline Ledger reliability release. The default test command automatically discovers every repository test file. Ledger Entry attempts an audited online Story first, but service, connectivity, timeout, length, or fact-verification failure discards that response and supplies a deterministic story built only from authoritative Round facts. The report is no longer blocked by Story service availability. This release changes no scoring, settlement, Shared Match, Course Library, localStorage, or database schema.
+
+## 32. Near-term sequence after v31.0.09
+
+1. Complete real-device Player/Classic and two-device Shared Match acceptance.
+2. Continue Player Mode usability refinement without changing Classic Mode.
+3. Implement lifecycle-based navigation and reduce screen clutter.
+4. Preserve Trip Mode as a pre-beta product milestone.
+5. Complete beta hardening only after calculation parity, offline behavior, Shared Match reliability, accessibility, and full regression gates are satisfied.
 # v30.3.90 Shared Match code compatibility
 
 New Shared Matches use only `DYE-######`. Existing 12-character Shared Match identifiers remain joinable through the normal Match workflow without re-keying an active or historical match. Join codes remain locators, not Account, Golfer Identity, Device, role, participation, or scoring-assignment keys.

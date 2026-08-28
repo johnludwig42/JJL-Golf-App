@@ -6,13 +6,9 @@ import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
 const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
-const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-const manifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
 
-test('v31.0.08 release identity and immutable assets are complete', () => {
-  assert.equal(pkg.version, '31.0.08');
-  assert.equal(manifest.version, 'v31.0.08');
-  assert.match(app, /buildLabel: 'Player Mode Accordion Entry'/);
+test('v31.0.08 immutable Player Mode release assets remain available', () => {
+  assert.equal(existsSync(new URL('../BUILD_NOTES_v31.0.08.md', import.meta.url)), true);
   for (const name of ['app-icon-192', 'app-icon-512', 'apple-touch-icon', 'favicon-32', 'favicon-16']) {
     assert.equal(existsSync(new URL(`../branding/${name}-v31.0.08.png`, import.meta.url)), true);
   }

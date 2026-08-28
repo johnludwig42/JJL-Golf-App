@@ -317,7 +317,7 @@ main{padding-bottom:calc(64px + env(safe-area-inset-bottom) + var(--keyboard-off
 .play-input-mode-bar select{width:auto;min-width:150px;margin:0}
 .play-input-mode-bar .tiny{max-width:420px;text-align:right}
 @media (max-width:600px){.play-input-mode-bar{align-items:stretch;flex-direction:column;gap:4px}.play-input-mode-bar label{justify-content:space-between}.play-input-mode-bar .tiny{text-align:left}}
-/* v31.0.08 Player Mode: collapsible per-golfer entry over the shared engine. */
+/* v31.0.09 Player Mode: collapsible per-golfer entry over the shared engine. */
 .player-input-mode-active .score-grid thead{display:none}
 .player-input-mode-active .score-grid,.player-input-mode-active .score-grid tbody,.player-input-mode-active .score-grid tr,.player-input-mode-active .score-grid td{display:block;width:100%}
 .player-mode-score-row td{padding:12px 0;border-bottom:1px solid var(--border)}

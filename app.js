@@ -16,11 +16,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.08',
-  versionNumber: '31.0.08',
-  cacheName: 'the-dye-ledger-v31.0.08',
-  buildDate: '2026-08-27T12:00:00-04:00',
-  buildLabel: 'Player Mode Accordion Entry'
+  version: 'v31.0.09',
+  versionNumber: '31.0.09',
+  cacheName: 'the-dye-ledger-v31.0.09',
+  buildDate: '2026-08-27T16:00:00-04:00',
+  buildLabel: 'Release Assurance and Offline Ledger Reliability'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -6680,6 +6680,22 @@ function buildLedgerEntryFactsOnlyStory(record, match = null, metrics = null) {
   return [story?.narrative, ...highlights, ...trackedStatistics].filter(Boolean).join('\n\n')
     || 'The recorded scorecard, competitions, and settlement are preserved in this Ledger Entry.';
 }
+function getLedgerEntryStoryFallbackReason(error, { offline = false, configured = true } = {}) {
+  if (offline) return 'offline';
+  if (!configured) return 'service-not-configured';
+  const message = String(error?.message || '').toLowerCase();
+  if (error?.name === 'AbortError' || message.includes('timed out')) return 'timeout';
+  if (message.includes('could not be verified') || message.includes('too long')) return 'verification-failed';
+  return 'service-unavailable';
+}
+function buildDeterministicLedgerEntryStory(match, metrics, fallbackReason = 'service-unavailable') {
+  const record = getEffectiveRoundRecord(match, metrics) || buildRoundRecord(match, metrics);
+  return {
+    text: buildLedgerEntryFactsOnlyStory(record, match, metrics),
+    provenance: 'deterministic-fallback',
+    fallbackReason,
+  };
+}
 function buildLedgerEntryStoryPayload(match, metrics) {
   const payload = buildRoundRecapPayload(match, metrics);
   return {
@@ -6719,8 +6735,11 @@ function addVerifiedGreeniesToLedgerStory(match, metrics, recapText) {
   return paragraphs.join('\n\n');
 }
 async function prepareLedgerEntryStory(match, metrics) {
-  if (navigator.onLine === false) throw new Error('The Story of the Round requires an internet connection.');
-  if (!getRoundRecapUrl()) throw new Error('Configure Supabase before generating The Story of the Round.');
+  const offline = navigator.onLine === false;
+  const configured = Boolean(getRoundRecapUrl());
+  if (offline || !configured) {
+    return buildDeterministicLedgerEntryStory(match, metrics, getLedgerEntryStoryFallbackReason(null, { offline, configured }));
+  }
   const requestStory = async (repair = null) => {
     const controller = new window.AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), 45000);
@@ -6747,24 +6766,29 @@ async function prepareLedgerEntryStory(match, metrics) {
       window.clearTimeout(timeoutId);
     }
   };
-  let text = addVerifiedGreeniesToLedgerStory(match, metrics, await requestStory());
-  if (text.split(/\s+/).filter(Boolean).length > 500) throw new Error('The generated Story was too long to fit the Ledger Entry. Please try again.');
-  const isBlockingFactIssue = issue => /^FALSE_|^UNVERIFIABLE_/.test(String(issue?.code || ''));
-  let blockingIssues = validateRoundRecapContent(match, metrics, text).issues.filter(isBlockingFactIssue);
-  if (blockingIssues.length) {
-    const repaired = await requestStory({
-      priorRecap: text,
-      issues: blockingIssues.map(issue => ({ code: issue.code, message: issue.message })),
-    });
-    if (repaired.split(/\s+/).filter(Boolean).length > 500) throw new Error('The corrected Story was too long to fit the Ledger Entry. Please try again.');
-    text = addVerifiedGreeniesToLedgerStory(match, metrics, repaired);
-    blockingIssues = validateRoundRecapContent(match, metrics, text).issues.filter(isBlockingFactIssue);
+  try {
+    let text = addVerifiedGreeniesToLedgerStory(match, metrics, await requestStory());
+    if (text.split(/\s+/).filter(Boolean).length > 500) throw new Error('The generated Story was too long to fit the Ledger Entry.');
+    const isBlockingFactIssue = issue => /^FALSE_|^UNVERIFIABLE_/.test(String(issue?.code || ''));
+    let blockingIssues = validateRoundRecapContent(match, metrics, text).issues.filter(isBlockingFactIssue);
+    if (blockingIssues.length) {
+      const repaired = await requestStory({
+        priorRecap: text,
+        issues: blockingIssues.map(issue => ({ code: issue.code, message: issue.message })),
+      });
+      if (repaired.split(/\s+/).filter(Boolean).length > 500) throw new Error('The corrected Story was too long to fit the Ledger Entry.');
+      text = addVerifiedGreeniesToLedgerStory(match, metrics, repaired);
+      blockingIssues = validateRoundRecapContent(match, metrics, text).issues.filter(isBlockingFactIssue);
+    }
+    if (blockingIssues.length) {
+      throw new Error('The generated Story could not be verified against the recorded round.');
+    }
+    return { text, provenance: 'audited-generated-narrative' };
+  } catch (error) {
+    const fallbackReason = getLedgerEntryStoryFallbackReason(error, { offline: false, configured: true });
+    console.warn(`Ledger Story used the verified deterministic fallback (${fallbackReason}).`);
+    return buildDeterministicLedgerEntryStory(match, metrics, fallbackReason);
   }
-  if (blockingIssues.length) {
-    const details = blockingIssues.map(issue => issue.message).filter(Boolean).join(' ');
-    throw new Error(`The generated Story could not be verified against the recorded round.${details ? ` ${details}` : ''} Please try again.`);
-  }
-  return { text, provenance: 'audited-generated-narrative' };
 }
 function buildLegacyRoundSnapshot(match, metrics) {
   if (!metrics) return '';
@@ -8889,6 +8913,7 @@ async function openUnifiedExport(match, printView = 'ledger') {
     }
     reportModel.meta.story = ledgerStory.text;
     reportModel.meta.storyProvenance = ledgerStory.provenance;
+    reportModel.meta.storyFallbackReason = ledgerStory.fallbackReason || null;
     window.__DYE_LEDGER_PENDING_REPORT__ = reportModel;
     window.__DYE_LEDGER_AUTO_PRINT__ = true;
     try {
@@ -23934,6 +23959,9 @@ function installDyeLedgerLiveEngineAdapter() {
     buildLedgerEntryStoryPayload,
     addVerifiedGreeniesToLedgerStory,
     buildLedgerEntryFactsOnlyStory,
+    buildDeterministicLedgerEntryStory,
+    getLedgerEntryStoryFallbackReason,
+    prepareLedgerEntryStory,
     buildTrackedStatisticsStoryFacts,
     buildExportStatTrackingSummary,
     buildLedgerEntryStatisticsSections,

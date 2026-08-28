@@ -28,6 +28,8 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
+Current release: **v31.0.12 — Ledger Entry Correctness and Readability** on `release/v31.0.12`. This release corrects Ledger Entry narrative and competition presentation, clarifies handicap and carry disclosures, separates tracked performance from shot-pattern statistics, adds Fairway recovery lies, and orients match charts from the Winning Side perspective. It has no database migration.
+
 ## 2. Development Roles
 
 **Product Owner**

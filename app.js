@@ -16,11 +16,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.11',
-  versionNumber: '31.0.11',
-  cacheName: 'the-dye-ledger-v31.0.11',
-  buildDate: '2026-08-27T20:00:00-04:00',
-  buildLabel: 'Player Memories and Four-Golfer Grind'
+  version: 'v31.0.12',
+  versionNumber: '31.0.12',
+  cacheName: 'the-dye-ledger-v31.0.12',
+  buildDate: '2026-08-28T12:00:00-04:00',
+  buildLabel: 'Ledger Entry Correctness and Readability'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -4282,7 +4282,7 @@ function normalizeHoleStat(stat = {}, idx = 0) {
     greenResult: ['ON', 'SHORT', 'LEFT', 'RIGHT', 'LONG', 'UNKNOWN'].includes(String(stat?.greenResult || '').toUpperCase()) ? String(stat.greenResult).toUpperCase() : (stat?.green ? 'ON' : 'UNKNOWN'),
     approachResult: ['1','2','3','4','5','6','7','8','9','UNKNOWN'].includes(String(stat?.approachResult || '').toUpperCase()) ? String(stat.approachResult).toUpperCase() : (stat?.green ? '5' : 'UNKNOWN'),
     bunkerInvolved: !!stat?.bunkerInvolved,
-    recoveryLie: ['ROUGH', 'BUNKER', 'FRINGE', 'OTHER', 'UNKNOWN'].includes(String(stat?.recoveryLie || '').toUpperCase()) ? String(stat.recoveryLie).toUpperCase() : (stat?.bunkerInvolved ? 'BUNKER' : 'UNKNOWN'),
+    recoveryLie: ['FAIRWAY', 'ROUGH', 'BUNKER', 'FRINGE', 'OTHER', 'UNKNOWN'].includes(String(stat?.recoveryLie || '').toUpperCase()) ? String(stat.recoveryLie).toUpperCase() : (stat?.bunkerInvolved ? 'BUNKER' : 'UNKNOWN'),
     greenSource: ['calculated', 'override', 'legacy', 'unknown'].includes(String(stat?.greenSource || '').toLowerCase()) ? String(stat.greenSource).toLowerCase() : (Object.prototype.hasOwnProperty.call(stat || {}, 'green') ? 'legacy' : 'unknown'),
     greenOverride: typeof stat?.greenOverride === 'boolean' ? stat.greenOverride : null,
   };
@@ -7287,6 +7287,49 @@ function validateRoundRecapContent(match, metrics, recapText) {
   if (coachingEligible && !/\b(?:improvement|practice focus|next-round focus|opportunity)\b/i.test(recap)) {
     issues.push({ code: 'MISSING_IMPROVEMENT_REVIEW', message: 'Stat Tracking has enough evidence for player improvement opportunities, but the recap does not include them.' });
   }
+  const numberWords = { no: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18 };
+  const parseCount = token => /^\d+$/.test(String(token || '')) ? Number(token) : numberWords[String(token || '').toLocaleLowerCase()];
+  const statRows = computeStatTrackingSummary(match, metrics);
+  const statParagraphs = recap.split(/\n\s*\n/).map(paragraph => paragraph.trim()).filter(Boolean);
+  const normalizeStoryName = value => String(value || '').toLocaleLowerCase().replace(/[’‘]/g, "'");
+  const playersByAlias = statRows.map(row => {
+    const playerName = String(row?.playerMetric?.player?.name || row?.playerMetric?.name || '').trim();
+    const nameParts = playerName.split(/\s+/).filter(Boolean);
+    return { row, playerName, aliases: [playerName, nameParts[nameParts.length - 1]].filter(Boolean).map(normalizeStoryName) };
+  }).filter(entry => entry.playerName);
+  statParagraphs.forEach(paragraph => {
+   let currentStatPlayer = null;
+   paragraph.split(/(?<=[.!?])\s+|\n+/).map(sentence => sentence.trim()).filter(Boolean).forEach(sentence => {
+    const normalizedSentence = normalizeStoryName(sentence);
+    const explicitlyNamed = playersByAlias.filter(entry => entry.aliases.some(alias => normalizedSentence.includes(alias)));
+    if (explicitlyNamed.length === 1) currentStatPlayer = explicitlyNamed[0];
+    else if (explicitlyNamed.length > 1) currentStatPlayer = null;
+    const activePlayer = explicitlyNamed.length === 1 ? explicitlyNamed[0] : currentStatPlayer;
+    if (!activePlayer) return;
+    const { row, playerName } = activePlayer;
+    const totals = row?.totals || {};
+      const parMatch = sentence.match(/\bpar[- ]?([345])s?\b/i);
+      const girCountMatch = sentence.match(/\b(\d+|no|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen)\s+greens? in regulation\b/i);
+      if (parMatch && girCountMatch) {
+        const parType = String(parMatch[1]);
+        const claimed = parseCount(girCountMatch[1]);
+        const opportunities = Number(totals?.parTypes?.[parType]?.opportunities || 0);
+        if (Number.isFinite(claimed) && claimed > opportunities) {
+          issues.push({ code: 'FALSE_PAR_TYPE_GIR_COUNT', message: `${playerName} is described with ${claimed} greens in regulation on par ${parType}s, but only ${opportunities} recorded par-${parType} opportunities exist.` });
+        }
+      }
+      const missedGirMatch = sentence.match(/\bmiss(?:ed|ing)\s+(\d+|no|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen)\s+of\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen)\s+greens?\b/i);
+      if (!parMatch && missedGirMatch) {
+        const claimedMisses = parseCount(missedGirMatch[1]);
+        const claimedOpportunities = parseCount(missedGirMatch[2]);
+        const greenOpps = Number(totals.greenOpps || 0);
+        const actualMisses = Math.max(0, greenOpps - Number(totals.greens || 0));
+        if (claimedOpportunities !== greenOpps || claimedMisses !== actualMisses) {
+          issues.push({ code: 'FALSE_GIR_SCOPE', message: `${playerName}'s overall GIR claim says ${claimedMisses} misses from ${claimedOpportunities} greens, but the recorded round shows ${actualMisses} misses from ${greenOpps} known GIR opportunities.` });
+        }
+      }
+   });
+  });
   issues.push(...validateGreeniesNarrativeClaims(match, metrics, recap));
   return { valid: issues.length === 0, issues, specVersion: ROUND_RECAP_CONTENT_SPEC_VERSION };
 }
@@ -10569,7 +10612,7 @@ function computeStatTrackingSummary(match, metrics) {
   const summary = trackedPlayers.map(playerMetric => {
     const playerRef = match.players.find(row => row.playerId === playerMetric.playerId);
     const emptyOutcome = () => ({ opportunities: 0, scoreToPar: 0, girs: 0, penalties: 0, penaltyHoles: 0, scramblingOpps: 0, scrambles: 0 });
-    const totals = { trackedHoles: 0, fairwaysHit: 0, fairwayOpps: 0, greens: 0, greenOpps: 0, unknownGirHoles: 0, putts: 0, puttOpps: 0, onePutts: 0, threePutts: 0, girPutts: 0, girPuttOpps: 0, missedGirPutts: 0, missedGirPuttOpps: 0, penaltyStrokes: 0, penaltyHoles: 0, upAndDowns: 0, scramblingOpps: 0, missingRecoveryLies: 0, sandies: 0, sandSaveOpps: 0, fairwayOutcomes: { HIT: emptyOutcome(), LEFT: emptyOutcome(), RIGHT: emptyOutcome() }, recoveryByLie: { ROUGH: { opportunities: 0, successes: 0 }, BUNKER: { opportunities: 0, successes: 0 }, FRINGE: { opportunities: 0, successes: 0 }, OTHER: { opportunities: 0, successes: 0 } }, parTypes: { '3': emptyOutcome(), '4': emptyOutcome(), '5': emptyOutcome() }, approachOpps: 0, approachMisses: 0, approachPositions: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 0, '8': 0, '9': 0 }, approachOutcomes: { '1': emptyOutcome(), '2': emptyOutcome(), '3': emptyOutcome(), '4': emptyOutcome(), '5': emptyOutcome(), '6': emptyOutcome(), '7': emptyOutcome(), '8': emptyOutcome(), '9': emptyOutcome() } };
+    const totals = { trackedHoles: 0, fairwaysHit: 0, fairwayOpps: 0, greens: 0, greenOpps: 0, unknownGirHoles: 0, putts: 0, puttOpps: 0, onePutts: 0, threePutts: 0, girPutts: 0, girPuttOpps: 0, missedGirPutts: 0, missedGirPuttOpps: 0, penaltyStrokes: 0, penaltyHoles: 0, upAndDowns: 0, scramblingOpps: 0, missingRecoveryLies: 0, sandies: 0, sandSaveOpps: 0, fairwayOutcomes: { HIT: emptyOutcome(), LEFT: emptyOutcome(), RIGHT: emptyOutcome() }, recoveryByLie: { FAIRWAY: { opportunities: 0, successes: 0 }, ROUGH: { opportunities: 0, successes: 0 }, BUNKER: { opportunities: 0, successes: 0 }, FRINGE: { opportunities: 0, successes: 0 }, OTHER: { opportunities: 0, successes: 0 } }, parTypes: { '3': emptyOutcome(), '4': emptyOutcome(), '5': emptyOutcome() }, approachOpps: 0, approachMisses: 0, approachPositions: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 0, '8': 0, '9': 0 }, approachOutcomes: { '1': emptyOutcome(), '2': emptyOutcome(), '3': emptyOutcome(), '4': emptyOutcome(), '5': emptyOutcome(), '6': emptyOutcome(), '7': emptyOutcome(), '8': emptyOutcome(), '9': emptyOutcome() } };
     (metrics?.holeResults || []).forEach((holeResult, holeIdx) => {
       if (!holeResult?.completed) return;
       const scoreObj = holeResult?.playerScores?.find(ps => ps.playerId === playerMetric.playerId);
@@ -13031,7 +13074,7 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
       } else if (key === 'bunkerInvolved') {
         currentStat.bunkerInvolved = !!input.checked;
       } else if (key === 'recoveryLie') {
-        currentStat.recoveryLie = ['ROUGH', 'BUNKER', 'FRINGE', 'OTHER', 'UNKNOWN'].includes(String(input.value || '').toUpperCase()) ? String(input.value).toUpperCase() : 'UNKNOWN';
+        currentStat.recoveryLie = ['FAIRWAY', 'ROUGH', 'BUNKER', 'FRINGE', 'OTHER', 'UNKNOWN'].includes(String(input.value || '').toUpperCase()) ? String(input.value).toUpperCase() : 'UNKNOWN';
         currentStat.bunkerInvolved = currentStat.recoveryLie === 'BUNKER';
       } else {
         currentStat[key] = !!input.checked;
@@ -17040,7 +17083,7 @@ function renderPlayerModeStatEntry(match, hole, metrics) {
     ${(par === 4 || par === 5) ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Fairway</span><div class="player-mode-stat-options player-mode-fairway-options">${choice('fairwayResult','LEFT','↶  Left',stat.fairwayResult === 'LEFT')}${fairwayHitChoice}${choice('fairwayResult','RIGHT','Right  ↷',stat.fairwayResult === 'RIGHT')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="fairwayResult" value="${escapeHtml(stat.fairwayResult)}" />` : ''}
     <div class="player-mode-derived player-mode-gir-result"><span>GIR</span><strong aria-label="${derived.value === null ? 'GIR unknown' : (derived.value ? 'Green in regulation' : 'Missed green in regulation')}">${derived.value === null ? '—' : (derived.value ? '✓' : '✕')}</strong><small>${derived.source === 'calculated' ? 'Calculated from gross score and putts' : derived.source === 'override' ? 'Manual correction' : 'Enter score and putts to calculate'}</small></div>
     ${advanced ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Approach</span><div class="player-mode-approach-grid" role="group" aria-label="Approach result">${['7','8','9','4','5','6','1','2','3'].map(approachChoice).join('')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="approachResult" value="${escapeHtml(stat.approachResult)}" />` : ''}
-    ${advanced && derived.value === false ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Recovery lie</span><div class="player-mode-stat-options player-mode-recovery-options">${recoveryChoice('ROUGH','Rough')}${recoveryChoice('BUNKER','Bunker')}${recoveryChoice('FRINGE','Fringe')}${recoveryChoice('OTHER','Other')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="recoveryLie" value="${escapeHtml(stat.recoveryLie)}" /><div class="player-mode-derived"><span>Scrambling</span><strong>${recovery.success ? 'Converted' : 'Not converted'}</strong><small>Calculated from missed GIR and gross score${recovery.sandyOpportunity ? ' · Sand save opportunity' : ''}</small></div>` : ''}
+    ${advanced && derived.value === false ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Recovery lie</span><div class="player-mode-stat-options player-mode-five-options player-mode-recovery-options">${recoveryChoice('FAIRWAY','Fairway')}${recoveryChoice('ROUGH','Rough')}${recoveryChoice('BUNKER','Bunker')}${recoveryChoice('FRINGE','Fringe')}${recoveryChoice('OTHER','Other')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="recoveryLie" value="${escapeHtml(stat.recoveryLie)}" /><div class="player-mode-derived"><span>Scrambling</span><strong>${recovery.success ? 'Converted' : 'Not converted'}</strong><small>Calculated from missed GIR and gross score${recovery.sandyOpportunity ? ' · Sand save opportunity' : ''}</small></div>` : ''}
     <details class="player-mode-gir-override"><summary>Correct GIR for an edge case</summary><div class="player-mode-stat-options">${choice('greenOverride','','Calculated',stat.greenOverride === null)}${choice('greenOverride','true','Force GIR',stat.greenOverride === true)}${choice('greenOverride','false','Force miss',stat.greenOverride === false)}</div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="greenOverride" value="${stat.greenOverride === null ? '' : String(stat.greenOverride)}" /></details>
     <div class="player-mode-readback">${derived.value === null ? 'GIR remains unknown until both gross score and putts are recorded.' : `${derived.value ? 'Green in regulation' : (stat.approachResult !== 'UNKNOWN' ? `Missed ${String(approachLabels[stat.approachResult] || '').toLowerCase()}` : 'Missed GIR')}${recovery.opportunity ? ` · scramble ${recovery.success ? 'converted' : 'not converted'}` : ''}${stat.puttsSource !== 'default' ? ` · ${stat.putts} putt${stat.putts === 1 ? '' : 's'}` : ''}${stat.penaltyStrokes ? ` · ${stat.penaltyStrokes} penalty stroke${stat.penaltyStrokes === 1 ? '' : 's'}` : ''}.`}</div>` : ''}
   </div>`;
@@ -17779,7 +17822,7 @@ function renderStatTrackingEntry(match, hole, metrics) {
                     }
                     if (col.key === 'recoveryLie') {
                       if (derived.value !== false) return `<td><span class="tiny">${derived.value === true ? 'Not needed' : 'Pending GIR'}</span></td>`;
-                      return `<td><select class="stat-recovery-select" data-stat-player="${escapeHtml(p.playerId)}" data-stat-key="recoveryLie" aria-label="Recovery lie for ${escapeHtml(playerName)}" ${canEdit ? '' : 'disabled'}><option value="UNKNOWN" ${stat.recoveryLie === 'UNKNOWN' ? 'selected' : ''}>Select…</option><option value="ROUGH" ${stat.recoveryLie === 'ROUGH' ? 'selected' : ''}>Rough</option><option value="BUNKER" ${stat.recoveryLie === 'BUNKER' ? 'selected' : ''}>Bunker</option><option value="FRINGE" ${stat.recoveryLie === 'FRINGE' ? 'selected' : ''}>Fringe</option><option value="OTHER" ${stat.recoveryLie === 'OTHER' ? 'selected' : ''}>Other</option></select><small class="stat-recovery-result">Scramble ${recovery.success ? '✓' : 'No'}${recovery.sandyOpportunity ? ' · sand save opportunity' : ''}</small></td>`;
+                      return `<td><select class="stat-recovery-select" data-stat-player="${escapeHtml(p.playerId)}" data-stat-key="recoveryLie" aria-label="Recovery lie for ${escapeHtml(playerName)}" ${canEdit ? '' : 'disabled'}><option value="UNKNOWN" ${stat.recoveryLie === 'UNKNOWN' ? 'selected' : ''}>Select…</option><option value="FAIRWAY" ${stat.recoveryLie === 'FAIRWAY' ? 'selected' : ''}>Fairway</option><option value="ROUGH" ${stat.recoveryLie === 'ROUGH' ? 'selected' : ''}>Rough</option><option value="BUNKER" ${stat.recoveryLie === 'BUNKER' ? 'selected' : ''}>Bunker</option><option value="FRINGE" ${stat.recoveryLie === 'FRINGE' ? 'selected' : ''}>Fringe</option><option value="OTHER" ${stat.recoveryLie === 'OTHER' ? 'selected' : ''}>Other</option></select><small class="stat-recovery-result">Scramble ${recovery.success ? '✓' : 'No'}${recovery.sandyOpportunity ? ' · sand save opportunity' : ''}</small></td>`;
                     }
                     const label = 'Fairway hit';
                     return `<td><label class="stat-matrix-check" aria-label="${escapeHtml(label)}"><input type="checkbox" data-stat-player="${escapeHtml(p.playerId)}" data-stat-key="${escapeHtml(col.key)}" ${stat[col.key] ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span></span></label></td>`;

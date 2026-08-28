@@ -3,6 +3,8 @@
    or derived from it. Stroke allocation comes from the app's engine, keyed by
    basis; the report never re-derives handicapping.
    ========================================================================== */
+import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getWinningMarginPerspective } from './logic.js?v=31.0.12';
+
 const packPages = globalThis.packPages;
 const runGame = globalThis.runGame;
 const REFERENCE_ROUND = {
@@ -86,7 +88,7 @@ REFERENCE_ROUND.players.forEach((p,index)=>{
   };
 });
 const ROUND = globalThis.__DYE_LEDGER_ROUND__ || REFERENCE_ROUND;
-document.title = `The Dye Ledger — ${ROUND.meta.course}, ${new Intl.DateTimeFormat('en-US', {
+document.title = `Ledger Entry — ${ROUND.meta.course}, ${new Intl.DateTimeFormat('en-US', {
   month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC',
 }).format(new Date(`${ROUND.meta.date}T12:00:00Z`))}`;
 
@@ -233,7 +235,7 @@ const add = (id, build, opts={}) => BLOCKS.push({id,build,...opts});
 /* ---- hero ---- */
 add("hero", ()=>{
   const w = h("div",{style:"padding-bottom:2px"});
-  const label = FEAT ? `${FEAT.name} · ${FEAT.allowance.label}` : "No featured competition";
+  const label = FEAT ? composeCompetitionLabel(FEAT.name, FEAT.allowance.label) : "No featured competition";
   w.appendChild(h("div",{class:"eyebrow",text:"Featured Competition · "+label}));
   let head;
   if(WINK){
@@ -319,8 +321,8 @@ if(HAS_SIDES) add("strip", ()=>{
 });
 
 /* ---- featured competition chart ---- */
-if(FR) add("charth", ()=>secHead("Featured Competition by hole",
-  `${FEAT.name} · ${FEAT.allowance.label}`), {keepWithNext:true, label:"Result"});
+if(FR) add("charth", ()=>{ const perspective=getWinningMarginPerspective(MARGIN||{}); const side=FEAT.sides?.[perspective.sideIndex]; return secHead("Featured Competition by hole",
+  `${composeCompetitionLabel(FEAT.name, FEAT.allowance.label)}${MARGIN&&side?` · Winning Side perspective: ${SIDES[side.key].name}`:""}`); }, {keepWithNext:true, label:"Result"});
 if(FR) add("chart", ()=>{ const w=h("div"); w.innerHTML=chartSVG(); return w; });
 
 /* One geometry for every archetype. The label stack below the plot was carrying
@@ -372,10 +374,13 @@ function chartSVG(){
 
 function marginChart(){
   const {x0,x1,y0,y1}=CH;
-  const CUM=MARGIN.cum;
+  const perspective=getWinningMarginPerspective(MARGIN);
+  const CUM=MARGIN.cum.map(value=>value*perspective.sign);
   const lo=Math.min(-1,...CUM), hi=Math.max(1,...CUM)+1;
   const Y=v=>y1-(v-lo)/(hi-lo)*(y1-y0), X=i=>x0+(x1-x0)*i/NH, zero=Y(0);
-  const colOf = v => v>0?SIDES[FEAT.sides[1].key].color:SIDES[FEAT.sides[0].key].color;
+  const perspectiveKey=FEAT.sides[perspective.sideIndex].key;
+  const opposingKey=FEAT.sides[perspective.sideIndex===0?1:0].key;
+  const colOf = v => v>0?SIDES[perspectiveKey].color:SIDES[opposingKey].color;
   let d=`M${X(0)} ${zero}`, fills="";
   for(let i=1;i<=NH;i++){
     d += ` L${X(i-1)} ${Y(CUM[i])} L${X(i)} ${Y(CUM[i])}`;
@@ -392,21 +397,21 @@ function marginChart(){
     <line x1="${X(tp.i+1)}" y1="${y0}" x2="${X(tp.i+1)}" y2="${CH.ribbonBot}" stroke="#B0821F" stroke-width=".8"/>
     <text x="${(X(tp.i)+X(tp.i+1))/2}" y="${y0-6}" text-anchor="middle" font-family="Archivo"
       font-weight="600" font-size="6.6" letter-spacing="1.4" fill="#B0821F">TURNING POINT</text>`:"";
-  const sgn = 1;
+  const sgn = perspective.sign;
   const segLab = MARGIN.segments.map(s=>{
     const mid=(X(s.idx[0])+X(s.idx[s.idx.length-1]+1))/2;
     const v=s.margin*sgn;
-    const txt = v===0?"ALL SQUARE":`${SIDES[FEAT.sides[v>0?1:0].key].name.toUpperCase()} ${Math.abs(v)} UP`;
+    const txt = v===0?"ALL SQUARE":`${SIDES[v>0?perspectiveKey:opposingKey].name.toUpperCase()} ${Math.abs(v)} UP`;
     return `<text x="${mid}" y="${CH.segY}" text-anchor="middle" font-family="Archivo" font-weight="600"
       font-size="6.4" letter-spacing="1.4" fill="#6E736C">${s.label.toUpperCase()} ${txt}</text>`;
   }).join("");
   const inner = `${grid}${band}${fills}
-    <path d="${d}" fill="none" stroke="${WINK?SIDES[WINK].color:'#6E736C'}" stroke-width="2.2" stroke-linejoin="miter"/>
+    <path d="${d}" fill="none" stroke="${SIDES[perspectiveKey].color}" stroke-width="2.2" stroke-linejoin="miter"/>
     <line x1="${x0}" y1="${zero}" x2="${x1}" y2="${zero}" stroke="#14211C" stroke-width="1.4"/>
     <text x="${x0-8}" y="${zero+2.6}" text-anchor="end" font-family="Archivo" font-weight="600"
       font-size="6.6" letter-spacing=".8" fill="#14211C">AS</text>
     <text x="${x1}" y="${Y(MARGIN.total)-8}" text-anchor="end" font-family="Archivo" font-weight="700"
-      font-size="10" fill="${WINK?SIDES[WINK].color:'#6E736C'}">${Math.abs(MARGIN.total)} UP</text>`;
+      font-size="10" fill="${SIDES[perspectiveKey].color}">${MARGIN.total===0?'AS':`${Math.abs(MARGIN.total)} UP`}</text>`;
   return chartFrame(inner,yAxisLabel("MATCH MARGIN · HOLES"),segLab);
 }
 
@@ -465,18 +470,14 @@ if(FR && FR.turning) add("turning", ()=>{
   const tp=FR.turning, i=tp.i, hole=HOLES[i];
   let body="";
   if(MARGIN){
-    const heroes = sideOf(WINK).map(p=>({p,v:p.fnet[i]})).sort((a,b)=>a.v-b.v).slice(0,FEAT.bestN||2);
-    const opp = MARGIN.per[i][WINK===FEAT.sides[1].key?"a":"b"];
-    body = `<b>${listw(heroes.map(x=>x.p.name))}</b> both post net ${heroes[0].v} against
-      ${an(SIDES[LOSEK].name)} best ${wn(FEAT.bestN||2)} of ${opp}. The hole swings ${tp.gain}
-      and puts ${SIDES[WINK].name} ${Math.abs(MARGIN.cum[i+1])} up — a lead they never surrender.`;
+    body = describeMarginTurningPoint({ margin:MARGIN, game:FEAT, sides:SIDES, players:P, holeIndex:i });
   } else if(FR.archetype==="cumulative"){
     body = `<b>${nameOf(FR.winner.id)}</b> takes the lead here and holds it to the end.`;
   } else {
     body = `<b>${tp.winner?nameOf(tp.winner):"Carry"}</b> takes the largest pot of the round, ${usd(tp.value)}.`;
   }
   w.innerHTML = `<div class="k">Turning point · Hole ${hole} · Par ${C.par[i]} · ${qty(C.yds[i])} yds · SI ${C.si[i]}</div>
-    <p>${body} Highest-leverage hole of the round on margin moved and holes remaining.</p>`;
+    <p>${body} Selected by the featured competition’s deterministic turning-point rule.</p>`;
   return w;
 });
 
@@ -683,7 +684,7 @@ add("lbh", ()=>secHead("Player leaderboard",
 add("lb", ()=>{
   const money = HAS_MONEY;
   const cols = [
-    ["l","Player","26%"],["n","Idx","6%"],["n","CH","5%"],
+    ["l","Player","26%"],["n","Idx","6%"],["n",NH<18?"CH /<br>alloc.":"CH","5%"],
     ...(NH>9?[["n","Out","6%"],["n","In","6%"]]:[]),
     ["n","Gross","7%"],["n","Net<br>full CH","9%"],["n","To<br>par","6%"],
     ["n","Net<br>featured","9%"],["n","Bird","6%"],["n","Dbl+","6%"],
@@ -694,7 +695,7 @@ add("lb", ()=>{
     const dbl=p.delta.filter(d=>d>=2).length;
     const tp=p.cnetT-p.parPlayed;
     return `<tr data-row><td class="l">${nameCell(p)}</td>
-      <td class="n dim">${p.index.toFixed(1)}</td><td class="n dim">${p.ch}</td>
+      <td class="n dim">${p.index.toFixed(1)}</td><td class="n dim">${NH<18?`${p.ch} / ${sum(p.strokes.courseNet)}`:p.ch}</td>
       ${NH>9?`<td class="n">${p.out}</td><td class="n">${p.inn}</td>`:""}
       <td class="n"><b>${p.tot}</b></td><td class="n">${p.cnetT}</td>
       <td class="n">${tp===0?"E":(tp>0?"+":"")+tp}</td><td class="n">${p.fnetT}</td>
@@ -705,7 +706,7 @@ add("lb", ()=>{
   const w=h("div");
   w.innerHTML=`<table><colgroup>${cols.map(c=>`<col style="width:${c[2]}">`).join("")}</colgroup>
     <thead data-rowhead><tr>${cols.map(c=>`<th class="${c[0]}">${c[1]}</th>`).join("")}</tr></thead>
-    <tbody>${rows}</tbody></table>`;
+    <tbody>${rows}</tbody></table>${NH<18?'<div class="note" style="padding-top:6px">CH IS THE 18-HOLE COURSE HANDICAP BASIS; ALLOC. IS THE NUMBER OF COURSE-NET STROKES APPLIED TO THIS NINE.</div>':''}`;
   return w;
 }, {splittable:true, minRows:3});
 
@@ -843,13 +844,14 @@ SIDEGAMES.forEach((g,gi)=>{
          <thead data-rowhead><tr><th class="l">Hole</th><th class="n">Yds</th><th class="l">Winner</th><th class="n">Pot</th></tr></thead>
          <tbody>${rows}</tbody></table>`}));
       const pos=P.slice().sort((a,b)=>(g.moneyBy[b.id]||0)-(g.moneyBy[a.id]||0));
+      const potentialPots=(g.R.per?.length||0)*(Number(g.R.pot)||0);
       w.appendChild(h("div",{html:
-        `<div class="subhead">Net position<span>${usd(g.R.grossFlow)} gross · ${usd(g.R.netFlow)} net</span></div>
+        `<div class="subhead">Net position<span>${usd(potentialPots)} potential pots · ${usd(g.R.netFlow)} settled net</span></div>
          <table class="dense"><colgroup><col style="width:64%"><col style="width:36%"></colgroup><tbody>
          ${pos.map(p=>`<tr data-row><td class="l">${nameCell(p)}</td>
            <td class="n ${(g.moneyBy[p.id]||0)<0?'neg':'pos'}">${acct(g.moneyBy[p.id]||0)}</td></tr>`).join("")}
          </tbody></table>
-         <div class="note" style="margin-top:6px">${usd(g.R.stake)} FROM EACH OF THE OTHER ${P.length-1} PLAYERS, SO THE POT ON ANY ONE HOLE IS ${usd(g.R.pot)}. A SEPARATE GAME FROM THE FEATURED COMPETITION; IT SETTLES INDEPENDENTLY.</div>`}));
+         <div class="note" style="margin-top:6px">${usd(g.R.stake)} FROM EACH OF THE OTHER ${plur(P.length-1,"player").toUpperCase()}, SO THE POT ON ANY ONE HOLE IS ${usd(g.R.pot)}. ${describeFinalCarry(g.R,P.length).toUpperCase()} A SEPARATE GAME FROM THE FEATURED COMPETITION; IT SETTLES INDEPENDENTLY.</div>`}));
     } else {
       const pos=P.slice().sort((a,b)=>(g.moneyBy[b.id]||0)-(g.moneyBy[a.id]||0));
       w.appendChild(h("div",{html:`<div class="subhead">Net position</div>
@@ -891,8 +893,9 @@ if(!P.some(p=>p.statistics)) add("stats", ()=>{
   return w;
 }, {splittable:true, minRows:3});
 
-if(P.some(p=>p.statistics)) add("stats", ()=>{
-  const w=h("div");
+const TRACKED_PLAYERS=P.filter(p=>p.statistics?.tracked?.trackedHoles);
+function buildTrackedStatisticsPage(page){
+  const w=h("div",{class:`ledger-stat-page ledger-stat-page-${page}`});
   const MIN_RATE_SAMPLE=5;
   const obj=v=>v&&typeof v==="object"?v:{};
   const num=v=>Number.isFinite(Number(v))?Number(v):0;
@@ -905,7 +908,7 @@ if(P.some(p=>p.statistics)) add("stats", ()=>{
     return `<tr data-row><td class="l">${nameCell(p)}</td><td class="n">${holes||"—"}</td><td class="n">${avg(p.tot,holes)}</td>
       <td class="n">${rate(s.birdieOrBetter,holes)}</td><td class="n">${rate(s.parOrBetter,holes)}</td><td class="n">${rate(s.bogeyOrBetter,holes)}</td>
       <td class="n">${num(t.trackedHoles)?rate(num(t.trackedHoles)-num(t.penaltyHoles),t.trackedHoles):"—"}</td></tr>`; }).join("");
-  w.innerHTML=table("Scoring","Completed, scored holes; rates show count/sample.",
+  if(page==="performance") w.innerHTML=table("Scoring","Completed, scored holes; rates show count/sample.",
     ["Player","Holes","Gross avg","Birdie+","Par+","Double avoid.","Penalty-free"],scoring);
   const tracked=P.filter(p=>p.statistics?.tracked?.trackedHoles);
   if(tracked.length){
@@ -913,63 +916,71 @@ if(P.some(p=>p.statistics)) add("stats", ()=>{
       <td class="n">${rate(t.fairwaysHit,t.fairwayOpps)}</td><td class="n">${rate(t.greens,t.greenOpps)}</td><td class="n">${rate(s.convertedGreens,s.greensInRegulation)}</td>
       <td class="n">${rate(s.fairwayHitGirs,s.fairwayHitOpportunities)}</td><td class="n">${rate(s.fairwayMissedGirs,s.fairwayMissedOpportunities)}</td>
       <td class="n">${Number.isFinite(s.fairwayGirAdvantage)?`${s.fairwayGirAdvantage>=0?"+":""}${Math.round(s.fairwayGirAdvantage*100)} pp`:"—"}</td></tr>`; }).join("");
-    w.innerHTML+=table("Ball Striking","Recorded tracked holes only; GIR birdie conversion includes par-5 greens reached in two.",
+    if(page==="performance") w.innerHTML+=table("Ball Striking","Recorded tracked holes only; GIR birdie conversion includes par-5 greens reached in two.",
       ["Player","Tracked","Fairways","GIR","Birdie+ / GIR","GIR / FW hit","GIR / FW miss","FW advantage"],ball);
     const short=tracked.map(p=>{ const t=obj(p.statistics.tracked); return `<tr data-row><td class="l">${nameCell(p)}</td><td class="n">${num(t.trackedHoles)}</td>
       <td class="n">${num(t.puttOpps)?num(t.putts):"—"}</td><td class="n">${avg(t.putts,t.puttOpps)}</td><td class="n">${rate(t.upAndDowns,t.scramblingOpps)}</td><td class="n">${rate(t.sandies,t.sandSaveOpps)}</td></tr>`; }).join("");
-    w.innerHTML+=table("Short Game & Recovery","Only recorded opportunities enter each denominator.",
+    if(page==="performance") w.innerHTML+=table("Short Game & Recovery","Only recorded opportunities enter each denominator.",
       ["Player","Tracked","Putts","Putts / hole","Scrambling","Sand saves"],short);
 
-    const lies=["ROUGH","BUNKER","FRINGE","OTHER"];
+    const lies=["FAIRWAY","ROUGH","BUNKER","FRINGE","OTHER"];
     if(tracked.some(p=>lies.some(k=>num(obj(obj(p.statistics.tracked).recoveryByLie)[k]?.opportunities)))){
       const rows=tracked.map(p=>{ const r=obj(obj(p.statistics.tracked).recoveryByLie); return `<tr data-row><td class="l">${nameCell(p)}</td>${lies.map(k=>`<td class="n">${rate(obj(r[k]).successes,obj(r[k]).opportunities)}</td>`).join("")}</tr>`; }).join("");
-      w.innerHTML+=table("Recovery by Lie","Scrambling success from the recorded lie; unknown lies are excluded.",
-        ["Player","Rough","Bunker","Fringe","Other"],rows);
+      if(page==="performance") w.innerHTML+=table("Recovery by Lie","Scrambling success from the recorded lie; unknown lies are excluded.",
+        ["Player","Fairway","Rough","Bunker","Fringe","Other"],rows);
     }
 
     const fwKeys=["HIT","LEFT","RIGHT"];
     if(tracked.some(p=>fwKeys.some(k=>num(obj(obj(p.statistics.tracked).fairwayOutcomes)[k]?.opportunities)))){
       const rows=tracked.map(p=>{ const f=obj(obj(p.statistics.tracked).fairwayOutcomes); return `<tr data-row><td class="l">${nameCell(p)}</td>${fwKeys.map(k=>`<td class="n">${num(obj(f[k]).opportunities)||"—"}</td>`).join("")}</tr>`; }).join("");
-      w.innerHTML+=table("Tee-Shot Dispersion","Recorded par-4 and par-5 tee-shot outcomes.",
+      if(page==="patterns") w.innerHTML+=table("Tee-Shot Dispersion","Recorded par-4 and par-5 tee-shot outcomes.",
         ["Player","Hit","Miss left","Miss right"],rows);
       const consequence=tracked.map(p=>{ const f=obj(obj(p.statistics.tracked).fairwayOutcomes); return `<tr data-row><td class="l">${nameCell(p)}</td>${fwKeys.map(k=>{const x=obj(f[k]);return `<td class="n">${num(x.opportunities)?`${signed(num(x.scoreToPar)/num(x.opportunities))} <span class="dim">· ${rate(num(x.opportunities)-num(x.penaltyHoles),x.opportunities)} clean</span>`:"—"}</td>`;}).join("")}</tr>`; }).join("");
-      w.innerHTML+=table("Tee-Shot Consequences","Average score to par; “clean” means no recorded penalty on the hole.",
+      if(page==="patterns") w.innerHTML+=table("Tee-Shot Consequences","Average score to par; “clean” means no recorded penalty on the hole.",
         ["Player","Hit","Miss left","Miss right"],consequence);
     }
 
     const posKeys=["7","8","9","4","5","6","1","2","3"];
     if(tracked.some(p=>posKeys.some(k=>num(obj(obj(p.statistics.tracked).approachPositions)[k])))){
       const rows=tracked.map(p=>{ const a=obj(obj(p.statistics.tracked).approachPositions); return `<tr data-row><td class="l">${nameCell(p)}</td>${posKeys.map(k=>`<td class="n">${num(a[k])||"—"}</td>`).join("")}</tr>`; }).join("");
-      w.innerHTML+=table("Approach Dispersion","3×3 target map: 7–9 long, 4–6 pin-high, 1–3 short; 5 is GIR.",
+      if(page==="patterns") w.innerHTML+=table("Approach Dispersion","3×3 target map: 7–9 long, 4–6 pin-high, 1–3 short; 5 is GIR. Unknown locations are excluded and disclosed below.",
         ["Player","7","8","9","4","5 GIR","6","1","2","3"],rows);
     }
 
     if(tracked.some(p=>posKeys.some(k=>num(obj(obj(p.statistics.tracked).approachOutcomes)[k]?.scramblingOpps)))){
       const axes={Short:["1","2","3"],Left:["1","4","7"],Right:["3","6","9"],Long:["7","8","9"]};
       const rows=tracked.map(p=>{ const a=obj(obj(p.statistics.tracked).approachOutcomes); return `<tr data-row><td class="l">${nameCell(p)}</td>${Object.values(axes).map(keys=>{const d=keys.reduce((z,k)=>{const x=obj(a[k]);z.o+=num(x.scramblingOpps);z.s+=num(x.scrambles);return z;},{o:0,s:0});return `<td class="n">${rate(d.s,d.o)}</td>`;}).join("")}</tr>`; }).join("");
-      w.innerHTML+=table("Scrambling by Approach Miss","Directional axes overlap at corner misses; GIR is excluded.",
+      if(page==="patterns") w.innerHTML+=table("Scrambling by Approach Miss","Directional axes overlap at corner misses; GIR is excluded.",
         ["Player",...Object.keys(axes)],rows);
     }
 
     if(tracked.some(p=>num(p.statistics.tracked.puttOpps))){
       const rows=tracked.map(p=>{ const t=obj(p.statistics.tracked); return `<tr data-row><td class="l">${nameCell(p)}</td><td class="n">${rate(t.onePutts,t.puttOpps)}</td><td class="n">${rate(t.threePutts,t.puttOpps)}</td><td class="n">${avg(t.girPutts,t.girPuttOpps)}</td><td class="n">${avg(t.missedGirPutts,t.missedGirPuttOpps)}</td></tr>`; }).join("");
-      w.innerHTML+=table("Putting Context","Putts are counted by lie; unknown GIR holes do not enter GIR splits.",
+      if(page==="performance") w.innerHTML+=table("Putting Context","Putts are counted by lie; unknown GIR holes do not enter GIR splits.",
         ["Player","One-putt","Three-putt","Putts / GIR","Putts / missed GIR"],rows);
     }
 
     const parKeys=["3","4","5"];
     if(tracked.some(p=>parKeys.some(k=>num(obj(obj(p.statistics.tracked).parTypes)[k]?.opportunities)))){
       const rows=tracked.map(p=>{ const q=obj(obj(p.statistics.tracked).parTypes); return `<tr data-row><td class="l">${nameCell(p)}</td>${parKeys.map(k=>{const x=obj(q[k]);return `<td class="n">${num(x.opportunities)?`${signed(num(x.scoreToPar)/num(x.opportunities))} <span class="dim">(${num(x.opportunities)})</span>`:"—"}</td>`;}).join("")}</tr>`; }).join("");
-      w.innerHTML+=table("Performance by Par","Average score to par with recorded sample size.",
+      if(page==="performance") w.innerHTML+=table("Performance by Par","Average score to par with recorded sample size.",
         ["Player","Par 3","Par 4","Par 5"],rows);
     }
 
-    const complete=tracked.map(p=>{ const t=obj(p.statistics.tracked); return `<tr data-row><td class="l">${nameCell(p)}</td><td class="n">${num(t.trackedHoles)}</td><td class="n">${num(t.fairwayOpps)}</td><td class="n">${num(t.greenOpps)}</td><td class="n">${num(t.puttOpps)}</td><td class="n">${num(t.unknownGirHoles)}</td><td class="n">${num(t.missingRecoveryLies)}</td></tr>`; }).join("");
-    w.innerHTML+=table("Tracking Completeness","Unknown values are disclosed and excluded, never counted as misses.",
-      ["Player","Tracked","FW samples","GIR samples","Putt samples","GIR unknown","Lie unknown"],complete);
+    const complete=tracked.map(p=>{ const t=obj(p.statistics.tracked); const trackedHoles=num(t.trackedHoles); const recordedApproaches=num(t.approachOpps)||Object.values(obj(t.approachPositions)).reduce((total,value)=>total+num(value),0); const approachSamples=Math.min(trackedHoles,recordedApproaches); const approachUnknown=Math.max(0,trackedHoles-approachSamples); return `<tr data-row><td class="l">${nameCell(p)}</td><td class="n">${trackedHoles}</td><td class="n">${num(t.fairwayOpps)}</td><td class="n">${num(t.greenOpps)}</td><td class="n">${num(t.puttOpps)}</td><td class="n">${approachSamples}</td><td class="n">${approachUnknown}</td><td class="n">${num(t.unknownGirHoles)}</td><td class="n">${num(t.missingRecoveryLies)}</td></tr>`; }).join("");
+    if(page==="patterns") w.innerHTML+=table("Tracking Completeness","Unknown values are disclosed and excluded, never counted as misses.",
+      ["Player","Tracked","FW<br>samples","GIR<br>samples","Putt<br>samples","Approach<br>samples","Approach<br>unknown","GIR<br>unknown","Recovery<br>lie unknown"],complete);
   }
   return w;
-}, {splittable:true, minRows:3});
+}
+
+if(P.some(p=>p.statistics)) add("stats-performance", ()=>buildTrackedStatisticsPage("performance"), {splittable:true, minRows:3});
+if(TRACKED_PLAYERS.length){
+  add("statspatternsh", ()=>secHead("Player statistics · Shot patterns",
+    "Directional outcomes, consequences and tracking coverage."),
+    {keepWithNext:true, breakBefore:true, label:"Statistics"});
+  add("stats-patterns", ()=>buildTrackedStatisticsPage("patterns"), {splittable:true, minRows:3});
+}
 
 /* ---- appendix scorecards ---- */
 function scorecard(netKey, stkKey, label){
@@ -993,7 +1004,10 @@ function scorecard(netKey, stkKey, label){
         <span class="g">${mark(g,C.par[i])}</span>
         <span class="n">${mark(p[netKey][i],C.par[i])}<span class="stk">${dots}</span></span></td>`;}).join("");
     const t=v=>`<td class="cell tot"><span class="g">${v[0]}</span><span class="n">${v[1]}</span></td>`;
-    return `<tr data-row><td class="pl"><b>${p.name}</b><em>${HAS_SIDES?SIDES[p.side].name+" · ":""}${p.tee} · ${stkKey==='courseNet'?'CH '+p.ch:'PH '+p.ph}</em></td>
+    const handicapLabel=stkKey==='courseNet'
+      ? (NH<18?`CH ${p.ch} (18-hole basis) · ${sum(p.strokes.courseNet)} allocated`:`CH ${p.ch}`)
+      : `PH ${p.ph} · ${sum(p.strokes.featured)} allocated`;
+    return `<tr data-row><td class="pl"><b>${p.name}</b><em>${HAS_SIDES?SIDES[p.side].name+" · ":""}${p.tee} · ${handicapLabel}</em></td>
       ${cells}${NH>9?t([p.out,sum(p[netKey],0,half)])+t([p.inn,sum(p[netKey],half)]):""}
       ${t([p.tot,sum(p[netKey])])}</tr>`;}).join("");
   return `<table class="sc">${cols}<thead data-rowhead><tr><th>Player</th>
@@ -1031,7 +1045,7 @@ const SLUG = `${ROUND.meta.course} · ${fmtDate(ROUND.meta.date)}`;
 function makePage(n, total, label){
   const pg=h("div",{class:"page"});
   pg.appendChild(h("div",{class:"masthead",html:
-    `<div class="wordmark">THE DYE LEDGER${label?`<em>${label}</em>`:""}</div>
+    `<div class="wordmark">THE DYE LEDGER<span>LEDGER ENTRY</span>${label?`<em>${label}</em>`:""}</div>
      <div class="mast-meta">${SLUG}${n===1?`<span class="final${COMPLETE?"":" prov"}">${COMPLETE?"FINAL":"PROVISIONAL"}</span>`:""}</div>`}));
   pg.appendChild(h("div",{class:"tie"}));
   const flow=h("div",{class:"flow"});

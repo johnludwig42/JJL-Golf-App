@@ -43,12 +43,7 @@ function trackedSummaryFixture({ legacy = false } = {}) {
   return { rows: engine.computeStatTrackingSummary(liveMatch, metrics), engine };
 }
 
-test('v31.0.11 release identity and immutable assets are aligned', () => {
-  assert.equal(pkg.version, '31.0.11');
-  assert.equal(manifest.version, 'v31.0.11');
-  assert.match(app, /version: 'v31\.0\.11'/);
-  assert.match(app, /buildLabel: 'Player Memories and Four-Golfer Grind'/);
-  assert.match(html, /id="appVersionFooter">v31\.0\.11</);
+test('v31.0.11 immutable release assets remain available', () => {
   for (const name of ['app-icon-192', 'app-icon-512', 'apple-touch-icon', 'favicon-32', 'favicon-16']) {
     assert.equal(existsSync(new URL(`../branding/${name}-v31.0.11.png`, import.meta.url)), true);
   }
@@ -105,20 +100,22 @@ test('zero-tracked and partial legacy stats remain zero-filled without fabricate
   assert.equal(legacy.approachOpps, 0);
 });
 
-test('small-sample rates show fractions without percentages and the shared threshold applies to clean rates', () => {
-  assert.match(renderer, /const MIN_RATE_SAMPLE=5/);
-  assert.match(renderer, /num\(d\)<MIN_RATE_SAMPLE\?`<span class="dim">\(\$\{num\(n\)\}\/\$\{num\(d\)\}\)<\/span>`/);
-  assert.match(renderer, /rate\(num\(x\.opportunities\)-num\(x\.penaltyHoles\),x\.opportunities\)/);
+test('single-round rates always show percentages with supporting fractions', () => {
+  assert.doesNotMatch(renderer, /MIN_RATE_SAMPLE/);
+  assert.match(renderer, /Math\.round\(num\(n\)\/num\(d\)\*100\)/);
+  assert.doesNotMatch(renderer, /clean<\/span>/);
 });
 
 test('dedicated Ledger renders every advanced family only from available facts', () => {
-  for (const heading of ['Short Game & Recovery', 'Recovery by Lie', 'Tee-Shot Dispersion', 'Tee-Shot Consequences', 'Approach Dispersion', 'Scrambling by Approach Miss', 'Putting Context', 'Performance by Par', 'Tracking Completeness']) {
+  for (const heading of ['Short Game & Recovery', 'Recovery by Lie', 'Tee-Shot Results', 'Approach Dispersion', 'Scrambling by Approach Miss', 'Putting Context', 'Performance by Par', 'Tracking Completeness']) {
     assert.match(renderer, new RegExp(heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
   assert.match(renderer, /const obj=v=>v&&typeof v==="object"\?v:\{\}/);
   assert.match(renderer, /const num=v=>Number\.isFinite\(Number\(v\)\)\?Number\(v\):0/);
   assert.match(renderer, /Unknown values are disclosed and excluded, never counted as misses/);
   assert.match(renderer, /Only recorded opportunities enter each denominator/);
+  assert.match(renderer, /const posKeys=allPosKeys\.filter/);
+  assert.match(renderer, /rate\(count,known\)/);
   assert.doesNotMatch(renderer, /t\.upAndDowns<\/td><td class="n">\$\{t\.sandies/);
 });
 

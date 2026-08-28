@@ -54,7 +54,7 @@ test('Player Mode delegates to shared inputs and preserves explicit directional 
   assert.match(app, /data-stat-key="fairwayResult"/);
   assert.match(app, /data-stat-key="greenOverride"/);
   assert.match(app, /data-stat-key="approachResult"/);
-  assert.match(app, /Grind requires this device to score no more than two golfers/);
+  assert.match(app, /Grind is available when this device can edit no more than \$\{MAX_GRIND_EDITABLE_PLAYERS\} golfers/);
   assert.match(css, /player-input-mode-active/);
   assert.doesNotMatch(app, /function computePlayerModeMetrics|function syncPlayerMode|function buildPlayerModeReport/);
 });

@@ -16,11 +16,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.10',
-  versionNumber: '31.0.10',
-  cacheName: 'the-dye-ledger-v31.0.10',
-  buildDate: '2026-08-27T18:00:00-04:00',
-  buildLabel: 'Complete Grind Statistics Reporting'
+  version: 'v31.0.11',
+  versionNumber: '31.0.11',
+  cacheName: 'the-dye-ledger-v31.0.11',
+  buildDate: '2026-08-27T20:00:00-04:00',
+  buildLabel: 'Player Memories and Four-Golfer Grind'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -82,6 +82,7 @@ const STAT_TRACKING_MODES = Object.freeze({
   ENHANCED: Object.freeze({ key: 'ENHANCED', label: 'Enhanced' }),
   GRIND: Object.freeze({ key: 'GRIND', label: 'Grind' }),
 });
+const MAX_GRIND_EDITABLE_PLAYERS = 4;
 function normalizeStatTrackingMode(value, fallback = 'CASUAL') {
   const requested = String(value || '').trim().toUpperCase();
   return STAT_TRACKING_MODES[requested]?.key || STAT_TRACKING_MODES[fallback]?.key || STAT_TRACKING_MODES.CASUAL.key;
@@ -15306,6 +15307,24 @@ function renderRoundMemoriesPanel(match = getActiveMatch()) {
   panel.innerHTML = match ? buildMemoriesDisplay(match) : '<div class="tiny">Create or load a match to see memories.</div>';
 }
 let editingMemoryId = '';
+let memoryDeleteConfirmArmed = false;
+function canDeleteRoundMemory(match, memory) {
+  if (!canEditRoundMemory(match, memory)) return false;
+  if (match.storageMode === 'shared') return false;
+  return !['complete', 'completed'].includes(String(match.status || '').toLowerCase()) && !isFrozenRoundRecord(match.roundRecordSnapshot);
+}
+function removeRoundMemoryById(memories = [], memoryId = '') {
+  return (Array.isArray(memories) ? memories : []).filter(memory => String(memory.memoryId || memory.id) !== String(memoryId));
+}
+
+function getGrindEditablePlayerCount(match, metricPlayers = []) {
+  const visiblePlayers = getVisibleScoringPlayers(match, metricPlayers, { stats: true });
+  if (match?.storageMode === 'shared' && isAssignedPlayersMode(match)) {
+    const locallyAssignedPlayerIds = getSharedLocallyOwnedPlayerIds(match);
+    return visiblePlayers.filter(player => locallyAssignedPlayerIds.has(player.playerId)).length;
+  }
+  return visiblePlayers.filter(player => canEditPlayerScore(match, player.team, player.playerId)).length;
+}
 function openAddMemoryModal(memoryId = '') {
   const match = getActiveMatch();
   if (!match) return toast('Create or load a match first.');
@@ -15317,6 +15336,7 @@ function openAddMemoryModal(memoryId = '') {
   const existing = memoryId ? getRoundMemories(match).find(memory => String(memory.memoryId) === String(memoryId)) : null;
   if (existing && !canEditRoundMemory(match, existing)) return toast(match.status === 'completed' || isFrozenRoundRecord(match.roundRecordSnapshot) ? 'Completed-round Memories are preserved. Corrections will use Amendment Sessions.' : 'Shared Match Memories are append-only while conflict-safe editing is being completed.');
   editingMemoryId = existing?.memoryId || '';
+  memoryDeleteConfirmArmed = false;
   const maxHole = getPlayableHoleCount(match, getTee(match.courseId, match.teeId)) || 18;
   hole.innerHTML = Array.from({ length: maxHole }, (_, idx) => `<option value="${idx + 1}">Hole ${idx + 1}</option>`).join('');
   hole.value = String(Math.min(maxHole, Math.max(1, existing?.holeNumber || currentHole || 1)));
@@ -15324,8 +15344,14 @@ function openAddMemoryModal(memoryId = '') {
   text.value = existing?.text || '';
   const title = document.getElementById('addMemoryTitle');
   const save = document.getElementById('addMemorySaveBtn');
+  const remove = document.getElementById('deleteMemoryBtn');
   if (title) title.textContent = existing ? 'Edit Memory' : 'Add Memory';
   if (save) save.textContent = existing ? 'Save Changes' : 'Save Memory';
+  if (remove) {
+    remove.classList.toggle('hidden', !existing || !canDeleteRoundMemory(match, existing));
+    remove.textContent = 'Delete Memory';
+    remove.setAttribute('aria-pressed', 'false');
+  }
   backdrop.classList.remove('hidden');
   backdrop.setAttribute('aria-hidden', 'false');
   window.setTimeout(() => text.focus(), 50);
@@ -15339,6 +15365,35 @@ function closeAddMemoryModal() {
   }
   if (text) text.value = '';
   editingMemoryId = '';
+  memoryDeleteConfirmArmed = false;
+}
+function deleteMemoryFromModal() {
+  const match = getActiveMatch();
+  const existing = editingMemoryId ? getRoundMemories(match).find(memory => String(memory.memoryId) === String(editingMemoryId)) : null;
+  if (!match || !existing || !canDeleteRoundMemory(match, existing)) return toast('This Memory cannot be deleted from the current round.');
+  const remove = document.getElementById('deleteMemoryBtn');
+  if (!memoryDeleteConfirmArmed) {
+    memoryDeleteConfirmArmed = true;
+    if (remove) {
+      remove.textContent = 'Confirm Delete';
+      remove.setAttribute('aria-pressed', 'true');
+    }
+    return;
+  }
+  const priorMemories = match.memories;
+  match.memories = removeRoundMemoryById(match.memories, existing.memoryId);
+  if (!persist({ skipRender: true })) {
+    match.memories = priorMemories;
+    memoryDeleteConfirmArmed = false;
+    if (remove) {
+      remove.textContent = 'Delete Memory';
+      remove.setAttribute('aria-pressed', 'false');
+    }
+    return;
+  }
+  closeAddMemoryModal();
+  renderAll();
+  toast('Memory deleted.');
 }
 function saveMemoryFromModal() {
   const match = getActiveMatch();
@@ -16876,9 +16931,9 @@ function renderClassicPlayInputMode({ match, tee, metrics, scoringHoles, hole, c
 function getEffectivePlayerStatTrackingMode(match, metrics) {
   if (!isStatTrackingEnabled(match)) return { requested: 'NONE', active: 'NONE', grindRestricted: false };
   const requested = normalizeStatTrackingMode(match?.statTrackingMode || getPlayerPreferences().scoring.statTrackingMode);
-  const editableCount = getVisibleScoringPlayers(match, metrics?.players || [], { stats: true }).filter(player => canEditPlayerScore(match, player.team, player.playerId)).length;
-  const grindRestricted = requested === 'GRIND' && editableCount > 2;
-  return { requested, active: grindRestricted ? 'ENHANCED' : requested, grindRestricted };
+  const editableCount = getGrindEditablePlayerCount(match, metrics?.players || []);
+  const grindRestricted = requested === 'GRIND' && editableCount > MAX_GRIND_EDITABLE_PLAYERS;
+  return { requested, active: grindRestricted ? 'ENHANCED' : requested, grindRestricted, editableCount, maxEditablePlayers: MAX_GRIND_EDITABLE_PLAYERS };
 }
 function statTrackingModeIncludesApproachGrid(mode) {
   return ['ENHANCED', 'GRIND'].includes(normalizeStatTrackingMode(mode));
@@ -16978,7 +17033,7 @@ function renderPlayerModeStatEntry(match, hole, metrics) {
     <div class="player-mode-expanded-meta"><span>${escapeHtml(getPlayerHoleTeeInfo(match, selected, currentHole - 1, metrics?.tee).label)}${strokes > 0 ? ` · ${'●'.repeat(strokes)}` : ''}${Number.isFinite(net) ? ` · net ${net}` : ''}</span><span class="player-mode-stat-badge">${tracksStats ? mode.active.charAt(0) + mode.active.slice(1).toLowerCase() : 'Score only'}</span></div>
     <div class="player-mode-stat-section"><span class="player-mode-stat-label">Gross Score</span><div class="player-mode-score-choices player-mode-detail-score" role="group" aria-label="Gross score for ${escapeHtml(selected.player?.name || 'Player')}">${scoreChoices.map(value => `<button type="button" data-player-score-value="${value}" data-player-score-player="${escapeHtml(selected.playerId)}" class="${Number(gross) === value ? 'is-active' : ''}" ${canEdit ? '' : 'disabled'}><b>${value}</b><small>${escapeHtml(getPlayerModeScoreLabel(value, par))}</small></button>`).join('')}<label class="player-mode-more-score ${otherScoreSelected ? 'is-active' : ''}"><span>${otherScoreSelected ? escapeHtml(String(gross)) : 'Other'}</span><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" min="1" max="25" data-score-player="${escapeHtml(selected.playerId)}" data-score-locked="${canEdit ? '0' : '1'}" data-hole-par="${par}" value="${gross || ''}" ${canEdit ? '' : 'disabled'} /></label></div></div>
     ${tracksStats ? `<div class="tiny">Putts count only from the putting surface. Conceded putts count as a stroke and a putt.</div>
-    ${mode.grindRestricted ? '<div class="player-mode-warning">Grind requires this device to score no more than two golfers. Enhanced controls are shown.</div>' : ''}
+    ${mode.grindRestricted ? `<div class="player-mode-warning">Grind supports up to ${MAX_GRIND_EDITABLE_PLAYERS} golfers assigned to this device. Enhanced controls are shown for ${mode.editableCount} editable golfers.</div>` : ''}
     <div class="player-mode-stat-section"><span class="player-mode-stat-label">Putts</span><div class="player-mode-stat-options player-mode-six-options">${[0,1,2,3,4].map(value => choice('putts', value, value, stat.puttsSource !== 'default' && stat.putts === value)).join('')}<label class="player-mode-more-stat"><span>Other</span><input class="stat-putts-input" type="tel" inputmode="numeric" min="0" max="9" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="putts" data-putts-source="${escapeHtml(stat.puttsSource)}" value="${stat.puttsSource === 'default' ? '' : stat.putts}" ${canEdit ? '' : 'disabled'} /></label></div></div>
     <div class="player-mode-stat-section"><span class="player-mode-stat-label">Penalty strokes</span><div class="player-mode-stat-options">${[0,1,2].map(value => choice('penaltyStrokes', value, value, stat.penaltyStrokes === value)).join('')}</div></div>
     <input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="penaltyStrokes" value="${stat.penaltyStrokes}" />
@@ -17519,7 +17574,8 @@ function renderHoleSelector(match, scoringHoles = [], metrics = null) {
     const compactMatchStatus = metrics ? getPrimaryMatchStatusLine(match, metrics) : '';
     playerHeader.classList.remove('hidden');
     const roundStatMode = normalizeStatTrackingMode(match.statTrackingMode || (match.statTrackingEnabled ? 'CASUAL' : 'NONE'));
-    playerHeader.innerHTML = `<div class="player-mode-hole-title"><label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select><div class="player-mode-hole-meta">Par ${Number(hole?.par) || '—'}${Number.isFinite(yardage) && yardage > 0 ? ` · ${formatYardageValue(yardage)} yd` : ''} · SI ${Number(hole?.strokeIndex) || '—'}</div>${compactMatchStatus ? `<div class="player-mode-header-match-status"><span>Match</span><strong>${escapeHtml(compactMatchStatus)}</strong></div>` : ''}</div><div class="player-mode-header-actions"><div class="player-mode-header-meta"><div class="player-mode-save-state" aria-live="polite">Saved ✓</div><button type="button" class="secondary player-mode-overflow" data-player-mode-overflow aria-expanded="false" aria-controls="playerModeOverflowMenu" aria-label="More Play actions">•••</button></div><button type="button" class="player-mode-header-save-next" data-player-mode-save-next>Save &amp; Next Hole</button></div><div id="playerModeOverflowMenu" class="player-mode-overflow-menu hidden"><button type="button" class="secondary" data-player-mode-scoreboard>Open Scoreboard</button><label><span class="tiny">Scoring mode</span><select id="playerModeRoundScoringModeSelect" aria-label="Active round scoring mode">${Object.values(PLAY_INPUT_MODES).filter(mode => mode.available).map(mode => `<option value="${mode.key}" ${mode.key === (isPlayerMode ? 'PLAYER' : 'CLASSIC') ? 'selected' : ''}>${mode.label.replace(' Mode','')}</option>`).join('')}</select></label><label><span class="tiny">Stat mode</span><select id="playerModeRoundStatModeSelect" aria-label="Active round stat mode">${Object.values(STAT_TRACKING_MODES).map(mode => `<option value="${mode.key}" ${mode.key === roundStatMode ? 'selected' : ''}>${mode.label}</option>`).join('')}</select></label></div>`;
+    const memoryCount = getRoundMemories(match).length;
+    playerHeader.innerHTML = `<div class="player-mode-hole-title"><label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select><div class="player-mode-hole-meta">Par ${Number(hole?.par) || '—'}${Number.isFinite(yardage) && yardage > 0 ? ` · ${formatYardageValue(yardage)} yd` : ''} · SI ${Number(hole?.strokeIndex) || '—'}</div>${compactMatchStatus ? `<div class="player-mode-header-match-status"><span>Match</span><strong>${escapeHtml(compactMatchStatus)}</strong></div>` : ''}</div><div class="player-mode-header-actions"><div class="player-mode-header-meta"><div class="player-mode-save-state" aria-live="polite">Saved ✓</div><button type="button" class="secondary player-mode-overflow" data-player-mode-overflow aria-expanded="false" aria-controls="playerModeOverflowMenu" aria-label="More Play actions">•••</button></div><button type="button" class="player-mode-header-save-next" data-player-mode-save-next>Save &amp; Next Hole</button></div><div id="playerModeOverflowMenu" class="player-mode-overflow-menu hidden"><button type="button" class="secondary" data-player-mode-scoreboard>Open Scoreboard</button><button type="button" class="secondary" data-player-mode-add-memory>Add Memory${memoryCount ? ` (${memoryCount})` : ''}</button><label><span class="tiny">Scoring mode</span><select id="playerModeRoundScoringModeSelect" aria-label="Active round scoring mode">${Object.values(PLAY_INPUT_MODES).filter(mode => mode.available).map(mode => `<option value="${mode.key}" ${mode.key === (isPlayerMode ? 'PLAYER' : 'CLASSIC') ? 'selected' : ''}>${mode.label.replace(' Mode','')}</option>`).join('')}</select></label><label><span class="tiny">Stat mode</span><select id="playerModeRoundStatModeSelect" aria-label="Active round stat mode">${Object.values(STAT_TRACKING_MODES).map(mode => `<option value="${mode.key}" ${mode.key === roundStatMode ? 'selected' : ''}>${mode.label}</option>`).join('')}</select></label></div>`;
     if (badge) badge.innerHTML = '';
     return;
   }
@@ -19388,9 +19444,9 @@ function syncRoundTrackingModeSetup(source = '', values = null) {
   }
   if (!enabledToggle.checked && statSelect.value !== 'NONE') statSelect.value = 'NONE';
   const selectedCount = getSelectedPlayersFromSetup().length;
-  if (help) help.textContent = statSelect.value === 'GRIND' && selectedCount > 2
-    ? `Grind will safely use Enhanced on this device while it is scoring ${selectedCount} golfers. Grind activates only at two or fewer.`
-    : 'Grind is available only when this device scores no more than two golfers.';
+  if (help) help.textContent = statSelect.value === 'GRIND' && selectedCount > MAX_GRIND_EDITABLE_PLAYERS
+    ? `For single-device scoring, Grind will safely use Enhanced with ${selectedCount} golfers. Shared assigned-player scoring evaluates the golfers assigned to each device.`
+    : `Grind is available when this device can edit no more than ${MAX_GRIND_EDITABLE_PLAYERS} golfers.`;
 }
 function renderStatTrackingPlayerSelector(explicitIds = null) {
   const wrap = document.getElementById('statTrackingPlayersWrap');
@@ -21973,6 +22029,10 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       openQuickScoreboardView();
       return;
     }
+    if (e.target.closest('[data-player-mode-add-memory]')) {
+      openAddMemoryModal();
+      return;
+    }
     const otherScore = e.target.closest('[data-player-mode-other-player]');
     if (otherScore) {
       const row = document.querySelector(`[data-player-mode-row="${cssEscape(otherScore.dataset.playerModeOtherPlayer || '')}"]`);
@@ -22893,6 +22953,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('scoreboardShareRoundBtn').addEventListener('click', () => { openPrintScorecard(); });
   document.getElementById('saveScoresBtn').addEventListener('click', () => { saveCurrentHole(); });
   document.getElementById('addMemorySaveBtn')?.addEventListener('click', saveMemoryFromModal);
+  document.getElementById('deleteMemoryBtn')?.addEventListener('click', deleteMemoryFromModal);
   document.getElementById('roundMemoriesPanel')?.addEventListener('click', event => {
     const id = event.target.closest('[data-edit-memory]')?.dataset.editMemory;
     if (id) openAddMemoryModal(id);
@@ -24022,8 +24083,11 @@ function installDyeLedgerLiveEngineAdapter() {
     normalizePlayInputMode,
     normalizeStatTrackingMode,
     deriveGreenInRegulation,
-    deriveScramblingResult,
+        deriveScramblingResult,
         getEffectivePlayerStatTrackingMode,
+        getGrindEditablePlayerCount,
+        canDeleteRoundMemory,
+        removeRoundMemoryById,
         statTrackingModeIncludesApproachGrid,
         getPreferredPlayInputMode,
         getEffectivePlayInputMode,

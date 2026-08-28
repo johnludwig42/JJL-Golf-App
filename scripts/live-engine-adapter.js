@@ -39,11 +39,16 @@ const UNSUPPORTED_LIVE_AREAS = [
 
 function createBrowserShim() {
   const sandbox = { console, setTimeout, clearTimeout, Math, Date, Intl, URL, URLSearchParams };
+  const localStorageValues = new Map();
   sandbox.window = sandbox;
   sandbox.self = sandbox;
   sandbox.globalThis = sandbox;
   sandbox.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__ = true;
-  sandbox.localStorage = { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+  sandbox.localStorage = {
+    getItem: key => localStorageValues.has(String(key)) ? localStorageValues.get(String(key)) : null,
+    setItem: (key, value) => localStorageValues.set(String(key), String(value)),
+    removeItem: key => localStorageValues.delete(String(key)),
+  };
   sandbox.navigator = { userAgent: 'node-live-engine-adapter', serviceWorker: null };
   sandbox.location = { href: 'http://localhost/live-engine-adapter', pathname: '/' };
   sandbox.addEventListener = () => {};

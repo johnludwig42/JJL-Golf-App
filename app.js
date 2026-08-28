@@ -16,11 +16,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.09',
-  versionNumber: '31.0.09',
-  cacheName: 'the-dye-ledger-v31.0.09',
-  buildDate: '2026-08-27T16:00:00-04:00',
-  buildLabel: 'Release Assurance and Offline Ledger Reliability'
+  version: 'v31.0.10',
+  versionNumber: '31.0.10',
+  cacheName: 'the-dye-ledger-v31.0.10',
+  buildDate: '2026-08-27T18:00:00-04:00',
+  buildLabel: 'Complete Grind Statistics Reporting'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -10567,8 +10567,8 @@ function computeStatTrackingSummary(match, metrics) {
   const trackedPlayers = (metrics?.players || []).filter(playerMetric => isPlayerStatTrackingEnabled(match, playerMetric.playerId));
   const summary = trackedPlayers.map(playerMetric => {
     const playerRef = match.players.find(row => row.playerId === playerMetric.playerId);
-    const emptyOutcome = () => ({ opportunities: 0, scoreToPar: 0, girs: 0, penalties: 0 });
-    const totals = { trackedHoles: 0, fairwaysHit: 0, fairwayOpps: 0, greens: 0, greenOpps: 0, unknownGirHoles: 0, putts: 0, puttOpps: 0, onePutts: 0, threePutts: 0, girPutts: 0, girPuttOpps: 0, missedGirPutts: 0, missedGirPuttOpps: 0, penaltyStrokes: 0, upAndDowns: 0, scramblingOpps: 0, missingRecoveryLies: 0, sandies: 0, sandSaveOpps: 0, fairwayOutcomes: { HIT: emptyOutcome(), LEFT: emptyOutcome(), RIGHT: emptyOutcome() }, recoveryByLie: { ROUGH: { opportunities: 0, successes: 0 }, BUNKER: { opportunities: 0, successes: 0 }, FRINGE: { opportunities: 0, successes: 0 }, OTHER: { opportunities: 0, successes: 0 } }, parTypes: { '3': emptyOutcome(), '4': emptyOutcome(), '5': emptyOutcome() }, approachOpps: 0, approachMisses: 0, approachPositions: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 0, '8': 0, '9': 0 }, approachOutcomes: { '1': emptyOutcome(), '2': emptyOutcome(), '3': emptyOutcome(), '4': emptyOutcome(), '5': emptyOutcome(), '6': emptyOutcome(), '7': emptyOutcome(), '8': emptyOutcome(), '9': emptyOutcome() } };
+    const emptyOutcome = () => ({ opportunities: 0, scoreToPar: 0, girs: 0, penalties: 0, penaltyHoles: 0, scramblingOpps: 0, scrambles: 0 });
+    const totals = { trackedHoles: 0, fairwaysHit: 0, fairwayOpps: 0, greens: 0, greenOpps: 0, unknownGirHoles: 0, putts: 0, puttOpps: 0, onePutts: 0, threePutts: 0, girPutts: 0, girPuttOpps: 0, missedGirPutts: 0, missedGirPuttOpps: 0, penaltyStrokes: 0, penaltyHoles: 0, upAndDowns: 0, scramblingOpps: 0, missingRecoveryLies: 0, sandies: 0, sandSaveOpps: 0, fairwayOutcomes: { HIT: emptyOutcome(), LEFT: emptyOutcome(), RIGHT: emptyOutcome() }, recoveryByLie: { ROUGH: { opportunities: 0, successes: 0 }, BUNKER: { opportunities: 0, successes: 0 }, FRINGE: { opportunities: 0, successes: 0 }, OTHER: { opportunities: 0, successes: 0 } }, parTypes: { '3': emptyOutcome(), '4': emptyOutcome(), '5': emptyOutcome() }, approachOpps: 0, approachMisses: 0, approachPositions: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 0, '8': 0, '9': 0 }, approachOutcomes: { '1': emptyOutcome(), '2': emptyOutcome(), '3': emptyOutcome(), '4': emptyOutcome(), '5': emptyOutcome(), '6': emptyOutcome(), '7': emptyOutcome(), '8': emptyOutcome(), '9': emptyOutcome() } };
     (metrics?.holeResults || []).forEach((holeResult, holeIdx) => {
       if (!holeResult?.completed) return;
       const scoreObj = holeResult?.playerScores?.find(ps => ps.playerId === playerMetric.playerId);
@@ -10579,13 +10579,14 @@ function computeStatTrackingSummary(match, metrics) {
       totals.trackedHoles += 1;
       const par = Number(hole?.par) || Number(scoreObj?.par) || 0;
       const scoreToPar = Number(scoreObj.gross) - par;
+      const penaltyStrokes = Math.max(0, Number(stat.penaltyStrokes || 0));
       const parType = totals.parTypes[String(par)];
-      if (parType) { parType.opportunities += 1; parType.scoreToPar += scoreToPar; parType.penalties += Number(stat.penaltyStrokes || 0); }
+      if (parType) { parType.opportunities += 1; parType.scoreToPar += scoreToPar; parType.penalties += penaltyStrokes; if (penaltyStrokes) parType.penaltyHoles += 1; }
       if (par === 4 || par === 5) {
         totals.fairwayOpps += 1;
         if (stat.fairway) totals.fairwaysHit += 1;
         const fairwayOutcome = totals.fairwayOutcomes[String(stat.fairwayResult || '')];
-        if (fairwayOutcome) { fairwayOutcome.opportunities += 1; fairwayOutcome.scoreToPar += scoreToPar; fairwayOutcome.penalties += Number(stat.penaltyStrokes || 0); }
+        if (fairwayOutcome) { fairwayOutcome.opportunities += 1; fairwayOutcome.scoreToPar += scoreToPar; fairwayOutcome.penalties += penaltyStrokes; if (penaltyStrokes) fairwayOutcome.penaltyHoles += 1; }
       }
       if (stat.greenSource !== 'unknown') {
         totals.greenOpps += 1;
@@ -10601,7 +10602,8 @@ function computeStatTrackingSummary(match, metrics) {
         const outcome = totals.approachOutcomes[approachResult];
         outcome.opportunities += 1;
         outcome.scoreToPar += scoreToPar;
-        outcome.penalties += Number(stat.penaltyStrokes || 0);
+        outcome.penalties += penaltyStrokes;
+        if (penaltyStrokes) outcome.penaltyHoles += 1;
         if (stat.green) outcome.girs += 1;
       }
       if (Number.isFinite(stat.putts) && stat.puttsSource !== 'default') {
@@ -10612,7 +10614,8 @@ function computeStatTrackingSummary(match, metrics) {
         if (stat.greenSource !== 'unknown' && stat.green) { totals.girPutts += stat.putts; totals.girPuttOpps += 1; }
         if (stat.greenSource !== 'unknown' && !stat.green) { totals.missedGirPutts += stat.putts; totals.missedGirPuttOpps += 1; }
       }
-      if (Number.isFinite(Number(stat.penaltyStrokes))) totals.penaltyStrokes += Number(stat.penaltyStrokes);
+      if (Number.isFinite(Number(stat.penaltyStrokes))) totals.penaltyStrokes += penaltyStrokes;
+      if (penaltyStrokes) totals.penaltyHoles += 1;
       const recovery = deriveScramblingResult({ gross: scoreObj.gross, par, green: stat.green, greenSource: stat.greenSource, recoveryLie: stat.recoveryLie });
       if (recovery.opportunity) totals.scramblingOpps += 1;
       if (recovery.success) totals.upAndDowns += 1;
@@ -10623,6 +10626,11 @@ function computeStatTrackingSummary(match, metrics) {
       if (recovery.opportunity && totals.recoveryByLie[recoveryLie]) {
         totals.recoveryByLie[recoveryLie].opportunities += 1;
         if (recovery.success) totals.recoveryByLie[recoveryLie].successes += 1;
+      }
+      const approachOutcome = totals.approachOutcomes[approachResult];
+      if (recovery.opportunity && approachOutcome) {
+        approachOutcome.scramblingOpps += 1;
+        if (recovery.success) approachOutcome.scrambles += 1;
       }
     });
     return { playerMetric, totals };
@@ -23947,8 +23955,9 @@ function installDyeLedgerLiveEngineAdapter() {
     emailAppDiagnostics,
     computePlayerRoundInsights,
     buildPlayerRoundInsights,
-        buildStatTrackingSummary,
-        getApproachDispersionSummary,
+    computeStatTrackingSummary,
+    buildStatTrackingSummary,
+    getApproachDispersionSummary,
     buildScoreDistributionPresentation,
     formatYardageValue,
     formatMomentumMoneyValue,

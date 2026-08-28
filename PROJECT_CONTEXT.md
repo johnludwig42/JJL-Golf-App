@@ -477,11 +477,15 @@ v31.0.07 introduces Player Mode, None/Casual/Enhanced/Grind stat capture, derive
 
 v31.0.08 removes duplicate Player Mode score entry and uses one collapsible score-and-stat card per golfer. Classic Mode and all shared calculation, persistence, synchronization, and reporting paths remain unchanged.
 
-## 31. Current development release — v31.0.09
+## 31. Completed release — v31.0.09
 
 v31.0.09 is a release-assurance and offline Ledger reliability release. The default test command automatically discovers every repository test file. Ledger Entry attempts an audited online Story first, but service, connectivity, timeout, length, or fact-verification failure discards that response and supplies a deterministic story built only from authoritative Round facts. The report is no longer blocked by Story service availability. This release changes no scoring, settlement, Shared Match, Course Library, localStorage, or database schema.
 
-## 32. Near-term sequence after v31.0.09
+## 32. Current development release — v31.0.10
+
+v31.0.10 expands the dedicated Ledger Entry statistics pages to use the advanced facts already captured in Enhanced and Grind modes. It adds recovery rates by lie, tee-shot dispersion and consequences, 3×3 approach dispersion, scrambling by approach-miss axis, putting context, performance by par, penalty-free rate, and tracking-completeness disclosure. Sections appear only when their required facts exist; unknown and partial inputs remain outside denominators. No scoring, settlement, Shared Match, Course Library, localStorage, or database schema changes are included.
+
+## 33. Near-term sequence after v31.0.10
 
 1. Complete real-device Player/Classic and two-device Shared Match acceptance.
 2. Continue Player Mode usability refinement without changing Classic Mode.

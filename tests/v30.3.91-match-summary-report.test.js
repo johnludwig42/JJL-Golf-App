@@ -61,6 +61,6 @@ test('shared reconciliation is compact status content rather than a standalone r
 });
 
 test('current release identity is consistent in the application source', () => {
-  assert.match(app, /version: 'v31\.0\.09'/);
-  assert.match(app, /buildLabel: 'Release Assurance and Offline Ledger Reliability'/);
+  assert.match(app, /version: 'v31\.0\.10'/);
+  assert.match(app, /buildLabel: 'Complete Grind Statistics Reporting'/);
 });

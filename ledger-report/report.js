@@ -68,8 +68,21 @@ REFERENCE_ROUND.players.forEach((p,index)=>{
     fairwayHitOpportunities:7, fairwayHitGirs:4,
     fairwayMissedOpportunities:7, fairwayMissedGirs:2,
     fairwayGirAdvantage:2/7,
-    tracked:{trackedHoles:18,fairwaysHit:7,fairwayOpps:14,greens,greenOpps:18,
-      putts:31+index%4,puttOpps:18,penaltyStrokes:index%3,upAndDowns:3,sandies:1},
+    tracked:{trackedHoles:18,fairwaysHit:7,fairwayOpps:14,greens,greenOpps:18,unknownGirHoles:0,
+      putts:31+index%4,puttOpps:18,onePutts:5,threePutts:2,girPutts:18,girPuttOpps:greens,
+      missedGirPutts:13,missedGirPuttOpps:18-greens,penaltyStrokes:index%3,penaltyHoles:index%3,
+      upAndDowns:3,scramblingOpps:8,sandies:1,sandSaveOpps:3,missingRecoveryLies:1,
+      fairwayOutcomes:{
+        HIT:{opportunities:7,scoreToPar:2,girs:4,penalties:0,penaltyHoles:0},
+        LEFT:{opportunities:4,scoreToPar:5,girs:1,penalties:1,penaltyHoles:1},
+        RIGHT:{opportunities:3,scoreToPar:3,girs:1,penalties:0,penaltyHoles:0}},
+      recoveryByLie:{ROUGH:{opportunities:4,successes:2},BUNKER:{opportunities:3,successes:1},FRINGE:{opportunities:1,successes:0},OTHER:{opportunities:0,successes:0}},
+      approachPositions:{'1':2,'2':2,'3':1,'4':2,'5':greens,'6':1,'7':1,'8':1,'9':0},
+      approachOutcomes:{
+        '1':{scramblingOpps:2,scrambles:1},'2':{scramblingOpps:2,scrambles:1},'3':{scramblingOpps:1,scrambles:0},
+        '4':{scramblingOpps:1,scrambles:1},'5':{scramblingOpps:0,scrambles:0},'6':{scramblingOpps:1,scrambles:0},
+        '7':{scramblingOpps:1,scrambles:0},'8':{scramblingOpps:0,scrambles:0},'9':{scramblingOpps:0,scrambles:0}},
+      parTypes:{'3':{opportunities:4,scoreToPar:1},'4':{opportunities:10,scoreToPar:6},'5':{opportunities:4,scoreToPar:2}}},
   };
 });
 const ROUND = globalThis.__DYE_LEDGER_ROUND__ || REFERENCE_ROUND;
@@ -880,27 +893,80 @@ if(!P.some(p=>p.statistics)) add("stats", ()=>{
 
 if(P.some(p=>p.statistics)) add("stats", ()=>{
   const w=h("div");
-  const rate=(n,d)=>d?`${Math.round(n/d*100)}% <span class="dim">(${n}/${d})</span>`:"—";
+  const MIN_RATE_SAMPLE=5;
+  const obj=v=>v&&typeof v==="object"?v:{};
+  const num=v=>Number.isFinite(Number(v))?Number(v):0;
+  const rate=(n,d)=>!num(d)?"—":num(d)<MIN_RATE_SAMPLE?`<span class="dim">(${num(n)}/${num(d)})</span>`:`${Math.round(num(n)/num(d)*100)}% <span class="dim">(${num(n)}/${num(d)})</span>`;
+  const avg=(n,d)=>num(d)?(num(n)/num(d)).toFixed(2):"—";
+  const signed=v=>num(v)===0?"E":`${num(v)>0?"+":""}${num(v).toFixed(2)}`;
   const table=(title,note,heads,rows)=>`<div class="subhead" data-ledger-stat-group="${title.toLowerCase().replace(/[^a-z]+/g,"-")}">${title}<span>${note}</span></div>
     <table class="dense"><thead data-rowhead><tr>${heads.map((x,i)=>`<th class="${i?"n":"l"}">${x}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table>`;
-  const scoring=P.map(p=>{ const s=p.statistics, holes=s.scoredHoles||p.nPlayed;
-    return `<tr data-row><td class="l">${nameCell(p)}</td><td class="n">${holes}</td><td class="n">${(p.tot/holes).toFixed(2)}</td>
+  const scoring=P.map(p=>{ const s=obj(p.statistics),t=obj(s.tracked),holes=num(s.scoredHoles)||num(p.nPlayed);
+    return `<tr data-row><td class="l">${nameCell(p)}</td><td class="n">${holes||"—"}</td><td class="n">${avg(p.tot,holes)}</td>
       <td class="n">${rate(s.birdieOrBetter,holes)}</td><td class="n">${rate(s.parOrBetter,holes)}</td><td class="n">${rate(s.bogeyOrBetter,holes)}</td>
-      <td class="n">${s.tracked?.trackedHoles?s.tracked.penaltyStrokes:"—"}</td></tr>`; }).join("");
+      <td class="n">${num(t.trackedHoles)?rate(num(t.trackedHoles)-num(t.penaltyHoles),t.trackedHoles):"—"}</td></tr>`; }).join("");
   w.innerHTML=table("Scoring","Completed, scored holes; rates show count/sample.",
-    ["Player","Holes","Gross avg","Birdie+","Par+","Double avoid.","Penalty"],scoring);
+    ["Player","Holes","Gross avg","Birdie+","Par+","Double avoid.","Penalty-free"],scoring);
   const tracked=P.filter(p=>p.statistics?.tracked?.trackedHoles);
   if(tracked.length){
-    const ball=tracked.map(p=>{ const s=p.statistics,t=s.tracked; return `<tr data-row><td class="l">${nameCell(p)}</td><td class="n">${t.trackedHoles}</td>
+    const ball=tracked.map(p=>{ const s=obj(p.statistics),t=obj(s.tracked); return `<tr data-row><td class="l">${nameCell(p)}</td><td class="n">${num(t.trackedHoles)}</td>
       <td class="n">${rate(t.fairwaysHit,t.fairwayOpps)}</td><td class="n">${rate(t.greens,t.greenOpps)}</td><td class="n">${rate(s.convertedGreens,s.greensInRegulation)}</td>
       <td class="n">${rate(s.fairwayHitGirs,s.fairwayHitOpportunities)}</td><td class="n">${rate(s.fairwayMissedGirs,s.fairwayMissedOpportunities)}</td>
       <td class="n">${Number.isFinite(s.fairwayGirAdvantage)?`${s.fairwayGirAdvantage>=0?"+":""}${Math.round(s.fairwayGirAdvantage*100)} pp`:"—"}</td></tr>`; }).join("");
     w.innerHTML+=table("Ball Striking","Recorded tracked holes only; GIR birdie conversion includes par-5 greens reached in two.",
       ["Player","Tracked","Fairways","GIR","Birdie+ / GIR","GIR / FW hit","GIR / FW miss","FW advantage"],ball);
-    const short=tracked.map(p=>{ const t=p.statistics.tracked; return `<tr data-row><td class="l">${nameCell(p)}</td><td class="n">${t.trackedHoles}</td>
-      <td class="n">${t.puttOpps?t.putts:"—"}</td><td class="n">${t.puttOpps?(t.putts/t.puttOpps).toFixed(2):"—"}</td><td class="n">${t.upAndDowns}</td><td class="n">${t.sandies}</td></tr>`; }).join("");
-    w.innerHTML+=table("Short Game & Putting","Recorded tracked holes only; untouched fields are omitted.",
-      ["Player","Tracked","Putts","Putts / hole","Up & downs","Sandies"],short);
+    const short=tracked.map(p=>{ const t=obj(p.statistics.tracked); return `<tr data-row><td class="l">${nameCell(p)}</td><td class="n">${num(t.trackedHoles)}</td>
+      <td class="n">${num(t.puttOpps)?num(t.putts):"—"}</td><td class="n">${avg(t.putts,t.puttOpps)}</td><td class="n">${rate(t.upAndDowns,t.scramblingOpps)}</td><td class="n">${rate(t.sandies,t.sandSaveOpps)}</td></tr>`; }).join("");
+    w.innerHTML+=table("Short Game & Recovery","Only recorded opportunities enter each denominator.",
+      ["Player","Tracked","Putts","Putts / hole","Scrambling","Sand saves"],short);
+
+    const lies=["ROUGH","BUNKER","FRINGE","OTHER"];
+    if(tracked.some(p=>lies.some(k=>num(obj(obj(p.statistics.tracked).recoveryByLie)[k]?.opportunities)))){
+      const rows=tracked.map(p=>{ const r=obj(obj(p.statistics.tracked).recoveryByLie); return `<tr data-row><td class="l">${nameCell(p)}</td>${lies.map(k=>`<td class="n">${rate(obj(r[k]).successes,obj(r[k]).opportunities)}</td>`).join("")}</tr>`; }).join("");
+      w.innerHTML+=table("Recovery by Lie","Scrambling success from the recorded lie; unknown lies are excluded.",
+        ["Player","Rough","Bunker","Fringe","Other"],rows);
+    }
+
+    const fwKeys=["HIT","LEFT","RIGHT"];
+    if(tracked.some(p=>fwKeys.some(k=>num(obj(obj(p.statistics.tracked).fairwayOutcomes)[k]?.opportunities)))){
+      const rows=tracked.map(p=>{ const f=obj(obj(p.statistics.tracked).fairwayOutcomes); return `<tr data-row><td class="l">${nameCell(p)}</td>${fwKeys.map(k=>`<td class="n">${num(obj(f[k]).opportunities)||"—"}</td>`).join("")}</tr>`; }).join("");
+      w.innerHTML+=table("Tee-Shot Dispersion","Recorded par-4 and par-5 tee-shot outcomes.",
+        ["Player","Hit","Miss left","Miss right"],rows);
+      const consequence=tracked.map(p=>{ const f=obj(obj(p.statistics.tracked).fairwayOutcomes); return `<tr data-row><td class="l">${nameCell(p)}</td>${fwKeys.map(k=>{const x=obj(f[k]);return `<td class="n">${num(x.opportunities)?`${signed(num(x.scoreToPar)/num(x.opportunities))} <span class="dim">· ${rate(num(x.opportunities)-num(x.penaltyHoles),x.opportunities)} clean</span>`:"—"}</td>`;}).join("")}</tr>`; }).join("");
+      w.innerHTML+=table("Tee-Shot Consequences","Average score to par; “clean” means no recorded penalty on the hole.",
+        ["Player","Hit","Miss left","Miss right"],consequence);
+    }
+
+    const posKeys=["7","8","9","4","5","6","1","2","3"];
+    if(tracked.some(p=>posKeys.some(k=>num(obj(obj(p.statistics.tracked).approachPositions)[k])))){
+      const rows=tracked.map(p=>{ const a=obj(obj(p.statistics.tracked).approachPositions); return `<tr data-row><td class="l">${nameCell(p)}</td>${posKeys.map(k=>`<td class="n">${num(a[k])||"—"}</td>`).join("")}</tr>`; }).join("");
+      w.innerHTML+=table("Approach Dispersion","3×3 target map: 7–9 long, 4–6 pin-high, 1–3 short; 5 is GIR.",
+        ["Player","7","8","9","4","5 GIR","6","1","2","3"],rows);
+    }
+
+    if(tracked.some(p=>posKeys.some(k=>num(obj(obj(p.statistics.tracked).approachOutcomes)[k]?.scramblingOpps)))){
+      const axes={Short:["1","2","3"],Left:["1","4","7"],Right:["3","6","9"],Long:["7","8","9"]};
+      const rows=tracked.map(p=>{ const a=obj(obj(p.statistics.tracked).approachOutcomes); return `<tr data-row><td class="l">${nameCell(p)}</td>${Object.values(axes).map(keys=>{const d=keys.reduce((z,k)=>{const x=obj(a[k]);z.o+=num(x.scramblingOpps);z.s+=num(x.scrambles);return z;},{o:0,s:0});return `<td class="n">${rate(d.s,d.o)}</td>`;}).join("")}</tr>`; }).join("");
+      w.innerHTML+=table("Scrambling by Approach Miss","Directional axes overlap at corner misses; GIR is excluded.",
+        ["Player",...Object.keys(axes)],rows);
+    }
+
+    if(tracked.some(p=>num(p.statistics.tracked.puttOpps))){
+      const rows=tracked.map(p=>{ const t=obj(p.statistics.tracked); return `<tr data-row><td class="l">${nameCell(p)}</td><td class="n">${rate(t.onePutts,t.puttOpps)}</td><td class="n">${rate(t.threePutts,t.puttOpps)}</td><td class="n">${avg(t.girPutts,t.girPuttOpps)}</td><td class="n">${avg(t.missedGirPutts,t.missedGirPuttOpps)}</td></tr>`; }).join("");
+      w.innerHTML+=table("Putting Context","Putts are counted by lie; unknown GIR holes do not enter GIR splits.",
+        ["Player","One-putt","Three-putt","Putts / GIR","Putts / missed GIR"],rows);
+    }
+
+    const parKeys=["3","4","5"];
+    if(tracked.some(p=>parKeys.some(k=>num(obj(obj(p.statistics.tracked).parTypes)[k]?.opportunities)))){
+      const rows=tracked.map(p=>{ const q=obj(obj(p.statistics.tracked).parTypes); return `<tr data-row><td class="l">${nameCell(p)}</td>${parKeys.map(k=>{const x=obj(q[k]);return `<td class="n">${num(x.opportunities)?`${signed(num(x.scoreToPar)/num(x.opportunities))} <span class="dim">(${num(x.opportunities)})</span>`:"—"}</td>`;}).join("")}</tr>`; }).join("");
+      w.innerHTML+=table("Performance by Par","Average score to par with recorded sample size.",
+        ["Player","Par 3","Par 4","Par 5"],rows);
+    }
+
+    const complete=tracked.map(p=>{ const t=obj(p.statistics.tracked); return `<tr data-row><td class="l">${nameCell(p)}</td><td class="n">${num(t.trackedHoles)}</td><td class="n">${num(t.fairwayOpps)}</td><td class="n">${num(t.greenOpps)}</td><td class="n">${num(t.puttOpps)}</td><td class="n">${num(t.unknownGirHoles)}</td><td class="n">${num(t.missingRecoveryLies)}</td></tr>`; }).join("");
+    w.innerHTML+=table("Tracking Completeness","Unknown values are disclosed and excluded, never counted as misses.",
+      ["Player","Tracked","FW samples","GIR samples","Putt samples","GIR unknown","Lie unknown"],complete);
   }
   return w;
 }, {splittable:true, minRows:3});
@@ -978,6 +1044,12 @@ function makePage(n, total, label){
 function sliceRows(node, start, end, continued, resumed){
   const rows=[...node.querySelectorAll("[data-row]")];
   rows.forEach((r,i)=>{ if(i<start||i>=end) r.remove(); });
+  [...node.querySelectorAll("table")].forEach(tbl=>{
+    if(tbl.querySelector("[data-row]")) return;
+    const heading=tbl.previousElementSibling;
+    if(heading?.classList?.contains("subhead")) heading.remove();
+    tbl.remove();
+  });
   if(continued){
     const head=node.querySelector("[data-rowhead]");
     if(head) head.setAttribute("data-cont","1");
@@ -1005,8 +1077,11 @@ function layout(){
     const headH=head?head.getBoundingClientRect().height:0;
     const cs=getComputedStyle(node);
     const mgn=(parseFloat(cs.marginTop)||0)+(parseFloat(cs.marginBottom)||0);
-    const m={height:Math.ceil(node.getBoundingClientRect().height+mgn),
-             headerH:Math.ceil(headH),rows:rows.map(v=>Math.ceil(v))};
+    const height=Math.ceil(node.getBoundingClientRect().height+mgn);
+    const rowHeights=rows.map(v=>Math.ceil(v));
+    const nonRowHeight=Math.max(0,height-rowHeights.reduce((a,b)=>a+b,0));
+    const m={height,
+             headerH:Math.max(Math.ceil(headH),nonRowHeight),rows:rowHeights};
     probe.removeChild(node);
     cache.set(b.id,m);
     return m;

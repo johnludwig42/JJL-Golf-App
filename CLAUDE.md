@@ -9,10 +9,10 @@ Read these sources before changing code:
 
 ## Current release
 
-- Development branch: `release/v31.0.09`
-- Release: v31.0.09 — Release Assurance and Offline Ledger Reliability
+- Development branch: `release/v31.0.10`
+- Release: v31.0.10 — Complete Grind Statistics Reporting
 - Static, dependency-free, local-first PWA; Node is development tooling only
-- No v31.0.09 database migration
+- No v31.0.10 database migration
 
 ## Non-negotiable invariants
 

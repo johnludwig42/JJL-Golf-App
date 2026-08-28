@@ -9,10 +9,10 @@ Read these sources before changing code:
 
 ## Current release
 
-- Development branch: `release/v31.0.10`
-- Release: v31.0.10 — Complete Grind Statistics Reporting
+- Development branch: `release/v31.0.11`
+- Release: v31.0.11 — Player Memories and Four-Golfer Grind
 - Static, dependency-free, local-first PWA; Node is development tooling only
-- No v31.0.10 database migration
+- No v31.0.11 database migration
 
 ## Non-negotiable invariants
 

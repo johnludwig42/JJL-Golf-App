@@ -10,15 +10,15 @@ const worker = readFileSync(new URL('../service-worker.js', import.meta.url), 'u
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const manifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
 
-test('v31.0.10 release identity and immutable assets are aligned', () => {
-  assert.equal(pkg.version, '31.0.10');
-  assert.equal(manifest.version, 'v31.0.10');
-  assert.match(app, /version: 'v31\.0\.10'/);
-  assert.match(app, /buildLabel: 'Complete Grind Statistics Reporting'/);
-  assert.match(worker, /cacheName: 'the-dye-ledger-v31\.0\.10'/);
-  assert.match(html, /id="appVersionFooter">v31\.0\.10</);
+test('v31.0.11 release identity and immutable assets are aligned', () => {
+  assert.equal(pkg.version, '31.0.11');
+  assert.equal(manifest.version, 'v31.0.11');
+  assert.match(app, /version: 'v31\.0\.11'/);
+  assert.match(app, /buildLabel: 'Player Memories and Four-Golfer Grind'/);
+  assert.match(worker, /cacheName: 'the-dye-ledger-v31\.0\.11'/);
+  assert.match(html, /id="appVersionFooter">v31\.0\.11</);
   for (const name of ['app-icon-192', 'app-icon-512', 'apple-touch-icon', 'favicon-32', 'favicon-16']) {
-    assert.equal(existsSync(new URL(`../branding/${name}-v31.0.10.png`, import.meta.url)), true);
+    assert.equal(existsSync(new URL(`../branding/${name}-v31.0.11.png`, import.meta.url)), true);
   }
 });
 

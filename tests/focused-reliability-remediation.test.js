@@ -133,10 +133,10 @@ test('focused setup disclosures, Honors pill, and header-only icon change match 
   assert.match(app, /score-primary-status score-honors-status/);
   assert.match(css, /\.score-status-row\{display:grid;justify-items:center/);
   assert.doesNotMatch(css, /score-honors-status::before/);
-  assert.match(html, /<img src="\.\/branding\/apple-touch-icon-v31\.0\.10\.png" alt="The Dye Ledger"/);
+  assert.match(html, /<img src="\.\/branding\/apple-touch-icon-v31\.0\.11\.png" alt="The Dye Ledger"/);
   assert.equal((html.match(/branding\/app-icon-192\.png/g) || []).length, 0);
-  assert.match(manifest, /branding\/app-icon-192-v31\.0\.10\.png/);
-  assert.match(manifest, /branding\/apple-touch-icon-v31\.0\.10\.png/);
+  assert.match(manifest, /branding\/app-icon-192-v31\.0\.11\.png/);
+  assert.match(manifest, /branding\/apple-touch-icon-v31\.0\.11\.png/);
   const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
   assert.equal(new Set(ids).size, ids.length);
 });

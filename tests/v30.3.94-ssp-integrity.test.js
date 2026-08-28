@@ -10,9 +10,9 @@ const review = fs.readFileSync('docs/architecture/CONSTITUTIONAL_REVIEW_v30.3.94
 const notes = fs.readFileSync('BUILD_NOTES_v30.3.94.md', 'utf8');
 
 test('current runtime and PWA shell remain version-aligned after v30.3.94', () => {
-  assert.match(app, /version: 'v31\.0\.10'/);
-  assert.match(index, /app\.js\?v=31\.0\.10/);
-  assert.match(serviceWorker, /cacheName: 'the-dye-ledger-v31\.0\.10'/);
+  assert.match(app, /version: 'v31\.0\.11'/);
+  assert.match(index, /app\.js\?v=31\.0\.11/);
+  assert.match(serviceWorker, /cacheName: 'the-dye-ledger-v31\.0\.11'/);
   for (const asset of ['app-icon-192', 'app-icon-512', 'apple-touch-icon', 'favicon-32', 'favicon-16']) {
     assert.equal(fs.existsSync(`branding/${asset}-v31.0.06.png`), true);
   }

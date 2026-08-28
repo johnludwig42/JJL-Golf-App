@@ -481,11 +481,15 @@ v31.0.08 removes duplicate Player Mode score entry and uses one collapsible scor
 
 v31.0.09 is a release-assurance and offline Ledger reliability release. The default test command automatically discovers every repository test file. Ledger Entry attempts an audited online Story first, but service, connectivity, timeout, length, or fact-verification failure discards that response and supplies a deterministic story built only from authoritative Round facts. The report is no longer blocked by Story service availability. This release changes no scoring, settlement, Shared Match, Course Library, localStorage, or database schema.
 
-## 32. Current development release — v31.0.10
+## 32. Completed release — v31.0.10
 
 v31.0.10 expands the dedicated Ledger Entry statistics pages to use the advanced facts already captured in Enhanced and Grind modes. It adds recovery rates by lie, tee-shot dispersion and consequences, 3×3 approach dispersion, scrambling by approach-miss axis, putting context, performance by par, penalty-free rate, and tracking-completeness disclosure. Sections appear only when their required facts exist; unknown and partial inputs remain outside denominators. No scoring, settlement, Shared Match, Course Library, localStorage, or database schema changes are included.
 
-## 33. Near-term sequence after v31.0.10
+## 33. Current development release — v31.0.11
+
+v31.0.11 restores Add Memory access in Player Mode and adds confirmed deletion for editable local-round Memories while preserving completed-round and Shared Match protections. Grind now supports up to four golfers per scoring device. In assigned-player Shared Matches, eligibility follows the device's actual assignments rather than the total field visible to a host. Five or more editable golfers continue to receive Enhanced controls. No scoring, settlement, Ledger Entry, Course Library, localStorage schema, or database changes are included.
+
+## 34. Near-term sequence after v31.0.11
 
 1. Complete real-device Player/Classic and two-device Shared Match acceptance.
 2. Continue Player Mode usability refinement without changing Classic Mode.

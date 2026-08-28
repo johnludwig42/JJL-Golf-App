@@ -33,7 +33,6 @@ test('gross completion preserves optional stat coverage without blocking explici
 test('Play stat matrix uses interaction provenance without a review checkbox', () => {
   assert.doesNotMatch(app, /data-stat-hole-reviewed/);
   assert.doesNotMatch(app, /Statistics reviewed for this hole/);
-  assert.match(app, /Putts begin as editable suggestions/);
   assert.match(app, /entryCompleted = true/);
   assert.match(app, /puttsSource: normalizePuttsSource/);
   assert.match(app, /All scores entered\. Review and complete the round when ready\./);

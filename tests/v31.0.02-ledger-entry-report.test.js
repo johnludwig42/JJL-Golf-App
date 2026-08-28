@@ -144,7 +144,7 @@ test('dedicated Ledger Entry adapter maps existing authoritative facts without c
   assert.match(shell, /Content-Security-Policy/);
   assert.match(shell, /fonts\/archivo-latin-700-normal\.woff2/);
   for (const asset of ['bootstrap.js', 'pack.js', 'engines.js', 'report.js']) {
-    assert.match(shell, new RegExp(`${asset.replace('.', '\\.')}\\?v=31\\.0\\.08`), `${asset} must use the current release cache key`);
+    assert.match(shell, new RegExp(`${asset.replace('.', '\\.')}\\?v=31\\.0\\.09`), `${asset} must use the current release cache key`);
   }
   assert.match(renderer, /ROUND\.meta\.recap/);
   assert.match(renderer, /ROUND\.meta\.story \|\| ROUND\.meta\.recap/);
@@ -179,7 +179,7 @@ test('Ledger Story generation is version-bound, non-mutating, and isolated from 
   assert.match(source, /Generating a fresh Story of the Round/);
   assert.match(source, /window\.AbortController/);
   assert.match(source, /45000/);
-  assert.doesNotMatch(source.slice(source.indexOf('async function prepareLedgerEntryStory'), source.indexOf('function decorateReportSections')), /deterministic-fallback|buildLedgerEntryFactsOnlyStory/);
+  assert.match(source.slice(source.indexOf('async function prepareLedgerEntryStory'), source.indexOf('function buildLegacyRoundSnapshot')), /buildDeterministicLedgerEntryStory/);
   assert.match(edgeFunction, /Do not discuss Greenies/);
   assert.match(shell, /id="returnToMatchBtn"[^>]*>‹ Return to Match<\/button>/);
   assert.match(shell, /@media print\{[\s\S]*?\.report-nav\{display:none!important\}/);
@@ -221,7 +221,17 @@ test('Ledger Story Greenies audit distinguishes a count from hole numbers in the
     'Alex Ledger claimed three Greenies by winning on holes 3 and 7.'
   );
   assert.equal(inaccurate.issues.some(issue => issue.code === 'FALSE_GREENIES_COUNT'), true);
-  assert.match(source, /blockingIssues\.map\(issue => issue\.message\)/);
+  assert.match(source, /blockingIssues\.map\(issue => \(\{ code: issue\.code, message: issue\.message \}\)\)/);
+});
+
+test('Ledger Entry always receives a verified deterministic story when the online service is unavailable', async () => {
+  const result = fixture();
+  const story = await result.engine.prepareLedgerEntryStory(result.match, result.metrics);
+  assert.equal(story.provenance, 'deterministic-fallback');
+  assert.equal(story.fallbackReason, 'service-not-configured');
+  assert.ok(story.text.length > 40);
+  assert.match(source, /console\.warn\(`Ledger Story used the verified deterministic fallback/);
+  assert.doesNotMatch(source.slice(source.indexOf('async function prepareLedgerEntryStory'), source.indexOf('function buildLegacyRoundSnapshot')), /requires an internet connection|Configure Supabase before generating/);
 });
 
 test('Ledger Story replaces variable Greenies prose with deterministic recorded results', () => {

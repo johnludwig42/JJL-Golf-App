@@ -1,4 +1,13 @@
 (() => {
+  // iOS Safari reserves space for its own print header and footer even when
+  // @page has no margin. Mark the document before the report measures and
+  // packs its pages so each physical page fits that smaller print area.
+  const userAgent = String(navigator.userAgent || '');
+  const platform = String(navigator.platform || '');
+  const isIosPrintSurface = /iPad|iPhone|iPod/i.test(userAgent)
+    || (platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1);
+  if (isIosPrintSurface) document.documentElement.classList.add('ios-print-surface');
+
   const opener = window.opener;
   const query = new URLSearchParams(window.location.search);
   const transferKey = query.get('reportKey');

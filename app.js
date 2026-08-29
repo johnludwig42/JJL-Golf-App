@@ -16,11 +16,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.14',
-  versionNumber: '31.0.14',
-  cacheName: 'the-dye-ledger-v31.0.14',
-  buildDate: '2026-08-29T12:00:00-04:00',
-  buildLabel: 'Player Mode Progressive Entry Flow'
+  version: 'v31.0.15',
+  versionNumber: '31.0.15',
+  cacheName: 'the-dye-ledger-v31.0.15',
+  buildDate: '2026-08-29T17:15:00-04:00',
+  buildLabel: 'Accepted Ledger Entry Snapshots'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;

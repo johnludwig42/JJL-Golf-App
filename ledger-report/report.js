@@ -3,7 +3,7 @@
    or derived from it. Stroke allocation comes from the app's engine, keyed by
    basis; the report never re-derives handicapping.
    ========================================================================== */
-import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getWinningMarginPerspective } from './logic.js?v=31.0.12';
+import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.15';
 
 const packPages = globalThis.packPages;
 const runGame = globalThis.runGame;
@@ -803,18 +803,26 @@ if(MARGIN){
     const segs = MARGIN.segments;
     const lbl=t=>`<td style="font-family:Archivo;font-weight:600;font-size:5.6pt;letter-spacing:.1em;color:#6E736C;white-space:nowrap;padding-right:6px">${t}</td>`;
     segs.forEach(s=>{
+      const perspective=getSegmentMarginPerspective(MARGIN,s);
+      const perspectiveSide=FEAT.sides[perspective.sideIndex];
+      const opposingSide=FEAT.sides[perspective.sideIndex===0?1:0];
+      const perspectiveName=SIDES[perspectiveSide.key].name;
+      const opposingName=SIDES[opposingSide.key].name;
       const cells=s.idx.map(i=>{
         const r=MARGIN.per[i];
         const k=r.win===null?null:FEAT.sides[r.win].key;
         const c=k?SIDES[k].color:"#EDEDE6", fg=k?"#fff":"#6E736C";
+        const first=perspective.sideIndex===0?r.a:r.b;
+        const second=perspective.sideIndex===0?r.b:r.a;
         return `<td style="padding:0 1px"><div style="background:${c};color:${fg};font-family:IBM Plex Mono;font-size:6.4pt;font-weight:600;text-align:center;padding:3px 0">${k||"½"}</div>
-          <div style="font-family:IBM Plex Mono;font-size:6.2pt;text-align:center;color:#6E736C;padding-top:1.5px">${r.a}–${r.b}</div></td>`;}).join("");
+          <div style="font-family:IBM Plex Mono;font-size:6.2pt;text-align:center;color:#6E736C;padding-top:1.5px">${first}–${second}</div></td>`;}).join("");
       const heads=s.idx.map(i=>`<td style="font-family:IBM Plex Mono;font-size:6.2pt;text-align:center;padding-bottom:2px">${MARGIN.per[i].hole}</td>`).join("");
-      const runs=s.idx.map(i=>`<td style="font-family:IBM Plex Mono;font-size:6.2pt;text-align:center;padding-top:2px;font-weight:600">${MARGIN.cum[i+1]===0?"AS":(MARGIN.cum[i+1]>0?"+":"")+MARGIN.cum[i+1]}</td>`).join("");
+      const runs=s.idx.map((i,index)=>{ const value=perspective.runningMargins[index]; return `<td style="font-family:IBM Plex Mono;font-size:6.2pt;text-align:center;padding-top:2px;font-weight:600">${value===0?"AS":value>0?`+${value}`:String(value)}</td>`; }).join("");
       const v=s.margin;
       const res=v===0?"ALL SQUARE":`${SIDES[FEAT.sides[v>0?1:0].key].name.toUpperCase()} ${Math.abs(v)} UP`;
       w.appendChild(h("div",{"data-row":"",html:
-        `<table style="width:100%;margin-bottom:2px"><tr>${lbl("HOLE")}${heads}</tr>
+        `<div style="font-family:Archivo;font-weight:600;font-size:6.4pt;letter-spacing:.08em;color:#6E736C;margin-bottom:3px">${s.label.toUpperCase()} · ${perspectiveName.toUpperCase()} PERSPECTIVE · NET ${perspectiveName.toUpperCase()}–${opposingName.toUpperCase()}</div>
+         <table style="width:100%;margin-bottom:2px"><tr>${lbl("HOLE")}${heads}</tr>
          <tr>${lbl("RESULT")}${cells}</tr>
          <tr>${lbl("RUNNING")}${runs}</tr></table>
          <div style="font-family:Archivo;font-weight:700;font-size:8pt;text-align:right;white-space:normal;margin:0 0 7px;color:${v>0?SIDES[FEAT.sides[1].key].color:v<0?SIDES[FEAT.sides[0].key].color:'#6E736C'}">${s.label.toUpperCase()} · ${res}</div>`}));

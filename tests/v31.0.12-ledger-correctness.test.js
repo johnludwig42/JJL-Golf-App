@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
-import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getWinningMarginPerspective } from '../ledger-report/logic.js';
+import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from '../ledger-report/logic.js';
 import { marginEngine } from '../ledger-report/engines.js';
 import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
 import { currentBrandingAssetNames, currentVersionBare, currentVersionPrefixed } from './support/release-identity.js';
@@ -101,6 +101,23 @@ test('Prairie View match selects hole 7, where John takes the lead for good', ()
   assert.equal(result.total, -1);
   assert.equal(result.turning.i, 6);
   assert.deepEqual(result.cum, [0, 1, 2, 2, 1, 1, 0, -1, -2, -1]);
+});
+
+test('each margin segment resets and uses its winner, or team 1 for a tie, as perspective', () => {
+  const margin = {
+    per: [
+      { win: 1, scored: true }, { win: 0, scored: true }, { win: 1, scored: true },
+      { win: 1, scored: true }, { win: null, scored: true }, { win: 0, scored: true },
+    ],
+  };
+  const front = getSegmentMarginPerspective(margin, { margin: 1, idx: [0, 1, 2] });
+  assert.equal(front.sideIndex, 1);
+  assert.deepEqual(front.runningMargins, [1, 0, 1]);
+  const tiedBack = getSegmentMarginPerspective(margin, { margin: 0, idx: [3, 4, 5] });
+  assert.equal(tiedBack.sideIndex, 0);
+  assert.equal(tiedBack.tied, true);
+  assert.deepEqual(tiedBack.runningMargins, [-1, -1, 0]);
+  assert.match(reportSource, /PERSPECTIVE · NET/);
 });
 
 test('competition labels de-duplicate embedded game names', () => {

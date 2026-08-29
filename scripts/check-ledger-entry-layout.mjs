@@ -61,7 +61,12 @@ const audit = await page.evaluate(() => {
       index: index + 1,
       label: pageNode.querySelector('.wordmark em')?.textContent?.trim() || 'Result',
       overflow: flow ? used - flow.clientHeight : 0,
+      headroom: flow ? flow.clientHeight - used : 0,
       horizontalOverflow: pageNode.scrollWidth > pageNode.clientWidth + 1,
+      statisticFragments: [...pageNode.querySelectorAll('[data-ledger-stat-category]')].map(category => ({
+        id: category.getAttribute('data-ledger-stat-category'),
+        rows: category.querySelectorAll('[data-row]').length,
+      })),
     };
   });
   return {
@@ -81,6 +86,8 @@ if (JSON.stringify(audit.labels) !== JSON.stringify(expectedLabels)) {
 if (!audit.headings.some(heading => heading.startsWith('Highlights'))) { console.error('Highlights missing from cover.'); failed = true; }
 if (!audit.headings.some(heading => heading.startsWith('Appendix · Course net')) || !audit.headings.some(heading => heading.startsWith('Appendix · Featured net'))) { console.error('Both scorecard appendices are required.'); failed = true; }
 if (audit.pages.some(pageRow => pageRow.horizontalOverflow)) { console.error('Horizontal overflow detected.'); failed = true; }
+const orphanedStatFragments = audit.pages.flatMap(pageRow => pageRow.statisticFragments.map(fragment => ({ ...fragment, page: pageRow.index }))).filter(fragment => fragment.rows === 1);
+if (orphanedStatFragments.length) { console.error(`Single-player statistics fragments detected: ${orphanedStatFragments.map(row => `${row.id} on page ${row.page}`).join(', ')}`); failed = true; }
 const overflows = audit.pages.filter(pageRow => pageRow.overflow > 1);
 if (overflows.length) { console.error(`Page overflow detected: ${overflows.map(row => `${row.index} (+${row.overflow}px)`).join(', ')}`); failed = true; }
 for (const family of ['Archivo', 'Inter', 'IBM Plex Mono']) {
@@ -90,6 +97,7 @@ if (errors.length) { console.error(`Console errors:\n${errors.join('\n')}`); fai
 
 console.log(`${basename(input)} — Chrome ${await browser.version()}`);
 console.log(`${audit.pages.length} pages; ${audit.labels.length} ordered subjects; bundled fonts loaded.`);
+console.log(`Statistics pages: ${audit.pages.filter(row => row.label === 'Statistics').map(row => `${row.index} (${Math.max(0, row.headroom)}px headroom; ${row.statisticFragments.map(fragment => fragment.id).join(', ') || 'heading'})`).join(', ') || 'none'}.`);
 if (!failed) {
   await page.emulateMediaType('print');
   await page.pdf({ path: output, format: 'letter', printBackground: true, preferCSSPageSize: true, margin: { top: 0, right: 0, bottom: 0, left: 0 } });

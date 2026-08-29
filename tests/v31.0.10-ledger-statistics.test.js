@@ -103,7 +103,7 @@ test('zero-tracked and partial legacy stats remain zero-filled without fabricate
 
 test('single-round rates always show percentages with supporting fractions', () => {
   assert.doesNotMatch(renderer, /MIN_RATE_SAMPLE/);
-  assert.match(renderer, /Math\.round\(num\(n\)\/num\(d\)\*100\)/);
+  assert.match(renderer, /Math\.round\(statNum\(n\)\/statNum\(d\)\*100\)/);
   assert.doesNotMatch(renderer, /clean<\/span>/);
 });
 
@@ -111,8 +111,8 @@ test('dedicated Ledger renders every advanced family only from available facts',
   for (const heading of ['Short Game & Recovery', 'Recovery by Lie', 'Tee-Shot Results', 'Approach Dispersion', 'Scrambling by Approach Miss', 'Putting Context', 'Performance by Par', 'Tracking Completeness']) {
     assert.match(renderer, new RegExp(heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
-  assert.match(renderer, /const obj=v=>v&&typeof v==="object"\?v:\{\}/);
-  assert.match(renderer, /const num=v=>Number\.isFinite\(Number\(v\)\)\?Number\(v\):0/);
+  assert.match(renderer, /const statObj=v=>v&&typeof v==="object"\?v:\{\}/);
+  assert.match(renderer, /const statNum=v=>Number\.isFinite\(Number\(v\)\)\?Number\(v\):0/);
   assert.match(renderer, /Unknown values are disclosed and excluded, never counted as misses/);
   assert.match(renderer, /Only recorded opportunities enter each denominator/);
   assert.match(renderer, /const posKeys=allPosKeys\.filter/);

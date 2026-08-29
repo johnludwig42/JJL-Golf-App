@@ -3,7 +3,7 @@
    or derived from it. Stroke allocation comes from the app's engine, keyed by
    basis; the report never re-derives handicapping.
    ========================================================================== */
-import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.15';
+import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.16';
 
 const packPages = globalThis.packPages;
 const runGame = globalThis.runGame;
@@ -905,13 +905,14 @@ if(!P.some(p=>p.statistics)) add("stats", ()=>{
 }, {splittable:true, minRows:3});
 
 const TRACKED_PLAYERS=P.filter(p=>p.statistics?.tracked?.trackedHoles);
+const statObj=v=>v&&typeof v==="object"?v:{};
+const statNum=v=>Number.isFinite(Number(v))?Number(v):0;
+const statRate=(n,d)=>!statNum(d)?"—":`${Math.round(statNum(n)/statNum(d)*100)}% <span class="dim">(${statNum(n)}/${statNum(d)})</span>`;
+const statAvg=(n,d)=>statNum(d)?(statNum(n)/statNum(d)).toFixed(2):"—";
+const statSigned=v=>statNum(v)===0?"E":`${statNum(v)>0?"+":""}${statNum(v).toFixed(2)}`;
 function buildTrackedStatisticsPage(page){
   const w=h("div",{class:`ledger-stat-page ledger-stat-page-${page}`});
-  const obj=v=>v&&typeof v==="object"?v:{};
-  const num=v=>Number.isFinite(Number(v))?Number(v):0;
-  const rate=(n,d)=>!num(d)?"—":`${Math.round(num(n)/num(d)*100)}% <span class="dim">(${num(n)}/${num(d)})</span>`;
-  const avg=(n,d)=>num(d)?(num(n)/num(d)).toFixed(2):"—";
-  const signed=v=>num(v)===0?"E":`${num(v)>0?"+":""}${num(v).toFixed(2)}`;
+  const obj=statObj,num=statNum,rate=statRate,avg=statAvg,signed=statSigned;
   const table=(title,note,heads,rows)=>`<div class="subhead" data-ledger-stat-group="${title.toLowerCase().replace(/[^a-z]+/g,"-")}">${title}<span>${note}</span></div>
     <table class="dense"><thead data-rowhead><tr>${heads.map((x,i)=>`<th class="${i?"n":"l"}">${x}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table>`;
   const scoring=P.map(p=>{ const s=obj(p.statistics),t=obj(s.tracked),holes=num(s.scoredHoles)||num(p.nPlayed);
@@ -982,12 +983,44 @@ function buildTrackedStatisticsPage(page){
   return w;
 }
 
-if(P.some(p=>p.statistics)) add("stats-performance", ()=>buildTrackedStatisticsPage("performance"), {splittable:true, minRows:3});
+function trackedStatisticsGroups(page){
+  const source=buildTrackedStatisticsPage(page);
+  return [...source.querySelectorAll(".subhead")].map((head,index)=>{
+    const tableNode=head.nextElementSibling;
+    const id=head.dataset.ledgerStatGroup||`${page}-${index+1}`;
+    const html=head.outerHTML+(tableNode?.outerHTML||"");
+    return {id,build:()=>{const w=h("div",{class:`ledger-stat-page ledger-stat-page-${page}`,"data-ledger-stat-category":id});w.innerHTML=html;return w;}};
+  });
+}
+
+if(P.some(p=>p.statistics)) trackedStatisticsGroups("performance").forEach((group,index)=>
+  add(`stats-performance-${group.id}`,group.build,{splittable:true,minRows:2,keepTogetherWhenFits:true,label:index===0?"Statistics":undefined}));
 if(TRACKED_PLAYERS.length){
   add("statspatternsh", ()=>secHead("Player statistics · Shot patterns",
     "Directional outcomes, consequences and tracking coverage."),
-    {keepWithNext:true, breakBefore:true, label:"Statistics"});
-  add("stats-patterns", ()=>buildTrackedStatisticsPage("patterns"), {splittable:true, minRows:3});
+    {keepWithNext:true, label:"Statistics"});
+  trackedStatisticsGroups("patterns").forEach(group=>
+    add(`stats-patterns-${group.id}`,group.build,{splittable:true,minRows:2,keepTogetherWhenFits:true}));
+}
+
+if(ROUND.partnership?.sides?.length){
+  add("partnershiph",()=>secHead("Partnership performance",
+    `${ROUND.partnership.gameName} · ${String(ROUND.partnership.basis).toUpperCase()} · Best ball`),
+    {keepWithNext:true,label:"Statistics"});
+  add("partnership",()=>{
+    const w=h("div",{class:"ledger-stat-page ledger-stat-page-partnership","data-ledger-stat-category":"partnership"});
+    const rows=ROUND.partnership.sides.map(side=>{
+      const partners=side.playerContributions;
+      const contribution=player=>player?`${player.name}<br><strong>${player.count}</strong>`:"—";
+      const rescues=partners.filter(player=>player.rescues).map(player=>`${player.name} ${player.rescues}`).join(" · ")||"0";
+      const rating=side.rating!==null&&Number.isFinite(Number(side.rating))?`${Math.round(Number(side.rating))}%`:`— <span class="dim">fewer than 6 holes or no rating range</span>`;
+      return `<tr data-row><td class="l"><strong>${side.name}</strong></td><td class="n">${side.holes}</td><td class="n">${contribution(partners[0])}</td><td class="n">${contribution(partners[1])}</td><td class="n">${side.redundancy}</td><td class="n">${side.alternations}</td><td class="n">${rescues}</td><td class="n">${side.strokesSaved}</td><td class="n">${rating}</td></tr>`;
+    }).join("");
+    w.innerHTML=`<div class="subhead" data-ledger-stat-group="partnership">Ham &amp; Egg<span>Best-ball contribution · ${ROUND.partnership.gameName} (${String(ROUND.partnership.basis).toLowerCase()}). Rating compares actual alignment with the best and worst alignment those two scorecards allow.</span></div>
+      <table class="dense"><thead data-rowhead><tr><th class="l">Side</th><th class="n">Holes</th><th class="n">Partner 1 counted</th><th class="n">Partner 2 counted</th><th class="n">Both</th><th class="n">Alternated</th><th class="n">Rescues</th><th class="n">Strokes saved</th><th class="n">Rating</th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="scnote">Contribution is inclusive: both partners receive credit when tied, so Partner 1 + Partner 2 - Both = Holes. Rescues require a two-stroke advantage over the partner.</p>`;
+    return w;
+  },{splittable:true,minRows:2,keepTogetherWhenFits:true});
 }
 
 /* ---- appendix scorecards ---- */
@@ -1109,7 +1142,7 @@ function layout(){
     return m;
   };
 
-  const {pages,overflows}=packPages(BLOCKS, flowH-2, measure);  /* 2px gutter */
+  const {pages,overflows}=packPages(BLOCKS, flowH-8, measure);  /* conservative browser-rounding gutter */
 
   /* Masthead subtitle: the section in effect where the page starts, carried
      forward so a continuation page keeps the right label. */

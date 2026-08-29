@@ -7,7 +7,7 @@
  * instead of a constant.
  *
  * A block is:
- *   { id, splittable, minRows, keepWithNext, breakBefore }
+ *   { id, splittable, minRows, keepWithNext, keepTogetherWhenFits, breakBefore }
  * measure(block) returns:
  *   { height, headerH, rows: [heights...] }   // rows only meaningful if splittable
  *
@@ -44,6 +44,15 @@ function packPages(blocks, pageHeight, measure, opts = {}) {
     }
 
     if (m.height <= remaining()) {
+      page.push({ block, rowStart: 0, rowEnd: m.rows ? m.rows.length : 0, height: m.height });
+      used += m.height;
+      continue;
+    }
+
+    // Compact category tables should move intact to a fresh page when they fit
+    // there. Oversized tables still use the normal row-aware split path.
+    if (block.splittable && block.keepTogetherWhenFits && m.height <= pageHeight && used > 0) {
+      flush();
       page.push({ block, rowStart: 0, rowEnd: m.rows ? m.rows.length : 0, height: m.height });
       used += m.height;
       continue;

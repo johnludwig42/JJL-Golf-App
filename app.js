@@ -16,11 +16,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.15',
-  versionNumber: '31.0.15',
-  cacheName: 'the-dye-ledger-v31.0.15',
-  buildDate: '2026-08-29T17:15:00-04:00',
-  buildLabel: 'Accepted Ledger Entry Snapshots'
+  version: 'v31.0.16',
+  versionNumber: '31.0.16',
+  cacheName: 'the-dye-ledger-v31.0.16',
+  buildDate: '2026-08-29T21:00:00-04:00',
+  buildLabel: 'Ledger Pagination & Partnership Statistics'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -4769,6 +4769,101 @@ function resolveTeamHoleScore(holeResult, teamNo, policy = {}, options = {}) {
   const countingScores = eligibleScores.slice(0, countingBalls);
   return { status: 'complete', total: countingScores.reduce((sum, score) => sum + score.value, 0), countingScores, eligibleScores, countingBalls, basis };
 }
+function computeBestBallPartnershipStatistics(match, metrics = null) {
+  const effectiveMetrics = metrics || computeMatchMetrics(match);
+  const selectedGames = getOrderedSelectedGames(match);
+  const featuredKey = resolveFeaturedCompetitionKey(match, effectiveMetrics);
+  const candidates = selectedGames.map(config => {
+    if (!['nassau', 'team_match'].includes(String(config?.key || ''))) return null;
+    const policy = config.key === 'nassau'
+      ? normalizeNassauConfig(config, match)
+      : {
+          ...config,
+          basis: String(config.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net',
+          countingBalls: normalizeCountingBalls(config.countingBalls, 1),
+          scoringPolicyVersion: Number(config.scoringPolicyVersion || NASSAU_SCORING_POLICY_VERSION),
+          handicapAllowancePercent: normalizeHandicapAllowancePercent(config.handicapAllowancePercent, match?.allowance ?? 100),
+        };
+    if (normalizeCountingBalls(policy.countingBalls, 1) !== 1) return null;
+    const teamNumbers = [...new Set((match?.players || []).map(player => Number(player?.team)).filter(Number.isFinite))].sort((a, b) => a - b);
+    if (teamNumbers.length !== 2 || teamNumbers.some(teamNo => (match.players || []).filter(player => Number(player?.team) === teamNo).length !== 2)) return null;
+    return { config, policy, featured: String(config.key) === String(featuredKey), teamNumbers };
+  }).filter(Boolean).sort((a, b) => Number(b.featured) - Number(a.featured));
+  const source = candidates[0];
+  if (!source) return null;
+
+  const holes = (effectiveMetrics?.holeResults || []).map(hole => {
+    if (!hole?.completed) return null;
+    const sides = source.teamNumbers.map(teamNo => resolveTeamHoleScore(hole, teamNo, source.policy, { metrics: effectiveMetrics }));
+    if (sides.some(side => side.status !== 'complete' || side.eligibleScores.length !== 2 || !Number.isFinite(side.total))) return null;
+    return { holeNumber: Number(hole.holeNumber), sides };
+  }).filter(Boolean);
+  if (!holes.length) return null;
+
+  const sides = source.teamNumbers.map((teamNo, sideIndex) => {
+    const roster = (match.players || []).filter(player => Number(player?.team) === teamNo);
+    const playerIds = roster.map(player => String(player.playerId));
+    const names = Object.fromEntries((effectiveMetrics.players || []).map(player => [String(player.playerId), player.player?.name || 'Player']));
+    const contributions = Object.fromEntries(playerIds.map(id => [id, 0]));
+    const rescues = Object.fromEntries(playerIds.map(id => [id, 0]));
+    let redundancy = 0;
+    let alternations = 0;
+    let priorSoleContributor = null;
+    const first = [];
+    const second = [];
+    let actual = 0;
+
+    holes.forEach(hole => {
+      const scores = hole.sides[sideIndex].eligibleScores.slice().sort((a, b) => playerIds.indexOf(a.playerId) - playerIds.indexOf(b.playerId));
+      const low = Math.min(...scores.map(score => score.value));
+      const contributors = scores.filter(score => score.value === low);
+      contributors.forEach(score => { contributions[score.playerId] += 1; });
+      if (contributors.length === 2) {
+        redundancy += 1;
+        priorSoleContributor = null;
+      } else {
+        const contributor = contributors[0];
+        const partner = scores.find(score => score.playerId !== contributor.playerId);
+        if (priorSoleContributor && priorSoleContributor !== contributor.playerId) alternations += 1;
+        priorSoleContributor = contributor.playerId;
+        if (partner && partner.value >= contributor.value + 2) rescues[contributor.playerId] += 1;
+      }
+      first.push(scores[0].value);
+      second.push(scores[1].value);
+      actual += low;
+    });
+
+    const ascendingFirst = first.slice().sort((a, b) => a - b);
+    const ascendingSecond = second.slice().sort((a, b) => a - b);
+    const descendingSecond = ascendingSecond.slice().reverse();
+    const worst = ascendingFirst.reduce((sum, value, index) => sum + Math.min(value, ascendingSecond[index]), 0);
+    const best = ascendingFirst.reduce((sum, value, index) => sum + Math.min(value, descendingSecond[index]), 0);
+    const denominator = worst - best;
+    const rating = holes.length >= 6 && denominator > 0
+      ? Math.max(0, Math.min(100, Math.round(((worst - actual) / denominator) * 100)))
+      : null;
+    return {
+      teamId: teamNo,
+      name: getTeamLabel(match, teamNo),
+      holes: holes.length,
+      playerContributions: playerIds.map(playerId => ({ playerId, name: names[playerId] || 'Player', count: contributions[playerId], rescues: rescues[playerId] })),
+      redundancy,
+      alternations,
+      actual,
+      best,
+      worst,
+      strokesSaved: worst - actual,
+      rating,
+    };
+  });
+  return {
+    gameId: String(source.config.key),
+    gameName: getFeaturedGameLabel(match, source.config.key) || getGameLabel(source.config.key),
+    basis: source.policy.basis === 'gross' ? 'gross' : 'net',
+    holes: holes.map(hole => hole.holeNumber),
+    sides,
+  };
+}
 function getTeamHoleScore(holeResult, teamNo, basis = 'net', scoringMode = 'best_ball') {
   const teamScores = (holeResult?.playerScores || []).filter(s => s.team === teamNo);
   if (!teamScores.length) return null;
@@ -6581,6 +6676,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
       scope: ['greenies', 'skins', 'net_skins'].includes(config.key) ? 'individual' : 'team',
       unit: 'dollars',
       money: gameMoney(frozen),
+      basis: String(config.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net',
     };
     if (config.key === 'nassau') {
       const policy = normalizeNassauConfig(config, match);
@@ -6591,6 +6687,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
       if (back.length) segments.push({ label: 'Back', holes: back });
       return {
         ...common, type: 'nassau', sides: sideRows, segments,
+        basis: policy.basis === 'gross' ? 'gross' : 'net',
         bestN: normalizeCountingBalls(policy.countingBalls, 1),
         allowance: { key: 'featured', label: `${policy.basis === 'gross' ? 'Gross' : `Best ${normalizeCountingBalls(policy.countingBalls, 1)} · ${policy.handicapAllowancePercent}% off the low`}` },
         stakePerSegment: Number(policy.stakesOverall ?? policy.stakesFront ?? policy.stake ?? 0) || 0,
@@ -6607,7 +6704,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
     if (config.key === 'greenies') {
       const winners = config.winnersByHole || match.greeniesWinners || {};
       return {
-        ...common, type: 'greenies', allowance: { key: 'featured', label: 'Gross' },
+        ...common, type: 'greenies', basis: 'gross', allowance: { key: 'featured', label: 'Gross' },
         detail: {
           stakePerPlayer: Number(config.stakePerPlayer ?? config.stake ?? 0) || 0,
           winners: Object.fromEntries(Object.entries(winners).map(([hole, winner]) => [String(hole), typeof winner === 'object' ? String(winner.winner || winner.playerId || '') : String(winner || '')]).filter(([, winner]) => winner)),
@@ -6619,6 +6716,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
       const result = computeNinePointResults(match, effectiveMetrics, config);
       return {
         ...common, type: 'ninepoint', scope: 'individual', unit: 'points', lowWins: false,
+        basis: config.basis === 'gross' ? 'gross' : 'net',
         allowance: { key: config.basis === 'gross' ? 'courseNet' : 'featured', label: config.basis === 'gross' ? 'Gross' : 'Game Net' },
         pointValue: Number(result.stakePerPoint || config.stakePerPoint || 0),
         settlementMode: 'headToHead',
@@ -6630,6 +6728,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
       const result = computeSkinResults(match, effectiveMetrics, config);
       return {
         ...common, type: 'skins', scope: 'individual',
+        basis: config.key === 'skins' ? 'gross' : 'net',
         allowance: { key: config.key === 'skins' ? 'courseNet' : 'featured', label: config.key === 'skins' ? 'Gross' : 'Game Net' },
         detail: {
           stakePerPlayer: Number(config.stakePerPlayer ?? config.stake ?? 0) || 0,
@@ -6647,7 +6746,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
   if (!games.some(game => game.featured)) {
     games.push({
       id: 'stroke-net', name: 'Stroke Play · Course Net', type: 'strokeplay', featured: true,
-      scope: 'individual', unit: 'strokes', lowWins: true, allowance: { key: 'courseNet', label: 'Full Course Handicap' },
+      scope: 'individual', unit: 'strokes', lowWins: true, basis: 'net', allowance: { key: 'courseNet', label: 'Full Course Handicap' },
       pointsByHole: Object.fromEntries(players.map(player => [player.id, player.gross.map((gross, index) => gross == null ? null : gross - player.strokes.courseNet[index] - Number(holes[index]?.par || 0))])),
       money: Object.fromEntries(players.map(player => [player.id, 0])), segments: [{ label: 'Round', holes: holeNumbers.slice() }],
     });
@@ -6662,7 +6761,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
       id: String(press.gameId || `press-${index + 1}`), name: `Press · H${start}–H${end}`,
       type: 'matchplay', featured: false, scope: 'team', sides: sideRows,
       segments: [{ label: `Press H${start}–H${end}`, holes: pressHoles }], bestN: parentNassau.bestN,
-      allowance: clonePlain(parentNassau.allowance), stakePerSegment: Number(press.stake || press.config?.wagerAmount || 0) || 0,
+      basis: parentNassau.basis, allowance: clonePlain(parentNassau.allowance), stakePerSegment: Number(press.stake || press.config?.wagerAmount || 0) || 0,
       unit: 'dollars', money: gameMoney(press), parentGameId: parentNassau.id,
     });
   });
@@ -6695,6 +6794,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
     sides,
     players,
     games,
+    partnership: computeBestBallPartnershipStatistics(match, effectiveMetrics),
     memories: (record.notes?.memories || []).map(memory => ({ hole: Number(memory.holeNumber || memory.hole || 0), text: String(memory.text || memory.note || memory.description || '') })).filter(memory => memory.text),
     payments: (record.transactions || []).map(payment => ({ from: String(payment.payerId), to: String(payment.payeeId), amt: Number(payment.amount) || 0 })),
   };
@@ -24328,6 +24428,7 @@ function installDyeLedgerLiveEngineAdapter() {
     normalizeNassauConfig,
     getRecommendedNassauAllowance,
     resolveTeamHoleScore,
+    computeBestBallPartnershipStatistics,
     formatNassauPolicyLabel,
     holeCourseNetStrokeAllowance,
     getGameRelativeStrokeAllowance,

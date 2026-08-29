@@ -2598,8 +2598,12 @@ const uiState = {
 let pendingNextRoundSessionContext = null;
 
 
+const LEDGER_ENTRY_ACCEPTANCE_STORAGE_KEY = 'dye-ledger:pending-ledger-entry-acceptance';
+const LEDGER_ENTRY_REVISION_STORAGE_KEY = 'dye-ledger:pending-ledger-entry-revision';
 const state = DYE_LEDGER_ADAPTER_MODE ? { players: [], courses: [], matches: [], notes: '' } : loadState();
 normalizeState();
+if (!DYE_LEDGER_ADAPTER_MODE) consumePendingLedgerEntryAcceptance();
+if (!DYE_LEDGER_ADAPTER_MODE) consumePendingLedgerEntryRevision();
 
 function uid() {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
@@ -6671,6 +6675,10 @@ function buildLedgerEntryReportModel(match, metrics = null) {
     .filter(Boolean).join(' · ');
   return {
     meta: {
+      roundId: String(match?.id || ''),
+      appVersion: APP_VERSION,
+      rulesVersion: ROUND_RECORD_SCHEMA_VERSION,
+      acceptanceStatus: 'draft',
       course: course.name || course.courseName || match.courseName || 'Golf Course',
       layout: tee.name || tee.teeName || match.layoutName || 'Round',
       date: record.meta?.date || match.date || new Date().toISOString().slice(0, 10),
@@ -6690,6 +6698,101 @@ function buildLedgerEntryReportModel(match, metrics = null) {
     memories: (record.notes?.memories || []).map(memory => ({ hole: Number(memory.holeNumber || memory.hole || 0), text: String(memory.text || memory.note || memory.description || '') })).filter(memory => memory.text),
     payments: (record.transactions || []).map(payment => ({ from: String(payment.payerId), to: String(payment.payeeId), amt: Number(payment.amount) || 0 })),
   };
+}
+
+function normalizeAcceptedLedgerEntrySnapshot(snapshot, roundId = '') {
+  if (!snapshot || snapshot.status !== 'accepted' || !snapshot.acceptedAt || !snapshot.report) return null;
+  const report = clonePlain(snapshot.report);
+  const reportRoundId = String(report?.meta?.roundId || snapshot.roundId || '');
+  if (!reportRoundId || (roundId && reportRoundId !== String(roundId))) return null;
+  const story = String(report?.meta?.story || snapshot.story || '').trim();
+  if (!story || report?.meta?.status !== 'final') return null;
+  report.meta.story = story;
+  report.meta.acceptanceStatus = 'accepted';
+  report.meta.acceptedAt = snapshot.acceptedAt;
+  return {
+    schemaVersion: 1,
+    status: 'accepted',
+    roundId: reportRoundId,
+    acceptedAt: snapshot.acceptedAt,
+    appVersion: String(snapshot.appVersion || report.meta.appVersion || APP_VERSION),
+    rulesVersion: snapshot.rulesVersion ?? report.meta.rulesVersion ?? ROUND_RECORD_SCHEMA_VERSION,
+    story,
+    storyProvenance: String(snapshot.storyProvenance || report.meta.storyProvenance || ''),
+    report,
+  };
+}
+function getAcceptedLedgerEntrySnapshot(match) {
+  return normalizeAcceptedLedgerEntrySnapshot(match?.ledgerEntrySnapshot, match?.id);
+}
+function acceptLedgerEntrySnapshotEnvelope(envelope, { persistNow = true } = {}) {
+  const roundId = String(envelope?.roundId || envelope?.report?.meta?.roundId || '');
+  const match = state.matches.find(row => String(row?.id || '') === roundId);
+  if (!match || match.status !== 'complete') return { accepted: false, reason: 'round-not-complete' };
+  const acceptedAt = String(envelope?.acceptedAt || new Date().toISOString());
+  const report = clonePlain(envelope?.report || null);
+  if (!report?.meta || report.meta.status !== 'final' || !String(report.meta.story || '').trim()) {
+    return { accepted: false, reason: 'invalid-report' };
+  }
+  report.meta.roundId = roundId;
+  report.meta.acceptanceStatus = 'accepted';
+  report.meta.acceptedAt = acceptedAt;
+  const snapshot = normalizeAcceptedLedgerEntrySnapshot({
+    schemaVersion: 1,
+    status: 'accepted',
+    roundId,
+    acceptedAt,
+    appVersion: report.meta.appVersion || APP_VERSION,
+    rulesVersion: report.meta.rulesVersion ?? ROUND_RECORD_SCHEMA_VERSION,
+    story: report.meta.story,
+    storyProvenance: report.meta.storyProvenance,
+    report,
+  }, roundId);
+  if (!snapshot) return { accepted: false, reason: 'invalid-report' };
+  const priorSnapshot = match.ledgerEntrySnapshot;
+  match.ledgerEntrySnapshot = snapshot;
+  if (persistNow && !persist({ skipRender: true })) {
+    match.ledgerEntrySnapshot = priorSnapshot;
+    return { accepted: false, reason: 'save-failed' };
+  }
+  if (persistNow && match.storageMode === 'shared' && isCurrentDeviceMatchHost(match)) {
+    void uploadSharedMatch(match).catch(error => console.warn('Accepted Ledger Entry cloud sync failed.', error));
+  }
+  return { accepted: true, snapshot: clonePlain(snapshot) };
+}
+function consumePendingLedgerEntryAcceptance(storage = localStorage) {
+  let envelope = null;
+  try { envelope = JSON.parse(storage.getItem(LEDGER_ENTRY_ACCEPTANCE_STORAGE_KEY) || 'null'); } catch (_error) {}
+  if (!envelope) return { accepted: false, reason: 'none' };
+  const result = acceptLedgerEntrySnapshotEnvelope(envelope, { persistNow: true });
+  if (result.accepted || result.reason === 'invalid-report') {
+    try { storage.removeItem(LEDGER_ENTRY_ACCEPTANCE_STORAGE_KEY); } catch (_error) {}
+  }
+  return result;
+}
+function unlockAcceptedLedgerEntry(roundId, { persistNow = true } = {}) {
+  const match = state.matches.find(row => String(row?.id || '') === String(roundId || ''));
+  if (!match || !getAcceptedLedgerEntrySnapshot(match)) return { unlocked: false, reason: 'not-found' };
+  const priorSnapshot = match.ledgerEntrySnapshot;
+  match.ledgerEntrySnapshot = null;
+  if (persistNow && !persist({ skipRender: true })) {
+    match.ledgerEntrySnapshot = priorSnapshot;
+    return { unlocked: false, reason: 'save-failed' };
+  }
+  if (persistNow && match.storageMode === 'shared' && isCurrentDeviceMatchHost(match)) {
+    void uploadSharedMatch(match).catch(error => console.warn('Ledger Entry revision cloud sync failed.', error));
+  }
+  return { unlocked: true };
+}
+function consumePendingLedgerEntryRevision(storage = localStorage) {
+  let request = null;
+  try { request = JSON.parse(storage.getItem(LEDGER_ENTRY_REVISION_STORAGE_KEY) || 'null'); } catch (_error) {}
+  if (!request) return { unlocked: false, reason: 'none' };
+  const result = unlockAcceptedLedgerEntry(request.roundId, { persistNow: true });
+  if (result.unlocked || result.reason === 'not-found') {
+    try { storage.removeItem(LEDGER_ENTRY_REVISION_STORAGE_KEY); } catch (_error) {}
+  }
+  return result;
 }
 
 function buildLedgerEntryFactsOnlyStory(record, match = null, metrics = null) {
@@ -8945,6 +9048,18 @@ function storeLedgerReportTransfer(reportModel, { autoPrint = true } = {}) {
   }));
   return transferKey;
 }
+function launchLedgerReportModel(reportModel, { sameTabLedger, exportWindow, autoPrint = true }) {
+  window.__DYE_LEDGER_PENDING_REPORT__ = reportModel;
+  window.__DYE_LEDGER_AUTO_PRINT__ = !!autoPrint;
+  const transferKey = storeLedgerReportTransfer(reportModel, { autoPrint });
+  const reportUrl = new URL(`ledger-report/shell.html?v=${encodeURIComponent(String(APP_VERSION || '').replace(/^v/i, ''))}`, window.location.href);
+  reportUrl.searchParams.set('reportKey', transferKey);
+  if (sameTabLedger) window.location.assign(reportUrl.href);
+  else {
+    exportWindow.location.replace(reportUrl.href);
+    exportWindow.focus();
+  }
+}
 async function openUnifiedExport(match, printView = 'ledger') {
   const metrics = computeMatchMetrics(match);
   if (!metrics) {
@@ -8956,6 +9071,7 @@ async function openUnifiedExport(match, printView = 'ledger') {
     return;
   }
   const sameTabLedger = printView === 'ledger' && shouldUseSameTabLedgerReport();
+  const acceptedLedgerReport = printView === 'ledger' ? getAcceptedLedgerEntrySnapshot(match)?.report || null : null;
   const exportWindow = sameTabLedger ? null : window.open('', '_blank');
   if (!sameTabLedger && !exportWindow) {
     toast('Please allow pop-ups to share this round.');
@@ -8966,11 +9082,22 @@ async function openUnifiedExport(match, printView = 'ledger') {
     exportWindow.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Preparing Export</title></head><body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:24px;"><strong>Reconciling shared scores...</strong><div style="margin-top:8px;color:#5a667a;">Pulling latest shared scores before creating the report.</div></body></html>');
     exportWindow.document.close();
   }
-  if (match.storageMode === 'shared' && printView !== 'scorecard') {
+  if (match.storageMode === 'shared' && printView !== 'scorecard' && !acceptedLedgerReport) {
     await reconcileSharedMatchBeforeSummary(match, { silent: false });
   }
   const refreshedMetrics = computeMatchMetrics(match) || metrics;
   if (printView === 'ledger') {
+    if (acceptedLedgerReport) {
+      if (exportWindow) exportWindow.document.body.innerHTML = '<strong>Opening accepted Ledger Entry…</strong><div style="margin-top:8px;color:#5a667a;">Using the Story of the Round and report accepted for this completed round.</div>';
+      toast('Opening the accepted Ledger Entry…');
+      try {
+        launchLedgerReportModel(clonePlain(acceptedLedgerReport), { sameTabLedger, exportWindow });
+      } catch (error) {
+        if (exportWindow) exportWindow.close();
+        toast('The accepted Ledger Entry could not be opened.');
+      }
+      return;
+    }
     if (exportWindow) exportWindow.document.body.innerHTML = '<strong>Preparing The Story of the Round…</strong><div style="margin-top:8px;color:#5a667a;">Using the authoritative scorecard, competitions, settlement, Memories, and recorded context.</div>';
     toast('Generating a fresh Story of the Round…', 45000);
     let ledgerStory;
@@ -8990,17 +9117,8 @@ async function openUnifiedExport(match, printView = 'ledger') {
     reportModel.meta.story = ledgerStory.text;
     reportModel.meta.storyProvenance = ledgerStory.provenance;
     reportModel.meta.storyFallbackReason = ledgerStory.fallbackReason || null;
-    window.__DYE_LEDGER_PENDING_REPORT__ = reportModel;
-    window.__DYE_LEDGER_AUTO_PRINT__ = true;
     try {
-      const transferKey = storeLedgerReportTransfer(reportModel);
-      const reportUrl = new URL(`ledger-report/shell.html?v=${encodeURIComponent(String(APP_VERSION || '').replace(/^v/i, ''))}`, window.location.href);
-      reportUrl.searchParams.set('reportKey', transferKey);
-      if (sameTabLedger) window.location.assign(reportUrl.href);
-      else {
-        exportWindow.location.replace(reportUrl.href);
-        exportWindow.focus();
-      }
+      launchLedgerReportModel(reportModel, { sameTabLedger, exportWindow, autoPrint: false });
     } catch (error) {
       if (exportWindow) exportWindow.close();
       toast('Ledger Entry could not be opened.');
@@ -9018,6 +9136,8 @@ async function openUnifiedExport(match, printView = 'ledger') {
   exportWindow.document.close();
   try { exportWindow.focus(); } catch (err) {}
 }
+globalThis.__DYE_LEDGER_ACCEPT_REPORT__ = envelope => acceptLedgerEntrySnapshotEnvelope(envelope, { persistNow: true });
+globalThis.__DYE_LEDGER_UNLOCK_REPORT__ = roundId => unlockAcceptedLedgerEntry(roundId, { persistNow: true });
 function prepareScoreboardPrintLayout(printView = 'summary') {
   const root = document.getElementById('leaderboardWrap');
   const classicCard = document.querySelector('.print-section-classic-scorecard');
@@ -9294,6 +9414,7 @@ function normalizeMatch(match) {
   match.roundRecapLastError = match.roundRecapLastError && typeof match.roundRecapLastError === 'object'
     ? { code: String(match.roundRecapLastError.code || ''), status: Number(match.roundRecapLastError.status) || 0, occurredAt: match.roundRecapLastError.occurredAt || null }
     : null;
+  match.ledgerEntrySnapshot = normalizeAcceptedLedgerEntrySnapshot(match.ledgerEntrySnapshot, match.id);
   match.roundEndReason = String(match.roundEndReason || '').trim();
   match.roundCompletionState = match.roundCompletionState && typeof match.roundCompletionState === 'object' ? match.roundCompletionState : null;
   match.roundContext = normalizeRoundContext(match.roundContext);
@@ -13345,7 +13466,7 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
     status: match.status || 'active',
     course_id: match.courseId || '',
     reference_tee_id: match.teeId || '',
-    course_snapshot: { ...courseSnapshot, sharedMatchMeta: { tripId: match.tripId || null, eventId: match.eventId || null, scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device'), matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || ''), hostDeviceId: match.sharedHostDeviceId || getSharedDeviceId(), hostParticipantId: match.sharedHostParticipantId || getCurrentSharedParticipantId(match), devices: Array.isArray(match.sharedDevices) ? match.sharedDevices : [], participants: getSharedAssignmentParticipants(match), playerAssignments: match.sharedPlayerAssignments || {}, playerAssignmentState: match.sharedPlayerAssignmentState || {}, memories: getRoundMemories(match), memoriesUpdatedAt: new Date().toISOString(), roundContext: normalizeRoundContext(match.roundContext), roundTiming: match.roundTiming || { startedAt: null, endedAt: null }, holeFirstCompletedAt: match.holeFirstCompletedAt || {}, greeniesWinners: isCurrentDeviceMatchHost(match) ? clonePlain(match.greeniesWinners || {}) : {}, greeniesUpdatedAt: match.greeniesUpdatedAt || null, sspFacts: buildSharedSspFacts(match), pressConfig: normalizePressConfig(match.pressConfig), presses: isCurrentDeviceMatchHost(match) ? clonePlain(match.presses || []) : [], roundRecordSnapshot: isCurrentDeviceMatchHost(match) && isFrozenRoundRecord(match.roundRecordSnapshot) ? clonePlain(match.roundRecordSnapshot) : null } },
+    course_snapshot: { ...courseSnapshot, sharedMatchMeta: { tripId: match.tripId || null, eventId: match.eventId || null, scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device'), matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || ''), hostDeviceId: match.sharedHostDeviceId || getSharedDeviceId(), hostParticipantId: match.sharedHostParticipantId || getCurrentSharedParticipantId(match), devices: Array.isArray(match.sharedDevices) ? match.sharedDevices : [], participants: getSharedAssignmentParticipants(match), playerAssignments: match.sharedPlayerAssignments || {}, playerAssignmentState: match.sharedPlayerAssignmentState || {}, memories: getRoundMemories(match), memoriesUpdatedAt: new Date().toISOString(), roundContext: normalizeRoundContext(match.roundContext), roundTiming: match.roundTiming || { startedAt: null, endedAt: null }, holeFirstCompletedAt: match.holeFirstCompletedAt || {}, greeniesWinners: isCurrentDeviceMatchHost(match) ? clonePlain(match.greeniesWinners || {}) : {}, greeniesUpdatedAt: match.greeniesUpdatedAt || null, sspFacts: buildSharedSspFacts(match), pressConfig: normalizePressConfig(match.pressConfig), presses: isCurrentDeviceMatchHost(match) ? clonePlain(match.presses || []) : [], roundRecordSnapshot: isCurrentDeviceMatchHost(match) && isFrozenRoundRecord(match.roundRecordSnapshot) ? clonePlain(match.roundRecordSnapshot) : null, ledgerEntrySnapshot: isCurrentDeviceMatchHost(match) ? clonePlain(getAcceptedLedgerEntrySnapshot(match)) : null } },
     format: match.format || 'teams',
     allowance: Number(match.allowance) || 100,
     hole_count: getRequestedHoleCount(match),
@@ -13768,6 +13889,7 @@ function hydrateMatchFromCloudBundle(bundle) {
     hostDeviceId: sharedMeta.hostDeviceId || null,
     roundRecordSnapshot: isFrozenRoundRecord(sharedMeta.roundRecordSnapshot) ? clonePlain(sharedMeta.roundRecordSnapshot) : null,
     roundRecordSnapshotHistory: [],
+    ledgerEntrySnapshot: normalizeAcceptedLedgerEntrySnapshot(sharedMeta.ledgerEntrySnapshot, matchRow?.id),
     pressConfig: normalizePressConfig(sharedMeta.pressConfig),
     presses: Array.isArray(sharedMeta.presses) ? clonePlain(sharedMeta.presses) : [],
     players: (players || []).map((row, idx) => ({
@@ -16184,6 +16306,7 @@ function markRoundReopenedForEditing(match) {
     match.roundRecordSnapshotHistory = [...(match.roundRecordSnapshotHistory || []), superseded];
     match.roundRecordSnapshot = null;
   }
+  match.ledgerEntrySnapshot = null;
   match.previousCompletedAt = match.completedAt || match.previousCompletedAt || null;
   match.reopenedAt = new Date().toISOString();
   match.status = 'active';
@@ -24282,6 +24405,8 @@ function installDyeLedgerLiveEngineAdapter() {
     buildMatchSummaryAnalyticsHighlights,
     buildLedgerEntryBody,
     buildLedgerEntryReportModel,
+    normalizeAcceptedLedgerEntrySnapshot,
+    getAcceptedLedgerEntrySnapshot,
     buildLedgerEntryStoryPayload,
     addVerifiedGreeniesToLedgerStory,
     buildLedgerEntryFactsOnlyStory,

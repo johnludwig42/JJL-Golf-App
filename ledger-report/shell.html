@@ -26,6 +26,7 @@ body{background:#2E322C;font-family:var(--body);color:var(--ink);font-size:9pt;l
 .report-nav button{appearance:none;border:1px solid rgba(255,255,255,.34);border-radius:10px;
   background:var(--paper);color:var(--ink);padding:8px 12px;font:600 9pt var(--disp);cursor:pointer}
 .report-nav button:focus-visible{outline:3px solid #E5C567;outline-offset:2px}
+.report-nav button[disabled]{opacity:.72;cursor:default}
 .report-nav-status{font:400 7.5pt var(--body);color:rgba(255,255,255,.78)}
 .report-missing{width:8.5in;min-height:11in;margin:22px auto;padding:1in;background:var(--paper)}
 
@@ -216,6 +217,9 @@ tr:last-child td{border-bottom:none}
 
 <nav class="report-nav" aria-label="Ledger Entry actions">
   <button id="returnToMatchBtn" type="button">‹ Return to Match</button>
+  <button id="acceptLedgerEntryBtn" type="button">Accept &amp; Finalize</button>
+  <button id="reviseLedgerEntryBtn" type="button" hidden>Unlock &amp; Regenerate</button>
+  <button id="printLedgerEntryBtn" type="button">Print / Save PDF</button>
   <span class="report-nav-status"><strong>Before printing:</strong> open More settings and turn off browser headers and footers. The Ledger footer will remain on every page.</span>
   <span id="returnToMatchStatus" class="report-nav-status" hidden>Close this tab to return to the match.</span>
 </nav>

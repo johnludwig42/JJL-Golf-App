@@ -139,9 +139,9 @@ test('current release identity, report assets, and statistics-page contract are 
   for (const name of currentBrandingAssetNames) {
     assert.equal(existsSync(new URL(`../branding/${name}`, import.meta.url)), true);
   }
-  assert.match(reportSource, /buildTrackedStatisticsPage\("performance"\)/);
+  assert.match(reportSource, /trackedStatisticsGroups\("performance"\)/);
   assert.match(reportSource, /Player statistics · Shot patterns/);
-  assert.match(reportSource, /buildTrackedStatisticsPage\("patterns"\)/);
+  assert.match(reportSource, /trackedStatisticsGroups\("patterns"\)/);
   assert.match(reportSource, /Winning Side perspective/);
   assert.match(reportSource, /Approach<br>unknown/);
   assert.match(reportSource, /Recovery<br>lie unknown/);

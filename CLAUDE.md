@@ -25,6 +25,7 @@ Read these sources before changing code:
 - Ledger Entry never accepts an unverified generated story. When online generation fails, it uses the deterministic authoritative-facts story.
 - Grind is limited to four golfers editable by one scorekeeper; otherwise use Enhanced.
 - Every release gets a new cache name and immutable branding filenames.
+- Release-identity assertions must derive the current version from `package.json` through the shared test helper; test files must not hard-code the current release version.
 
 ## Required workflow
 

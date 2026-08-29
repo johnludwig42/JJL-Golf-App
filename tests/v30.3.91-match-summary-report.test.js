@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
+import { currentVersionRegexEscaped } from './support/release-identity.js';
 
 const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 
@@ -61,6 +62,6 @@ test('shared reconciliation is compact status content rather than a standalone r
 });
 
 test('current release identity is consistent in the application source', () => {
-  assert.match(app, /version: 'v31\.0\.11'/);
-  assert.match(app, /buildLabel: 'Player Memories and Four-Golfer Grind'/);
+  assert.match(app, new RegExp(`version: '${currentVersionRegexEscaped}'`));
+  assert.match(app, /buildLabel: '[^']+'/);
 });

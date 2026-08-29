@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
+import { currentVersionBare, currentVersionBareRegexEscaped, currentVersionPrefixed, currentVersionRegexEscaped } from './support/release-identity.js';
 
 const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -74,11 +75,11 @@ function roundFixture(engine) {
 }
 
 test('current release identity is consistent across runtime, cache, manifest, and package metadata', () => {
-  assert.equal(pkg.version, '31.0.11');
-  assert.equal(manifest.version, 'v31.0.11');
-  assert.match(app, /versionNumber:\s*'31\.0\.11'/);
-  assert.match(worker, /v31\.0\.11/);
-  assert.match(html, /id="appVersionLabel">v31\.0\.11/);
+  assert.equal(pkg.version, currentVersionBare);
+  assert.equal(manifest.version, currentVersionPrefixed);
+  assert.match(app, new RegExp(`versionNumber:\\s*'${currentVersionBareRegexEscaped}'`));
+  assert.match(worker, new RegExp(currentVersionRegexEscaped));
+  assert.match(html, new RegExp(`id="appVersionLabel">${currentVersionRegexEscaped}`));
 });
 
 test('critical state writes are all-or-error and preserve the prior durable payload on failure', () => {

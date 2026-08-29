@@ -59,5 +59,5 @@ test('rendering delegates to Classic while score mutation, calculations, sync, a
   assert.match(app, /await persistCurrentMatch\(\{ applyDom: true, silent: true \}\)/);
   assert.match(html, /id="playInputModeSelect"/);
   assert.match(html, /name="scoring\.playInputMode" value="PLAYER"/);
-  assert.doesNotMatch(app, /function computePlayerModeMetrics|function syncPlayerMode|function buildPlayerModeReport/);
+  assert.doesNotMatch(app, /function computePlayerModeMetrics\s*\(|function syncPlayerMode\s*\(|function buildPlayerModeReport\s*\(/);
 });

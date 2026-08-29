@@ -1,17 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
+import { currentBrandingAssetNames, currentVersionPrefixed, currentVersionRegexEscaped } from './support/release-identity.js';
 
 const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 
-test('v31.0.13 release identity and immutable assets are complete', () => {
-  assert.match(app, /version: 'v31\.0\.13'/);
-  assert.match(html, /id="appVersionFooter">v31\.0\.13/);
-  assert.equal(existsSync(new URL('../BUILD_NOTES_v31.0.13.md', import.meta.url)), true);
-  for (const name of ['app-icon-192', 'app-icon-512', 'apple-touch-icon', 'favicon-32', 'favicon-16']) {
-    assert.equal(existsSync(new URL(`../branding/${name}-v31.0.13.png`, import.meta.url)), true);
+test('current release identity and immutable assets are complete', () => {
+  assert.match(app, new RegExp(`version: '${currentVersionRegexEscaped}'`));
+  assert.match(html, new RegExp(`id="appVersionFooter">${currentVersionRegexEscaped}`));
+  assert.equal(existsSync(new URL(`../BUILD_NOTES_${currentVersionPrefixed}.md`, import.meta.url)), true);
+  for (const name of currentBrandingAssetNames) {
+    assert.equal(existsSync(new URL(`../branding/${name}`, import.meta.url)), true);
   }
 });
 

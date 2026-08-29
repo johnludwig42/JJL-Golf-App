@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
+import { currentBrandingAssetNames, currentVersionPrefixed, currentVersionRegexEscaped, findHardCodedCurrentVersionLiterals } from './support/release-identity.js';
 
 const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -46,13 +47,14 @@ function fourGolferFixture(overrides = {}) {
   };
 }
 
-test('v31.0.14 release identity and immutable PWA assets are complete', () => {
-  assert.match(app, /version: 'v31\.0\.14'/);
-  assert.match(html, /id="appVersionFooter">v31\.0\.14/);
-  assert.equal(existsSync(new URL('../BUILD_NOTES_v31.0.14.md', import.meta.url)), true);
-  for (const name of ['app-icon-192', 'app-icon-512', 'apple-touch-icon', 'favicon-32', 'favicon-16']) {
-    assert.equal(existsSync(new URL(`../branding/${name}-v31.0.14.png`, import.meta.url)), true);
+test('current release identity and immutable PWA assets are complete without hard-coded current-version literals', () => {
+  assert.match(app, new RegExp(`version: '${currentVersionRegexEscaped}'`));
+  assert.match(html, new RegExp(`id="appVersionFooter">${currentVersionRegexEscaped}`));
+  assert.equal(existsSync(new URL(`../BUILD_NOTES_${currentVersionPrefixed}.md`, import.meta.url)), true);
+  for (const name of currentBrandingAssetNames) {
+    assert.equal(existsSync(new URL(`../branding/${name}`, import.meta.url)), true);
   }
+  assert.deepEqual(findHardCodedCurrentVersionLiterals(), []);
 });
 
 test('More Detail defaults closed, is remembered only by device storage, and never mutates round data', () => {

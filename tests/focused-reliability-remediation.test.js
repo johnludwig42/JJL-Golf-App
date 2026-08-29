@@ -7,6 +7,7 @@ import './v30.3.77-calculation-assurance.test.js';
 import './v30.3.78-summary-insights.test.js';
 import './v30.3.79-match-summary-recap.test.js';
 import './v30.3.80-match-setup-navigation.test.js';
+import { currentVersionRegexEscaped } from './support/release-identity.js';
 
 const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -133,10 +134,10 @@ test('focused setup disclosures, Honors pill, and header-only icon change match 
   assert.match(app, /score-primary-status score-honors-status/);
   assert.match(css, /\.score-status-row\{display:grid;justify-items:center/);
   assert.doesNotMatch(css, /score-honors-status::before/);
-  assert.match(html, /<img src="\.\/branding\/apple-touch-icon-v31\.0\.11\.png" alt="The Dye Ledger"/);
+  assert.match(html, new RegExp(`<img src="\\./branding/apple-touch-icon-${currentVersionRegexEscaped}\\.png" alt="The Dye Ledger"`));
   assert.equal((html.match(/branding\/app-icon-192\.png/g) || []).length, 0);
-  assert.match(manifest, /branding\/app-icon-192-v31\.0\.11\.png/);
-  assert.match(manifest, /branding\/apple-touch-icon-v31\.0\.11\.png/);
+  assert.match(manifest, new RegExp(`branding/app-icon-192-${currentVersionRegexEscaped}\\.png`));
+  assert.match(manifest, new RegExp(`branding/apple-touch-icon-${currentVersionRegexEscaped}\\.png`));
   const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
   assert.equal(new Set(ids).size, ids.length);
 });

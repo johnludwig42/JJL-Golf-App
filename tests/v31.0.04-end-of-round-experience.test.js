@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
+import { currentBrandingAssetNames, currentVersionBare, currentVersionPrefixed, currentVersionRegexEscaped } from './support/release-identity.js';
 
 const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -70,8 +71,8 @@ test('finalization retains rollback recovery marker, frozen snapshot, and determ
 
 test('same-version service workers do not produce an update offer', () => {
   const engine = loadLiveEngine();
-  assert.equal(engine.shouldOfferServiceWorkerUpdate('31.0.11'), false);
-  assert.equal(engine.shouldOfferServiceWorkerUpdate('v31.0.11'), false);
+  assert.equal(engine.shouldOfferServiceWorkerUpdate(currentVersionBare), false);
+  assert.equal(engine.shouldOfferServiceWorkerUpdate(currentVersionPrefixed), false);
   assert.equal(engine.shouldOfferServiceWorkerUpdate('31.0.08'), true);
   assert.equal(engine.shouldOfferServiceWorkerUpdate(''), true);
 });
@@ -85,11 +86,11 @@ test('completed-round destination exposes summary, ledger, return, and new-match
 });
 
 test('release identity and immutable PWA assets are aligned', () => {
-  assert.equal(pkg.version, '31.0.11');
-  assert.equal(manifest.version, 'v31.0.11');
-  assert.match(app, /version: 'v31\.0\.11'/);
-  assert.match(worker, /cacheName: 'the-dye-ledger-v31\.0\.11'/);
-  for (const name of ['app-icon-192', 'app-icon-512', 'apple-touch-icon', 'favicon-32', 'favicon-16']) {
-    assert.equal(existsSync(new URL(`../branding/${name}-v31.0.11.png`, import.meta.url)), true);
+  assert.equal(pkg.version, currentVersionBare);
+  assert.equal(manifest.version, currentVersionPrefixed);
+  assert.match(app, new RegExp(`version: '${currentVersionRegexEscaped}'`));
+  assert.match(worker, new RegExp(`cacheName: 'the-dye-ledger-${currentVersionRegexEscaped}'`));
+  for (const name of currentBrandingAssetNames) {
+    assert.equal(existsSync(new URL(`../branding/${name}`, import.meta.url)), true);
   }
 });

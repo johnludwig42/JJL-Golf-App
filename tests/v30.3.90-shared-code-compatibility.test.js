@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 
 import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
+import { currentVersionRegexEscaped } from './support/release-identity.js';
 
 const app = fs.readFileSync('app.js', 'utf8');
 const html = fs.readFileSync('index.html', 'utf8');
@@ -37,6 +38,6 @@ test('join and host UI present DYE codes as the sole supported format', () => {
 });
 
 test('current release identity is consistent in the app shell', () => {
-  assert.match(app, /version: 'v31\.0\.11'/);
-  assert.match(html, /id="appVersionFooter">v31\.0\.11</);
+  assert.match(app, new RegExp(`version: '${currentVersionRegexEscaped}'`));
+  assert.match(html, new RegExp(`id="appVersionFooter">${currentVersionRegexEscaped}<`));
 });

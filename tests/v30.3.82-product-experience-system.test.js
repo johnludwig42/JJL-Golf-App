@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { currentVersionBareRegexEscaped, currentVersionRegexEscaped } from './support/release-identity.js';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
@@ -58,8 +59,8 @@ test('print restores the complete Scores record independent of selected destinat
 });
 
 test('v30.3.82 Product Experience remains present after the current PWA upgrade', () => {
-  assert.match(app, /version: 'v31\.0\.11'/);
-  assert.match(html, /apple-touch-icon-v31\.0\.11\.png/);
-  assert.match(html, /style\.css\?v=31\.0\.11/);
+  assert.match(app, new RegExp(`version: '${currentVersionRegexEscaped}'`));
+  assert.match(html, new RegExp(`apple-touch-icon-${currentVersionRegexEscaped}\\.png`));
+  assert.match(html, new RegExp(`style\\.css\\?v=${currentVersionBareRegexEscaped}`));
   assert.match(notes, /v30\.3\.82/);
 });

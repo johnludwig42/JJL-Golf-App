@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
+import { currentBrandingAssetNames, currentVersionBare, currentVersionBareRegexEscaped, currentVersionPrefixed, currentVersionRegexEscaped } from './support/release-identity.js';
 import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
 
 const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
@@ -11,11 +12,11 @@ const manifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
 test('post-v30.3.80 release identity retains immutable PWA assets', () => {
-  assert.equal(pkg.version, '31.0.11');
-  assert.equal(manifest.version, 'v31.0.11');
-  assert.match(app, /versionNumber:\s*'31\.0\.11'/);
-  assert.match(worker, /cacheName:\s*'the-dye-ledger-v31\.0\.11'/);
-  ['app-icon-192-v31.0.11.png', 'app-icon-512-v31.0.11.png', 'apple-touch-icon-v31.0.11.png', 'favicon-32-v31.0.11.png', 'favicon-16-v31.0.11.png']
+  assert.equal(pkg.version, currentVersionBare);
+  assert.equal(manifest.version, currentVersionPrefixed);
+  assert.match(app, new RegExp(`versionNumber:\\s*'${currentVersionBareRegexEscaped}'`));
+  assert.match(worker, new RegExp(`cacheName:\\s*'the-dye-ledger-${currentVersionRegexEscaped}'`));
+  currentBrandingAssetNames
     .forEach(name => assert.equal(existsSync(new URL(`../branding/${name}`, import.meta.url)), true));
 });
 

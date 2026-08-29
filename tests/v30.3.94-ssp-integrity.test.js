@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { currentBrandingAssetNames, currentVersionBareRegexEscaped, currentVersionRegexEscaped } from './support/release-identity.js';
 
 const app = fs.readFileSync('app.js', 'utf8');
 const index = fs.readFileSync('index.html', 'utf8');
@@ -10,11 +11,11 @@ const review = fs.readFileSync('docs/architecture/CONSTITUTIONAL_REVIEW_v30.3.94
 const notes = fs.readFileSync('BUILD_NOTES_v30.3.94.md', 'utf8');
 
 test('current runtime and PWA shell remain version-aligned after v30.3.94', () => {
-  assert.match(app, /version: 'v31\.0\.11'/);
-  assert.match(index, /app\.js\?v=31\.0\.11/);
-  assert.match(serviceWorker, /cacheName: 'the-dye-ledger-v31\.0\.11'/);
-  for (const asset of ['app-icon-192', 'app-icon-512', 'apple-touch-icon', 'favicon-32', 'favicon-16']) {
-    assert.equal(fs.existsSync(`branding/${asset}-v31.0.06.png`), true);
+  assert.match(app, new RegExp(`version: '${currentVersionRegexEscaped}'`));
+  assert.match(index, new RegExp(`app\\.js\\?v=${currentVersionBareRegexEscaped}`));
+  assert.match(serviceWorker, new RegExp(`cacheName: 'the-dye-ledger-${currentVersionRegexEscaped}'`));
+  for (const asset of currentBrandingAssetNames) {
+    assert.equal(fs.existsSync(`branding/${asset}`), true);
   }
 });
 

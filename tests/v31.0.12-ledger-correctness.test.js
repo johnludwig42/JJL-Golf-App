@@ -4,6 +4,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getWinningMarginPerspective } from '../ledger-report/logic.js';
 import { marginEngine } from '../ledger-report/engines.js';
 import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
+import { currentBrandingAssetNames, currentVersionBare, currentVersionPrefixed } from './support/release-identity.js';
 
 const reportSource = readFileSync(new URL('../ledger-report/report.js', import.meta.url), 'utf8');
 const reportShell = readFileSync(new URL('../ledger-report/shell.html', import.meta.url), 'utf8');
@@ -113,13 +114,13 @@ test('unclaimed final carries are disclosed without fabricating settlement', () 
   assert.equal(describeFinalCarry({ per: [{ carried: 0 }] }, 2), '');
 });
 
-test('v31.0.12 release identity, report assets, and statistics-page contract are aligned', () => {
+test('current release identity, report assets, and statistics-page contract are aligned', () => {
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
   const manifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
-  assert.equal(pkg.version, '31.0.12');
-  assert.equal(manifest.version, 'v31.0.12');
-  for (const name of ['app-icon-192', 'app-icon-512', 'apple-touch-icon', 'favicon-32', 'favicon-16']) {
-    assert.equal(existsSync(new URL(`../branding/${name}-v31.0.12.png`, import.meta.url)), true);
+  assert.equal(pkg.version, currentVersionBare);
+  assert.equal(manifest.version, currentVersionPrefixed);
+  for (const name of currentBrandingAssetNames) {
+    assert.equal(existsSync(new URL(`../branding/${name}`, import.meta.url)), true);
   }
   assert.match(reportSource, /buildTrackedStatisticsPage\("performance"\)/);
   assert.match(reportSource, /Player statistics · Shot patterns/);

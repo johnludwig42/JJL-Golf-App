@@ -19,6 +19,7 @@ test('Player Mode presents one sticky hole and featured-match header', () => {
   const selector = app.slice(app.indexOf('function renderHoleSelector'), app.indexOf('function renderSneakySandyPoleyEntry'));
   assert.match(selector, /player-mode-hole-meta/);
   assert.match(selector, /player-mode-header-match-status/);
+  assert.doesNotMatch(selector, /<small>\$\{Number\(metrics\?\.completed/);
   assert.match(selector, /player-mode-entry-counter/);
   assert.match(css, /\.player-mode-hole-header\{position:sticky/);
   assert.match(css, /\.player-mode-hole-header\{position:sticky;top:calc\(var\(--app-chrome-height, 0px\) \+ 8px\);z-index:1400/);

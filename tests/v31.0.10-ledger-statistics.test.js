@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
+import { currentBrandingAssetNames } from './support/release-identity.js';
 
 const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const renderer = readFileSync(new URL('../ledger-report/report.js', import.meta.url), 'utf8');
@@ -43,9 +44,9 @@ function trackedSummaryFixture({ legacy = false } = {}) {
   return { rows: engine.computeStatTrackingSummary(liveMatch, metrics), engine };
 }
 
-test('v31.0.11 immutable release assets remain available', () => {
-  for (const name of ['app-icon-192', 'app-icon-512', 'apple-touch-icon', 'favicon-32', 'favicon-16']) {
-    assert.equal(existsSync(new URL(`../branding/${name}-v31.0.11.png`, import.meta.url)), true);
+test('current immutable release assets remain available', () => {
+  for (const name of currentBrandingAssetNames) {
+    assert.equal(existsSync(new URL(`../branding/${name}`, import.meta.url)), true);
   }
 });
 

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 
 import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
+import { currentVersionBare, currentVersionPrefixed, currentVersionRegexEscaped } from './support/release-identity.js';
 
 const app = fs.readFileSync('app.js', 'utf8');
 const serviceWorker = fs.readFileSync('service-worker.js', 'utf8');
@@ -20,10 +21,10 @@ function memoryStorage() {
 test('v31 identifies the release and uses a dedicated immutable cache', () => {
   const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
   const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
-  assert.equal(pkg.version, '31.0.11');
-  assert.equal(manifest.version, 'v31.0.11');
+  assert.equal(pkg.version, currentVersionBare);
+  assert.equal(manifest.version, currentVersionPrefixed);
   assert.match(app, /function buildLedgerEntryReportModel/);
-  assert.match(serviceWorker, /the-dye-ledger-v31\.0\.11/);
+  assert.match(serviceWorker, new RegExp(`the-dye-ledger-${currentVersionRegexEscaped}`));
 });
 
 test('durable outbox replaces a superseded player-hole operation and survives reload', () => {

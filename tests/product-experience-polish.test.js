@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { currentBrandingAssetNames, currentVersionRegexEscaped } from './support/release-identity.js';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
@@ -49,14 +50,10 @@ test('Library course tools are visually cohesive and maintenance is disclosed', 
 });
 
 test('Home Screen branding is shared by the header while install assets remain complete', () => {
-  assert.match(html, /src="\.\/branding\/apple-touch-icon-v31\.0\.11\.png" alt="The Dye Ledger"/);
-  assert.match(html, /href="\.\/branding\/apple-touch-icon-v31\.0\.11\.png"/);
-  assert.deepEqual(manifest.icons.map(icon => icon.src), [
-    './branding/app-icon-192-v31.0.11.png',
-    './branding/app-icon-512-v31.0.11.png',
-    './branding/apple-touch-icon-v31.0.11.png',
-  ]);
-  for (const asset of ['app-icon-192-v31.0.11.png', 'app-icon-512-v31.0.11.png', 'apple-touch-icon-v31.0.11.png', 'favicon-32-v31.0.11.png', 'favicon-16-v31.0.11.png']) {
+  assert.match(html, new RegExp(`src="\\./branding/apple-touch-icon-${currentVersionRegexEscaped}\\.png" alt="The Dye Ledger"`));
+  assert.match(html, new RegExp(`href="\\./branding/apple-touch-icon-${currentVersionRegexEscaped}\\.png"`));
+  assert.deepEqual(manifest.icons.map(icon => icon.src), currentBrandingAssetNames.slice(0, 3).map(name => `./branding/${name}`));
+  for (const asset of currentBrandingAssetNames) {
     assert.match(serviceWorker, new RegExp(`branding/${asset.replace('.', '\\.')}`));
   }
 });

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
+import { currentVersionRegexEscaped } from './support/release-identity.js';
 
 import {
   compareScoredLedgers,
@@ -84,8 +85,8 @@ test('PDF preflight moves whole fitting sections to a fresh page', () => {
 });
 
 test('release metadata includes a real non-midnight build timestamp', () => {
-  assert.match(app, /version: 'v31\.0\.11'/);
-  assert.match(worker, /version: 'v31\.0\.11'/);
-  assert.match(app, /buildDate: '2026-08-27T20:00:00-04:00'/);
+  assert.match(app, new RegExp(`version: '${currentVersionRegexEscaped}'`));
+  assert.match(worker, new RegExp(`version: '${currentVersionRegexEscaped}'`));
+  assert.match(app, /buildDate: '\d{4}-\d{2}-\d{2}T(?!00:00:00)[0-2]\d:[0-5]\d:[0-5]\d(?:\.\d{3})?(?:Z|[+-]\d{2}:\d{2})'/);
   assert.doesNotMatch(app, /buildDate: '2026-08-05T04:00:00\.000Z'/);
 });

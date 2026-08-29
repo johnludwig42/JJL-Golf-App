@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
+import { currentVersionRegexEscaped } from './support/release-identity.js';
 
 const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -170,11 +171,11 @@ test('UI/save source locks, current icon references, cache paths, and branding d
   assert.match(app, /disabled aria-disabled="true"/);
   assert.match(app, /validatePressEditContract\(existing, selectedGames/);
   assert.equal((html.match(/rel="apple-touch-icon"/g) || []).length, 1);
-  assert.match(html, /<img src="\.\/branding\/apple-touch-icon-v31\.0\.11\.png" alt="The Dye Ledger"/);
-  assert.match(html, /rel="apple-touch-icon"[^>]+href="\.\/branding\/apple-touch-icon-v31\.0\.11\.png"/);
+  assert.match(html, new RegExp(`<img src="\\./branding/apple-touch-icon-${currentVersionRegexEscaped}\\.png" alt="The Dye Ledger"`));
+  assert.match(html, new RegExp(`rel="apple-touch-icon"[^>]+href="\\./branding/apple-touch-icon-${currentVersionRegexEscaped}\\.png"`));
   assert.doesNotMatch(html, /<img src="\.\/branding\/app-icon-192\.png" alt="The Dye Ledger"/);
-  assert.match(worker, /branding\/apple-touch-icon-v31\.0\.11\.png/);
-  assert.match(worker, /the-dye-ledger-v31\.0\.11/);
+  assert.match(worker, new RegExp(`branding/apple-touch-icon-${currentVersionRegexEscaped}\\.png`));
+  assert.match(worker, new RegExp(`the-dye-ledger-${currentVersionRegexEscaped}`));
   assert.match(branding, /Header \/ iPhone source[^\n]*`branding\/apple-touch-icon\.png`/);
   assert.match(branding, /Existing Home Screen icons may remain cached until the user removes and re-adds the app from Safari/);
   assert.equal(createHash('sha256').update(appleIcon).digest('hex'), 'd38a80dad54f65b47c46eef6c952e02f8fbf94d8b52338a567dcb4664224ba95');

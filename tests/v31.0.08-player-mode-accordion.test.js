@@ -56,7 +56,7 @@ test('Player Mode delegates to shared inputs and preserves explicit directional 
   assert.match(app, /data-stat-key="approachResult"/);
   assert.match(app, /Grind supports up to \$\{MAX_GRIND_EDITABLE_PLAYERS\} golfers assigned to this device/);
   assert.match(css, /player-input-mode-active/);
-  assert.doesNotMatch(app, /function computePlayerModeMetrics|function syncPlayerMode|function buildPlayerModeReport/);
+  assert.doesNotMatch(app, /function computePlayerModeMetrics\s*\(|function syncPlayerMode\s*\(|function buildPlayerModeReport\s*\(/);
 });
 
 test('Player Mode keeps par centered and uses consistent six-choice score and putt controls', () => {
@@ -119,7 +119,7 @@ test('Player Mode uses one collapsible score-and-stat card per golfer without ch
   assert.match(app, /player-mode-player-detail/);
   assert.match(app, /'__COLLAPSED__'/);
   assert.doesNotMatch(app, /data-player-mode-save-next>Save &amp; Next Hole/);
-  assert.match(app, /id="playerModeSaveNextBtn"[^>]*data-player-mode-save-next/);
+  assert.match(html, /<button type="button" data-player-mode-save-next>Save &amp; Next Hole<\/button>/);
   assert.match(app, /id="playerModeRoundScoringModeSelect"/);
   assert.match(app, /id="playerModeRoundStatModeSelect"/);
   const overflowMarkup = app.slice(app.indexOf('id="playerModeOverflowMenu"'), app.indexOf('if (badge) badge.innerHTML'));

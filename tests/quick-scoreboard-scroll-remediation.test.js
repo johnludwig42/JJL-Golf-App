@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
+import { currentVersionPrefixed, currentVersionRegexEscaped } from './support/release-identity.js';
 
 const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
@@ -126,15 +127,15 @@ function sha256(bytes) {
 }
 
 test('header, Apple, desktop PWA, favicon, worker cache, and branding documentation agree without changing artwork bytes', () => {
-  assert.match(htmlSource, /<img src="\.\/branding\/apple-touch-icon-v31\.0\.11\.png" alt="The Dye Ledger"/);
+  assert.match(htmlSource, new RegExp(`<img src="\\./branding/apple-touch-icon-${currentVersionRegexEscaped}\\.png" alt="The Dye Ledger"`));
   assert.equal(count(htmlSource, /rel="apple-touch-icon"/g), 1);
-  assert.match(htmlSource, /rel="apple-touch-icon"[^>]+href="\.\/branding\/apple-touch-icon-v31\.0\.11\.png"/);
+  assert.match(htmlSource, new RegExp(`rel="apple-touch-icon"[^>]+href="\\./branding/apple-touch-icon-${currentVersionRegexEscaped}\\.png"`));
   assert.doesNotMatch(htmlSource, /brand-mark[\s\S]{0,200}app-icon-192/);
 
   const expected = [
-    ['./branding/app-icon-192-v31.0.11.png', '192x192'],
-    ['./branding/app-icon-512-v31.0.11.png', '512x512'],
-    ['./branding/apple-touch-icon-v31.0.11.png', '180x180'],
+    [`./branding/app-icon-192-${currentVersionPrefixed}.png`, '192x192'],
+    [`./branding/app-icon-512-${currentVersionPrefixed}.png`, '512x512'],
+    [`./branding/apple-touch-icon-${currentVersionPrefixed}.png`, '180x180'],
   ];
   assert.deepEqual(manifest.icons.map(icon => [icon.src, icon.sizes]), expected);
   for (const [src, sizes] of expected) {
@@ -146,9 +147,9 @@ test('header, Apple, desktop PWA, favicon, worker cache, and branding documentat
     assert.deepEqual(pngDimensions(bytes), { width, height });
     assert.match(worker, new RegExp(src.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
-  assert.match(worker, /cacheName: 'the-dye-ledger-v31\.0\.11'/);
-  assert.match(htmlSource, /favicon-32-v31\.0\.11\.png/);
-  assert.match(htmlSource, /favicon-16-v31\.0\.11\.png/);
+  assert.match(worker, new RegExp(`cacheName: 'the-dye-ledger-${currentVersionRegexEscaped}'`));
+  assert.match(htmlSource, new RegExp(`favicon-32-${currentVersionRegexEscaped}\\.png`));
+  assert.match(htmlSource, new RegExp(`favicon-16-${currentVersionRegexEscaped}\\.png`));
 
   const master = readFileSync(new URL('../branding/app-icon-master.png', import.meta.url));
   const desktop512 = readFileSync(new URL('../branding/app-icon-512.png', import.meta.url));

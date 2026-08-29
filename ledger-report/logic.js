@@ -68,3 +68,20 @@ export function getWinningMarginPerspective(margin = {}) {
   const sideIndex = margin.winner === 1 ? 1 : 0;
   return { sideIndex, sign: sideIndex === 1 ? 1 : -1, tied: margin.winner === null || margin.winner === undefined };
 }
+
+export function getSegmentMarginPerspective(margin = {}, segment = {}) {
+  const segmentMargin = Number(segment?.margin || 0);
+  const sideIndex = segmentMargin > 0 ? 1 : 0;
+  const sign = sideIndex === 1 ? 1 : -1;
+  let running = 0;
+  const runningMargins = (segment?.idx || []).map(index => {
+    const result = margin?.per?.[index];
+    if (result?.scored !== false) {
+      if (result?.win === 1) running += 1;
+      else if (result?.win === 0) running -= 1;
+    }
+    const displayed = running * sign;
+    return displayed === 0 ? 0 : displayed;
+  });
+  return { sideIndex, sign, tied: segmentMargin === 0, runningMargins };
+}

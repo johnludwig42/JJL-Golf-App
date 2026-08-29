@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
+import { currentVersionBareRegexEscaped } from './support/release-identity.js';
 
 const source = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -145,8 +146,9 @@ test('dedicated Ledger Entry adapter maps existing authoritative facts without c
   assert.match(shell, /Content-Security-Policy/);
   assert.match(shell, /fonts\/archivo-latin-700-normal\.woff2/);
   for (const asset of ['bootstrap.js', 'pack.js', 'engines.js', 'report.js']) {
-    assert.match(shell, new RegExp(`${asset.replace('.', '\\.')}\\?v=31\\.0\\.12`), `${asset} must use the current release cache key`);
+    assert.match(shell, new RegExp(`${asset.replace('.', '\\.')}\\?v=${currentVersionBareRegexEscaped}`), `${asset} must use the current release cache key`);
   }
+  assert.match(renderer, new RegExp(`logic\\.js\\?v=${currentVersionBareRegexEscaped}`));
   assert.match(renderer, /ROUND\.meta\.recap/);
   assert.match(renderer, /ROUND\.meta\.story \|\| ROUND\.meta\.recap/);
   assert.doesNotMatch(renderer, /localStorage|supabase|fetch\(/);

@@ -7,6 +7,7 @@ const source = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const index = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const shell = readFileSync(new URL('../ledger-report/shell.html', import.meta.url), 'utf8');
 const renderer = readFileSync(new URL('../ledger-report/report.js', import.meta.url), 'utf8');
+const bootstrap = readFileSync(new URL('../ledger-report/bootstrap.js', import.meta.url), 'utf8');
 const edgeFunction = readFileSync(new URL('../supabase/functions/round-recap/index.ts', import.meta.url), 'utf8');
 
 function fixture({ complete = true, presses = true } = {}) {
@@ -183,13 +184,17 @@ test('Ledger Story generation is version-bound, non-mutating, and isolated from 
   assert.match(edgeFunction, /Do not discuss Greenies/);
   assert.match(shell, /id="returnToMatchBtn"[^>]*>‹ Return to Match<\/button>/);
   assert.match(shell, /@media print\{[\s\S]*?\.report-nav\{display:none!important\}/);
+  assert.match(shell, /\.ios-print-surface \.page\{height:10\.5in\}/);
+  assert.match(shell, /@media print\{body\{background:#fff\}/);
+  assert.match(bootstrap, /iPad\|iPhone\|iPod/);
+  assert.match(bootstrap, /platform === 'MacIntel'/);
+  assert.match(bootstrap, /classList\.add\('ios-print-surface'\)/);
   assert.match(renderer, /function returnToOriginatingMatch\(\)/);
   assert.match(renderer, /window\.location\.assign\(new URL\("\.\.\/",window\.location\.href\)\.href\)/);
   assert.doesNotMatch(source.slice(source.indexOf('async function prepareLedgerEntryStory'), source.indexOf('function buildLegacyRoundSnapshot')), /persist\(|roundRecapGenerated\s*=|roundRecapFinal\s*=/);
 });
 
 test('Ledger Entry uses a mobile-safe same-tab transfer after fresh story generation', () => {
-  const bootstrap = readFileSync(new URL('../ledger-report/bootstrap.js', import.meta.url), 'utf8');
   assert.match(source, /function shouldUseSameTabLedgerReport\(\)/);
   assert.match(source, /mobileUserAgent \|\| standalone \|\| compactCoarsePointer/);
   assert.match(source, /sessionStorage\.setItem\(transferKey/);

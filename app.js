@@ -16,11 +16,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.13',
-  versionNumber: '31.0.13',
-  cacheName: 'the-dye-ledger-v31.0.13',
-  buildDate: '2026-08-28T18:00:00-04:00',
-  buildLabel: 'Player Mode Clarity and Round Flow'
+  version: 'v31.0.14',
+  versionNumber: '31.0.14',
+  cacheName: 'the-dye-ledger-v31.0.14',
+  buildDate: '2026-08-29T12:00:00-04:00',
+  buildLabel: 'Player Mode Progressive Entry Flow'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -69,6 +69,7 @@ const SMART_SCORE_ADVANCE_PRESETS = {
 };
 const DEFAULT_SMART_SCORE_ADVANCE_PRESET = 'normal';
 const DEVICE_SCORE_ADVANCE_OVERRIDES_STORAGE_KEY = 'dyeLedger.deviceScoreAdvanceOverrides.v1';
+const PLAYER_MODE_MORE_DETAIL_STORAGE_KEY = 'dyeLedger.playerModeMoreDetail.v1';
 const PLAYER_PREFERENCES_STORAGE_KEY = 'dyeLedger.playerPreferences';
 const PLAYER_PREFERENCES_SCHEMA_VERSION = 6;
 const PLAY_INPUT_MODE_SCHEMA_VERSION = 2;
@@ -581,6 +582,7 @@ let scoreAutoAdvanceGeneration = 0;
 const scoreInputSessionState = new Map();
 let pendingScoreAutoAdvanceTimer = null;
 let pendingScoreAutoAdvancePlayerId = null;
+let pendingPlayerModeEntryAdvanceTimer = null;
 const SCORE_ENTRY_MODES = {
   single_device: 'One device scores for everyone',
   assigned_players: 'Assigned Players Score Entry',
@@ -743,6 +745,26 @@ function saveDeviceScoreAdvanceOverride(match, value = {}, storage = localStorag
   } catch {
     return false;
   }
+}
+function isPlayerModeMoreDetailOpen(storage = localStorage) {
+  const result = readJsonStorageRecord(storage, PLAYER_MODE_MORE_DETAIL_STORAGE_KEY);
+  if (result.ok && !result.missing) return result.value?.open === true;
+  if (result.malformed && result.raw === 'open') return true;
+  if (!result.ok && !result.malformed) {
+    localPersistenceDiagnostics.storageAvailable = false;
+    localPersistenceDiagnostics.lastFailedLocalSave = new Date().toISOString();
+    localPersistenceDiagnostics.lastFailureMessage = result.errorMessage || 'More Detail preference could not be read.';
+  }
+  return false;
+}
+function savePlayerModeMoreDetailOpen(open, storage = localStorage) {
+  const result = writeJsonStorageRecord(storage, PLAYER_MODE_MORE_DETAIL_STORAGE_KEY, { open: !!open });
+  if (!result.ok) {
+    localPersistenceDiagnostics.storageAvailable = false;
+    localPersistenceDiagnostics.lastFailedLocalSave = new Date().toISOString();
+    localPersistenceDiagnostics.lastFailureMessage = result.errorMessage || 'More Detail preference could not be saved.';
+  }
+  return result.ok;
 }
 function generateSharedMatchCode(random = Math.random) {
   const digits = Array.from({ length: 6 }, () => String(1 + Math.min(8, Math.floor(Number(random()) * 9)))).join('');
@@ -17041,6 +17063,35 @@ function getPlayerModeEntryProgress(match, metrics, tee, hole) {
   return { total: statuses.length, complete: statuses.filter(row => row.status.complete).length, statuses };
 }
 
+function getPlayerModeRequiredDetailState(match, metrics, playerMetric, tee, hole) {
+  const mode = getEffectivePlayerStatTrackingMode(match, metrics);
+  const advanced = ['ENHANCED', 'GRIND'].includes(mode.active)
+    && isPlayerStatTrackingEnabled(match, playerMetric?.playerId);
+  if (!advanced) return { incomplete: false, fairway: false, approach: false, recoveryLie: false };
+  const playerRef = match?.players?.find(row => String(row.playerId) === String(playerMetric?.playerId));
+  const stat = normalizeHoleStat(playerRef?.stats?.[currentHole - 1] || {}, currentHole - 1);
+  const playerHole = getPlayerHole(match, playerMetric, currentHole - 1, tee) || hole;
+  const par = Number(playerHole?.par || hole?.par || 4);
+  const gross = playerRef?.scores?.[currentHole - 1]?.gross;
+  const derived = deriveGreenInRegulation({ gross, putts: stat.putts, par, puttsSource: stat.puttsSource, override: stat.greenOverride });
+  const fairway = (par === 4 || par === 5) && stat.fairwayResult === 'UNKNOWN';
+  const approach = derived.value === false && stat.approachResult === 'UNKNOWN';
+  const recoveryLie = derived.value === false && stat.recoveryLie === 'UNKNOWN';
+  return { incomplete: fairway || approach || recoveryLie, fairway, approach, recoveryLie };
+}
+
+function getPlayerModeGirProvenance(derived = {}) {
+  if (derived.source === 'calculated') return 'Calculated from gross score and putts';
+  if (derived.source === 'override') return 'Manual correction';
+  return 'Enter score and putts to calculate';
+}
+
+function buildPlayerModeDetailedReadback({ derived, stat, recovery, approachLabels = {} } = {}) {
+  if (derived?.value === null) return 'GIR remains unknown until both gross score and putts are recorded.';
+  const puttsRecorded = stat?.puttsSource !== 'default';
+  return `${derived?.value ? 'Green in regulation' : (stat?.approachResult !== 'UNKNOWN' ? `Missed ${String(approachLabels[stat?.approachResult] || '').toLowerCase()}` : 'Missed GIR')}${recovery?.opportunity ? ` · scramble ${recovery.success ? 'converted' : 'not converted'}` : ''}${puttsRecorded ? ` · ${stat.putts} putt${stat.putts === 1 ? '' : 's'}` : ''}${stat?.penaltyStrokes ? ` · ${stat.penaltyStrokes} penalty stroke${stat.penaltyStrokes === 1 ? '' : 's'}` : ''}.`;
+}
+
 function syncPlayerModeSelectionForHole(match, metrics, tee, hole) {
   const contextKey = `${match?.id || 'match'}:${Number(currentHole) || 1}`;
   if (playerModeSelectionContextKey === contextKey) return;
@@ -17048,6 +17099,80 @@ function syncPlayerModeSelectionForHole(match, metrics, tee, hole) {
   const progress = getPlayerModeEntryProgress(match, metrics, tee, hole);
   const next = progress.statuses.find(row => canEditPlayerScore(match, row.playerMetric.team, row.playerMetric.playerId) && !row.status.complete);
   playerModeSelectedPlayerId = next ? String(next.playerMetric.playerId) : '__COLLAPSED__';
+}
+
+function getPlayerModeEntryAdvanceTarget(match, metrics, tee, hole, playerId) {
+  const progress = getPlayerModeEntryProgress(match, metrics, tee, hole);
+  const editable = progress.statuses
+    .filter(row => canEditPlayerScore(match, row.playerMetric.team, row.playerMetric.playerId))
+    .map(row => ({ ...row, requiredDetail: getPlayerModeRequiredDetailState(match, metrics, row.playerMetric, tee, hole) }));
+  const currentIndex = editable.findIndex(row => String(row.playerMetric.playerId) === String(playerId));
+  const current = currentIndex >= 0 ? editable[currentIndex] : null;
+  const ready = row => !!row?.status.complete && !row.requiredDetail.incomplete;
+  const next = currentIndex >= 0 ? editable.slice(currentIndex + 1).find(row => !ready(row)) : null;
+  return {
+    currentComplete: ready(current),
+    nextPlayerId: next ? String(next.playerMetric.playerId) : '',
+    allEditableComplete: editable.length > 0 && editable.every(ready),
+  };
+}
+
+function cancelPendingPlayerModeEntryAdvance() {
+  if (pendingPlayerModeEntryAdvanceTimer) clearTimeout(pendingPlayerModeEntryAdvanceTimer);
+  pendingPlayerModeEntryAdvanceTimer = null;
+}
+
+function isPlayerModeAdvanceContextCurrent(match, scheduledMatchId, scheduledHole, activeHole = currentHole) {
+  return !!match
+    && String(match.id || '') === String(scheduledMatchId || '')
+    && Number(activeHole) === Number(scheduledHole);
+}
+
+function focusPlayerModeAdvanceTarget(playerId = '') {
+  window.setTimeout(() => {
+    const target = playerId
+      ? document.querySelector(`[data-player-mode-select="${cssEscape(playerId)}"]`)
+      : document.querySelector('[data-player-mode-save-next]');
+    if (!target) return;
+    try {
+      target.focus({ preventScroll: false });
+      target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    } catch {}
+  }, 0);
+}
+
+function schedulePlayerModeEntryAdvance(playerId, match = getActiveMatch()) {
+  cancelPendingPlayerModeEntryAdvance();
+  if (!match || getEffectivePlayInputMode(match) !== PLAY_INPUT_MODES.PLAYER.key) return false;
+  if (!isSmartScoreAdvanceEnabled(match) || isMatchFinished(match)) return false;
+  const scheduledHole = currentHole;
+  const scheduledMatchId = String(match.id || '');
+  const metrics = computeMatchMetrics(match);
+  const tee = metrics?.tee || getTee(match.courseId, match.teeId);
+  const hole = getSelectedScoringHoles(match, tee)[currentHole - 1] || null;
+  const initial = getPlayerModeEntryAdvanceTarget(match, metrics, tee, hole, playerId);
+  if (!initial.currentComplete || (!initial.nextPlayerId && !initial.allEditableComplete)) return false;
+  pendingPlayerModeEntryAdvanceTimer = window.setTimeout(() => {
+    pendingPlayerModeEntryAdvanceTimer = null;
+    const active = getActiveMatch();
+    if (!isPlayerModeAdvanceContextCurrent(active, scheduledMatchId, scheduledHole)) return;
+    if (getEffectivePlayInputMode(active) !== PLAY_INPUT_MODES.PLAYER.key) return;
+    const liveMetrics = computeMatchMetrics(active);
+    const liveTee = liveMetrics?.tee || getTee(active.courseId, active.teeId);
+    const liveHole = getSelectedScoringHoles(active, liveTee)[currentHole - 1] || null;
+    const target = getPlayerModeEntryAdvanceTarget(active, liveMetrics, liveTee, liveHole, playerId);
+    if (!target.currentComplete) return;
+    if (target.nextPlayerId) {
+      playerModeSelectedPlayerId = target.nextPlayerId;
+      renderCurrentMatch();
+      focusPlayerModeAdvanceTarget(target.nextPlayerId);
+    } else if (target.allEditableComplete) {
+      playerModeSelectedPlayerId = '__COLLAPSED__';
+      renderCurrentMatch();
+      focusPlayerModeAdvanceTarget();
+    }
+  }, getSmartScoreAdvanceDelay(match));
+  return true;
 }
 
 function getPlayerModeSavePresentation(match) {
@@ -17119,23 +17244,33 @@ function renderPlayerModeStatEntry(match, hole, metrics) {
   const approachLabels = { '7': 'Deep Left', '8': 'Long', '9': 'Deep Right', '4': 'Left', '5': 'GIR', '6': 'Right', '1': 'Short Left', '2': 'Short', '3': 'Short Right' };
   const approachChoice = value => `<button type="button" data-player-stat-choice="approachResult" data-player-stat-value="${value}" data-stat-player-id="${escapeHtml(selected.playerId)}" class="${(value === '5' ? derived.value === true : stat.approachResult === value) ? 'is-active' : ''} ${value === '5' ? 'is-derived' : ''}" ${(canEdit && value !== '5' && derived.value !== true) ? '' : 'disabled'}><b>${value}</b><small>${escapeHtml(approachLabels[value])}</small></button>`;
   const advanced = statTrackingModeIncludesApproachGrid(mode.active);
-  const grind = mode.active === 'GRIND';
   const recovery = deriveScramblingResult({ gross, par, green: derived.value, greenSource: derived.source, recoveryLie: stat.recoveryLie });
   const recoveryChoice = (value, label) => choice('recoveryLie', value, label, stat.recoveryLie === value);
+  const detailOpen = isPlayerModeMoreDetailOpen();
+  const puttsRecorded = stat.puttsSource !== 'default';
+  const girProvenance = getPlayerModeGirProvenance(derived);
+  const coreReadback = derived.value === null
+    ? (gross ? 'Putts needed to calculate GIR' : 'Enter score and putts')
+    : `${derived.value ? 'GIR' : 'Missed GIR'}${derived.source === 'override' ? ' · corrected' : ''} · ${puttsRecorded ? `${stat.putts} putt${stat.putts === 1 ? '' : 's'}` : 'putts needed'}`;
+  const detailIncomplete = getPlayerModeRequiredDetailState(match, metrics, selected, metrics?.tee, hole).incomplete;
+  const detailedReadback = buildPlayerModeDetailedReadback({ derived, stat, recovery, approachLabels });
   wrap.innerHTML = `<div class="player-mode-player-detail player-mode-stat-card" data-player-stat-mode="${tracksStats ? mode.active : 'NONE'}">
     <div class="player-mode-expanded-meta"><span>${escapeHtml(getPlayerHoleTeeInfo(match, selected, currentHole - 1, metrics?.tee).label)}${strokes > 0 ? ` · ${'●'.repeat(strokes)}` : ''}${Number.isFinite(net) ? ` · net ${net}` : ''}</span><span class="player-mode-stat-badge">${tracksStats ? mode.active.charAt(0) + mode.active.slice(1).toLowerCase() : 'Score only'}</span></div>
     <div class="player-mode-stat-section"><span class="player-mode-stat-label">Gross Score</span><div class="player-mode-score-choices player-mode-detail-score" role="group" aria-label="Gross score for ${escapeHtml(selected.player?.name || 'Player')}">${scoreChoices.map(value => `<button type="button" data-player-score-value="${value}" data-player-score-player="${escapeHtml(selected.playerId)}" class="${Number(gross) === value ? 'is-active' : ''}" ${canEdit ? '' : 'disabled'}><b>${value}</b><small>${escapeHtml(getPlayerModeScoreLabel(value, par))}</small></button>`).join('')}<label class="player-mode-more-score ${otherScoreSelected ? 'is-active' : ''}"><span>${otherScoreSelected ? escapeHtml(String(gross)) : 'Other'}</span><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" min="1" max="25" data-score-player="${escapeHtml(selected.playerId)}" data-score-locked="${canEdit ? '0' : '1'}" data-hole-par="${par}" value="${gross || ''}" ${canEdit ? '' : 'disabled'} /></label></div></div>
-    ${tracksStats ? `<div class="tiny">Putts count only from the putting surface. Conceded putts count as a stroke and a putt.</div>
-    ${mode.grindRestricted ? `<div class="player-mode-warning">Grind supports up to ${MAX_GRIND_EDITABLE_PLAYERS} golfers assigned to this device. Enhanced controls are shown for ${mode.editableCount} editable golfers.</div>` : ''}
-    <div class="player-mode-stat-section"><span class="player-mode-stat-label">Putts</span><div class="player-mode-stat-options player-mode-six-options">${[0,1,2,3,4].map(value => choice('putts', value, value, stat.puttsSource !== 'default' && stat.putts === value)).join('')}<label class="player-mode-more-stat"><span>Other</span><input class="stat-putts-input" type="tel" inputmode="numeric" min="0" max="9" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="putts" data-putts-source="${escapeHtml(stat.puttsSource)}" value="${stat.puttsSource === 'default' ? '' : stat.putts}" ${canEdit ? '' : 'disabled'} /></label></div></div>
-    <div class="player-mode-stat-section"><span class="player-mode-stat-label">Penalty strokes</span><div class="player-mode-stat-options">${[0,1,2].map(value => choice('penaltyStrokes', value, value, stat.penaltyStrokes === value)).join('')}</div></div>
-    <input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="penaltyStrokes" value="${stat.penaltyStrokes}" />
-    ${(par === 4 || par === 5) ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Fairway</span><div class="player-mode-stat-options player-mode-fairway-options">${choice('fairwayResult','LEFT','↶  Left',stat.fairwayResult === 'LEFT')}${fairwayHitChoice}${choice('fairwayResult','RIGHT','Right  ↷',stat.fairwayResult === 'RIGHT')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="fairwayResult" value="${escapeHtml(stat.fairwayResult)}" />` : ''}
-    <div class="player-mode-derived player-mode-gir-result"><span>GIR</span><strong aria-label="${derived.value === null ? 'GIR unknown' : (derived.value ? 'Green in regulation' : 'Missed green in regulation')}">${derived.value === null ? '—' : (derived.value ? '✓' : '✕')}</strong><small>${derived.source === 'calculated' ? 'Calculated from gross score and putts' : derived.source === 'override' ? 'Manual correction' : 'Enter score and putts to calculate'}</small></div>
-    ${advanced ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Approach</span><div class="player-mode-approach-grid" role="group" aria-label="Approach result">${['7','8','9','4','5','6','1','2','3'].map(approachChoice).join('')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="approachResult" value="${escapeHtml(stat.approachResult)}" />` : ''}
-    ${advanced && derived.value === false ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Recovery lie</span><div class="player-mode-stat-options player-mode-five-options player-mode-recovery-options">${recoveryChoice('FAIRWAY','Fairway')}${recoveryChoice('ROUGH','Rough')}${recoveryChoice('BUNKER','Bunker')}${recoveryChoice('FRINGE','Fringe')}${recoveryChoice('OTHER','Other')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="recoveryLie" value="${escapeHtml(stat.recoveryLie)}" /><div class="player-mode-derived"><span>Scrambling</span><strong>${recovery.success ? 'Converted' : 'Not converted'}</strong><small>Calculated from missed GIR and gross score${recovery.sandyOpportunity ? ' · Sand save opportunity' : ''}</small></div>` : ''}
-    <details class="player-mode-gir-override"><summary>Correct GIR for an edge case</summary><div class="player-mode-stat-options">${choice('greenOverride','','Calculated',stat.greenOverride === null)}${choice('greenOverride','true','Force GIR',stat.greenOverride === true)}${choice('greenOverride','false','Force miss',stat.greenOverride === false)}</div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="greenOverride" value="${stat.greenOverride === null ? '' : String(stat.greenOverride)}" /></details>
-    <div class="player-mode-readback">${derived.value === null ? 'GIR remains unknown until both gross score and putts are recorded.' : `${derived.value ? 'Green in regulation' : (stat.approachResult !== 'UNKNOWN' ? `Missed ${String(approachLabels[stat.approachResult] || '').toLowerCase()}` : 'Missed GIR')}${recovery.opportunity ? ` · scramble ${recovery.success ? 'converted' : 'not converted'}` : ''}${stat.puttsSource !== 'default' ? ` · ${stat.putts} putt${stat.putts === 1 ? '' : 's'}` : ''}${stat.penaltyStrokes ? ` · ${stat.penaltyStrokes} penalty stroke${stat.penaltyStrokes === 1 ? '' : 's'}` : ''}.`}</div>` : ''}
+    ${tracksStats ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Putts</span><div class="player-mode-stat-options player-mode-six-options">${[0,1,2,3,4].map(value => choice('putts', value, value, stat.puttsSource !== 'default' && stat.putts === value)).join('')}<label class="player-mode-more-stat"><span>Other</span><input class="stat-putts-input" type="tel" inputmode="numeric" min="0" max="9" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="putts" data-putts-source="${escapeHtml(stat.puttsSource)}" value="${stat.puttsSource === 'default' ? '' : stat.putts}" ${canEdit ? '' : 'disabled'} /></label></div></div>
+    <div class="player-mode-core-actions"><div class="player-mode-readback player-mode-core-readback" aria-live="polite">${escapeHtml(coreReadback)}</div><button type="button" class="secondary player-mode-more-detail-toggle" data-player-mode-more-detail data-incomplete="${detailIncomplete}" aria-label="${detailOpen ? 'Hide detail' : `More detail${detailIncomplete ? ', incomplete' : ''}`}" aria-expanded="${detailOpen}" aria-controls="playerModeMoreDetail-${escapeHtml(selected.playerId)}"><span>${detailOpen ? 'Hide detail' : 'More detail'}${!detailOpen && detailIncomplete ? '<b aria-hidden="true">•</b>' : ''}</span></button></div>
+    <div id="playerModeMoreDetail-${escapeHtml(selected.playerId)}" class="player-mode-more-detail" ${detailOpen ? '' : 'hidden'}>
+      <div class="tiny">Putts count only from the putting surface. Conceded putts count as a stroke and a putt.</div>
+      ${mode.grindRestricted ? `<div class="player-mode-warning">Grind supports up to ${MAX_GRIND_EDITABLE_PLAYERS} golfers assigned to this device. Enhanced controls are shown for ${mode.editableCount} editable golfers.</div>` : ''}
+      <div class="player-mode-stat-section"><span class="player-mode-stat-label">Penalty strokes</span><div class="player-mode-stat-options">${[0,1,2].map(value => choice('penaltyStrokes', value, value, stat.penaltyStrokes === value)).join('')}</div></div>
+      <input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="penaltyStrokes" value="${stat.penaltyStrokes}" />
+      ${(par === 4 || par === 5) ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Fairway</span><div class="player-mode-stat-options player-mode-fairway-options">${choice('fairwayResult','LEFT','↶  Left',stat.fairwayResult === 'LEFT')}${fairwayHitChoice}${choice('fairwayResult','RIGHT','Right  ↷',stat.fairwayResult === 'RIGHT')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="fairwayResult" value="${escapeHtml(stat.fairwayResult)}" />` : ''}
+      <div class="player-mode-derived player-mode-gir-result"><span>GIR</span><strong aria-label="${derived.value === null ? 'GIR unknown' : (derived.value ? 'Green in regulation' : 'Missed green in regulation')}">${derived.value === null ? '—' : (derived.value ? '✓' : '✕')}</strong><small>${escapeHtml(girProvenance)}</small></div>
+      ${advanced ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Approach</span><div class="player-mode-approach-grid" role="group" aria-label="Approach result">${['7','8','9','4','5','6','1','2','3'].map(approachChoice).join('')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="approachResult" value="${escapeHtml(stat.approachResult)}" />` : ''}
+      ${advanced && derived.value === false ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Recovery lie</span><div class="player-mode-stat-options player-mode-five-options player-mode-recovery-options">${recoveryChoice('FAIRWAY','Fairway')}${recoveryChoice('ROUGH','Rough')}${recoveryChoice('BUNKER','Bunker')}${recoveryChoice('FRINGE','Fringe')}${recoveryChoice('OTHER','Other')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="recoveryLie" value="${escapeHtml(stat.recoveryLie)}" /><div class="player-mode-derived"><span>Scrambling</span><strong>${recovery.success ? 'Converted' : 'Not converted'}</strong><small>Calculated from missed GIR and gross score${recovery.sandyOpportunity ? ' · Sand save opportunity' : ''}</small></div>` : ''}
+      <details class="player-mode-gir-override"><summary>Correct GIR for an edge case</summary><div class="player-mode-stat-options">${choice('greenOverride','','Calculated',stat.greenOverride === null)}${choice('greenOverride','true','Force GIR',stat.greenOverride === true)}${choice('greenOverride','false','Force miss',stat.greenOverride === false)}</div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="greenOverride" value="${stat.greenOverride === null ? '' : String(stat.greenOverride)}" /></details>
+      <div class="player-mode-readback player-mode-detail-readback">${escapeHtml(detailedReadback)}</div>
+    </div>` : ''}
   </div>`;
 }
 
@@ -18339,6 +18474,8 @@ function commitScoreInput(inputEl, { viaEnter = false, viaAutoAdvance = false, e
   } else {
     persistCurrentMatch({ applyDom: true, immediateShared: true, silent: true });
   }
+
+  schedulePlayerModeEntryAdvance(playerId, match);
 
   scoreInputSessionState.delete(playerId);
   return true;
@@ -22134,6 +22271,17 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       handleScoreboardFinishEndRound('early');
       return;
     }
+    const moreDetailToggle = e.target.closest('[data-player-mode-more-detail]');
+    if (moreDetailToggle) {
+      const match = getActiveMatch();
+      if (!match) return;
+      applyCurrentHoleDomToMatch(match);
+      persist({ skipRender: true });
+      cancelPendingPlayerModeEntryAdvance();
+      savePlayerModeMoreDetailOpen(moreDetailToggle.getAttribute('aria-expanded') !== 'true');
+      renderCurrentMatch();
+      return;
+    }
     const otherScore = e.target.closest('[data-player-mode-other-player]');
     if (otherScore) {
       const row = document.querySelector(`[data-player-mode-row="${cssEscape(otherScore.dataset.playerModeOtherPlayer || '')}"]`);
@@ -22144,6 +22292,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
     const playerSelect = e.target.closest('[data-player-mode-select]');
     if (playerSelect) {
+      cancelPendingPlayerModeEntryAdvance();
       playerModeSelectedPlayerId = playerSelect.getAttribute('aria-expanded') === 'true'
         ? '__COLLAPSED__'
         : String(playerSelect.dataset.playerModeSelect || '');
@@ -22166,6 +22315,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (statChoice) {
       const match = getActiveMatch();
       if (!match) return;
+      if (statChoice.closest('.player-mode-more-detail')) cancelPendingPlayerModeEntryAdvance();
       const playerId = String(statChoice.dataset.statPlayerId || '');
       const key = String(statChoice.dataset.playerStatChoice || '');
       const value = String(statChoice.dataset.playerStatValue ?? '');
@@ -22180,6 +22330,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       match.statReviewContractVersion = 1;
       persist({ skipRender: true });
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
+      schedulePlayerModeEntryAdvance(playerId, match);
       renderCurrentMatch();
       return;
     }
@@ -22238,6 +22389,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (stepBtn) {
       const match = getActiveMatch();
       if (!match) return;
+      if (stepBtn.closest('.player-mode-more-detail')) cancelPendingPlayerModeEntryAdvance();
       const playerId = stepBtn.dataset.statPlayer || '';
       const key = stepBtn.dataset.statKey || '';
       const dir = stepBtn.dataset.statStep === 'down' ? -1 : 1;
@@ -22259,6 +22411,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       match.statReviewContractVersion = 1;
       persist({ skipRender: true });
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
+      schedulePlayerModeEntryAdvance(playerId, match);
       renderCurrentMatch();
       return;
     }
@@ -22280,6 +22433,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (e.target && e.target.matches('input[data-stat-player][data-stat-key], select[data-stat-player][data-stat-key]')) {
       const match = getActiveMatch();
       if (!match) return;
+      if (e.target.closest('.player-mode-more-detail')) cancelPendingPlayerModeEntryAdvance();
       if (e.target.matches('input[type="checkbox"]')) {
         applySmartPuttsAdjustmentFromCheckbox(e.target);
       } else if (e.target.matches('.stat-putts-input')) {
@@ -22292,6 +22446,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       match.statReviewContractVersion = 1;
       persist({ skipRender: true });
       scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
+      schedulePlayerModeEntryAdvance(String(e.target.dataset.statPlayer || ''), match);
       renderCurrentMatch();
     }
     if (e.target && e.target.matches('[data-ssp-player][data-ssp-key], [data-ssp-prox], [data-ssp-hole-key]')) {
@@ -24184,9 +24339,18 @@ function installDyeLedgerLiveEngineAdapter() {
     normalizePlayInputMode,
     normalizeStatTrackingMode,
     deriveGreenInRegulation,
-        deriveScramblingResult,
-        getEffectivePlayerStatTrackingMode,
-        getGrindEditablePlayerCount,
+            deriveScramblingResult,
+            getEffectivePlayerStatTrackingMode,
+            getPlayerModeEntryProgress,
+            getPlayerModeRequiredDetailState,
+            getPlayerModeEntryAdvanceTarget,
+            getPlayerModeGirProvenance,
+            buildPlayerModeDetailedReadback,
+            isPlayerModeAdvanceContextCurrent,
+            canEditPlayerScore,
+            isPlayerModeMoreDetailOpen,
+            savePlayerModeMoreDetailOpen,
+            getGrindEditablePlayerCount,
         canDeleteRoundMemory,
         removeRoundMemoryById,
         statTrackingModeIncludesApproachGrid,

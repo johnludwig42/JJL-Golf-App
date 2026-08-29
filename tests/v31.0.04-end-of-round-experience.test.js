@@ -16,7 +16,8 @@ test('complete and early-ending actions are explicit and mutually state driven',
   assert.match(html, /id="scoreboardFinishRoundBtn"[^>]*>Complete Round<\/button>/);
   assert.match(html, /id="scoreboardEndRoundEarlyBtn"[^>]*>End Round Early<\/button>/);
   assert.match(app, /show\(scoringFinishBtn, hasMatch && !isComplete && activeRound && dataCompletion\?\.scoresComplete\)/);
-  assert.match(app, /show\(scoringEarlyBtn, hasMatch && !isComplete && activeRound && !dataCompletion\?\.scoresComplete\)/);
+  assert.match(app, /show\(scoringEarlyBtn, hasMatch && !isComplete && activeRound && !dataCompletion\?\.scoresComplete && \(!playerMode \|\| playerCompletionContext\)\)/);
+  assert.match(app, /data-player-mode-end-early>End Round Early/);
 });
 
 test('review sheet explains missing facts, provisional status, and routes to a hole', () => {

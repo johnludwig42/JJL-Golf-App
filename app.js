@@ -16,11 +16,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.12',
-  versionNumber: '31.0.12',
-  cacheName: 'the-dye-ledger-v31.0.12',
-  buildDate: '2026-08-28T12:00:00-04:00',
-  buildLabel: 'Ledger Entry Correctness and Readability'
+  version: 'v31.0.13',
+  versionNumber: '31.0.13',
+  cacheName: 'the-dye-ledger-v31.0.13',
+  buildDate: '2026-08-28T18:00:00-04:00',
+  buildLabel: 'Player Mode Clarity and Round Flow'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -2536,6 +2536,7 @@ let editingTeeRef = null;
 let editingMatchId = null;
 let currentHole = 1;
 let playerModeSelectedPlayerId = '';
+let playerModeSelectionContextKey = '';
 let catchUpScoringState = null;
 let currentHoleSequenceStart = 1;
 let finishConfirmArmed = false;
@@ -16457,6 +16458,9 @@ function syncFinishRoundUi(match = getActiveMatch()) {
   const reopenedEdit = !!match?.previousCompletedAt;
   const dataCompletion = hasMatch && !isComplete ? getRoundDataCompletionState(match) : null;
   const authority = hasMatch ? getRoundFinalizationAuthority(match) : { allowed: false };
+  const playerMode = getEffectivePlayInputMode(match) === PLAY_INPUT_MODES.PLAYER.key;
+  const finalHoleActive = hasMatch && currentHole === getRequestedHoleCount(match);
+  const playerCompletionContext = finalHoleActive || !!dataCompletion?.scoresComplete;
   const show = (el, visible) => {
     if (!el) return;
     el.classList.toggle('hidden', !visible);
@@ -16467,7 +16471,7 @@ function syncFinishRoundUi(match = getActiveMatch()) {
   };
   show(scoringFinishBtn, hasMatch && !isComplete && activeRound && dataCompletion?.scoresComplete);
   show(scoreboardFinishBtn, hasMatch && !isComplete && activeRound && dataCompletion?.scoresComplete);
-  show(scoringEarlyBtn, hasMatch && !isComplete && activeRound && !dataCompletion?.scoresComplete);
+  show(scoringEarlyBtn, hasMatch && !isComplete && activeRound && !dataCompletion?.scoresComplete && (!playerMode || playerCompletionContext));
   show(scoreboardEarlyBtn, hasMatch && !isComplete && activeRound && !dataCompletion?.scoresComplete);
   show(scoreboardConfirmBtn, false);
   show(setupFinishBtn, false);
@@ -16967,6 +16971,7 @@ function renderClassicPlayInputMode({ match, tee, metrics, scoringHoles, hole, c
   renderPressActions(match, metrics);
   const playMatchSummary = document.getElementById('playMatchSummary');
   if (playMatchSummary) {
+    playMatchSummary.classList.remove('hidden');
     const statusOptions = getMatchStatusOptions(match);
     playMatchSummary.innerHTML = buildFeaturedMatchStatus(match, metrics, match.matchStatusGame || statusOptions[0]?.key || 'team_match');
   }
@@ -17023,6 +17028,39 @@ function getPlayerModeEntryStatus(match, metrics, playerMetric, score, par) {
   const stat = playerRef?.stats?.[currentHole - 1];
   if (tracksStats && !stat?.entryCompleted) return { key: 'stats-needed', label: 'Stats needed', complete: false };
   return { key: 'complete', label: `${Number(score)} · ${getPlayerModeScoreLabel(Number(score), par)}`, complete: true };
+}
+
+function getPlayerModeEntryProgress(match, metrics, tee, hole) {
+  const visible = getVisibleScoringPlayers(match, metrics?.players || [], { stats: false });
+  const statuses = visible.map(playerMetric => {
+    const playerRef = match.players.find(row => String(row.playerId) === String(playerMetric.playerId));
+    const score = playerRef?.scores?.[currentHole - 1]?.gross;
+    const playerHole = getPlayerHole(match, playerMetric, currentHole - 1, tee) || hole;
+    return { playerMetric, status: getPlayerModeEntryStatus(match, metrics, playerMetric, score, Number(playerHole?.par || hole?.par || 4)) };
+  });
+  return { total: statuses.length, complete: statuses.filter(row => row.status.complete).length, statuses };
+}
+
+function syncPlayerModeSelectionForHole(match, metrics, tee, hole) {
+  const contextKey = `${match?.id || 'match'}:${Number(currentHole) || 1}`;
+  if (playerModeSelectionContextKey === contextKey) return;
+  playerModeSelectionContextKey = contextKey;
+  const progress = getPlayerModeEntryProgress(match, metrics, tee, hole);
+  const next = progress.statuses.find(row => canEditPlayerScore(match, row.playerMetric.team, row.playerMetric.playerId) && !row.status.complete);
+  playerModeSelectedPlayerId = next ? String(next.playerMetric.playerId) : '__COLLAPSED__';
+}
+
+function getPlayerModeSavePresentation(match) {
+  if (match?.storageMode === 'shared') {
+    const sync = getSharedSyncStatus(match);
+    if (sync.state === 'syncing') return { label: 'Saved on device · Syncing…', tone: 'working' };
+    if (sync.state === 'synced') return { label: 'This device synced ✓', tone: 'good' };
+    if (sync.state === 'needs-attention') return { label: 'Sync needs attention', tone: 'attention' };
+    if (navigator.onLine === false) return { label: 'Saved on device · Offline', tone: 'warning' };
+    return { label: 'Saved on device ✓', tone: 'warning' };
+  }
+  if (localPersistenceDiagnostics.storageAvailable === false || localPersistenceDiagnostics.lastFailureMessage) return { label: 'Save needs attention', tone: 'attention' };
+  return { label: 'Saved ✓', tone: 'good' };
 }
 
 function renderPlayerModeScoreGrid(match, tee, metrics, hole) {
@@ -17110,16 +17148,13 @@ function renderPlayerPlayInputMode({ match, tee, metrics, scoringHoles, hole, co
   document.getElementById('classicScoreGridWrap')?.classList.add('hidden');
   document.getElementById('classicHoleActions')?.classList.add('hidden');
   document.getElementById('playerModeBottomActions')?.classList.remove('hidden');
+  syncPlayerModeSelectionForHole(match, metrics, tee, hole);
   renderPlayerModeScoreGrid(match, tee, metrics, hole);
   renderPressActions(match, metrics);
   const playMatchSummary = document.getElementById('playMatchSummary');
   if (playMatchSummary) {
-    const statusOptions = getMatchStatusOptions(match);
-    const gameKey = match.matchStatusGame || statusOptions[0]?.key || 'team_match';
-    const featuredLabel = getFeaturedGameLabel(match, gameKey);
-    const rawStatus = getPrimaryMatchStatusLine(match, metrics) || 'Not started';
-    const headline = rawStatus.replace(/^[^:]+:\s*/, '') || rawStatus;
-    playMatchSummary.innerHTML = `<div class="player-mode-featured-label">Featured · ${escapeHtml(featuredLabel)}</div><div class="player-mode-featured-result">${escapeHtml(headline)}</div><div class="player-mode-featured-through">${Number(metrics?.completed || 0) ? `through ${Number(metrics.completed)}` : 'Not started'}</div>`;
+    playMatchSummary.innerHTML = '';
+    playMatchSummary.classList.add('hidden');
   }
   renderSneakySandyPoleyEntry(match, hole, metrics);
   renderPlayerModeStatEntry(match, hole, metrics);
@@ -17627,10 +17662,17 @@ function renderHoleSelector(match, scoringHoles = [], metrics = null) {
     const hole = holes[currentHole - 1] || null;
     const yardage = Number(hole?.yardage);
     const compactMatchStatus = metrics ? getPrimaryMatchStatusLine(match, metrics) : '';
+    const statusOptions = getMatchStatusOptions(match);
+    const gameKey = match.matchStatusGame || statusOptions[0]?.key || 'team_match';
+    const featuredLabel = getFeaturedGameLabel(match, gameKey);
+    const entryProgress = metrics ? getPlayerModeEntryProgress(match, metrics, metrics.tee, hole) : { complete: 0, total: 0 };
+    const saveState = getPlayerModeSavePresentation(match);
+    const dataCompletion = getRoundDataCompletionState(match);
+    const completionContext = currentHole === maxHole || dataCompletion.scoresComplete;
     playerHeader.classList.remove('hidden');
     const roundStatMode = normalizeStatTrackingMode(match.statTrackingMode || (match.statTrackingEnabled ? 'CASUAL' : 'NONE'));
     const memoryCount = getRoundMemories(match).length;
-    playerHeader.innerHTML = `<div class="player-mode-hole-title"><label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select><div class="player-mode-hole-meta">Par ${Number(hole?.par) || '—'}${Number.isFinite(yardage) && yardage > 0 ? ` · ${formatYardageValue(yardage)} yd` : ''} · SI ${Number(hole?.strokeIndex) || '—'}</div>${compactMatchStatus ? `<div class="player-mode-header-match-status"><span>Match</span><strong>${escapeHtml(compactMatchStatus)}</strong></div>` : ''}</div><div class="player-mode-header-actions"><div class="player-mode-header-meta"><div class="player-mode-save-state" aria-live="polite">Saved ✓</div><button type="button" class="secondary player-mode-overflow" data-player-mode-overflow aria-expanded="false" aria-controls="playerModeOverflowMenu" aria-label="More Play actions">•••</button></div><button type="button" class="player-mode-header-save-next" data-player-mode-save-next>Save &amp; Next Hole</button></div><div id="playerModeOverflowMenu" class="player-mode-overflow-menu hidden"><button type="button" class="secondary" data-player-mode-scoreboard>Open Scoreboard</button><button type="button" class="secondary" data-player-mode-add-memory>Add Memory${memoryCount ? ` (${memoryCount})` : ''}</button><label><span class="tiny">Scoring mode</span><select id="playerModeRoundScoringModeSelect" aria-label="Active round scoring mode">${Object.values(PLAY_INPUT_MODES).filter(mode => mode.available).map(mode => `<option value="${mode.key}" ${mode.key === (isPlayerMode ? 'PLAYER' : 'CLASSIC') ? 'selected' : ''}>${mode.label.replace(' Mode','')}</option>`).join('')}</select></label><label><span class="tiny">Stat mode</span><select id="playerModeRoundStatModeSelect" aria-label="Active round stat mode">${Object.values(STAT_TRACKING_MODES).map(mode => `<option value="${mode.key}" ${mode.key === roundStatMode ? 'selected' : ''}>${mode.label}</option>`).join('')}</select></label></div>`;
+    playerHeader.innerHTML = `<div class="player-mode-hole-title"><label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select><div class="player-mode-hole-meta">Par ${Number(hole?.par) || '—'}${Number.isFinite(yardage) && yardage > 0 ? ` · ${formatYardageValue(yardage)} yd` : ''} · SI ${Number(hole?.strokeIndex) || '—'}</div>${compactMatchStatus ? `<div class="player-mode-header-match-status"><span>${escapeHtml(featuredLabel)}</span><strong>${escapeHtml(compactMatchStatus.replace(/^[^:]+:\s*/, ''))}</strong><small>${Number(metrics?.completed || 0) ? `through ${Number(metrics.completed)}` : 'Not started'}</small></div>` : ''}</div><div class="player-mode-header-actions"><div class="player-mode-header-meta"><div class="player-mode-entry-counter">${entryProgress.complete} of ${entryProgress.total} entered</div><div class="player-mode-save-state" data-tone="${saveState.tone}" aria-live="polite">${escapeHtml(saveState.label)}</div><button type="button" class="secondary player-mode-overflow" data-player-mode-overflow aria-expanded="false" aria-controls="playerModeOverflowMenu" aria-label="More Play actions">•••</button></div></div><div id="playerModeOverflowMenu" class="player-mode-overflow-menu hidden"><button type="button" class="secondary" data-player-mode-add-memory>Add Memory${memoryCount ? ` (${memoryCount})` : ''}</button>${!completionContext ? '<button type="button" class="secondary" data-player-mode-end-early>End Round Early</button>' : ''}<label><span class="tiny">Scoring mode</span><select id="playerModeRoundScoringModeSelect" aria-label="Active round scoring mode">${Object.values(PLAY_INPUT_MODES).filter(mode => mode.available).map(mode => `<option value="${mode.key}" ${mode.key === (isPlayerMode ? 'PLAYER' : 'CLASSIC') ? 'selected' : ''}>${mode.label.replace(' Mode','')}</option>`).join('')}</select></label><label><span class="tiny">Stat mode</span><select id="playerModeRoundStatModeSelect" aria-label="Active round stat mode">${Object.values(STAT_TRACKING_MODES).map(mode => `<option value="${mode.key}" ${mode.key === roundStatMode ? 'selected' : ''}>${mode.label}</option>`).join('')}</select></label></div>`;
     if (badge) badge.innerHTML = '';
     return;
   }
@@ -22086,6 +22128,10 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
     if (e.target.closest('[data-player-mode-add-memory]')) {
       openAddMemoryModal();
+      return;
+    }
+    if (e.target.closest('[data-player-mode-end-early]')) {
+      handleScoreboardFinishEndRound('early');
       return;
     }
     const otherScore = e.target.closest('[data-player-mode-other-player]');

@@ -1,6 +1,6 @@
 {
   "name": "the-dye-ledger",
-  "version": "31.0.13",
+  "version": "31.0.14",
   "private": true,
   "type": "module",
   "scripts": {
@@ -40,6 +40,7 @@
     "test:v31.0.09": "node --test tests/v31.0.09-release-assurance.test.js tests/v31.0.08-player-mode-accordion.test.js tests/v31.0.02-ledger-entry-report.test.js",
     "test:v31.0.11": "node --test tests/v31.0.11-player-memory-grind.test.js tests/v31.0.08-player-mode-accordion.test.js tests/v31.0.09-release-assurance.test.js",
     "test:v31.0.13": "node --test tests/v31.0.13-player-mode-clarity.test.js tests/v31.0.11-player-memory-grind.test.js tests/shared-match-completion.test.js",
+    "test:v31.0.14": "node --test tests/v31.0.14-player-mode-entry-flow.test.js tests/v31.0.11-player-memory-grind.test.js tests/player-preferences.test.js tests/shared-match-completion.test.js",
     "build:ledger-entry-fixture": "node scripts/generate-ledger-entry-fixture.js",
     "check:layout": "npm run build:ledger-entry-fixture && node scripts/check-ledger-entry-layout.mjs",
     "test:identity-security": "node --test tests/v30.3.75-identity-security.test.js",

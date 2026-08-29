@@ -1191,7 +1191,76 @@ function returnToOriginatingMatch(){
     if(status) status.hidden=false;
   }
 }
+function acceptLedgerEntry(){
+  const button=document.getElementById("acceptLedgerEntryBtn");
+  const status=document.getElementById("returnToMatchStatus");
+  if(ROUND?.meta?.status!=="final" || !String(ROUND?.meta?.story||"").trim()){
+    if(status){ status.hidden=false; status.textContent="Complete the round before accepting this Ledger Entry."; }
+    return;
+  }
+  const acceptedAt=new Date().toISOString();
+  const report=JSON.parse(JSON.stringify(ROUND));
+  report.meta.acceptanceStatus="accepted";
+  report.meta.acceptedAt=acceptedAt;
+  const envelope={roundId:String(report.meta.roundId||""),acceptedAt,report};
+  let accepted=false;
+  try{
+    const opener=window.opener && !window.opener.closed ? window.opener : null;
+    const result=opener && typeof opener.__DYE_LEDGER_ACCEPT_REPORT__==="function"
+      ? opener.__DYE_LEDGER_ACCEPT_REPORT__(envelope) : null;
+    accepted=Boolean(result?.accepted);
+  }catch(e){}
+  if(!accepted){
+    try{ accepted=Boolean(globalThis.__DYE_LEDGER_QUEUE_ACCEPTANCE__?.(envelope)); }catch(e){}
+  }
+  if(!accepted){
+    if(status){ status.hidden=false; status.textContent="This Ledger Entry could not be saved. Return to the app and try again."; }
+    return;
+  }
+  ROUND.meta.acceptanceStatus="accepted";
+  ROUND.meta.acceptedAt=acceptedAt;
+  if(button){ button.disabled=true; button.textContent="Accepted"; }
+  const reviseButton=document.getElementById("reviseLedgerEntryBtn");
+  if(reviseButton) reviseButton.hidden=false;
+  if(status){ status.hidden=false; status.textContent="Accepted and frozen with this completed round."; }
+}
+function reviseLedgerEntry(){
+  if(!window.confirm("Unlock this accepted Ledger Entry? Its frozen Story and report will be replaced the next time you generate and accept a Ledger Entry.")) return;
+  const roundId=String(ROUND?.meta?.roundId||"");
+  let unlocked=false;
+  try{
+    const opener=window.opener && !window.opener.closed ? window.opener : null;
+    const result=opener && typeof opener.__DYE_LEDGER_UNLOCK_REPORT__==="function"
+      ? opener.__DYE_LEDGER_UNLOCK_REPORT__(roundId) : null;
+    unlocked=Boolean(result?.unlocked);
+  }catch(e){}
+  if(!unlocked){
+    try{ unlocked=Boolean(globalThis.__DYE_LEDGER_QUEUE_REVISION__?.(roundId)); }catch(e){}
+  }
+  const status=document.getElementById("returnToMatchStatus");
+  if(!unlocked){
+    if(status){ status.hidden=false; status.textContent="This Ledger Entry could not be unlocked. Return to the app and try again."; }
+    return;
+  }
+  if(status){ status.hidden=false; status.textContent="Unlocked. Return to the match and generate a revised Ledger Entry."; }
+  const acceptButton=document.getElementById("acceptLedgerEntryBtn");
+  const reviseButton=document.getElementById("reviseLedgerEntryBtn");
+  if(acceptButton){ acceptButton.disabled=true; acceptButton.textContent="Unlocked"; }
+  if(reviseButton) reviseButton.hidden=true;
+}
 document.getElementById("returnToMatchBtn")?.addEventListener("click",returnToOriginatingMatch);
+document.getElementById("acceptLedgerEntryBtn")?.addEventListener("click",acceptLedgerEntry);
+document.getElementById("reviseLedgerEntryBtn")?.addEventListener("click",reviseLedgerEntry);
+document.getElementById("printLedgerEntryBtn")?.addEventListener("click",()=>{ try{ window.print(); }catch(e){} });
+if(ROUND?.meta?.acceptanceStatus==="accepted"){
+  const button=document.getElementById("acceptLedgerEntryBtn");
+  if(button){ button.disabled=true; button.textContent="Accepted"; }
+  const reviseButton=document.getElementById("reviseLedgerEntryBtn");
+  if(reviseButton) reviseButton.hidden=false;
+}else if(ROUND?.meta?.status!=="final"){
+  const button=document.getElementById("acceptLedgerEntryBtn");
+  if(button){ button.disabled=true; button.textContent="Complete round to accept"; }
+}
 if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>setTimeout(layoutThenPrint,40));
 else window.addEventListener("load",()=>setTimeout(layoutThenPrint,40));
 

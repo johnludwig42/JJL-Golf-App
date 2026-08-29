@@ -208,6 +208,36 @@ test('Ledger Entry uses a mobile-safe same-tab transfer after fresh story genera
   assert.match(renderer, /sessionStorage\.removeItem\(globalThis\.__DYE_LEDGER_REPORT_TRANSFER_KEY__\)/);
 });
 
+test('accepted completed-round Ledger Entries are frozen and reopen without regenerating the story', () => {
+  assert.match(shell, /id="acceptLedgerEntryBtn"[^>]*>Accept &amp; Finalize<\/button>/);
+  assert.match(shell, /id="reviseLedgerEntryBtn"[^>]*hidden>Unlock &amp; Regenerate<\/button>/);
+  assert.match(shell, /id="printLedgerEntryBtn"[^>]*>Print \/ Save PDF<\/button>/);
+  assert.match(renderer, /function acceptLedgerEntry\(\)/);
+  assert.match(renderer, /function reviseLedgerEntry\(\)/);
+  assert.match(renderer, /acceptanceStatus="accepted"/);
+  assert.match(bootstrap, /pending-ledger-entry-acceptance/);
+  assert.match(source, /function normalizeAcceptedLedgerEntrySnapshot\(snapshot, roundId = ''\)/);
+  assert.match(source, /match\.ledgerEntrySnapshot = snapshot/);
+  assert.match(source, /const acceptedLedgerReport = printView === 'ledger'/);
+  assert.match(source, /if \(acceptedLedgerReport\) \{/);
+  assert.match(source, /Opening the accepted Ledger Entry/);
+  assert.match(source, /launchLedgerReportModel\(reportModel, \{ sameTabLedger, exportWindow, autoPrint: false \}\)/);
+  assert.match(source, /ledgerEntrySnapshot: isCurrentDeviceMatchHost\(match\)/);
+  assert.match(source, /ledgerEntrySnapshot: normalizeAcceptedLedgerEntrySnapshot\(sharedMeta\.ledgerEntrySnapshot/);
+
+  const engine = loadLiveEngine();
+  const report = { meta: { roundId: 'round-1', status: 'final', story: 'Accepted Story.', storyProvenance: 'audited-generated-narrative' } };
+  const accepted = engine.normalizeAcceptedLedgerEntrySnapshot({
+    status: 'accepted', acceptedAt: '2026-08-29T18:00:00.000Z', report,
+  }, 'round-1');
+  assert.equal(accepted.status, 'accepted');
+  assert.equal(accepted.story, 'Accepted Story.');
+  assert.equal(accepted.report.meta.acceptanceStatus, 'accepted');
+  report.meta.story = 'Changed outside snapshot.';
+  assert.equal(accepted.story, 'Accepted Story.');
+  assert.equal(engine.normalizeAcceptedLedgerEntrySnapshot({ status: 'accepted', acceptedAt: 'now', report: { meta: { roundId: 'round-1', status: 'provisional', story: 'No.' } } }, 'round-1'), null);
+});
+
 test('Ledger Story Greenies audit distinguishes a count from hole numbers in the same sentence', () => {
   const result = fixture();
   result.match.selectedGames.push({ key: 'greenies', participants: result.match.players.map(player => player.playerId) });

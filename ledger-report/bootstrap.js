@@ -43,6 +43,22 @@
   globalThis.__DYE_LEDGER_RETURN_URL__ = String(transfer?.returnUrl || '');
   globalThis.__DYE_LEDGER_REPORT_TRANSFER_KEY__ = transfer ? transferKey : '';
   globalThis.__DYE_LEDGER_REPORT_MISSING__ = missingReloadPayload;
+  globalThis.__DYE_LEDGER_QUEUE_ACCEPTANCE__ = envelope => {
+    try {
+      localStorage.setItem('dye-ledger:pending-ledger-entry-acceptance', JSON.stringify(envelope));
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  };
+  globalThis.__DYE_LEDGER_QUEUE_REVISION__ = roundId => {
+    try {
+      localStorage.setItem('dye-ledger:pending-ledger-entry-revision', JSON.stringify({ roundId: String(roundId || '') }));
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  };
   if (missingReloadPayload) {
     window.addEventListener('DOMContentLoaded', () => {
       const doc = document.getElementById('doc');

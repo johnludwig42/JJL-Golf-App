@@ -38,7 +38,7 @@ body{background:#2E322C;font-family:var(--body);color:var(--ink);font-size:9pt;l
    repaginates instead of spilling each report footer onto an extra sheet. */
 .ios-print-surface .page{height:10.5in}
 @media screen{.page{margin:22px auto;box-shadow:0 2px 30px rgba(0,0,0,.45)}}
-@media print{body{background:#fff}.page{margin:0 auto;box-shadow:none;break-after:page;page-break-after:always}
+@media print{body{background:#fff}.page{margin:0 auto;box-shadow:none;outline:none!important;break-after:page;page-break-after:always}
   .page:last-child{break-after:auto;page-break-after:auto}.report-nav{display:none!important}.page-overflow-diagnostic{display:none!important}}
 .flow{flex:1 1 auto;overflow:hidden}
 #probe{position:absolute;left:-9999px;top:0;visibility:hidden}

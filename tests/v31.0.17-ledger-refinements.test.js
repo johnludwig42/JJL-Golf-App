@@ -50,13 +50,19 @@ test('Ledger presentation uses the refined names, denominators, postable score, 
   assert.match(reportSource, /Bird\+/);
   assert.match(reportSource, /Postable/);
   assert.match(reportSource, /Partnership Gain/);
-  assert.match(reportSource, /Rating \/100/);
+  assert.match(reportSource, /Ham &amp; Egg<br>Rating \/100/);
+  assert.match(reportSource, /Counted shows how often each partner supplied the team’s counting score/);
   assert.match(reportSource, /Hand-offs/);
   assert.match(reportSource, /Tied/);
+  assert.match(reportSource, /A Rescue occurs when a player supplies the counting score/);
+  assert.match(reportSource, /lowest individual \$\{partnershipBasis\} total/);
+  assert.match(reportSource, /BEST-BALL CARD TOTAL/);
+  assert.match(reportSource, /INFORMATIONAL AGGREGATE/);
   assert.doesNotMatch(reportSource, /side\.strokesSaved/);
   assert.match(reportSource, /partners\.map\(player=>`\$\{player\.name\}/, 'both partners remain visible in rescue output');
   assert.match(reportSource, /page-overflow-diagnostic/);
   assert.match(shellSource, /\.page-overflow-diagnostic\{display:none!important\}/);
+  assert.match(shellSource, /outline:none!important/);
   assert.match(shellSource, /appendix-scorecard-separator/);
 });
 

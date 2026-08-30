@@ -98,13 +98,13 @@ test('Ledger Entry v31.0.02 satisfies the 61-assertion non-browser contract', ()
     ['record serializable', (() => { try { JSON.stringify(final.record); return true; } catch { return false; } })()],
     ['provisional does not award final', !provisional.html.includes('data-ledger-status="FINAL"')],
     ['provisional badge', provisional.html.includes('PROVISIONAL')],
-    ['default option first', index.indexOf('value="ledger"') < index.indexOf('value="scorecard"')],
-    ['default option selected', /option value="ledger" selected/.test(index)],
-    ['recommended label', index.includes('Ledger Entry (Recommended)')],
+    ['one finish-up workflow', (index.match(/id="postRoundActionsInline"/g) || []).length === 1],
+    ['direct ledger action', index.includes('id="postRoundInlineLedgerBtn"')],
+    ['classic scorecard action', index.includes('id="postRoundInlineClassicScorecardBtn"')],
     ['summary report removed', !index.includes('value="summary">Match Summary')],
-    ['scorecard preserved', index.includes('value="scorecard">Classic Scorecard')],
+    ['scorecard preserved', index.includes('Classic scorecard instead')],
     ['default function ledger', source.includes("printView = 'ledger'")],
-    ['legacy summary route retained internally', source.includes("['ledger', 'summary', 'scorecard']")],
+    ['facts-only preview route', source.includes("'story-not-saved'")],
     ['no recap toggle', !index.includes('ledgerRecapToggle')],
     ['report is read only', !source.includes('saveLedgerEntry')],
     ['dedicated renderer route', source.includes('ledger-report/shell.html')],
@@ -174,7 +174,7 @@ test('Ledger Entry consumes the reviewed and saved Story without regenerating it
   assert.match(shell, /\.prose p\{margin-bottom:6px;break-inside:auto\}/);
   assert.match(source, /const savedStory = getFinalRoundRecap\(match\)/);
   assert.match(source, /reportModel\.meta\.story = savedStory/);
-  assert.match(source, /storyProvenance = 'audited-user-approved-story'/);
+  assert.match(source, /storyProvenance = savedStory \? 'audited-user-approved-story'/);
   assert.match(source, /function validateGreeniesNarrativeClaims\(match, metrics, recapText\)/);
   assert.match(source, /FALSE_GREENIES_COUNT/);
   assert.match(source, /UNVERIFIABLE_GREENIES_COUNT/);
@@ -182,7 +182,7 @@ test('Ledger Entry consumes the reviewed and saved Story without regenerating it
   assert.match(source, /const requestStory = async \(repair = null\)/);
   assert.match(source, /blockingIssues\.map\(issue => \(\{ code: issue\.code, message: issue\.message \}\)\)/);
   assert.match(source, /provenance: 'audited-generated-narrative'/);
-  assert.match(source, /Review and save the Story\. The Ledger Entry will open automatically after it is saved/);
+  assert.match(source, /pendingLedgerOpenMatchId[\s\S]*openUnifiedExport\(match, 'ledger'\)/);
   assert.match(source, /window\.AbortController/);
   assert.match(source, /45000/);
   assert.match(source.slice(source.indexOf('async function prepareLedgerEntryStory'), source.indexOf('function buildLegacyRoundSnapshot')), /buildDeterministicLedgerEntryStory/);

@@ -57,11 +57,11 @@ test('the Ledger explains the fixed denominator and omits alignment constructs',
 
 test('the app exposes one saved Story workflow and no Match Summary report choice', () => {
   assert.match(index, /Story of the Round/);
-  assert.match(index, /Create \/ Review Story/);
+  assert.match(index, /Review Story/);
   assert.doesNotMatch(index, /value="summary">Match Summary/);
   assert.doesNotMatch(index, /id="postRoundInlineViewSummaryBtn"/);
   assert.match(source, /const savedStory = getFinalRoundRecap\(match\)/);
-  assert.match(source, /reportModel\.meta\.story = savedStory/);
+  assert.match(source, /reportModel\.meta\.story = savedStory \|\| previewStory\.text/);
   assert.match(source, /audited-user-approved-story/);
   assert.match(source, /no headings or bullet lists/);
   assert.match(source, /two or three facts/);
@@ -101,10 +101,10 @@ test('both Story payloads consume the shared Nassau content rule', () => {
   assert.equal((source.match(/\$\{STORY_SHARED_CONTENT_RULES\}/g) || []).length, 2);
 });
 
-test('Ledger requests route through Story review and open automatically after save', () => {
-  assert.match(source, /async function routeLedgerRequestThroughStory\(match\)/);
-  assert.match(source, /hidePostRoundActions\(\);[\s\S]*hideRoundCompletePrompt\(\);/);
+test('saved Story opens the Ledger automatically from the guided post-round workflow', () => {
+  assert.doesNotMatch(source, /function routeLedgerRequestThroughStory\(match\)/);
   assert.match(source, /pendingLedgerOpenMatchId[\s\S]*openUnifiedExport\(match, 'ledger'\)/);
-  assert.match(source, /if \(blockingIssues\.length\) \{\s*const fallback = buildDeterministicLedgerEntryStory\(match, metrics, 'verification-failed'\)/);
+  assert.match(source, /const previewStory = savedStory \? null : buildDeterministicLedgerEntryStory\(match, refreshedMetrics, 'story-not-saved'\)/);
+  assert.match(source, /const fallback = buildDeterministicLedgerEntryStory\(match, metrics, 'verification-failed'\)/);
   assert.equal((source.match(/const repaired = await requestRecap/g) || []).length >= 1, true);
 });

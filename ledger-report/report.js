@@ -3,7 +3,7 @@
    or derived from it. Stroke allocation comes from the app's engine, keyed by
    basis; the report never re-derives handicapping.
    ========================================================================== */
-import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.18';
+import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.19';
 
 const packPages = globalThis.packPages;
 const runGame = globalThis.runGame;
@@ -1244,6 +1244,10 @@ function returnToOriginatingMatch(){
 function acceptLedgerEntry(){
   const button=document.getElementById("acceptLedgerEntryBtn");
   const status=document.getElementById("returnToMatchStatus");
+  if(ROUND?.meta?.storyApprovalRequired){
+    if(status){ status.hidden=false; status.textContent="Review and save the Story of the Round before accepting this Ledger Entry."; }
+    return;
+  }
   if(ROUND?.meta?.status!=="final" || !String(ROUND?.meta?.story||"").trim()){
     if(status){ status.hidden=false; status.textContent="Complete the round before accepting this Ledger Entry."; }
     return;
@@ -1307,6 +1311,11 @@ if(ROUND?.meta?.acceptanceStatus==="accepted"){
   if(button){ button.disabled=true; button.textContent="Accepted"; }
   const reviseButton=document.getElementById("reviseLedgerEntryBtn");
   if(reviseButton) reviseButton.hidden=false;
+}else if(ROUND?.meta?.storyApprovalRequired){
+  const button=document.getElementById("acceptLedgerEntryBtn");
+  if(button){ button.disabled=true; button.textContent="Save Story to finalize"; }
+  const status=document.getElementById("returnToMatchStatus");
+  if(status){ status.hidden=false; status.textContent="Preview uses a verified facts-only Story. Review and save the Story of the Round to finalize."; }
 }else if(ROUND?.meta?.status!=="final"){
   const button=document.getElementById("acceptLedgerEntryBtn");
   if(button){ button.disabled=true; button.textContent="Complete round to accept"; }

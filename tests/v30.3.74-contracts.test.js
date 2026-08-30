@@ -123,11 +123,11 @@ test('every Memory is guaranteed in recap output without an empty section', () =
   const engine = loadLiveEngine();
   const match = { memories: [{ id: 'a', text: 'Brian holed a bunker shot', holeNumber: 14, createdAt: '2026-07-16T12:00:00Z' }, { id: 'b', text: 'Phil made the long putt', holeNumber: 18, createdAt: '2026-07-16T13:00:00Z' }] };
   const covered = engine.ensureRoundRecapMemoryCoverage(match, 'Brian holed a bunker shot changed the match.');
-  assert.match(covered, /Round Memories/);
+  assert.match(covered, /saved memories add details/);
   assert.match(covered, /Phil made the long putt/);
   assert.doesNotMatch(engine.ensureRoundRecapMemoryCoverage({ memories: [] }, 'Recap'), /Round Memories/);
   const payloadSource = engine.buildRoundRecapPayload.toString();
-  assert.match(payloadSource, /Every item in memories is a high-intent user fact/);
+  assert.match(payloadSource, /Every Memory is a high-intent user fact/);
   assert.match(payloadSource, /author: m\.createdByName/);
   const contextual = engine.ensureRoundRecapMemoryCoverage({ memories: [{ id: 'c', text: 'A long birdie putt', holeNumber: 7, category: 'Best Shot', createdByName: 'Alex', createdAt: '2026-07-16T14:00:00Z' }] }, 'Recap');
   assert.match(contextual, /Alex · Hole 7 · Best Shot: A long birdie putt/);

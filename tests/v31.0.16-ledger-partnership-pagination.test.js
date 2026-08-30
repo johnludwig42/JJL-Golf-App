@@ -71,16 +71,17 @@ test('partnership eligibility fails closed and excludes incomplete holes', () =>
   assert.deepEqual(Array.from(missingResult.holes), [1,3,4,5,6,7,9]);
 });
 
-test('perfectly complementary and fully stacked cards produce exact 100 and 0 ratings', () => {
+test('Ham & Egg Rating uses handoffs divided by all possible round transitions', () => {
   const complement = fixture({ basis: 'net', customValues: {
     p1: [4,5,4,6,4,5,4,5,4], p2: [5,4,6,4,5,4,6,4,5],
     p3: [4,5,4,6,4,5,4,5,4], p4: [5,4,6,4,5,4,6,4,5],
   }});
   const perfect = complement.engine.computeBestBallPartnershipStatistics(complement.match, complement.metrics).sides[0];
-  assert.equal(perfect.worst, 41);
-  assert.equal(perfect.best, 36);
   assert.equal(perfect.actual, 36);
   assert.equal(perfect.rating, 100);
+  assert.equal(perfect.possibleRoundTransitions, 8);
+  assert.equal('best' in perfect, false);
+  assert.equal('worst' in perfect, false);
   assert.equal(perfect.partnershipGain, 5);
 
   const stacked = fixture({ customValues: {
@@ -88,7 +89,7 @@ test('perfectly complementary and fully stacked cards produce exact 100 and 0 ra
     p3: [4,4,4,4,4,4,4,4,4], p4: [4,4,4,4,4,4,4,4,4],
   }});
   const stackedSide = stacked.engine.computeBestBallPartnershipStatistics(stacked.match, stacked.metrics).sides[0];
-  assert.equal(stackedSide.rating, null, 'identical cards have no exploitable range');
+  assert.equal(stackedSide.rating, 0, 'a complete card with no handoffs earns a zero rating');
 
   const aligned = fixture({ customValues: {
     p1: [4,4,4,5,5,5,6,6,6], p2: [3,3,3,5,5,5,7,7,7],

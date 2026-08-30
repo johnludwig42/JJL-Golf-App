@@ -3,7 +3,7 @@
    or derived from it. Stroke allocation comes from the app's engine, keyed by
    basis; the report never re-derives handicapping.
    ========================================================================== */
-import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.17';
+import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.18';
 
 const packPages = globalThis.packPages;
 const runGame = globalThis.runGame;
@@ -1015,11 +1015,11 @@ if(ROUND.partnership?.sides?.length){
       const contribution=player=>player?`${player.name}<br><strong>${rate(player.count,side.holes)}</strong>`:"—";
       const rescues=partners.map(player=>`${player.name} ${rate(player.rescues,side.holes)}`).join("<br>");
       const rating=side.rating!==null&&Number.isFinite(Number(side.rating))?Math.round(Number(side.rating)):"—";
-      return `<tr data-row><td class="l"><strong>${side.name}</strong><br><span class="dim">${side.holes} eligible holes<br>Actual ${side.actual} · Best ${side.best} · Stacked ${side.worst}</span></td><td class="n">${contribution(partners[0])}</td><td class="n">${contribution(partners[1])}</td><td class="n">${rate(side.redundancy,side.holes)}</td><td class="n">${rate(side.alternations,side.alternationOpportunities)}</td><td class="n">${rescues}</td><td class="n">${side.partnershipGain}</td><td class="n">${rating}</td></tr>`;
+      return `<tr data-row><td class="l"><strong>${side.name}</strong><br><span class="dim">${side.holes} eligible holes · Actual ${side.actual}</span></td><td class="n">${contribution(partners[0])}</td><td class="n">${contribution(partners[1])}</td><td class="n">${rate(side.redundancy,side.holes)}</td><td class="n">${rate(side.alternations,side.alternationOpportunities)}</td><td class="n">${rescues}</td><td class="n">${side.partnershipGain}</td><td class="n">${rating}</td></tr>`;
     }).join("");
     w.innerHTML=`<div class="subhead" data-ledger-stat-group="partnership">Ham &amp; Egg Rating<span>How effectively the partners’ counting scores complemented one another.</span></div>
       <table class="dense"><colgroup><col style="width:18%"><col style="width:11%"><col style="width:11%"><col style="width:9%"><col style="width:10%"><col style="width:17%"><col style="width:13%"><col style="width:9%"></colgroup><thead data-rowhead><tr><th class="l">Side</th><th class="n">Counted</th><th class="n">Counted</th><th class="n">Tied</th><th class="n">Hand-offs</th><th class="n">Rescues</th><th class="n">Partnership Gain</th><th class="n">Rating /100</th></tr></thead><tbody>${rows}</tbody></table>
-      <p class="scnote">Contribution identifies who supplied the counting score; tied holes credit both partners. Partnership Gain is the better partner’s eligible-hole total minus the team’s actual best-ball total—the strokes the partnership improved on its better individual card, not strokes gained. Ham &amp; Egg Rating places actual best ball between the strongest and weakest alignment allowed by those two cards; an em dash means no rating range exists. A dominant contribution split can still rate highly, while an even split can rate poorly. Rescues require a two-stroke advantage over the partner. Hand-offs measure changes across adjacent eligible holes where both holes have one sole contributor.</p>`;
+      <p class="scnote">Contribution identifies who supplied the counting score; tied holes credit both partners. Partnership Gain is the better partner’s eligible-hole total minus the team’s actual best-ball total—the strokes the partnership improved on its better individual card, not strokes gained. Hand-offs measure changes across adjacent eligible holes where both holes have one sole contributor. Ham &amp; Egg Rating measures the total extent of that alternation across the completed round: actual hand-offs divided by all possible hole-to-hole transitions, multiplied by 100 (17 possible for 18 holes; 8 for nine). The report shows only the rating; an em dash means the round is incomplete. Rescues require a two-stroke advantage over the partner.</p>`;
     return w;
   },{splittable:true,minRows:2,keepTogetherWhenFits:true});
 }

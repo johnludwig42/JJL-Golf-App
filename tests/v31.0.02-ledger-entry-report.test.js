@@ -165,7 +165,7 @@ test('dedicated Ledger Entry adapter maps existing authoritative facts without c
 test('Ledger Story generation is version-bound, non-mutating, and isolated from the Match Summary recap', () => {
   assert.doesNotMatch(source, /ledgerEntryStoryCache|getLedgerEntryStoryCacheKey/);
   assert.match(source, /reportPurpose: 'ledger-story'/);
-  assert.match(source, /Target 300–400 words and never exceed 450/);
+  assert.match(source, /Target 400–500 words and never exceed 550/);
   assert.match(source, /exactly 3–5 natural paragraphs separated by blank lines/);
   assert.match(source, /signed holes-up results such as \+2 or \+3/);
   assert.match(renderer, /function storyParagraphs\(text\)/);

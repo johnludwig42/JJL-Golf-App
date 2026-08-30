@@ -46,7 +46,8 @@ test('best-ball partnership statistics reuse complete one-ball team results with
   assert.deepEqual(result.sides[0].playerContributions.map(player => player.count), [6, 6]);
   assert.equal(result.sides[0].redundancy, 3);
   assert.equal(result.sides[0].alternations, 3);
-  assert.ok(result.sides[0].strokesSaved >= 0);
+  assert.ok(result.sides[0].partnershipGain >= 0);
+  assert.equal('strokesSaved' in result.sides[0], false);
   assert.ok(Number.isInteger(result.sides[0].rating));
   const model = engine.buildLedgerEntryReportModel(match, metrics);
   assert.equal(model.games[0].basis, 'gross');
@@ -80,7 +81,7 @@ test('perfectly complementary and fully stacked cards produce exact 100 and 0 ra
   assert.equal(perfect.best, 36);
   assert.equal(perfect.actual, 36);
   assert.equal(perfect.rating, 100);
-  assert.equal(perfect.strokesSaved, 5);
+  assert.equal(perfect.partnershipGain, 5);
 
   const stacked = fixture({ customValues: {
     p1: [4,4,4,4,4,4,4,4,4], p2: [4,4,4,4,4,4,4,4,4],
@@ -106,6 +107,7 @@ test('ties credit both partners, break alternation, and keep one hole denominato
   assert.equal(side.redundancy, 1);
   assert.equal(side.playerContributions[0].count + side.playerContributions[1].count - side.redundancy, side.holes);
   assert.equal(side.alternations, 6);
+  assert.equal(side.alternationOpportunities, 6);
 });
 
 test('gross and net bases exactly match the authoritative hole resolver', () => {
@@ -167,5 +169,6 @@ test('Ledger renderer exposes independent stat-category blocks and partnership o
   assert.match(reportSource, /keepTogetherWhenFits:true/);
   assert.match(reportSource, /Partnership performance/);
   assert.match(reportSource, /Ham &amp; Egg/);
-  assert.match(reportSource, /Contribution is inclusive/);
+  assert.match(reportSource, /Partnership Gain/);
+  assert.match(reportSource, /Rating \/100/);
 });

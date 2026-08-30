@@ -14,13 +14,14 @@ const localPersistenceDiagnostics = {
   lastSuccessfulLocalSave: null,
   lastFailedLocalSave: null,
   lastFailureMessage: '',
+  lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.19',
-  versionNumber: '31.0.19',
-  cacheName: 'the-dye-ledger-v31.0.19',
-  buildDate: '2026-08-30T16:00:00-04:00',
-  buildLabel: 'Guided Post-Round Story Flow'
+  version: 'v31.0.20',
+  versionNumber: '31.0.20',
+  cacheName: 'the-dye-ledger-v31.0.20',
+  buildDate: '2026-08-30T18:30:00-04:00',
+  buildLabel: 'Clear Save Status and Round History'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -3242,12 +3243,14 @@ function persist({ skipRender = false } = {}) {
     localPersistenceDiagnostics.storageAvailable = false;
     localPersistenceDiagnostics.lastFailedLocalSave = result.savedAt;
     localPersistenceDiagnostics.lastFailureMessage = result.errorMessage;
+    localPersistenceDiagnostics.lastBackupWarning = '';
     notifyLocalSaveFailure();
     return false;
   }
   localPersistenceDiagnostics.storageAvailable = true;
   localPersistenceDiagnostics.lastSuccessfulLocalSave = result.savedAt;
-  localPersistenceDiagnostics.lastFailureMessage = result.backupError || '';
+  localPersistenceDiagnostics.lastFailureMessage = '';
+  localPersistenceDiagnostics.lastBackupWarning = result.backupError || '';
   if (!skipRender) renderAll();
   return true;
 }
@@ -16113,6 +16116,23 @@ async function handleDeleteCourseEverywhere(courseId) {
   }
 }
 
+function getRoundLibrarySortTime(match) {
+  const candidates = [match?.completedAt, match?.updatedAt, match?.lastSavedAt, match?.createdAt];
+  for (const value of candidates) {
+    const parsed = Date.parse(String(value || ''));
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+}
+
+function compareRoundLibraryNewestFirst(a, b) {
+  const dateOrder = String(b?.date || '').localeCompare(String(a?.date || ''));
+  if (dateOrder) return dateOrder;
+  const timeOrder = getRoundLibrarySortTime(b) - getRoundLibrarySortTime(a);
+  if (timeOrder) return timeOrder;
+  return String(b?.id || '').localeCompare(String(a?.id || ''));
+}
+
 function renderMatches() {
   const el = document.getElementById('matchesList');
   if (!el) return;
@@ -16120,14 +16140,14 @@ function renderMatches() {
     el.innerHTML = '<div class="library-empty-state"><strong>No saved rounds</strong><span>Rounds appear here after you create one from Match Setup.</span></div>';
     return;
   }
-  const sorted = state.matches.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const sorted = state.matches.slice().sort(compareRoundLibraryNewestFirst);
   const inProgress = sorted.filter(m => m.status !== 'complete');
   const completed = sorted.filter(m => m.status === 'complete');
   const renderRow = match => {
     const course = getCourse(match.courseId);
     const tee = getTee(match.courseId, match.teeId);
     const metrics = computeMatchMetrics(match);
-    const status = match.status === 'complete' ? 'Complete' : (state.activeMatchId === match.id ? 'Active' : 'Saved');
+    const status = match.status === 'complete' ? 'Complete' : (state.activeMatchId === match.id ? 'Active' : 'Paused');
     const timing = getRoundElapsedTimeState(match, metrics);
     const storage = match.storageMode === 'shared' ? 'Shared' : 'Local';
     const cloudMeta = match.storageMode === 'shared' ? `${storage} · ${match.cloudSyncState || 'local-cache'}${match.sharedMatchRef ? ` · ID ${match.sharedMatchRef}` : ''}` : storage;
@@ -16479,7 +16499,7 @@ function renderSessionSummary() {
     <div class="session-round-list top-gap">
       ${rounds.map(round => {
         const course = getCourse(round.courseId);
-        const status = round.status === 'complete' ? 'Complete' : (state.activeMatchId === round.id ? 'In Progress' : 'Saved');
+        const status = round.status === 'complete' ? 'Complete' : (state.activeMatchId === round.id ? 'In Progress' : 'Paused');
         return `<div class="session-round-row"><strong>Round ${Number(round.roundNumber) || 1}</strong><span>${escapeHtml(course?.name || 'Course not selected')} – ${escapeHtml(status)}</span></div>`;
       }).join('')}
     </div>`;
@@ -17112,6 +17132,7 @@ function completeActiveRound() {
     if (!completedWrite.ok) {
       localPersistenceDiagnostics.lastFailedLocalSave = completedWrite.savedAt;
       localPersistenceDiagnostics.lastFailureMessage = completedWrite.errorMessage;
+      localPersistenceDiagnostics.lastBackupWarning = '';
       notifyLocalSaveFailure();
       throw new Error(`COMPLETED_ROUND_SAVE_FAILED: ${completedWrite.errorMessage}`);
     }
@@ -17119,7 +17140,8 @@ function completeActiveRound() {
     state.activeMatchId = candidate.id;
     localPersistenceDiagnostics.storageAvailable = true;
     localPersistenceDiagnostics.lastSuccessfulLocalSave = completedWrite.savedAt;
-    localPersistenceDiagnostics.lastFailureMessage = completedWrite.backupError || '';
+    localPersistenceDiagnostics.lastFailureMessage = '';
+    localPersistenceDiagnostics.lastBackupWarning = completedWrite.backupError || '';
     try { localStorage.removeItem(FINISH_RECOVERY_STORAGE_KEY); } catch {}
     finishConfirmArmed = false;
     newMatchPromptFinishArmed = false;
@@ -17518,6 +17540,12 @@ function schedulePlayerModeEntryAdvance(playerId, match = getActiveMatch()) {
   return true;
 }
 
+function getLocalSavePresentation(diagnostics = localPersistenceDiagnostics) {
+  if (diagnostics.storageAvailable === false || diagnostics.lastFailureMessage) return { label: 'Save needs attention', tone: 'attention' };
+  if (diagnostics.lastBackupWarning) return { label: 'Saved · Backup unavailable', tone: 'warning' };
+  return { label: 'Saved ✓', tone: 'good' };
+}
+
 function getPlayerModeSavePresentation(match) {
   if (match?.storageMode === 'shared') {
     const sync = getSharedSyncStatus(match);
@@ -17527,8 +17555,7 @@ function getPlayerModeSavePresentation(match) {
     if (navigator.onLine === false) return { label: 'Saved on device · Offline', tone: 'warning' };
     return { label: 'Saved on device ✓', tone: 'warning' };
   }
-  if (localPersistenceDiagnostics.storageAvailable === false || localPersistenceDiagnostics.lastFailureMessage) return { label: 'Save needs attention', tone: 'attention' };
-  return { label: 'Saved ✓', tone: 'good' };
+  return getLocalSavePresentation();
 }
 
 function renderPlayerModeScoreGrid(match, tee, metrics, hole) {
@@ -24037,7 +24064,7 @@ function renderBuildInfoUi() {
     appStorageLoadedFrom: localPersistenceDiagnostics.loadedFrom,
     appFinishRecoveryStatus: localPersistenceDiagnostics.recoveryStatus,
     appLastLocalSave: localPersistenceDiagnostics.lastSuccessfulLocalSave ? formatTimestampET(localPersistenceDiagnostics.lastSuccessfulLocalSave) : 'Not saved this session',
-    appLastLocalSaveFailure: localPersistenceDiagnostics.lastFailedLocalSave ? `${formatTimestampET(localPersistenceDiagnostics.lastFailedLocalSave)} · ${localPersistenceDiagnostics.lastFailureMessage || 'Unknown failure'}` : 'None',
+    appLastLocalSaveFailure: localPersistenceDiagnostics.lastFailedLocalSave && localPersistenceDiagnostics.lastFailureMessage ? `${formatTimestampET(localPersistenceDiagnostics.lastFailedLocalSave)} · ${localPersistenceDiagnostics.lastFailureMessage}` : (localPersistenceDiagnostics.lastBackupWarning ? `Primary saved · Backup warning: ${localPersistenceDiagnostics.lastBackupWarning}` : 'None'),
     appActiveRoundDiagnostic: diagnosticMatch ? `${diagnosticMatch.id} · ${diagnosticMatch.status}` : 'None',
     appSharedMatchDiagnostic: diagnosticMatch?.storageMode === 'shared' ? `${isCurrentDeviceMatchHost(diagnosticMatch) ? 'Host' : 'Joined'} · ${diagnosticMatch.cloudSyncState || 'local-cache'} · pull ${diagnosticMatch.lastSharedScorePullAt || 'never'} · push ${diagnosticMatch.lastSharedScorePushAt || 'never'}` : 'Not active',
     appScoredHoleDiagnostic: String(scoredHoleCount),
@@ -24708,6 +24735,10 @@ function installDyeLedgerLiveEngineAdapter() {
     validateRoundRecapContent,
     getAutomaticRoundRecapEligibility,
     getPostRoundWorkflowState,
+    getPlayerModeSavePresentation,
+    getLocalSavePresentation,
+    getRoundLibrarySortTime,
+    compareRoundLibraryNewestFirst,
     ensureRoundRecapMemoryCoverage,
     ensureRoundRecapRequiredFacts,
     isRoundRecapWeatherCovered,

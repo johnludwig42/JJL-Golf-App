@@ -169,7 +169,8 @@ test('Ledger renderer exposes independent stat-category blocks and partnership o
   assert.match(reportSource, /trackedStatisticsGroups\("performance"\)/);
   assert.match(reportSource, /keepTogetherWhenFits:true/);
   assert.match(reportSource, /Partnership performance/);
+  assert.match(reportSource, /Team Metrics/);
   assert.match(reportSource, /Ham &amp; Egg/);
   assert.match(reportSource, /Partnership Gain/);
-  assert.match(reportSource, /Rating \/100/);
+  assert.match(reportSource, /Ham &amp; Egg<br>Rating \/100/);
 });

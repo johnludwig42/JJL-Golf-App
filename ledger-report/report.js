@@ -829,9 +829,16 @@ if(MARGIN){
     });
     const perW = FEAT.stakePerSegment;
     const bets = segs.length + (MARGIN.aggregate?1:0);
+    const cardBasis = String(FEAT.basis||"net").toLowerCase()==="gross"?"GROSS":"NET";
+    const cardTotals = [
+      {name:SIDES[FEAT.sides[0].key].name,total:sum(MARGIN.per.filter(r=>r.scored).map(r=>r.a))},
+      {name:SIDES[FEAT.sides[1].key].name,total:sum(MARGIN.per.filter(r=>r.scored).map(r=>r.b))},
+    ];
     w.appendChild(h("div",{"data-row":"",class:"recon",html:
-      `<span>BEST ${wn(FEAT.bestN||2).toUpperCase()} NET PER SIDE · ${SIDES[SIDEKEYS[0]].name.toUpperCase()}–${SIDES[SIDEKEYS[1]].name.toUpperCase()} UNDER EACH HOLE</span>
+      `<span>BEST ${wn(FEAT.bestN||2).toUpperCase()} ${cardBasis} PER SIDE · ${SIDES[SIDEKEYS[0]].name.toUpperCase()}–${SIDES[SIDEKEYS[1]].name.toUpperCase()} UNDER EACH HOLE</span>
        <span style="color:#14211C;font-weight:600">${MARGIN.aggregate?`AGGREGATE ${MARGIN.aggregate.margin>0?SIDES[FEAT.sides[1].key].name.toUpperCase():SIDES[FEAT.sides[0].key].name.toUpperCase()} ${Math.abs(MARGIN.aggregate.margin)} UP · `:""}${perW?`${wn(bets).toUpperCase()} BETS × ${usd(perW)} = ${usd(bets*perW)} EACH`:"NO WAGER"}</span>`}));
+    w.appendChild(h("div",{"data-row":"",class:"note",style:"padding-top:5px",html:
+      `<strong>BEST-BALL CARD TOTAL · BEST ${wn(FEAT.bestN||2).toUpperCase()} ${cardBasis}</strong> · ${cardTotals.map(side=>`${side.name.toUpperCase()} ${side.total}`).join(" · ")} · INFORMATIONAL AGGREGATE; THE ${FEAT.type==="nassau"?"NASSAU":"MATCH"} RESULT IS DETERMINED HOLE BY HOLE.`}));
     return w;
   }, {splittable:true, minRows:1});
 }
@@ -1009,6 +1016,7 @@ if(ROUND.partnership?.sides?.length){
     {keepWithNext:true,label:"Statistics"});
   add("partnership",()=>{
     const w=h("div",{class:"ledger-stat-page ledger-stat-page-partnership","data-ledger-stat-category":"partnership"});
+    const partnershipBasis=String(ROUND.partnership.basis||"net").toLowerCase()==="gross"?"gross":"net";
     const rows=ROUND.partnership.sides.map(side=>{
       const partners=side.playerContributions;
       const rate=(value,denominator)=>denominator?`${Math.round(value/denominator*100)}% (${value}/${denominator})`:"—";
@@ -1017,9 +1025,9 @@ if(ROUND.partnership?.sides?.length){
       const rating=side.rating!==null&&Number.isFinite(Number(side.rating))?Math.round(Number(side.rating)):"—";
       return `<tr data-row><td class="l"><strong>${side.name}</strong><br><span class="dim">${side.holes} eligible holes · Actual ${side.actual}</span></td><td class="n">${contribution(partners[0])}</td><td class="n">${contribution(partners[1])}</td><td class="n">${rate(side.redundancy,side.holes)}</td><td class="n">${rate(side.alternations,side.alternationOpportunities)}</td><td class="n">${rescues}</td><td class="n">${side.partnershipGain}</td><td class="n">${rating}</td></tr>`;
     }).join("");
-    w.innerHTML=`<div class="subhead" data-ledger-stat-group="partnership">Ham &amp; Egg Rating<span>How effectively the partners’ counting scores complemented one another.</span></div>
-      <table class="dense"><colgroup><col style="width:18%"><col style="width:11%"><col style="width:11%"><col style="width:9%"><col style="width:10%"><col style="width:17%"><col style="width:13%"><col style="width:9%"></colgroup><thead data-rowhead><tr><th class="l">Side</th><th class="n">Counted</th><th class="n">Counted</th><th class="n">Tied</th><th class="n">Hand-offs</th><th class="n">Rescues</th><th class="n">Partnership Gain</th><th class="n">Rating /100</th></tr></thead><tbody>${rows}</tbody></table>
-      <p class="scnote">Contribution identifies who supplied the counting score; tied holes credit both partners. Partnership Gain is the better partner’s eligible-hole total minus the team’s actual best-ball total—the strokes the partnership improved on its better individual card, not strokes gained. Hand-offs measure changes across adjacent eligible holes where both holes have one sole contributor. Ham &amp; Egg Rating measures the total extent of that alternation across the completed round: actual hand-offs divided by all possible hole-to-hole transitions, multiplied by 100 (17 possible for 18 holes; 8 for nine). The report shows only the rating; an em dash means the round is incomplete. Rescues require a two-stroke advantage over the partner.</p>`;
+    w.innerHTML=`<div class="subhead" data-ledger-stat-group="partnership">Team Metrics<span>How effectively the partners’ counting scores complemented one another.</span></div>
+      <table class="dense"><colgroup><col style="width:16%"><col style="width:11%"><col style="width:11%"><col style="width:9%"><col style="width:10%"><col style="width:17%"><col style="width:13%"><col style="width:12%"></colgroup><thead data-rowhead><tr><th class="l">Side</th><th class="n">Counted</th><th class="n">Counted</th><th class="n">Tied</th><th class="n">Hand-offs</th><th class="n">Rescues</th><th class="n">Partnership Gain</th><th class="n">Ham &amp; Egg<br>Rating /100</th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="scnote">Counted shows how often each partner supplied the team’s counting score; when the partners tie for the counting score, both receive Counted credit. Tied is the share of eligible holes on which both partners supplied the same counting score. Hand-offs measure changes between sole contributors on adjacent eligible holes. A Rescue occurs when a player supplies the counting score and beats the partner’s score by at least two strokes; its percentage uses eligible team holes as the denominator. Partnership Gain is the difference between the side’s lowest individual ${partnershipBasis} total and its hole-by-hole ${partnershipBasis} best-ball total—not strokes gained. Ham &amp; Egg Rating is actual hand-offs divided by all possible hole-to-hole transitions, multiplied by 100 (17 possible for 18 holes; 8 for nine). The report shows only the rating; an em dash means the round is incomplete.</p>`;
     return w;
   },{splittable:true,minRows:2,keepTogetherWhenFits:true});
 }

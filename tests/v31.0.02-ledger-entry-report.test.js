@@ -167,7 +167,8 @@ test('Ledger Entry consumes the reviewed and saved Story without regenerating it
   assert.match(source, /reportPurpose: 'ledger-story'/);
   assert.match(source, /Target 400–500 words and never exceed 550/);
   assert.match(source, /exactly 3–5 natural paragraphs separated by blank lines/);
-  assert.match(source, /signed holes-up results such as \+2 or \+3/);
+  assert.match(source, /express its margin in prose as “2 up”/);
+  assert.match(source, /never use closed-match notation such as “2 & 0”/);
   assert.match(renderer, /function storyParagraphs\(text\)/);
   assert.match(renderer, /storyParagraphs\(supplied\)/);
   assert.match(shell, /\.prose p\{margin-bottom:6px;break-inside:auto\}/);
@@ -181,7 +182,7 @@ test('Ledger Entry consumes the reviewed and saved Story without regenerating it
   assert.match(source, /const requestStory = async \(repair = null\)/);
   assert.match(source, /blockingIssues\.map\(issue => \(\{ code: issue\.code, message: issue\.message \}\)\)/);
   assert.match(source, /provenance: 'audited-generated-narrative'/);
-  assert.match(source, /Generate, review, and save the Story of the Round before opening the final Ledger Entry/);
+  assert.match(source, /Review and save the Story\. The Ledger Entry will open automatically after it is saved/);
   assert.match(source, /window\.AbortController/);
   assert.match(source, /45000/);
   assert.match(source.slice(source.indexOf('async function prepareLedgerEntryStory'), source.indexOf('function buildLegacyRoundSnapshot')), /buildDeterministicLedgerEntryStory/);

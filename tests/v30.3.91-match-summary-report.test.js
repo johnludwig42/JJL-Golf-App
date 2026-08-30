@@ -52,7 +52,7 @@ test('bogey-derived metric is truthfully labeled as double-bogey avoidance', () 
 });
 
 test('Story contract separates Nassau components and forbids unsupported invention', () => {
-  assert.match(app, /keep Front, Back, and Overall results distinct/);
+  assert.match(app, /name each component \(Front, Back, and Overall\)/);
   assert.match(app, /Do not invent shots, quotations, emotions, motives, swing mechanics/);
 });
 

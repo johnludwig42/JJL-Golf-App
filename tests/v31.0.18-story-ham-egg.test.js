@@ -66,3 +66,45 @@ test('the app exposes one saved Story workflow and no Match Summary report choic
   assert.match(source, /no headings or bullet lists/);
   assert.match(source, /two or three facts/);
 });
+
+test('Story validation blocks impossible and Nassau-only closed-match notation', () => {
+  const f = fixture();
+  for (const notation of ['2 & 0', '6 & 0', '3 & 2']) {
+    const validation = f.engine.validateRoundRecapContent(f.live, f.metrics, `Blue won the Front ${notation}.`);
+    const notationIssues = validation.issues.filter(issue => /NOTATION/.test(issue.code));
+    assert.equal(notationIssues.length, 1, `${notation} should produce one notation issue`);
+    assert.match(notationIssues[0].code, /^FALSE_/);
+  }
+  const clean = f.engine.validateRoundRecapContent(f.live, f.metrics, 'Blue finished the Front 2 up, Gold finished the Back 2 down, and Overall was halved.');
+  assert.equal(clean.issues.some(issue => /NOTATION/.test(issue.code)), false);
+});
+
+test('legitimate closed-match notation remains available outside Nassau', () => {
+  const f = fixture();
+  f.live.selectedGames = [{ key: 'team_match', basis: 'gross' }];
+  const metrics = f.engine.computeMatchMetrics(f.live);
+  const validation = f.engine.validateRoundRecapContent(f.live, metrics, 'Blue closed the team match 3 & 2.');
+  assert.equal(validation.issues.some(issue => /NOTATION/.test(issue.code)), false);
+});
+
+test('both Story payloads consume the shared Nassau content rule', () => {
+  const f = fixture();
+  const canonical = f.engine.buildRoundRecapPayload(f.live, f.metrics).recapInstructions;
+  const ledger = f.engine.buildLedgerEntryStoryPayload(f.live, f.metrics).recapInstructions;
+  for (const instructions of [canonical, ledger]) {
+    assert.match(instructions, /“2 up”/);
+    assert.match(instructions, /“2 down”/);
+    assert.match(instructions, /never use closed-match notation/);
+    assert.match(instructions, /Front, Back, and Overall/);
+  }
+  assert.equal((source.match(/const STORY_SHARED_CONTENT_RULES\s*=/g) || []).length, 1);
+  assert.equal((source.match(/\$\{STORY_SHARED_CONTENT_RULES\}/g) || []).length, 2);
+});
+
+test('Ledger requests route through Story review and open automatically after save', () => {
+  assert.match(source, /async function routeLedgerRequestThroughStory\(match\)/);
+  assert.match(source, /hidePostRoundActions\(\);[\s\S]*hideRoundCompletePrompt\(\);/);
+  assert.match(source, /pendingLedgerOpenMatchId[\s\S]*openUnifiedExport\(match, 'ledger'\)/);
+  assert.match(source, /if \(blockingIssues\.length\) \{\s*const fallback = buildDeterministicLedgerEntryStory\(match, metrics, 'verification-failed'\)/);
+  assert.equal((source.match(/const repaired = await requestRecap/g) || []).length >= 1, true);
+});

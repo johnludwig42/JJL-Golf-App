@@ -148,7 +148,7 @@ test('current release identity, report assets, and statistics-page contract are 
   assert.match(reportSource, /LEDGER ENTRY/);
   assert.match(reportShell, /\.ledger-stat-page \.subhead/);
   assert.match(reportShell, /<title>Ledger Entry/);
-  assert.match(reportShell, /turn off browser headers and footers/);
+  assert.match(reportShell, /desktop print dialog offers Headers and footers/);
   assert.match(reportBootstrap, /history\.replaceState/);
   assert.match(reportBootstrap, /Report data is no longer available/);
 });

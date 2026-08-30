@@ -20,14 +20,15 @@
 *{box-sizing:border-box;margin:0;padding:0}
 html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 body{background:#2E322C;font-family:var(--body);color:var(--ink);font-size:9pt;line-height:1.45}
-.report-nav{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;
+.report-nav{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
   max-width:8.5in;margin:0 auto;padding:10px 12px;background:rgba(20,33,28,.96);
   color:var(--paper);font-family:var(--disp);box-shadow:0 2px 14px rgba(0,0,0,.28)}
-.report-nav button{appearance:none;border:1px solid rgba(255,255,255,.34);border-radius:10px;
-  background:var(--paper);color:var(--ink);padding:8px 12px;font:600 9pt var(--disp);cursor:pointer}
+.report-nav button{appearance:none;border:1px solid rgba(255,255,255,.34);border-radius:999px;
+  background:var(--paper);color:var(--ink);padding:10px 14px;min-height:44px;font:600 1rem var(--body);cursor:pointer}
 .report-nav button:focus-visible{outline:3px solid #E5C567;outline-offset:2px}
 .report-nav button[disabled]{opacity:.72;cursor:default}
-.report-nav-status{font:400 7.5pt var(--body);color:rgba(255,255,255,.78)}
+.report-nav-status{flex:1 0 100%;font:400 7.5pt var(--body);color:rgba(255,255,255,.78)}
+@media(max-width:700px){.report-nav button{flex:1 1 calc(50% - 4px);min-width:0}.report-nav-status{line-height:1.4}}
 .report-missing{width:8.5in;min-height:11in;margin:22px auto;padding:1in;background:var(--paper)}
 
 @page{size:letter;margin:0}
@@ -222,12 +223,12 @@ tr:last-child td{border-bottom:none}
   <button id="acceptLedgerEntryBtn" type="button">Accept &amp; Finalize</button>
   <button id="reviseLedgerEntryBtn" type="button" hidden>Unlock &amp; Regenerate</button>
   <button id="printLedgerEntryBtn" type="button">Print / Save PDF</button>
-  <span class="report-nav-status"><strong>Before printing:</strong> open More settings and turn off browser headers and footers. The Ledger footer will remain on every page.</span>
+  <span class="report-nav-status"><strong>Before printing:</strong> if your desktop print dialog offers Headers and footers, turn them off under More settings. On iPhone and iPad, AirPrint does not provide that browser setting. The Ledger footer remains on every report page.</span>
   <span id="returnToMatchStatus" class="report-nav-status" hidden>Close this tab to return to the match.</span>
 </nav>
 <div id="probe"></div>
 <div id="doc"></div>
-<script src="../ledger-report/bootstrap.js?v=31.0.19"></script>
-<script type="module" src="../ledger-report/pack.js?v=31.0.19"></script>
-<script type="module" src="../ledger-report/engines.js?v=31.0.19"></script>
-<script type="module" src="../ledger-report/report.js?v=31.0.19"></script>
+<script src="../ledger-report/bootstrap.js?v=31.0.20"></script>
+<script type="module" src="../ledger-report/pack.js?v=31.0.20"></script>
+<script type="module" src="../ledger-report/engines.js?v=31.0.20"></script>
+<script type="module" src="../ledger-report/report.js?v=31.0.20"></script>

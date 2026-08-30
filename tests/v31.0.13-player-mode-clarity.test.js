@@ -51,13 +51,14 @@ test('Player Mode entry progress and initial expansion use the existing completi
 });
 
 test('saved messaging distinguishes local persistence from Shared Match synchronization', () => {
-  const presentation = app.slice(app.indexOf('function getPlayerModeSavePresentation'), app.indexOf('function renderPlayerModeScoreGrid'));
+  const presentation = app.slice(app.indexOf('function getLocalSavePresentation'), app.indexOf('function renderPlayerModeScoreGrid'));
   assert.match(presentation, /getSharedSyncStatus\(match\)/);
   assert.match(presentation, /Saved on device · Syncing…/);
   assert.match(presentation, /This device synced ✓/);
   assert.match(presentation, /Sync needs attention/);
   assert.match(presentation, /Saved on device · Offline/);
   assert.match(presentation, /localPersistenceDiagnostics/);
+  assert.match(presentation, /Saved · Backup unavailable/);
   assert.match(presentation, /Saved ✓/);
 });
 

@@ -36,7 +36,7 @@ test('approved Scores sections are independent closed-by-default disclosures and
     ['print-section-match-status', 'Match status'],
     ['print-section-classic-scorecard', 'Classic scorecard'],
     ['print-section-stat-tracking', 'Stats'],
-    ['print-section-notes', 'Round Notes, Memories &amp; Recap'],
+    ['print-section-notes', 'Story of the Round'],
   ];
   expected.forEach(([className, title]) => {
     const pattern = new RegExp(`<details[^>]*class="[^"]*scoreboard-collapsible[^"]*${className}[^"]*"[^>]*>\\s*<summary><h2>${title}<\\/h2><\\/summary>`);

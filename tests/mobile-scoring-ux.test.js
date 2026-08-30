@@ -324,7 +324,7 @@ test('responsive source paths contain internal scrolling, width-fit momentum, de
   const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
   const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   assert.match(html, new RegExp(`src="\\./branding/apple-touch-icon-${currentVersionRegexEscaped}\\.png" alt="The Dye Ledger"`));
-  assert.match(html, /id="playMatchSummary"[^>]*aria-label="Match Summary"/);
+  assert.match(html, /id="playMatchSummary"[^>]*aria-label="Featured match status"/);
   assert.match(css, /\.table-scroll-region\{[^}]*overflow-x:auto[^}]*overflow-y:hidden/);
   assert.match(css, /\.quick-scoreboard-modal\{[^}]*overflow-x:hidden/s);
   assert.match(css, /\.quick-momentum-card \.momentum-chart\{[^}]*min-width:0[^}]*max-width:100%/);

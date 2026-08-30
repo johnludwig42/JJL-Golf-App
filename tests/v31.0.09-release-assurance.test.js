@@ -39,13 +39,14 @@ test('Ledger Story fallback reasons are deterministic and auditable', () => {
   assert.equal(engine.getLedgerEntryStoryFallbackReason(new Error('network failed')), 'service-unavailable');
 });
 
-test('failed online Story generation falls back without aborting Ledger Entry export', () => {
+test('legacy deterministic Story fallback remains available while Ledger requires the saved Story', () => {
   const storyPath = app.slice(app.indexOf('async function prepareLedgerEntryStory'), app.indexOf('function buildLegacyRoundSnapshot'));
   assert.match(storyPath, /return buildDeterministicLedgerEntryStory/);
   assert.match(storyPath, /provenance: 'audited-generated-narrative'/);
   assert.doesNotMatch(storyPath, /requires an internet connection|Configure Supabase before generating/);
-  assert.match(app, /reportModel\.meta\.story = ledgerStory\.text/);
-  assert.match(app, /reportModel\.meta\.storyFallbackReason = ledgerStory\.fallbackReason \|\| null/);
+  assert.match(app, /const savedStory = getFinalRoundRecap\(match\)/);
+  assert.match(app, /reportModel\.meta\.story = savedStory/);
+  assert.match(app, /reportModel\.meta\.storyFallbackReason = null/);
 });
 
 test('Player Mode accordion retains the shared DOM-driven save invariant', () => {

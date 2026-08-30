@@ -51,7 +51,7 @@ test('payload identifies the content contract and keeps deterministic facts auth
   const payload = engine.buildRoundRecapPayload(match, metrics);
   assert.equal(payload.recapContentSpecVersion, '1.0.0');
   assert.ok(payload.authoritativeFacts);
-  assert.match(payload.recapInstructions, /Compatibility bridge/);
+  assert.match(payload.recapInstructions, /canonical Story of the Round/);
   assert.match(payload.recapInstructions, /authoritativeFacts override/);
   assert.doesNotMatch(JSON.stringify(payload), /password|otp|service.role/i);
 });
@@ -62,9 +62,9 @@ test('tracked-stat payload supports evidence-based improvement review without in
   assert.equal(payload.players[0].statsTracked, true);
   assert.equal(payload.players[0].approachPerformance.trackedScoredHoles, 3);
   assert.equal(payload.players[0].approachPerformance.fairwayHitOpportunities, 1);
-  assert.match(payload.recapInstructions, /650–850 words/);
-  assert.match(payload.recapInstructions, /sample size/);
-  assert.match(payload.recapInstructions, /do not infer swing mechanics/);
+  assert.match(payload.recapInstructions, /400–500 words/);
+  assert.match(payload.recapInstructions, /two or three facts/);
+  assert.match(payload.recapInstructions, /Do not invent shots[\s\S]*swing mechanics/);
 
   const missing = engine.validateRoundRecapContent(match, metrics, 'Three holes were completed. Alex holed a long putt on 1.');
   assert.ok(missing.issues.some(issue => issue.code === 'MISSING_IMPROVEMENT_REVIEW'));
@@ -80,7 +80,7 @@ test('verified recap weather requires temperature and humidity without exposing 
   assert.equal(payload.roundContext.weather.humidity, 64);
   assert.equal('latitudeApprox' in payload.roundContext.weather, false);
   assert.equal('longitudeApprox' in payload.roundContext.weather, false);
-  assert.match(payload.recapInstructions, /temperature in degrees Fahrenheit and humidity percentage/);
+  assert.match(payload.recapInstructions, /Include recorded weather briefly/);
 
   const missing = engine.validateRoundRecapContent(match, metrics, 'Recorded conditions were warm and breezy. Alex holed a long putt on 1.');
   assert.ok(missing.issues.some(issue => issue.code === 'MISSING_WEATHER_TEMPERATURE'));
@@ -93,8 +93,8 @@ test('verified weather is appended after uncovered Memories and is not duplicate
   const { engine, match } = incompleteFixture();
   match.roundContext = { weather: { conditionsText: 'Partly cloudy', temperature: 78, humidity: 64, windSpeed: 9, windDirection: 225 } };
   const uncovered = engine.ensureRoundRecapRequiredFacts(match, 'A short provisional round was played.');
-  assert.match(uncovered, /Round Memories[\s\S]*Alex holed a long putt on 1\.[\s\S]*Weather[\s\S]*78°F[\s\S]*64% humidity/);
-  assert.match(uncovered, /Recorded after the first completed hole/);
+  assert.match(uncovered, /saved memories add details[\s\S]*Alex holed a long putt on 1\.[\s\S]*Recorded after the first completed hole[\s\S]*78°F[\s\S]*64% humidity/i);
+  assert.match(uncovered, /recorded after the first completed hole/i);
 
   const integrated = 'A short provisional round was played. Alex holed a long putt on 1. Conditions after the first completed hole were partly cloudy at 78°F with 64% humidity.';
   assert.equal(engine.ensureRoundRecapRequiredFacts(match, integrated), integrated);

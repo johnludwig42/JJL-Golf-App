@@ -98,13 +98,13 @@ test('Ledger Entry v31.0.02 satisfies the 61-assertion non-browser contract', ()
     ['record serializable', (() => { try { JSON.stringify(final.record); return true; } catch { return false; } })()],
     ['provisional does not award final', !provisional.html.includes('data-ledger-status="FINAL"')],
     ['provisional badge', provisional.html.includes('PROVISIONAL')],
-    ['default option first', index.indexOf('value="ledger"') < index.indexOf('value="summary"')],
+    ['default option first', index.indexOf('value="ledger"') < index.indexOf('value="scorecard"')],
     ['default option selected', /option value="ledger" selected/.test(index)],
     ['recommended label', index.includes('Ledger Entry (Recommended)')],
-    ['summary preserved', index.includes('value="summary">Match Summary')],
+    ['summary report removed', !index.includes('value="summary">Match Summary')],
     ['scorecard preserved', index.includes('value="scorecard">Classic Scorecard')],
     ['default function ledger', source.includes("printView = 'ledger'")],
-    ['valid view list', source.includes("['ledger', 'summary', 'scorecard']")],
+    ['legacy summary route retained internally', source.includes("['ledger', 'summary', 'scorecard']")],
     ['no recap toggle', !index.includes('ledgerRecapToggle')],
     ['report is read only', !source.includes('saveLedgerEntry')],
     ['dedicated renderer route', source.includes('ledger-report/shell.html')],
@@ -162,7 +162,7 @@ test('dedicated Ledger Entry adapter maps existing authoritative facts without c
   assert.doesNotMatch(renderer, /ROUND\.meta\.course} · \$\{ROUND\.meta\.layout}/);
 });
 
-test('Ledger Story generation is version-bound, non-mutating, and isolated from the Match Summary recap', () => {
+test('Ledger Entry consumes the reviewed and saved Story without regenerating it', () => {
   assert.doesNotMatch(source, /ledgerEntryStoryCache|getLedgerEntryStoryCacheKey/);
   assert.match(source, /reportPurpose: 'ledger-story'/);
   assert.match(source, /Target 400–500 words and never exceed 550/);
@@ -171,7 +171,9 @@ test('Ledger Story generation is version-bound, non-mutating, and isolated from 
   assert.match(renderer, /function storyParagraphs\(text\)/);
   assert.match(renderer, /storyParagraphs\(supplied\)/);
   assert.match(shell, /\.prose p\{margin-bottom:6px;break-inside:auto\}/);
-  assert.match(source, /reportModel\.meta\.story = ledgerStory\.text/);
+  assert.match(source, /const savedStory = getFinalRoundRecap\(match\)/);
+  assert.match(source, /reportModel\.meta\.story = savedStory/);
+  assert.match(source, /storyProvenance = 'audited-user-approved-story'/);
   assert.match(source, /function validateGreeniesNarrativeClaims\(match, metrics, recapText\)/);
   assert.match(source, /FALSE_GREENIES_COUNT/);
   assert.match(source, /UNVERIFIABLE_GREENIES_COUNT/);
@@ -179,7 +181,7 @@ test('Ledger Story generation is version-bound, non-mutating, and isolated from 
   assert.match(source, /const requestStory = async \(repair = null\)/);
   assert.match(source, /blockingIssues\.map\(issue => \(\{ code: issue\.code, message: issue\.message \}\)\)/);
   assert.match(source, /provenance: 'audited-generated-narrative'/);
-  assert.match(source, /Generating a fresh Story of the Round/);
+  assert.match(source, /Generate, review, and save the Story of the Round before opening the final Ledger Entry/);
   assert.match(source, /window\.AbortController/);
   assert.match(source, /45000/);
   assert.match(source.slice(source.indexOf('async function prepareLedgerEntryStory'), source.indexOf('function buildLegacyRoundSnapshot')), /buildDeterministicLedgerEntryStory/);

@@ -60,12 +60,12 @@ test('completed round makes recap generation a primary next step', () => {
   assert.match(app, /await generateRoundRecapForActiveMatch\(\)/);
 });
 
-test('a round with no selected games remains eligible for an AI recap', () => {
+test('a round with no selected games remains eligible for a Story', () => {
   const fixture = trackedFixture(true);
   const metrics = fixture.engine.computeMatchMetrics(fixture.match);
   const payload = fixture.engine.buildRoundRecapPayload(fixture.match, metrics);
   assert.deepEqual(payload.games, []);
   assert.equal(payload.players.length, 1);
   assert.ok(payload.authoritativeFacts);
-  assert.match(app, /AI Recap service is not deployed for this environment/);
+  assert.match(app, /Story service is not deployed for this environment/);
 });

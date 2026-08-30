@@ -32,29 +32,29 @@ test('v30.3.79 immutable PWA assets remain available after later upgrades', () =
     .forEach(name => assert.equal(existsSync(new URL(`../branding/${name}`, import.meta.url)), true));
 });
 
-test('Match Summary presents accepted AI recap in the main narrative hierarchy', () => {
+test('legacy summary renderer presents the saved Story in the main narrative hierarchy', () => {
   const { engine, live, metrics } = fixture({ roundRecapFinal: 'Alex won a close Friday match.' });
   const before = JSON.stringify(live);
   const summary = engine.buildSummaryExportBody(live, metrics);
-  assert.match(summary, /AI Round Recap/);
-  assert.match(summary, /Accepted recap/);
+  assert.match(summary, /Story of the Round/);
+  assert.match(summary, /Saved Story/);
   assert.match(summary, /Alex won a close Friday match/);
   assert.match(summary, /Alex nearly holed the bunker shot/);
-  assert.ok(summary.indexOf('Round Story') < summary.indexOf('AI Round Recap'));
-  assert.ok(summary.indexOf('AI Round Recap') < summary.indexOf('Round Analytics'));
+  assert.ok(summary.indexOf('Round Story') < summary.indexOf('Story of the Round'));
+  assert.ok(summary.indexOf('Story of the Round') < summary.indexOf('Round Analytics'));
   assert.ok(summary.indexOf('Round Analytics') < summary.indexOf('Final Settlement'));
   assert.equal(JSON.stringify(live), before);
 });
 
-test('draft and absent AI recaps are labeled truthfully without hiding the rest of the summary', () => {
+test('draft and absent Stories are labeled truthfully in the legacy renderer', () => {
   const draftFixture = fixture({ roundRecapGenerated: 'A draft account of the match.' });
   const draft = draftFixture.engine.buildSummaryExportBody(draftFixture.live, draftFixture.metrics);
-  assert.match(draft, /Draft recap/);
+  assert.match(draft, /Draft Story/);
   assert.match(draft, /A draft account of the match/);
   const emptyFixture = fixture();
   const empty = emptyFixture.engine.buildSummaryExportBody(emptyFixture.live, emptyFixture.metrics);
-  assert.match(empty, /No AI recap has been generated/);
-  assert.match(empty, /Generate and review an AI recap/);
+  assert.match(empty, /No Story has been generated for this round/);
+  assert.match(empty, /Generate, review, and save the Story/);
   assert.match(empty, /Final Settlement/);
 });
 

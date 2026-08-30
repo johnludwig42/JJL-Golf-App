@@ -51,9 +51,9 @@ test('bogey-derived metric is truthfully labeled as double-bogey avoidance', () 
   assert.doesNotMatch(html, />Bogey Avoidance</);
 });
 
-test('AI recap contract separates Nassau components and forbids unsupported performance inference', () => {
-  assert.match(app, /report Front 9, Back 9, and Overall as distinct component results/);
-  assert.match(app, /Do not infer ball-striking, putting, course-management quality/);
+test('Story contract separates Nassau components and forbids unsupported invention', () => {
+  assert.match(app, /keep Front, Back, and Overall results distinct/);
+  assert.match(app, /Do not invent shots, quotations, emotions, motives, swing mechanics/);
 });
 
 test('shared reconciliation is compact status content rather than a standalone report section', () => {

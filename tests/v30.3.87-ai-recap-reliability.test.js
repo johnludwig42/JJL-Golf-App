@@ -30,7 +30,7 @@ test('client preserves a generated recap that still needs review after one repai
   assert.match(app, /const repaired = await requestRecap\(\{/);
   assert.match(app, /match\.roundRecapGenerated = recap/);
   assert.match(app, /Draft generated but needs review:/);
-  assert.match(app, /Round Recap draft saved for review/);
+  assert.match(app, /Story draft saved for review/);
   assert.match(app, /roundRecapValidationIssues/);
   assert.match(app, /const recap = draftRecap \|\| finalRecap/);
   assert.match(app, /getDraftRoundRecap\(match\) \|\| getStoredRoundRecap\(match\)/);
@@ -50,7 +50,7 @@ test('client distinguishes deployment, contract, configuration, authorization, r
 });
 
 test('recap failures remain isolated from scoring and local round persistence', () => {
-  assert.match(app, /Scores, Memories, and Match Summary remain saved/);
-  assert.match(app, /persist\(\{ skipRender: true \}\);\s*renderLeaderboard\(\);\s*toast\('Round Recap unavailable/s);
+  assert.match(app, /Scores, Memories, and round data remain saved/);
+  assert.match(app, /persist\(\{ skipRender: true \}\);\s*renderLeaderboard\(\);\s*toast\('The Story could not be generated/s);
   assert.doesNotMatch(edgeFunction, /service_role|SUPABASE_SERVICE_ROLE/i);
 });

@@ -42,7 +42,7 @@ test('RoundRecord fixtures preserve three-layer order, structured settlement, an
   ];
   fixtures.forEach(fixture => {
     const { html, record } = render(fixture);
-    const order = ['The Dye Ledger', 'Round Story', 'AI Round Recap', 'Round Analytics', 'Settlement', 'Game Drivers', 'Ledger / Audit Detail', 'Classic scorecard', 'Leaderboards'];
+    const order = ['The Dye Ledger', 'Round Story', 'Story of the Round', 'Round Analytics', 'Settlement', 'Game Drivers', 'Ledger / Audit Detail', 'Classic scorecard', 'Leaderboards'];
     order.forEach(label => assert.match(html, new RegExp(label)));
     order.slice(1).forEach((label, idx) => assert.ok(html.indexOf(label) > html.indexOf(order[idx]), `${fixture.id}: ${label} order`));
     assert.match(html, /data-report-section-type="main"/);
@@ -76,8 +76,8 @@ test('weather, out-of-sequence, legacy, and recap fixtures stay truthful and com
   assert.deepEqual(weather.record.notes.weather, weather.match.roundContext.weather);
   assert.deepEqual(Array.from(weather.record.meta.completedHoleNumbers), [1, 3, 5]);
   assert.doesNotMatch(weather.snapshot, /through Hole 5/i);
-  assert.match(weather.html, /AI Round Recap/);
-  assert.match(weather.html, /Accepted recap/);
+  assert.match(weather.html, /Story of the Round/);
+  assert.match(weather.html, /Saved Story/);
   assert.match(weather.html, /A concise supported recap/);
   const malformed = render(buildMatch({ id: 'bad-weather', scores, weather: { nonsense: true } }));
   assert.doesNotMatch(malformed.snapshot, /<span>Weather<\/span>/);

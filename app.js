@@ -16,11 +16,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.17',
-  versionNumber: '31.0.17',
-  cacheName: 'the-dye-ledger-v31.0.17',
-  buildDate: '2026-08-29T22:30:00-04:00',
-  buildLabel: 'Ledger Partnership Refinements'
+  version: 'v31.0.18',
+  versionNumber: '31.0.18',
+  cacheName: 'the-dye-ledger-v31.0.18',
+  buildDate: '2026-08-30T10:30:00-04:00',
+  buildLabel: 'Canonical Story and Ham & Egg Rating'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -4837,16 +4837,12 @@ function computeBestBallPartnershipStatistics(match, metrics = null) {
       actual += low;
     });
 
-    const ascendingFirst = first.slice().sort((a, b) => a - b);
-    const ascendingSecond = second.slice().sort((a, b) => a - b);
-    const descendingSecond = ascendingSecond.slice().reverse();
-    const worst = ascendingFirst.reduce((sum, value, index) => sum + Math.min(value, ascendingSecond[index]), 0);
-    const best = ascendingFirst.reduce((sum, value, index) => sum + Math.min(value, descendingSecond[index]), 0);
-    const denominator = worst - best;
     const partnerTotals = [first.reduce((sum, value) => sum + value, 0), second.reduce((sum, value) => sum + value, 0)];
     const betterPartnerTotal = Math.min(...partnerTotals);
-    const rating = holes.length >= 6 && denominator > 0
-      ? Math.max(0, Math.min(100, Math.round(((worst - actual) / denominator) * 100)))
+    const completion = getRoundCompletionState(match, effectiveMetrics);
+    const possibleRoundTransitions = Math.max(0, Number(completion.selectedHoleCount || 0) - 1);
+    const rating = completion.isComplete && possibleRoundTransitions > 0
+      ? Math.max(0, Math.min(100, Math.round((alternations / possibleRoundTransitions) * 100)))
       : null;
     return {
       teamId: teamNo,
@@ -4857,10 +4853,9 @@ function computeBestBallPartnershipStatistics(match, metrics = null) {
       alternations,
       alternationOpportunities,
       actual,
-      best,
-      worst,
       betterPartnerTotal,
       partnershipGain: betterPartnerTotal - actual,
+      possibleRoundTransitions,
       rating,
     };
   });
@@ -5845,7 +5840,7 @@ function buildExportMomentum(match, metrics) {
 
 function formatRoundMemoryRecapLine(memory) {
   const context = [memory.createdByName, memory.holeNumber ? `Hole ${memory.holeNumber}` : '', memory.category && memory.category !== 'General' ? memory.category : ''].filter(Boolean).join(' · ');
-  return `- ${context ? `${context}: ` : ''}${String(memory.text || '').trim()}`;
+  return `${context ? `${context}: ` : ''}${String(memory.text || '').trim()}`;
 }
 function ensureRoundRecapMemoryCoverage(match, recapText) {
   const recap = String(recapText || '').trim();
@@ -5853,8 +5848,8 @@ function ensureRoundRecapMemoryCoverage(match, recapText) {
   if (!memories.length) return recap;
   const missing = memories.filter(memory => !recap.toLocaleLowerCase().includes(String(memory.text || '').trim().toLocaleLowerCase()));
   if (!missing.length) return recap;
-  const section = `Round Memories\n${missing.map(formatRoundMemoryRecapLine).join('\n')}`;
-  return [recap, section].filter(Boolean).join('\n\n');
+  const memoryText = missing.map(formatRoundMemoryRecapLine).join(' ');
+  return [recap, `The saved memories add details the scorecard could not capture: ${memoryText}`].filter(Boolean).join('\n\n');
 }
 function isRoundRecapWeatherCovered(match, recapText) {
   const weather = normalizeRoundWeatherSnapshot(match?.roundContext?.weather);
@@ -5886,7 +5881,7 @@ function ensureRoundRecapRequiredFacts(match, recapText) {
   const recapWithMemories = ensureRoundRecapMemoryCoverage(match, recapText);
   if (isRoundRecapWeatherCovered(match, recapWithMemories)) return recapWithMemories;
   const weatherLine = formatRoundRecapWeatherLine(match);
-  return [recapWithMemories, weatherLine ? `Weather\n${weatherLine}` : ''].filter(Boolean).join('\n\n');
+  return [recapWithMemories, weatherLine].filter(Boolean).join('\n\n');
 }
 function getStoredRoundRecap(match) {
   const stored = String(match?.roundRecapFinal || match?.roundRecapGenerated || match?.roundRecap || '').trim();
@@ -5928,11 +5923,11 @@ function buildRoundRecapExport(match, metrics = null, { includeEmpty = false, em
     : '';
   const content = `
       <div class="export-section-head">
-        <h2>AI Round Recap</h2>
-        <div class="export-section-sub">${recap ? `${accepted ? 'Accepted recap' : 'Draft recap'} centered on the Featured Competition, round notes, memories, scores, games, and stats.` : 'No AI recap has been generated for this round.'}</div>
+        <h2>Story of the Round</h2>
+        <div class="export-section-sub">${recap ? `${accepted ? 'Saved Story' : 'Draft Story'} built from the Featured Competition, round notes, Memories, scores, games, and selected statistics.` : 'No Story has been generated for this round.'}</div>
       </div>
       ${incompleteNote}
-      ${recap ? `<div class="export-round-recap-text">${formatRoundRecapHtml(recap)}</div>` : '<div class="export-empty">Generate and review an AI recap from the Scores tab to include it here. Scores, settlement, and memories remain available below.</div>'}`;
+      ${recap ? `<div class="export-round-recap-text">${formatRoundRecapHtml(recap)}</div>` : '<div class="export-empty">Generate, review, and save the Story from the Scores tab before finalizing the Ledger Entry.</div>'}`;
   return embedded ? `<div class="export-round-recap-embedded">${content}</div>` : `<section class="export-section export-section-round-recap">${content}</section>`;
 }
 
@@ -6956,7 +6951,7 @@ function buildLedgerEntryStoryPayload(match, metrics) {
     trackedStatisticsInstruction: 'Use relevant recorded tracked statistics to help explain the round. State the tracked-hole sample, and never interpret an unrecorded field as zero.',
     partnershipPerformance,
     partnershipPerformanceInstruction: partnershipPerformance ? 'Include a natural, concise observation about the supplied Partnership Performance. Keep its game and gross/net basis explicit. Contribution identifies who supplied counting scores; Partnership Gain measures improvement over the better partner playing alone; Ham & Egg Rating measures card complementarity on a 0–100 scale. Do not call either figure strokes gained or a percentage, and do not invent causes.' : '',
-    recapInstructions: 'Write The Story of the Round for a Ledger Entry. Use only supplied authoritative facts. Target 400–500 words and never exceed 550. Write exactly 3–5 natural paragraphs separated by blank lines, with no headings or bullet lists. Write with the factual precision, pacing, and polish of a major golf publication without inventing shots, quotations, emotions, motives, or drama. Open with the Featured Competition result, explain the decisive stretch and pivotal holes, recognize supported player and round highlights, and close with a concise perspective on what defined the round. Express completed Nassau component margins as signed holes-up results such as +2 or +3; never use closed-match notation such as 2 & 0 for a Nassau component. Keep Low Gross, Course Net, Featured Net, game results, points, dollars, and settlement distinct. Do not discuss Greenies; the client adds their recorded results deterministically. Mention Memories, weather recorded after the first completed hole, tracked statistics, and Partnership Performance only when supplied and genuinely relevant. State provisional scope for incomplete rounds. Return a self-contained narrative rather than repeating the full Match Summary recap or listing report sections.',
+    recapInstructions: 'Write The Story of the Round for a Ledger Entry. Use only supplied authoritative facts. Target 400–500 words and never exceed 550. Write exactly 3–5 natural paragraphs separated by blank lines, with no headings or bullet lists. Write with the factual precision, pacing, and polish of a major golf publication without inventing shots, quotations, emotions, motives, or drama. Open with the Featured Competition result, explain the decisive stretch and pivotal holes, recognize supported player and round highlights, and close with a concise perspective on what defined the round. Express completed Nassau component margins as signed holes-up results such as +2 or +3; never use closed-match notation such as 2 & 0 for a Nassau component. Keep Low Gross, Course Net, Featured Net, game results, points, dollars, and settlement distinct. Do not discuss Greenies; the client adds their recorded results deterministically. Mention Memories, weather recorded after the first completed hole, tracked statistics, and Partnership Performance only when supplied and genuinely relevant. State provisional scope for incomplete rounds. Return a self-contained narrative rather than listing report sections.',
   };
 }
 function addVerifiedGreeniesToLedgerStory(match, metrics, recapText) {
@@ -7285,7 +7280,7 @@ function buildRecapInputTransparency(match) {
   const notes = String(match?.roundRecapNotes || '').trim();
   const previewMemories = memories.slice(0, 5);
   return `
-    <div class="round-recap-input-preview" aria-label="AI recap inputs preview">
+    <div class="round-recap-input-preview" aria-label="Story inputs preview">
       <div class="recap-input-row">
         <strong>Featured Competition</strong>
         <span>${escapeHtml(getFeaturedCompetitionDisplayName(match, resolveFeaturedCompetitionKey(match, match ? computeMatchMetrics(match) : null)))}</span>
@@ -7315,10 +7310,10 @@ function buildRoundRecapControls(match) {
   const configured = !!getRoundRecapUrl();
   const disabled = !online || !configured;
   const memoryCount = getRoundMemories(match).length;
-  const reason = !configured ? 'Configure Supabase to enable AI round recaps.' : (!online ? 'Round Recap requires an internet connection.' : `AI recap uses Round Notes plus ${memoryCount} saved memor${memoryCount === 1 ? 'y' : 'ies'}.`);
+  const reason = !configured ? 'Configure Supabase to enable the AI Story of the Round.' : (!online ? 'Story generation requires an internet connection.' : `The Story uses Round Notes plus ${memoryCount} saved memor${memoryCount === 1 ? 'y' : 'ies'}.`);
   const editing = !!uiState.roundRecapEditing && !!recap;
   const recapStatus = hasNewDraft ? (buildRoundRecapStatus(match) || 'New draft recap ready for host review.')
-    : (finalRecap ? 'Accepted recap ready for Match Summary and PDF.' : (draftRecap ? 'Draft recap ready for host review.' : (buildRoundRecapStatus(match) || reason)));
+    : (finalRecap ? 'Saved Story ready for the Ledger Entry.' : (draftRecap ? 'Draft Story ready for review.' : (buildRoundRecapStatus(match) || reason)));
   const validationIssues = Array.isArray(match.roundRecapValidationIssues) ? match.roundRecapValidationIssues : [];
   const recapPreview = recap ? (editing
     ? `<textarea id="roundRecapEditBox" class="round-recap-edit-box" rows="10">${escapeHtml(recap)}</textarea>`
@@ -7326,21 +7321,21 @@ function buildRoundRecapControls(match) {
   return `
     <div class="round-recap-control-card no-print">
       <div>
-        <div class="section-label">AI Round Recap</div>
+        <div class="section-label">Story of the Round</div>
         <div class="tiny">${escapeHtml(recapStatus)}</div>
         ${validationIssues.length ? `<div class="round-recap-review-warning" role="status"><strong>Review required</strong><ul>${validationIssues.map(issue => `<li>${escapeHtml(issue.message || issue.code || 'Generated recap needs review.')}</li>`).join('')}</ul></div>` : ''}
       </div>
       <div class="round-recap-notes-field">
-        <label for="roundRecapNotesBox">Round Notes for AI Recap</label>
+        <label for="roundRecapNotesBox">Round Notes for the Story</label>
         <div class="tiny">Add context the scorecard cannot see — funny moments, clutch shots, weather, side bets, injuries, pace, or anything worth remembering. Memories captured on the Play tab are also included.</div>
         <textarea id="roundRecapNotesBox" rows="7" placeholder="Example: Tom birdied 16 to close out match play. Mike holed a bunker shot on 8. Wind picked up on the back nine.">${escapeHtml(match.roundRecapNotes || '')}</textarea>
       </div>
       ${buildRecapInputTransparency(match)}
       <div class="actions wrap compact-actions">
-        <button id="generateRoundRecapBtn" type="button" class="secondary" ${disabled ? 'disabled' : ''}>${recap ? 'Regenerate' : 'Generate AI Recap'}</button>
+        <button id="generateRoundRecapBtn" type="button" class="secondary" ${disabled ? 'disabled' : ''}>${recap ? 'Regenerate Story' : 'Generate Story'}</button>
         ${recap ? `<button id="editRoundRecapBtn" type="button" class="secondary">${editing ? 'Stop Editing' : 'Edit'}</button>` : ''}
-        ${recap ? '<button id="acceptRoundRecapBtn" type="button">Accept</button>' : ''}
-        ${recap ? '<button id="clearRoundRecapBtn" type="button" class="secondary">Clear Recap</button>' : ''}
+        ${recap ? '<button id="acceptRoundRecapBtn" type="button">Save Story</button>' : ''}
+        ${recap ? '<button id="clearRoundRecapBtn" type="button" class="secondary">Clear Story</button>' : ''}
       </div>
       ${recapPreview}
     </div>`;
@@ -7444,13 +7439,13 @@ function buildRoundRecapAuthoritativeFacts(match, metrics, playerSummaries, fina
 }
 function getRoundRecapFailureMessage(status, code = '') {
   const normalizedCode = String(code || '').trim().toUpperCase();
-  if (status === 404 || normalizedCode === 'FUNCTION_NOT_FOUND') return 'AI Recap service is not deployed for this environment.';
-  if (status === 401 || status === 403 || normalizedCode === 'AUTHORIZATION_FAILED') return 'AI Recap service authorization is not configured correctly.';
-  if (status === 409 || normalizedCode === 'CONTENT_SPEC_MISMATCH') return 'AI Recap service version does not match this app. Update the service before trying again.';
-  if (status === 429 || normalizedCode === 'RATE_LIMITED') return 'AI Recap request limit reached. Please wait and try again.';
-  if (status === 503 || normalizedCode === 'SERVICE_NOT_CONFIGURED') return 'AI Recap service is not fully configured for this environment.';
-  if (status === 502 || normalizedCode === 'PROVIDER_FAILED') return 'AI Recap provider could not complete the request. Please try again.';
-  return 'AI Recap service returned an error. Scores, Memories, and Match Summary remain saved.';
+  if (status === 404 || normalizedCode === 'FUNCTION_NOT_FOUND') return 'Story service is not deployed for this environment.';
+  if (status === 401 || status === 403 || normalizedCode === 'AUTHORIZATION_FAILED') return 'Story service authorization is not configured correctly.';
+  if (status === 409 || normalizedCode === 'CONTENT_SPEC_MISMATCH') return 'Story service version does not match this app. Update the service before trying again.';
+  if (status === 429 || normalizedCode === 'RATE_LIMITED') return 'Story request limit reached. Please wait and try again.';
+  if (status === 503 || normalizedCode === 'SERVICE_NOT_CONFIGURED') return 'Story service is not fully configured for this environment.';
+  if (status === 502 || normalizedCode === 'PROVIDER_FAILED') return 'Story provider could not complete the request. Please try again.';
+  return 'Story service returned an error. Scores, Memories, and round data remain saved.';
 }
 function setRoundRecapFailure(match, { status = 0, code = '', message = '' } = {}) {
   const safeCode = String(code || `HTTP_${Number(status) || 0}`).replace(/[^A-Z0-9_-]/gi, '').slice(0, 48).toUpperCase();
@@ -7595,6 +7590,12 @@ function validateRoundRecapContent(match, metrics, recapText) {
   return { valid: issues.length === 0, issues, specVersion: ROUND_RECAP_CONTENT_SPEC_VERSION };
 }
 
+function getBlockingStoryValidationIssues(validation = {}) {
+  return (Array.isArray(validation?.issues) ? validation.issues : []).filter(issue =>
+    /^(?:EMPTY_RECAP|FALSE_|UNVERIFIABLE_|MISSING_MEMORIES|MISSING_WEATHER_)/.test(String(issue?.code || ''))
+  );
+}
+
 function buildRoundRecapPayload(match, metrics) {
   const courseName = metrics?.course?.name || getCourse(match?.courseId)?.name || 'Course';
   const teeName = metrics?.tee?.teeName || getTee(match?.courseId, match?.teeId)?.teeName || 'Tee';
@@ -7669,6 +7670,7 @@ function buildRoundRecapPayload(match, metrics) {
     conditionsText: normalizedRecapWeather.conditionsText,
     summary: normalizedRecapWeather.summary,
   } : null;
+  const partnershipPerformance = computeBestBallPartnershipStatistics(match, metrics);
   return {
     app: 'The Dye Ledger',
     recapContentSpecVersion: ROUND_RECAP_CONTENT_SPEC_VERSION,
@@ -7698,7 +7700,8 @@ function buildRoundRecapPayload(match, metrics) {
       result: getFeaturedCompetitionResult(match, metrics).result,
     },
     memories: getRoundMemories(match).map(m => ({ text: m.text, category: m.category, holeNumber: m.holeNumber, author: m.createdByName, createdByName: m.createdByName, createdAt: m.createdAt, timestamp: m.timestamp })),
-    recapInstructions: 'Compatibility bridge for the currently deployed function: apply the Dye Ledger recap content specification identified by recapContentSpecVersion. Target 650–850 words when enough supported facts exist, never exceed 900 words, and stay shorter rather than pad a fact-light round. Write a polished, private-club style golf recap with sections when supported: Round Story, Featured Competition, Turning Points, Player Highlights, Game Story, Statistical Notes, Player Improvement Opportunities, Memorable Moments, and Closing Note or Fun Awards. Every item in memories is a high-intent user fact and must be materially represented with its specific names, hole number, and description preserved. Weave each Memory naturally when possible; otherwise include it verbatim in a Round Memories section. Never replace a specific Memory with vague generic language and never invent supporting details. Center the Featured Competition first, distinguish it from Low Gross, Low Net, Money Winner, game winners, and awards, and use Round Notes and Memories for personality. For a Nassau, report Front 9, Back 9, and Overall as distinct component results; never collapse them into one composite margin or describe a team payment as an individual award. When a player has Stat Tracking enabled and at least three tracked scored holes, specifically review that player for an improvement opportunity grounded in the supplied counts, rates, or approachPerformance evidence. State the sample size, use tentative language for small samples, and do not infer swing mechanics, club choice, physical limitations, intent, or causation from one round. If eligible evidence does not exist, omit coaching rather than guess. When roundContext.weather is present, include one brief natural summary of the recorded conditions and state the supplied temperature in degrees Fahrenheit and humidity percentage when available. Weave those verified conditions into the recap when natural; otherwise add a final Weather section after any Round Memories section. Do not expose coordinates, recite unnecessary raw metrics, imply the snapshot covered the entire round, or claim weather caused an outcome unless a Round Note or Memory explicitly supports that connection. Do not fabricate shots, weather, holes, or emotions not supported by data or notes. Do not infer ball-striking, putting, course-management quality, swing mechanics, or causes from gross scores alone; only discuss those areas when the corresponding tracked facts support them. For an incomplete round, say completed holes and use the supplied completed-hole list; never say opening holes or front nine unless that exact sequential range is complete. Treat incomplete-round money as provisional unless the relevant game is mathematically decided. If clinched early, explain that the featured competition was decided before all holes were played. Do not fabricate untracked statistics. Deterministic authoritativeFacts override notes, Memories, and generated prose. Keep the tone professional, fun, golf-aware, specific, and mobile-readable.',
+    partnershipPerformance,
+    recapInstructions: 'Write the canonical Story of the Round for The Dye Ledger. Use only supplied authoritative facts. Target 400–500 words and never exceed 550. Write exactly 3–5 natural paragraphs separated by blank lines, with no headings, bullet lists, or statistical inventory. Write with the factual precision, pacing, and polish of a major golf publication. Open with the Featured Competition result, develop the decisive stretch and pivotal holes, recognize supported player and round highlights, and close with a concise perspective on what defined the day. Every Memory is a high-intent user fact and must be represented naturally with its names, hole number, and description preserved. Distinguish Low Gross, Course Net, Featured Net, game results, money, and settlement. For Nassau, keep Front, Back, and Overall results distinct. Use tracked statistics selectively: mention only the two or three facts that materially explain the round rather than reciting player stat lines. When Partnership Performance is supplied, naturally interpret its hole-preserving Hand-offs, Ham & Egg Rating, Partnership Gain, contribution, or Rescues when relevant; never describe hypothetical score rearrangement or call Partnership Gain strokes gained. Ham & Egg Rating is actual hand-offs divided by all possible round transitions and is scored 0–100. Include recorded weather briefly when supplied. Do not invent shots, quotations, emotions, motives, swing mechanics, club choice, causation, or untracked statistics. State provisional scope for incomplete rounds. Deterministic authoritativeFacts override notes, Memories, and prose. Return a self-contained narrative intended to be reviewed, edited, saved, and then frozen inside the Ledger Entry.',
     players: playerSummaries,
     games: summarizeSelectedGamesForRecap(match, metrics),
     finalSettlement,
@@ -7710,9 +7713,9 @@ function buildRoundRecapPayload(match, metrics) {
 async function generateRoundRecapForActiveMatch() {
   const match = getActiveMatch();
   if (!match) return toast('Create or load a match first.');
-  if (navigator.onLine === false) return toast('Round Recap requires an internet connection.');
+  if (navigator.onLine === false) return toast('Story generation requires an internet connection.');
   const url = getRoundRecapUrl();
-  if (!url) return toast('Configure Supabase before generating a Round Recap.');
+  if (!url) return toast('Configure Supabase before generating the Story of the Round.');
   const metrics = computeMatchMetrics(match);
   if (!metrics) return toast('Match data is not ready yet.');
   const btn = document.getElementById('generateRoundRecapBtn');
@@ -7720,7 +7723,7 @@ async function generateRoundRecapForActiveMatch() {
     btn.disabled = true;
     btn.textContent = 'Generating…';
   }
-  match.roundRecapStatus = 'Generating Round Recap…';
+  match.roundRecapStatus = 'Generating Story of the Round…';
   persist({ skipRender: true });
   renderRoundMemoriesPanel(match);
   renderRoundRecapControlPanel(match);
@@ -7741,37 +7744,39 @@ async function generateRoundRecapForActiveMatch() {
   };
   try {
     let recap = await requestRecap();
-    if (!recap) throw new Error('Round Recap returned no text.');
+    if (!recap) throw new Error('Story generation returned no text.');
     let validation = validateRoundRecapContent(match, metrics, recap);
-    if (!validation.valid) {
+    let blockingIssues = getBlockingStoryValidationIssues(validation);
+    if (blockingIssues.length) {
       const repaired = await requestRecap({
         priorRecap: recap,
-        issues: validation.issues.map(issue => ({ code: issue.code, message: issue.message })),
+        issues: blockingIssues.map(issue => ({ code: issue.code, message: issue.message })),
       });
       if (repaired) {
         recap = repaired;
         validation = validateRoundRecapContent(match, metrics, recap);
+        blockingIssues = getBlockingStoryValidationIssues(validation);
       }
     }
     match.roundRecapGenerated = recap;
     if (!String(match.roundRecapFinal || '').trim()) match.roundRecap = recap;
     match.roundRecapGeneratedAt = new Date().toISOString();
-    match.roundRecapValidationIssues = validation.issues.map(issue => ({ code: issue.code, message: issue.message }));
+    match.roundRecapValidationIssues = blockingIssues.map(issue => ({ code: issue.code, message: issue.message }));
     match.roundRecapLastError = null;
-    match.roundRecapStatus = validation.valid
-      ? (String(match.roundRecapFinal || '').trim() ? 'New draft recap generated. Accepted recap preserved.' : 'Draft recap generated. Review, edit, or accept it.')
-      : `Draft generated but needs review: ${validation.issues.map(issue => issue.message).join(' ')}`;
+    match.roundRecapStatus = blockingIssues.length === 0
+      ? (String(match.roundRecapFinal || '').trim() ? 'New draft Story generated. Saved Story preserved.' : 'Draft Story generated. Review, edit, or save it.')
+      : `Draft generated but needs review: ${blockingIssues.map(issue => issue.message).join(' ')}`;
     persist({ skipRender: true });
     renderLeaderboard();
-    toast(validation.valid ? 'Round Recap generated.' : 'Round Recap draft saved for review.');
+    toast(blockingIssues.length === 0 ? 'Story of the Round generated.' : 'Story draft saved for review.');
   } catch (err) {
     console.error(err);
     const status = Number(err?.status || 0);
-    const offlineMessage = navigator.onLine === false || err?.name === 'TypeError' ? 'AI Recap could not reach the service. Check the connection and try again.' : '';
+    const offlineMessage = navigator.onLine === false || err?.name === 'TypeError' ? 'The Story service could not be reached. Check the connection and try again.' : '';
     setRoundRecapFailure(match, { status, code: err?.code, message: offlineMessage });
     persist({ skipRender: true });
     renderLeaderboard();
-    toast('Round Recap unavailable. Match Summary still works normally.');
+    toast('The Story could not be generated. Your round remains safely saved; please try again.');
   }
 }
 
@@ -7780,24 +7785,25 @@ function acceptRoundRecapForActiveMatch() {
   if (!match) return;
   const editBox = document.getElementById('roundRecapEditBox');
   const text = String(editBox?.value || getDraftRoundRecap(match) || getStoredRoundRecap(match) || '').trim();
-  if (!text) return toast('No recap text to accept.');
+  if (!text) return toast('No Story text to save.');
   const metrics = computeMatchMetrics(match);
   const validation = validateRoundRecapContent(match, metrics, text);
-  if (!validation.valid) {
-    match.roundRecapStatus = `Cannot accept recap: ${validation.issues.map(issue => issue.message).join(' ')}`;
+  const blockingIssues = getBlockingStoryValidationIssues(validation);
+  if (blockingIssues.length) {
+    match.roundRecapStatus = `Cannot save Story: ${blockingIssues.map(issue => issue.message).join(' ')}`;
     persist({ skipRender: true });
     renderLeaderboard();
-    return toast('Recap needs review before it can be accepted.');
+    return toast('The Story needs review before it can be saved.');
   }
   match.roundRecapFinal = text;
   match.roundRecap = text;
-  match.roundRecapStatus = 'Accepted recap saved for Match Summary and PDF.';
+  match.roundRecapStatus = 'Story saved for the Ledger Entry.';
   match.roundRecapValidationIssues = [];
   match.roundRecapLastError = null;
   uiState.roundRecapEditing = false;
   persist({ skipRender: true });
   renderLeaderboard();
-  toast('Recap accepted.');
+  toast('Story saved.');
 }
 function clearRoundRecapForActiveMatch() {
   const match = getActiveMatch();
@@ -7806,7 +7812,7 @@ function clearRoundRecapForActiveMatch() {
   match.roundRecapGenerated = '';
   match.roundRecapFinal = '';
   match.roundRecapGeneratedAt = null;
-  match.roundRecapStatus = 'Round Recap cleared.';
+  match.roundRecapStatus = 'Story cleared.';
   match.roundRecapValidationIssues = [];
   match.roundRecapLastError = null;
   uiState.roundRecapEditing = false;
@@ -8228,17 +8234,21 @@ function buildClassicOnlyExportBody(match, metrics) {
 }
 
 function buildUnifiedExportDocument(match, metrics, printView = 'ledger') {
+  // `summary` remains an internal compatibility route for historical records and
+  // regression fixtures. It is intentionally absent from the user-facing picker.
   const requestedView = ['ledger', 'summary', 'scorecard'].includes(printView) ? printView : 'ledger';
   const courseName = metrics?.course?.name || 'No course';
   const teeName = metrics?.tee?.teeName || 'No tee';
   const holeCount = getPlayableHoleCount(match, metrics?.tee);
-  const reportLabel = requestedView === 'scorecard' ? 'Classic Scorecard' : (requestedView === 'summary' ? 'Match Summary' : 'Ledger Entry');
+  const reportLabel = requestedView === 'scorecard' ? 'Classic Scorecard' : requestedView === 'summary' ? 'Legacy Round Summary' : 'Ledger Entry';
   const pageTitle = escapeHtml(`${reportLabel} — ${courseName}`);
   const pageSub = escapeHtml(`${match?.date || todayIso()} · ${courseName} · ${teeName} · ${holeCount} holes`);
   const pageMeta = escapeHtml(`${metrics ? `${metrics.completed}/${holeCount} holes completed` : 'Scorecard ready to print'}${match?.status === 'complete' ? ' · Final' : ' · Live'} · ${reportLabel}`);
   const bodyHtml = requestedView === 'scorecard'
     ? buildClassicOnlyExportBody(match, metrics)
-    : (requestedView === 'summary' ? buildSummaryExportBody(match, metrics) : buildLedgerEntryBody(match, metrics));
+    : requestedView === 'summary'
+      ? buildSummaryExportBody(match, metrics)
+      : buildLedgerEntryBody(match, metrics);
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -9224,14 +9234,16 @@ async function openUnifiedExport(match, printView = 'ledger') {
       }
       return;
     }
-    if (exportWindow) exportWindow.document.body.innerHTML = '<strong>Preparing The Story of the Round…</strong><div style="margin-top:8px;color:#5a667a;">Using the authoritative scorecard, competitions, settlement, Memories, and recorded context.</div>';
-    toast('Generating a fresh Story of the Round…', 45000);
-    let ledgerStory;
-    try {
-      ledgerStory = await prepareLedgerEntryStory(match, refreshedMetrics);
-    } catch (error) {
+    const savedStory = getFinalRoundRecap(match);
+    if (!savedStory) {
       if (exportWindow) exportWindow.close();
-      toast(String(error?.message || 'The Story of the Round could not be generated. Please try again.'), 7200);
+      activateTab('leaderboard');
+      renderLeaderboard();
+      openExperienceDestination('leaderboard', 'story', { scroll: false });
+      const storyCard = document.getElementById('roundStoryCard');
+      if (storyCard) storyCard.open = true;
+      document.getElementById('roundRecapControls')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+      toast('Generate, review, and save the Story of the Round before opening the final Ledger Entry.', 7200);
       return;
     }
     const reportModel = buildLedgerEntryReportModel(match, refreshedMetrics);
@@ -9240,9 +9252,9 @@ async function openUnifiedExport(match, printView = 'ledger') {
       toast('Ledger Entry is not available for this round.');
       return;
     }
-    reportModel.meta.story = ledgerStory.text;
-    reportModel.meta.storyProvenance = ledgerStory.provenance;
-    reportModel.meta.storyFallbackReason = ledgerStory.fallbackReason || null;
+    reportModel.meta.story = savedStory;
+    reportModel.meta.storyProvenance = 'audited-user-approved-story';
+    reportModel.meta.storyFallbackReason = null;
     try {
       launchLedgerReportModel(reportModel, { sameTabLedger, exportWindow, autoPrint: false });
     } catch (error) {
@@ -14143,7 +14155,7 @@ async function reconcileSharedMatchBeforeSummary(match, { silent = true } = {}) 
   const checkedAt = new Date().toISOString();
   match.sharedLedgerParity = summarizeLedgerParity(compareScoredLedgers(extractLocalScoredLedger(match), []), {
     checkedAt,
-    warning: 'Shared Match scores may not be fully reconciled on this device. Pull latest scores before creating a final Match Summary.',
+    warning: 'Shared Match scores may not be fully reconciled on this device. Pull latest scores before creating a final Ledger Entry.',
   });
   if (!match.sharedMatchId || !hasSupabaseConfig()) {
     match.lastSharedParityCheckAt = checkedAt;
@@ -16788,7 +16800,7 @@ function showRoundEndPrompt(mode, match = getActiveMatch()) {
       if (ok) finishRoundFromPrompt();
       return;
     }
-    const ok = window.confirm(`Round Complete\n\nGenerate Match Summary?\n\nOK = Finish Round\nCancel = Review Final Hole`);
+    const ok = window.confirm(`Round Complete\n\nFinish the round, then generate and review its Story of the Round?\n\nOK = Finish Round\nCancel = Review Final Hole`);
     if (ok) finishRoundFromPrompt();
     else reviewFinalHoleFromPrompt();
     return;
@@ -16823,7 +16835,7 @@ function showRoundEndPrompt(mode, match = getActiveMatch()) {
     const unresolvedStats = dataCompletion.unresolved.filter(item => item.type === 'stats');
     text.textContent = unresolvedStats.length
       ? `${requested} of ${requested} holes scored. ${describeRoundDataCompletion(dataCompletion)}. You may review potentially missing stats now or complete the round; untouched statistics will be excluded from stat summaries.`
-      : `${requested} of ${requested} holes scored. Complete the round and generate the Match Summary?`;
+      : `${requested} of ${requested} holes scored. Complete the round, then generate and review the Story of the Round?`;
     primary.textContent = 'Complete Round';
     secondary.textContent = unresolvedStats.length ? 'Review Potentially Missing Stats' : 'Review Final Hole';
   }
@@ -19330,7 +19342,7 @@ function normalizeDraftTeeAssignments({ courseId = null, forceDefault = false } 
   return next;
 }
 function syncScoreboardPrintControls(printView = null) {
-  const resolvedView = ['ledger', 'summary', 'scorecard'].includes(printView) ? printView : 'ledger';
+  const resolvedView = ['ledger', 'scorecard'].includes(printView) ? printView : 'ledger';
   const select = document.getElementById('scoreboardPrintViewSelect');
   const button = document.getElementById('scoreboardShareRoundBtn');
   const hint = document.getElementById('scoreboardPrintViewHint');
@@ -19338,9 +19350,7 @@ function syncScoreboardPrintControls(printView = null) {
   if (button) button.textContent = 'Share Match';
   if (hint) hint.textContent = resolvedView === 'scorecard'
     ? 'Classic Scorecard selected. It will open ready to save or share as a PDF.'
-    : (resolvedView === 'summary'
-      ? 'Match Summary selected. It will open ready to save or share as a PDF.'
-      : 'Ledger Entry selected. Recommended format with the result, story, games, statistics, settlement, and scorecards.');
+    : 'Ledger Entry selected. Recommended format with the saved Story, result, games, statistics, settlement, and scorecards.';
 }
 
 function renderTeamNameInputs(teamCount = Number(document.getElementById('teamCountSelect')?.value || 1), teamNames = []) {
@@ -21571,7 +21581,9 @@ function viewCompletedMatchSummary() {
   hidePostRoundActions();
   activateTab('leaderboard');
   renderLeaderboard();
-  openExperienceDestination('leaderboard', 'results', { scroll: false });
+  openExperienceDestination('leaderboard', 'story', { scroll: false });
+  const storyCard = document.getElementById('roundStoryCard');
+  if (storyCard) storyCard.open = true;
 }
 
 function loadTeeEditor(courseId = null, teeId = null) {

@@ -77,11 +77,11 @@ test('same-version service workers do not produce an update offer', () => {
   assert.equal(engine.shouldOfferServiceWorkerUpdate(''), true);
 });
 
-test('completed-round destination exposes summary, ledger, return, and new-match paths', () => {
-  assert.match(html, /id="postRoundViewSummaryBtn"/);
-  assert.match(html, /id="postRoundLedgerBtn"[^>]*>Open Ledger Entry<\/button>/);
-  assert.match(html, /id="postRoundReturnBtn"[^>]*>Return to Completed Round<\/button>/);
-  assert.match(html, /id="postRoundNewMatchBtn"/);
+test('completed-round destination exposes Story, Ledger, scorecard, and next-match paths', () => {
+  assert.match(html, /id="postRoundInlineGenerateRecapBtn"/);
+  assert.match(html, /id="postRoundInlineLedgerBtn"/);
+  assert.match(html, /id="postRoundInlineClassicScorecardBtn"/);
+  assert.match(html, /id="postRoundInlineNewMatchBtn"/);
   assert.match(app, /openUnifiedExport\(match, 'ledger'\)/);
 });
 

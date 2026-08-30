@@ -16,11 +16,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.18',
-  versionNumber: '31.0.18',
-  cacheName: 'the-dye-ledger-v31.0.18',
-  buildDate: '2026-08-30T10:30:00-04:00',
-  buildLabel: 'Canonical Story and Ham & Egg Rating'
+  version: 'v31.0.19',
+  versionNumber: '31.0.19',
+  cacheName: 'the-dye-ledger-v31.0.19',
+  buildDate: '2026-08-30T16:00:00-04:00',
+  buildLabel: 'Guided Post-Round Story Flow'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -2597,6 +2597,7 @@ const uiState = {
   nearbyCourseDistances: {},
 };
 let pendingNextRoundSessionContext = null;
+const roundRecapGenerationInFlight = new Map();
 
 
 const LEDGER_ENTRY_ACCEPTANCE_STORAGE_KEY = 'dye-ledger:pending-ledger-entry-acceptance';
@@ -7310,9 +7311,10 @@ function buildRoundRecapControls(match) {
   const hasNewDraft = !!draftRecap && draftRecap !== finalRecap;
   const online = navigator.onLine !== false;
   const configured = !!getRoundRecapUrl();
-  const disabled = !online || !configured;
+  const joinedWaiting = match.storageMode === 'shared' && !isCurrentDeviceMatchHost(match);
+  const disabled = !online || !configured || joinedWaiting;
   const memoryCount = getRoundMemories(match).length;
-  const reason = !configured ? 'Configure Supabase to enable the AI Story of the Round.' : (!online ? 'Story generation requires an internet connection.' : `The Story uses Round Notes plus ${memoryCount} saved memor${memoryCount === 1 ? 'y' : 'ies'}.`);
+  const reason = joinedWaiting ? 'The Shared Match host prepares and accepts the Story for this round.' : (!configured ? 'Configure Supabase to enable the AI Story of the Round.' : (!online ? 'Story generation requires an internet connection.' : `The Story uses Round Notes plus ${memoryCount} saved memor${memoryCount === 1 ? 'y' : 'ies'}.`));
   const editing = !!uiState.roundRecapEditing && !!recap;
   const recapStatus = hasNewDraft ? (buildRoundRecapStatus(match) || 'New draft recap ready for host review.')
     : (finalRecap ? 'Saved Story ready for the Ledger Entry.' : (draftRecap ? 'Draft Story ready for review.' : (buildRoundRecapStatus(match) || reason)));
@@ -7720,12 +7722,14 @@ function buildRoundRecapPayload(match, metrics) {
     authoritativeFacts: buildRoundRecapAuthoritativeFacts(match, metrics, playerSummaries, finalSettlement, payoutGames),
   };
 }
-async function generateRoundRecapForActiveMatch() {
-  const match = getActiveMatch();
-  if (!match) return toast('Create or load a match first.');
+async function runRoundRecapGeneration(match, { automatic = false, silent = false } = {}) {
+  const notify = (message, duration) => { if (!silent) toast(message, duration); };
   const url = getRoundRecapUrl();
   const metrics = computeMatchMetrics(match);
-  if (!metrics) return toast('Match data is not ready yet.');
+  if (!metrics) {
+    notify('Match data is not ready yet.');
+    return { ok: false, skipped: true, reason: 'metrics-unavailable' };
+  }
   const btn = document.getElementById('generateRoundRecapBtn');
   if (btn) {
     btn.disabled = true;
@@ -7784,10 +7788,16 @@ async function generateRoundRecapForActiveMatch() {
       : `Draft generated but needs review: ${blockingIssues.map(issue => issue.message).join(' ')}`;
     persist({ skipRender: true });
     renderLeaderboard();
-    toast(blockingIssues.length === 0 ? 'Story of the Round generated.' : 'Story draft saved for review.');
+    notify(blockingIssues.length === 0 ? 'Story of the Round generated.' : 'Story draft saved for review.');
     return { ok: blockingIssues.length === 0, recap, blockingIssues };
   } catch (err) {
     console.error(err);
+    if (automatic) {
+      match.roundRecapStatus = 'Story not generated. Generate it when you are ready.';
+      persist({ skipRender: true });
+      renderLeaderboard();
+      return { ok: false, error: err, automatic: true };
+    }
     const fallbackReason = getLedgerEntryStoryFallbackReason(err, { offline: navigator.onLine === false, configured: Boolean(url) });
     const fallback = buildDeterministicLedgerEntryStory(match, metrics, fallbackReason);
     const fallbackValidation = validateRoundRecapContent(match, metrics, fallback.text);
@@ -7802,9 +7812,47 @@ async function generateRoundRecapForActiveMatch() {
       : 'The Story service was unavailable. A verified facts-only draft is ready to review and save.';
     persist({ skipRender: true });
     renderLeaderboard();
-    toast(blockingIssues.length ? 'The facts-only Story needs review.' : 'A verified facts-only Story is ready to review.');
+    notify(blockingIssues.length ? 'The facts-only Story needs review.' : 'A verified facts-only Story is ready to review.');
     return { ok: blockingIssues.length === 0, recap: fallback.text, blockingIssues, fallback: true };
   }
+}
+
+function getAutomaticRoundRecapEligibility(match, options = {}) {
+  if (!match) return { eligible: false, reason: 'no-match' };
+  if (getDraftRoundRecap(match) || getFinalRoundRecap(match)) return { eligible: false, reason: 'story-exists' };
+  const online = options.online ?? navigator.onLine !== false;
+  if (!online) return { eligible: false, reason: 'offline' };
+  const isHost = options.isHost ?? (match.storageMode !== 'shared' || isCurrentDeviceMatchHost(match));
+  if (match.storageMode === 'shared' && !isHost) return { eligible: false, reason: 'joined-device' };
+  return { eligible: true, reason: 'ready' };
+}
+
+function generateRoundRecapForActiveMatch(options = {}) {
+  const match = options.match || getActiveMatch();
+  if (!match) {
+    if (!options.silent) toast('Create or load a match first.');
+    return Promise.resolve({ ok: false, skipped: true, reason: 'no-match' });
+  }
+  if (options.automatic) {
+    const eligibility = getAutomaticRoundRecapEligibility(match);
+    if (!eligibility.eligible) return Promise.resolve({ ok: eligibility.reason === 'story-exists', skipped: true, reason: eligibility.reason });
+  }
+  const key = String(match.id || 'active-round');
+  const existing = roundRecapGenerationInFlight.get(key);
+  if (existing) return existing;
+  const operation = runRoundRecapGeneration(match, options).finally(() => {
+    if (roundRecapGenerationInFlight.get(key) === operation) roundRecapGenerationInFlight.delete(key);
+    syncPostRoundWorkflowUi(match);
+  });
+  roundRecapGenerationInFlight.set(key, operation);
+  syncPostRoundWorkflowUi(match);
+  return operation;
+}
+
+function scheduleAutomaticRoundRecap(match) {
+  if (!getAutomaticRoundRecapEligibility(match).eligible) return false;
+  window.setTimeout(() => { generateRoundRecapForActiveMatch({ match, automatic: true, silent: true }); }, 0);
+  return true;
 }
 
 function acceptRoundRecapForActiveMatch() {
@@ -9227,23 +9275,6 @@ function launchLedgerReportModel(reportModel, { sameTabLedger, exportWindow, aut
     exportWindow.focus();
   }
 }
-async function routeLedgerRequestThroughStory(match) {
-  if (!match) return;
-  uiState.pendingLedgerOpenMatchId = match.id;
-  hidePostRoundActions();
-  hideRoundCompletePrompt();
-  if (match.storageMode === 'shared') await reconcileSharedMatchBeforeSummary(match, { silent: false });
-  activateTab('leaderboard');
-  renderLeaderboard();
-  openExperienceDestination('leaderboard', 'story', { scroll: false });
-  const storyCard = document.getElementById('roundStoryCard');
-  if (storyCard) storyCard.open = true;
-  if (!getDraftRoundRecap(match)) await generateRoundRecapForActiveMatch();
-  document.getElementById('roundRecapControls')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-  toast(getDraftRoundRecap(match)
-    ? 'Review and save the Story. The Ledger Entry will open automatically after it is saved.'
-    : 'Create, review, and save the Story before opening the Ledger Entry.', 7200);
-}
 async function openUnifiedExport(match, printView = 'ledger') {
   const metrics = computeMatchMetrics(match);
   if (!metrics) {
@@ -9256,10 +9287,6 @@ async function openUnifiedExport(match, printView = 'ledger') {
   }
   const sameTabLedger = printView === 'ledger' && shouldUseSameTabLedgerReport();
   const acceptedLedgerReport = printView === 'ledger' ? getAcceptedLedgerEntrySnapshot(match)?.report || null : null;
-  if (printView === 'ledger' && !acceptedLedgerReport && !getFinalRoundRecap(match)) {
-    await routeLedgerRequestThroughStory(match);
-    return;
-  }
   const exportWindow = sameTabLedger ? null : window.open('', '_blank');
   if (!sameTabLedger && !exportWindow) {
     toast('Please allow pop-ups to share this round.');
@@ -9287,15 +9314,17 @@ async function openUnifiedExport(match, printView = 'ledger') {
       return;
     }
     const savedStory = getFinalRoundRecap(match);
+    const previewStory = savedStory ? null : buildDeterministicLedgerEntryStory(match, refreshedMetrics, 'story-not-saved');
     const reportModel = buildLedgerEntryReportModel(match, refreshedMetrics);
     if (!reportModel) {
       if (exportWindow) exportWindow.close();
       toast('Ledger Entry is not available for this round.');
       return;
     }
-    reportModel.meta.story = savedStory;
-    reportModel.meta.storyProvenance = 'audited-user-approved-story';
-    reportModel.meta.storyFallbackReason = null;
+    reportModel.meta.story = savedStory || previewStory.text;
+    reportModel.meta.storyProvenance = savedStory ? 'audited-user-approved-story' : previewStory.provenance;
+    reportModel.meta.storyFallbackReason = savedStory ? null : previewStory.fallbackReason;
+    reportModel.meta.storyApprovalRequired = !savedStory;
     try {
       launchLedgerReportModel(reportModel, { sameTabLedger, exportWindow, autoPrint: false });
     } catch (error) {
@@ -16806,6 +16835,7 @@ function syncFinishRoundUi(match = getActiveMatch()) {
   show(setupFinishBtn, false);
   show(setupConfirmBtn, false);
   show(postRoundInline, hasMatch && isComplete);
+  syncPostRoundWorkflowUi(match);
   if (scoreboardFinishBtn) scoreboardFinishBtn.textContent = reopenedEdit ? 'Save Completed Round' : 'Complete Round';
   if (scoringFinishBtn) scoringFinishBtn.textContent = reopenedEdit ? 'Save Completed Round' : 'Complete Round';
   [scoringFinishBtn, scoreboardFinishBtn, scoringEarlyBtn, scoreboardEarlyBtn].forEach(button => { if (button) { button.disabled = !authority.allowed; button.setAttribute('aria-disabled', authority.allowed ? 'false' : 'true'); } });
@@ -17097,9 +17127,15 @@ function completeActiveRound() {
     syncFinishRoundUi(candidate);
     renderMatches();
     renderCurrentMatch();
+    uiState.completedSummaryMatchId = candidate.id;
+    hidePostRoundActions();
+    activateTab('leaderboard');
     renderLeaderboard();
     renderMatchSetupState();
-    showPostRoundActions(candidate);
+    const storyCard = document.getElementById('roundStoryCard');
+    if (storyCard && !getFinalRoundRecap(candidate)) storyCard.open = true;
+    document.getElementById('postRoundActionsInline')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    scheduleAutomaticRoundRecap(candidate);
     toast(wasReopened
       ? 'Round updates saved. The prior frozen result remains in history.'
       : 'Round finished and saved.');
@@ -19388,15 +19424,7 @@ function normalizeDraftTeeAssignments({ courseId = null, forceDefault = false } 
   return next;
 }
 function syncScoreboardPrintControls(printView = null) {
-  const resolvedView = ['ledger', 'scorecard'].includes(printView) ? printView : 'ledger';
-  const select = document.getElementById('scoreboardPrintViewSelect');
-  const button = document.getElementById('scoreboardShareRoundBtn');
-  const hint = document.getElementById('scoreboardPrintViewHint');
-  if (select && select.value !== resolvedView) select.value = resolvedView;
-  if (button) button.textContent = resolvedView === 'ledger' ? getLedgerOpenActionLabel(getActiveMatch(), { share: true }) : 'Share Match';
-  if (hint) hint.textContent = resolvedView === 'scorecard'
-    ? 'Classic Scorecard selected. It will open ready to save or share as a PDF.'
-    : 'Ledger Entry selected. Recommended format with the saved Story, result, games, statistics, settlement, and scorecards.';
+  syncPostRoundWorkflowUi(getActiveMatch());
 }
 
 function renderTeamNameInputs(teamCount = Number(document.getElementById('teamCountSelect')?.value || 1), teamNames = []) {
@@ -21638,6 +21666,43 @@ function getLedgerOpenActionLabel(match, { share = false } = {}) {
   return 'Create Story & Open Ledger';
 }
 
+function getPostRoundWorkflowState(match) {
+  const generating = !!match && roundRecapGenerationInFlight.has(String(match.id || 'active-round'));
+  const finalStory = getFinalRoundRecap(match);
+  const draftStory = getDraftRoundRecap(match);
+  const acceptedLedger = getAcceptedLedgerEntrySnapshot(match);
+  const joinedWaiting = !!match && match.storageMode === 'shared' && !isCurrentDeviceMatchHost(match) && !acceptedLedger;
+  return {
+    generating,
+    joinedWaiting,
+    storyLabel: finalStory ? 'Saved' : (draftStory ? 'Draft ready' : (generating ? 'Generating…' : (joinedWaiting ? 'Waiting for host' : 'Not generated'))),
+    storyAction: finalStory ? 'View Saved Story' : (draftStory ? 'Review Story' : (generating ? 'Generating…' : (joinedWaiting ? 'Waiting for host' : 'Generate Story'))),
+    ledgerLabel: acceptedLedger ? 'Accepted and ready' : (finalStory ? 'Ready' : (joinedWaiting ? 'Waiting for host; preview available' : 'Preview available with facts-only Story')),
+    ledgerAction: acceptedLedger || finalStory ? 'Open Ledger Entry' : 'Preview Ledger',
+    storyDisabled: generating || joinedWaiting,
+    ledgerReady: !!(acceptedLedger || finalStory),
+  };
+}
+
+function syncPostRoundWorkflowUi(match = getActiveMatch()) {
+  const storyState = document.getElementById('postRoundStoryState');
+  const ledgerState = document.getElementById('postRoundLedgerState');
+  const storyButton = document.getElementById('postRoundInlineGenerateRecapBtn');
+  const ledgerButton = document.getElementById('postRoundInlineLedgerBtn');
+  if (!match || match.status !== 'complete') return;
+  const workflow = getPostRoundWorkflowState(match);
+  if (storyState) storyState.textContent = workflow.storyLabel;
+  if (ledgerState) ledgerState.textContent = workflow.ledgerLabel;
+  if (storyButton) {
+    storyButton.textContent = workflow.storyAction;
+    storyButton.disabled = workflow.storyDisabled;
+  }
+  if (ledgerButton) {
+    ledgerButton.textContent = workflow.ledgerAction;
+    ledgerButton.classList.toggle('secondary', !workflow.ledgerReady);
+  }
+}
+
 function loadTeeEditor(courseId = null, teeId = null) {
   const form = document.getElementById('teeForm');
   const card = document.getElementById('teeEditorCard');
@@ -22316,17 +22381,6 @@ function installHandlers() {
       }, 120);
     }
   });
-
-document.getElementById('scoreboardPrintViewSelect').addEventListener('change', e => {
-  const requestedView = ['ledger', 'summary', 'scorecard'].includes(e.target.value) ? e.target.value : 'ledger';
-  const match = getActiveMatch();
-  if (match) {
-    match.printView = requestedView;
-    persist({ skipRender: true });
-  }
-  syncScoreboardPrintControls(requestedView);
-  applyScoreboardPrintView(requestedView);
-});
 
 window.addEventListener('resize', scheduleTeamPayoutSplitPaneSync);
 window.addEventListener('orientationchange', () => {
@@ -23321,11 +23375,21 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const match = getActiveMatch();
     if (match) openUnifiedExport(match, 'ledger');
   });
+  document.getElementById('postRoundInlineClassicScorecardBtn')?.addEventListener('click', () => {
+    const match = getActiveMatch();
+    if (match) openUnifiedExport(match, 'scorecard');
+  });
   document.getElementById('postRoundInlineGenerateRecapBtn')?.addEventListener('click', async () => {
+    const match = getActiveMatch();
+    if (!match) return;
     activateTab('leaderboard');
+    renderLeaderboard();
     const story = document.getElementById('roundStoryCard');
     if (story) story.open = true;
-    await generateRoundRecapForActiveMatch();
+    if (!getFinalRoundRecap(match)) uiState.pendingLedgerOpenMatchId = match.id;
+    if (!getFinalRoundRecap(match) && !getDraftRoundRecap(match)) {
+      await generateRoundRecapForActiveMatch();
+    }
     document.getElementById('roundRecapControls')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   });
   document.getElementById('completedSummaryDoneBtn')?.addEventListener('click', exitCompletedSummaryToMatch);
@@ -23519,7 +23583,6 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     persist({ skipRender: true });
     scheduleSharedMatchSync(match, { immediate: false, silent: true });
   });
-  document.getElementById('scoreboardShareRoundBtn').addEventListener('click', () => { openPrintScorecard(); });
   document.getElementById('saveScoresBtn').addEventListener('click', () => { saveCurrentHole(); });
   document.getElementById('addMemorySaveBtn')?.addEventListener('click', saveMemoryFromModal);
   document.getElementById('deleteMemoryBtn')?.addEventListener('click', deleteMemoryFromModal);
@@ -24643,6 +24706,8 @@ function installDyeLedgerLiveEngineAdapter() {
     buildFrozenScoresGameSummary,
     buildRoundRecapPayload,
     validateRoundRecapContent,
+    getAutomaticRoundRecapEligibility,
+    getPostRoundWorkflowState,
     ensureRoundRecapMemoryCoverage,
     ensureRoundRecapRequiredFacts,
     isRoundRecapWeatherCovered,

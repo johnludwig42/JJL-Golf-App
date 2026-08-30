@@ -14,8 +14,9 @@
 /* v30.3.74 — outcome-first Scores contract and SSP validation states */
 #leaderboardWrap{display:grid;gap:14px}
 #leaderboard .scores-outcome-hero{order:-100;border-color:rgba(11,93,59,.24);background:linear-gradient(145deg,#fff,#f2f8f5)}
-#leaderboard .scoreboard-export-card{order:90}
-#leaderboard .print-section-notes{order:80}
+#leaderboard .finish-up-card{order:-90}
+#leaderboard .print-section-notes{order:-80}
+#leaderboard .scoreboard-export-card{order:-70}
 .scores-outcome-content{display:grid;gap:10px;min-width:0}
 .scores-outcome-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
 .scores-outcome-head h2{margin:3px 0 0;font-size:clamp(20px,4vw,30px)}
@@ -4023,6 +4024,15 @@ main,
   text-align: left;
   justify-content: flex-start;
 }
+.finish-up-card{margin-top:0;background:linear-gradient(145deg,#fff,#f4f8f6)}
+.finish-up-card h2{margin:4px 0 0}
+.finish-up-workflow{display:grid;border-top:1px solid var(--border)}
+.finish-up-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid var(--border)}
+.finish-up-row>div{min-width:0}
+.finish-up-row button{flex:0 0 auto;min-width:150px}
+.finish-up-next{padding-top:13px;border-top:1px solid var(--border)}
+.finish-up-card .quiet-action{border:0;background:transparent;color:var(--accent);padding:6px 0;min-height:36px;text-align:left;box-shadow:none}
+@media(max-width:520px){.finish-up-row{align-items:stretch;flex-direction:column;gap:8px}.finish-up-row button{width:100%;min-width:0}}
 
 /* v29.3.2 Game Setup Cancel Path */
 .setup-cancel-btn {
@@ -5633,12 +5643,7 @@ body.keyboard-open .app-chrome{
   top:calc(var(--app-chrome-height, 0px) + 8px) !important;
   z-index:1400 !important;
 }
-#leaderboard .scoreboard-export-card{
-  position:sticky;
-  top:calc(var(--app-chrome-height, 0px) + 8px);
-  z-index:1200;
-  background:#fff;
-}
+#leaderboard .scoreboard-export-card{background:#fff}
 #courses details.scoreboard-collapsible > summary{
   position:sticky;
   top:calc(var(--app-chrome-height, 0px) + 8px);

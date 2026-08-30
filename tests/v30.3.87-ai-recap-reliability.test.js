@@ -25,12 +25,11 @@ test('Edge Function returns stable sanitized failure codes and supports one repa
   assert.doesNotMatch(edgeFunction, /console\.(?:log|error).*apiKey/i);
 });
 
-test('client preserves a generated recap that still needs review after one repair attempt', () => {
+test('client performs one repair attempt and replaces an unverified result with the deterministic Story', () => {
   assert.match(app, /let recap = await requestRecap\(\)/);
   assert.match(app, /const repaired = await requestRecap\(\{/);
   assert.match(app, /match\.roundRecapGenerated = recap/);
-  assert.match(app, /Draft generated but needs review:/);
-  assert.match(app, /Story draft saved for review/);
+  assert.match(app, /buildDeterministicLedgerEntryStory\(match, metrics, 'verification-failed'\)/);
   assert.match(app, /roundRecapValidationIssues/);
   assert.match(app, /const recap = draftRecap \|\| finalRecap/);
   assert.match(app, /getDraftRoundRecap\(match\) \|\| getStoredRoundRecap\(match\)/);
@@ -51,6 +50,7 @@ test('client distinguishes deployment, contract, configuration, authorization, r
 
 test('recap failures remain isolated from scoring and local round persistence', () => {
   assert.match(app, /Scores, Memories, and round data remain saved/);
-  assert.match(app, /persist\(\{ skipRender: true \}\);\s*renderLeaderboard\(\);\s*toast\('The Story could not be generated/s);
+  assert.match(app, /A verified facts-only Story is ready to review/);
+  assert.match(app, /persist\(\{ skipRender: true \}\);\s*renderLeaderboard\(\);/s);
   assert.doesNotMatch(edgeFunction, /service_role|SUPABASE_SERVICE_ROLE/i);
 });

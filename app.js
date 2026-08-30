@@ -2592,6 +2592,7 @@ const uiState = {
   classicScorecardViewByMatch: {},
   memoryDraftCategory: 'General',
   roundRecapEditing: false,
+  pendingLedgerOpenMatchId: null,
   activeSetupDestination: '',
   nearbyCourseDistances: {},
 };
@@ -6941,6 +6942,7 @@ function buildDeterministicLedgerEntryStory(match, metrics, fallbackReason = 'se
     fallbackReason,
   };
 }
+const STORY_SHARED_CONTENT_RULES = 'Keep Low Gross, Course Net, Featured Net, game results, points, dollars, and settlement distinct. For Nassau, name each component (Front, Back, and Overall) and express its margin in prose as “2 up” for the winning side, “2 down” for the losing side, and “halved” or “all square” for a tie; never use closed-match notation such as “2 & 0” for a Nassau component. Do not invent shots, quotations, emotions, motives, swing mechanics, club choice, causation, or untracked statistics. State provisional scope for incomplete rounds.';
 function buildLedgerEntryStoryPayload(match, metrics) {
   const payload = buildRoundRecapPayload(match, metrics);
   const partnershipPerformance = computeBestBallPartnershipStatistics(match, metrics);
@@ -6951,7 +6953,7 @@ function buildLedgerEntryStoryPayload(match, metrics) {
     trackedStatisticsInstruction: 'Use relevant recorded tracked statistics to help explain the round. State the tracked-hole sample, and never interpret an unrecorded field as zero.',
     partnershipPerformance,
     partnershipPerformanceInstruction: partnershipPerformance ? 'Include a natural, concise observation about the supplied Partnership Performance. Keep its game and gross/net basis explicit. Contribution identifies who supplied counting scores; Partnership Gain measures improvement over the better partner playing alone; Ham & Egg Rating measures card complementarity on a 0–100 scale. Do not call either figure strokes gained or a percentage, and do not invent causes.' : '',
-    recapInstructions: 'Write The Story of the Round for a Ledger Entry. Use only supplied authoritative facts. Target 400–500 words and never exceed 550. Write exactly 3–5 natural paragraphs separated by blank lines, with no headings or bullet lists. Write with the factual precision, pacing, and polish of a major golf publication without inventing shots, quotations, emotions, motives, or drama. Open with the Featured Competition result, explain the decisive stretch and pivotal holes, recognize supported player and round highlights, and close with a concise perspective on what defined the round. Express completed Nassau component margins as signed holes-up results such as +2 or +3; never use closed-match notation such as 2 & 0 for a Nassau component. Keep Low Gross, Course Net, Featured Net, game results, points, dollars, and settlement distinct. Do not discuss Greenies; the client adds their recorded results deterministically. Mention Memories, weather recorded after the first completed hole, tracked statistics, and Partnership Performance only when supplied and genuinely relevant. State provisional scope for incomplete rounds. Return a self-contained narrative rather than listing report sections.',
+    recapInstructions: `Write The Story of the Round for a Ledger Entry. Use only supplied authoritative facts. Target 400–500 words and never exceed 550. Write exactly 3–5 natural paragraphs separated by blank lines, with no headings or bullet lists. Write with the factual precision, pacing, and polish of a major golf publication. Open with the Featured Competition result, explain the decisive stretch and pivotal holes, recognize supported player and round highlights, and close with a concise perspective on what defined the round. ${STORY_SHARED_CONTENT_RULES} Do not discuss Greenies; the client adds their recorded results deterministically. Mention Memories, weather recorded after the first completed hole, tracked statistics, and Partnership Performance only when supplied and genuinely relevant. Return a self-contained narrative rather than listing report sections.`,
   };
 }
 function addVerifiedGreeniesToLedgerStory(match, metrics, recapText) {
@@ -7505,6 +7507,14 @@ function validateRoundRecapContent(match, metrics, recapText) {
   const recap = String(recapText || '').trim();
   const issues = [];
   if (!recap) issues.push({ code: 'EMPTY_RECAP', message: 'The recap is empty.' });
+  const closedMatchNotation = [...recap.matchAll(/\b(\d+)\s*&\s*(\d+)\b/g)];
+  const zeroRemainingNotation = closedMatchNotation.find(result => Number(result[2]) === 0);
+  const hasNassau = (match?.selectedGames || []).some(game => game?.key === 'nassau');
+  if (zeroRemainingNotation) {
+    issues.push({ code: 'FALSE_CLOSED_MATCH_ZERO_NOTATION', message: `“${zeroRemainingNotation[0]}” is not valid result notation. Nassau margins are written as “2 up” or “2 down,” never “2 & 0”.` });
+  } else if (hasNassau && closedMatchNotation.length) {
+    issues.push({ code: 'FALSE_NASSAU_RESULT_NOTATION', message: `“${closedMatchNotation[0][0]}” is closed-match notation and cannot describe a Nassau component. Name Front, Back, or Overall and write the margin as “2 up,” “2 down,” “halved,” or “all square”.` });
+  }
   const completion = getRoundCompletionState(match, metrics);
   if (completion?.isIncomplete && /\b(?:all|full|complete(?:d)?)\s+(?:the\s+)?18\s+holes\b/i.test(recap)) {
     issues.push({ code: 'FALSE_FULL_ROUND', message: `The recap describes a full 18 holes, but ${completion.completedHoleCount} of ${completion.selectedHoleCount} holes are complete.` });
@@ -7701,7 +7711,7 @@ function buildRoundRecapPayload(match, metrics) {
     },
     memories: getRoundMemories(match).map(m => ({ text: m.text, category: m.category, holeNumber: m.holeNumber, author: m.createdByName, createdByName: m.createdByName, createdAt: m.createdAt, timestamp: m.timestamp })),
     partnershipPerformance,
-    recapInstructions: 'Write the canonical Story of the Round for The Dye Ledger. Use only supplied authoritative facts. Target 400–500 words and never exceed 550. Write exactly 3–5 natural paragraphs separated by blank lines, with no headings, bullet lists, or statistical inventory. Write with the factual precision, pacing, and polish of a major golf publication. Open with the Featured Competition result, develop the decisive stretch and pivotal holes, recognize supported player and round highlights, and close with a concise perspective on what defined the day. Every Memory is a high-intent user fact and must be represented naturally with its names, hole number, and description preserved. Distinguish Low Gross, Course Net, Featured Net, game results, money, and settlement. For Nassau, keep Front, Back, and Overall results distinct. Use tracked statistics selectively: mention only the two or three facts that materially explain the round rather than reciting player stat lines. When Partnership Performance is supplied, naturally interpret its hole-preserving Hand-offs, Ham & Egg Rating, Partnership Gain, contribution, or Rescues when relevant; never describe hypothetical score rearrangement or call Partnership Gain strokes gained. Ham & Egg Rating is actual hand-offs divided by all possible round transitions and is scored 0–100. Include recorded weather briefly when supplied. Do not invent shots, quotations, emotions, motives, swing mechanics, club choice, causation, or untracked statistics. State provisional scope for incomplete rounds. Deterministic authoritativeFacts override notes, Memories, and prose. Return a self-contained narrative intended to be reviewed, edited, saved, and then frozen inside the Ledger Entry.',
+    recapInstructions: `Write the canonical Story of the Round for The Dye Ledger. Use only supplied authoritative facts. Target 400–500 words and never exceed 550. Write exactly 3–5 natural paragraphs separated by blank lines, with no headings, bullet lists, or statistical inventory. Write with the factual precision, pacing, and polish of a major golf publication. Open with the Featured Competition result, develop the decisive stretch and pivotal holes, recognize supported player and round highlights, and close with a concise perspective on what defined the day. Every Memory is a high-intent user fact and must be represented naturally with its names, hole number, and description preserved. ${STORY_SHARED_CONTENT_RULES} Use tracked statistics selectively: mention only the two or three facts that materially explain the round rather than reciting player stat lines. When Partnership Performance is supplied, naturally interpret its hole-preserving Hand-offs, Ham & Egg Rating, Partnership Gain, contribution, or Rescues when relevant; never describe hypothetical score rearrangement or call Partnership Gain strokes gained. Ham & Egg Rating is actual hand-offs divided by all possible round transitions and is scored 0–100. Include recorded weather briefly when supplied. Deterministic authoritativeFacts override notes, Memories, and prose. Return a self-contained narrative intended to be reviewed, edited, saved, and then frozen inside the Ledger Entry.`,
     players: playerSummaries,
     games: summarizeSelectedGamesForRecap(match, metrics),
     finalSettlement,
@@ -7713,9 +7723,7 @@ function buildRoundRecapPayload(match, metrics) {
 async function generateRoundRecapForActiveMatch() {
   const match = getActiveMatch();
   if (!match) return toast('Create or load a match first.');
-  if (navigator.onLine === false) return toast('Story generation requires an internet connection.');
   const url = getRoundRecapUrl();
-  if (!url) return toast('Configure Supabase before generating the Story of the Round.');
   const metrics = computeMatchMetrics(match);
   if (!metrics) return toast('Match data is not ready yet.');
   const btn = document.getElementById('generateRoundRecapBtn');
@@ -7743,6 +7751,8 @@ async function generateRoundRecapForActiveMatch() {
     return ensureRoundRecapRequiredFacts(match, String(data?.recap || data?.text || '').trim());
   };
   try {
+    if (navigator.onLine === false) throw new Error('Story generation is offline.');
+    if (!url) throw new Error('Story service is not configured.');
     let recap = await requestRecap();
     if (!recap) throw new Error('Story generation returned no text.');
     let validation = validateRoundRecapContent(match, metrics, recap);
@@ -7758,6 +7768,12 @@ async function generateRoundRecapForActiveMatch() {
         blockingIssues = getBlockingStoryValidationIssues(validation);
       }
     }
+    if (blockingIssues.length) {
+      const fallback = buildDeterministicLedgerEntryStory(match, metrics, 'verification-failed');
+      recap = fallback.text;
+      validation = validateRoundRecapContent(match, metrics, recap);
+      blockingIssues = getBlockingStoryValidationIssues(validation);
+    }
     match.roundRecapGenerated = recap;
     if (!String(match.roundRecapFinal || '').trim()) match.roundRecap = recap;
     match.roundRecapGeneratedAt = new Date().toISOString();
@@ -7769,14 +7785,25 @@ async function generateRoundRecapForActiveMatch() {
     persist({ skipRender: true });
     renderLeaderboard();
     toast(blockingIssues.length === 0 ? 'Story of the Round generated.' : 'Story draft saved for review.');
+    return { ok: blockingIssues.length === 0, recap, blockingIssues };
   } catch (err) {
     console.error(err);
-    const status = Number(err?.status || 0);
-    const offlineMessage = navigator.onLine === false || err?.name === 'TypeError' ? 'The Story service could not be reached. Check the connection and try again.' : '';
-    setRoundRecapFailure(match, { status, code: err?.code, message: offlineMessage });
+    const fallbackReason = getLedgerEntryStoryFallbackReason(err, { offline: navigator.onLine === false, configured: Boolean(url) });
+    const fallback = buildDeterministicLedgerEntryStory(match, metrics, fallbackReason);
+    const fallbackValidation = validateRoundRecapContent(match, metrics, fallback.text);
+    const blockingIssues = getBlockingStoryValidationIssues(fallbackValidation);
+    match.roundRecapGenerated = fallback.text;
+    if (!String(match.roundRecapFinal || '').trim()) match.roundRecap = fallback.text;
+    match.roundRecapGeneratedAt = new Date().toISOString();
+    match.roundRecapValidationIssues = blockingIssues.map(issue => ({ code: issue.code, message: issue.message }));
+    match.roundRecapLastError = null;
+    match.roundRecapStatus = blockingIssues.length
+      ? `The verified fallback Story needs review: ${blockingIssues.map(issue => issue.message).join(' ')}`
+      : 'The Story service was unavailable. A verified facts-only draft is ready to review and save.';
     persist({ skipRender: true });
     renderLeaderboard();
-    toast('The Story could not be generated. Your round remains safely saved; please try again.');
+    toast(blockingIssues.length ? 'The facts-only Story needs review.' : 'A verified facts-only Story is ready to review.');
+    return { ok: blockingIssues.length === 0, recap: fallback.text, blockingIssues, fallback: true };
   }
 }
 
@@ -7804,6 +7831,10 @@ function acceptRoundRecapForActiveMatch() {
   persist({ skipRender: true });
   renderLeaderboard();
   toast('Story saved.');
+  if (String(uiState.pendingLedgerOpenMatchId || '') === String(match.id || '')) {
+    uiState.pendingLedgerOpenMatchId = null;
+    openUnifiedExport(match, 'ledger');
+  }
 }
 function clearRoundRecapForActiveMatch() {
   const match = getActiveMatch();
@@ -9196,6 +9227,23 @@ function launchLedgerReportModel(reportModel, { sameTabLedger, exportWindow, aut
     exportWindow.focus();
   }
 }
+async function routeLedgerRequestThroughStory(match) {
+  if (!match) return;
+  uiState.pendingLedgerOpenMatchId = match.id;
+  hidePostRoundActions();
+  hideRoundCompletePrompt();
+  if (match.storageMode === 'shared') await reconcileSharedMatchBeforeSummary(match, { silent: false });
+  activateTab('leaderboard');
+  renderLeaderboard();
+  openExperienceDestination('leaderboard', 'story', { scroll: false });
+  const storyCard = document.getElementById('roundStoryCard');
+  if (storyCard) storyCard.open = true;
+  if (!getDraftRoundRecap(match)) await generateRoundRecapForActiveMatch();
+  document.getElementById('roundRecapControls')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  toast(getDraftRoundRecap(match)
+    ? 'Review and save the Story. The Ledger Entry will open automatically after it is saved.'
+    : 'Create, review, and save the Story before opening the Ledger Entry.', 7200);
+}
 async function openUnifiedExport(match, printView = 'ledger') {
   const metrics = computeMatchMetrics(match);
   if (!metrics) {
@@ -9208,6 +9256,10 @@ async function openUnifiedExport(match, printView = 'ledger') {
   }
   const sameTabLedger = printView === 'ledger' && shouldUseSameTabLedgerReport();
   const acceptedLedgerReport = printView === 'ledger' ? getAcceptedLedgerEntrySnapshot(match)?.report || null : null;
+  if (printView === 'ledger' && !acceptedLedgerReport && !getFinalRoundRecap(match)) {
+    await routeLedgerRequestThroughStory(match);
+    return;
+  }
   const exportWindow = sameTabLedger ? null : window.open('', '_blank');
   if (!sameTabLedger && !exportWindow) {
     toast('Please allow pop-ups to share this round.');
@@ -9235,17 +9287,6 @@ async function openUnifiedExport(match, printView = 'ledger') {
       return;
     }
     const savedStory = getFinalRoundRecap(match);
-    if (!savedStory) {
-      if (exportWindow) exportWindow.close();
-      activateTab('leaderboard');
-      renderLeaderboard();
-      openExperienceDestination('leaderboard', 'story', { scroll: false });
-      const storyCard = document.getElementById('roundStoryCard');
-      if (storyCard) storyCard.open = true;
-      document.getElementById('roundRecapControls')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-      toast('Generate, review, and save the Story of the Round before opening the final Ledger Entry.', 7200);
-      return;
-    }
     const reportModel = buildLedgerEntryReportModel(match, refreshedMetrics);
     if (!reportModel) {
       if (exportWindow) exportWindow.close();
@@ -16291,6 +16332,11 @@ function showPostRoundActions(match = getActiveMatch()) {
   const text = document.getElementById('postRoundActionsText');
   if (title) title.textContent = 'Round Complete ✓';
   if (text) text.textContent = `${completedHoles(match)} holes completed. What would you like to do?`;
+  const ledgerLabel = getLedgerOpenActionLabel(match);
+  const modalLedgerButton = document.getElementById('postRoundLedgerBtn');
+  const inlineLedgerButton = document.getElementById('postRoundInlineLedgerBtn');
+  if (modalLedgerButton) modalLedgerButton.textContent = ledgerLabel;
+  if (inlineLedgerButton) inlineLedgerButton.textContent = ledgerLabel;
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
 }
@@ -19347,7 +19393,7 @@ function syncScoreboardPrintControls(printView = null) {
   const button = document.getElementById('scoreboardShareRoundBtn');
   const hint = document.getElementById('scoreboardPrintViewHint');
   if (select && select.value !== resolvedView) select.value = resolvedView;
-  if (button) button.textContent = 'Share Match';
+  if (button) button.textContent = resolvedView === 'ledger' ? getLedgerOpenActionLabel(getActiveMatch(), { share: true }) : 'Share Match';
   if (hint) hint.textContent = resolvedView === 'scorecard'
     ? 'Classic Scorecard selected. It will open ready to save or share as a PDF.'
     : 'Ledger Entry selected. Recommended format with the saved Story, result, games, statistics, settlement, and scorecards.';
@@ -21584,6 +21630,12 @@ function viewCompletedMatchSummary() {
   openExperienceDestination('leaderboard', 'story', { scroll: false });
   const storyCard = document.getElementById('roundStoryCard');
   if (storyCard) storyCard.open = true;
+}
+
+function getLedgerOpenActionLabel(match, { share = false } = {}) {
+  if (getAcceptedLedgerEntrySnapshot(match) || getFinalRoundRecap(match)) return share ? 'Share Match' : 'Open Ledger Entry';
+  if (getDraftRoundRecap(match)) return 'Review Story & Open Ledger';
+  return 'Create Story & Open Ledger';
 }
 
 function loadTeeEditor(courseId = null, teeId = null) {

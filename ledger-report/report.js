@@ -3,7 +3,7 @@
    or derived from it. Stroke allocation comes from the app's engine, keyed by
    basis; the report never re-derives handicapping.
    ========================================================================== */
-import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.16';
+import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.17';
 
 const packPages = globalThis.packPages;
 const runGame = globalThis.runGame;
@@ -143,6 +143,7 @@ P.forEach(p=>{
   p.parPlayed = p.playedIdx.reduce((a,i)=>a+C.par[i],0);
   p.delta = p.playedIdx.map(i=>p.gross[i]-C.par[i]);
   p.tot = sum(p.gross); p.cnetT = sum(p.cnet); p.fnetT = sum(p.fnet); p.onetT = sum(p.onet);
+  p.postable = isNum(p.postable) ? p.postable : p.tot;
   p.half = Math.ceil(NH/2);
   p.out = sum(p.gross,0,p.half); p.inn = sum(p.gross,p.half);
 });
@@ -215,7 +216,6 @@ const nameCell = p => `<span class="nm">${HAS_SIDES?dot(p.side):""}${p.name}</sp
 
 function secHead(title, sub){
   const w = h("div",{class:"sechead"});
-  w.appendChild(h("div",{class:"tie"}));
   w.appendChild(h("div",{class:"sec",
     html:title+(sub?` <small>${sub}</small>`:"")}));
   return w;
@@ -687,10 +687,10 @@ add("lbh", ()=>secHead("Player leaderboard",
 add("lb", ()=>{
   const money = HAS_MONEY;
   const cols = [
-    ["l","Player","26%"],["n","Idx","6%"],["n",NH<18?"CH /<br>alloc.":"CH","5%"],
-    ...(NH>9?[["n","Out","6%"],["n","In","6%"]]:[]),
-    ["n","Gross","7%"],["n","Net<br>full CH","9%"],["n","To<br>par","6%"],
-    ["n","Net<br>featured","9%"],["n","Bird","6%"],["n","Dbl+","6%"],
+    ["l","Player","22%"],["n","Idx","5%"],["n",NH<18?"CH /<br>alloc.":"CH","5%"],
+    ...(NH>9?[["n","Out","5%"],["n","In","5%"]]:[]),
+    ["n","Gross","6%"],["n","Postable","7%"],["n","Net<br>full CH","8%"],["n","To<br>par","6%"],
+    ["n","Net<br>featured","8%"],["n","Bird+","5%"],["n","Dbl+","5%"],
     ...(COMPLETE?[]:[["n","Holes","6%"]]),
     ...(money?[["n","Money","10%"]]:[])];
   const rows=P.slice().sort((a,b)=>a.cnetT-b.cnetT).map(p=>{
@@ -700,7 +700,7 @@ add("lb", ()=>{
     return `<tr data-row><td class="l">${nameCell(p)}</td>
       <td class="n dim">${p.index.toFixed(1)}</td><td class="n dim">${NH<18?`${p.ch} / ${sum(p.strokes.courseNet)}`:p.ch}</td>
       ${NH>9?`<td class="n">${p.out}</td><td class="n">${p.inn}</td>`:""}
-      <td class="n"><b>${p.tot}</b></td><td class="n">${p.cnetT}</td>
+      <td class="n"><b>${p.tot}</b></td><td class="n">${p.postable}</td><td class="n">${p.cnetT}</td>
       <td class="n">${tp===0?"E":(tp>0?"+":"")+tp}</td><td class="n">${p.fnetT}</td>
       <td class="n">${bird}</td><td class="n">${dbl}</td>
       ${COMPLETE?"":`<td class="n dim">${p.nPlayed}</td>`}
@@ -709,7 +709,7 @@ add("lb", ()=>{
   const w=h("div");
   w.innerHTML=`<table><colgroup>${cols.map(c=>`<col style="width:${c[2]}">`).join("")}</colgroup>
     <thead data-rowhead><tr>${cols.map(c=>`<th class="${c[0]}">${c[1]}</th>`).join("")}</tr></thead>
-    <tbody>${rows}</tbody></table>${NH<18?'<div class="note" style="padding-top:6px">CH IS THE 18-HOLE COURSE HANDICAP BASIS; ALLOC. IS THE NUMBER OF COURSE-NET STROKES APPLIED TO THIS NINE.</div>':''}`;
+    <tbody>${rows}</tbody></table><div class="note" style="padding-top:6px">POSTABLE IS ADJUSTED GROSS FOR HANDICAP-POSTING PURPOSES; IT IS NOT COURSE NET OR FEATURED NET.${NH<18?' CH IS THE 18-HOLE COURSE HANDICAP BASIS; ALLOC. IS THE NUMBER OF COURSE-NET STROKES APPLIED TO THIS NINE.':''}</div>`;
   return w;
 }, {splittable:true, minRows:3});
 
@@ -1005,20 +1005,21 @@ if(TRACKED_PLAYERS.length){
 
 if(ROUND.partnership?.sides?.length){
   add("partnershiph",()=>secHead("Partnership performance",
-    `${ROUND.partnership.gameName} · ${String(ROUND.partnership.basis).toUpperCase()} · Best ball`),
+    `${ROUND.partnership.gameName} · ${cap(String(ROUND.partnership.basis))} · Best ball`),
     {keepWithNext:true,label:"Statistics"});
   add("partnership",()=>{
     const w=h("div",{class:"ledger-stat-page ledger-stat-page-partnership","data-ledger-stat-category":"partnership"});
     const rows=ROUND.partnership.sides.map(side=>{
       const partners=side.playerContributions;
-      const contribution=player=>player?`${player.name}<br><strong>${player.count}</strong>`:"—";
-      const rescues=partners.filter(player=>player.rescues).map(player=>`${player.name} ${player.rescues}`).join(" · ")||"0";
-      const rating=side.rating!==null&&Number.isFinite(Number(side.rating))?`${Math.round(Number(side.rating))}%`:`— <span class="dim">fewer than 6 holes or no rating range</span>`;
-      return `<tr data-row><td class="l"><strong>${side.name}</strong></td><td class="n">${side.holes}</td><td class="n">${contribution(partners[0])}</td><td class="n">${contribution(partners[1])}</td><td class="n">${side.redundancy}</td><td class="n">${side.alternations}</td><td class="n">${rescues}</td><td class="n">${side.strokesSaved}</td><td class="n">${rating}</td></tr>`;
+      const rate=(value,denominator)=>denominator?`${Math.round(value/denominator*100)}% (${value}/${denominator})`:"—";
+      const contribution=player=>player?`${player.name}<br><strong>${rate(player.count,side.holes)}</strong>`:"—";
+      const rescues=partners.map(player=>`${player.name} ${rate(player.rescues,side.holes)}`).join("<br>");
+      const rating=side.rating!==null&&Number.isFinite(Number(side.rating))?Math.round(Number(side.rating)):"—";
+      return `<tr data-row><td class="l"><strong>${side.name}</strong><br><span class="dim">${side.holes} eligible holes<br>Actual ${side.actual} · Best ${side.best} · Stacked ${side.worst}</span></td><td class="n">${contribution(partners[0])}</td><td class="n">${contribution(partners[1])}</td><td class="n">${rate(side.redundancy,side.holes)}</td><td class="n">${rate(side.alternations,side.alternationOpportunities)}</td><td class="n">${rescues}</td><td class="n">${side.partnershipGain}</td><td class="n">${rating}</td></tr>`;
     }).join("");
-    w.innerHTML=`<div class="subhead" data-ledger-stat-group="partnership">Ham &amp; Egg<span>Best-ball contribution · ${ROUND.partnership.gameName} (${String(ROUND.partnership.basis).toLowerCase()}). Rating compares actual alignment with the best and worst alignment those two scorecards allow.</span></div>
-      <table class="dense"><thead data-rowhead><tr><th class="l">Side</th><th class="n">Holes</th><th class="n">Partner 1 counted</th><th class="n">Partner 2 counted</th><th class="n">Both</th><th class="n">Alternated</th><th class="n">Rescues</th><th class="n">Strokes saved</th><th class="n">Rating</th></tr></thead><tbody>${rows}</tbody></table>
-      <p class="scnote">Contribution is inclusive: both partners receive credit when tied, so Partner 1 + Partner 2 - Both = Holes. Rescues require a two-stroke advantage over the partner.</p>`;
+    w.innerHTML=`<div class="subhead" data-ledger-stat-group="partnership">Ham &amp; Egg Rating<span>How effectively the partners’ counting scores complemented one another.</span></div>
+      <table class="dense"><colgroup><col style="width:18%"><col style="width:11%"><col style="width:11%"><col style="width:9%"><col style="width:10%"><col style="width:17%"><col style="width:13%"><col style="width:9%"></colgroup><thead data-rowhead><tr><th class="l">Side</th><th class="n">Counted</th><th class="n">Counted</th><th class="n">Tied</th><th class="n">Hand-offs</th><th class="n">Rescues</th><th class="n">Partnership Gain</th><th class="n">Rating /100</th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="scnote">Contribution identifies who supplied the counting score; tied holes credit both partners. Partnership Gain is the better partner’s eligible-hole total minus the team’s actual best-ball total—the strokes the partnership improved on its better individual card, not strokes gained. Ham &amp; Egg Rating places actual best ball between the strongest and weakest alignment allowed by those two cards; an em dash means no rating range exists. A dominant contribution split can still rate highly, while an even split can rate poorly. Rescues require a two-stroke advantage over the partner. Hand-offs measure changes across adjacent eligible holes where both holes have one sole contributor.</p>`;
     return w;
   },{splittable:true,minRows:2,keepTogetherWhenFits:true});
 }
@@ -1069,8 +1070,8 @@ add("sc1h", ()=>secHead("Appendix · Course net",
   {keepWithNext:true, breakBefore:true, label:"Appendix"});
 add("sc1", ()=>{ const w=h("div"); w.innerHTML=scorecard("cnet","courseNet")+MKLEGEND; return w; },
   {splittable:true, minRows:2});
-add("sc2h", ()=>secHead("Appendix · Featured net",
-  FEAT?FEAT.allowance.label:"—"), {keepWithNext:true});
+add("sc2h", ()=>{ const w=secHead("Appendix · Featured net",
+  FEAT?FEAT.allowance.label:"—"); w.classList.add("appendix-scorecard-separator"); return w; }, {keepWithNext:true});
 add("sc2", ()=>{ const w=h("div");
   w.innerHTML=scorecard("fnet","featured")
     +`<p class="scnote">Gross above, featured net below; marks are set against par in both rows.
@@ -1142,7 +1143,7 @@ function layout(){
     return m;
   };
 
-  const {pages,overflows}=packPages(BLOCKS, flowH-8, measure);  /* conservative browser-rounding gutter */
+  const {pages,overflows}=packPages(BLOCKS, flowH-18, measure);  /* conservative browser-rounding gutter */
 
   /* Masthead subtitle: the section in effect where the page starts, carried
      forward so a continuation page keeps the right label. */
@@ -1189,7 +1190,7 @@ function report(pages,overflows){
       console.error(`PAGE ${i+1} OVERFLOWS BY ${over}px — content will be clipped in print.`);
       if(typeof matchMedia!=="function" || !matchMedia("print").matches){
         pg.style.outline="3px solid #C0392B";
-        pg.appendChild(h("div",{text:`PAGE ${i+1} OVERFLOW +${over}px`,
+        pg.appendChild(h("div",{class:"page-overflow-diagnostic",text:`PAGE ${i+1} OVERFLOW +${over}px`,
           style:"position:absolute;top:6px;right:6px;background:#C0392B;color:#fff;"+
             "font:600 8pt 'IBM Plex Mono',monospace;padding:3px 7px;z-index:9"}));
       }

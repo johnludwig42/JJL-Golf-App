@@ -16,11 +16,11 @@ const localPersistenceDiagnostics = {
   lastFailureMessage: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.16',
-  versionNumber: '31.0.16',
-  cacheName: 'the-dye-ledger-v31.0.16',
-  buildDate: '2026-08-29T21:00:00-04:00',
-  buildLabel: 'Ledger Pagination & Partnership Statistics'
+  version: 'v31.0.17',
+  versionNumber: '31.0.17',
+  cacheName: 'the-dye-ledger-v31.0.17',
+  buildDate: '2026-08-29T22:30:00-04:00',
+  buildLabel: 'Ledger Partnership Refinements'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -4808,6 +4808,7 @@ function computeBestBallPartnershipStatistics(match, metrics = null) {
     const rescues = Object.fromEntries(playerIds.map(id => [id, 0]));
     let redundancy = 0;
     let alternations = 0;
+    let alternationOpportunities = 0;
     let priorSoleContributor = null;
     const first = [];
     const second = [];
@@ -4824,7 +4825,10 @@ function computeBestBallPartnershipStatistics(match, metrics = null) {
       } else {
         const contributor = contributors[0];
         const partner = scores.find(score => score.playerId !== contributor.playerId);
-        if (priorSoleContributor && priorSoleContributor !== contributor.playerId) alternations += 1;
+        if (priorSoleContributor) {
+          alternationOpportunities += 1;
+          if (priorSoleContributor !== contributor.playerId) alternations += 1;
+        }
         priorSoleContributor = contributor.playerId;
         if (partner && partner.value >= contributor.value + 2) rescues[contributor.playerId] += 1;
       }
@@ -4839,6 +4843,8 @@ function computeBestBallPartnershipStatistics(match, metrics = null) {
     const worst = ascendingFirst.reduce((sum, value, index) => sum + Math.min(value, ascendingSecond[index]), 0);
     const best = ascendingFirst.reduce((sum, value, index) => sum + Math.min(value, descendingSecond[index]), 0);
     const denominator = worst - best;
+    const partnerTotals = [first.reduce((sum, value) => sum + value, 0), second.reduce((sum, value) => sum + value, 0)];
+    const betterPartnerTotal = Math.min(...partnerTotals);
     const rating = holes.length >= 6 && denominator > 0
       ? Math.max(0, Math.min(100, Math.round(((worst - actual) / denominator) * 100)))
       : null;
@@ -4849,16 +4855,18 @@ function computeBestBallPartnershipStatistics(match, metrics = null) {
       playerContributions: playerIds.map(playerId => ({ playerId, name: names[playerId] || 'Player', count: contributions[playerId], rescues: rescues[playerId] })),
       redundancy,
       alternations,
+      alternationOpportunities,
       actual,
       best,
       worst,
-      strokesSaved: worst - actual,
+      betterPartnerTotal,
+      partnershipGain: betterPartnerTotal - actual,
       rating,
     };
   });
   return {
     gameId: String(source.config.key),
-    gameName: getFeaturedGameLabel(match, source.config.key) || getGameLabel(source.config.key),
+    gameName: getGameLabel(source.config.key),
     basis: source.policy.basis === 'gross' ? 'gross' : 'net',
     holes: holes.map(hole => hole.holeNumber),
     sides,
@@ -6648,6 +6656,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
       index: Number(playerMetric.player?.index ?? recordPlayer.index) || 0,
       ch: courseHandicap,
       ph: featured.reduce((sum, strokes) => sum + strokes, 0),
+      postable: Number(recordPlayer.postable ?? playerMetric.postableTotal ?? playerMetric.grossTotal ?? 0),
       gross: completedScoresByPlayer(playerMetric.playerId),
       strokes: { courseNet, featured, offLow },
       statistics: insight ? {
@@ -6909,11 +6918,16 @@ function buildLedgerEntryFactsOnlyStory(record, match = null, metrics = null) {
   const turningParagraph = turning ? `The round’s defining turn came on hole ${Number(story.turningPoint.holeNumber)}. ${turning}` : '';
   const highlightParagraph = highlights.length ? `The scorecard supplied the individual highlights as well. ${highlights.join(' ')}` : '';
   const statisticsParagraph = trackedStatistics.length ? `The recorded statistics add context without changing the result. ${trackedStatistics.join(' ')}` : '';
+  const partnership = match && metrics ? computeBestBallPartnershipStatistics(match, metrics) : null;
+  const partnershipParagraph = partnership?.sides?.length
+    ? `The ${partnership.gameName} partnership figures add another view of the result on a ${partnership.basis} basis. ${partnership.sides.map(side => `${side.name} produced a Partnership Gain of ${side.partnershipGain} ${side.partnershipGain === 1 ? 'stroke' : 'strokes'} and a Ham & Egg Rating of ${side.rating === null ? 'not rated' : `${side.rating} out of 100`} across ${side.holes} eligible holes`).join('; ')}.`
+    : '';
   const memories = Array.isArray(record?.notes?.memories) ? record.notes.memories.filter(memory => String(memory?.text || memory?.description || '').trim()) : [];
   const closing = memories.length
     ? `${memories.length} saved round ${memories.length === 1 ? 'memory preserves' : 'memories preserve'} additional context from the day. Together, the scorecard, competition ledger, and recorded details define this round.`
     : 'Together, the scorecard, competition ledger, and recorded details define this round.';
-  return [opening, turningParagraph, highlightParagraph, statisticsParagraph, closing].filter(Boolean).slice(0, 5).join('\n\n')
+  const contextParagraph = [statisticsParagraph, partnershipParagraph].filter(Boolean).join(' ');
+  return [opening, turningParagraph, highlightParagraph, contextParagraph, closing].filter(Boolean).slice(0, 5).join('\n\n')
     || 'The recorded scorecard, competitions, and settlement are preserved in this Ledger Entry.';
 }
 function getLedgerEntryStoryFallbackReason(error, { offline = false, configured = true } = {}) {
@@ -6934,12 +6948,15 @@ function buildDeterministicLedgerEntryStory(match, metrics, fallbackReason = 'se
 }
 function buildLedgerEntryStoryPayload(match, metrics) {
   const payload = buildRoundRecapPayload(match, metrics);
+  const partnershipPerformance = computeBestBallPartnershipStatistics(match, metrics);
   return {
     ...payload,
     reportPurpose: 'ledger-story',
     trackedStatistics: buildTrackedStatisticsStoryFacts(match, metrics),
     trackedStatisticsInstruction: 'Use relevant recorded tracked statistics to help explain the round. State the tracked-hole sample, and never interpret an unrecorded field as zero.',
-    recapInstructions: 'Write The Story of the Round for a Ledger Entry. Use only supplied authoritative facts. Target 300–400 words and never exceed 450. Write exactly 3–5 natural paragraphs separated by blank lines, with no headings or bullet lists. Write with the factual precision, pacing, and polish of a major golf publication without inventing shots, quotations, emotions, motives, or drama. Open with the Featured Competition result, explain the decisive stretch and pivotal holes, recognize supported player and round highlights, and close with a concise perspective on what defined the round. Express completed Nassau component margins as signed holes-up results such as +2 or +3; never use closed-match notation such as 2 & 0 for a Nassau component. Keep Low Gross, Course Net, Featured Net, game results, points, dollars, and settlement distinct. Do not discuss Greenies; the client adds their recorded results deterministically. Mention Memories, weather recorded after the first completed hole, and tracked statistics only when supplied and genuinely relevant. State provisional scope for incomplete rounds. Return a self-contained narrative rather than repeating the full Match Summary recap or listing report sections.',
+    partnershipPerformance,
+    partnershipPerformanceInstruction: partnershipPerformance ? 'Include a natural, concise observation about the supplied Partnership Performance. Keep its game and gross/net basis explicit. Contribution identifies who supplied counting scores; Partnership Gain measures improvement over the better partner playing alone; Ham & Egg Rating measures card complementarity on a 0–100 scale. Do not call either figure strokes gained or a percentage, and do not invent causes.' : '',
+    recapInstructions: 'Write The Story of the Round for a Ledger Entry. Use only supplied authoritative facts. Target 400–500 words and never exceed 550. Write exactly 3–5 natural paragraphs separated by blank lines, with no headings or bullet lists. Write with the factual precision, pacing, and polish of a major golf publication without inventing shots, quotations, emotions, motives, or drama. Open with the Featured Competition result, explain the decisive stretch and pivotal holes, recognize supported player and round highlights, and close with a concise perspective on what defined the round. Express completed Nassau component margins as signed holes-up results such as +2 or +3; never use closed-match notation such as 2 & 0 for a Nassau component. Keep Low Gross, Course Net, Featured Net, game results, points, dollars, and settlement distinct. Do not discuss Greenies; the client adds their recorded results deterministically. Mention Memories, weather recorded after the first completed hole, tracked statistics, and Partnership Performance only when supplied and genuinely relevant. State provisional scope for incomplete rounds. Return a self-contained narrative rather than repeating the full Match Summary recap or listing report sections.',
   };
 }
 function addVerifiedGreeniesToLedgerStory(match, metrics, recapText) {
@@ -7004,15 +7021,15 @@ async function prepareLedgerEntryStory(match, metrics) {
   };
   try {
     let text = addVerifiedGreeniesToLedgerStory(match, metrics, await requestStory());
-    if (text.split(/\s+/).filter(Boolean).length > 500) throw new Error('The generated Story was too long to fit the Ledger Entry.');
-    const isBlockingFactIssue = issue => /^FALSE_|^UNVERIFIABLE_/.test(String(issue?.code || ''));
+    if (text.split(/\s+/).filter(Boolean).length > 600) throw new Error('The generated Story was too long to fit the Ledger Entry.');
+    const isBlockingFactIssue = issue => /^FALSE_|^UNVERIFIABLE_|^MISSING_PARTNERSHIP_REVIEW$/.test(String(issue?.code || ''));
     let blockingIssues = validateRoundRecapContent(match, metrics, text).issues.filter(isBlockingFactIssue);
     if (blockingIssues.length) {
       const repaired = await requestStory({
         priorRecap: text,
         issues: blockingIssues.map(issue => ({ code: issue.code, message: issue.message })),
       });
-      if (repaired.split(/\s+/).filter(Boolean).length > 500) throw new Error('The corrected Story was too long to fit the Ledger Entry.');
+      if (repaired.split(/\s+/).filter(Boolean).length > 600) throw new Error('The corrected Story was too long to fit the Ledger Entry.');
       text = addVerifiedGreeniesToLedgerStory(match, metrics, repaired);
       blockingIssues = validateRoundRecapContent(match, metrics, text).issues.filter(isBlockingFactIssue);
     }
@@ -7521,6 +7538,15 @@ function validateRoundRecapContent(match, metrics, recapText) {
   );
   if (coachingEligible && !/\b(?:improvement|practice focus|next-round focus|opportunity)\b/i.test(recap)) {
     issues.push({ code: 'MISSING_IMPROVEMENT_REVIEW', message: 'Stat Tracking has enough evidence for player improvement opportunities, but the recap does not include them.' });
+  }
+  const partnershipPerformance = computeBestBallPartnershipStatistics(match, metrics);
+  if (partnershipPerformance?.sides?.length) {
+    const normalizedRecap = recap.toLocaleLowerCase();
+    const namesPartnership = partnershipPerformance.sides.some(side => normalizedRecap.includes(String(side.name || '').toLocaleLowerCase()));
+    const describesPartnership = /\b(?:partnership|ham\s*(?:&|and)\s*egg|partnership gain|complementar(?:ity|y))\b/i.test(recap);
+    if (!namesPartnership || !describesPartnership) {
+      issues.push({ code: 'MISSING_PARTNERSHIP_REVIEW', message: 'Best-ball Partnership Performance is available, but the recap does not identify a side and explain the partnership result.' });
+    }
   }
   const numberWords = { no: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18 };
   const parseCount = token => /^\d+$/.test(String(token || '')) ? Number(token) : numberWords[String(token || '').toLocaleLowerCase()];

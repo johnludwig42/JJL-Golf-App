@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.25',
-  versionNumber: '31.0.25',
-  cacheName: 'the-dye-ledger-v31.0.25',
-  buildDate: '2026-09-02T11:00:00-04:00',
-  buildLabel: 'Setup and Library Input Reliability'
+  version: 'v31.0.26',
+  versionNumber: '31.0.26',
+  cacheName: 'the-dye-ledger-v31.0.26',
+  buildDate: '2026-09-02T15:00:00-04:00',
+  buildLabel: 'Imported Scorecard Draft Reliability'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -15592,13 +15592,14 @@ function collectScorecardImportReviewData() {
         yardage: Number.isFinite(yardage) && yardage > 0 ? yardage : null,
       };
     });
+    const existingTee = uiState.scorecardImportData?.tees?.[idx] || {};
     const tee = {
-      id: uid(),
+      id: existingTee.id || uid(),
       courseName,
       teeName,
-      gender: 'M',
-      isCombo: false,
-      comboSources: [],
+      gender: existingTee.gender || 'M',
+      isCombo: !!existingTee.isCombo,
+      comboSources: Array.isArray(existingTee.comboSources) ? existingTee.comboSources : [],
       length: holes.reduce((sum, h) => sum + (Number(h.yardage) || 0), 0) || null,
       par: holes.reduce((sum, h) => sum + (Number(h.par) || 0), 0) || null,
       rating: Number.isFinite(rating) ? rating : null,
@@ -15611,6 +15612,72 @@ function collectScorecardImportReviewData() {
   }).filter(t => t.teeName);
   const holeCount = Number(wrap.dataset.importHoleCount) === 9 ? 9 : 18;
   return { courseName, city, state: stateValue, country, holeCount, tees };
+}
+function mergeScorecardImportReviewDraft(current, reviewed) {
+  if (!current || !reviewed) return current;
+  return {
+    ...current,
+    name: reviewed.courseName,
+    city: reviewed.city,
+    state: reviewed.state,
+    country: reviewed.country,
+    holeCount: reviewed.holeCount,
+    totalPar: reviewed.tees[0]?.par || current.totalPar || null,
+    tees: reviewed.tees,
+  };
+}
+function syncScorecardImportReviewDraftFromDom() {
+  const wrap = document.getElementById('scorecardImportReview');
+  const current = uiState.scorecardImportData;
+  if (!current || !wrap?.querySelector('.scorecard-import-review-card')) return current;
+  const reviewed = collectScorecardImportReviewData();
+  if (!reviewed) return current;
+  uiState.scorecardImportData = mergeScorecardImportReviewDraft(current, reviewed);
+  return uiState.scorecardImportData;
+}
+function getScorecardImportReviewControlKey(control) {
+  if (!control) return '';
+  const teeCard = control.closest?.('[data-import-tee]');
+  const holeRow = control.closest?.('[data-import-hole]');
+  if (control.dataset.importField) return `course:${control.dataset.importField}`;
+  if (control.dataset.teeField) return `tee:${teeCard?.dataset.importTee || '0'}:${control.dataset.teeField}`;
+  if (control.dataset.holeField) return `hole:${teeCard?.dataset.importTee || '0'}:${holeRow?.dataset.importHole || '1'}:${control.dataset.holeField}`;
+  return '';
+}
+function findScorecardImportReviewControl(wrap, key) {
+  const [kind, first, second, third] = String(key || '').split(':');
+  if (kind === 'course') return wrap.querySelector(`[data-import-field="${first}"]`);
+  if (kind === 'tee') return wrap.querySelector(`[data-import-tee="${first}"] [data-tee-field="${second}"]`);
+  if (kind === 'hole') return wrap.querySelector(`[data-import-tee="${first}"] [data-import-hole="${second}"] [data-hole-field="${third}"]`);
+  return null;
+}
+function captureScorecardImportReviewViewState(wrap) {
+  if (!wrap?.querySelector('.scorecard-import-review-card')) return null;
+  const active = wrap?.contains(document.activeElement) ? document.activeElement : null;
+  return {
+    activeKey: getScorecardImportReviewControlKey(active),
+    selectionStart: Number.isInteger(active?.selectionStart) ? active.selectionStart : null,
+    selectionEnd: Number.isInteger(active?.selectionEnd) ? active.selectionEnd : null,
+    openTees: Array.from(wrap?.querySelectorAll('[data-import-tee][open]') || []).map(card => String(card.dataset.importTee)),
+    scrollTop: Number(wrap?.scrollTop) || 0,
+    pageScrollX: Number(window.scrollX) || 0,
+    pageScrollY: Number(window.scrollY) || 0,
+  };
+}
+function restoreScorecardImportReviewViewState(wrap, viewState) {
+  if (!wrap || !viewState) return;
+  const openTees = new Set(viewState.openTees || []);
+  wrap.querySelectorAll('[data-import-tee]').forEach(card => { card.open = openTees.has(String(card.dataset.importTee)); });
+  wrap.scrollTop = Number(viewState.scrollTop) || 0;
+  window.scrollTo(Number(viewState.pageScrollX) || 0, Number(viewState.pageScrollY) || 0);
+  const active = findScorecardImportReviewControl(wrap, viewState.activeKey);
+  if (!active) return;
+  try {
+    active.focus({ preventScroll: true });
+    if (viewState.selectionStart !== null && typeof active.setSelectionRange === 'function') {
+      active.setSelectionRange(viewState.selectionStart, viewState.selectionEnd ?? viewState.selectionStart);
+    }
+  } catch {}
 }
 function saveImportedScorecardCourse() {
   const reviewed = collectScorecardImportReviewData();
@@ -15691,6 +15758,8 @@ function deleteImportedScorecardTee(teeIdx) {
 function renderScorecardImportReview() {
   const el = document.getElementById('scorecardImportReview');
   if (!el) return;
+  const viewState = captureScorecardImportReviewViewState(el);
+  syncScorecardImportReviewDraftFromDom();
   const data = uiState.scorecardImportData;
   if (!data) {
     el.classList.add('hidden');
@@ -15782,6 +15851,7 @@ function renderScorecardImportReview() {
     renderScorecardImportReview();
     updateScorecardImportStatus();
   });
+  restoreScorecardImportReviewViewState(el, viewState);
 }
 function updateScorecardImportStatus() {
   const status = document.getElementById('scorecardImportStatus');
@@ -22611,6 +22681,15 @@ function installHandlers() {
     const btn = e.target.closest('[data-remove-scorecard-file]');
     if (btn) removeScorecardImportFile(Number(btn.dataset.removeScorecardFile));
   });
+  const scorecardImportReview = document.getElementById('scorecardImportReview');
+  if (scorecardImportReview) {
+    scorecardImportReview.addEventListener('input', e => {
+      if (e.target.matches('[data-import-field], [data-tee-field], [data-hole-field]')) syncScorecardImportReviewDraftFromDom();
+    });
+    scorecardImportReview.addEventListener('change', e => {
+      if (e.target.matches('[data-import-field], [data-tee-field], [data-hole-field]')) syncScorecardImportReviewDraftFromDom();
+    });
+  }
   renderScorecardImportSelection();
   document.getElementById('teeForm').addEventListener('submit', e => {
     e.preventDefault();
@@ -25094,6 +25173,13 @@ function installDyeLedgerLiveEngineAdapter() {
     populateCalcPlayers,
     populateCalcCourses,
     populateCalcTees,
+    collectScorecardImportReviewData,
+    mergeScorecardImportReviewDraft,
+    syncScorecardImportReviewDraftFromDom,
+    getScorecardImportReviewControlKey,
+    findScorecardImportReviewControl,
+    captureScorecardImportReviewViewState,
+    restoreScorecardImportReviewViewState,
     updatePlayerDraftSlot,
     reconcilePlayerDraftSlots,
     getPlayerTeeSlotStates,

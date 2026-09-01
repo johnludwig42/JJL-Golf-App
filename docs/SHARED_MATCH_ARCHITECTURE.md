@@ -1,6 +1,6 @@
 # Shared Match Architecture
 
-Status: v31.0.22 — Bounded synchronization evidence
+Status: v31.0.23 — Persistent multi-match score delivery
 
 ## Authority model
 
@@ -17,6 +17,8 @@ The deterministic score-entry ID remains match/player/hole based, so an accepted
 ## Offline and reconnect behavior
 
 Score changes are persisted locally before Shared Match upload. Going offline records that locally saved scoring is retained. The trust indicator reports `Saved Locally` when changes await synchronization and `Offline` when the device has no connection. The browser `online` event automatically schedules an immediate upload/pull cycle; returning focus also retries a pending or failed synchronization. `Retry Sync` remains available when useful.
+
+Pending score delivery is independent of the active-round pointer and completed-round status. Startup, periodic refresh, reconnect, foregrounding, score saves, and completion can discover pending operations across all locally saved Shared Matches. Work remains partitioned by Shared Match identity, is processed in bounded sequential batches, and removes operations only after explicit server acknowledgement. Remote-score polling may stop for a completed round; locally queued delivery does not.
 
 ## Trust indicator
 

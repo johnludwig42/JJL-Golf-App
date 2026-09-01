@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.22',
-  versionNumber: '31.0.22',
-  cacheName: 'the-dye-ledger-v31.0.22',
-  buildDate: '2026-08-31T21:30:00-04:00',
-  buildLabel: 'Shared Match Sync Diagnostics'
+  version: 'v31.0.23',
+  versionNumber: '31.0.23',
+  cacheName: 'the-dye-ledger-v31.0.23',
+  buildDate: '2026-09-01T11:00:00-04:00',
+  buildLabel: 'Persistent Shared Score Delivery'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -563,6 +563,11 @@ let supabaseInitPromise = null;
 const sharedMatchSyncTimers = new Map();
 const sharedMatchSyncInflight = new Map();
 const sharedMatchSyncDirty = new Map();
+let sharedOutboxDrainInflight = null;
+let sharedOutboxDrainRequested = false;
+let sharedOutboxDrainContinuationTimer = null;
+const sharedOutboxPermanentFailureMatches = new Set();
+const SHARED_OUTBOX_DRAIN_MATCH_LIMIT = 2;
 const SHARED_MATCH_SYNC_DEBOUNCE_MS = 200;
 const SHARED_PARTICIPANT_REFRESH_MS = 30000;
 const SHARED_CONNECTION_FAST_REFRESH_MS = 3000;
@@ -1410,6 +1415,7 @@ function getSharedScoreOutboxOperations(matchOrId = null, storage = localStorage
   return readSharedScoreOutbox(storage).operations.filter(row => String(row.matchId) === String(matchId));
 }
 function queueSharedScoreOperation(match, playerId, holeNumber, options = {}, storage = localStorage) {
+  sharedOutboxPermanentFailureMatches.delete(String(match?.sharedMatchId || match?.id || ''));
   if (!match || match.storageMode !== 'shared' || options.source === 'remote') return null;
   const matchId = String(match.sharedMatchId || match.id || '');
   const key = getSharedPlayerHoleKey(playerId, holeNumber);
@@ -13973,6 +13979,78 @@ async function submitPendingSharedScoreOperations(client, match, scoreEntries = 
   currentMatch.lastSharedScorePushAt = new Date().toISOString();
   return { submitted: operations.length, acknowledged, acknowledgedIds, fallback };
 }
+function getSharedMatchesWithPendingScoreOperations(matches = state.matches, storage = localStorage) {
+  return (Array.isArray(matches) ? matches : []).filter(match =>
+    match?.storageMode === 'shared'
+      && !!match.sharedMatchId
+      && getSharedScoreOutboxOperations(match, storage).length > 0
+  );
+}
+function isPermanentSharedScoreDeliveryError(error) {
+  const code = String(error?.code || error?.status || '').toUpperCase();
+  const message = String(error?.message || error?.details || '').toLowerCase();
+  return ['401', '403', '42501', 'PGRST301'].includes(code)
+    || /not authorized|permission denied|membership|assignment|not assigned|row-level security/.test(message);
+}
+async function drainPendingSharedScoreOperationsForMatch(matchOrId, { storage = localStorage } = {}) {
+  let match = getCanonicalSharedMatch(matchOrId);
+  if (!match || match.storageMode !== 'shared' || !match.sharedMatchId) return { ok: true, skipped: true, pending: 0 };
+  const pendingBefore = getSharedScoreOutboxOperations(match, storage).length;
+  if (!pendingBefore) return { ok: true, skipped: true, pending: 0 };
+  try {
+    const client = await ensureSupabaseClient();
+    if (!client) throw new Error('Supabase is not configured.');
+    match = getCanonicalSharedMatch(matchOrId) || match;
+    const payload = buildCloudMatchPayload(match);
+    const result = await submitPendingSharedScoreOperations(client, match, payload.scoreEntries, { storage });
+    match = getCanonicalSharedMatch(matchOrId) || match;
+    match.lastSharedSyncError = '';
+    match.lastSharedSyncErrorCode = '';
+    if (!getSharedScoreOutboxOperations(match, storage).length) match.cloudSyncState = 'pending-sync';
+    persist({ skipRender: true });
+    return { ok: true, skipped: false, pendingBefore, pending: getSharedScoreOutboxOperations(match, storage).length, ...result };
+  } catch (error) {
+    match = getCanonicalSharedMatch(matchOrId) || match;
+    recordSharedCloudFailure(match, error, { explicit: false, phase: 'score-delivery' });
+    persist({ skipRender: true });
+    return { ok: false, skipped: false, pendingBefore, pending: getSharedScoreOutboxOperations(match, storage).length, permanent: isPermanentSharedScoreDeliveryError(error), error };
+  }
+}
+async function drainPendingSharedScoreOutboxes({ matches = state.matches, storage = localStorage, matchLimit = SHARED_OUTBOX_DRAIN_MATCH_LIMIT, delivery = drainPendingSharedScoreOperationsForMatch, cloudAvailable = hasSupabaseConfig(), scheduleContinuation = true } = {}) {
+  if (!cloudAvailable || (typeof navigator !== 'undefined' && navigator.onLine === false)) return { drained: 0, remaining: getSharedMatchesWithPendingScoreOperations(matches, storage).length, results: [] };
+  if (sharedOutboxDrainInflight) {
+    sharedOutboxDrainRequested = true;
+    return sharedOutboxDrainInflight;
+  }
+  const task = (async () => {
+    const candidates = getSharedMatchesWithPendingScoreOperations(matches, storage)
+      .filter(match => !sharedOutboxPermanentFailureMatches.has(String(match.sharedMatchId || match.id || '')))
+      .slice(0, Math.max(1, Number(matchLimit) || 1));
+    const results = [];
+    for (const match of candidates) {
+      const result = await delivery(match, { storage });
+      const deliveryId = String(match.sharedMatchId || match.id || '');
+      if (result.permanent) sharedOutboxPermanentFailureMatches.add(deliveryId);
+      else if (result.ok) sharedOutboxPermanentFailureMatches.delete(deliveryId);
+      results.push({ matchId: match.id, ...result });
+    }
+    return { drained: results.filter(result => result.ok && !result.skipped).length, remaining: getSharedMatchesWithPendingScoreOperations(matches, storage).length, results };
+  })();
+  sharedOutboxDrainInflight = task;
+  try {
+    return await task;
+  } finally {
+    sharedOutboxDrainInflight = null;
+    const retryableRemain = getSharedMatchesWithPendingScoreOperations(matches, storage).some(match => !sharedOutboxPermanentFailureMatches.has(String(match.sharedMatchId || match.id || '')));
+    if (scheduleContinuation && (sharedOutboxDrainRequested || retryableRemain)) {
+      sharedOutboxDrainRequested = false;
+      if (!sharedOutboxDrainContinuationTimer) sharedOutboxDrainContinuationTimer = window.setTimeout(() => {
+        sharedOutboxDrainContinuationTimer = null;
+        void drainPendingSharedScoreOutboxes();
+      }, SHARED_SCORE_REFRESH_MS);
+    }
+  }
+}
 async function uploadSharedMatch(match) {
   const client = await ensureSupabaseClient();
   if (!client) throw new Error('Supabase is not configured.');
@@ -14432,8 +14510,10 @@ async function reconcileSharedMatchBeforeSummary(match, { silent = true } = {}) 
 }
 function startSharedScoreRefresh() {
   if (sharedScoreRefreshTimer) return;
+  void drainPendingSharedScoreOutboxes();
   sharedScoreRefreshTimer = window.setInterval(async () => {
     if (document.visibilityState === 'hidden') return;
+    await drainPendingSharedScoreOutboxes();
     const match = getActiveMatch();
     if (!match || match.storageMode !== 'shared' || match.status === 'complete') return;
     await ensureSharedRealtimeSubscription(match);
@@ -15043,6 +15123,7 @@ window.addEventListener('resize', updateAppChromeOffset);
 window.addEventListener('orientationchange', () => window.setTimeout(updateAppChromeOffset, 120));
 
 window.addEventListener('pagehide', () => {
+  void drainPendingSharedScoreOutboxes();
   const active = getActiveMatch();
   if (!active || active.storageMode !== 'shared') return;
   try { applyCurrentHoleDomToMatch(active); } catch (err) {}
@@ -15050,6 +15131,7 @@ window.addEventListener('pagehide', () => {
   scheduleSharedMatchSync(active, { immediate: true, silent: true });
 });
 document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'hidden') void drainPendingSharedScoreOutboxes();
   const active = getActiveMatch();
   if (!active || active.storageMode !== 'shared') return;
   if (document.visibilityState !== 'hidden') {
@@ -15071,6 +15153,7 @@ window.addEventListener('offline', () => {
   renderAll();
 });
 window.addEventListener('online', () => {
+  void drainPendingSharedScoreOutboxes();
   const active = getActiveMatch();
   if (active?.storageMode === 'shared') {
     recordSharedSyncDiagnostic(active, 'RECONNECT', { reason: 'network-online' });
@@ -15081,6 +15164,7 @@ window.addEventListener('online', () => {
   refreshActiveSharedScores({ silent: true });
 });
 window.addEventListener('focus', () => {
+  void drainPendingSharedScoreOutboxes();
   const active = getActiveMatch();
   if (active?.storageMode === 'shared' && (active.lastSharedSyncError || active.cloudSyncState === 'pending-sync')) scheduleSharedMatchSync(active, { immediate: true, silent: true });
   refreshActiveSharedParticipants({ silent: true });
@@ -25129,6 +25213,10 @@ function installDyeLedgerLiveEngineAdapter() {
     acknowledgeSharedScoreOperations,
     buildPendingSharedScoreOperations,
     submitPendingSharedScoreOperations,
+    getSharedMatchesWithPendingScoreOperations,
+    isPermanentSharedScoreDeliveryError,
+    drainPendingSharedScoreOperationsForMatch,
+    drainPendingSharedScoreOutboxes,
     getMomentumRangeOptions,
     getMomentumChartKeyForRange,
     canEditGreenies,

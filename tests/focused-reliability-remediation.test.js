@@ -102,7 +102,10 @@ test('120 varied player-selection interactions preserve slot, team, tee, uniquen
     const before = draft.map(row => ({ ...row }));
     const pick = option(slot, target.id, ['mouse', 'touch', 'pen'][cycle % 3]);
     const calls = [];
-    if (cycle % 2) engine.handlePlayerComboboxOptionPointerDown(pick.event, (...args) => calls.push(args));
+    if (cycle % 2) {
+      const handled = engine.handlePlayerComboboxOptionPointerDown(pick.event, (...args) => calls.push(args));
+      if (!handled) engine.selectPlayerComboboxOption(pick.candidate, (...args) => calls.push(args));
+    }
     else engine.selectPlayerComboboxOption(pick.candidate, (...args) => calls.push(args));
     assert.equal(calls.length, 1);
     draft = engine.updatePlayerDraftSlot(draft, calls[0][0], calls[0][1], { playersPerTeam: 2, defaultTeeId: 'gold' });

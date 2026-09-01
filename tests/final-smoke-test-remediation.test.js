@@ -56,7 +56,7 @@ test('Library markup has unique IDs and bounded course-management styling', () =
   assert.match(css, /@media \(max-width:700px\)[\s\S]*?\.library-course-actions\{align-items:stretch;justify-content:stretch/);
 });
 
-test('mouse and touch pointerdown select once through the authoritative option helper', () => {
+test('mouse pointerdown selects once while touch waits for click so dragging can scroll', () => {
   const engine = loadLiveEngine();
   for (const pointerType of ['mouse', 'touch']) {
     const calls = [];
@@ -68,8 +68,10 @@ test('mouse and touch pointerdown select once through the authoritative option h
       button: 0,
       preventDefault: () => { prevented += 1; },
     };
-    assert.equal(engine.handlePlayerComboboxOptionPointerDown(event, (...args) => calls.push(args)), true);
-    assert.equal(prevented, 1);
+    const handled = engine.handlePlayerComboboxOptionPointerDown(event, (...args) => calls.push(args));
+    assert.equal(handled, pointerType === 'mouse');
+    assert.equal(prevented, pointerType === 'mouse' ? 1 : 0);
+    if (pointerType === 'touch') assert.equal(engine.selectPlayerComboboxOption(candidate, (...args) => calls.push(args)), true);
     assert.deepEqual(JSON.parse(JSON.stringify(calls)), [[pointerType === 'mouse' ? 0 : 2, `${pointerType}-player`, { preserveFocus: false }]]);
     assert.equal(engine.selectPlayerComboboxOption(candidate, (...args) => calls.push(args)), false);
     assert.equal(calls.length, 1, 'the subsequent activation must not assign twice');

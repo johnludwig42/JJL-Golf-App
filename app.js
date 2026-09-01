@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.24',
-  versionNumber: '31.0.24',
-  cacheName: 'the-dye-ledger-v31.0.24',
-  buildDate: '2026-09-01T17:00:00-04:00',
-  buildLabel: 'Round Lifecycle and Post-Round Clarity'
+  version: 'v31.0.25',
+  versionNumber: '31.0.25',
+  cacheName: 'the-dye-ledger-v31.0.25',
+  buildDate: '2026-09-02T11:00:00-04:00',
+  buildLabel: 'Setup and Library Input Reliability'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -3110,7 +3110,38 @@ function getSelectablePlayersForDraftSlot(players = [], draftRows = [], slot = -
 function getPlayerComboboxMatches(query = '', candidates = [], currentPlayer = null) {
   const normalized = String(query || '').trim().toLowerCase();
   const effectiveQuery = currentPlayer && normalized === getPlayerLookupLabel(currentPlayer).toLowerCase() ? '' : normalized;
-  return (candidates || []).filter(player => !effectiveQuery || getPlayerLookupLabel(player).toLowerCase().includes(effectiveQuery));
+  return orderPlayerComboboxCandidates((candidates || []).filter(player => !effectiveQuery || getPlayerLookupLabel(player).toLowerCase().includes(effectiveQuery)), effectiveQuery);
+}
+function getPlayerLastPlayedAt(playerId) {
+  return state.matches
+    .filter(match => (match.players || []).some(row => String(row.playerId) === String(playerId)))
+    .map(match => String(match.date || match.completedAt || match.updatedAt || match.createdAt || ''))
+    .filter(Boolean)
+    .sort((a, b) => b.localeCompare(a))[0] || '';
+}
+function getPlayerComboboxMatchRank(player, query = '') {
+  const needle = String(query || '').trim().toLowerCase();
+  if (!needle) return 0;
+  const name = String(player?.name || '').trim().toLowerCase();
+  const label = getPlayerLookupLabel(player).toLowerCase();
+  if (label === needle) return 0;
+  if (name === needle) return 1;
+  if (name.startsWith(needle)) return 2;
+  if (name.split(/\s+/).some(word => word.startsWith(needle))) return 3;
+  return 4;
+}
+function orderPlayerComboboxCandidates(players = [], query = '') {
+  const needle = String(query || '').trim().toLowerCase();
+  return [...players].sort((a, b) => {
+    if (needle) {
+      const rankDiff = getPlayerComboboxMatchRank(a, needle) - getPlayerComboboxMatchRank(b, needle);
+      if (rankDiff) return rankDiff;
+    } else {
+      const recencyDiff = getPlayerLastPlayedAt(b.id).localeCompare(getPlayerLastPlayedAt(a.id));
+      if (recencyDiff) return recencyDiff;
+    }
+    return String(a.name || '').localeCompare(String(b.name || '')) || String(a.id || '').localeCompare(String(b.id || ''));
+  });
 }
 function getCourseSearchValue() {
   return String(uiState.courseSearch || document.getElementById('coursesSearchInput')?.value || '').trim().toLowerCase();
@@ -19717,26 +19748,39 @@ function buildSelectedGamesSummary(match, metrics) {
   return `<div class="game-summary-grid">${cards.join('')}</div>`;
 }
 
+function rebuildSelectOptionsPreservingValue(select, optionsHtml, { fallback = '' } = {}) {
+  if (!select) return '';
+  const priorValue = String(select.value || '');
+  select.innerHTML = optionsHtml;
+  const restorable = priorValue && Array.from(select.options || []).some(option => String(option.value) === priorValue);
+  select.value = restorable ? priorValue : String(fallback || '');
+  return select.value;
+}
 function populateCourseSelects() {
-  const courses = getDedupedCourseOptions(document.getElementById('teeCourseSelect')?.value || '');
+  const select = document.getElementById('teeCourseSelect');
+  const courses = getDedupedCourseOptions(select?.value || '');
   const options = courses.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
-  document.getElementById('teeCourseSelect').innerHTML = `<option value="">Select course</option>${options}`;
+  rebuildSelectOptionsPreservingValue(select, `<option value="">Select course</option>${options}`);
 }
 function populateCalcPlayers() {
   const options = state.players.map(p => `<option value="${p.id}">${escapeHtml(p.name)} (${Number(p.index).toFixed(1)})</option>`).join('');
-  document.getElementById('calcPlayer').innerHTML = `<option value="">Select player</option>${options}`;
+  rebuildSelectOptionsPreservingValue(document.getElementById('calcPlayer'), `<option value="">Select player</option>${options}`);
 }
 function populateCalcCourses() {
-  const courses = getDedupedCourseOptions(document.getElementById('calcCourse')?.value || '');
+  const courseSelect = document.getElementById('calcCourse');
+  const priorTeeId = document.getElementById('calcTee')?.value || '';
+  const courses = getDedupedCourseOptions(courseSelect?.value || '');
   const options = courses.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
-  document.getElementById('calcCourse').innerHTML = `<option value="">Select course</option>${options}`;
-  populateCalcTees();
+  rebuildSelectOptionsPreservingValue(courseSelect, `<option value="">Select course</option>${options}`);
+  populateCalcTees(priorTeeId);
 }
-function populateCalcTees() {
+function populateCalcTees(selectedTeeId = null) {
   const courseId = document.getElementById('calcCourse').value;
   const teeSelect = document.getElementById('calcTee');
   const course = getCourse(courseId);
-  teeSelect.innerHTML = !course ? '<option value="">Select tee</option>' : `<option value="">Select tee</option>${getSortedTeesByYardage(course).map(t => `<option value="${t.id}">${formatTeeSummary(t)}</option>`).join('')}`;
+  if (selectedTeeId != null) teeSelect.value = selectedTeeId;
+  const options = !course ? '<option value="">Select tee</option>' : `<option value="">Select tee</option>${getSortedTeesByYardage(course).map(t => `<option value="${t.id}">${formatTeeSummary(t)}</option>`).join('')}`;
+  rebuildSelectOptionsPreservingValue(teeSelect, options);
 }
 function populateMatchCourseSelects(selectedCourseId = null, selectedTeeId = null) {
   const courses = getDedupedCourseOptions(selectedCourseId || '');
@@ -20235,7 +20279,7 @@ function populateMatchPlayerPicker(selected = []) {
     const current = selectedBySlot[idx] || '';
     const currentPlayer = getPlayer(current);
     const currentTeeId = teeBySlot[idx] || '';
-    const selectablePlayers = getSelectablePlayersForDraftSlot(state.players, draftSelections, idx);
+    const selectablePlayers = orderPlayerComboboxCandidates(getSelectablePlayersForDraftSlot(state.players, draftSelections, idx));
     const hasSavedPlayers = state.players.length > 0;
     const teamLabel = teamNames[teamNo - 1] || `Team ${teamNo}`;
     const slotLabel = `${teamLabel}, Player ${slotNo}`;
@@ -20254,7 +20298,7 @@ function populateMatchPlayerPicker(selected = []) {
             <input id="${inputId}" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="${listId}" data-player-combobox-slot="${idx}" data-slot-team="${teamNo}" placeholder="Search saved players" value="${escapeHtml(currentPlayer ? getPlayerLookupLabel(currentPlayer) : '')}" autocomplete="off" ${hasSavedPlayers ? '' : 'disabled'} />
             ${currentPlayer ? `<button type="button" class="player-combobox-clear" data-clear-player-slot="${idx}" aria-label="Clear ${escapeHtml(slotLabel)} assignment">×</button>` : ''}
           </div>
-          <div id="${listId}" class="player-combobox-list hidden" role="listbox" data-player-combobox-list="${idx}">${selectablePlayers.map((player, optionIndex) => `<button type="button" id="${listId}_option_${optionIndex}" class="player-combobox-option" role="option" aria-selected="${player.id === current ? 'true' : 'false'}" data-player-combobox-option="${idx}" data-player-id="${escapeHtml(player.id)}" data-player-label="${escapeHtml(getPlayerLookupLabel(player).toLowerCase())}"><span>${getPlayerDisplayHtml(player, { wrapperClass: 'player-label-inline', nameClass: 'player-label-name', indexClass: 'player-label-index' })}</span></button>`).join('')}<div class="player-combobox-empty tiny hidden" data-player-combobox-empty="${idx}">No saved players match.</div></div>
+          <div id="${listId}" class="player-combobox-list hidden" role="listbox" data-player-combobox-list="${idx}"><div class="player-combobox-count tiny" data-player-combobox-count="${idx}">${selectablePlayers.length} of ${selectablePlayers.length} players</div>${selectablePlayers.map((player, optionIndex) => `<button type="button" id="${listId}_option_${optionIndex}" class="player-combobox-option" role="option" aria-selected="${player.id === current ? 'true' : 'false'}" data-player-combobox-option="${idx}" data-player-id="${escapeHtml(player.id)}" data-player-label="${escapeHtml(getPlayerLookupLabel(player).toLowerCase())}"><span>${getPlayerDisplayHtml(player, { wrapperClass: 'player-label-inline', nameClass: 'player-label-name', indexClass: 'player-label-index' })}</span></button>`).join('')}<div class="player-combobox-empty tiny hidden" data-player-combobox-empty="${idx}">No saved players match.</div></div>
         </div>
         ${teeSelect}
       </div>
@@ -20301,6 +20345,28 @@ function closePlayerCombobox(inputEl, { restoreInvalid = true } = {}) {
   return !!match;
 }
 
+function positionPlayerCombobox(inputEl, list = null) {
+  if (!inputEl) return null;
+  const targetList = list || document.querySelector(`[data-player-combobox-list="${Number(inputEl.dataset.playerComboboxSlot)}"]`);
+  if (!targetList) return null;
+  const rect = inputEl.getBoundingClientRect();
+  const viewportHeight = Math.max(0, Number(window.innerHeight) || document.documentElement.clientHeight || 0);
+  const gap = 8;
+  const spaceBelow = Math.max(0, viewportHeight - rect.bottom - gap);
+  const spaceAbove = Math.max(0, rect.top - gap);
+  const openAbove = spaceBelow < 132 && spaceAbove > spaceBelow;
+  const available = openAbove ? spaceAbove : spaceBelow;
+  const maxHeight = Math.max(72, Math.min(240, Math.floor(available)));
+  targetList.classList.toggle('opens-above', openAbove);
+  targetList.style.maxHeight = `${maxHeight}px`;
+  targetList.dataset.openDirection = openAbove ? 'above' : 'below';
+  return { openAbove, maxHeight, spaceAbove, spaceBelow };
+}
+
+function repositionOpenPlayerComboboxes() {
+  document.querySelectorAll('[data-player-combobox-slot][aria-expanded="true"]').forEach(input => positionPlayerCombobox(input));
+}
+
 function filterPlayerCombobox(inputEl, { open = true } = {}) {
   if (!inputEl) return [];
   const slot = Number(inputEl.dataset.playerComboboxSlot);
@@ -20311,7 +20377,13 @@ function filterPlayerCombobox(inputEl, { open = true } = {}) {
   const optionPlayers = Array.from(list.querySelectorAll('[data-player-combobox-option]'))
     .map(option => getPlayer(option.dataset.playerId))
     .filter(Boolean);
-  const matchingIds = new Set(getPlayerComboboxMatches(inputEl.value, optionPlayers, currentPlayer).map(player => String(player.id)));
+  const matches = getPlayerComboboxMatches(inputEl.value, optionPlayers, currentPlayer);
+  const matchingIds = new Set(matches.map(player => String(player.id)));
+  const optionsByPlayerId = new Map(Array.from(list.querySelectorAll('[data-player-combobox-option]')).map(option => [String(option.dataset.playerId), option]));
+  matches.forEach(player => {
+    const option = optionsByPlayerId.get(String(player.id));
+    if (option) list.appendChild(option);
+  });
   const visible = Array.from(list.querySelectorAll('[data-player-combobox-option]')).filter(option => {
     const show = matchingIds.has(String(option.dataset.playerId));
     option.classList.toggle('hidden', !show);
@@ -20319,7 +20391,10 @@ function filterPlayerCombobox(inputEl, { open = true } = {}) {
     return show;
   });
   list.querySelector(`[data-player-combobox-empty="${slot}"]`)?.classList.toggle('hidden', visible.length > 0);
+  const count = list.querySelector(`[data-player-combobox-count="${slot}"]`);
+  if (count) count.textContent = `${visible.length} of ${optionPlayers.length} players`;
   list.classList.toggle('hidden', !open);
+  if (open) positionPlayerCombobox(inputEl, list);
   inputEl.setAttribute('aria-expanded', open ? 'true' : 'false');
   inputEl.removeAttribute('aria-activedescendant');
   inputEl.dataset.activeOptionIndex = '-1';
@@ -20352,6 +20427,7 @@ function scrollToActiveHoleScoringTop({ behavior = 'smooth' } = {}) {
 function handlePlayerComboboxOptionPointerDown(event, assign = assignPlayerToSlot) {
   const option = event.target.closest?.('[data-player-combobox-option]');
   if (!option || (event.pointerType === 'mouse' && event.button !== 0)) return false;
+  if (event.pointerType && event.pointerType !== 'mouse') return false;
   event.preventDefault();
   return selectPlayerComboboxOption(option, assign);
 }
@@ -22750,6 +22826,16 @@ function installHandlers() {
   matchPlayersPickerEl.addEventListener('keydown', handlePlayerComboboxKeydown);
   matchPlayersPickerEl.addEventListener('pointerdown', handlePlayerComboboxOptionPointerDown);
   matchPlayersPickerEl.addEventListener('pointerdown', handlePlayerComboboxClearPointerDown);
+  matchPlayersPickerEl.addEventListener('pointerdown', e => {
+    const list = e.target.closest('[data-player-combobox-list]');
+    if (list) list.dataset.pointerInteraction = 'true';
+  });
+  const finishComboboxPointerInteraction = e => {
+    const list = e.target.closest?.('[data-player-combobox-list]');
+    if (list) window.setTimeout(() => { delete list.dataset.pointerInteraction; }, 0);
+  };
+  matchPlayersPickerEl.addEventListener('pointerup', finishComboboxPointerInteraction);
+  matchPlayersPickerEl.addEventListener('pointercancel', finishComboboxPointerInteraction);
   matchPlayersPickerEl.addEventListener('click', e => {
     const option = e.target.closest('[data-player-combobox-option]');
     if (option) {
@@ -22765,9 +22851,12 @@ function installHandlers() {
     window.setTimeout(() => {
       if (!input.isConnected) return;
       const row = input.closest('[data-assignment-slot]');
-      if (row && !row.contains(document.activeElement)) closePlayerCombobox(input, { restoreInvalid: true });
+      const list = row?.querySelector('[data-player-combobox-list]');
+      if (row && !row.contains(document.activeElement) && list?.dataset.pointerInteraction !== 'true') closePlayerCombobox(input, { restoreInvalid: true });
     }, 0);
   });
+  window.addEventListener('resize', repositionOpenPlayerComboboxes);
+  window.addEventListener('orientationchange', repositionOpenPlayerComboboxes);
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && closeSharedMatchDetails()) return;
     if (e.key === 'Escape' && !document.getElementById('playerDetailDialog')?.classList.contains('hidden')) closePlayerDetailView();
@@ -24995,6 +25084,16 @@ function installDyeLedgerLiveEngineAdapter() {
     getPlayerByLookupLabel,
     getSelectablePlayersForDraftSlot,
     getPlayerComboboxMatches,
+    getPlayerLastPlayedAt,
+    getPlayerComboboxMatchRank,
+    orderPlayerComboboxCandidates,
+    positionPlayerCombobox,
+    filterPlayerCombobox,
+    rebuildSelectOptionsPreservingValue,
+    populateCourseSelects,
+    populateCalcPlayers,
+    populateCalcCourses,
+    populateCalcTees,
     updatePlayerDraftSlot,
     reconcilePlayerDraftSlots,
     getPlayerTeeSlotStates,

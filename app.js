@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.20',
-  versionNumber: '31.0.20',
-  cacheName: 'the-dye-ledger-v31.0.20',
-  buildDate: '2026-08-30T18:30:00-04:00',
-  buildLabel: 'Clear Save Status and Round History'
+  version: 'v31.0.21',
+  versionNumber: '31.0.21',
+  cacheName: 'the-dye-ledger-v31.0.21',
+  buildDate: '2026-08-31T12:00:00-04:00',
+  buildLabel: 'Story Review Surface'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -7316,15 +7316,22 @@ function buildRoundRecapControls(match) {
   const configured = !!getRoundRecapUrl();
   const joinedWaiting = match.storageMode === 'shared' && !isCurrentDeviceMatchHost(match);
   const disabled = !online || !configured || joinedWaiting;
+  const canAuthor = !joinedWaiting;
   const memoryCount = getRoundMemories(match).length;
   const reason = joinedWaiting ? 'The Shared Match host prepares and accepts the Story for this round.' : (!configured ? 'Configure Supabase to enable the AI Story of the Round.' : (!online ? 'Story generation requires an internet connection.' : `The Story uses Round Notes plus ${memoryCount} saved memor${memoryCount === 1 ? 'y' : 'ies'}.`));
   const editing = !!uiState.roundRecapEditing && !!recap;
   const recapStatus = hasNewDraft ? (buildRoundRecapStatus(match) || 'New draft recap ready for host review.')
     : (finalRecap ? 'Saved Story ready for the Ledger Entry.' : (draftRecap ? 'Draft Story ready for review.' : (buildRoundRecapStatus(match) || reason)));
   const validationIssues = Array.isArray(match.roundRecapValidationIssues) ? match.roundRecapValidationIssues : [];
-  const recapPreview = recap ? (editing
+  const recapPreview = recap ? (editing && canAuthor
     ? `<textarea id="roundRecapEditBox" class="round-recap-edit-box" rows="10">${escapeHtml(recap)}</textarea>`
     : `<div class="round-recap-preview">${formatRoundRecapHtml(recap)}</div>`) : '';
+  const storyActions = recap
+    ? `${canAuthor ? '<button id="acceptRoundRecapBtn" type="button">Save Story</button>' : ''}
+       ${canAuthor ? `<button id="editRoundRecapBtn" type="button" class="secondary">${editing ? 'Stop Editing' : 'Edit'}</button>` : ''}
+       ${canAuthor ? `<button id="generateRoundRecapBtn" type="button" class="secondary" ${disabled ? 'disabled' : ''}>Regenerate Story</button>` : ''}
+       ${canAuthor ? '<button id="clearRoundRecapBtn" type="button" class="secondary">Clear Story</button>' : ''}`
+    : `<button id="generateRoundRecapBtn" type="button" class="secondary" ${disabled ? 'disabled' : ''}>Generate Story</button>`;
   return `
     <div class="round-recap-control-card no-print">
       <div>
@@ -7332,19 +7339,20 @@ function buildRoundRecapControls(match) {
         <div class="tiny">${escapeHtml(recapStatus)}</div>
         ${validationIssues.length ? `<div class="round-recap-review-warning" role="status"><strong>Review required</strong><ul>${validationIssues.map(issue => `<li>${escapeHtml(issue.message || issue.code || 'Generated recap needs review.')}</li>`).join('')}</ul></div>` : ''}
       </div>
-      <div class="round-recap-notes-field">
-        <label for="roundRecapNotesBox">Round Notes for the Story</label>
-        <div class="tiny">Add context the scorecard cannot see — funny moments, clutch shots, weather, side bets, injuries, pace, or anything worth remembering. Memories captured on the Play tab are also included.</div>
-        <textarea id="roundRecapNotesBox" rows="7" placeholder="Example: Tom birdied 16 to close out match play. Mike holed a bunker shot on 8. Wind picked up on the back nine.">${escapeHtml(match.roundRecapNotes || '')}</textarea>
+      ${recap ? `<div id="roundRecapStoryTarget" class="round-recap-story-target" tabindex="-1">${recapPreview}</div>` : ''}
+      <div class="actions wrap compact-actions round-recap-primary-actions">
+        ${storyActions}
       </div>
-      ${buildRecapInputTransparency(match)}
-      <div class="actions wrap compact-actions">
-        <button id="generateRoundRecapBtn" type="button" class="secondary" ${disabled ? 'disabled' : ''}>${recap ? 'Regenerate Story' : 'Generate Story'}</button>
-        ${recap ? `<button id="editRoundRecapBtn" type="button" class="secondary">${editing ? 'Stop Editing' : 'Edit'}</button>` : ''}
-        ${recap ? '<button id="acceptRoundRecapBtn" type="button">Save Story</button>' : ''}
-        ${recap ? '<button id="clearRoundRecapBtn" type="button" class="secondary">Clear Story</button>' : ''}
-      </div>
-      ${recapPreview}
+      ${joinedWaiting && recap ? '<div class="tiny">This Story is read-only on this device. The Shared Match host can edit or replace it.</div>' : ''}
+      <details class="round-recap-supporting-details" ${recap ? '' : 'open'}>
+        <summary>Story notes and source details</summary>
+        <div class="round-recap-notes-field">
+          <label for="roundRecapNotesBox">Round Notes for the Story</label>
+          <div class="tiny">Add context the scorecard cannot see — funny moments, clutch shots, weather, side bets, injuries, pace, or anything worth remembering. Memories captured on the Play tab are also included.</div>
+          <textarea id="roundRecapNotesBox" rows="7" ${canAuthor ? '' : 'disabled'} placeholder="Example: Tom birdied 16 to close out match play. Mike holed a bunker shot on 8. Wind picked up on the back nine.">${escapeHtml(match.roundRecapNotes || '')}</textarea>
+        </div>
+        ${buildRecapInputTransparency(match)}
+      </details>
     </div>`;
 }
 function summarizeSelectedGamesForRecap(match, metrics) {
@@ -16877,6 +16885,12 @@ function hideRoundEndPrompt() {
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
 }
+const DEFAULT_EARLY_ROUND_END_REASON = 'darkness';
+const EARLY_ROUND_END_REASONS = new Set(['darkness', 'weather', 'injury', 'conceded', 'endedEarly', 'other']);
+function normalizeEarlyRoundEndReason(value) {
+  const reason = String(value || '').trim();
+  return EARLY_ROUND_END_REASONS.has(reason) ? reason : DEFAULT_EARLY_ROUND_END_REASON;
+}
 function showRoundEndPrompt(mode, match = getActiveMatch()) {
   if (!match) return toast('No active match.');
   const authority = getRoundFinalizationAuthority(match);
@@ -16913,7 +16927,7 @@ function showRoundEndPrompt(mode, match = getActiveMatch()) {
     text.textContent = `${completed} of ${requested} holes completed. ${describeRoundDataCompletion(dataCompletion)}. Finishing now may leave reports or settlements provisional. Why did the round end early?`;
     if (reasonBox) {
       reasonBox.classList.remove('hidden');
-      const currentReason = String(match.roundEndReason || 'darkness');
+      const currentReason = normalizeEarlyRoundEndReason(match.roundEndReason);
       const options = [
         ['darkness', 'Darkness'],
         ['weather', 'Weather'],
@@ -17014,7 +17028,7 @@ async function handleRoundEndPrimary() {
   const authority = getRoundFinalizationAuthority(match);
   if (!authority.allowed) { hideRoundEndPrompt(); return toast(authority.label + '.'); }
   if (match) {
-    if (mode === 'early') match.roundEndReason = document.querySelector('input[name="roundEndReason"]:checked')?.value || 'endedEarly';
+    if (mode === 'early') match.roundEndReason = normalizeEarlyRoundEndReason(document.querySelector('input[name="roundEndReason"]:checked')?.value);
     else match.roundEndReason = 'completed';
   }
   hideRoundEndPrompt();
@@ -21693,10 +21707,15 @@ function getLedgerOpenActionLabel(match, { share = false } = {}) {
   return 'Create Story & Open Ledger';
 }
 
+function isPostRoundStoryReviewDisabled({ hasStory = false, generating = false, joinedWaiting = false } = {}) {
+  return !hasStory && (generating || joinedWaiting);
+}
+
 function getPostRoundWorkflowState(match) {
   const generating = !!match && roundRecapGenerationInFlight.has(String(match.id || 'active-round'));
   const finalStory = getFinalRoundRecap(match);
   const draftStory = getDraftRoundRecap(match);
+  const hasStory = !!(finalStory || draftStory);
   const acceptedLedger = getAcceptedLedgerEntrySnapshot(match);
   const joinedWaiting = !!match && match.storageMode === 'shared' && !isCurrentDeviceMatchHost(match) && !acceptedLedger;
   return {
@@ -21706,9 +21725,28 @@ function getPostRoundWorkflowState(match) {
     storyAction: finalStory ? 'View Saved Story' : (draftStory ? 'Review Story' : (generating ? 'Generating…' : (joinedWaiting ? 'Waiting for host' : 'Generate Story'))),
     ledgerLabel: acceptedLedger ? 'Accepted and ready' : (finalStory ? 'Ready' : (joinedWaiting ? 'Waiting for host; preview available' : 'Preview available with facts-only Story')),
     ledgerAction: acceptedLedger || finalStory ? 'Open Ledger Entry' : 'Preview Ledger',
-    storyDisabled: generating || joinedWaiting,
+    storyDisabled: isPostRoundStoryReviewDisabled({ hasStory, generating, joinedWaiting }),
     ledgerReady: !!(acceptedLedger || finalStory),
   };
+}
+
+function getRoundRecapReviewTarget(match = getActiveMatch()) {
+  const hasStory = !!(getFinalRoundRecap(match) || getDraftRoundRecap(match));
+  return document.getElementById(hasStory ? 'roundRecapStoryTarget' : 'roundRecapControls');
+}
+
+function scrollRoundRecapReviewIntoView(match = getActiveMatch()) {
+  const target = getRoundRecapReviewTarget(match);
+  if (!target?.scrollIntoView) return false;
+  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  window.setTimeout(() => {
+    const current = getRoundRecapReviewTarget(match);
+    if (!current?.scrollIntoView || !current.getBoundingClientRect) return;
+    const rect = current.getBoundingClientRect();
+    const chromeHeight = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--app-chrome-height')) || 0;
+    if (rect.top < chromeHeight || rect.top > window.innerHeight * 0.72) current.scrollIntoView({ behavior: 'auto', block: 'start' });
+  }, 400);
+  return true;
 }
 
 function syncPostRoundWorkflowUi(match = getActiveMatch()) {
@@ -23413,11 +23451,12 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     renderLeaderboard();
     const story = document.getElementById('roundStoryCard');
     if (story) story.open = true;
+    window.requestAnimationFrame(() => scrollRoundRecapReviewIntoView(match));
     if (!getFinalRoundRecap(match)) uiState.pendingLedgerOpenMatchId = match.id;
     if (!getFinalRoundRecap(match) && !getDraftRoundRecap(match)) {
       await generateRoundRecapForActiveMatch();
     }
-    document.getElementById('roundRecapControls')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    window.requestAnimationFrame(() => scrollRoundRecapReviewIntoView(match));
   });
   document.getElementById('completedSummaryDoneBtn')?.addEventListener('click', exitCompletedSummaryToMatch);
   document.getElementById('completedSummaryNewMatchBtn')?.addEventListener('click', () => { hidePostRoundActions(); startCleanNewMatchSetup(); });
@@ -24732,9 +24771,12 @@ function installDyeLedgerLiveEngineAdapter() {
     buildScoresSettlement,
     buildFrozenScoresGameSummary,
     buildRoundRecapPayload,
+    buildRoundRecapControls,
     validateRoundRecapContent,
     getAutomaticRoundRecapEligibility,
     getPostRoundWorkflowState,
+    isPostRoundStoryReviewDisabled,
+    normalizeEarlyRoundEndReason,
     getPlayerModeSavePresentation,
     getLocalSavePresentation,
     getRoundLibrarySortTime,

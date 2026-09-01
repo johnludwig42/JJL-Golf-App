@@ -3042,6 +3042,30 @@ body.printing-scorecard .nine-point-scorecard-table td:nth-child(2){
   padding-top: 8px;
   line-height: 1.45;
 }
+.round-recap-story-target {
+  scroll-margin-top: calc(var(--app-chrome-height, 128px) + 12px);
+  border: 1px solid rgba(12,55,33,.12);
+  border-radius: 14px;
+  background: #fff;
+  padding: 12px;
+  outline: none;
+}
+.round-recap-story-target .round-recap-preview {
+  border-top: 0;
+  padding-top: 0;
+}
+.round-recap-primary-actions { margin-top: 2px; }
+.round-recap-supporting-details {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.round-recap-supporting-details > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+.round-recap-supporting-details[open] > summary { margin-bottom: 10px; }
 
 /* v28.11: player-specific Stat Tracking participation selector */
 .stat-participants-card {

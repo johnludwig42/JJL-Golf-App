@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.21',
-  versionNumber: '31.0.21',
-  cacheName: 'the-dye-ledger-v31.0.21',
-  buildDate: '2026-08-31T12:00:00-04:00',
-  buildLabel: 'Story Review Surface'
+  version: 'v31.0.22',
+  versionNumber: '31.0.22',
+  cacheName: 'the-dye-ledger-v31.0.22',
+  buildDate: '2026-08-31T21:30:00-04:00',
+  buildLabel: 'Shared Match Sync Diagnostics'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -385,6 +385,7 @@ function getMatchSetupDiagnosticsText() {
 function getAppDiagnosticsText() {
   const errors = readRecentAppErrors().slice(0, 5);
   const preferenceDiagnostics = getPlayerPreferencesDiagnostics();
+  const activeSharedMatch = typeof getActiveMatch === 'function' ? getActiveMatch() : null;
   const lines = [
     'The Dye Ledger Diagnostics',
     `App Version: ${APP_VERSION}`,
@@ -396,9 +397,13 @@ function getAppDiagnosticsText() {
     `Player Preferences: schema v${preferenceDiagnostics.schemaVersion} · ${preferenceDiagnostics.storageAvailable ? preferenceDiagnostics.source : 'storage unavailable'}`,
     '',
     getMatchSetupDiagnosticsText(),
-    '',
-    'Recent App Errors:'
+    ''
   ];
+  if (activeSharedMatch?.storageMode === 'shared') {
+    lines.push(getSharedSyncDiagnosticsExportText(activeSharedMatch));
+    lines.push('');
+  }
+  lines.push('Recent App Errors:');
   if (!errors.length) {
     lines.push('None');
   } else {
@@ -1226,15 +1231,152 @@ const SHARED_DIAGNOSTIC_REASON_CODES = Object.freeze([
   'SCORE_ACKNOWLEDGED',
   'SCORE_RETRY_SCHEDULED',
   'PRESENCE_HEARTBEAT_FAILED',
+  'SYNC_ATTEMPT_PARTIAL',
+  'SYNC_ATTEMPT_FAILED',
+  'SYNC_REFERENCE_REBOUND',
 ]);
+const SHARED_SYNC_DIAGNOSTIC_CHAR_BUDGET = 6144;
+const SHARED_SYNC_EXCEPTION_HEAD_COUNT = 3;
+const SHARED_SYNC_EXCEPTION_TAIL_COUNT = 3;
+function getSharedSyncDiagnosticAggregate(match) {
+  const prior = match?.sharedSyncDiagnosticAggregate;
+  return prior && typeof prior === 'object' ? prior : {
+    schemaVersion: 1,
+    attempts: 0,
+    successes: 0,
+    partials: 0,
+    failures: 0,
+    totalElapsedMs: 0,
+    maxElapsedMs: 0,
+    firstAttemptAt: null,
+    lastAttemptAt: null,
+    phases: {},
+  };
+}
+function getSharedSyncDiagnosticsSerializedSize(match, events = null) {
+  return JSON.stringify({
+    aggregate: getSharedSyncDiagnosticAggregate(match),
+    events: events || (Array.isArray(match?.sharedSyncDiagnostics) ? match.sharedSyncDiagnostics : []),
+  }).length;
+}
+function pruneSharedSyncDiagnostics(match, events = []) {
+  const rows = events.slice(-200);
+  while (rows.length && getSharedSyncDiagnosticsSerializedSize(match, rows) > SHARED_SYNC_DIAGNOSTIC_CHAR_BUDGET) {
+    const exceptional = rows.map((row, index) => ({ row, index })).filter(item => ['SYNC_ATTEMPT_PARTIAL', 'SYNC_ATTEMPT_FAILED'].includes(item.row?.reasonCode));
+    const protectedIndexes = new Set([
+      ...exceptional.slice(0, SHARED_SYNC_EXCEPTION_HEAD_COUNT),
+      ...exceptional.slice(-SHARED_SYNC_EXCEPTION_TAIL_COUNT),
+    ].map(item => item.index));
+    let removeAt = rows.findIndex((row, index) => !protectedIndexes.has(index) && !['SYNC_ATTEMPT_PARTIAL', 'SYNC_ATTEMPT_FAILED'].includes(row?.reasonCode));
+    if (removeAt < 0) removeAt = rows.findIndex((row, index) => !protectedIndexes.has(index));
+    if (removeAt < 0) removeAt = Math.floor(rows.length / 2);
+    rows.splice(removeAt, 1);
+  }
+  return rows;
+}
 function recordSharedSyncDiagnostic(match, reasonCode, detail = {}, occurredAt = new Date().toISOString()) {
   if (!match || match.storageMode !== 'shared' || !SHARED_DIAGNOSTIC_REASON_CODES.includes(reasonCode)) return null;
   const event = { reasonCode, occurredAt, ...clonePlain(detail || {}) };
   const prior = Array.isArray(match.sharedSyncDiagnostics) ? match.sharedSyncDiagnostics : [];
   const fingerprint = JSON.stringify([event.reasonCode, event.playerId || '', event.holeNumber || '', event.assignmentRevision || '', event.sourceParticipant || '', event.incomingId || '']);
   const duplicate = prior.slice(-20).some(row => JSON.stringify([row.reasonCode, row.playerId || '', row.holeNumber || '', row.assignmentRevision || '', row.sourceParticipant || '', row.incomingId || '']) === fingerprint && row.occurredAt === event.occurredAt);
-  if (!duplicate) match.sharedSyncDiagnostics = [...prior, event].slice(-200);
+  if (!duplicate) match.sharedSyncDiagnostics = pruneSharedSyncDiagnostics(match, [...prior, event]);
   return event;
+}
+function recordSharedSyncAttemptDiagnostic(match, attempt = {}) {
+  if (!match || match.storageMode !== 'shared') return null;
+  const occurredAt = String(attempt.occurredAt || new Date().toISOString());
+  const outcome = ['success', 'partial', 'failed'].includes(attempt.outcome) ? attempt.outcome : 'failed';
+  const aggregate = getSharedSyncDiagnosticAggregate(match);
+  aggregate.attempts += 1;
+  aggregate.successes += outcome === 'success' ? 1 : 0;
+  aggregate.partials += outcome === 'partial' ? 1 : 0;
+  aggregate.failures += outcome === 'failed' ? 1 : 0;
+  aggregate.totalElapsedMs += Math.max(0, Number(attempt.elapsedMs) || 0);
+  aggregate.maxElapsedMs = Math.max(aggregate.maxElapsedMs, Math.max(0, Number(attempt.elapsedMs) || 0));
+  aggregate.firstAttemptAt = aggregate.firstAttemptAt || occurredAt;
+  aggregate.lastAttemptAt = occurredAt;
+  Object.entries(attempt.phases || {}).forEach(([phase, result]) => {
+    const phaseAggregate = aggregate.phases[phase] || { ran: 0, succeeded: 0, failed: 0, totalElapsedMs: 0, maxElapsedMs: 0 };
+    phaseAggregate.ran += result?.status === 'skipped' ? 0 : 1;
+    phaseAggregate.succeeded += result?.status === 'success' ? 1 : 0;
+    phaseAggregate.failed += result?.status === 'failed' ? 1 : 0;
+    phaseAggregate.totalElapsedMs += Math.max(0, Number(result?.elapsedMs) || 0);
+    phaseAggregate.maxElapsedMs = Math.max(phaseAggregate.maxElapsedMs, Math.max(0, Number(result?.elapsedMs) || 0));
+    aggregate.phases[phase] = phaseAggregate;
+  });
+  match.sharedSyncDiagnosticAggregate = aggregate;
+  if (outcome === 'success') {
+    match.sharedSyncDiagnostics = pruneSharedSyncDiagnostics(match, match.sharedSyncDiagnostics || []);
+    return aggregate;
+  }
+  const reasonCode = outcome === 'partial' ? 'SYNC_ATTEMPT_PARTIAL' : 'SYNC_ATTEMPT_FAILED';
+  const boundedPhases = Object.fromEntries(Object.entries(attempt.phases || {}).slice(0, 4).map(([phase, result]) => [
+    String(phase).slice(0, 32),
+    {
+      status: ['success', 'failed', 'skipped'].includes(result?.status) ? result.status : 'failed',
+      elapsedMs: Math.max(0, Number(result?.elapsedMs) || 0),
+      ...(result?.errorCode ? { errorCode: String(result.errorCode).slice(0, 48) } : {}),
+    },
+  ]));
+  return recordSharedSyncDiagnostic(match, reasonCode, {
+    attemptId: String(attempt.attemptId || '').slice(0, 48),
+    elapsedMs: Math.max(0, Number(attempt.elapsedMs) || 0),
+    outboxBefore: Math.max(0, Number(attempt.outboxBefore) || 0),
+    outboxAfter: Math.max(0, Number(attempt.outboxAfter) || 0),
+    acknowledgedOperationIds: (attempt.acknowledgedOperationIds || []).map(value => String(value).slice(0, 64)).slice(0, 8),
+    phases: boundedPhases,
+    parityStatus: String(attempt.parityStatus || 'not-checked').slice(0, 40),
+  }, occurredAt);
+}
+function getSanitizedSharedSyncDiagnostics(match) {
+  if (!match || match.storageMode !== 'shared') return null;
+  const allowedEventKeys = new Set([
+    'reasonCode', 'occurredAt', 'phase', 'code', 'count', 'attemptId', 'elapsedMs',
+    'outboxBefore', 'outboxAfter', 'acknowledgedOperationIds', 'phases', 'parityStatus',
+    'holeNumber', 'assignmentRevision', 'incomingId', 'reason',
+  ]);
+  const events = (Array.isArray(match.sharedSyncDiagnostics) ? match.sharedSyncDiagnostics : []).map(row =>
+    Object.fromEntries(Object.entries(row || {}).filter(([key]) => allowedEventKeys.has(key)))
+  );
+  return {
+    schemaVersion: 1,
+    appVersion: APP_VERSION,
+    exportedAt: new Date().toISOString(),
+    role: isCurrentDeviceMatchHost(match) ? 'host' : 'joined',
+    deviceId: getSharedDeviceId(),
+    participantId: getCurrentSharedParticipantId(match),
+    syncState: String(match.cloudSyncState || ''),
+    pendingScoreCount: getSharedScoreOutboxOperations(match).length,
+    lastAttemptAt: match.lastSharedSyncAttemptAt || null,
+    lastPushAt: match.lastSharedScorePushAt || null,
+    lastPullAt: match.lastSharedScorePullAt || null,
+    lastErrorCode: String(match.lastSharedSyncErrorCode || ''),
+    parity: match.sharedLedgerParity ? {
+      status: String(match.sharedLedgerParity.status || ''),
+      confirmed: !!match.sharedLedgerParity.parityConfirmed,
+      missingLocalCount: Number(match.sharedLedgerParity.missingLocal?.length || 0),
+      missingRemoteCount: Number(match.sharedLedgerParity.missingRemote?.length || 0),
+      conflictCount: Number(match.sharedLedgerParity.conflicts?.length || 0),
+    } : null,
+    aggregate: clonePlain(getSharedSyncDiagnosticAggregate(match)),
+    events,
+  };
+}
+function getSharedSyncDiagnosticsExportText(match) {
+  const diagnostics = getSanitizedSharedSyncDiagnostics(match);
+  return diagnostics ? `Shared Match Sync Diagnostics:\n${JSON.stringify(diagnostics, null, 2)}` : 'Shared Match Sync Diagnostics: unavailable';
+}
+function getSharedSyncDiagnosticsExportMeasurement(match) {
+  const text = getSharedSyncDiagnosticsExportText(match);
+  const encoded = encodeURIComponent(text);
+  return { characters: text.length, encodedCharacters: encoded.length, fitsAppDiagnosticsLimit: text.length <= 12000 };
+}
+async function copySharedSyncDiagnostics(match = getActiveMatch()) {
+  if (!match || match.storageMode !== 'shared') return false;
+  const copied = await copyTextToClipboard(getSharedSyncDiagnosticsExportText(match));
+  toast(copied ? 'Shared Match diagnostics copied.' : 'Could not copy Shared Match diagnostics.');
+  return copied;
 }
 function getSharedScoreWriteMeta(match, playerId, holeNumber) {
   const raw = match?.sharedScoreWriteState;
@@ -1943,6 +2085,7 @@ function logSharedAssignmentDiag(label, match, extra = {}) {
 function renderSharedAssignmentDiagnosticsPanel(match, { context = 'setup' } = {}) {
   if (!match || match.storageMode !== 'shared') return '';
   const state = describeSharedAssignmentState(match);
+  const syncAggregate = getSharedSyncDiagnosticAggregate(match);
   const playerRows = state.players.map(row => `<tr><td>${escapeHtml(row.playerName)}</td><td><code>${escapeHtml(row.playerId)}</code></td><td>${escapeHtml(row.assignedParticipantName || 'Unassigned')}<div class="tiny"><code>${escapeHtml(row.assignedParticipantId || '—')}</code></div>${row.legacyAssignedDeviceId ? `<div class="tiny">legacy device <code>${escapeHtml(row.legacyAssignedDeviceId)}</code></div>` : ''}</td><td>${row.assignedParticipantId && String(row.assignedParticipantId) === String(state.currentParticipantId) ? 'Yes' : 'No'}</td><td>${row.canEdit ? 'Yes' : 'No'}<div class="tiny">${escapeHtml(row.reason)}</div></td></tr>`).join('');
   const participantRows = state.sharedParticipants.map((participant, idx) => `<tr><td>${escapeHtml(participant.deviceName || participant.name || `Participant ${idx + 1}`)}</td><td><code>${escapeHtml(participant.participantId || '')}</code></td><td><code>${escapeHtml(participant.deviceId || '')}</code></td><td>${String(participant.participantId) === String(state.currentParticipantId) ? 'Yes' : 'No'}</td><td>${String(participant.participantId) === String(state.sharedHostParticipantId) || String(participant.deviceId) === String(state.sharedHostDeviceId) ? 'Yes' : 'No'}</td><td>${escapeHtml(participant.lastSeenAt || '')}</td></tr>`).join('');
   const snapshot = {
@@ -1983,6 +2126,9 @@ function renderSharedAssignmentDiagnosticsPanel(match, { context = 'setup' } = {
     <div class="tiny top-gap"><strong>Sync</strong>: ${escapeHtml(state.sharedSyncLabel)} - Attempt: ${escapeHtml(formatSharedStatusTimestamp(state.lastSyncAttemptAt))} - Pull: ${escapeHtml(formatSharedStatusTimestamp(state.lastSuccessfulPullAt))} - Push: ${escapeHtml(formatSharedStatusTimestamp(state.lastSuccessfulPushAt))} - Local scored holes: ${escapeHtml(String(state.localScoredHoleCount || 0))}${state.lastSyncError ? ` - Last error: ${escapeHtml(state.lastSyncError)}` : ''}</div>
     <div class="tiny top-gap"><strong>Ledger</strong>: Local ${escapeHtml(JSON.stringify(state.localScoredHolesByPlayer || {}))} - Remote ${escapeHtml(JSON.stringify(state.remoteScoredHolesByPlayer || {}))} - Missing local ${escapeHtml(String((state.missingLocalEntries || []).length))} - Missing remote ${escapeHtml(String((state.missingRemoteEntries || []).length))} - Conflicts ${escapeHtml(String((state.conflictsDetected || []).length))}</div>
     <div class="tiny top-gap"><strong>Reason Codes</strong>: ${escapeHtml(state.syncDiagnostics.slice(-10).map(row => row.reasonCode).join(', ') || 'None')}</div>
+    <div class="tiny top-gap"><strong>Sync attempts</strong>: ${syncAggregate.attempts} total · ${syncAggregate.successes} completed · ${syncAggregate.partials} partly completed · ${syncAggregate.failures} failed · slowest ${Math.round(syncAggregate.maxElapsedMs || 0)}ms</div>
+    <div class="tiny top-gap">Detailed evidence keeps the first and most recent failures within a fixed local-storage budget. Routine successes are summarized rather than listed individually.</div>
+    <div class="actions wrap compact-actions top-gap"><button type="button" class="secondary" data-copy-shared-sync-diagnostics>Copy Sync Diagnostics</button></div>
     <div class="table-scroll top-gap"><table class="mini-table"><thead><tr><th>Participant</th><th>Participant ID</th><th>Device ID</th><th>Current?</th><th>Host?</th><th>Last seen</th></tr></thead><tbody>${participantRows || '<tr><td colspan="6">No participants</td></tr>'}</tbody></table></div>
     <div class="table-scroll top-gap"><table class="mini-table"><thead><tr><th>Player</th><th>Player ID</th><th>Assigned Participant</th><th>Matches Current?</th><th>Editable?</th></tr></thead><tbody>${playerRows || '<tr><td colspan="5">No players</td></tr>'}</tbody></table></div>
     <div class="tiny top-gap"><strong>Metadata Snapshot</strong></div>
@@ -9608,6 +9754,8 @@ function normalizeMatch(match) {
   match.sharedScoreOutboxInitialized = match.sharedScoreOutboxInitialized === true || !!match.lastCloudSyncAt || !!match.lastSharedScorePullAt;
   match.sharedServerRevision = Math.max(0, Number(match.sharedServerRevision || 0));
   match.sharedSyncDiagnostics = Array.isArray(match.sharedSyncDiagnostics) ? match.sharedSyncDiagnostics.slice(-200) : [];
+  match.sharedSyncDiagnosticAggregate = getSharedSyncDiagnosticAggregate(match);
+  match.sharedSyncDiagnostics = pruneSharedSyncDiagnostics(match, match.sharedSyncDiagnostics);
   match.sessionId = String(match.sessionId || match.id || uid());
   match.sessionName = String(match.sessionName || 'Session');
   match.sessionCreatedAt = match.sessionCreatedAt || match.date || todayIso();
@@ -9781,6 +9929,11 @@ function formatComboHoleTeeIndicator(courseId, comboTee, holeIdx, prefix = 'Tee'
 function getPlayer(playerId) { return state.players.find(p => p.id === playerId); }
 function getMatch(matchId = state.activeMatchId) { return state.matches.find(m => m.id === matchId) || null; }
 function getActiveMatch() { return getMatch(); }
+function getCanonicalSharedMatch(matchOrId = null) {
+  const localId = typeof matchOrId === 'string' ? String(matchOrId) : String(matchOrId?.id || '');
+  const sharedId = typeof matchOrId === 'string' ? String(matchOrId) : String(matchOrId?.sharedMatchId || '');
+  return state.matches.find(match => (localId && String(match.id) === localId) || (sharedId && String(match.sharedMatchId || '') === sharedId)) || null;
+}
 function completedHoles(match) {
   return Number(match?.lastTouchedHole) || computeMatchProgress(match).lastTouchedHole || 0;
 }
@@ -13812,11 +13965,13 @@ async function submitPendingSharedScoreOperations(client, match, scoreEntries = 
     acknowledgedIds = receipts.map(row => row?.operation_id || row?.operationId).filter(Boolean);
     if (!acknowledgedIds.length) throw new Error('Score acknowledgement was not returned. Scores remain queued safely.');
     const revision = Math.max(0, ...receipts.map(row => Number(row?.match_revision || row?.matchRevision || 0)));
-    if (revision) match.sharedServerRevision = Math.max(Number(match.sharedServerRevision || 0), revision);
+    const currentMatch = getCanonicalSharedMatch(match) || match;
+    if (revision) currentMatch.sharedServerRevision = Math.max(Number(currentMatch.sharedServerRevision || 0), revision);
   }
-  const acknowledged = acknowledgeSharedScoreOperations(match, acknowledgedIds, storage);
-  match.lastSharedScorePushAt = new Date().toISOString();
-  return { submitted: operations.length, acknowledged, fallback };
+  const currentMatch = getCanonicalSharedMatch(match) || match;
+  const acknowledged = acknowledgeSharedScoreOperations(currentMatch, acknowledgedIds, storage);
+  currentMatch.lastSharedScorePushAt = new Date().toISOString();
+  return { submitted: operations.length, acknowledged, acknowledgedIds, fallback };
 }
 async function uploadSharedMatch(match) {
   const client = await ensureSupabaseClient();
@@ -13919,34 +14074,35 @@ async function uploadSharedMatch(match) {
     const pending = getSharedScoreOutboxOperations(match);
     if (pending.length) {
       await submitPendingSharedScoreOperations(client, match, payload.scoreEntries);
-      match.sharedScoreOutboxInitialized = true;
+      (getCanonicalSharedMatch(match) || match).sharedScoreOutboxInitialized = true;
     } else if (!match.sharedScoreOutboxInitialized) {
       // Seed a pre-v31 Shared Match once. Every later save uses only the changed
       // rows retained in the durable device outbox until acknowledged.
       response = await client.from('score_entries').upsert(payload.scoreEntries, { onConflict: 'id' });
       if (response.error) throw response.error;
-      match.sharedScoreOutboxInitialized = true;
+      (getCanonicalSharedMatch(match) || match).sharedScoreOutboxInitialized = true;
     }
   }
   if (writePlan.notes) {
     response = await client.from('match_notes').upsert(payload.notesRow, { onConflict: 'match_id' });
     if (response.error) throw response.error;
   }
-  match.storageMode = 'shared';
-  match.sharedMatchId = payload.matchRow.id;
-  match.sharedMatchRef = payload.matchRow.id;
-  match.sharedOwnerUserId = user?.id || null;
-  match.cloudSyncState = 'cloud-synced';
-  match.lastCloudSyncAt = new Date().toISOString();
-  match.lastSharedScorePushAt = match.lastCloudSyncAt;
-  match.lastSharedSyncError = '';
-  match.lastSharedSyncErrorCode = '';
-  if (payload.matchRow.course_snapshot.sharedMatchMeta.sspFacts && !(match.sharedSspConflicts || []).length) {
-    match.sharedSspBaseline = JSON.parse(JSON.stringify(payload.matchRow.course_snapshot.sharedMatchMeta.sspFacts));
-    match.sharedSspSyncState = 'synced';
+  const currentMatch = getCanonicalSharedMatch(match) || match;
+  currentMatch.storageMode = 'shared';
+  currentMatch.sharedMatchId = payload.matchRow.id;
+  currentMatch.sharedMatchRef = payload.matchRow.id;
+  currentMatch.sharedOwnerUserId = user?.id || null;
+  currentMatch.cloudSyncState = 'cloud-synced';
+  currentMatch.lastCloudSyncAt = new Date().toISOString();
+  currentMatch.lastSharedScorePushAt = currentMatch.lastCloudSyncAt;
+  currentMatch.lastSharedSyncError = '';
+  currentMatch.lastSharedSyncErrorCode = '';
+  if (payload.matchRow.course_snapshot.sharedMatchMeta.sspFacts && !(currentMatch.sharedSspConflicts || []).length) {
+    currentMatch.sharedSspBaseline = JSON.parse(JSON.stringify(payload.matchRow.course_snapshot.sharedMatchMeta.sspFacts));
+    currentMatch.sharedSspSyncState = 'synced';
   }
-  rememberSharedMatchId(match.sharedMatchId);
-  return match;
+  rememberSharedMatchId(currentMatch.sharedMatchId);
+  return currentMatch;
 }
 async function fetchSharedMatchBundle(matchId) {
   const client = await ensureSupabaseClient();
@@ -14165,34 +14321,37 @@ function mergeRemoteScoreEntriesIntoMatch(match, scoreEntries = []) {
   recordSharedLedgerParity(match, comparison);
   return mergeResult.changed;
 }
-async function pullSharedScoreEntries(match, { silent = true, render = true } = {}) {
+async function pullSharedScoreEntries(match, { silent = true, render = true, strictResult = false } = {}) {
   if (!match || match.storageMode !== 'shared' || !match.sharedMatchId || !hasSupabaseConfig()) return false;
   try {
     const client = await ensureSupabaseClient();
     if (!client) return false;
     const { data, error } = await client.from('score_entries').select('*').eq('match_id', match.sharedMatchId).eq('entry_status', 'active').order('hole_number');
     if (error) throw error;
-    const changed = mergeRemoteScoreEntriesIntoMatch(match, data || []);
+    const currentMatch = getCanonicalSharedMatch(match) || match;
+    const changed = mergeRemoteScoreEntriesIntoMatch(currentMatch, data || []);
     if (changed) {
-      match.cloudSyncState = 'cloud-synced';
-      match.lastCloudSyncAt = new Date().toISOString();
-      match.lastSharedScorePullAt = match.lastCloudSyncAt;
-      match.lastSharedSyncError = '';
+      currentMatch.cloudSyncState = 'cloud-synced';
+      currentMatch.lastCloudSyncAt = new Date().toISOString();
+      currentMatch.lastSharedScorePullAt = currentMatch.lastCloudSyncAt;
+      currentMatch.lastSharedSyncError = '';
       persist({ skipRender: true });
       if (render) renderAll();
       if (!silent) toast('Shared scores updated.');
     } else {
-      match.lastSharedScorePullAt = new Date().toISOString();
-      match.lastSharedSyncError = '';
+      currentMatch.lastSharedScorePullAt = new Date().toISOString();
+      currentMatch.lastSharedSyncError = '';
       persist({ skipRender: true });
     }
-    return changed;
+    return strictResult ? { ok: true, changed, error: null } : changed;
   } catch (err) {
     console.warn('Shared score pull failed.', err);
-    match.lastSharedSyncError = getSharedFriendlyError(err);
+    const currentMatch = getCanonicalSharedMatch(match) || match;
+    currentMatch.lastSharedSyncError = getSharedFriendlyError(err);
+    currentMatch.lastSharedSyncErrorCode = getSharedSafeErrorCode(err);
     persist({ skipRender: true });
     if (!silent) toast('Could not refresh shared scores. Local scoring is still saved.');
-    return false;
+    return strictResult ? { ok: false, changed: false, error: err } : false;
   }
 }
 async function refreshActiveSharedScores({ silent = true, render = true } = {}) {
@@ -14369,6 +14528,11 @@ async function mergeCloudSharedMetadata(match, { includeAssignments = false, inc
   const localAssignmentsBefore = { ...((match.sharedPlayerAssignments && typeof match.sharedPlayerAssignments === 'object') ? match.sharedPlayerAssignments : {}) };
   const localParticipantsBefore = getSharedAssignmentParticipants(match);
   const meta = await fetchSharedMatchMetadata(match.sharedMatchId, match);
+  const currentMatch = getCanonicalSharedMatch(match);
+  if (currentMatch && currentMatch !== match) {
+    recordSharedSyncDiagnostic(currentMatch, 'SYNC_REFERENCE_REBOUND', { phase: 'metadata-merge' });
+    match = currentMatch;
+  }
   let changed = mergeSharedDevices(match, meta.devices || []);
   const beforeParticipants = JSON.stringify(getSharedAssignmentParticipants(match));
   match.sharedParticipants = normalizeSharedParticipantList([...(match.sharedParticipants || []), ...(meta.participants || [])], match.sharedDevices || [], match);
@@ -14731,7 +14895,7 @@ function clearScheduledSharedMatchSync(matchId) {
 }
 async function flushSharedMatchSync(matchId, { silent = true } = {}) {
   if (!matchId) return;
-  const match = getMatch(matchId);
+  let match = getCanonicalSharedMatch(matchId);
   if (!match || match.storageMode !== 'shared' || !hasSupabaseConfig()) return null;
   if (sharedMatchSyncInflight.has(matchId)) {
     sharedMatchSyncDirty.set(matchId, true);
@@ -14741,18 +14905,73 @@ async function flushSharedMatchSync(matchId, { silent = true } = {}) {
   match.cloudSyncState = 'syncing';
   match.lastSharedSyncAttemptAt = new Date().toISOString();
   persist({ skipRender: true });
-  const task = (async () => {
+  const attemptStartedAt = Date.now();
+  const attemptId = createSharedScoreOperationId();
+  const outboxBeforeRows = getSharedScoreOutboxOperations(match);
+  const outboxBeforeIds = new Set(outboxBeforeRows.map(row => String(row.operationId)));
+  const phases = {
+    metadataPullBefore: { status: 'skipped', elapsedMs: 0 },
+    upload: { status: 'skipped', elapsedMs: 0 },
+    scorePull: { status: 'skipped', elapsedMs: 0 },
+    metadataPullAfter: { status: 'skipped', elapsedMs: 0 },
+  };
+  const runPhase = async (name, operation) => {
+    const startedAt = Date.now();
     try {
-      if (!isCurrentDeviceMatchHost(match)) {
-        await mergeCloudSharedMetadata(match, { includeAssignments: true, includeMemories: true });
-      } else {
-        await mergeCloudSharedMetadata(match, { includeAssignments: false, includeMemories: true });
-      }
-      await uploadSharedMatch(match);
-      await pullSharedScoreEntries(match, { silent: true, render: false });
-      await mergeCloudSharedMetadata(match, { includeAssignments: !isCurrentDeviceMatchHost(match) });
+      const value = await operation();
+      phases[name] = { status: 'success', elapsedMs: Date.now() - startedAt };
+      return { ok: true, value };
+    } catch (error) {
+      phases[name] = { status: 'failed', elapsedMs: Date.now() - startedAt, errorCode: getSharedSafeErrorCode(error) };
+      return { ok: false, error };
+    }
+  };
+  const task = (async () => {
+    let failure = null;
+    try {
+      let phase = await runPhase('metadataPullBefore', async () => {
+        match = getCanonicalSharedMatch(matchId) || match;
+        return mergeCloudSharedMetadata(match, { includeAssignments: !isCurrentDeviceMatchHost(match), includeMemories: true });
+      });
+      if (!phase.ok) throw phase.error;
+      phase = await runPhase('upload', async () => {
+        match = getCanonicalSharedMatch(matchId) || match;
+        return uploadSharedMatch(match);
+      });
+      if (!phase.ok) throw phase.error;
+      const scorePull = await runPhase('scorePull', async () => {
+        match = getCanonicalSharedMatch(matchId) || match;
+        const result = await pullSharedScoreEntries(match, { silent: true, render: false, strictResult: true });
+        if (!result.ok) throw result.error || new Error('Shared score pull failed.');
+        return result;
+      });
+      if (!scorePull.ok) failure = scorePull.error;
+      phase = await runPhase('metadataPullAfter', async () => {
+        match = getCanonicalSharedMatch(matchId) || match;
+        return mergeCloudSharedMetadata(match, { includeAssignments: !isCurrentDeviceMatchHost(match) });
+      });
+      if (!phase.ok && !failure) failure = phase.error;
+      match = getCanonicalSharedMatch(matchId) || match;
       setLastOpenedSharedMatch(match);
-      match.lastSharedSyncError = '';
+      if (!failure) {
+        match.lastSharedSyncError = '';
+        match.lastSharedSyncErrorCode = '';
+      } else {
+        match.cloudSyncState = 'local-cache';
+        recordSharedCloudFailure(match, failure, { explicit: !silent, phase: phases.scorePull.status === 'failed' ? 'score-pull' : 'metadata-pull-after' });
+      }
+      const outboxAfterRows = getSharedScoreOutboxOperations(match);
+      recordSharedSyncAttemptDiagnostic(match, {
+        attemptId,
+        occurredAt: new Date().toISOString(),
+        outcome: failure ? 'partial' : 'success',
+        elapsedMs: Date.now() - attemptStartedAt,
+        outboxBefore: outboxBeforeRows.length,
+        outboxAfter: outboxAfterRows.length,
+        acknowledgedOperationIds: Array.from(outboxBeforeIds).filter(id => !outboxAfterRows.some(row => String(row.operationId) === id)),
+        phases,
+        parityStatus: match.sharedLedgerParity?.status || 'not-checked',
+      });
       persist({ skipRender: true });
       if (!silent) {
         const parity = match.sharedLedgerParity;
@@ -14765,8 +14984,21 @@ async function flushSharedMatchSync(matchId, { silent = true } = {}) {
       }
     } catch (err) {
       console.error(err);
+      match = getCanonicalSharedMatch(matchId) || match;
       match.cloudSyncState = 'local-cache';
       recordSharedCloudFailure(match, err, { explicit: !silent, phase: 'manual-sync' });
+      const outboxAfterRows = getSharedScoreOutboxOperations(match);
+      recordSharedSyncAttemptDiagnostic(match, {
+        attemptId,
+        occurredAt: new Date().toISOString(),
+        outcome: 'failed',
+        elapsedMs: Date.now() - attemptStartedAt,
+        outboxBefore: outboxBeforeRows.length,
+        outboxAfter: outboxAfterRows.length,
+        acknowledgedOperationIds: Array.from(outboxBeforeIds).filter(id => !outboxAfterRows.some(row => String(row.operationId) === id)),
+        phases,
+        parityStatus: match.sharedLedgerParity?.status || 'not-checked',
+      });
       persist({ skipRender: true });
       if (!silent) toast('Cloud sync failed. Changes are still stored locally on this device.');
     }
@@ -14781,7 +15013,7 @@ async function flushSharedMatchSync(matchId, { silent = true } = {}) {
       await flushSharedMatchSync(matchId, { silent: true });
     }
   }
-  return match.sharedLedgerParity || null;
+  return (getCanonicalSharedMatch(matchId) || match).sharedLedgerParity || null;
 }
 function scheduleSharedMatchSync(matchOrId, { immediate = false, silent = true } = {}) {
   const matchId = typeof matchOrId === 'string' ? matchOrId : (matchOrId?.id || null);
@@ -22979,6 +23211,10 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     setupWorkflowMode = 'landing';
     renderMatchSetupState();
   });
+  document.addEventListener('click', async event => {
+    if (!event.target?.closest?.('[data-copy-shared-sync-diagnostics]')) return;
+    await copySharedSyncDiagnostics(getActiveMatch());
+  });
   document.getElementById('setupJoinMatchBtn')?.addEventListener('click', async () => {
     const joinButton = document.getElementById('setupJoinMatchBtn');
     const nameInput = document.getElementById('setupJoinDeviceNameInput');
@@ -24613,6 +24849,16 @@ function installDyeLedgerLiveEngineAdapter() {
     reconcileSharedPlayerAssignments,
     resolveSharedScoreWrite,
     recordSharedSyncDiagnostic,
+    getSharedSyncDiagnosticAggregate,
+    getSharedSyncDiagnosticsSerializedSize,
+    pruneSharedSyncDiagnostics,
+    recordSharedSyncAttemptDiagnostic,
+    getSanitizedSharedSyncDiagnostics,
+    getSharedSyncDiagnosticsExportText,
+    getSharedSyncDiagnosticsExportMeasurement,
+    getCanonicalSharedMatch,
+    getAppDiagnosticsText,
+    renderSharedAssignmentDiagnosticsPanel,
     getSharedSyncStatus,
     selectPlayerComboboxOption,
     handlePlayerComboboxOptionPointerDown,

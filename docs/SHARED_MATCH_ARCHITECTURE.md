@@ -1,6 +1,6 @@
 # Shared Match Architecture
 
-Status: v30.3.72 — Confidence Across Devices
+Status: v31.0.22 — Bounded synchronization evidence
 
 ## Authority model
 
@@ -56,7 +56,9 @@ Finish routing uses the same authoritative required-score completion derivation 
 
 ## Technical diagnostics
 
-Technical diagnostics retain up to 200 recent reason-coded events:
+Technical diagnostics use a 6,144-character per-match storage budget. Routine successful synchronization attempts are aggregate-only, and those counters span the whole round. Exceptional attempts keep bounded phase timing, outbox/acknowledgement, parity, and correlation evidence. When the budget is reached, the first and most recent exceptional records are retained and records are evicted from the middle so an initiating fault is not replaced by downstream symptoms.
+
+Reason-coded events include:
 
 - `ASSIGNMENT_REJECTED`
 - `ASSIGNMENT_REPLACED`
@@ -68,8 +70,13 @@ Technical diagnostics retain up to 200 recent reason-coded events:
 - `RECONNECT`
 - `AUTHORITATIVE_OVERWRITE`
 - `JOINED_OVERWRITE_PREVENTED`
+- `SYNC_ATTEMPT_PARTIAL`
+- `SYNC_ATTEMPT_FAILED`
+- `SYNC_REFERENCE_REBOUND`
 
-These codes appear only in technical diagnostics, never in the golfer-facing trust indicator.
+These codes appear only in technical diagnostics, never in the golfer-facing trust indicator. The existing troubleshooting disclosure provides `Copy Sync Diagnostics`, a clipboard path that does not depend on `mailto:` and exports only the sanitized synchronization view. Match codes, credentials, tokens, account identifiers, email addresses, player identities, and coordinates are excluded; technical device and participant identifiers remain available for correlating the two physical-device captures.
+
+v31.0.22 limits stale-reference correction to persisted synchronization-state writes. The coordinator and its upload, outbox acknowledgement, score-pull, and metadata-merge phases re-resolve the current stored match after network waits before applying results. Broader asynchronous cleanup remains deliberately deferred to v31.0.23, including completion reconciliation, participant/device refresh, heartbeat, and memory publication paths. The existing dirty-follow-up scheduling behavior is also retained for the evidence run rather than changed without two-device data.
 
 ## Manual QA
 

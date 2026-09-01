@@ -313,12 +313,12 @@ test('Play status line stays hidden when no competition is selected', () => {
   assert.equal(engine.getPrimaryMatchStatusLine(match, engine.computeMatchMetrics(match)), '');
 });
 
-test('completed-summary session guard requires the same completed active match', () => {
+test('completed-summary session guard is independent from the live-round pointer', () => {
   const engine = loadLiveEngine();
   const completed = { id: 'saved-round', status: 'complete' };
   const active = { id: 'live-round', status: 'active' };
   assert.equal(engine.isCompletedSummarySession(completed, completed.id, completed.id), true);
-  assert.equal(engine.isCompletedSummarySession(completed, completed.id, 'different-round'), false);
+  assert.equal(engine.isCompletedSummarySession(completed, completed.id, 'different-round'), true);
   assert.equal(engine.isCompletedSummarySession(active, active.id, active.id), false);
   assert.equal(engine.isCompletedSummarySession(completed, null, completed.id), false);
 });

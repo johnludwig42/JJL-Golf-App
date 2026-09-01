@@ -57,7 +57,7 @@ test('destination navigation provides a second back control on long pages', () =
 test('completed round makes recap generation a primary next step', () => {
   assert.match(html, /id="postRoundInlineGenerateRecapBtn"/);
   assert.match(app, /postRoundInlineGenerateRecapBtn/);
-  assert.match(app, /await generateRoundRecapForActiveMatch\(\)/);
+  assert.match(app, /await generateRoundRecapForActiveMatch\(\{ match \}\)/);
 });
 
 test('a round with no selected games remains eligible for a Story', () => {

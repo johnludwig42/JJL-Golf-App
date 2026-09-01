@@ -4316,22 +4316,24 @@ main,
 @media (max-width:760px) {
   #addMemoryDialog {
     align-items:flex-start;
-    padding:calc(var(--app-chrome-height, 0px) + max(12px, env(safe-area-inset-top))) 12px calc(12px + env(safe-area-inset-bottom));
+    padding:max(12px, env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom));
     overflow-x:hidden;
     overflow-y:auto;
     -webkit-overflow-scrolling:touch;
+    z-index:3000;
   }
   #addMemoryDialog .memory-sheet {
     width:min(720px, 100%);
     max-width:100%;
     min-width:0;
-    max-height:calc(100dvh - var(--app-chrome-height, 0px) - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     overflow-y:auto;
     overflow-x:hidden;
     border-radius:16px;
     padding-bottom:max(14px, env(safe-area-inset-bottom));
   }
 }
+.joined-round-completion-message{margin-top:8px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--panel-soft);color:var(--muted)}
 
 /* v30.1.2: Header and navigation density optimization */
 .app-header.compact-header {

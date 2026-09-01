@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.23',
-  versionNumber: '31.0.23',
-  cacheName: 'the-dye-ledger-v31.0.23',
-  buildDate: '2026-09-01T11:00:00-04:00',
-  buildLabel: 'Persistent Shared Score Delivery'
+  version: 'v31.0.24',
+  versionNumber: '31.0.24',
+  cacheName: 'the-dye-ledger-v31.0.24',
+  buildDate: '2026-09-01T17:00:00-04:00',
+  buildLabel: 'Round Lifecycle and Post-Round Clarity'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -7991,7 +7991,7 @@ function getAutomaticRoundRecapEligibility(match, options = {}) {
 }
 
 function generateRoundRecapForActiveMatch(options = {}) {
-  const match = options.match || getActiveMatch();
+  const match = options.match || getReviewOrActiveMatch();
   if (!match) {
     if (!options.silent) toast('Create or load a match first.');
     return Promise.resolve({ ok: false, skipped: true, reason: 'no-match' });
@@ -8019,7 +8019,7 @@ function scheduleAutomaticRoundRecap(match) {
 }
 
 function acceptRoundRecapForActiveMatch() {
-  const match = getActiveMatch();
+  const match = getReviewOrActiveMatch();
   if (!match) return;
   const editBox = document.getElementById('roundRecapEditBox');
   const text = String(editBox?.value || getDraftRoundRecap(match) || getStoredRoundRecap(match) || '').trim();
@@ -8048,7 +8048,7 @@ function acceptRoundRecapForActiveMatch() {
   }
 }
 function clearRoundRecapForActiveMatch() {
-  const match = getActiveMatch();
+  const match = getReviewOrActiveMatch();
   if (!match) return;
   match.roundRecap = '';
   match.roundRecapGenerated = '';
@@ -8061,7 +8061,7 @@ function clearRoundRecapForActiveMatch() {
   persist({ skipRender: true });
   renderLeaderboard();
 }
-function renderRoundRecapControlPanel(match = getActiveMatch()) {
+function renderRoundRecapControlPanel(match = getReviewOrActiveMatch()) {
   const panel = document.getElementById('roundRecapControls');
   if (!panel) return;
   panel.innerHTML = match ? buildRoundRecapControls(match) : '';
@@ -9544,7 +9544,7 @@ function prepareScoreboardPrintLayout(printView = 'summary') {
   }
 }
 function openPrintScorecard(matchId, printView = null) {
-  const match = getMatch(matchId || state.activeMatchId);
+  const match = matchId ? getMatch(matchId) : getReviewOrActiveMatch();
   if (!match) return toast('No round selected to share.');
   const candidateView = printView || match.printView || document.getElementById('scoreboardPrintViewSelect')?.value || 'ledger';
   const requestedView = ['ledger', 'summary', 'scorecard'].includes(candidateView) ? candidateView : 'ledger';
@@ -9935,6 +9935,17 @@ function formatComboHoleTeeIndicator(courseId, comboTee, holeIdx, prefix = 'Tee'
 function getPlayer(playerId) { return state.players.find(p => p.id === playerId); }
 function getMatch(matchId = state.activeMatchId) { return state.matches.find(m => m.id === matchId) || null; }
 function getActiveMatch() { return getMatch(); }
+function getCompletedReviewMatch() {
+  const match = getMatch(uiState.completedSummaryMatchId);
+  return match?.status === 'complete' ? match : null;
+}
+function getReviewOrActiveMatch() { return getCompletedReviewMatch() || getActiveMatch(); }
+function setCompletedReviewMatch(matchOrId = null) {
+  const match = typeof matchOrId === 'string' ? getMatch(matchOrId) : matchOrId;
+  uiState.completedSummaryMatchId = match?.status === 'complete' ? match.id : null;
+  return getCompletedReviewMatch();
+}
+function clearCompletedReviewMatch() { uiState.completedSummaryMatchId = null; }
 function getCanonicalSharedMatch(matchOrId = null) {
   const localId = typeof matchOrId === 'string' ? String(matchOrId) : String(matchOrId?.id || '');
   const sharedId = typeof matchOrId === 'string' ? String(matchOrId) : String(matchOrId?.sharedMatchId || '');
@@ -11956,7 +11967,7 @@ function buildPlayerDetailView(match, metrics, playerId) {
 }
 
 function openPlayerDetailView(playerId) {
-  const match = getActiveMatch();
+  const match = getReviewOrActiveMatch();
   if (!match || !playerId) return;
   const modal = document.getElementById('playerDetailDialog');
   const body = document.getElementById('playerDetailBody');
@@ -12320,7 +12331,7 @@ function buildFrozenScoresGameSummary(record) {
 }
 
 function renderLeaderboard() {
-  const match = getActiveMatch();
+  const match = getReviewOrActiveMatch();
   const empty = document.getElementById('leaderboardEmpty');
   const wrap = document.getElementById('leaderboardWrap');
   const completedSummaryBanner = document.getElementById('completedSummarySessionBanner');
@@ -14531,7 +14542,7 @@ async function fetchSharedMatchMetadata(matchId, match = null) {
   const client = await ensureSupabaseClient();
   if (!client) return { devices: [], playerAssignments: null, playerAssignmentState: null, memories: [], greeniesWinners: null, greeniesUpdatedAt: null, sspFacts: null, presses: [] };
   const [{ data: matchRow, error: matchError }, { data: memberships, error: membershipsError }] = await Promise.all([
-    client.from('matches').select('id,course_snapshot,updated_at').eq('id', matchId).maybeSingle(),
+    client.from('matches').select('id,status,completed_at,course_snapshot,updated_at').eq('id', matchId).maybeSingle(),
     client.from('match_memberships').select('*').eq('match_id', matchId).eq('status', 'active').order('joined_at'),
   ]);
   if (matchError) throw matchError;
@@ -14554,6 +14565,10 @@ async function fetchSharedMatchMetadata(matchId, match = null) {
     participants,
     playerAssignments,
     playerAssignmentState,
+    status: String(matchRow?.status || ''),
+    completedAt: matchRow?.completed_at || null,
+    roundRecordSnapshot: isFrozenRoundRecord(meta.roundRecordSnapshot) ? clonePlain(meta.roundRecordSnapshot) : null,
+    ledgerEntrySnapshot: meta.ledgerEntrySnapshot ? clonePlain(meta.ledgerEntrySnapshot) : null,
     memberships: (memberships || []).map(row => ({ id: row.id, user_id: row.user_id, role: row.role, status: row.status, device_label: row.device_label, joined_at: row.joined_at, last_seen_at: row.last_seen_at })),
   };
   return {
@@ -14614,6 +14629,15 @@ async function mergeCloudSharedMetadata(match, { includeAssignments = false, inc
     match = currentMatch;
   }
   let changed = mergeSharedDevices(match, meta.devices || []);
+  if (!isCurrentDeviceMatchHost(match) && meta.status === 'complete' && match.status !== 'complete') {
+    match.status = 'complete';
+    match.completedAt = meta.completedAt || match.completedAt || new Date().toISOString();
+    if (meta.roundRecordSnapshot) match.roundRecordSnapshot = meta.roundRecordSnapshot;
+    if (meta.ledgerEntrySnapshot) match.ledgerEntrySnapshot = meta.ledgerEntrySnapshot;
+    if (String(state.activeMatchId || '') === String(match.id || '')) state.activeMatchId = null;
+    setCompletedReviewMatch(match);
+    changed = true;
+  }
   const beforeParticipants = JSON.stringify(getSharedAssignmentParticipants(match));
   match.sharedParticipants = normalizeSharedParticipantList([...(match.sharedParticipants || []), ...(meta.participants || [])], match.sharedDevices || [], match);
   if (JSON.stringify(match.sharedParticipants || []) !== beforeParticipants) changed = true;
@@ -14952,7 +14976,13 @@ async function loadSharedMatchFromCloud(matchId, { activate = true, silent = fal
   }
   upsertLocalMatch(hydrated);
   if (activate) {
-    state.activeMatchId = hydrated.id;
+    if (hydrated.status === 'complete') {
+      state.activeMatchId = null;
+      setCompletedReviewMatch(hydrated);
+    } else {
+      state.activeMatchId = hydrated.id;
+      clearCompletedReviewMatch();
+    }
     setLastOpenedSharedMatch(hydrated);
     currentHole = Math.min(getRequestedHoleCount(hydrated), Math.max(1, completedHoles(hydrated) || 1));
   }
@@ -16032,7 +16062,7 @@ function canEditRoundMemory(match, memory) {
   if (match.storageMode === 'shared') return false;
   return true;
 }
-function renderRoundMemoriesPanel(match = getActiveMatch()) {
+function renderRoundMemoriesPanel(match = getReviewOrActiveMatch()) {
   const panel = document.getElementById('roundMemoriesPanel');
   const count = document.getElementById('roundMemoriesCount');
   if (!panel) return;
@@ -16698,7 +16728,7 @@ function buildNextRoundDraft(prior) {
   return draft;
 }
 
-function showPostRoundActions(match = getActiveMatch()) {
+function showPostRoundActions(match = getReviewOrActiveMatch()) {
   const modal = document.getElementById('postRoundActionsPrompt');
   if (!modal || !match) return;
   const title = document.getElementById('postRoundActionsTitle');
@@ -16721,8 +16751,8 @@ function hidePostRoundActions() {
   modal.setAttribute('aria-hidden', 'true');
 }
 
-function isCompletedSummarySession(match, summaryMatchId = uiState.completedSummaryMatchId, activeMatchId = state.activeMatchId) {
-  return !!match && match.status === 'complete' && String(summaryMatchId || '') === String(match.id || '') && String(activeMatchId || '') === String(match.id || '');
+function isCompletedSummarySession(match, summaryMatchId = uiState.completedSummaryMatchId) {
+  return !!match && match.status === 'complete' && String(summaryMatchId || '') === String(match.id || '');
 }
 
 function closeCompletedSummarySession() {
@@ -16732,7 +16762,7 @@ function closeCompletedSummarySession() {
   sharedMatchSyncDirty.delete(summaryMatch.id);
   if (String(state.lastOpenedSharedMatchId || '') === String(summaryMatch.id)) state.lastOpenedSharedMatchId = null;
   state.activeMatchId = null;
-  uiState.completedSummaryMatchId = null;
+  clearCompletedReviewMatch();
   setupWorkflowMode = 'landing';
   editingMatchId = null;
   currentHole = 1;
@@ -16758,8 +16788,33 @@ function exitCompletedSummaryToMatch() {
   return true;
 }
 
+function discardCompletedReviewRound() {
+  const match = getCompletedReviewMatch();
+  if (!match) return toast('No completed round is open for review.');
+  if (match.storageMode === 'shared' && !isCurrentDeviceMatchHost(match)) {
+    return toast('Only the Shared Match host can discard the completed round.');
+  }
+  const hasFinancialResults = !!match.roundRecordSnapshot?.transactions?.length;
+  const financialWarning = hasFinancialResults
+    ? '\n\nThis round includes recorded financial results. Those local records will also be removed.'
+    : '';
+  const sharedWarning = match.storageMode === 'shared'
+    ? '\n\nThis removes only the copy on this device; it does not delete the Shared Match from the cloud.'
+    : '';
+  if (!window.confirm(`Discard Completed Round?\n\nThis permanently removes "${match.name || 'Round'}" from this device.${financialWarning}${sharedWarning}\n\nThis cannot be undone on this device.`)) return false;
+  state.matches = state.matches.filter(row => String(row.id) !== String(match.id));
+  if (String(state.activeMatchId || '') === String(match.id)) state.activeMatchId = null;
+  clearCompletedReviewMatch();
+  hidePostRoundActions();
+  persist({ skipRender: true });
+  activateTab('setup');
+  renderAll();
+  toast('Completed round removed from this device.');
+  return true;
+}
+
 function startAnotherRoundWithSameGroup() {
-  const prior = getActiveMatch();
+  const prior = getReviewOrActiveMatch();
   if (!prior) return toast('No completed round is loaded.');
   hidePostRoundActions();
   const draft = buildNextRoundDraft(prior);
@@ -17150,6 +17205,7 @@ function syncFinishRoundUi(match = getActiveMatch()) {
   const scoreboardConfirmBtn = document.getElementById('scoreboardConfirmFinishRoundBtn');
   const setupFinishBtn = document.getElementById('setupFinishRoundBtn');
   const setupConfirmBtn = document.getElementById('setupConfirmFinishRoundBtn');
+  const joinedCompletionMessage = document.getElementById('joinedRoundCompletionMessage');
   const scoreboardRoundState = document.getElementById('scoreboardRoundState');
   const postRoundInline = document.getElementById('postRoundActionsInline');
   const postRoundInlineText = document.getElementById('postRoundActionsInlineText');
@@ -17183,6 +17239,7 @@ function syncFinishRoundUi(match = getActiveMatch()) {
   if (scoreboardFinishBtn) scoreboardFinishBtn.textContent = reopenedEdit ? 'Save Completed Round' : 'Complete Round';
   if (scoringFinishBtn) scoringFinishBtn.textContent = reopenedEdit ? 'Save Completed Round' : 'Complete Round';
   [scoringFinishBtn, scoreboardFinishBtn, scoringEarlyBtn, scoreboardEarlyBtn].forEach(button => { if (button) { button.disabled = !authority.allowed; button.setAttribute('aria-disabled', authority.allowed ? 'false' : 'true'); } });
+  show(joinedCompletionMessage, hasMatch && !isComplete && activeRound && !authority.allowed);
   if (postRoundInlineText && hasMatch && isComplete) postRoundInlineText.textContent = `${completedHoles(match)} holes completed. What would you like to do next?`;
   if (scoreboardRoundActions) scoreboardRoundActions.classList.toggle('no-active-round', !activeRound && !isComplete);
   if (scoreboardRoundState) {
@@ -17457,7 +17514,7 @@ function completeActiveRound() {
     const marker = createFinishRecoveryMarker(candidate);
     const candidateState = clonePlain(state);
     candidateState.matches = (candidateState.matches || []).map(row => row.id === candidate.id ? candidate : row);
-    candidateState.activeMatchId = candidate.id;
+    candidateState.activeMatchId = null;
     const completedWrite = persistFinishedStateSnapshot(candidateState, marker, localStorage);
     if (!completedWrite.ok) {
       localPersistenceDiagnostics.lastFailedLocalSave = completedWrite.savedAt;
@@ -17467,7 +17524,7 @@ function completeActiveRound() {
       throw new Error(`COMPLETED_ROUND_SAVE_FAILED: ${completedWrite.errorMessage}`);
     }
     state.matches = state.matches.map(row => row.id === candidate.id ? candidate : row);
-    state.activeMatchId = candidate.id;
+    state.activeMatchId = null;
     localPersistenceDiagnostics.storageAvailable = true;
     localPersistenceDiagnostics.lastSuccessfulLocalSave = completedWrite.savedAt;
     localPersistenceDiagnostics.lastFailureMessage = '';
@@ -17479,7 +17536,7 @@ function completeActiveRound() {
     syncFinishRoundUi(candidate);
     renderMatches();
     renderCurrentMatch();
-    uiState.completedSummaryMatchId = candidate.id;
+    setCompletedReviewMatch(candidate);
     hidePostRoundActions();
     activateTab('leaderboard');
     renderLeaderboard();
@@ -21985,13 +22042,11 @@ function closeExperienceDestination(tabId, { scroll = true } = {}) {
 
 function activateTab(tabId) {
   const previousTabId = document.querySelector('.panel.active')?.id || '';
-  const closedCompletedSummary = tabId === 'setup' && closeCompletedSummarySession();
   document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tabId));
   document.querySelectorAll('.panel').forEach(el => el.classList.toggle('active', el.id === tabId));
   document.body?.classList.toggle('player-mode-play-active', tabId === 'score' && getPreferredPlayInputMode() === PLAY_INPUT_MODES.PLAYER.key);
-  if (closedCompletedSummary) renderAll();
   updateAppChromeOffset();
-  syncFinishRoundUi(getActiveMatch());
+  syncFinishRoundUi(tabId === 'leaderboard' ? getReviewOrActiveMatch() : getActiveMatch());
   if (tabId === 'setup') {
     refreshActiveSharedParticipants({ silent: true });
     startSharedConnectionFastRefresh({ reason: 'match-tab-opened' });
@@ -22007,8 +22062,8 @@ function activateTab(tabId) {
 }
 
 function viewCompletedMatchSummary() {
-  const match = getActiveMatch();
-  if (match?.status === 'complete') uiState.completedSummaryMatchId = match.id;
+  const match = getReviewOrActiveMatch();
+  if (match?.status === 'complete') setCompletedReviewMatch(match);
   hidePostRoundActions();
   activateTab('leaderboard');
   renderLeaderboard();
@@ -22046,12 +22101,12 @@ function getPostRoundWorkflowState(match) {
   };
 }
 
-function getRoundRecapReviewTarget(match = getActiveMatch()) {
+function getRoundRecapReviewTarget(match = getReviewOrActiveMatch()) {
   const hasStory = !!(getFinalRoundRecap(match) || getDraftRoundRecap(match));
   return document.getElementById(hasStory ? 'roundRecapStoryTarget' : 'roundRecapControls');
 }
 
-function scrollRoundRecapReviewIntoView(match = getActiveMatch()) {
+function scrollRoundRecapReviewIntoView(match = getReviewOrActiveMatch()) {
   const target = getRoundRecapReviewTarget(match);
   if (!target?.scrollIntoView) return false;
   target.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -22065,7 +22120,7 @@ function scrollRoundRecapReviewIntoView(match = getActiveMatch()) {
   return true;
 }
 
-function syncPostRoundWorkflowUi(match = getActiveMatch()) {
+function syncPostRoundWorkflowUi(match = getReviewOrActiveMatch()) {
   const storyState = document.getElementById('postRoundStoryState');
   const ledgerState = document.getElementById('postRoundLedgerState');
   const storyButton = document.getElementById('postRoundInlineGenerateRecapBtn');
@@ -23683,6 +23738,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (editingMatchId) state.matches = state.matches.map(m => m.id === editingMatchId ? match : m); else state.matches = [...state.matches, match];
     pendingNextRoundSessionContext = null;
     state.activeMatchId = match.id;
+    clearCompletedReviewMatch();
     if (match.storageMode === 'shared') {
       setLastOpenedSharedMatch(match);
       logSharedAssignmentDiag('host-created-shared-match', match, { initialSharedParticipants: match.sharedParticipants || [], initialSharedDevices: match.sharedDevices || [], initialSharedPlayerAssignments: match.sharedPlayerAssignments || {} });
@@ -23740,7 +23796,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   const postRoundSummaryBtn = document.getElementById('postRoundViewSummaryBtn');
   if (postRoundSummaryBtn) postRoundSummaryBtn.addEventListener('click', viewCompletedMatchSummary);
   document.getElementById('postRoundLedgerBtn')?.addEventListener('click', () => {
-    const match = getActiveMatch();
+    const match = getReviewOrActiveMatch();
     if (match) openUnifiedExport(match, 'ledger');
   });
   document.getElementById('postRoundReturnBtn')?.addEventListener('click', () => {
@@ -23757,15 +23813,16 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   const postRoundInlineSummaryBtn = document.getElementById('postRoundInlineViewSummaryBtn');
   if (postRoundInlineSummaryBtn) postRoundInlineSummaryBtn.addEventListener('click', viewCompletedMatchSummary);
   document.getElementById('postRoundInlineLedgerBtn')?.addEventListener('click', () => {
-    const match = getActiveMatch();
+    const match = getReviewOrActiveMatch();
     if (match) openUnifiedExport(match, 'ledger');
   });
   document.getElementById('postRoundInlineClassicScorecardBtn')?.addEventListener('click', () => {
-    const match = getActiveMatch();
+    const match = getReviewOrActiveMatch();
     if (match) openUnifiedExport(match, 'scorecard');
   });
+  document.getElementById('postRoundInlineDiscardBtn')?.addEventListener('click', discardCompletedReviewRound);
   document.getElementById('postRoundInlineGenerateRecapBtn')?.addEventListener('click', async () => {
-    const match = getActiveMatch();
+    const match = getReviewOrActiveMatch();
     if (!match) return;
     activateTab('leaderboard');
     renderLeaderboard();
@@ -23774,7 +23831,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     window.requestAnimationFrame(() => scrollRoundRecapReviewIntoView(match));
     if (!getFinalRoundRecap(match)) uiState.pendingLedgerOpenMatchId = match.id;
     if (!getFinalRoundRecap(match) && !getDraftRoundRecap(match)) {
-      await generateRoundRecapForActiveMatch();
+      syncPostRoundWorkflowUi(match);
+      await generateRoundRecapForActiveMatch({ match });
     }
     window.requestAnimationFrame(() => scrollRoundRecapReviewIntoView(match));
   });
@@ -23874,17 +23932,20 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (selectedId) {
       const target = getMatch(selectedId);
       if (!target) return;
-      state.activeMatchId = selectedId;
       if (target?.storageMode === 'shared') setLastOpenedSharedMatch(target);
       currentHole = Math.min(getRequestedHoleCount(target), Math.max(1, Number(target?.currentHole) || completedHoles(target) || 1));
-      persist();
       if (viewId) {
+        state.activeMatchId = null;
+        setCompletedReviewMatch(target);
+        persist();
         activateTab('leaderboard');
         renderAll();
         return;
       }
       if (reopenId) {
         if (target.storageMode === 'shared' && !isCurrentDeviceMatchHost(target)) {
+          state.activeMatchId = null;
+          setCompletedReviewMatch(target);
           activateTab('leaderboard');
           toast('Only the Shared Match host can reopen this completed round.');
           renderAll();
@@ -23892,12 +23953,16 @@ document.getElementById('leaderboard').addEventListener('change', e => {
         }
         const reopen = window.confirm(`Reopen Completed Round?\n\n"${target.name || 'Round'}" will return to scoring for corrections. The prior frozen result remains preserved in round history until you finish and confirm the corrected round.\n\nReopen Round?`);
         if (!reopen) {
+          state.activeMatchId = null;
+          setCompletedReviewMatch(target);
           activateTab('leaderboard');
           renderAll();
           return;
         }
         const completedBeforeReopen = clonePlain(target);
         markRoundReopenedForEditing(target);
+        state.activeMatchId = target.id;
+        clearCompletedReviewMatch();
         if (persist({ skipRender: true })) {
           activateTab('score');
           toast('Round reopened for editing. The prior frozen result remains in history.');
@@ -23908,6 +23973,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
         renderAll();
         return;
       }
+      state.activeMatchId = selectedId;
+      clearCompletedReviewMatch();
+      persist();
       activateTab('score');
     }
     if (shareId) { openPrintScorecard(shareId); }
@@ -23918,6 +23986,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       if (confirm(`Remove Saved Round?\n\nThis removes "${target.name || 'Round'}" from this device.${sharedNote}\n\nThis action cannot be undone on this device.\n\nRemove Round?`)) {
         state.matches = state.matches.filter(m => m.id !== deleteId);
         if (state.activeMatchId === deleteId) state.activeMatchId = null;
+        if (uiState.completedSummaryMatchId === deleteId) clearCompletedReviewMatch();
         persist();
       }
     }
@@ -23927,7 +23996,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('leaderboard')?.addEventListener('click', e => {
     const promptBtn = e.target.closest('[data-round-note-prompt]');
     if (promptBtn) {
-      const match = getActiveMatch();
+      const match = getReviewOrActiveMatch();
       const box = document.getElementById('roundRecapNotesBox');
       if (!match || !box) return;
       const prompt = String(promptBtn.dataset.roundNotePrompt || promptBtn.textContent || '').trim();
@@ -23948,7 +24017,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
     if (e.target.closest('#editRoundRecapBtn')) {
       uiState.roundRecapEditing = !uiState.roundRecapEditing;
-      renderRoundRecapControlPanel(getActiveMatch());
+      renderRoundRecapControlPanel(getReviewOrActiveMatch());
       return;
     }
     if (e.target.closest('#acceptRoundRecapBtn')) {
@@ -23962,7 +24031,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   });
   document.getElementById('leaderboard')?.addEventListener('input', e => {
     if (!e.target || e.target.id !== 'roundRecapNotesBox') return;
-    const match = getActiveMatch();
+    const match = getReviewOrActiveMatch();
     if (!match) return;
     match.roundRecapNotes = e.target.value || '';
     match.notes = match.roundRecapNotes;
@@ -23982,7 +24051,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('playerDetailDialog')?.addEventListener('click', e => {
     if (e.target?.id === 'playerDetailDialog') return closePlayerDetailView();
     const scorecardView = e.target.closest('[data-scorecard-net-view]');
-    const match = getActiveMatch();
+    const match = getReviewOrActiveMatch();
     const modal = document.getElementById('playerDetailDialog');
     if (!scorecardView || !match || !modal?.dataset.playerId) return;
     const key = String(match.id);
@@ -25188,6 +25257,10 @@ function installDyeLedgerLiveEngineAdapter() {
     getScorecardImportSaveGuard,
     updateScorecardImportStatus,
     isCompletedSummarySession,
+    getCompletedReviewMatch,
+    getReviewOrActiveMatch,
+    setCompletedReviewMatch,
+    clearCompletedReviewMatch,
     formatRoundDuration,
     ensureRoundTimingStarted,
     ensureRoundTimingEnded,

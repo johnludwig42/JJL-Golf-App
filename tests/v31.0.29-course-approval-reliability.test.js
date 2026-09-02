@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
 import { currentBrandingAssetNames, currentVersionBare, currentVersionRegexEscaped } from './support/release-identity.js';
 
 const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
@@ -28,6 +29,55 @@ test('approval failure remains visible and retryable', () => {
   assert.match(app, /course\.cloudSyncError = error\?\.message[\s\S]*persist\(\{ skipRender: true \}\)/);
   assert.match(app, /approval needs attention: \$\{course\.cloudSyncError\}/);
   assert.match(app, /c\.cloudSyncError \? `<span class="tiny field-error course-meta-line">/);
+});
+
+test('a cloud draft missing local tees is scheduled for repair before approval', () => {
+  const engine = loadLiveEngine();
+  const holes = Array.from({ length: 18 }, (_, idx) => ({ holeNumber: idx + 1, par: 4, strokeIndex: idx + 1, yardage: 400 }));
+  const localTees = Array.from({ length: 7 }, (_, idx) => ({
+    id: `local-${idx + 1}`, cloudTeeId: idx < 4 ? `cloud-${idx + 1}` : '',
+    teeName: `Tee ${idx + 1}`, gender: 'M', holes,
+  }));
+  const seeded = engine.seedState({
+    courses: [{ id: 'local-course', name: 'Seven Tee Course', source: 'scorecard-import', cloudCourseId: 'cloud-course', cloudPublicationStatus: 'draft', cloudSyncState: 'draft-uploaded', tees: localTees }],
+    players: [], matches: [], activeMatchId: null,
+  });
+  engine.mergeSupabaseCourses([{
+    id: 'cloud-course', cloudCourseId: 'cloud-course', name: 'Seven Tee Course', source: 'supabase', cloudPublicationStatus: 'draft', cloudIncomplete: false,
+    tees: localTees.slice(0, 4).map(tee => ({ ...tee, id: tee.cloudTeeId, cloudTeeId: tee.cloudTeeId })),
+  }]);
+  const repaired = seeded.courses[0];
+  assert.equal(repaired.tees.length, 7);
+  assert.equal(repaired.cloudSyncState, 'pending-sync');
+  assert.equal(repaired.cloudIncomplete, true);
+  assert.equal(repaired.cloudTeeRepairPending, true);
+  assert.match(repaired.cloudSyncError, /4 of 7 local tees/);
+  assert.equal(engine.isCourseCloudWriteCandidate(repaired), true);
+});
+
+test('an approved cloud course missing preserved local tees remains visibly recoverable', () => {
+  const engine = loadLiveEngine();
+  const holes = Array.from({ length: 18 }, (_, idx) => ({ holeNumber: idx + 1, par: 4, strokeIndex: idx + 1, yardage: 400 }));
+  const localTees = Array.from({ length: 7 }, (_, idx) => ({ id: `local-${idx}`, cloudTeeId: idx < 4 ? `cloud-${idx}` : '', teeName: `Tee ${idx}`, gender: 'M', holes }));
+  const seeded = engine.seedState({ courses: [{ id: 'local-course', name: 'Approved Partial', source: 'scorecard-import', cloudCourseId: 'cloud-course', cloudPublicationStatus: 'draft', tees: localTees }], players: [], matches: [], activeMatchId: null });
+  engine.mergeSupabaseCourses([{ id: 'cloud-course', cloudCourseId: 'cloud-course', name: 'Approved Partial', source: 'maintainer', cloudPublicationStatus: 'approved', cloudIncomplete: false, tees: localTees.slice(0, 4).map(tee => ({ ...tee, id: tee.cloudTeeId })) }]);
+  const course = seeded.courses[0];
+  assert.equal(course.tees.length, 7);
+  assert.equal(course.cloudTeeRepairPending, true);
+  assert.equal(course.cloudIncomplete, true);
+  assert.match(course.cloudSyncError, /Cloud course has 4 of 7 local tees/);
+  assert.match(course.cloudSyncError, /Return it to Draft/);
+  assert.equal(engine.isCourseCloudWriteCandidate(course), false);
+});
+
+test('a recovered Supabase cache row becomes writable after the cloud course returns to Draft', () => {
+  const engine = loadLiveEngine();
+  const course = { name: 'Recovered Course', source: 'supabase', cloudCourseId: 'cloud-course', cloudPublicationStatus: 'draft', cloudSyncState: 'pending-sync', cloudTeeRepairPending: true };
+  assert.equal(engine.isCourseCloudWriteCandidate(course), true);
+});
+
+test('an incomplete cloud draft cannot be approved before repair', () => {
+  assert.match(app, /const canApproveDraft = [^;]+&& !c\.cloudIncomplete;/);
 });
 
 test('approval rollback never removes Course Library data', () => {

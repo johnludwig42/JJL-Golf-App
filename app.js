@@ -12789,13 +12789,23 @@ function mergeSupabaseCourses(cloudCourses = []) {
         return mergeCloudTeePreservingCompleteLocal(localMatch, ct);
       });
       const localOnlyTees = (existing.tees || []).filter(t => !cloudTees.some(ct => ct.id === t.id || (ct.cloudTeeId && ct.cloudTeeId === t.cloudTeeId) || (String(ct.teeName || '').trim().toLowerCase() === String(t.teeName || '').trim().toLowerCase() && String(ct.gender || 'M') === String(t.gender || 'M'))));
+      const cloudNeedsTeeRepair = localOnlyTees.length > 0;
+      const draftNeedsTeeRepair = String(course.cloudPublicationStatus || '').toLowerCase() === 'draft' && cloudNeedsTeeRepair;
+      const cloudTeeRepairMessage = cloudNeedsTeeRepair
+        ? `Cloud ${String(course.cloudPublicationStatus || '').toLowerCase() === 'approved' ? 'course' : 'draft'} has ${cloudTees.length} of ${cloudTees.length + localOnlyTees.length} local tees. ${draftNeedsTeeRepair ? 'Publish Local Changes to repair it before approval.' : 'Return it to Draft before publishing the preserved local tees.'}`
+        : '';
       state.courses[duplicateIdx] = {
         ...existing,
         ...course,
         id: existing.id,
+        source: draftNeedsTeeRepair ? existing.source : course.source,
         cloudCourseId: course.cloudCourseId || course.id || existing.cloudCourseId,
-        cloudSyncState: 'synced',
-        cloudSyncError: course.cloudIncomplete ? existing.cloudSyncError : '',
+        cloudSyncState: draftNeedsTeeRepair ? 'pending-sync' : 'synced',
+        cloudSyncError: course.cloudIncomplete
+          ? existing.cloudSyncError
+          : cloudTeeRepairMessage,
+        cloudIncomplete: course.cloudIncomplete || cloudNeedsTeeRepair,
+        cloudTeeRepairPending: cloudNeedsTeeRepair,
         tees: [...cloudTees, ...localOnlyTees],
       };
       updated += 1;
@@ -13047,6 +13057,7 @@ async function refreshSupabaseCoursesByIds(client, courseIds = []) {
 }
 function isCourseCloudWriteCandidate(course = {}) {
   if (!String(course?.name || '').trim()) return false;
+  if (course?.cloudTeeRepairPending === true && String(course?.cloudPublicationStatus || '').toLowerCase() === 'draft') return true;
   // A prior bulk-sync bug marked downloaded catalog rows as pending. Their
   // cloud identity/source is authoritative evidence that they are cache rows,
   // not locally authored drafts, so do not attempt to write them back.
@@ -16429,7 +16440,7 @@ function renderCourses() {
     const holeCount = getCourseHoleCount(c);
     const sourceLabel = (c.cloudCourseId || c.source === 'supabase') ? 'Cloud + device' : 'This device';
     const libraryState = getCourseLibraryStateLabel(c);
-    const canApproveDraft = uiState.courseLibraryMaintainer && String(c.cloudPublicationStatus || '').toLowerCase() === 'draft' && !!c.cloudCourseId;
+    const canApproveDraft = uiState.courseLibraryMaintainer && String(c.cloudPublicationStatus || '').toLowerCase() === 'draft' && !!c.cloudCourseId && !c.cloudIncomplete;
     const approvedReadOnly = libraryState === 'Approved';
     return `
     <div class="item compact-item library-item-card course-card ${expanded ? 'expanded' : 'collapsed'}">

@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.26',
-  versionNumber: '31.0.26',
-  cacheName: 'the-dye-ledger-v31.0.26',
-  buildDate: '2026-09-02T15:00:00-04:00',
-  buildLabel: 'Imported Scorecard Draft Reliability'
+  version: 'v31.0.27',
+  versionNumber: '31.0.27',
+  cacheName: 'the-dye-ledger-v31.0.27',
+  buildDate: '2026-09-02T19:00:00-04:00',
+  buildLabel: 'Course Tee Gender Sync Integrity'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -13072,6 +13072,17 @@ async function getCourseLibraryWriteAccess(client) {
 function getCloudTeeMatchKey(tee = {}) {
   return [tee.teeName, tee.gender || 'M'].map(v => String(v || '').trim().toLowerCase()).join('|');
 }
+function getDuplicateCourseTeeIdentities(course = {}) {
+  const seen = new Set();
+  const duplicates = [];
+  (course?.tees || []).filter(tee => String(tee?.teeName || '').trim()).forEach(tee => {
+    const key = getCloudTeeMatchKey(tee);
+    const gender = String(tee.gender || 'M').toUpperCase() === 'F' ? 'F' : 'M';
+    if (seen.has(key)) duplicates.push({ key, teeName: String(tee.teeName).trim(), gender });
+    else seen.add(key);
+  });
+  return duplicates;
+}
 function markCoursePendingSync(course, reason = '') {
   if (!course) return;
   course.cloudSyncState = 'pending-sync';
@@ -13090,6 +13101,7 @@ function buildCloudTeePayload(courseId, tee) {
   return {
     course_id: String(courseId),
     tee_name: String(tee.teeName || '').trim(),
+    gender: String(tee.gender || 'M').trim().toUpperCase() === 'F' ? 'F' : 'M',
     rating: Number.isFinite(Number(tee.rating)) ? Number(tee.rating) : null,
     slope: Number.isFinite(Number(tee.slope)) ? Number(tee.slope) : null,
     total_yards: getTeeTotalYardage(tee) || null,
@@ -13149,6 +13161,11 @@ function restoreCoursePublishRecoveries(storage = localStorage) {
   return persist({ skipRender: true }) ? { restored } : { restored: 0, error: 'The recovered course could not be saved locally.' };
 }
 function buildAtomicCoursePublishPayload(course, cloudCourseId = '') {
+  const duplicateTeeIdentities = getDuplicateCourseTeeIdentities(course);
+  if (duplicateTeeIdentities.length) {
+    const duplicate = duplicateTeeIdentities[0];
+    throw new Error(`Duplicate local tee identity: ${duplicate.teeName} (${duplicate.gender === 'F' ? 'Women' : 'Men'}). Rename or remove the duplicate before publishing.`);
+  }
   return {
     ...buildCloudCoursePayload(course),
     cloud_course_id: String(cloudCourseId || course?.cloudCourseId || ''),
@@ -25420,6 +25437,9 @@ function installDyeLedgerLiveEngineAdapter() {
     fetchAllSupabaseRows,
     mergeSupabaseCourses,
     isCourseCloudWriteCandidate,
+    getCloudTeeMatchKey,
+    getDuplicateCourseTeeIdentities,
+    buildCloudTeePayload,
     getCourseLibraryWriteAccess,
     isProtectedCloudCourse,
     markCourseFromCloudRow,

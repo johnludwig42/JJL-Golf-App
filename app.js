@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.35',
-  versionNumber: '31.0.35',
-  cacheName: 'the-dye-ledger-v31.0.35',
-  buildDate: '2026-09-02T08:05:00-04:00',
-  buildLabel: 'Score and Stat Entry Reliability'
+  version: 'v31.0.36',
+  versionNumber: '31.0.36',
+  cacheName: 'the-dye-ledger-v31.0.36',
+  buildDate: '2026-09-02T09:32:00-04:00',
+  buildLabel: 'Post-Round Story Review Reliability'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -21512,15 +21512,40 @@ function activateTab(tabId) {
   if (previousTabId !== tabId) window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
 }
 
-function viewCompletedMatchSummary() {
-  const match = getReviewOrActiveMatch();
-  if (match?.status === 'complete') setCompletedReviewMatch(match);
+function showRoundStoryReviewSurface(match) {
+  if (!match) return false;
+  if (match.status === 'complete') setCompletedReviewMatch(match);
   hidePostRoundActions();
   activateTab('leaderboard');
   renderLeaderboard();
   openExperienceDestination('leaderboard', 'story', { scroll: false });
   const storyCard = document.getElementById('roundStoryCard');
   if (storyCard) storyCard.open = true;
+  window.requestAnimationFrame(() => scrollRoundRecapReviewIntoView(match));
+  return true;
+}
+
+async function openRoundStoryReview(match = getReviewOrActiveMatch(), { generateIfMissing = true, openLedgerAfterSave = true } = {}) {
+  if (!match) {
+    toast('That completed round could not be reopened. Choose it from Saved Rounds.');
+    activateTab('courses');
+    renderPlayers();
+    openExperienceDestination('courses', 'rounds');
+    return false;
+  }
+  showRoundStoryReviewSurface(match);
+  if (openLedgerAfterSave && !getFinalRoundRecap(match)) uiState.pendingLedgerOpenMatchId = match.id;
+  if (generateIfMissing && !getFinalRoundRecap(match) && !getDraftRoundRecap(match)) {
+    syncPostRoundWorkflowUi(match);
+    await generateRoundRecapForActiveMatch({ match });
+    showRoundStoryReviewSurface(match);
+  }
+  window.requestAnimationFrame(() => scrollRoundRecapReviewIntoView(match));
+  return true;
+}
+
+function viewCompletedMatchSummary() {
+  return openRoundStoryReview(getReviewOrActiveMatch(), { generateIfMissing: false, openLedgerAfterSave: false });
 }
 
 function isPostRoundStoryReviewDisabled({ hasStory = false, generating = false, joinedWaiting = false } = {}) {
@@ -23322,27 +23347,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (match) openUnifiedExport(match, 'scorecard');
   });
   document.getElementById('postRoundInlineDiscardBtn')?.addEventListener('click', discardCompletedReviewRound);
-  document.getElementById('postRoundInlineGenerateRecapBtn')?.addEventListener('click', async () => {
-    const match = getReviewOrActiveMatch();
-    if (!match) {
-      toast('That completed round could not be reopened. Choose it from Saved Rounds.');
-      activateTab('courses');
-      renderPlayers();
-      openExperienceDestination('courses', 'rounds');
-      return;
-    }
-    activateTab('leaderboard');
-    renderLeaderboard();
-    const story = document.getElementById('roundStoryCard');
-    if (story) story.open = true;
-    window.requestAnimationFrame(() => scrollRoundRecapReviewIntoView(match));
-    if (!getFinalRoundRecap(match)) uiState.pendingLedgerOpenMatchId = match.id;
-    if (!getFinalRoundRecap(match) && !getDraftRoundRecap(match)) {
-      syncPostRoundWorkflowUi(match);
-      await generateRoundRecapForActiveMatch({ match });
-    }
-    window.requestAnimationFrame(() => scrollRoundRecapReviewIntoView(match));
-  });
+  document.getElementById('postRoundInlineGenerateRecapBtn')?.addEventListener('click', () => openRoundStoryReview());
   document.getElementById('completedSummaryDoneBtn')?.addEventListener('click', exitCompletedSummaryToMatch);
   document.getElementById('completedSummaryNewMatchBtn')?.addEventListener('click', () => { hidePostRoundActions(); startCleanNewMatchSetup(); });
   const postRoundInlineAnotherBtn = document.getElementById('postRoundInlineAnotherRoundBtn');
@@ -24704,6 +24709,8 @@ function installDyeLedgerLiveEngineAdapter() {
     getAutomaticRoundRecapEligibility,
     getPostRoundWorkflowState,
     isPostRoundStoryReviewDisabled,
+    showRoundStoryReviewSurface,
+    openRoundStoryReview,
     normalizeEarlyRoundEndReason,
     getPlayerModeSavePresentation,
     getLocalSavePresentation,

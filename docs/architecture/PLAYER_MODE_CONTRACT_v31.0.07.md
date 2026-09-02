@@ -11,7 +11,7 @@ More → Preferences supplies device defaults. Match Setup may override Score Ke
 - **None:** gross scores only.
 - **Casual:** putts, penalties, tee-shot result, and calculated GIR.
 - **Enhanced:** Casual plus a nine-position approach result and recovery outcomes. Position 5 is computed GIR; the other eight positions explicitly capture miss direction.
-- **Grind:** Enhanced plus bunker involvement and future shot-context extensions. It is restricted to devices scoring no more than two golfers.
+- **Grind:** Enhanced plus bunker involvement and future shot-context extensions. It is available when a device is responsible for no more than four editable golfers; larger device assignments fall back to Enhanced.
 
 ## Definitions
 

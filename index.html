@@ -7,18 +7,18 @@
   <meta name="theme-color" content="#0b5d3b" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=31.0.31&amp;rev=202609030100" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v31.0.31.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v31.0.31.png" />
-  <link rel="shortcut icon" href="./branding/favicon-32-v31.0.31.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v31.0.31.png" />
-  <link rel="stylesheet" href="style.css?v=31.0.31&amp;rev=202609030100" />
+  <link rel="manifest" href="manifest.json?v=31.0.32&amp;rev=202609030245" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v31.0.32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v31.0.32.png" />
+  <link rel="shortcut icon" href="./branding/favicon-32-v31.0.32.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v31.0.32.png" />
+  <link rel="stylesheet" href="style.css?v=31.0.32&amp;rev=202609030245" />
 </head>
 <body>
   <div class="app-chrome"><header class="app-header compact-header">
     <div class="brand-wrap">
       <div class="brand-mark">
-        <img src="./branding/apple-touch-icon-v31.0.31.png" alt="The Dye Ledger" />
+        <img src="./branding/apple-touch-icon-v31.0.32.png" alt="The Dye Ledger" />
       </div>
       <div>
       <h1>The Dye Ledger</h1>
@@ -303,6 +303,17 @@
             <button id="prevHoleBtn" type="button" class="secondary">◀ Prev</button>
             <div id="currentHoleBadge" class="badge big-badge">Hole 1</div>
             <button id="nextHoleBtn" type="button" class="secondary">Next ▶</button>
+            <div id="classicHoleContext" class="classic-hole-context" aria-live="polite"></div>
+            <div id="classicHeaderActions" class="classic-header-actions">
+              <button id="quickScoreboardBtn" type="button" class="secondary compact-icon-btn">Scoreboard</button><button id="playPressBtn" type="button" class="secondary compact-icon-btn hidden" aria-label="Press">Press</button>
+              <button type="button" class="secondary classic-play-overflow" data-classic-play-overflow aria-expanded="false" aria-controls="classicPlayOverflowMenu" aria-label="More Play actions">•••</button>
+              <div id="classicPlayOverflowMenu" class="classic-play-overflow-menu hidden">
+                <button id="endRoundEarlyBtn" type="button" class="secondary">End Round Early</button>
+                <label><span class="tiny">Scoring mode</span><select id="classicRoundScoringModeSelect" aria-label="Classic active round scoring mode"></select></label>
+                <label><span class="tiny">Stat mode</span><select id="classicRoundStatModeSelect" aria-label="Classic active round stat mode"></select></label>
+                <div class="tiny">When every score is entered, use Complete Round in Round Progress.</div>
+              </div>
+            </div>
           </div>
           <div id="catchUpScoringBar" class="catch-up-scoring-bar hidden" aria-live="polite"></div>
           <div id="holeSummary" class="tiny top-gap"></div>
@@ -315,7 +326,7 @@
               <div class="tiny">Gross score entry for the current hole.</div>
               <div id="playStrokeBasisNote" class="tiny">Featured Competition strokes will appear when a match is active.</div>
             </div>
-            <div class="play-report-actions"><button id="quickScoreboardBtn" type="button" class="secondary compact-icon-btn">Scoreboard</button><button id="playPressBtn" type="button" class="secondary compact-icon-btn hidden" aria-label="Press">Press</button></div>
+            <div class="play-report-actions"></div>
           </div>
           <div id="classicScoreGridWrap" class="score-grid-wrap top-gap">
             <table class="score-grid">
@@ -374,7 +385,6 @@
             </details>
             <div class="actions wrap compact-actions top-gap">
               <button id="finishRoundBtn" type="button">Complete Round</button>
-              <button id="endRoundEarlyBtn" type="button" class="secondary">End Round Early</button>
             </div>
             <div id="joinedRoundCompletionMessage" class="joined-round-completion-message tiny hidden" role="status">Waiting for the host to complete the match.</div>
           </section>
@@ -953,7 +963,7 @@
       <div class="card tight-card app-updates-card" data-experience-section="support">
         <h2>App Updates</h2>
         <div class="app-update-summary">
-          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v31.0.31</strong></div>
+          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v31.0.32</strong></div>
           <div><span class="muted-label">Build Date</span><strong id="appBuildTimestamp">loading…</strong></div>
           <div><span class="muted-label">Cache</span><span id="appActiveCacheName" class="break-word">checking…</span></div>
           <div><span class="muted-label">Update Available</span><strong id="appUpdateAvailableStatus">checking…</strong></div>
@@ -1000,11 +1010,11 @@
     </section>
   </main>
   <script id="appReleaseNotesData" type="application/json">[
+    {"version":"v31.0.32","summary":"Restores Classic hole navigation and adds a persistent, informative scoring header without changing Player Mode."},
     {"version":"v31.0.31","summary":"Preserves completed-round review across reloads, distinguishes early clinches, and aligns Featured Competition across every mutation path."},
     {"version":"v31.0.30","summary":"Activates complete cloud tee-count reconciliation under a new cache identity before Course Library approval."},
     {"version":"v31.0.29","summary":"Makes Course Library approval UUID-safe, validates complete drafts, and keeps approval failures visible and retryable."},
-    {"version":"v31.0.28","summary":"Clears obsolete Needs Attention flags after a repaired Course Library draft passes complete cloud verification."},
-    {"version":"v31.0.27","summary":"Preserves same-named men's and women's tees as distinct cloud records and rolls back any incomplete Course Library publish."}
+    {"version":"v31.0.28","summary":"Clears obsolete Needs Attention flags after a repaired Course Library draft passes complete cloud verification."}
   ]</script>
 
 
@@ -1021,7 +1031,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v31.0.31</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
+    <span id="appVersionFooter">v31.0.32</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
@@ -1151,8 +1161,8 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=31.0.31&amp;rev=202609030100"></script>
-  <script src="identity-security.js?v=31.0.31&amp;rev=202609030100"></script>
-  <script src="app.js?v=31.0.31&amp;rev=202609030100"></script>
+  <script src="supabase-config.js?v=31.0.32&amp;rev=202609030245"></script>
+  <script src="identity-security.js?v=31.0.32&amp;rev=202609030245"></script>
+  <script src="app.js?v=31.0.32&amp;rev=202609030245"></script>
 </body>
 </html>

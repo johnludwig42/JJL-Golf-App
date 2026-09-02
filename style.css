@@ -314,11 +314,26 @@ main{padding-bottom:calc(64px + env(safe-area-inset-bottom) + var(--keyboard-off
 }
 .picker-check input { width: auto; margin: 0; }
 .score-hole-nav { align-items: center; justify-content: space-between; }
+.classic-hole-context{grid-column:1 / span 2;min-width:0;display:grid;gap:3px;padding:2px 4px;text-align:left}
+.classic-hole-meta{font-size:.82rem;font-weight:750;color:var(--muted)}
+.classic-header-match-status{display:flex;align-items:baseline;flex-wrap:wrap;gap:3px 7px;min-width:0;font-size:.74rem}
+.classic-header-match-status span{color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.classic-header-match-status strong{color:var(--accent);overflow-wrap:anywhere}
+.classic-header-save-state{font-size:.68rem;font-weight:700;color:var(--accent)}
+.classic-header-save-state[data-tone="attention"]{color:#9b2c2c}.classic-header-save-state[data-tone="working"],.classic-header-save-state[data-tone="warning"]{color:#8a6100}
+.classic-header-actions{grid-column:3;display:flex;align-items:center;justify-content:flex-end;gap:6px;position:relative}
+.classic-header-actions button{min-height:44px}
+.classic-play-overflow{width:44px;min-width:44px;padding:0;font-size:1.05rem}
+.classic-play-overflow-menu{position:absolute;z-index:1401;right:0;top:calc(100% + 6px);display:grid;gap:6px;width:190px;padding:8px;border:1px solid var(--border);border-radius:12px;background:var(--card);box-shadow:0 12px 30px rgba(0,0,0,.16)}
+.classic-play-overflow-menu.hidden{display:none!important}
 .play-input-mode-bar{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-bottom:8px;padding:8px 10px;border:1px solid var(--border);border-radius:12px;background:var(--surface-soft,#f6f8f7)}
 .play-input-mode-bar label{display:flex;align-items:center;gap:8px;margin:0}
 .play-input-mode-bar select{width:auto;min-width:150px;margin:0}
 .play-input-mode-bar .tiny{max-width:420px;text-align:right}
 @media (max-width:600px){.play-input-mode-bar{align-items:stretch;flex-direction:column;gap:4px}.play-input-mode-bar label{justify-content:space-between}.play-input-mode-bar .tiny{text-align:left}}
+@media(max-width:600px){#score .score-hole-nav>button{min-height:44px}.classic-hole-context{grid-column:1 / -1}.classic-header-actions{grid-column:1 / -1;width:100%}}
+@media(max-width:360px){.classic-header-actions{gap:4px}.classic-header-actions .compact-icon-btn{padding:7px 8px;font-size:.72rem}.classic-hole-context{padding-left:2px}.classic-header-match-status{font-size:.68rem}}
+@media(max-width:640px){#score .score-hole-nav{position:sticky!important;top:calc(var(--app-chrome-height, 0px) + 8px)!important;z-index:1400!important;background:rgba(244,248,246,.96)!important;backdrop-filter:blur(8px)!important;border:1px solid rgba(11,93,59,.12)!important;padding-left:5px!important;padding-right:5px!important;box-shadow:0 8px 20px rgba(0,0,0,.08)!important}}
 /* v31.0.09 Player Mode: collapsible per-golfer entry over the shared engine. */
 .player-input-mode-active .score-grid thead{display:none}
 .player-input-mode-active .score-grid,.player-input-mode-active .score-grid tbody,.player-input-mode-active .score-grid tr,.player-input-mode-active .score-grid td{display:block;width:100%}
@@ -6268,3 +6283,4 @@ html.quick-scoreboard-open,body.quick-scoreboard-open{overflow:hidden!important;
 
 /* Player Mode owns the root scroll surface so its hole header can remain below the fixed app chrome. */
 body.player-mode-play-active{overflow-x:clip!important;overflow-y:visible!important}
+body.classic-mode-play-active{overflow-x:clip!important;overflow-y:visible!important}

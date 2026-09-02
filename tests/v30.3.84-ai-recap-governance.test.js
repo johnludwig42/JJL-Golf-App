@@ -169,7 +169,8 @@ test('current assets refresh and Play exposes the authoritative End Round workfl
     assert.match(html, new RegExp(`${asset.replace('.', '\\.')}\\?v=${currentVersionBare.replaceAll('.', '\\.')}`));
     assert.match(worker, new RegExp(`${asset.replace('.', '\\.')}\\?v=${currentVersionBare.replaceAll('.', '\\.')}`));
   }
-  assert.match(html, /<details class="play-round-details[\s\S]*?<button id="finishRoundBtn"[^>]*>Complete Round<\/button>[\s\S]*?<button id="endRoundEarlyBtn"[^>]*>End Round Early<\/button>/);
+  assert.match(html, /<div id="classicPlayOverflowMenu"[\s\S]*?<button id="endRoundEarlyBtn"[^>]*>End Round Early<\/button>/);
+  assert.match(html, /<button id="finishRoundBtn"[^>]*>Complete Round<\/button>/);
   assert.doesNotMatch(html, /id="confirmFinishRoundBtn"/);
   assert.match(app, /show\(scoringFinishBtn, hasMatch && !isComplete && activeRound && dataCompletion\?\.scoresComplete\)/);
   assert.match(app, /finishRoundBtn'\)\.addEventListener\('click', \(\) => handleScoreboardFinishEndRound\('complete'\)\)/);

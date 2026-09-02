@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.31',
-  versionNumber: '31.0.31',
-  cacheName: 'the-dye-ledger-v31.0.31',
-  buildDate: '2026-09-03T01:00:00-04:00',
-  buildLabel: 'Post-Round State and Setup Correctness'
+  version: 'v31.0.32',
+  versionNumber: '31.0.32',
+  cacheName: 'the-dye-ledger-v31.0.32',
+  buildDate: '2026-09-03T02:45:00-04:00',
+  buildLabel: 'Classic Play Header and Hole Navigation'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -17913,8 +17913,10 @@ function renderPlayInputModeSelector(activeMode = getPreferredPlayInputMode()) {
 function renderClassicPlayInputMode({ match, tee, metrics, scoringHoles, hole, controller }) {
   document.getElementById('scoreEntryWrap')?.classList.remove('player-input-mode-active');
   document.body?.classList.remove('player-mode-play-active');
+  document.body?.classList.add('classic-mode-play-active');
   document.querySelector('.play-input-mode-bar')?.classList.add('hidden');
-  document.getElementById('activeHoleScoringTop')?.classList.add('hidden');
+  document.getElementById('activeHoleScoringTop')?.classList.remove('hidden');
+  document.getElementById('playerModeHoleHeader')?.classList.add('hidden');
   document.getElementById('classicScoreEntryHead')?.classList.remove('hidden');
   document.getElementById('classicScoreGridWrap')?.classList.remove('hidden');
   document.getElementById('classicHoleActions')?.classList.remove('hidden');
@@ -17924,9 +17926,8 @@ function renderClassicPlayInputMode({ match, tee, metrics, scoringHoles, hole, c
   renderPressActions(match, metrics);
   const playMatchSummary = document.getElementById('playMatchSummary');
   if (playMatchSummary) {
-    playMatchSummary.classList.remove('hidden');
-    const statusOptions = getMatchStatusOptions(match);
-    playMatchSummary.innerHTML = buildFeaturedMatchStatus(match, metrics, match.matchStatusGame || statusOptions[0]?.key || 'team_match');
+    playMatchSummary.innerHTML = '';
+    playMatchSummary.classList.add('hidden');
   }
   renderSneakySandyPoleyEntry(match, hole, metrics);
   renderStatTrackingEntry(match, hole, metrics);
@@ -18213,6 +18214,7 @@ function renderPlayerModeStatEntry(match, hole, metrics) {
 function renderPlayerPlayInputMode({ match, tee, metrics, scoringHoles, hole, controller }) {
   document.getElementById('scoreEntryWrap')?.classList.add('player-input-mode-active');
   document.body?.classList.add('player-mode-play-active');
+  document.body?.classList.remove('classic-mode-play-active');
   document.querySelector('.play-input-mode-bar')?.classList.add('hidden');
   document.getElementById('activeHoleScoringTop')?.classList.add('hidden');
   document.getElementById('classicScoreEntryHead')?.classList.add('hidden');
@@ -18313,16 +18315,14 @@ function renderCurrentMatch() {
     const key = `${playerTee?.id || p.teeId || ''}|${holeTeeName}|${playerHole?.yardage || ''}`;
     return [key, `${holeTeeName} ${playerHole?.yardage ? `${formatYardageValue(playerHole.yardage)} yds` : '— yds'}`];
   })).values()].join(' · ') : '';
-  const primaryStatusLine = getPrimaryMatchStatusLine(match, metrics);
   const honorsStatusLine = getSneakySandyPoleyHonorsLine(match, metrics);
   const strokeBasisNote = document.getElementById('playStrokeBasisNote');
   if (strokeBasisNote) strokeBasisNote.textContent = getFeaturedCompetitionStrokeNote(match, metrics);
   const holeSummaryEl = document.getElementById('holeSummary');
   if (holeSummaryEl) {
     if (hole) {
-      const holeMeta = `Par ${hole.par || '-'} · SI ${hole.strokeIndex || '-'}`;
-      const statusItems = `${primaryStatusLine ? `<div class="score-primary-status">${escapeHtml(primaryStatusLine)}</div>` : ''}${honorsStatusLine ? `<div class="score-primary-status score-honors-status">${escapeHtml(honorsStatusLine)}</div>` : ''}`;
-      holeSummaryEl.innerHTML = `<div class="score-hole-meta">${escapeHtml(holeMeta)}</div>${statusItems ? `<div class="score-status-row">${statusItems}</div>` : ''}`;
+      const statusItems = honorsStatusLine ? `<div class="score-primary-status score-honors-status">${escapeHtml(honorsStatusLine)}</div>` : '';
+      holeSummaryEl.innerHTML = statusItems ? `<div class="score-status-row">${statusItems}</div>` : '';
     } else {
       holeSummaryEl.innerHTML = '';
     }
@@ -18729,7 +18729,7 @@ function renderHoleSelector(match, scoringHoles = [], metrics = null) {
     return `<option value="${holeNo}" ${holeNo === currentHole ? 'selected' : ''}>Hole ${displayHole}</option>`;
   }).join('');
   const isPlayerMode = getEffectivePlayInputMode(match) === PLAY_INPUT_MODES.PLAYER.key;
-  if (playerHeader) {
+  if (isPlayerMode && playerHeader) {
     const hole = holes[currentHole - 1] || null;
     const yardage = Number(hole?.yardage);
     const compactMatchStatus = metrics ? getPrimaryMatchStatusLine(match, metrics) : '';
@@ -18747,8 +18747,23 @@ function renderHoleSelector(match, scoringHoles = [], metrics = null) {
     if (badge) badge.innerHTML = '';
     return;
   }
-  playerHeader?.classList.add('hidden');
+  if (playerHeader) {
+    playerHeader.innerHTML = '';
+    playerHeader.classList.add('hidden');
+  }
+  const hole = holes[currentHole - 1] || null;
+  const yardage = Number(hole?.yardage);
+  const resolvedGameKey = match.matchStatusGame || 'team_match';
+  const featuredLabel = getFeaturedGameLabel(match, resolvedGameKey);
+  const compactMatchStatus = metrics ? getPrimaryMatchStatusLine(match, metrics) : '';
+  const saveState = getPlayerModeSavePresentation(match);
   if (badge) badge.innerHTML = `<label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select>`;
+  const classicContext = document.getElementById('classicHoleContext');
+  if (classicContext) classicContext.innerHTML = `<div class="classic-hole-meta">Par ${Number(hole?.par) || '—'}${Number.isFinite(yardage) && yardage > 0 ? ` · ${formatYardageValue(yardage)} yd` : ''} · SI ${Number(hole?.strokeIndex) || '—'}</div>${compactMatchStatus ? `<div class="classic-header-match-status"><span>${escapeHtml(featuredLabel)}</span><strong>${escapeHtml(compactMatchStatus.replace(/^[^:]+:\s*/, ''))}</strong></div>` : ''}<div class="classic-header-save-state" data-tone="${saveState.tone}">${escapeHtml(saveState.label)}</div>`;
+  const classicModeSelect = document.getElementById('classicRoundScoringModeSelect');
+  if (classicModeSelect) classicModeSelect.innerHTML = Object.values(PLAY_INPUT_MODES).filter(mode => mode.available).map(mode => `<option value="${mode.key}" ${mode.key === PLAY_INPUT_MODES.CLASSIC.key ? 'selected' : ''}>${mode.label.replace(' Mode','')}</option>`).join('');
+  const classicStatSelect = document.getElementById('classicRoundStatModeSelect');
+  if (classicStatSelect) classicStatSelect.innerHTML = Object.values(STAT_TRACKING_MODES).map(mode => `<option value="${mode.key}" ${mode.key === normalizeStatTrackingMode(match.statTrackingMode || (match.statTrackingEnabled ? 'CASUAL' : 'NONE')) ? 'selected' : ''}>${mode.label}</option>`).join('');
 }
 
 function renderSneakySandyPoleyEntry(match, hole, metrics) {
@@ -22267,9 +22282,11 @@ function closeExperienceDestination(tabId, { scroll = true } = {}) {
 
 function activateTab(tabId) {
   const previousTabId = document.querySelector('.panel.active')?.id || '';
+  const activePlayMode = getEffectivePlayInputMode(getActiveMatch());
   document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tabId));
   document.querySelectorAll('.panel').forEach(el => el.classList.toggle('active', el.id === tabId));
-  document.body?.classList.toggle('player-mode-play-active', tabId === 'score' && getPreferredPlayInputMode() === PLAY_INPUT_MODES.PLAYER.key);
+  document.body?.classList.toggle('player-mode-play-active', tabId === 'score' && activePlayMode === PLAY_INPUT_MODES.PLAYER.key);
+  document.body?.classList.toggle('classic-mode-play-active', tabId === 'score' && activePlayMode === PLAY_INPUT_MODES.CLASSIC.key);
   updateAppChromeOffset();
   syncFinishRoundUi(tabId === 'leaderboard' ? getReviewOrActiveMatch() : getActiveMatch());
   if (tabId === 'setup') {
@@ -23147,7 +23164,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
   document.getElementById('score').addEventListener('change', async e => {
-    if (e.target.id === 'playerModeRoundScoringModeSelect') {
+    if (['playerModeRoundScoringModeSelect', 'classicRoundScoringModeSelect'].includes(e.target.id)) {
       const prior = getEffectivePlayInputMode();
       const result = await switchPlayInputMode(e.target.value);
       if (!result.changed && result.reason) {
@@ -23156,7 +23173,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       }
       return;
     }
-    if (e.target.id === 'playerModeRoundStatModeSelect') {
+    if (['playerModeRoundStatModeSelect', 'classicRoundStatModeSelect'].includes(e.target.id)) {
       const match = getActiveMatch();
       if (!match) return;
       match.statTrackingMode = normalizeStatTrackingMode(e.target.value);
@@ -23289,6 +23306,14 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }, '#gameConfigs');
   });
   document.getElementById('score').addEventListener('click', e => {
+    const classicOverflowButton = e.target.closest('[data-classic-play-overflow]');
+    if (classicOverflowButton) {
+      const menu = document.getElementById('classicPlayOverflowMenu');
+      const opening = !!menu?.classList.contains('hidden');
+      menu?.classList.toggle('hidden', !opening);
+      classicOverflowButton.setAttribute('aria-expanded', String(opening));
+      return;
+    }
     const overflowButton = e.target.closest('[data-player-mode-overflow]');
     if (overflowButton) {
       const menu = document.getElementById('playerModeOverflowMenu');

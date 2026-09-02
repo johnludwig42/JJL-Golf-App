@@ -1,6 +1,6 @@
 {
   "name": "the-dye-ledger",
-  "version": "31.0.31",
+  "version": "31.0.32",
   "private": true,
   "type": "module",
   "scripts": {
@@ -55,6 +55,7 @@
     "test:v31.0.29": "node --test tests/v31.0.29-course-approval-reliability.test.js tests/v31.0.28-course-attention-recovery.test.js tests/v31.0.27-course-tee-gender-sync.test.js tests/course-library.test.js tests/course-library-security-package.test.js",
     "test:v31.0.30": "node --test tests/v31.0.30-course-tee-repair-activation.test.js tests/v31.0.29-course-approval-reliability.test.js tests/v31.0.28-course-attention-recovery.test.js tests/v31.0.27-course-tee-gender-sync.test.js tests/course-library.test.js",
     "test:v31.0.31": "node --test tests/v31.0.31-post-round-setup-correctness.test.js tests/v31.0.24-round-lifecycle.test.js tests/v31.0.21-story-review-surface.test.js tests/v31.0.20-save-history-report-actions.test.js tests/v31.0.30-course-tee-repair-activation.test.js",
+    "test:v31.0.32": "node --test tests/v31.0.32-classic-play-navigation.test.js tests/v31.0.14-player-mode-entry-flow.test.js tests/v31.0.13-player-mode-clarity.test.js tests/mobile-scoring-ux.test.js",
     "build:ledger-entry-fixture": "node scripts/generate-ledger-entry-fixture.js",
     "check:layout": "npm run build:ledger-entry-fixture && node scripts/check-ledger-entry-layout.mjs",
     "test:identity-security": "node --test tests/v30.3.75-identity-security.test.js",

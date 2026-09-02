@@ -3,7 +3,7 @@
    or derived from it. Stroke allocation comes from the app's engine, keyed by
    basis; the report never re-derives handicapping.
    ========================================================================== */
-import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.32';
+import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.33';
 
 const packPages = globalThis.packPages;
 const runGame = globalThis.runGame;
@@ -159,7 +159,11 @@ const HAS_SIDES = SIDEKEYS.length===2 && P.every(p=>p.side);
 
 /* run every game through its engine */
 const CTX = { players:P, holes:HOLES, par:C.par };
-ROUND.games.forEach(g=>{ try{ g.R = runGame(g,CTX); }catch(e){ g.R=null;
+ROUND.games.forEach(g=>{ try{
+  const gamePlayers = Array.isArray(g.playerIds) && g.playerIds.length
+    ? P.filter(player=>g.playerIds.includes(player.id)) : P;
+  g.R = runGame(g,{...CTX,players:gamePlayers});
+}catch(e){ g.R=null;
   console.error("ENGINE FAIL "+g.id+": "+e.message); } });
 const FEAT = ROUND.games.find(g=>g.featured) || ROUND.games[0] || null;
 
@@ -167,12 +171,12 @@ const FEAT = ROUND.games.find(g=>g.featured) || ROUND.games[0] || null;
 ROUND.games.forEach(g=>{
   g.moneyBy = g.money || (g.R && g.R.ledger) || {};
   if(g.unit==="points" && g.pointValue!=null && g.money){
-    P.forEach(p=>{ const own=g.R.series.find(s=>s.id===p.id).total;
+    g.R.series.forEach(s=>{ const p=S(s.id), own=s.total;
       const want=(g.settlementMode==="headToHead"
-        ? g.R.series.filter(s=>s.id!==p.id).reduce((sum,s)=>sum+(own-s.total),0)
+        ? g.R.series.filter(other=>other.id!==s.id).reduce((sum,other)=>sum+(own-other.total),0)
         : own)*g.pointValue;
-      if(Math.abs(want-(g.money[p.id]||0))>1e-6)
-        console.error(`POINTS/MONEY MISMATCH ${g.id} ${p.name}: ${want} vs ${g.money[p.id]}`); });
+      if(Math.abs(want-(g.money[s.id]||0))>1e-6)
+        console.error(`POINTS/MONEY MISMATCH ${g.id} ${p?.name||s.id}: ${want} vs ${g.money[s.id]||0}`); });
   }
 });
 const moneyOf = id => ROUND.games.reduce((a,g)=>a+(g.moneyBy[id]||0),0);
@@ -180,7 +184,8 @@ const HAS_MONEY = ROUND.games.some(g=>Object.values(g.moneyBy).some(v=>v!==0));
 const PAY = ROUND.payments||[];
 const sideMoney = k => sideOf(k).reduce((a,p)=>a+moneyOf(p.id),0);
 /* side games ordered by money moved, descending */
-const SIDEGAMES = ROUND.games.filter(g=>!g.featured)
+const NINEPOINT = ROUND.games.find(g=>g.type==="ninepoint"&&g.R?.archetype==="cumulative") || null;
+const SIDEGAMES = ROUND.games.filter(g=>!g.featured&&g.type!=="ninepoint")
   .sort((a,b)=> Object.values(b.moneyBy).filter(v=>v>0).reduce((x,y)=>x+y,0)
               - Object.values(a.moneyBy).filter(v=>v>0).reduce((x,y)=>x+y,0));
 
@@ -241,7 +246,10 @@ add("hero", ()=>{
   const label = FEAT ? headerCompetitionLabel(FEAT.name, FEAT.allowance.label) : "No featured competition";
   w.appendChild(h("div",{class:"eyebrow",text:"Featured Competition · "+label}));
   let head;
-  if(WINK){
+  if(FEAT?.type==="ninepoint"&&ROUND.meta.primaryMatchStatus){
+    head=ROUND.meta.primaryMatchStatus;
+  }
+  else if(WINK){
     const swept = FEAT?.type==="nassau" && MARGIN.segments.length>1 && MARGIN.segments.every(segment=>WINK===FEAT.sides[1].key ? segment.margin>0 : segment.margin<0);
     const verb = sideOf(WINK).length===1 ? "sweeps" : "sweep";
     head = swept ? `${SIDES[WINK].name} ${verb} the Nassau` : `${SIDES[WINK].name} — ${Math.abs(MARGIN.total)}&nbsp;up`;
@@ -261,7 +269,13 @@ add("hero", ()=>{
 
 function deckText(){
   const parts=[];
-  if(WINK){
+  if(FEAT?.type==="ninepoint"){
+    const completed=FR?.holesScored||0;
+    parts.push(completed
+      ? `Standings reflect ${completed} completed ${completed===1?"hole":"holes"} of individual 9-Point play.`
+      : "The 9-Point game has not started.");
+  }
+  else if(WINK){
     if(HAS_MONEY){
       const winnerPosition=sideMoney(WINK);
       parts.push(winnerPosition>0
@@ -424,18 +438,32 @@ function cumulativeChart(){
   const lo=Math.min(...all), hi=Math.max(...all);
   const pad=(hi-lo)*0.08||1;
   const Y=v=>y1-(v-(lo-pad))/((hi+pad)-(lo-pad))*(y1-y0), X=i=>x0+(x1-x0)*i/NH;
-  const top3 = FR.ranked.slice(0,3).map(s=>s.id);
+  const emphasized = FR.series.length<=4 ? FR.series.map(s=>s.id) : FR.ranked.slice(0,3).map(s=>s.id);
+  const individualColors=["#7A3E9D","#B35C00","#007C91","#8A6A00","#B2355C","#4B61A8"];
+  const usesSideIdentity=HAS_SIDES && FEAT?.scope!=="individual";
+  const chartColor=(series)=>usesSideIdentity ? SIDES[S(series.id).side].color : individualColors[FR.series.findIndex(row=>row.id===series.id)%individualColors.length];
   const paths = FR.series.map(s=>{
-    const lead = top3.includes(s.id);
+    const lead = emphasized.includes(s.id);
     const p = s.run.map((v,i)=>`${i?"L":"M"}${X(i)} ${Y(v)}`).join(" ");
-    const col = HAS_SIDES ? SIDES[S(s.id).side].color : "#14211C";
-    return `<path d="${p}" fill="none" stroke="${col}" stroke-width="${lead?2:0.9}"
+    const col = chartColor(s);
+    return `<path data-player-line="${s.id}" d="${p}" fill="none" stroke="${col}" stroke-width="${lead?2:0.9}"
       opacity="${lead?1:.28}"/>`;
   }).join("");
-  const tags = FR.ranked.slice(0,3).map((s,k)=>
-    `<text x="${x1+2}" y="${Y(s.run[NH])+3}" text-anchor="end" font-family="Archivo"
-      font-weight="700" font-size="7" fill="${HAS_SIDES?SIDES[S(s.id).side].color:'#14211C'}"
-      >${initials(nameOf(s.id))} ${s.total>0?"+":""}${s.total}</text>`).join("");
+  const labeled = (FR.series.length<=4 ? FR.ranked : FR.ranked.slice(0,3)).map(s=>({s,y:Y(s.run[NH])})).sort((a,b)=>a.y-b.y);
+  const labelGap=10;
+  labeled.forEach((entry,index)=>{ entry.y=Math.max(index?labeled[index-1].y+labelGap:y0,entry.y); });
+  for(let index=labeled.length-1;index>=0;index-=1){
+    const ceiling=index===labeled.length-1?y1:labeled[index+1].y-labelGap;
+    labeled[index].y=Math.min(labeled[index].y,ceiling);
+  }
+  const totalCounts=new Map(FR.series.map(s=>[s.total,FR.series.filter(row=>row.total===s.total).length]));
+  const tags = labeled.map(({s,y})=>{
+    const first=String(nameOf(s.id)||"Player").trim().split(/\s+/)[0];
+    const label=first.length>11?`${first.slice(0,10)}…`:first;
+    const tied=totalCounts.get(s.total)>1?" (T)":"";
+    return `<text data-player-label="${s.id}" x="${x1+2}" y="${y+3}" text-anchor="end" font-family="Archivo"
+      font-weight="700" font-size="7" fill="${chartColor(s)}">${label}${tied} ${s.total>0?"+":""}${s.total}</text>`;
+  }).join("");
   const tp=FR.turning;
   const band = tp?`<rect x="${X(tp.i)}" y="${y0}" width="${X(tp.i+1)-X(tp.i)}" height="${y1-y0}"
     fill="#B0821F" opacity=".13"/><text x="${(X(tp.i)+X(tp.i+1))/2}" y="${y0-6}" text-anchor="middle"
@@ -444,7 +472,7 @@ function cumulativeChart(){
     <text x="${x0-8}" y="${Y(v)+2.6}" text-anchor="end" font-family="IBM Plex Mono" font-size="6.5" fill="#6E736C">${Math.round(v*10)/10}</text>`).join("");
   return chartFrame(`${ticks}${band}${paths}${tags}`,yAxisLabel(`CUMULATIVE ${String(FR.unit).toUpperCase()}`),
     `<text x="${x0}" y="${CH.segY}" font-family="Archivo" font-weight="600" font-size="6.4"
-      letter-spacing="1.4" fill="#6E736C">CUMULATIVE ${String(FR.unit).toUpperCase()} · TOP THREE EMPHASISED</text>`);
+      letter-spacing="1.4" fill="#6E736C">CUMULATIVE ${String(FR.unit).toUpperCase()}${FR.series.length>4?' · TOP THREE EMPHASISED':''}</text>`);
 }
 
 function discreteChart(){
@@ -841,6 +869,21 @@ if(MARGIN){
       `<strong>BEST-BALL CARD TOTAL · BEST ${wn(FEAT.bestN||2).toUpperCase()} ${cardBasis}</strong> · ${cardTotals.map(side=>`${side.name.toUpperCase()} ${side.total}`).join(" · ")} · INFORMATIONAL AGGREGATE; THE ${FEAT.type==="nassau"?"NASSAU":"MATCH"} RESULT IS DETERMINED HOLE BY HOLE.`}));
     return w;
   }, {splittable:true, minRows:1});
+}
+
+/* ---- 9-Point hole by hole ---- */
+if(NINEPOINT?.R?.series.some(series=>series.raw.some(isNum))){
+  add("ninepointh",()=>secHead("9-Point · hole by hole",
+    `${String(NINEPOINT.basis||"net").toUpperCase()} points · unplayed holes remain blank.`),
+    {keepWithNext:true,breakBefore:!MARGIN,label:"Games"});
+  add("ninepoint",()=>{
+    const nameW=15,totalW=7,holeW=(100-nameW-totalW)/NH;
+    const cols=`<colgroup><col style="width:${nameW}%">${Array.from({length:NH},()=>`<col style="width:${holeW}%">`).join("")}<col style="width:${totalW}%"></colgroup>`;
+    const head=`<thead data-rowhead><tr><th class="l">Player</th>${HOLES.map(hole=>`<th>${hole}</th>`).join("")}<th class="tot">Total</th></tr></thead>`;
+    const rows=NINEPOINT.R.ranked.map(series=>`<tr data-row><td class="l">${nameCell(S(series.id))}</td>${series.raw.map(value=>`<td>${isNum(value)?value:""}</td>`).join("")}<td class="tot"><strong>${series.total}</strong></td></tr>`).join("");
+    const w=h("div",{"data-nine-point-hole-table":"",html:`<table class="sc nine-point-points">${cols}${head}<tbody>${rows}</tbody></table><p class="scnote">Each completed hole distributes exactly nine points among the three selected players. Blank cells are unplayed, not zero-point awards.</p>`});
+    return w;
+  },{splittable:true,minRows:3,keepTogetherWhenFits:true});
 }
 
 /* ---- side games, ordered by money moved ---- */

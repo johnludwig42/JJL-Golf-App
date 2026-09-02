@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.32',
-  versionNumber: '31.0.32',
-  cacheName: 'the-dye-ledger-v31.0.32',
-  buildDate: '2026-09-03T02:45:00-04:00',
-  buildLabel: 'Classic Play Header and Hole Navigation'
+  version: 'v31.0.33',
+  versionNumber: '31.0.33',
+  cacheName: 'the-dye-ledger-v31.0.33',
+  buildDate: '2026-09-02T06:13:00-04:00',
+  buildLabel: '9-Point Presentation'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -6910,11 +6910,12 @@ function buildLedgerEntryReportModel(match, metrics = null) {
       const result = computeNinePointResults(match, effectiveMetrics, config);
       return {
         ...common, type: 'ninepoint', scope: 'individual', unit: 'points', lowWins: false,
+        playerIds: result.playerIds.slice(),
         basis: config.basis === 'gross' ? 'gross' : 'net',
         allowance: { key: config.basis === 'gross' ? 'courseNet' : 'featured', label: config.basis === 'gross' ? 'Gross' : 'Game Net' },
         pointValue: Number(result.stakePerPoint || config.stakePerPoint || 0),
         settlementMode: 'headToHead',
-        pointsByHole: Object.fromEntries(players.map(player => [player.id, result.holes.map(hole => hole.completed ? Number(hole.points?.[player.id] || 0) : null)])),
+        pointsByHole: Object.fromEntries(result.playerIds.map(playerId => [playerId, result.holes.map(hole => hole.completed ? Number(hole.points?.[playerId] || 0) : null)])),
         segments: [{ label: 'Round', holes: holeNumbers.slice() }],
       };
     }
@@ -6978,6 +6979,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
       weather: weather || weatherNote ? { note: weatherNote || String(weather?.summary || weather?.description || ''), recordedAt: 'first completed hole' } : null,
       recap: record.notes?.aiRecap || null,
       recapProvenance: record.notes?.recapProvenance || 'deterministic-fallback',
+      primaryMatchStatus: getPrimaryMatchStatusLine(match, effectiveMetrics),
     },
     holes: holeNumbers,
     card: {
@@ -10639,6 +10641,28 @@ function getPrimaryMatchStatusLine(match, metrics, options = {}) {
     key = selectedKeys.has(featured) || ['stroke_net', 'stroke_gross'].includes(featured) ? featured : '';
   }
   if (!key || key === 'none') return '';
+  if (key === 'nine_point') {
+    const config = (match.selectedGames || []).find(game => game.key === 'nine_point') || {};
+    const result = computeNinePointResults(match, metrics, config);
+    const prefix = options.includesDraft ? 'Live 9-Point Game' : '9-Point Game';
+    if (!result.completedHoles) return `${prefix}: Not started`;
+    const groups = [];
+    (result.leaderboard || []).forEach(row => {
+      const total = Number(row.total) || 0;
+      const current = groups.at(-1);
+      const firstName = String(row.name || 'Player').trim().split(/\s+/)[0] || 'Player';
+      const label = firstName.length > 12 ? `${firstName.slice(0, 11)}…` : firstName;
+      if (current?.total === total) current.names.push(label);
+      else groups.push({ total, names: [label] });
+    });
+    const status = groups.map(group => {
+      const names = group.names.length > 1
+        ? `${group.names.slice(0, -1).join(', ')} and ${group.names.at(-1)}`
+        : group.names[0];
+      return `${names} ${group.total}`;
+    }).join(' · ');
+    return status ? `${prefix}: ${status}` : `${prefix}: Not started`;
+  }
   const text = getCompactGameStatus(match, metrics, key);
   if (!text || text === 'Active') return '';
   if (key === 'sneaky_sandy_poley') {

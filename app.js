@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.29',
-  versionNumber: '31.0.29',
-  cacheName: 'the-dye-ledger-v31.0.29',
-  buildDate: '2026-09-02T23:00:00-04:00',
-  buildLabel: 'Course Approval Reliability'
+  version: 'v31.0.30',
+  versionNumber: '31.0.30',
+  cacheName: 'the-dye-ledger-v31.0.30',
+  buildDate: '2026-09-03T00:30:00-04:00',
+  buildLabel: 'Course Tee Repair Activation'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;

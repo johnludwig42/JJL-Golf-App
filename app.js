@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.28',
-  versionNumber: '31.0.28',
-  cacheName: 'the-dye-ledger-v31.0.28',
-  buildDate: '2026-09-02T21:00:00-04:00',
-  buildLabel: 'Course Publish Status Recovery'
+  version: 'v31.0.29',
+  versionNumber: '31.0.29',
+  cacheName: 'the-dye-ledger-v31.0.29',
+  buildDate: '2026-09-02T23:00:00-04:00',
+  buildLabel: 'Course Approval Reliability'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -16429,7 +16429,7 @@ function renderCourses() {
     const holeCount = getCourseHoleCount(c);
     const sourceLabel = (c.cloudCourseId || c.source === 'supabase') ? 'Cloud + device' : 'This device';
     const libraryState = getCourseLibraryStateLabel(c);
-    const canApproveDraft = uiState.courseLibraryMaintainer && libraryState === 'Draft Uploaded' && !!c.cloudCourseId;
+    const canApproveDraft = uiState.courseLibraryMaintainer && String(c.cloudPublicationStatus || '').toLowerCase() === 'draft' && !!c.cloudCourseId;
     const approvedReadOnly = libraryState === 'Approved';
     return `
     <div class="item compact-item library-item-card course-card ${expanded ? 'expanded' : 'collapsed'}">
@@ -16440,12 +16440,13 @@ function renderCourses() {
             <span class="item-title" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</span>
             <span class="muted course-meta-line">${escapeHtml([c.city, c.state].filter(Boolean).join(', ') || c.country || 'Course')}</span>
             <span class="tiny course-meta-line"><strong>${escapeHtml(libraryState)}</strong> · ${escapeHtml(sourceLabel)} · ${escapeHtml(recentText)} · ${holeCount || '—'} holes · ${sortedTees.length} tee${sortedTees.length === 1 ? '' : 's'}</span>
+            ${c.cloudSyncError ? `<span class="tiny field-error course-meta-line">${escapeHtml(c.cloudSyncError)}</span>` : ''}
           </span>
         </button>
         <div class="actions wrap compact-actions library-item-actions-inline">
           <button class="secondary" data-edit-course="${c.id}" ${approvedReadOnly ? 'disabled title="Approved catalog courses are protected."' : ''}>Edit course</button>
           <button class="secondary" data-new-tee="${c.id}" ${approvedReadOnly ? 'disabled title="Approved catalog courses are protected."' : ''}>Add Tee Manually</button>
-          ${canApproveDraft ? `<button data-approve-course="${c.id}">Approve</button>` : ''}
+          ${canApproveDraft ? `<button data-approve-course="${c.id}">${libraryState === 'Needs Attention' ? 'Retry Approval' : 'Approve'}</button>` : ''}
           <details class="library-item-more-actions">
             <summary>More actions</summary>
             <div class="library-item-more-menu">
@@ -16523,9 +16524,10 @@ async function approveCourseLibraryDraft(courseId) {
     toast('Course approved.');
   } catch (error) {
     course.cloudSyncError = error?.message || 'Course approval failed.';
-    uiState.cloudCoursesStatus = 'Course approval needs attention. The draft remains unchanged.';
+    persist({ skipRender: true });
+    uiState.cloudCoursesStatus = `${course.name} approval needs attention: ${course.cloudSyncError} The draft remains unchanged and can be retried.`;
     renderCourses();
-    toast('Course approval needs attention.');
+    toast(`Course approval needs attention: ${course.cloudSyncError}`, 5000);
   } finally {
     uiState.cloudCoursesLoading = false;
     renderCourses();

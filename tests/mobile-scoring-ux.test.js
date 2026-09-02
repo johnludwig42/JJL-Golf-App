@@ -330,7 +330,8 @@ test('responsive source paths contain internal scrolling, width-fit momentum, de
   assert.match(css, /\.quick-momentum-card \.momentum-chart\{[^}]*min-width:0[^}]*max-width:100%/);
   const renderClassic = app.slice(app.indexOf('function renderClassicPlayInputMode'), app.indexOf('function renderPlayInputMode(', app.indexOf('function renderClassicPlayInputMode')));
   assert.ok(renderClassic.indexOf('renderScoreGrid(match, tee, metrics, scoringHoles);') < renderClassic.indexOf('renderPressActions(match, metrics);'));
-  assert.match(app, /playMatchSummary\.innerHTML = buildFeaturedMatchStatus/);
+  assert.match(app, /classic-header-match-status/);
+  assert.doesNotMatch(renderClassic, /buildFeaturedMatchStatus/);
 });
 
 test('Quick Scoreboard reuses the native bounded scorecard scroller and Play Greenies stay compact without changing controls', () => {

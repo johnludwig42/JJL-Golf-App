@@ -28,7 +28,7 @@ test('Player Mode presents one sticky hole and featured-match header', () => {
   const playerRenderer = app.slice(app.indexOf('function renderPlayerPlayInputMode'), app.indexOf('function renderHoleJumpTiles'));
   assert.match(playerRenderer, /playMatchSummary\.classList\.add\('hidden'\)/);
   const classicRenderer = app.slice(app.indexOf('function renderClassicPlayInputMode'), app.indexOf('function renderPlayerPlayInputMode'));
-  assert.match(classicRenderer, /playMatchSummary\.classList\.remove\('hidden'\)/);
+  assert.match(classicRenderer, /playMatchSummary\.classList\.add\('hidden'\)/);
 });
 
 test('Player Mode removes duplicate header actions while keeping persistent bottom actions', () => {

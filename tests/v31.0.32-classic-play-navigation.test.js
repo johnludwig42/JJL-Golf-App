@@ -39,13 +39,10 @@ test('Classic header provides Prev, direct selection, Next, and the existing nav
 test('Classic header renders current-hole facts and one resolved featured status', () => {
   const selector = section('function renderHoleSelector', 'function renderSneakySandyPoleyEntry');
   assert.match(selector, /playerHeader\.innerHTML = ''/);
-  assert.match(selector, /classic-hole-meta">Par/);
-  assert.match(selector, /formatYardageValue\(yardage\).*yd/);
-  assert.match(selector, /SI \$\{Number\(hole\?\.strokeIndex\)/);
-  assert.match(selector, /const resolvedGameKey = match\.matchStatusGame \|\| 'team_match'/);
-  assert.match(selector, /getFeaturedGameLabel\(match, resolvedGameKey\)/);
-  assert.match(selector, /getPrimaryMatchStatusLine\(match, metrics\)/);
-  assert.match(selector, /getPlayerModeSavePresentation\(match\)/);
+  assert.match(selector, /classic-hole-meta">\$\{holeMetaText\}/);
+  assert.match(selector, /classic-header-match-status">\$\{featuredStatusPair\}/);
+  assert.match(selector, /buildPlayFeaturedStatusPair\(match, metrics, 'team_match'\)/);
+  assert.match(selector, /buildPlaySaveState\(match\)/);
   const classic = section('function renderClassicPlayInputMode', 'function getEffectivePlayerStatTrackingMode');
   assert.match(classic, /playMatchSummary\.innerHTML = ''/);
   assert.match(classic, /playMatchSummary\.classList\.add\('hidden'\)/);

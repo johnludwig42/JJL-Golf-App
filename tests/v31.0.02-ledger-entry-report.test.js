@@ -185,7 +185,7 @@ test('Ledger Entry consumes the reviewed and saved Story without regenerating it
   assert.match(source, /pendingLedgerOpenMatchId[\s\S]*openUnifiedExport\(match, 'ledger'\)/);
   assert.match(source, /window\.AbortController/);
   assert.match(source, /45000/);
-  assert.match(source.slice(source.indexOf('async function prepareLedgerEntryStory'), source.indexOf('function buildLegacyRoundSnapshot')), /buildDeterministicLedgerEntryStory/);
+  assert.match(source.slice(source.indexOf('async function prepareLedgerEntryStory'), source.indexOf('function buildRoundRecordResultLine')), /buildDeterministicLedgerEntryStory/);
   assert.match(edgeFunction, /Do not discuss Greenies/);
   assert.match(shell, /id="returnToMatchBtn"[^>]*>‹ Return to Match<\/button>/);
   assert.match(shell, /@media print\{[\s\S]*?\.report-nav\{display:none!important\}/);
@@ -196,7 +196,7 @@ test('Ledger Entry consumes the reviewed and saved Story without regenerating it
   assert.match(bootstrap, /classList\.add\('ios-print-surface'\)/);
   assert.match(renderer, /function returnToOriginatingMatch\(\)/);
   assert.match(renderer, /window\.location\.assign\(new URL\("\.\.\/",window\.location\.href\)\.href\)/);
-  assert.doesNotMatch(source.slice(source.indexOf('async function prepareLedgerEntryStory'), source.indexOf('function buildLegacyRoundSnapshot')), /persist\(|roundRecapGenerated\s*=|roundRecapFinal\s*=/);
+  assert.doesNotMatch(source.slice(source.indexOf('async function prepareLedgerEntryStory'), source.indexOf('function buildRoundRecordResultLine')), /persist\(|roundRecapGenerated\s*=|roundRecapFinal\s*=/);
 });
 
 test('Ledger Entry uses a mobile-safe same-tab transfer after fresh story generation', () => {
@@ -271,7 +271,7 @@ test('Ledger Entry always receives a verified deterministic story when the onlin
   assert.equal(story.fallbackReason, 'service-not-configured');
   assert.ok(story.text.length > 40);
   assert.match(source, /console\.warn\(`Ledger Story used the verified deterministic fallback/);
-  assert.doesNotMatch(source.slice(source.indexOf('async function prepareLedgerEntryStory'), source.indexOf('function buildLegacyRoundSnapshot')), /requires an internet connection|Configure Supabase before generating/);
+  assert.doesNotMatch(source.slice(source.indexOf('async function prepareLedgerEntryStory'), source.indexOf('function buildRoundRecordResultLine')), /requires an internet connection|Configure Supabase before generating/);
 });
 
 test('Ledger Story replaces variable Greenies prose with deterministic recorded results', () => {

@@ -40,7 +40,7 @@ test('Ledger Story fallback reasons are deterministic and auditable', () => {
 });
 
 test('deterministic Story fallback remains available for Ledger preview before Story save', () => {
-  const storyPath = app.slice(app.indexOf('async function prepareLedgerEntryStory'), app.indexOf('function buildLegacyRoundSnapshot'));
+  const storyPath = app.slice(app.indexOf('async function prepareLedgerEntryStory'), app.indexOf('function buildRoundRecordResultLine'));
   assert.match(storyPath, /return buildDeterministicLedgerEntryStory/);
   assert.match(storyPath, /provenance: 'audited-generated-narrative'/);
   assert.doesNotMatch(storyPath, /requires an internet connection|Configure Supabase before generating/);

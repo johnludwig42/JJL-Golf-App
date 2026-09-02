@@ -25,7 +25,7 @@ test('Player Mode presents one sticky hole and featured-match header', () => {
   assert.match(css, /\.player-mode-hole-header\{position:sticky/);
   assert.match(css, /\.player-mode-hole-header\{position:sticky;top:calc\(var\(--app-chrome-height, 0px\) \+ 8px\);z-index:1400/);
   assert.match(css, /body\.player-mode-play-active\{overflow-x:clip!important;overflow-y:visible!important\}/);
-  const playerRenderer = app.slice(app.indexOf('function renderPlayerPlayInputMode'), app.indexOf('function renderHoleJumpTiles'));
+  const playerRenderer = app.slice(app.indexOf('function renderPlayerPlayInputMode'), app.indexOf('function isJoinedDeviceWaitingForAssignment'));
   assert.match(playerRenderer, /playMatchSummary\.classList\.add\('hidden'\)/);
   const classicRenderer = app.slice(app.indexOf('function renderClassicPlayInputMode'), app.indexOf('function renderPlayerPlayInputMode'));
   assert.match(classicRenderer, /playMatchSummary\.classList\.add\('hidden'\)/);

@@ -19,7 +19,7 @@ function add(level, label, detail = '') {
 function runGit(args) {
   try {
     return execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
-  } catch (err) {
+  } catch {
     return null;
   }
 }

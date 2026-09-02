@@ -50,7 +50,7 @@ test('shared controller reads the authoritative Round score and stat arrays with
 
 test('rendering delegates to Classic while score mutation, calculations, sync, and reports stay shared', () => {
   const renderStart = app.indexOf('function renderCurrentMatch()');
-  const renderEnd = app.indexOf('function getShortStatusName', renderStart);
+  const renderEnd = app.indexOf('function getConciseTeamName', renderStart);
   const renderSource = app.slice(renderStart, renderEnd);
   assert.match(renderSource, /renderPlayInputMode\(\{ match, tee, metrics, scoringHoles, hole \}\)/);
   assert.doesNotMatch(renderSource, /renderScoreGrid\(/);

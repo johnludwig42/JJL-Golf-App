@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.34',
-  versionNumber: '31.0.34',
-  cacheName: 'the-dye-ledger-v31.0.34',
-  buildDate: '2026-09-02T07:28:20-04:00',
-  buildLabel: 'Code Cleanup and Lint Hygiene'
+  version: 'v31.0.35',
+  versionNumber: '31.0.35',
+  cacheName: 'the-dye-ledger-v31.0.35',
+  buildDate: '2026-09-02T08:05:00-04:00',
+  buildLabel: 'Score and Stat Entry Reliability'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -4457,6 +4457,13 @@ function deriveScramblingResult({ gross, par, green, greenSource = 'unknown', re
   const success = numericGross <= numericPar;
   const sandyOpportunity = String(recoveryLie || '').toUpperCase() === 'BUNKER';
   return { opportunity: true, success, sandyOpportunity, sandySuccess: sandyOpportunity && success };
+}
+
+function reconcileBunkerInvolvement(stat, { controlEncountered = false, controlValue = false, recoveryLieEncountered = false } = {}) {
+  if (!stat) return false;
+  if (controlEncountered) stat.bunkerInvolved = !!controlValue || stat.recoveryLie === 'BUNKER';
+  else if (recoveryLieEncountered) stat.bunkerInvolved = stat.recoveryLie === 'BUNKER';
+  return !!stat.bunkerInvolved;
 }
 
 function isStatTrackingEnabled(match) {
@@ -13032,6 +13039,8 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
   const actualHoleNumber = holeMeta?.holeNumber || currentHole;
   let mutated = false;
   const changedScorePlayers = new Set();
+  const bunkerControlValues = new Map();
+  const recoveryLiePlayers = new Set();
   document.querySelectorAll('input[data-score-player]').forEach(input => {
     const playerId = input.dataset.scorePlayer;
     const mp = match.players.find(p => p.playerId === playerId);
@@ -13077,10 +13086,11 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
       } else if (key === 'greenOverride') {
         currentStat.greenOverride = input.value === '' ? null : input.value === 'true';
       } else if (key === 'bunkerInvolved') {
+        bunkerControlValues.set(String(playerId), !!input.checked);
         currentStat.bunkerInvolved = !!input.checked;
       } else if (key === 'recoveryLie') {
+        recoveryLiePlayers.add(String(playerId));
         currentStat.recoveryLie = ['FAIRWAY', 'ROUGH', 'BUNKER', 'FRINGE', 'OTHER', 'UNKNOWN'].includes(String(input.value || '').toUpperCase()) ? String(input.value).toUpperCase() : 'UNKNOWN';
-        currentStat.bunkerInvolved = currentStat.recoveryLie === 'BUNKER';
       } else {
         currentStat[key] = !!input.checked;
         currentStat.puttsSource = normalizePuttsSource(currentStat.puttsSource || 'default', 'default');
@@ -13098,6 +13108,12 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
       const score = playerRef.scores?.[currentHole - 1]?.gross;
       const playerMetric = computeMatchMetrics(match)?.players?.find(row => String(row.playerId) === String(playerRef.playerId));
       const playerHole = getPlayerHole(match, playerMetric, currentHole - 1, getMatchTee(match, match.teeId)) || holeMeta;
+      const playerKey = String(playerRef.playerId);
+      reconcileBunkerInvolvement(stat, {
+        controlEncountered: bunkerControlValues.has(playerKey),
+        controlValue: bunkerControlValues.get(playerKey),
+        recoveryLieEncountered: recoveryLiePlayers.has(playerKey),
+      });
       const derived = deriveGreenInRegulation({ gross: score, putts: stat.putts, par: playerHole?.par || holeMeta?.par, puttsSource: stat.puttsSource, override: stat.greenOverride });
       stat.green = derived.value === true;
       stat.greenSource = derived.source;
@@ -17099,8 +17115,9 @@ function isHoleStartedForPress(match, position) {
 function isActiveHoleTouchedForPress(match, position) {
   if (isHoleStartedForPress(match, position)) return true;
   if (Number(position) !== Number(currentHole) || typeof document === 'undefined') return false;
-  if (Array.from(document.querySelectorAll('#score input[data-score-player]')).some(input => String(input.value || '').trim() !== '')) return true;
-  return Array.from(document.querySelectorAll('#score [data-stat-player]')).some(input => input.type === 'checkbox' ? input.checked : (input.dataset.statKey === 'putts' ? input.dataset.puttsSource === 'user' : Number(input.value || 0) > 0));
+  const activeRoot = getActivePlayEntryContainer();
+  if (Array.from(activeRoot?.querySelectorAll('input[data-score-player]') || []).some(input => String(input.value || '').trim() !== '')) return true;
+  return Array.from(getActivePlayStatContainer()?.querySelectorAll('[data-stat-player]') || []).some(input => input.type === 'checkbox' ? input.checked : (input.dataset.statKey === 'putts' ? input.dataset.puttsSource === 'user' : Number(input.value || 0) > 0));
 }
 function getActiveScoringPosition(match) {
   if (!match || match.status === 'complete' || match.completedAt || match.roundEndReason) return null;
@@ -17247,7 +17264,8 @@ function renderClassicPlayInputMode({ match, tee, metrics, scoringHoles, hole, c
   document.getElementById('classicScoreEntryHead')?.classList.remove('hidden');
   document.getElementById('classicScoreGridWrap')?.classList.remove('hidden');
   document.getElementById('classicHoleActions')?.classList.remove('hidden');
-  document.getElementById('playerModeScoreList')?.classList.add('hidden');
+  const playerModeList = document.getElementById('playerModeScoreList');
+  if (playerModeList) { playerModeList.classList.add('hidden'); playerModeList.innerHTML = ''; }
   document.getElementById('playerModeBottomActions')?.classList.add('hidden');
   renderScoreGrid(match, tee, metrics, scoringHoles);
   renderPressActions(match, metrics);
@@ -17276,6 +17294,25 @@ function getEffectivePlayerStatTrackingMode(match, metrics) {
 }
 function statTrackingModeIncludesApproachGrid(mode) {
   return ['ENHANCED', 'GRIND'].includes(normalizeStatTrackingMode(mode));
+}
+
+function getActivePlayEntryContainer() {
+  const mode = String(document.getElementById('scoreEntryWrap')?.dataset?.playInputMode || '').toUpperCase();
+  return mode === PLAY_INPUT_MODES.PLAYER.key
+    ? document.getElementById('playerModeScoreList')
+    : document.getElementById('classicScoreGridWrap');
+}
+function getActivePlayStatContainer() {
+  const mode = String(document.getElementById('scoreEntryWrap')?.dataset?.playInputMode || '').toUpperCase();
+  return mode === PLAY_INPUT_MODES.PLAYER.key
+    ? document.getElementById('playerModeScoreList')
+    : document.getElementById('statTrackingEntryWrap');
+}
+function findActiveScoreInput(playerId) {
+  return getActivePlayEntryContainer()?.querySelector(`input[data-score-player="${cssEscape(playerId)}"]`) || null;
+}
+function findActiveStatInput(playerId, key) {
+  return getActivePlayStatContainer()?.querySelector(`[data-stat-player="${cssEscape(playerId)}"][data-stat-key="${cssEscape(key)}"]`) || null;
 }
 
 function getPlayerModeSelectedPlayer(match, metrics) {
@@ -17507,6 +17544,7 @@ function renderPlayerModeStatEntry(match, hole, metrics) {
   const approachLabels = { '7': 'Deep Left', '8': 'Long', '9': 'Deep Right', '4': 'Left', '5': 'GIR', '6': 'Right', '1': 'Short Left', '2': 'Short', '3': 'Short Right' };
   const approachChoice = value => `<button type="button" data-player-stat-choice="approachResult" data-player-stat-value="${value}" data-stat-player-id="${escapeHtml(selected.playerId)}" class="${(value === '5' ? derived.value === true : stat.approachResult === value) ? 'is-active' : ''} ${value === '5' ? 'is-derived' : ''}" ${(canEdit && value !== '5' && derived.value !== true) ? '' : 'disabled'}><b>${value}</b><small>${escapeHtml(approachLabels[value])}</small></button>`;
   const advanced = statTrackingModeIncludesApproachGrid(mode.active);
+  const grind = mode.active === 'GRIND';
   const recovery = deriveScramblingResult({ gross, par, green: derived.value, greenSource: derived.source, recoveryLie: stat.recoveryLie });
   const recoveryChoice = (value, label) => choice('recoveryLie', value, label, stat.recoveryLie === value);
   const detailOpen = isPlayerModeMoreDetailOpen();
@@ -17531,6 +17569,7 @@ function renderPlayerModeStatEntry(match, hole, metrics) {
       <div class="player-mode-derived player-mode-gir-result"><span>GIR</span><strong aria-label="${derived.value === null ? 'GIR unknown' : (derived.value ? 'Green in regulation' : 'Missed green in regulation')}">${derived.value === null ? '—' : (derived.value ? '✓' : '✕')}</strong><small>${escapeHtml(girProvenance)}</small></div>
       ${advanced ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Approach</span><div class="player-mode-approach-grid" role="group" aria-label="Approach result">${['7','8','9','4','5','6','1','2','3'].map(approachChoice).join('')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="approachResult" value="${escapeHtml(stat.approachResult)}" />` : ''}
       ${advanced && derived.value === false ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Recovery lie</span><div class="player-mode-stat-options player-mode-five-options player-mode-recovery-options">${recoveryChoice('FAIRWAY','Fairway')}${recoveryChoice('ROUGH','Rough')}${recoveryChoice('BUNKER','Bunker')}${recoveryChoice('FRINGE','Fringe')}${recoveryChoice('OTHER','Other')}</div></div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="recoveryLie" value="${escapeHtml(stat.recoveryLie)}" /><div class="player-mode-derived"><span>Scrambling</span><strong>${recovery.success ? 'Converted' : 'Not converted'}</strong><small>Calculated from missed GIR and gross score${recovery.sandyOpportunity ? ' · Sand save opportunity' : ''}</small></div>` : ''}
+      ${grind ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Bunker involvement</span><label class="player-mode-bunker-toggle"><input type="checkbox" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="bunkerInvolved" ${stat.bunkerInvolved ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span>Ball entered a bunker during this hole</span></label></div>` : ''}
       <details class="player-mode-gir-override"><summary>Correct GIR for an edge case</summary><div class="player-mode-stat-options">${choice('greenOverride','','Calculated',stat.greenOverride === null)}${choice('greenOverride','true','Force GIR',stat.greenOverride === true)}${choice('greenOverride','false','Force miss',stat.greenOverride === false)}</div><input type="hidden" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="greenOverride" value="${stat.greenOverride === null ? '' : String(stat.greenOverride)}" /></details>
       <div class="player-mode-readback player-mode-detail-readback">${escapeHtml(detailedReadback)}</div>
     </div>` : ''}
@@ -17544,7 +17583,10 @@ function renderPlayerPlayInputMode({ match, tee, metrics, scoringHoles, hole, co
   document.querySelector('.play-input-mode-bar')?.classList.add('hidden');
   document.getElementById('activeHoleScoringTop')?.classList.add('hidden');
   document.getElementById('classicScoreEntryHead')?.classList.add('hidden');
-  document.getElementById('classicScoreGridWrap')?.classList.add('hidden');
+  const classicWrap = document.getElementById('classicScoreGridWrap');
+  if (classicWrap) classicWrap.classList.add('hidden');
+  const classicBody = document.getElementById('scoreGridBody');
+  if (classicBody) classicBody.innerHTML = '';
   document.getElementById('classicHoleActions')?.classList.add('hidden');
   document.getElementById('playerModeBottomActions')?.classList.remove('hidden');
   syncPlayerModeSelectionForHole(match, metrics, tee, hole);
@@ -18110,6 +18152,9 @@ function renderStatTrackingEntry(match, hole, metrics) {
   }
   const isFairwayHole = Number(hole?.par) === 4 || Number(hole?.par) === 5;
   const statPlayers = getVisibleScoringPlayers(match, (metrics?.players || []), { stats: true }).filter(p => isPlayerStatTrackingEnabled(match, p.playerId));
+  const mode = getEffectivePlayerStatTrackingMode(match, metrics);
+  const advanced = statTrackingModeIncludesApproachGrid(mode.active);
+  const grind = mode.active === 'GRIND';
   match.statReviewContractVersion = Math.max(1, Number(match.statReviewContractVersion || 0));
   wrap.classList.remove('hidden');
   if (!statPlayers.length) {
@@ -18118,11 +18163,12 @@ function renderStatTrackingEntry(match, hole, metrics) {
   }
   const canShowFairway = isFairwayHole;
   const columns = [
-    ...(canShowFairway ? [{ key: 'fairway', label: 'FW' }] : []),
+    ...(canShowFairway ? [{ key: 'fairwayResult', label: 'Tee' }] : []),
     { key: 'green', label: 'GIR' },
     { key: 'putts', label: 'Putts' },
     { key: 'penaltyStrokes', label: 'Pen' },
-    { key: 'recoveryLie', label: 'Recovery Lie' },
+    ...(advanced ? [{ key: 'approachResult', label: 'Approach' }, { key: 'recoveryLie', label: 'Recovery Lie' }] : []),
+    ...(grind ? [{ key: 'bunkerInvolved', label: 'Bunker' }] : []),
   ];
   const stepper = (playerId, key, value, disabled, extraAttrs = '') => `
     <div class="stat-stepper ${disabled ? 'is-disabled' : ''}" role="group" aria-label="${escapeHtml(key === 'putts' ? 'Putts' : 'Penalty strokes')}">
@@ -18130,6 +18176,12 @@ function renderStatTrackingEntry(match, hole, metrics) {
       <input class="score-input ${key === 'putts' ? 'stat-putts-input' : 'stat-penalty-input'} stat-step-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" min="0" max="9" data-stat-player="${escapeHtml(playerId)}" data-stat-key="${escapeHtml(key)}" value="${Number.isFinite(Number(value)) ? Math.max(0, Math.round(Number(value))) : (key === 'putts' ? 2 : 0)}" ${extraAttrs} ${disabled ? 'disabled' : ''} />
       <button type="button" class="stat-step-btn" data-stat-step="up" data-stat-player="${escapeHtml(playerId)}" data-stat-key="${escapeHtml(key)}" ${disabled ? 'disabled' : ''}>+</button>
     </div>`;
+  const puttsControl = (playerId, stat, disabled) => {
+    const confirmed = normalizePuttsSource(stat.puttsSource || 'default', 'default') !== 'default';
+    const value = confirmed ? Number(stat.putts) : null;
+    const more = confirmed && value >= 6;
+    return `<div class="classic-putts-control"><select data-classic-putts-choice="${escapeHtml(playerId)}" aria-label="Putts" ${disabled ? 'disabled' : ''}><option value="" ${!confirmed ? 'selected' : ''}>Putts</option>${[0,1,2,3,4,5].map(count => `<option value="${count}" ${confirmed && value === count ? 'selected' : ''}>${count}</option>`).join('')}<option value="MORE" ${more ? 'selected' : ''}>More…</option></select><input class="score-input stat-putts-input classic-putts-more ${more ? '' : 'hidden'}" type="tel" inputmode="numeric" min="6" max="20" data-stat-player="${escapeHtml(playerId)}" data-stat-key="putts" data-putts-source="${confirmed ? 'user' : 'default'}" value="${more ? value : ''}" aria-label="Six or more putts" ${disabled ? 'disabled' : ''} /></div>`;
+  };
   wrap.innerHTML = `
     <div class="card inset-card stat-entry-card stat-matrix-card">
       <div class="item-header compact-item-header">
@@ -18166,7 +18218,7 @@ function renderStatTrackingEntry(match, hole, metrics) {
                   </th>
                   ${columns.map(col => {
                     if (col.key === 'putts') {
-                      return `<td>${stepper(p.playerId, 'putts', Number.isFinite(Number(stat.putts)) ? Number(stat.putts) : 2, !canEdit, `data-putts-source="${escapeHtml(normalizePuttsSource(stat.puttsSource || 'default', 'default'))}"`)}</td>`;
+                      return `<td>${puttsControl(p.playerId, stat, !canEdit)}</td>`;
                     }
                     if (col.key === 'penaltyStrokes') {
                       return `<td>${stepper(p.playerId, 'penaltyStrokes', Number.isFinite(Number(stat.penaltyStrokes)) ? Number(stat.penaltyStrokes) : 0, !canEdit)}</td>`;
@@ -18178,8 +18230,9 @@ function renderStatTrackingEntry(match, hole, metrics) {
                       if (derived.value !== false) return `<td><span class="tiny">${derived.value === true ? 'Not needed' : 'Pending GIR'}</span></td>`;
                       return `<td><select class="stat-recovery-select" data-stat-player="${escapeHtml(p.playerId)}" data-stat-key="recoveryLie" aria-label="Recovery lie for ${escapeHtml(playerName)}" ${canEdit ? '' : 'disabled'}><option value="UNKNOWN" ${stat.recoveryLie === 'UNKNOWN' ? 'selected' : ''}>Select…</option><option value="FAIRWAY" ${stat.recoveryLie === 'FAIRWAY' ? 'selected' : ''}>Fairway</option><option value="ROUGH" ${stat.recoveryLie === 'ROUGH' ? 'selected' : ''}>Rough</option><option value="BUNKER" ${stat.recoveryLie === 'BUNKER' ? 'selected' : ''}>Bunker</option><option value="FRINGE" ${stat.recoveryLie === 'FRINGE' ? 'selected' : ''}>Fringe</option><option value="OTHER" ${stat.recoveryLie === 'OTHER' ? 'selected' : ''}>Other</option></select><small class="stat-recovery-result">Scramble ${recovery.success ? '✓' : 'No'}${recovery.sandyOpportunity ? ' · sand save opportunity' : ''}</small></td>`;
                     }
-                    const label = 'Fairway hit';
-                    return `<td><label class="stat-matrix-check" aria-label="${escapeHtml(label)}"><input type="checkbox" data-stat-player="${escapeHtml(p.playerId)}" data-stat-key="${escapeHtml(col.key)}" ${stat[col.key] ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span></span></label></td>`;
+                    if (col.key === 'fairwayResult') return `<td><select data-stat-player="${escapeHtml(p.playerId)}" data-stat-key="fairwayResult" aria-label="Tee-shot result for ${escapeHtml(playerName)}" ${canEdit ? '' : 'disabled'}><option value="UNKNOWN" ${stat.fairwayResult === 'UNKNOWN' ? 'selected' : ''}>—</option><option value="LEFT" ${stat.fairwayResult === 'LEFT' ? 'selected' : ''}>Left</option><option value="HIT" ${stat.fairwayResult === 'HIT' ? 'selected' : ''}>Hit</option><option value="RIGHT" ${stat.fairwayResult === 'RIGHT' ? 'selected' : ''}>Right</option></select></td>`;
+                    if (col.key === 'approachResult') return `<td><select data-stat-player="${escapeHtml(p.playerId)}" data-stat-key="approachResult" aria-label="Approach result for ${escapeHtml(playerName)}" ${canEdit ? '' : 'disabled'}><option value="UNKNOWN" ${stat.approachResult === 'UNKNOWN' ? 'selected' : ''}>—</option>${['7','8','9','4','5','6','1','2','3'].map(value => `<option value="${value}" ${(value === '5' ? derived.value === true : stat.approachResult === value) ? 'selected' : ''} ${value === '5' ? 'disabled' : ''}>${value}</option>`).join('')}</select></td>`;
+                    return `<td><label class="stat-matrix-check" aria-label="Bunker involved"><input type="checkbox" data-stat-player="${escapeHtml(p.playerId)}" data-stat-key="bunkerInvolved" ${stat.bunkerInvolved ? 'checked' : ''} ${canEdit ? '' : 'disabled'} /><span></span></label></td>`;
                   }).join('')}
                 </tr>`;
               }).join('')}
@@ -18412,7 +18465,7 @@ function isActiveScoringWorkflowInput(input) {
 }
 
 function getActiveScoringWorkflowInputs() {
-  return Array.from(document.querySelectorAll('#score input[data-score-player]')).filter(isActiveScoringWorkflowInput);
+  return Array.from(getActivePlayEntryContainer()?.querySelectorAll('input[data-score-player]') || []).filter(isActiveScoringWorkflowInput);
 }
 
 function getEditableScoreInputs() {
@@ -18538,8 +18591,7 @@ function cancelPendingScoreAutoAdvance(playerId = null) {
 
 function getLiveScoreInputForPlayer(playerId) {
   if (!playerId) return null;
-  const escapedId = cssEscape(playerId);
-  return document.querySelector(`#score input[data-score-player="${escapedId}"]`);
+  return findActiveScoreInput(playerId);
 }
 
 function schedulePendingScoreAutoAdvance(inputEl) {
@@ -21708,8 +21760,7 @@ function exportJson() {
 }
 
 function findStatPuttsInput(playerId) {
-  const escapedId = window.CSS && typeof window.CSS.escape === 'function' ? window.CSS.escape(String(playerId || '')) : String(playerId || '').replace(/"/g, '\"');
-  return document.querySelector(`.stat-putts-input[data-stat-player="${escapedId}"]`);
+  return findActiveStatInput(playerId, 'putts');
 }
 function updateActiveMatchPuttsSource(playerId, puttsValue, source) {
   const match = getActiveMatch();
@@ -21743,9 +21794,8 @@ function applySmartPuttsAdjustmentFromCheckbox(checkbox) {
   if (!puttsInput || puttsInput.disabled) return false;
   const source = normalizePuttsSource(puttsInput.dataset.puttsSource || 'default', 'default');
   if (source === 'user') return false;
-  const escapedId = window.CSS && typeof window.CSS.escape === 'function' ? window.CSS.escape(String(playerId || '')) : String(playerId || '').replace(/"/g, '\"');
-  const upAndDownChecked = !!document.querySelector(`[data-stat-player="${escapedId}"][data-stat-key="upAndDown"]`)?.checked;
-  const sandyChecked = !!document.querySelector(`[data-stat-player="${escapedId}"][data-stat-key="sandy"]`)?.checked;
+  const upAndDownChecked = !!findActiveStatInput(playerId, 'upAndDown')?.checked;
+  const sandyChecked = !!findActiveStatInput(playerId, 'sandy')?.checked;
   if (upAndDownChecked || sandyChecked) {
     if (puttsInput.value !== '1' || source !== 'auto') {
       puttsInput.value = '1';
@@ -22533,7 +22583,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const scoreChoice = e.target.closest('[data-player-score-value][data-player-score-player]');
     if (scoreChoice) {
       const playerId = String(scoreChoice.dataset.playerScorePlayer || '');
-      const input = document.querySelector(`input[data-score-player="${cssEscape(playerId)}"]`);
+      const input = findActiveScoreInput(playerId);
       if (!input || input.disabled) return;
       input.value = String(scoreChoice.dataset.playerScoreValue || '');
       handleLiveScoreInputEvent(input);
@@ -22550,7 +22600,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       const playerId = String(statChoice.dataset.statPlayerId || '');
       const key = String(statChoice.dataset.playerStatChoice || '');
       const value = String(statChoice.dataset.playerStatValue ?? '');
-      const input = document.querySelector(`[data-stat-player="${cssEscape(playerId)}"][data-stat-key="${cssEscape(key)}"]`);
+      const input = findActiveStatInput(playerId, key);
       if (!input || input.disabled) return;
       if (input.type === 'checkbox') input.checked = value === 'true' ? !input.checked : value === 'true';
       else input.value = value;
@@ -22609,8 +22659,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const scoreStepBtn = e.target.closest('[data-score-step]');
     if (scoreStepBtn) {
       const playerId = scoreStepBtn.dataset.scoreStepPlayer || '';
-      const escapedId = cssEscape(playerId);
-      const input = document.querySelector(`input[data-score-player="${escapedId}"]`);
+      const input = findActiveScoreInput(playerId);
       if (!input || input.disabled) return;
       const dir = scoreStepBtn.dataset.scoreStep === 'down' ? -1 : 1;
       applySmartScoreStep(input, dir);
@@ -22624,9 +22673,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       const playerId = stepBtn.dataset.statPlayer || '';
       const key = stepBtn.dataset.statKey || '';
       const dir = stepBtn.dataset.statStep === 'down' ? -1 : 1;
-      const escapedId = cssEscape(playerId);
-      const escapedKey = cssEscape(key);
-      const input = document.querySelector(`input[data-stat-player="${escapedId}"][data-stat-key="${escapedKey}"]`);
+      const input = findActiveStatInput(playerId, key);
       if (!input || input.disabled) return;
       const fallback = key === 'putts' ? 2 : 0;
       const current = Number.isFinite(Number(input.value)) ? Number(input.value) : fallback;
@@ -22659,6 +22706,32 @@ document.getElementById('leaderboard').addEventListener('change', e => {
         currentHoleSequenceStart = Math.max(1, Math.min(18, selectedHole));
       }
       saveCurrentHole({ targetHole: selectedHole, silent: true });
+      return;
+    }
+    if (e.target && e.target.matches('[data-classic-putts-choice]')) {
+      const playerId = String(e.target.dataset.classicPuttsChoice || '');
+      const input = findActiveStatInput(playerId, 'putts');
+      if (!input || input.disabled) return;
+      if (e.target.value === 'MORE') {
+        input.classList.remove('hidden');
+        input.value = Number(input.value) >= 6 ? input.value : '6';
+        input.focus();
+        input.select?.();
+        return;
+      }
+      if (e.target.value === '') return;
+      input.value = e.target.value;
+      input.dataset.puttsSource = 'user';
+      commitSmartPuttsDomValue(input, 'user');
+      const match = getActiveMatch();
+      if (!match) return;
+      applyCurrentHoleDomToMatch(match);
+      const player = match.players?.find(row => String(row.playerId) === playerId);
+      if (player?.stats?.[currentHole - 1]) player.stats[currentHole - 1].entryCompleted = true;
+      match.statReviewContractVersion = 1;
+      persist({ skipRender: true });
+      scheduleSharedActiveMatchSyncFromDom({ immediate: true, silent: true, persistLocal: true });
+      renderCurrentMatch();
       return;
     }
     if (e.target && e.target.matches('input[data-stat-player][data-stat-key], select[data-stat-player][data-stat-key]')) {
@@ -23288,7 +23361,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const hostOverridePlayers = [];
     if (match.storageMode === 'shared' && isAssignedPlayersMode(match) && isCurrentDeviceMatchHost(match)) {
       const owned = getSharedLocallyOwnedPlayerIds(match);
-      document.querySelectorAll('input[data-score-player]').forEach(input => {
+      getActivePlayEntryContainer()?.querySelectorAll('input[data-score-player]').forEach(input => {
         const playerId = input.dataset.scorePlayer;
         if (!playerId || owned.has(playerId)) return;
         const mp = (match.players || []).find(row => row.playerId === playerId);
@@ -24120,7 +24193,7 @@ function hasOpenBlockingUi() {
 function hasUnsavedVisibleScoreInputs() {
   const match = getActiveMatch();
   if (!match || getActivePanelId() !== 'score') return false;
-  const inputs = Array.from(document.querySelectorAll('input[data-score-player]'));
+  const inputs = Array.from(getActivePlayEntryContainer()?.querySelectorAll('input[data-score-player]') || []);
   if (!inputs.length) return false;
   return inputs.some(input => {
     const playerId = input.dataset.scorePlayer;
@@ -24648,7 +24721,8 @@ function installDyeLedgerLiveEngineAdapter() {
     normalizePlayInputMode,
     normalizeStatTrackingMode,
     deriveGreenInRegulation,
-            deriveScramblingResult,
+                deriveScramblingResult,
+                reconcileBunkerInvolvement,
             getEffectivePlayerStatTrackingMode,
             getPlayerModeEntryProgress,
             getPlayerModeRequiredDetailState,

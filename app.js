@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.30',
-  versionNumber: '31.0.30',
-  cacheName: 'the-dye-ledger-v31.0.30',
-  buildDate: '2026-09-03T00:30:00-04:00',
-  buildLabel: 'Course Tee Repair Activation'
+  version: 'v31.0.31',
+  versionNumber: '31.0.31',
+  cacheName: 'the-dye-ledger-v31.0.31',
+  buildDate: '2026-09-03T01:00:00-04:00',
+  buildLabel: 'Post-Round State and Setup Correctness'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -2734,7 +2734,6 @@ const uiState = {
   scorecardImportFiles: [],
   scorecardImportStatus: '',
   scorecardImportLoading: false,
-  completedSummaryMatchId: null,
   matchPlayerDraft: [],
   referenceTeeManual: false,
   referenceTeeAutoId: '',
@@ -3194,7 +3193,7 @@ function setCourseExpanded(courseId, expanded) {
   else uiState.expandedCourses.delete(courseId);
 }
 function getEmptyPersistentState() {
-  return { players: [], playerRegistry: { schemaVersion: 1, players: [] }, savedRosters: { schemaVersion: 1, rosters: [] }, courses: [], matches: [], activeMatchId: null, notes: '', sharedMatchIds: [], lastOpenedSharedMatchId: null };
+  return { players: [], playerRegistry: { schemaVersion: 1, players: [] }, savedRosters: { schemaVersion: 1, rosters: [] }, courses: [], matches: [], activeMatchId: null, completedSummaryMatchId: null, notes: '', sharedMatchIds: [], lastOpenedSharedMatchId: null };
 }
 
 function getStorageErrorMessage(error) {
@@ -3242,6 +3241,9 @@ function sanitizePersistentState(input) {
   clean.savedRosters = input.savedRosters && typeof input.savedRosters === 'object' ? input.savedRosters : fallback.savedRosters;
   clean.activeMatchId = typeof input.activeMatchId === 'string' && input.activeMatchId.trim() ? input.activeMatchId.trim() : null;
   if (clean.activeMatchId && !clean.matches.some(match => String(match.id || '') === clean.activeMatchId)) clean.activeMatchId = null;
+  clean.completedSummaryMatchId = typeof input.completedSummaryMatchId === 'string' && input.completedSummaryMatchId.trim() ? input.completedSummaryMatchId.trim() : null;
+  const completedReviewMatch = clean.completedSummaryMatchId ? clean.matches.find(match => String(match.id || '') === clean.completedSummaryMatchId) : null;
+  if (!completedReviewMatch || completedReviewMatch.status !== 'complete') clean.completedSummaryMatchId = null;
   clean.notes = typeof input.notes === 'string' ? input.notes : '';
   clean.sharedMatchIds = Array.isArray(input.sharedMatchIds) ? [...new Set(input.sharedMatchIds.filter(Boolean).map(String))] : [];
   clean.lastOpenedSharedMatchId = typeof input.lastOpenedSharedMatchId === 'string' && input.lastOpenedSharedMatchId.trim() ? input.lastOpenedSharedMatchId.trim() : null;
@@ -8267,9 +8269,30 @@ function decorateReportSections(html) {
 
 function getLedgerEntryStatus(record, match, metrics) {
   const completion = getRoundCompletionState(match, metrics);
-  if (record?.meta?.status === 'final') return 'FINAL';
-  if (areAllGamesFinal(match, metrics) && completion.completedHoleCount > 0) return 'CLINCHED EARLY';
+  if (completion.isComplete) return 'FINAL';
+  if ((record?.meta?.status === 'final' || areAllGamesFinal(match, metrics)) && completion.completedHoleCount > 0) return 'CLINCHED EARLY';
   return 'PROVISIONAL';
+}
+function synchronizeFeaturedCompetition(match, { authority = 'local', requestedSelection = null, requestedStatusGame = null } = {}) {
+  if (!match || typeof match !== 'object') return '';
+  const selectedGames = Array.isArray(match.selectedGames) ? match.selectedGames : [];
+  const selectedKeys = new Set(selectedGames.map(game => String(game?.key || '')).filter(Boolean));
+  const allowedStandalone = new Set(['none', 'stroke_net', 'stroke_gross']);
+  const fallback = resolveAutoFeaturedCompetition(match);
+  const joinedCloudAuthority = authority === 'cloud' || (match.storageMode === 'shared' && !isCurrentDeviceMatchHost(match));
+  if (joinedCloudAuthority) {
+    const hydrated = normalizeFeaturedCompetition(requestedStatusGame || match.matchStatusGame || fallback);
+    const resolved = hydrated === 'auto' ? fallback : hydrated;
+    match.matchStatusGame = resolved;
+    match.featuredCompetition = resolved;
+    return resolved;
+  }
+  let selection = normalizeFeaturedCompetition(requestedSelection ?? match.featuredCompetition ?? 'auto');
+  if (selection !== 'auto' && !allowedStandalone.has(selection) && !selectedKeys.has(selection)) selection = fallback;
+  const resolved = selection === 'auto' ? fallback : selection;
+  match.featuredCompetition = selection;
+  match.matchStatusGame = resolved;
+  return resolved;
 }
 
 function getLedgerEntryFeaturedBasis(match, metrics) {
@@ -9762,8 +9785,6 @@ function normalizeMatch(match) {
   match.greeniesUpdatedAt = match.greeniesUpdatedAt || null;
   match.greeniesSuggestions = match.greeniesSuggestions && typeof match.greeniesSuggestions === 'object' ? match.greeniesSuggestions : {};
   match.sharedHostScoreOverrides = match.sharedHostScoreOverrides && typeof match.sharedHostScoreOverrides === 'object' ? match.sharedHostScoreOverrides : {};
-  match.matchStatusGame = match.matchStatusGame || getDefaultFeaturedGameKey(match.selectedGames || []);
-  match.momentumGame = match.momentumGame || match.matchStatusGame || getDefaultFeaturedGameKey(match.selectedGames || []);
   match.storageMode = match.storageMode === 'shared' ? 'shared' : 'local';
   match.sharedMatchId = String(match.sharedMatchId || match.id || '');
   match.cloudSyncState = String(match.cloudSyncState || (match.storageMode === 'shared' ? 'local-cache' : 'local-only'));
@@ -9786,6 +9807,8 @@ function normalizeMatch(match) {
   match.sharedDevices = Array.isArray(match.sharedDevices) ? match.sharedDevices : [];
   match.sharedParticipants = Array.isArray(match.sharedParticipants) ? match.sharedParticipants : [];
   match.sharedPlayerAssignments = match.sharedPlayerAssignments && typeof match.sharedPlayerAssignments === 'object' ? match.sharedPlayerAssignments : {};
+  synchronizeFeaturedCompetition(match, { requestedStatusGame: match.matchStatusGame });
+  match.momentumGame = match.momentumGame || match.matchStatusGame || getDefaultFeaturedGameKey(match.selectedGames || []);
   match.sharedPlayerAssignmentState = match.sharedPlayerAssignmentState && typeof match.sharedPlayerAssignmentState === 'object' ? match.sharedPlayerAssignmentState : {};
   match.sharedScoreWriteState = match.sharedScoreWriteState && typeof match.sharedScoreWriteState === 'object' ? match.sharedScoreWriteState : {};
   match.sharedScoreOutboxInitialized = match.sharedScoreOutboxInitialized === true || !!match.lastCloudSyncAt || !!match.lastSharedScorePullAt;
@@ -9967,16 +9990,20 @@ function getPlayer(playerId) { return state.players.find(p => p.id === playerId)
 function getMatch(matchId = state.activeMatchId) { return state.matches.find(m => m.id === matchId) || null; }
 function getActiveMatch() { return getMatch(); }
 function getCompletedReviewMatch() {
-  const match = getMatch(uiState.completedSummaryMatchId);
+  const match = getMatch(state.completedSummaryMatchId);
   return match?.status === 'complete' ? match : null;
 }
 function getReviewOrActiveMatch() { return getCompletedReviewMatch() || getActiveMatch(); }
 function setCompletedReviewMatch(matchOrId = null) {
   const match = typeof matchOrId === 'string' ? getMatch(matchOrId) : matchOrId;
-  uiState.completedSummaryMatchId = match?.status === 'complete' ? match.id : null;
+  state.completedSummaryMatchId = match?.status === 'complete' ? match.id : null;
+  persist({ skipRender: true });
   return getCompletedReviewMatch();
 }
-function clearCompletedReviewMatch() { uiState.completedSummaryMatchId = null; }
+function clearCompletedReviewMatch() {
+  state.completedSummaryMatchId = null;
+  persist({ skipRender: true });
+}
 function getCanonicalSharedMatch(matchOrId = null) {
   const localId = typeof matchOrId === 'string' ? String(matchOrId) : String(matchOrId?.id || '');
   const sharedId = typeof matchOrId === 'string' ? String(matchOrId) : String(matchOrId?.sharedMatchId || '');
@@ -12464,7 +12491,7 @@ function renderLeaderboard() {
   if (matchStatusGameSelect) {
     matchStatusGameSelect.innerHTML = statusOptions.map(opt => `<option value="${opt.key}" ${opt.key === match.matchStatusGame ? 'selected' : ''}>${escapeHtml(opt.label)}</option>`).join('');
     if (!statusOptions.find(opt => opt.key === match.matchStatusGame)) {
-      match.matchStatusGame = statusOptions[0]?.key || 'team_match';
+      synchronizeFeaturedCompetition(match, { requestedSelection: statusOptions[0]?.key || 'team_match' });
       matchStatusGameSelect.value = match.matchStatusGame;
     }
   }
@@ -14475,6 +14502,7 @@ function hydrateMatchFromCloudBundle(bundle) {
   });
   ensureSharedParticipantRegistered(hydrated, hydrated.sharedHostDeviceId ? '' : 'Device');
   migrateSharedPlayerAssignmentsToParticipants(hydrated);
+  synchronizeFeaturedCompetition(hydrated, { authority: 'cloud', requestedStatusGame: hydrated.matchStatusGame });
   normalizeMatch(hydrated);
   if (notes?.body && !state.notes) state.notes = String(notes.body);
   return hydrated;
@@ -16864,6 +16892,7 @@ function buildNextRoundDraft(prior) {
   draft.courseId = '';
   draft.teeId = '';
   draft.selectedGames = [];
+  synchronizeFeaturedCompetition(draft, { requestedSelection: 'auto' });
   draft.players = cleanPlayers;
   draft.greeniesWinners = {};
   draft.notes = '';
@@ -16901,12 +16930,12 @@ function hidePostRoundActions() {
   modal.setAttribute('aria-hidden', 'true');
 }
 
-function isCompletedSummarySession(match, summaryMatchId = uiState.completedSummaryMatchId) {
+function isCompletedSummarySession(match, summaryMatchId = state.completedSummaryMatchId) {
   return !!match && match.status === 'complete' && String(summaryMatchId || '') === String(match.id || '');
 }
 
 function closeCompletedSummarySession() {
-  const summaryMatch = getMatch(uiState.completedSummaryMatchId);
+  const summaryMatch = getMatch(state.completedSummaryMatchId);
   if (!isCompletedSummarySession(summaryMatch)) return false;
   clearScheduledSharedMatchSync(summaryMatch.id);
   sharedMatchSyncDirty.delete(summaryMatch.id);
@@ -20849,6 +20878,7 @@ function applyMatchTemplate(templateId) {
     completedAt: null,
     status: 'active'
   });
+  synchronizeFeaturedCompetition(draft, { requestedSelection: draft.featuredCompetition });
   loadMatchEditor(null, draft);
   renderMatchTemplatesPanel();
   toast('Template applied. Review setup, then start round.');
@@ -23060,8 +23090,13 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       return;
     }
     if (e.target.id === 'matchStatusGameSelect') {
-      match.matchStatusGame = e.target.value;
-      match.momentumGame = e.target.value;
+      if (match.storageMode === 'shared' && !isCurrentDeviceMatchHost(match)) {
+        toast('The Shared Match host controls the Featured Competition.');
+        renderLeaderboard();
+        return;
+      }
+      const resolved = synchronizeFeaturedCompetition(match, { requestedSelection: e.target.value });
+      match.momentumGame = resolved;
       persist({ skipRender: true });
       renderLeaderboard();
       return;
@@ -24040,7 +24075,13 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   document.getElementById('postRoundInlineDiscardBtn')?.addEventListener('click', discardCompletedReviewRound);
   document.getElementById('postRoundInlineGenerateRecapBtn')?.addEventListener('click', async () => {
     const match = getReviewOrActiveMatch();
-    if (!match) return;
+    if (!match) {
+      toast('That completed round could not be reopened. Choose it from Saved Rounds.');
+      activateTab('courses');
+      renderPlayers();
+      openExperienceDestination('courses', 'rounds');
+      return;
+    }
     activateTab('leaderboard');
     renderLeaderboard();
     const story = document.getElementById('roundStoryCard');
@@ -24203,7 +24244,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       if (confirm(`Remove Saved Round?\n\nThis removes "${target.name || 'Round'}" from this device.${sharedNote}\n\nThis action cannot be undone on this device.\n\nRemove Round?`)) {
         state.matches = state.matches.filter(m => m.id !== deleteId);
         if (state.activeMatchId === deleteId) state.activeMatchId = null;
-        if (uiState.completedSummaryMatchId === deleteId) clearCompletedReviewMatch();
+        if (state.completedSummaryMatchId === deleteId) clearCompletedReviewMatch();
         persist();
       }
     }
@@ -25180,6 +25221,7 @@ function installDyeLedgerLiveEngineAdapter() {
       state.playerRegistry = seed.playerRegistry || { schemaVersion: 1, players: [] };
       state.savedRosters = seed.savedRosters || { schemaVersion: 1, rosters: [] };
       state.activeMatchId = seed.activeMatchId || state.matches[0]?.id || null;
+      state.completedSummaryMatchId = seed.completedSummaryMatchId || null;
       normalizeState();
       return state;
     },
@@ -25199,6 +25241,10 @@ function installDyeLedgerLiveEngineAdapter() {
     getStorageErrorMessage,
     readJsonStorageRecord,
     sanitizePersistentState,
+    getCompletedReviewMatch,
+    getReviewOrActiveMatch,
+    setCompletedReviewMatch,
+    clearCompletedReviewMatch,
     reconcileInterruptedFinishState,
     loadStateFromStorage,
     persistStateSnapshot,
@@ -25222,6 +25268,9 @@ function installDyeLedgerLiveEngineAdapter() {
     populateCalcPlayers,
     populateCalcCourses,
     populateCalcTees,
+    synchronizeFeaturedCompetition,
+    resolveFeaturedCompetitionKey,
+    getLedgerEntryStatus,
     collectScorecardImportReviewData,
     mergeScorecardImportReviewDraft,
     syncScorecardImportReviewDraftFromDom,
@@ -25495,10 +25544,6 @@ function installDyeLedgerLiveEngineAdapter() {
     getScorecardImportSaveGuard,
     updateScorecardImportStatus,
     isCompletedSummarySession,
-    getCompletedReviewMatch,
-    getReviewOrActiveMatch,
-    setCompletedReviewMatch,
-    clearCompletedReviewMatch,
     formatRoundDuration,
     ensureRoundTimingStarted,
     ensureRoundTimingEnded,

@@ -18,7 +18,7 @@ test('current release identity and immutable assets are complete', () => {
 test('completion durably clears the live pointer and establishes completed review', () => {
   assert.match(app, /candidateState\.activeMatchId = null/);
   assert.match(app, /state\.activeMatchId = null;[\s\S]{0,900}setCompletedReviewMatch\(candidate\)/);
-  assert.match(app, /function isCompletedSummarySession\(match, summaryMatchId = uiState\.completedSummaryMatchId\)/);
+  assert.match(app, /function isCompletedSummarySession\(match, summaryMatchId = state\.completedSummaryMatchId\)/);
   assert.doesNotMatch(app, /function isCompletedSummarySession\([^)]*activeMatchId/);
 });
 

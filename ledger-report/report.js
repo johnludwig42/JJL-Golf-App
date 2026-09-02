@@ -3,7 +3,7 @@
    or derived from it. Stroke allocation comes from the app's engine, keyed by
    basis; the report never re-derives handicapping.
    ========================================================================== */
-import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.33';
+import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.34';
 
 const packPages = globalThis.packPages;
 const runGame = globalThis.runGame;
@@ -934,7 +934,7 @@ if(!P.some(p=>p.statistics)) add("stats", ()=>{
   const nameW=26, restW=(100-nameW)/(5+types.length);
   const cols=[["l","Player",nameW+"%"],["n","Gross<br>avg",restW+"%"],
     ["n","Birdie+",restW+"%"],["n","Par or<br>better",restW+"%"],
-    ["n","Double<br>avoid.",restW+"%"],["n","Worst<br>hole",restW+"%"],
+    ["n","No<br>double+",restW+"%"],["n","Worst<br>hole",restW+"%"],
     ...types.map(t=>["n",`Par ${t}<br>(${idxOf(t).length})`,restW+"%"])];
   const rows=P.slice().sort((a,b)=>a.tot-b.tot).map(p=>{
     const d=p.gross.map((g,i)=>g-C.par[i]);
@@ -970,7 +970,7 @@ function buildTrackedStatisticsPage(page){
       <td class="n">${rate(s.birdieOrBetter,holes)}</td><td class="n">${rate(s.parOrBetter,holes)}</td><td class="n">${rate(s.bogeyOrBetter,holes)}</td>
       <td class="n">${num(t.trackedHoles)?rate(num(t.trackedHoles)-num(t.penaltyHoles),t.trackedHoles):"—"}</td></tr>`; }).join("");
   if(page==="performance") w.innerHTML=table("Scoring","Completed, scored holes; rates show count/sample.",
-    ["Player","Holes","Gross avg","Birdie+","Par+","Double avoid.","Penalty-free"],scoring);
+    ["Player","Holes","Gross avg","Birdie+","Par+","No double+","Penalty-free"],scoring);
   const tracked=P.filter(p=>p.statistics?.tracked?.trackedHoles);
   if(tracked.length){
     const ball=tracked.map(p=>{ const s=obj(p.statistics),t=obj(s.tracked); return `<tr data-row><td class="l">${nameCell(p)}</td><td class="n">${num(t.trackedHoles)}</td>

@@ -63,7 +63,7 @@ test('Shared Match Round Default normalizes, persists, resets, and seeds only ne
 });
 
 test('destination statuses replace the redundant readiness checklist and validation routes to the affected section', () => {
-  const render = app.slice(app.indexOf('function renderRoundReadiness()'), app.indexOf('function renderSetupConfidencePanels'));
+  const render = app.slice(app.indexOf('function renderRoundReadiness()'), app.indexOf('const SETUP_DESTINATION_COPY'));
   assert.doesNotMatch(render, /Tap an item to finish setup|readiness-check-list|data-readiness-destination/);
   assert.match(render, /renderSetupDestinationStatuses\(state\)/);
   assert.doesNotMatch(html, /roundReadinessPanel/);

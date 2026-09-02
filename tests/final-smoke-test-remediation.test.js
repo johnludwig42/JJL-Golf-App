@@ -104,7 +104,7 @@ test('slot replacement and duplicate rejection preserve team and tee mapping', (
 test('pointer, click, and Enter converge on one selection function and assignment refreshes setup truth', () => {
   assert.match(app, /addEventListener\('pointerdown', handlePlayerComboboxOptionPointerDown\)/);
   assert.match(app, /addEventListener\('click',[\s\S]*?selectPlayerComboboxOption\(option\)/);
-  const keyboard = app.slice(app.indexOf('function handlePlayerComboboxKeydown'), app.indexOf('function getCurrentSetupPlayerIds'));
+  const keyboard = app.slice(app.indexOf('function handlePlayerComboboxKeydown'), app.indexOf('function renderPlayerCombobox'));
   assert.match(keyboard, /event\.key === 'Enter'[\s\S]*?selectPlayerComboboxOption\(option\)/);
   assert.match(keyboard, /event\.key === 'Escape'[\s\S]*?closePlayerCombobox\(input, \{ restoreInvalid: true \}\)/);
   const assignment = app.slice(app.indexOf('function assignPlayerToSlot'), app.indexOf('function refreshMatchPlayerSlots'));

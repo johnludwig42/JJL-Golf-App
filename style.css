@@ -513,11 +513,6 @@ body.keyboard-open .top-tabs { box-shadow: 0 6px 14px rgba(0,0,0,.07); }
 .momentum-pill.team1 { background: #1f6e47; color: white; }
 .momentum-pill.team2 { background: #9f3030; color: white; }
 
-.hole-jump-tiles{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
-.hole-jump-tile{border:1px solid #cfe4d8;background:#eef7f2;color:#0b5d3b;border-radius:12px;padding:10px 0;font-size:12px;font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.04)}
-.hole-jump-tile.active{background:var(--accent);color:white;border-color:var(--accent)}
-.hole-jump-tile.complete{background:#eef7f2;border-color:#cfe4d8;color:#0b5d3b}
-.hole-jump-tile.active.complete{background:var(--accent);color:white}
 .payout-summary-intro{line-height:1.45}
 .payout-table-wrap{overflow-x:auto;padding-bottom:4px}
 .payout-game-table,.settlement-table{width:100%;border-collapse:collapse;margin-top:10px;background:white;border:1px solid var(--border);border-radius:12px;overflow:hidden}
@@ -528,7 +523,6 @@ body.keyboard-open .top-tabs { box-shadow: 0 6px 14px rgba(0,0,0,.07); }
 .payout-settlement-head{margin-top:8px}
 .payout-total-positive{color:#0b5d3b;font-weight:700}
 .payout-total-negative{color:#9f3030;font-weight:700}
-@media (max-width:760px){.hole-jump-tiles{grid-template-columns:repeat(6,minmax(0,1fr))}}
 
 @media (max-width:760px){
   .greenies-list{grid-template-columns:1fr}
@@ -1785,8 +1779,6 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
   #score .score-grid th, #score .score-grid td{padding:8px 6px;font-size:12px;}
   #score .score-grid th:first-child, #score .score-grid td:first-child{min-width:94px;}
   #score .score-grid input.score-input{width:56px;min-height:44px;font-size:17px;}
-  .hole-jump-tiles{grid-template-columns:repeat(3, minmax(0, 1fr));}
-  .hole-jump-tile{min-height:42px;}
   .match-status-grid, .game-summary-grid, .handicap-preview-grid, .stat-summary-grid{grid-template-columns:1fr;}
   .leader-mobile-grid{grid-template-columns:1fr 1fr;}
   #leaderboard .scoreboard-card{overflow:visible;}

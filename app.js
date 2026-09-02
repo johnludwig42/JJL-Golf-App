@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.33',
-  versionNumber: '31.0.33',
-  cacheName: 'the-dye-ledger-v31.0.33',
-  buildDate: '2026-09-02T06:13:00-04:00',
-  buildLabel: '9-Point Presentation'
+  version: 'v31.0.34',
+  versionNumber: '31.0.34',
+  cacheName: 'the-dye-ledger-v31.0.34',
+  buildDate: '2026-09-02T07:28:20-04:00',
+  buildLabel: 'Code Cleanup and Lint Hygiene'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -231,7 +231,7 @@ function getPlayerPreferencesDiagnostics(storage = localStorage) {
   try {
     const raw = storage.getItem(PLAYER_PREFERENCES_STORAGE_KEY);
     return { schemaVersion: getPlayerPreferences(storage).schemaVersion, storageAvailable: true, source: raw == null ? 'defaults' : 'stored' };
-  } catch (err) {
+  } catch  {
     return { schemaVersion: PLAYER_PREFERENCES_SCHEMA_VERSION, storageAvailable: false, source: 'defaults' };
   }
 }
@@ -290,7 +290,7 @@ function readRecentAppErrors() {
     const raw = localStorage.getItem(APP_ERROR_STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed.slice(0, APP_ERROR_LIMIT) : [];
-  } catch (err) {
+  } catch  {
     return [];
   }
 }
@@ -299,17 +299,17 @@ function writeRecentAppErrors(errors) {
   try {
     const bounded = Array.isArray(errors) ? errors.slice(0, APP_ERROR_LIMIT) : [];
     localStorage.setItem(APP_ERROR_STORAGE_KEY, JSON.stringify(bounded));
-  } catch (err) {
+  } catch  {
     // Ignore diagnostics storage failures.
   }
 }
 
 function getSafeUserAgent() {
-  try { return navigator.userAgent || ''; } catch (err) { return ''; }
+  try { return navigator.userAgent || ''; } catch  { return ''; }
 }
 
 function getSafeUrl() {
-  try { return window.location.href || ''; } catch (err) { return ''; }
+  try { return window.location.href || ''; } catch  { return ''; }
 }
 
 function recordAppError(error, context = 'App') {
@@ -356,7 +356,7 @@ function formatDiagnosticsTimestamp(timestamp) {
       second: '2-digit',
       hour12: true
     }).format(date) + ' ET';
-  } catch (err) {
+  } catch  {
     return String(timestamp || 'Unknown time');
   }
 }
@@ -555,7 +555,6 @@ function buildCompetitionRulesSummary(games = []) {
 
 const GAME_LABELS = Object.fromEntries(GAME_LIBRARY.map(g => [g.key, g.label]));
 const CLOUD_MATCH_CACHE_PREFIX = 'the-dye-ledger-cloud-match:';
-const SHARED_MATCHES_INDEX_KEY = 'the-dye-ledger-shared-index';
 const SUPABASE_CONFIG = window.__DYE_SUPABASE_CONFIG__ || {};
 let supabaseClient = null;
 let supabaseInitPromise = null;
@@ -623,12 +622,6 @@ const LEGACY_SCORE_ENTRY_MODE_MAP = {
   team_codes: 'assigned_players',
   open_edit: 'open_edit',
 };
-const SCORE_ACCESS_ROLE_LABELS = {
-  event_admin: 'Event Admin',
-  official_scorer: 'Official Scorer',
-  team_scorer: 'Team Scorer',
-  viewer: 'Viewer',
-};
 function getGameLabel(key) {
   const resolvedKey = typeof key === 'object' && key !== null ? key.key : key;
   const label = GAME_LABELS[resolvedKey] || resolvedKey;
@@ -646,9 +639,6 @@ function getLegacyScoreEntryMode(mode = 'team_codes') {
   if (normalized === 'single_device') return 'official_scorer';
   if (normalized === 'team_codes') return 'team_input';
   return 'open_edit';
-}
-function formatScoreAccessRoleLabel(role = 'viewer') {
-  return SCORE_ACCESS_ROLE_LABELS[role] || SCORE_ACCESS_ROLE_LABELS.viewer;
 }
 function defaultTeamScorerLabel(teamName = '', teamNo = 1) {
   return `${teamName || `Team ${teamNo}`} scorer`;
@@ -959,10 +949,6 @@ function getSharedParticipantById(match, participantId) {
 function getSharedParticipantByDeviceId(match, deviceId) {
   const id = String(deviceId || '').trim();
   return getSharedAssignmentParticipants(match).find(p => String(p.deviceId) === id || String(p.legacyDeviceId || '') === id) || null;
-}
-function getSharedParticipantName(match, participantId = '') {
-  const p = getSharedParticipantById(match, participantId);
-  return p?.deviceName || p?.name || (participantId ? 'Unknown participant' : 'Unassigned');
 }
 function resolveAssignmentValueToParticipantId(match, value) {
   const raw = String(value || '').trim();
@@ -1880,10 +1866,6 @@ function getAssignedPlayerNamesForParticipant(match, participantId = getCurrentS
     .map(mp => getPlayer(mp.playerId)?.name || 'Player')
     .filter(Boolean);
 }
-function getAssignedPlayerNamesForDevice(match, deviceId = getSharedDeviceId()) {
-  const participant = getSharedParticipantByDeviceId(match, deviceId);
-  return getAssignedPlayerNamesForParticipant(match, participant?.participantId || deviceId);
-}
 function getSharedAssignmentSummary(match) {
   if (!match || match.storageMode !== 'shared') return '';
   if (!isAssignedPlayersMode(match)) return 'This shared match allows the active scorer to score according to the selected scoring mode.';
@@ -1891,15 +1873,6 @@ function getSharedAssignmentSummary(match) {
   if (isCurrentDeviceMatchHost(match)) return 'Host device - can score all players and manage assignments.';
   return names.length ? `You are assigned to score: ${names.join(', ')}` : 'Waiting for the host to assign players to this device.';
 }
-function getSharedDeviceStatus(match, device) {
-  const currentId = getSharedDeviceId();
-  const isThis = String(device?.id || '') === currentId;
-  if (isThis && navigator.onLine === false) return 'Offline';
-  if (isThis && String(match?.cloudSyncState || '') === 'syncing') return 'Syncing';
-  if (isThis && (String(match?.cloudSyncState || '') === 'pending-sync' || sharedMatchSyncTimers.has(match?.id))) return 'Pending changes';
-  return isThis ? 'Online' : (device?.lastSeenAt ? 'Synced' : 'Needs attention');
-}
-
 function getSharedParticipantSeenStatus(participant = {}) {
   const ts = participant?.lastSeenAt || participant?.last_seen_at || participant?.lastSeen || '';
   const d = ts ? new Date(ts) : null;
@@ -1937,12 +1910,6 @@ function showSharedJoinConfirmation(match) {
   if (!match || match.storageMode !== 'shared') return;
   const summary = getSharedAssignmentSummary(match);
   toast(summary === 'Waiting for the host to assign players to this device.' ? 'Joined match. Waiting for host assignment.' : `Joined match. ${summary}`);
-}
-function setSetupWorkflowMode(mode = 'landing') {
-  const anchor = captureSetupScrollAnchor('#setupEntryCard');
-  setupWorkflowMode = ['landing', 'create', 'join'].includes(mode) ? mode : 'landing';
-  renderMatchSetupState();
-  restoreSetupScrollAnchor(anchor);
 }
 function copyTextToClipboard(text = '') {
   const value = String(text || '');
@@ -1987,11 +1954,6 @@ function canEditPlayerScore(match, teamNo = 1, playerId = '') {
   return access.role === 'event_admin' || access.role === 'official_scorer';
 }
 
-function getSharedDeviceByIdForDiagnostics(match, deviceId) {
-  const id = String(deviceId || '').trim();
-  if (!id) return null;
-  return (getSharedAssignmentDevices(match) || []).find(d => String(d.id) === id) || null;
-}
 function explainPlayerEditability(match, playerId) {
   const pid = String(playerId || '').trim();
   const mp = (match?.players || []).find(row => String(row.playerId) === pid) || null;
@@ -2183,16 +2145,6 @@ function canEditGreenies(match, teamNo = 1, playerId = '', options = {}) {
   const isHost = options.isHost == null ? isCurrentDeviceMatchHost(match) : !!options.isHost;
   return match.storageMode !== 'shared' || isHost;
 }
-function getScoreAccessHint(match) {
-  const access = getScoreAccessState(match);
-  if (access.mode === 'assigned_players') return 'Assigned Players Score Entry: this device can edit only the players assigned to it. Other players remain visible as read-only.';
-  if (access.role === 'event_admin') return 'Organizer / Admin can edit all teams, correct scores, and manage shared-round setup.';
-  if (access.mode === 'open_edit' && access.role !== 'viewer') return 'Anyone Can Enter Scores mode keeps score entry open to any authorized non-viewer device.';
-  if (access.role === 'official_scorer') return 'One Device Scores for Everyone keeps one full-access scorer in charge of entry.';
-  if (access.role === 'team_scorer') return `Each Team Enters Its Own Scores mode limits editing to ${getTeamLabel(match, access.team)}.`;
-  return 'Viewer is read-only and can monitor the round without editing any scores.';
-}
-
 function normalizeSelectedGamesOrder(games = []) {
   const ordered = Array.isArray(games) ? games.slice() : [];
   const priority = {
@@ -2715,7 +2667,6 @@ let playerModeSelectionContextKey = '';
 let catchUpScoringState = null;
 let currentHoleSequenceStart = 1;
 let finishConfirmArmed = false;
-let currentLeaderboardMatchRef = null;
 let newMatchPromptFinishArmed = false;
 let newMatchStartInProgress = false;
 let newMatchDialogMode = 'intent';
@@ -2935,20 +2886,9 @@ function formatRoundWeatherDisplay(match) {
     if (weather.windSpeed != null) bits.push(`Wind ${weather.windSpeed} mph${windDirection ? ` ${windDirection}` : ''}`);
     if (condition) bits.push(condition.charAt(0).toUpperCase() + condition.slice(1));
     return bits.length ? `Weather: ${bits.join(' · ')}` : String(weather.summary || '').trim();
-  } catch (_) {
+  } catch  {
     return '';
   }
-}
-
-function getRoundWeatherStatusLabel(match) {
-  const summary = getRoundWeatherSummary(match);
-  if (summary) return { label: 'Weather context captured', detail: summary, kind: 'ok' };
-  const status = normalizeRoundWeatherStatus(match?.roundContext?.weatherStatus || {});
-  if (status.state === 'pending') return { label: 'Weather capture in progress', detail: 'Scoring is available while weather context is captured.', kind: 'info' };
-  if (status.state === 'permission_needed') return { label: 'Location permission needed', detail: status.reason || 'Weather context was skipped because location was not available.', kind: 'warn' };
-  if (status.state === 'unavailable') return { label: 'Weather unavailable', detail: status.reason || 'Weather context could not be captured for this round.', kind: 'warn' };
-  if (status.state === 'skipped') return { label: 'Weather skipped', detail: status.reason || 'Weather context was skipped for this round.', kind: 'info' };
-  return { label: 'Weather context optional', detail: 'Weather context uses your location once when the round starts. It is saved only with this round.', kind: 'info' };
 }
 
 function getCurrentWeatherPosition() {
@@ -3886,10 +3826,6 @@ function resolveSneakySandyPoleyValidation(match, input, players = [], holeIdx =
   return { greenies, eligiblePlayers, prox, unresolved: greenies.some(row => !row.resolved) || prox.mode === 'tbd' };
 }
 
-function createSneakySandyPoleyTeamPointMap(teams = [], value = 0) {
-  return Object.fromEntries((teams || []).map(team => [team.id, Number(value) || 0]));
-}
-
 function getSneakySandyPoleyPointWinner(pointsByTeam = {}, teams = []) {
   if ((teams || []).length !== 2) return { teamId: null, tied: true, margin: 0, total: 0 };
   const a = Number(pointsByTeam[teams[0].id] || 0);
@@ -4349,11 +4285,6 @@ function getSneakySandyPoleyEligibleProxPlayers(input, players = []) {
   return (players || []).filter(player => !!rows[player.playerId]?.greeny);
 }
 
-function isSneakySandyPoleyProxEligible(input, playerId) {
-  if (!playerId) return false;
-  return !!input?.players?.[String(playerId)]?.greeny;
-}
-
 const SSP_PROX_TBD_VALUE = '__tbd';
 const SSP_PROX_PUSH_VALUE = '__push';
 const SSP_PROX_TEAM_PREFIX = '__team:';
@@ -4570,10 +4501,6 @@ function getRequestedHoleCount(match) {
 function getPlayableHoleCount(match, tee = null) {
   return Math.max(1, getSelectedHoleIndexes(match, tee).length);
 }
-function formatHoleCountLabel(count) {
-  const holes = Number(count) === 9 ? 9 : 18;
-  return `${holes} hole${holes === 1 ? '' : 's'}`;
-}
 function isNineHoleMatch(match) {
   return getRequestedHoleCount(match) === 9;
 }
@@ -4619,15 +4546,6 @@ function getAdjacentPlayableHole(match, current = currentHole, direction = 1, te
   if (idx < 0) return sequence[0] || null;
   const nextIdx = idx + (direction >= 0 ? 1 : -1);
   return nextIdx >= 0 && nextIdx < sequence.length ? sequence[nextIdx] : null;
-}
-
-function isSelectedRoundComplete(match, tee = null) {
-  if (!match) return false;
-  const count = getPlayableHoleCount(match, tee || getTee(match.courseId, match.teeId));
-  const players = Array.isArray(match.players) ? match.players : [];
-  return count > 0 && players.length > 0 && Array.from({ length: count }, (_, idx) => idx).every(idx =>
-    players.every(player => Number(player?.scores?.[idx]?.gross) > 0)
-  );
 }
 
 function getRoundDataCompletionState(match, metrics = null) {
@@ -4851,18 +4769,6 @@ function getFeaturedGameLabel(match, gameKey) {
   const mode = gameKey === "team_match" ? " · Best Ball" : (cfg.scoringMode ? ` · ${formatScoringModeLabel(cfg.scoringMode)}` : "");
   return `${getGameLabel(gameKey)} (${basis}${mode})`;
 }
-function formatMatchDiff(diff, match = null) {
-  if (!Number.isFinite(diff) || diff === 0) return 'AS';
-  const sign = diff > 0 ? getTeamLabel(match, 1) : getTeamLabel(match, 2);
-  return `${sign} ${Math.abs(diff)} up`;
-}
-
-function formatGrossNet(score) {
-  if (!Number.isFinite(score?.gross)) return '—';
-  const netText = Number.isFinite(score?.net) ? ` / net ${score.net}` : '';
-  return `${score.gross}${netText}`;
-}
-
 function getHoleValueForBasis(scoreObj, basis = 'net') {
   if (!scoreObj) return null;
   return String(basis || 'net').toLowerCase() === 'gross' ? scoreObj.gross : scoreObj.net;
@@ -5453,29 +5359,6 @@ function formatStrokesDisplay(strokes) {
   const n = Number(strokes) || 0;
   return n > 0 ? String(n) : '—';
 }
-function formatNassauSegmentStatus(match, metrics, diff) {
-  const n = Number(diff) || 0;
-  if (!Number.isFinite(n) || n === 0) return 'AS';
-  const teamNo = n > 0 ? 1 : 2;
-  return `${getTeamLabel(match, teamNo) || `Team ${teamNo}`} +${Math.abs(n)}`;
-}
-function buildNassauOneLineStatus(match, metrics) {
-  if (!match || !metrics || !(match.selectedGames || []).some(g => g.key === 'nassau')) return '';
-  if ((metrics.teams || []).length !== 2) return '';
-  const cfg = (match.selectedGames || []).find(g => g.key === 'nassau') || {};
-  const basis = String(cfg.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net';
-  const diffs = computeNassauDiffsForBasis(metrics, basis, cfg);
-  const holeCount = getPlayableHoleCount(match, metrics.tee);
-  const parts = [];
-  if (holeCount <= 9) {
-    parts.push(`${getHoleSegmentLabel(match, metrics.tee)}: ${formatNassauSegmentStatus(match, metrics, diffs.overall)}`);
-  } else {
-    parts.push(`Front: ${formatNassauSegmentStatus(match, metrics, diffs.front)}`);
-    parts.push(`Back: ${formatNassauSegmentStatus(match, metrics, diffs.back)}`);
-    parts.push(`18: ${formatNassauSegmentStatus(match, metrics, diffs.overall)}`);
-  }
-  return `Nassau: ${parts.join(' · ')}`;
-}
 function formatCompactTeeName(name = '') {
   const clean = String(name || '').trim();
   if (!clean) return '';
@@ -5687,16 +5570,6 @@ function getGreeniesResults(match, metrics, cfg = {}) {
   winnersByHole.sort((a,b)=>a.holeNumber-b.holeNumber);
   return { counts, winnersByHole };
 }
-function formatGolfScoreSymbol(score, par) {
-  if (!Number.isFinite(score)) return '—';
-  const diff = Number(score) - Number(par || 0);
-  const s = String(score);
-  if (diff <= -2) return `◎${s}◎`;
-  if (diff === -1) return `◯${s}◯`;
-  if (diff === 1) return `□${s}□`;
-  if (diff >= 2) return `▣${s}▣`;
-  return s;
-}
 function golfScoreClass(score, par) {
   if (!Number.isFinite(score)) return '';
   const diff = Number(score) - Number(par || 0);
@@ -5721,62 +5594,6 @@ function formatGolfScoreMarkup(score, par, tone = 'gross') {
   const cls = golfScoreClass(score, par);
   const style = getGolfScoreInlineStyle(score, par);
   return `<span class="score-number ${cls} ${tone === 'net' ? 'score-net' : 'score-gross'}" style="${style}">${escapeHtml(String(score))}</span>`;
-}
-function buildRoundShareText(match) {
-  const metrics = computeMatchMetrics(match);
-  currentLeaderboardMatchRef = match;
-  if (!metrics) return `${match?.name || 'Golf round'}
-
-This round is missing valid course or tee data.`;
-  const lines = [];
-  lines.push(`${match.name || 'Round'} — ${match.date}`);
-  lines.push(`${metrics.course.name} · ${metrics.tee.teeName}`);
-  const holeCount = getPlayableHoleCount(match, metrics.tee);
-  lines.push(`${getHoleSegmentLabel(match, metrics.tee)} · ${metrics.completed}/${holeCount} holes complete`);
-  if (match.status === 'complete') lines.push(`Completed ${formatTimestampET(match.completedAt || Date.now())}`);
-  lines.push('');
-
-  if (metrics.teams.length === 2) {
-    lines.push(`Team Match: ${formatMatchDiff(metrics.matchDiff, match)}`);
-    const front = metrics.teams[0].front === 0 ? 'AS' : (metrics.teams[0].front > 0 ? `${getTeamLabel(match, 1)} ${Math.abs(metrics.teams[0].front)} up` : `${getTeamLabel(match, 2)} ${Math.abs(metrics.teams[0].front)} up`);
-    const back = metrics.teams[0].back === 0 ? 'AS' : (metrics.teams[0].back > 0 ? `${getTeamLabel(match, 1)} ${Math.abs(metrics.teams[0].back)} up` : `${getTeamLabel(match, 2)} ${Math.abs(metrics.teams[0].back)} up`);
-    if (holeCount > 9) {
-      lines.push(`Front 9: ${front}`);
-      lines.push(`Back 9: ${back}`);
-    } else {
-      lines.push(`Match status: ${front}`);
-    }
-    lines.push('');
-    lines.push('Team Totals');
-    metrics.teams.forEach(team => {
-      lines.push(`${getTeamLabel(match, team.team)} (${team.members.map(m => m.player.name).join(', ')}): gross ${team.grossTotal}, net ${team.netTotal}, to par ${formatToPar(team.toPar)}, net diff ${formatToPar(team.netDiff)}, skins ${team.skins}`);
-    });
-    lines.push('');
-  }
-
-  lines.push('Player Totals');
-  metrics.players.slice().sort((a, b) => a.netDiff - b.netDiff || a.toPar - b.toPar).forEach(p => {
-    lines.push(`${p.player.name} (${getTeamLabel(match, p.team)}): gross ${p.grossTotal || 0}, net ${p.netTotal || 0}, to par ${formatToPar(p.toPar || 0)}, net diff ${formatToPar(p.netDiff || 0)}, skins ${p.skins}`);
-  });
-
-  lines.push('');
-  lines.push('Hole-by-Hole');
-  metrics.holeResults.forEach(h => {
-    if (!h.completed) {
-      lines.push(`H${h.holeNumber}: not completed`);
-      return;
-    }
-    const playerBits = metrics.players.map(p => {
-      const score = h.playerScores.find(ps => ps.playerId === p.playerId);
-      return `${p.player.name} ${formatGrossNet(score)}`;
-    }).join(' | ');
-    const result = metrics.teams.length === 2
-      ? (h.teamWinner === 1 ? `${getTeamLabel(match, 1)} won hole` : h.teamWinner === 2 ? `${getTeamLabel(match, 2)} won hole` : 'Hole tied')
-      : `Low net: ${h.indivWinners.map(id => metrics.players.find(p => p.playerId === id)?.player.name).filter(Boolean).join(', ') || '—'}`;
-    lines.push(`H${h.holeNumber}: ${playerBits} — ${result}`);
-  });
-
-  return lines.join('\n');
 }
 function applyScoreboardPrintView(view = "summary") {
   const requestedView = view === "scorecard" ? "scorecard" : "summary";
@@ -5807,65 +5624,6 @@ function buildPrintMeta(match, metrics, printView = "summary") {
     <div class="print-round-sub">${escapeHtml(match?.date || todayIso())} · ${escapeHtml(courseName)} · ${escapeHtml(teeName)} · ${holeCount} holes</div>
     <div class="print-round-sub">${metrics ? `${metrics.completed}/${holeCount} holes completed` : 'Scorecard ready to print'}${match?.status === 'complete' ? ' · Final' : ' · Live'} · ${printView === 'scorecard' ? 'Classic scorecard only' : 'Full match summary'}<\/div>`;
 }
-function clearPrintScaling() {
-  const root = document.getElementById('leaderboardWrap');
-  const classicCard = document.querySelector('.print-section-classic-scorecard');
-  if (root) {
-    root.style.removeProperty('--summary-print-scale');
-    root.style.removeProperty('--classic-print-scale');
-  }
-  if (classicCard) classicCard.style.removeProperty('--classic-print-height');
-}
-let activePrintCleanup = null;
-function cleanupActivePrintSession() {
-  if (typeof activePrintCleanup === 'function') {
-    const cleanup = activePrintCleanup;
-    activePrintCleanup = null;
-    cleanup();
-  }
-}
-function armDeferredPrintCleanup(cleanup) {
-  cleanupActivePrintSession();
-  let done = false;
-  let cleanupTimer = null;
-  const runCleanup = () => {
-    if (done) return;
-    done = true;
-    if (cleanupTimer) clearTimeout(cleanupTimer);
-    window.removeEventListener('afterprint', handleAfterPrint);
-    window.removeEventListener('focus', handleFocusReturn, true);
-    document.removeEventListener('visibilitychange', handleVisibilityReturn, true);
-    cleanup();
-    activePrintCleanup = null;
-  };
-  const scheduleCleanup = (delay = 700) => {
-    if (done) return;
-    if (cleanupTimer) clearTimeout(cleanupTimer);
-    cleanupTimer = setTimeout(() => {
-      if (document.visibilityState === 'visible') runCleanup();
-    }, delay);
-  };
-  const handleAfterPrint = () => scheduleCleanup(900);
-  const handleFocusReturn = () => scheduleCleanup(450);
-  const handleVisibilityReturn = () => {
-    if (document.visibilityState === 'visible') scheduleCleanup(250);
-  };
-  window.addEventListener('afterprint', handleAfterPrint);
-  window.addEventListener('focus', handleFocusReturn, true);
-  document.addEventListener('visibilitychange', handleVisibilityReturn, true);
-  activePrintCleanup = runCleanup;
-}
-function fitElementScale(element, maxWidth, maxHeight = null) {
-  if (!element || !maxWidth) return 1;
-  const width = Math.max(element.scrollWidth || 0, element.offsetWidth || 0, element.getBoundingClientRect?.().width || 0);
-  const height = Math.max(element.scrollHeight || 0, element.offsetHeight || 0, element.getBoundingClientRect?.().height || 0);
-  if (!width || !height) return 1;
-  const widthScale = Math.min(1, maxWidth / width);
-  const heightScale = maxHeight ? Math.min(1, maxHeight / height) : 1;
-  return Math.max(0.58, Math.min(widthScale, heightScale, 1));
-}
-
-
 function buildExportPlayerLeaderboard(match, metrics) {
   const completion = getRoundCompletionState(match, metrics);
   const sortedPlayers = (metrics?.players || []).slice().sort((a, b) => a.leaderboardNetDiff - b.leaderboardNetDiff || a.toPar - b.toPar || a.player.name.localeCompare(b.player.name));
@@ -6300,9 +6058,6 @@ function getCompletedHoleCountInRange(match, metrics, startIdx, endIdx) {
 function formatIncompleteScopeSuffix(completion) {
   return completion?.isIncomplete ? ` ${completion.throughLabel}` : '';
 }
-function formatProvisionalSuffix(completion) {
-  return completion?.isIncomplete ? ' — provisional' : '';
-}
 function getMatchClinchState({ margin, holesRemaining } = {}) {
   const m = Math.abs(Number(margin) || 0);
   const r = Math.max(0, Number(holesRemaining) || 0);
@@ -6313,9 +6068,6 @@ function getMatchClinchState({ margin, holesRemaining } = {}) {
     holesRemaining: r,
     resultText: isClinched ? `Won ${m} & ${r}` : (m ? `Leads ${m} up · ${r} hole${r === 1 ? '' : 's'} remain` : `All square · ${r} hole${r === 1 ? '' : 's'} remain`)
   };
-}
-function isMatchResultClinched(diff, remainingHoles) {
-  return getMatchClinchState({ margin: diff, holesRemaining: remainingHoles }).isClinched;
 }
 function formatTeamGameStatusScoped(match, metrics, diff, completion, { holesRemaining = null, scopeLabel = '', forceProvisional = false } = {}) {
   if (!completion?.isIncomplete && holesRemaining == null) return formatTeamGameStatus(match, metrics, diff);
@@ -6375,7 +6127,7 @@ function getGameClinchStates(match, metrics) {
       } else {
         states.push({ key, segment: 'overall', isClinched: false, holesRemaining: completion.incompleteHoleCount, resultText: 'Provisional' });
       }
-    } catch (_) {
+    } catch  {
       states.push({ key, segment: 'overall', isClinched: false, holesRemaining: completion.incompleteHoleCount, resultText: 'Unavailable' });
     }
   });
@@ -7058,11 +6810,11 @@ function acceptLedgerEntrySnapshotEnvelope(envelope, { persistNow = true } = {})
 }
 function consumePendingLedgerEntryAcceptance(storage = localStorage) {
   let envelope = null;
-  try { envelope = JSON.parse(storage.getItem(LEDGER_ENTRY_ACCEPTANCE_STORAGE_KEY) || 'null'); } catch (_error) {}
+  try { envelope = JSON.parse(storage.getItem(LEDGER_ENTRY_ACCEPTANCE_STORAGE_KEY) || 'null'); } catch  {}
   if (!envelope) return { accepted: false, reason: 'none' };
   const result = acceptLedgerEntrySnapshotEnvelope(envelope, { persistNow: true });
   if (result.accepted || result.reason === 'invalid-report') {
-    try { storage.removeItem(LEDGER_ENTRY_ACCEPTANCE_STORAGE_KEY); } catch (_error) {}
+    try { storage.removeItem(LEDGER_ENTRY_ACCEPTANCE_STORAGE_KEY); } catch  {}
   }
   return result;
 }
@@ -7082,11 +6834,11 @@ function unlockAcceptedLedgerEntry(roundId, { persistNow = true } = {}) {
 }
 function consumePendingLedgerEntryRevision(storage = localStorage) {
   let request = null;
-  try { request = JSON.parse(storage.getItem(LEDGER_ENTRY_REVISION_STORAGE_KEY) || 'null'); } catch (_error) {}
+  try { request = JSON.parse(storage.getItem(LEDGER_ENTRY_REVISION_STORAGE_KEY) || 'null'); } catch  {}
   if (!request) return { unlocked: false, reason: 'none' };
   const result = unlockAcceptedLedgerEntry(request.roundId, { persistNow: true });
   if (result.unlocked || result.reason === 'not-found') {
-    try { storage.removeItem(LEDGER_ENTRY_REVISION_STORAGE_KEY); } catch (_error) {}
+    try { storage.removeItem(LEDGER_ENTRY_REVISION_STORAGE_KEY); } catch  {}
   }
   return result;
 }
@@ -7231,76 +6983,6 @@ async function prepareLedgerEntryStory(match, metrics) {
     return buildDeterministicLedgerEntryStory(match, metrics, fallbackReason);
   }
 }
-function buildLegacyRoundSnapshot(match, metrics) {
-  if (!metrics) return '';
-  const completion = getRoundCompletionState(match, metrics);
-  const ctx = getPayoutReportContext(match, metrics);
-  const players = metrics.players || [];
-  const status = buildRoundStatusSummary(match, metrics);
-  const settlement = ctx.finalTotals || {};
-  const settlementRows = Object.entries(settlement).map(([id, amount]) => ({ id, amount: Number(amount || 0), name: getPlayer(id)?.name || id }));
-  const biggest = getHighRows(settlementRows, 'amount');
-  const lowGross = getLowRows(players, 'grossTotal');
-  const lowNet = getLowRows(players, 'leaderboardNetTotal');
-  const featured = getFeaturedCompetitionResult(match, metrics);
-  const timing = getRoundElapsedTimeState(match, metrics);
-  const weather = formatRoundWeatherDisplay(match);
-  const drivers = buildExecutiveDriverRows(match, metrics, ctx);
-  const keyDetails = [];
-  const currentResult = biggest.rows.length && biggest.value > 0
-    ? formatAwardWinners(biggest.rows.map(r => r.name), formatMoneyAccounting(biggest.value))
-    : 'All square — no current net payment';
-  keyDetails.push(['Round Status', completion.isIncomplete ? `${completion.completedHoleCount} of ${completion.selectedHoleCount} holes completed · Provisional` : `${completion.completedHoleCount} of ${completion.selectedHoleCount} holes completed · Final`]);
-  if (completion.isIncomplete && !completion.isSequential && completion.completedHolesLabel) keyDetails.push(['Completed Holes', completion.completedHolesLabel]);
-  if (timing.available) keyDetails.push(['Round Timing', escapeHtml(timing.label)]);
-  if (weather) keyDetails.push(['Weather', escapeHtml(weather.replace(/^Weather:\s*/i, ''))]);
-  if (featured?.result) keyDetails.push(['Featured Competition', `${escapeHtml(featured.label)} — ${escapeHtml(featured.result)}`]);
-  if (lowGross.rows.length) keyDetails.push([completion.isIncomplete ? 'Low Gross Leader' : 'Low Gross', `${formatAwardWinners(lowGross.rows.map(r => r.player?.name), lowGross.value)}${formatIncompleteScopeSuffix(completion)}`]);
-  if (lowNet.rows.length) keyDetails.push([completion.isIncomplete ? 'Low Net Leader' : 'Low Net', `${formatAwardWinners(lowNet.rows.map(r => r.player?.name), lowNet.value)}${formatIncompleteScopeSuffix(completion)}`]);
-  (ctx.payoutGames || []).slice(0, 4).forEach(game => {
-    const rows = Object.entries(game.amounts || {}).map(([id, amount]) => ({ id, amount: Number(amount || 0), name: getPlayer(id)?.name || id }));
-    const high = getHighRows(rows, 'amount');
-    if (high.rows.length && high.value > 0) keyDetails.push([game.label || getGameLabel(game.key), formatAwardWinners(high.rows.map(r => r.name), formatMoneyAccounting(high.value))]);
-  });
-  const awards = buildRoundAwardsRows(match, metrics);
-  const metaBits = [metrics?.course?.name || getCourse(match?.courseId)?.name || 'Course', metrics?.tee?.teeName || getTee(match?.courseId, match?.teeId)?.teeName || 'Tee', match?.date || todayIso()].filter(Boolean);
-  const playerNames = players.map(p => p?.player?.name).filter(Boolean).join(' · ');
-  const uniqueAwardKeys = new Set(keyDetails.map(([label]) => String(label).replace(/ Leader$/,'').toLowerCase()));
-  const compactAwards = awards.filter(([label]) => !uniqueAwardKeys.has(String(label).replace(/ Leader$/,'').toLowerCase())).slice(0, 8);
-  const takeaways = [];
-  if (featured?.result) takeaways.push(`${featured.label}: ${featured.result}`);
-  if (biggest.rows.length && biggest.value > 0) takeaways.push(`${biggest.rows.map(row => row.name).join(', ')} lead the money result at ${formatMoneyAccounting(biggest.value)}.`);
-  if (lowNet.rows.length) takeaways.push(`${lowNet.rows.map(row => row.player?.name).filter(Boolean).join(', ')} ${lowNet.rows.length > 1 ? 'share' : 'leads'} low net at ${formatToPar(Number(lowNet.rows[0]?.leaderboardNetDiff || 0))}.`);
-  if (completion.isIncomplete) takeaways.push('Only completed holes are included; unplayed holes are not estimated.');
-  return `
-    <section class="export-section export-section-round-snapshot report-section--major print-keep-together">
-      <div class="export-section-head round-snapshot-head">
-        <div>
-          <h2>Executive Round Summary</h2>
-          <div class="export-section-sub">Result, economic drivers, timing, and audit scope.</div>
-        </div>
-        <span class="round-snapshot-badge round-snapshot-badge-${escapeHtml(status.tone)}">${escapeHtml(status.badge)}</span>
-      </div>
-      <div class="round-snapshot-hero">
-        <div class="round-snapshot-kicker">Current Result · ${escapeHtml(metaBits.join(' · '))}</div>
-        <div class="round-snapshot-title">${escapeHtml(currentResult)}${completion.isIncomplete && !areAllGamesFinal(match, metrics) ? ' · Provisional' : ''}</div>
-        <div class="round-snapshot-detail"><strong>${escapeHtml(status.headline)}</strong> · ${escapeHtml(status.detail)}</div>
-        ${playerNames ? `<div class="round-snapshot-players">${escapeHtml(playerNames)}</div>` : ''}
-      </div>
-      <div class="round-snapshot-body">
-        <div class="round-snapshot-primary">
-          <div class="round-snapshot-section-title">Primary Drivers</div>
-          ${drivers.length ? `<div class="executive-driver-list">${drivers.map(row => `<div class="executive-driver-row"><div><strong>${escapeHtml(row.label)}</strong><span>${escapeHtml(row.result)}</span></div><div class="executive-driver-impact">${escapeHtml(row.impact)}</div>${row.stakes ? `<small>${escapeHtml(row.stakes)}</small>` : ''}</div>`).join('')}</div>` : '<div class="export-empty">No payout games have moved yet.</div>'}
-          ${takeaways.length ? `<div class="round-snapshot-takeaways"><div class="round-snapshot-awards-title">Key Takeaways</div><ul>${takeaways.slice(0, 5).map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul></div>` : ''}
-        </div>
-        <div class="round-snapshot-secondary">
-          ${keyDetails.length ? `<div class="round-snapshot-grid">${keyDetails.map(([label, value]) => `<div class="round-snapshot-row"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`).join('')}</div>` : `<div class="export-empty empty-state-card">No round highlights available yet.</div>`}
-          ${compactAwards.length ? `<div class="round-snapshot-awards"><div class="round-snapshot-awards-title">Leaders & Awards</div><div class="round-snapshot-awards-grid">${compactAwards.slice(0, 4).map(([label, value]) => `<div class="round-snapshot-award"><span>${escapeHtml(label)}</span><strong>${value}</strong></div>`).join('')}</div></div>` : ''}
-        </div>
-      </div>
-    </section>`;
-}
-
 function buildRoundRecordResultLine(record) {
   const positions = Object.entries(record?.settlement?.netPositions || {}).map(([playerId, amount]) => ({ playerId, amount: Number(amount || 0) }));
   const winners = positions.filter(row => row.amount > 0.0001).sort((a, b) => b.amount - a.amount);
@@ -7569,7 +7251,7 @@ function summarizeSelectedGamesForRecap(match, metrics) {
           : computeTeamGameDiffs(match, metrics, cfg.key);
         item.summary = { basis: formatBasisLabel(cfg.basis), front: diffs.front, back: diffs.back, overall: diffs.overall, status: formatTeamGameStatus(match, metrics, diffs.overall) };
       }
-    } catch (err) {
+    } catch  {
       item.summary = 'Unavailable';
     }
     return item;
@@ -7649,16 +7331,6 @@ function getRoundRecapFailureMessage(status, code = '') {
   if (status === 502 || normalizedCode === 'PROVIDER_FAILED') return 'Story provider could not complete the request. Please try again.';
   return 'Story service returned an error. Scores, Memories, and round data remain saved.';
 }
-function setRoundRecapFailure(match, { status = 0, code = '', message = '' } = {}) {
-  const safeCode = String(code || `HTTP_${Number(status) || 0}`).replace(/[^A-Z0-9_-]/gi, '').slice(0, 48).toUpperCase();
-  match.roundRecapLastError = {
-    code: safeCode || 'UNKNOWN',
-    status: Number(status) || 0,
-    occurredAt: new Date().toISOString(),
-  };
-  match.roundRecapStatus = message || getRoundRecapFailureMessage(Number(status) || 0, safeCode);
-}
-
 function validateGreeniesNarrativeClaims(match, metrics, recapText) {
   const greenies = summarizeSelectedGamesForRecap(match, metrics).find(game => game.key === 'greenies');
   const recordedCounts = greenies?.summary?.counts && typeof greenies.summary.counts === 'object' ? greenies.summary.counts : null;
@@ -7864,7 +7536,7 @@ function buildRoundRecapPayload(match, metrics) {
         if (outcome !== 'pending') momentum.holes.push({ hole: h.holeNumber, status: formatPerspectiveStatus(running, getMomentumPerspectiveTeam(match)) });
       });
     }
-  } catch (_) {}
+  } catch  {}
   const roundCompletionState = getRoundCompletionState(match, metrics);
   const gameClinchStates = getGameClinchStates(match, metrics);
   const allGamesFinal = areAllGamesFinal(match, metrics);
@@ -8170,23 +7842,7 @@ function buildSneakySandyPoleyExportSummary(match, metrics) {
       <div class="game-summary-value">${Number(ledger.finalTotalsByTeam?.[team.id] || 0)} pts</div>
       <div class="game-summary-sub">Base ${Number(ledger.baseTotalsByTeam?.[team.id] || 0)} pts</div>
     </div>`).join('');
-  const holeRows = countedHoles.map(hole => {
-    const base = teams.map(team => `${team.name} ${Number(hole.basePointsByTeam?.[team.id] || 0)}`).join(' / ');
-    const final = teams.map(team => `${team.name} ${Number(hole.finalPointsByTeam?.[team.id] || 0)}`).join(' / ');
-    const takeKeep = hole.takeKeep?.teamId ? `${formatSneakySandyPoleyTeamName(ledger, match, hole.takeKeep.teamId)} ${hole.takeKeep.type === 'take' ? 'Take +2' : 'Keep +1'}` : '-';
-    const umbee = hole.umbee?.active ? `${formatSneakySandyPoleyTeamName(ledger, match, hole.umbee.teamId)} ${hole.umbee.reason}` : '-';
-    const running = hole.runningLeader?.tied ? 'Tied' : `${formatSneakySandyPoleyTeamName(ledger, match, hole.runningLeader?.teamId)} +${Number(hole.runningLeader?.margin || 0)}`;
-    return `<tr>
-      <td>${Number(hole.holeNumber) || ''}</td>
-      <td>${escapeHtml(base)}</td>
-      <td>${escapeHtml(takeKeep)}</td>
-      <td>${escapeHtml(hole.bridge?.label || '1x')}</td>
-      <td>${escapeHtml(umbee)}</td>
-      <td>${escapeHtml(final)}</td>
-      <td>${escapeHtml(running)}</td>
-    </tr>`;
-  }).join('');
-  const pointValue = Number(ledger.settlement?.pointValue || ledger.settings?.pointValue || 0);
+    const pointValue = Number(ledger.settlement?.pointValue || ledger.settings?.pointValue || 0);
   const momentum = buildSneakySandyPoleyMomentumData(match, { ledger });
   const momentumHtml = momentum.length ? (() => {
     const width = 680, height = 230, padLeft = 54, padRight = 28, padTop = 28, padBottom = 42;
@@ -9526,7 +9182,7 @@ async function openUnifiedExport(match, printView = 'ledger') {
       toast('Opening the accepted Ledger Entry…');
       try {
         launchLedgerReportModel(clonePlain(acceptedLedgerReport), { sameTabLedger, exportWindow });
-      } catch (error) {
+      } catch  {
         if (exportWindow) exportWindow.close();
         toast('The accepted Ledger Entry could not be opened.');
       }
@@ -9546,7 +9202,7 @@ async function openUnifiedExport(match, printView = 'ledger') {
     reportModel.meta.storyApprovalRequired = !savedStory;
     try {
       launchLedgerReportModel(reportModel, { sameTabLedger, exportWindow, autoPrint: false });
-    } catch (error) {
+    } catch  {
       if (exportWindow) exportWindow.close();
       toast('Ledger Entry could not be opened.');
     }
@@ -9557,48 +9213,14 @@ async function openUnifiedExport(match, printView = 'ledger') {
     const versionQuery = String(APP_VERSION || '').replace(/^v/i, '');
     const basePath = window.location.pathname || '/';
     exportWindow.history.replaceState(null, '', `${window.location.origin}${basePath}?v=${encodeURIComponent(versionQuery)}`);
-  } catch (err) {}
+  } catch  {}
   exportWindow.document.open();
   exportWindow.document.write(exportHtml);
   exportWindow.document.close();
-  try { exportWindow.focus(); } catch (err) {}
+  try { exportWindow.focus(); } catch  {}
 }
 globalThis.__DYE_LEDGER_ACCEPT_REPORT__ = envelope => acceptLedgerEntrySnapshotEnvelope(envelope, { persistNow: true });
 globalThis.__DYE_LEDGER_UNLOCK_REPORT__ = roundId => unlockAcceptedLedgerEntry(roundId, { persistNow: true });
-function prepareScoreboardPrintLayout(printView = 'summary') {
-  const root = document.getElementById('leaderboardWrap');
-  const classicCard = document.querySelector('.print-section-classic-scorecard');
-  const classicScorecard = document.getElementById('classicScorecard');
-  const printableSummaryNodes = Array.from(document.querySelectorAll('#leaderboardWrap > .scoreboard-card:not(.scoreboard-export-card):not(.hidden)'));
-  clearPrintScaling();
-  if (!root) return;
-  const viewportWidth = Math.max(window.innerWidth || 0, document.documentElement?.clientWidth || 0, 1180);
-  const viewportHeight = Math.max(window.innerHeight || 0, document.documentElement?.clientHeight || 0, 720);
-  if (printView === 'scorecard') {
-    const printSafeWidth = 920;
-    const printSafeHeight = 560;
-    const scorecardTable = classicScorecard?.querySelector('.scorecard-table');
-    const scaleTarget = scorecardTable || classicScorecard;
-    let scale = fitElementScale(scaleTarget, printSafeWidth, printSafeHeight);
-    scale = Math.max(0.42, Math.min(scale, 1));
-    root.style.setProperty('--classic-print-scale', String(scale));
-    if (classicCard && classicScorecard) {
-      const height = Math.ceil((classicScorecard.scrollHeight || classicScorecard.offsetHeight || 0) * scale);
-      if (height) classicCard.style.setProperty('--classic-print-height', `${height}px`);
-    }
-  } else {
-    const widest = printableSummaryNodes.reduce((max, node) => Math.max(max, node.scrollWidth || node.offsetWidth || 0), 0);
-    const maxWidth = Math.max(880, viewportWidth - 28);
-    const scale = widest ? fitElementScale({
-      scrollWidth: widest,
-      scrollHeight: root.scrollHeight || root.offsetHeight || viewportHeight,
-      offsetWidth: widest,
-      offsetHeight: root.scrollHeight || root.offsetHeight || viewportHeight,
-      getBoundingClientRect: () => ({ width: widest, height: root.scrollHeight || root.offsetHeight || viewportHeight })
-    }, maxWidth) : 1;
-    root.style.setProperty('--summary-print-scale', String(scale));
-  }
-}
 function openPrintScorecard(matchId, printView = null) {
   const match = matchId ? getMatch(matchId) : getReviewOrActiveMatch();
   if (!match) return toast('No round selected to share.');
@@ -9984,10 +9606,6 @@ function getHoleTeeNameForDisplay(courseId, tee, holeIdx, courseOverride = null)
   if (tee.isCombo) return getComboSourceTeeName(courseId, tee, holeIdx, courseOverride) || '';
   return inferFlattenedComboSourceTeeName(courseId, tee, holeIdx) || tee.teeName || '';
 }
-function formatComboHoleTeeIndicator(courseId, comboTee, holeIdx, prefix = 'Tee') {
-  const teeName = comboTee?.isCombo ? getComboSourceTeeName(courseId, comboTee, holeIdx) : inferFlattenedComboSourceTeeName(courseId, comboTee, holeIdx);
-  return teeName ? `${prefix}: ${teeName}` : '';
-}
 function getPlayer(playerId) { return state.players.find(p => p.id === playerId); }
 function getMatch(matchId = state.activeMatchId) { return state.matches.find(m => m.id === matchId) || null; }
 function getActiveMatch() { return getMatch(); }
@@ -10013,9 +9631,6 @@ function getCanonicalSharedMatch(matchOrId = null) {
 }
 function completedHoles(match) {
   return Number(match?.lastTouchedHole) || computeMatchProgress(match).lastTouchedHole || 0;
-}
-function getLastFullyCompletedHole(match) {
-  return Number(match?.lastFullyCompletedHole) || computeMatchProgress(match).lastFullyCompletedHole || 0;
 }
 function holeStrokeAllowanceForPlayer(holeStrokeIndex, playerHandicap, baseHandicap) {
   const diff = Math.max(0, playerHandicap - baseHandicap);
@@ -10935,130 +10550,6 @@ function buildClassicScorecard(match, metrics, opts = {}) {
 }
 
 
-function isCompactTeamPayoutViewport() {
-  const viewportWidth = Math.max(window.innerWidth || 0, document.documentElement?.clientWidth || 0, 0);
-  return viewportWidth > 0 && viewportWidth <= 760;
-}
-
-
-function getTeamPayoutMobileWindowSize() {
-  const viewportWidth = Math.max(window.innerWidth || 0, document.documentElement?.clientWidth || 0, 0);
-  if (viewportWidth && viewportWidth <= 430) return 2;
-  return 3;
-}
-
-function shortenTeamPayoutGameLabel(label, index, used = new Set()) {
-  const original = String(label || '').trim() || `Game ${index + 1}`;
-  let short = original
-    .replace(/Nassau\s*\((front|back|overall)\)/i, (_, part) => `Nassau ${part.charAt(0).toUpperCase()}`)
-    .replace(/\bFront\b/i, 'F')
-    .replace(/\bBack\b/i, 'B')
-    .replace(/\bOverall\b/i, 'Ov')
-    .replace(/\bBest Ball\b/i, 'BB')
-    .replace(/\bMatch Play\b/i, 'Match')
-    .replace(/\bStroke Play\b/i, 'Stroke')
-    .replace(/\bContest\b/i, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (short.length > 12) short = short.slice(0, 11).trimEnd();
-  if (!short) short = `G${index + 1}`;
-  let candidate = short;
-  if (used.has(candidate)) candidate = `${candidate} (${index + 1})`;
-  if (candidate.length > 14) candidate = `G${index + 1}`;
-  used.add(candidate);
-  return { short: candidate, full: original };
-}
-
-function getTeamPayoutMobileWindows(matchId, section) {
-  const windowSize = getTeamPayoutMobileWindowSize();
-  const used = new Set();
-  const games = section.games.map((game, index) => ({
-    ...game,
-    mobileLabel: shortenTeamPayoutGameLabel(game.label, index, used),
-    mobileKey: `${section.key}-${index}`,
-  }));
-  const windows = [];
-  for (let start = 0; start < games.length; start += windowSize) {
-    windows.push(games.slice(start, start + windowSize));
-  }
-  if (!windows.length) windows.push([]);
-  const active = Math.max(0, Math.min(Number(uiState.teamPayoutMobileWindowByMatch[matchId] || 0), windows.length - 1));
-  return { games, windows, active };
-}
-
-function buildTeamPayoutMobileMatrix(match, section, players, totals) {
-  const matchId = match?.id || 'active';
-  const { windows, active } = getTeamPayoutMobileWindows(matchId, section);
-  const visibleGames = windows[active] || [];
-  const legendKey = uiState.teamPayoutMobileOpenHeaderKey || '';
-  const legendGame = visibleGames.find(game => game.mobileKey === legendKey) || null;
-  const legendText = legendGame
-    ? escapeHtml(legendGame.mobileLabel.full)
-    : 'Tap a game header to see the full game name.';
-  const windowButtons = windows.map((games, index) => {
-    const summary = games.map(game => game.mobileLabel.short).join(' · ') || `Games ${index + 1}`;
-    return `<button type="button" class="team-payout-window-chip ${index === active ? 'active' : ''}" data-team-payout-window="${index}" aria-pressed="${index === active ? 'true' : 'false'}" title="${escapeHtml(games.map(game => game.mobileLabel.full).join(' • '))}">${escapeHtml(summary)}</button>`;
-  }).join('');
-  const headerCells = visibleGames.map(game => {
-    const isOpen = legendKey === game.mobileKey;
-    return `<th class="team-payout-mobile-game-head"><button type="button" class="team-payout-header-button ${isOpen ? 'active' : ''}" data-team-payout-header-full="${escapeHtml(game.mobileLabel.full)}" data-team-payout-header-key="${game.mobileKey}" aria-expanded="${isOpen ? 'true' : 'false'}">${escapeHtml(game.mobileLabel.short)}</button></th>`;
-  }).join('');
-  const bodyRows = players.map(player => {
-    const gameCells = visibleGames.map(game => {
-      const amount = game.amounts[player.id] || 0;
-      const cls = amount > 0.0001 ? 'payout-total-positive' : amount < -0.0001 ? 'payout-total-negative' : '';
-      const text = Math.abs(amount) > 0.0001 ? formatMoneyAccounting(amount) : '—';
-      return `<td class="team-payout-mobile-game-cell ${cls}">${text}</td>`;
-    }).join('');
-    return `<tr><th scope="row" class="team-payout-mobile-player-cell"><strong>${escapeHtml(player.name)}</strong></th>${gameCells}</tr>`;
-  }).join('');
-  const columnFoot = visibleGames.map(game => {
-    const colTotal = players.reduce((sum, player) => sum + (game.amounts[player.id] || 0), 0);
-    const cls = Math.abs(colTotal) <= 0.0001 ? '' : (colTotal > 0 ? 'payout-total-positive' : 'payout-total-negative');
-    return `<td class="team-payout-mobile-game-cell ${cls}"><strong>${formatMoneyAccounting(colTotal)}</strong></td>`;
-  }).join('');
-  const visibleCount = Math.max(1, visibleGames.length || 1);
-  const colgroup = `<colgroup><col class="team-payout-col-player">${visibleGames.map(() => '<col class="team-payout-col-game">').join('')}</colgroup>`;
-  return `
-    <div class="team-payout-mobile-matrix" data-team-payout-mobile style="--team-payout-visible-games:${visibleCount};">
-      <div class="team-payout-mobile-topline">
-        <div class="team-payout-mobile-topline-label">View</div>
-        <div class="team-payout-window-chips" role="tablist" aria-label="Visible team payout games">${windowButtons}</div>
-      </div>
-      <div class="team-payout-mobile-legend ${legendGame ? 'is-open' : ''}" aria-live="polite">${legendText}</div>
-      <div class="payout-table-wrap team-payout-mobile-wrap">
-        <table class="payout-game-table team-payout-mobile-table">
-          ${colgroup}
-          <thead><tr><th class="team-payout-mobile-player-head">Player</th>${headerCells}</tr></thead>
-          <tbody>${bodyRows}</tbody>
-          <tfoot><tr><th scope="row" class="team-payout-mobile-player-cell"><strong>Total</strong></th>${columnFoot}</tr></tfoot>
-        </table>
-      </div>
-    </div>`;
-}
-function buildResponsiveSettlementTable(settlements) {
-  const rows = settlements.length
-    ? settlements.map(row => `
-      <tr>
-        <td class="settlement-from-cell"><span class="settlement-name">${escapeHtml(getPlayer(row.from)?.name || 'Unknown')}</span></td>
-        <td class="settlement-to-cell"><span class="settlement-name">${escapeHtml(getPlayer(row.to)?.name || 'Unknown')}</span></td>
-        <td class="settlement-amount-cell"><strong>${formatMoneyAccounting(row.amount)}</strong></td>
-      </tr>`).join('')
-    : '<tr><td colspan="3">No payouts due right now.</td></tr>';
-  return `
-    <div class="payout-table-wrap top-gap settlement-table-wrap">
-      <table class="settlement-table settlement-table-responsive">
-        <colgroup>
-          <col class="settlement-col-from">
-          <col class="settlement-col-to">
-          <col class="settlement-col-amount">
-        </colgroup>
-        <thead><tr><th>From</th><th>To</th><th>Amount</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>`;
-}
-
 function buildSettleUpList(settlements) {
   if (!settlements.length) return '<div class="tiny">No payments needed.</div>';
   return `<div class="settle-up-list">${settlements.map(row => `
@@ -11160,24 +10651,6 @@ function buildGrossGamePaymentDetail(players, games) {
     </div>`;
   }).join('')}</div>`;
 }
-function buildGrossGameDetailSection(match, players, games) {
-  const matchId = String(match?.id || 'active');
-  const open = !!uiState.grossGameDetailOpenByMatch[matchId];
-  const label = open ? 'Hide Game Payout Detail ▲' : 'Show Game Payout Detail ▼';
-  const detail = open ? `
-    <div class="gross-game-detail-body" id="grossGameDetailBody">
-      <div class="payout-summary-intro"><strong>Player Game Summary</strong><br><span class="tiny">Game results by player before efficient settlement.</span></div>
-      ${buildPlayerGrossSummaryCards(players, games)}
-      <div class="payout-summary-intro top-gap"><strong>Game-by-Game Payout Detail</strong><br><span class="tiny">Pre-settlement audit trail that reconciles to the net settlement above.</span></div>
-      ${buildGrossGamePaymentDetail(players, games)}
-    </div>` : '';
-  return `<div class="gross-game-detail-card top-gap">
-    <button type="button" class="gross-game-detail-toggle" data-gross-game-detail-toggle aria-expanded="${open ? 'true' : 'false'}" aria-controls="grossGameDetailBody">${label}</button>
-    ${detail}
-  </div>`;
-}
-
-
 function getPayoutReportContext(match, metrics) {
   const selected = getOrderedSelectedGames(match);
   const games = computeLivePayoutGames(match, metrics);
@@ -11218,12 +10691,6 @@ function buildExportGrossGameDetailSummary(match, metrics) {
     </div>`;
 }
 
-function buildNetPayoutSummary(match, metrics) {
-  const ctx = getPayoutReportContext(match, metrics);
-  if (!ctx.selected.length) return '<div><strong>Net payout (live):</strong> No gambling games selected.</div>';
-  if (!ctx.payoutGames.length) return '<div><strong>Net payout (live):</strong> No payout-producing games selected.</div>';
-  return `<div class="payout-summary-stack">${buildFinalNetSettlementSection(ctx.players, ctx.finalTotals)}${buildGrossGameDetailSection(match, ctx.players, ctx.payoutGames)}</div>`;
-}
 function getCompletedStatHoleLimit(match, metrics) {
   const completion = getRoundCompletionState(match, metrics);
   return Math.max(0, Math.min(Number(completion.completedHoleCount || 0), Number(metrics?.holeCount) || getRequestedHoleCount(match)));
@@ -11828,30 +11295,6 @@ function getPlayerDetailThroughLabel(match, metrics, playerMetric) {
   return lastHole ? `H${lastHole} (${scoredCount}/${total})` : `0/${total}`;
 }
 
-function getPlayerDetailMatchStatus(match, metrics, playerMetric) {
-  if (!match || !metrics || !playerMetric) return '';
-  const games = Array.isArray(match.selectedGames) ? match.selectedGames : [];
-  if (!games.length) return '';
-  if (games.some(g => g.key === 'singles_match') && isSinglesMatchPlayEligible(match, metrics)) {
-    const result = computeSinglesMatchPlayResult(match, metrics, getSinglesMatchConfig(match) || {});
-    if ([result.playerAId, result.playerBId].map(String).includes(String(playerMetric.playerId))) return result.resultText || '';
-  }
-  const sidePairing = getIndividualMatchPairings(match, metrics).find(pair => (
-    String(pair.playerA?.playerId) === String(playerMetric.playerId) || String(pair.playerB?.playerId) === String(playerMetric.playerId)
-  ));
-  if (sidePairing && ['match_play', 'nassau'].includes(String(sidePairing.game || '').toLowerCase())) {
-    return `${getSideMatchGameLabel(sidePairing.game)}: ${sidePairing.status}`;
-  }
-  if (metrics.teams?.length === 2) {
-    const teamGame = games.find(g => g.key === 'team_match') || games.find(g => g.key === 'nassau');
-    if (teamGame) {
-      const diffs = computeTeamGameDiffs(match, metrics, teamGame.key);
-      return `${getGameLabel(teamGame.key)}: ${formatTeamGameStatus(match, metrics, diffs.overall)}`;
-    }
-  }
-  return '';
-}
-
 function buildPlayerDetailStatBlock(match, metrics, playerMetric) {
   if (!isStatTrackingEnabled(match) || !isPlayerStatTrackingEnabled(match, playerMetric?.playerId)) {
     return '<div class="player-detail-empty tiny">No hole-by-hole stat tracking is enabled for this player.</div>';
@@ -12193,43 +11636,18 @@ function buildQuickPlayerScoreSummary(match, metrics, record = null) {
 function buildQuickScoreboardView(match, metrics, preferences = getPlayerPreferences()) {
   if (!match || !metrics) return '<div class="player-detail-empty">Scoreboard is unavailable.</div>';
   const quickPreferences = normalizePlayerPreferences(preferences).quickScoreboard;
-  const sortedPlayers = (metrics.players || []).slice().sort((a, b) => a.leaderboardNetDiff - b.leaderboardNetDiff || a.toPar - b.toPar || String(a.player?.name || '').localeCompare(String(b.player?.name || '')));
-  const playerRows = sortedPlayers.map((p, idx) => `
-    <tr>
-      <td>${idx + 1}</td>
-      <td>${escapeHtml(p.player?.name || 'Player')}</td>
-      <td>${p.grossTotal || 0}</td>
-      <td>${p.leaderboardNetTotal || 0}</td>
-      <td>${formatToPar(p.leaderboardNetDiff || 0)}</td>
-    </tr>`).join('');
-  const showTeams = hasMultiPlayerTeam(metrics);
-  const teamRows = showTeams ? (metrics.teams || []).slice().sort((a, b) => a.netTotal - b.netTotal || a.grossTotal - b.grossTotal || a.team - b.team).map(t => `
-    <tr>
-      <td>${escapeHtml(getTeamLabel(match, t.team))}</td>
-      <td>${t.grossTotal || 0}</td>
-      <td>${t.netTotal || 0}</td>
-      <td>${formatToPar(t.netDiff || 0)}</td>
-    </tr>`).join('') : '';
-  const completion = getRoundCompletionState(match, metrics);
+          const completion = getRoundCompletionState(match, metrics);
   const elapsed = getRoundElapsedTimeState(match);
   const gameStatusRows = buildQuickScoreboardGameStatusRows(match, metrics);
   const payout = getPayoutReportContext(match, metrics);
   const gameMoneyHtml = buildGameMoneyContributionRows(match, metrics, payout);
   const sspSettlement = isSneakySandyPoleyEnabled(match) ? buildSneakySandyPoleyLedger(match, { metrics }).settlement : null;
   const sspMoneyHtml = sspSettlement?.valid && !sspSettlement.tied && sspSettlement.amount > 0 ? `<div class="quick-ssp-money"><strong>${escapeHtml(sspSettlement.label)}</strong><span>${escapeHtml(sspSettlement.payerLabel)}</span><span>${escapeHtml(sspSettlement.payeeLabel)}</span></div>` : '';
-  const moneyRows = Object.entries(payout.finalTotals || {})
-    .map(([id, amount]) => ({ name: getPlayer(id)?.name || id, amount: Number(amount) || 0 }))
-    .filter(row => Math.abs(row.amount) > 0.0001)
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 4)
-    .map(row => `<div class="quick-money-row"><span>${escapeHtml(row.name)}</span><strong>${formatFinalNetSettlementMoney(row.amount)}</strong></div>`)
-    .join('');
-  const record = getEffectiveRoundRecord(match, metrics);
+    const record = getEffectiveRoundRecord(match, metrics);
   const story = buildRoundRecordStory(record);
   const turning = story.turningPoint;
   const highlightHtml = turning ? `<section class="quick-scoreboard-section quick-round-highlight"><h4>Round Highlight</h4><span>Turning Point · H${escapeHtml(turning.holeNumber || '—')}</span><strong>${escapeHtml(describeRoundRecordEvent(record, turning))}</strong></section>` : '';
-  const playerContext = sortedPlayers.map(player => `<span><strong>${escapeHtml(player.player?.name || 'Player')}</strong> · Course HCP ${player.courseHdcp ?? player.courseHandicap ?? '—'}</span>`).join('');
-  const gameSummaryHtml = buildQuickGameSummary(match, metrics, record);
+    const gameSummaryHtml = buildQuickGameSummary(match, metrics, record);
   return `
     <div class="quick-scoreboard-shell">
       <div class="quick-scoreboard-meta">${escapeHtml(completion.label)}${match.status === 'complete' ? ' · Final' : ' · Live'}${elapsed.available ? ` · ${escapeHtml(elapsed.label.replace(/^Round elapsed time:\s*/i, ''))}` : ''}</div>
@@ -12444,7 +11862,6 @@ function renderLeaderboard() {
   }
 
   const metrics = computeMatchMetrics(match);
-  currentLeaderboardMatchRef = match;
   if (!metrics) {
     empty.classList.remove('hidden');
     wrap.classList.add('hidden');
@@ -12693,10 +12110,6 @@ async function getSupabaseUser() {
   if (signIn.error) throw signIn.error;
   return signIn.data?.user || null;
 }
-function getSharedMatchIndex() {
-  return Array.isArray(state.sharedMatchIds) ? [...new Set(state.sharedMatchIds.filter(Boolean))] : [];
-}
-
 function normalizeCloudCourseRow(row = {}) {
   const id = String(row.id || row.course_id || row.name || uid());
   return {
@@ -12991,10 +12404,6 @@ function buildCourseIdentity(course = {}) {
     country: normalizeCourseCountryIdentity(course.country),
     holeCount: getCourseHoleCount(course),
   };
-}
-function getCloudCourseMatchKey(course = {}) {
-  const identity = buildCourseIdentity(course);
-  return [identity.name, identity.city, identity.state, identity.country, identity.holeCount || ''].join('|');
 }
 function getCloudCourseNameKey(course = {}) {
   return normalizeCourseIdentityText(course?.name);
@@ -13294,83 +12703,6 @@ async function publishCourseAtomically(client, course, existingCourse = null) {
   markCourseFromCloudRow(course, { id: cloudCourseId, publication_status: 'draft', owner_user_id: result?.owner_user_id || '' });
   return { id: cloudCourseId, publication_status: 'draft', owner_user_id: result?.owner_user_id || '', verified: true };
 }
-async function findCloudCourseRow(client, course) {
-  const name = String(course?.name || '').trim();
-  if (!name) return null;
-  if (course?.cloudCourseId) {
-    const { data: byId, error: idError } = await client.from('courses').select('*').eq('id', String(course.cloudCourseId)).limit(2);
-    if (idError) throw idError;
-    if ((byId || []).length > 1) throw makeDuplicateCloudCourseError(course, byId);
-    if ((byId || []).length === 1) return byId[0];
-  }
-  const { data, error } = await client.from('courses').select('*');
-  if (error) throw error;
-  const matches = findMatchingCloudCourseRows(data || [], course);
-  if (matches.length > 1) throw makeDuplicateCloudCourseError(course, matches);
-  return matches[0] || null;
-}
-async function syncCourseToSupabase(course, { silent = true } = {}) {
-  if (!course?.name) return { skipped: true };
-  if (!hasSupabaseConfig()) {
-    markCoursePendingSync(course, 'Supabase not configured');
-    uiState.cloudCoursesStatus = 'Cloud course library not configured. Course saved locally and marked pending sync.';
-    persist({ skipRender: true });
-    renderCourses();
-    return { pending: true };
-  }
-  try {
-    uiState.cloudCoursesStatus = 'Cloud Course Library: Syncing... manual setup remains available.';
-    renderCourses();
-    const client = await ensureSupabaseClient({ anonymousAuth: false });
-    if (!client) throw new Error('Supabase client unavailable.');
-    const writeAccess = await getCourseLibraryWriteAccess(client);
-    if (!writeAccess.allowed) throw new Error(writeAccess.message);
-    uiState.courseLibraryMaintainer = writeAccess.isMaintainer === true;
-    const existingCourse = await runCourseCloudOperation(() => findCloudCourseRow(client, course), 'Cloud course lookup');
-    if (existingCourse && isProtectedCloudCourse(existingCourse)) {
-      markCourseFromCloudRow(course, existingCourse);
-      persist({ skipRender: true });
-      renderAll();
-      return { current: true, protected: true };
-    }
-    await runCourseCloudOperation(() => publishCourseAtomically(client, course, existingCourse), `${course.name} atomic publish and verification`, { retries: 0 });
-    uiState.cloudCoursesStatus = 'Cloud Course Library: Connected ✓';
-    const savedVerifiedCourse = persist({ skipRender: true });
-    if (savedVerifiedCourse) clearCoursePublishRecovery(course.id);
-    renderAll();
-    if (!silent) toast('Course synced to cloud.');
-    return { synced: true };
-  } catch (err) {
-    console.warn('Course sync failed:', err);
-    markCoursePendingSync(course, err?.message || 'Course sync failed');
-    uiState.cloudCoursesStatus = 'Cloud Course Library: Offline. Course saved locally and will sync later.';
-    persist({ skipRender: true });
-    renderCourses();
-    if (!silent) toast('Course saved locally. Cloud sync failed.');
-    return { pending: true, error: err };
-  }
-}
-function scheduleCourseSync(courseOrId, { immediate = false, silent = true } = {}) {
-  const courseId = typeof courseOrId === 'string' ? courseOrId : courseOrId?.id;
-  const course = typeof courseOrId === 'string' ? getCourse(courseId) : courseOrId;
-  if (!course) return;
-  markCoursePendingSync(course);
-  persist({ skipRender: true });
-  const delay = immediate ? 0 : 800;
-  if (uiState.courseSyncTimers[courseId]) clearTimeout(uiState.courseSyncTimers[courseId]);
-  uiState.courseSyncTimers[courseId] = window.setTimeout(() => {
-    delete uiState.courseSyncTimers[courseId];
-    syncCourseToSupabase(course, { silent });
-  }, delay);
-}
-async function flushPendingCourseSync({ silent = true } = {}) {
-  if (!hasSupabaseConfig()) return;
-  const pending = state.courses.filter(c => c.cloudSyncState === 'pending-sync');
-  for (const course of pending) {
-    await syncCourseToSupabase(course, { silent });
-  }
-}
-
 function createCourseSyncDiagnostics() {
   const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
   return {
@@ -14826,11 +14158,6 @@ function getSharedAssignmentDevices(match) {
   if (!match) return [];
   return normalizeSharedDeviceList(Array.isArray(match.sharedDevices) ? match.sharedDevices : [], match);
 }
-function isValidSharedAssignmentDeviceId(match, deviceId) {
-  const id = String(deviceId || '').trim();
-  if (!match || !id) return false;
-  return getSharedAssignmentDevices(match).some(device => String(device.id) === id);
-}
 function isValidSharedAssignmentParticipantId(match, participantId) {
   const id = String(participantId || '').trim();
   if (!match || !id) return false;
@@ -15286,7 +14613,7 @@ window.addEventListener('pagehide', () => {
   void drainPendingSharedScoreOutboxes();
   const active = getActiveMatch();
   if (!active || active.storageMode !== 'shared') return;
-  try { applyCurrentHoleDomToMatch(active); } catch (err) {}
+  try { applyCurrentHoleDomToMatch(active); } catch  {}
   persist({ skipRender: true });
   scheduleSharedMatchSync(active, { immediate: true, silent: true });
 });
@@ -15300,7 +14627,7 @@ document.addEventListener('visibilitychange', () => {
     refreshActiveSharedScores({ silent: true });
     return;
   }
-  try { applyCurrentHoleDomToMatch(active); } catch (err) {}
+  try { applyCurrentHoleDomToMatch(active); } catch  {}
   persist({ skipRender: true });
   scheduleSharedMatchSync(active, { immediate: true, silent: true });
 });
@@ -15662,7 +14989,7 @@ async function requestAiScorecardExtraction(filesOrFile) {
   });
   const text = await response.text();
   let payload = null;
-  try { payload = text ? JSON.parse(text) : null; } catch (_) { payload = null; }
+  try { payload = text ? JSON.parse(text) : null; } catch  { payload = null; }
   if (!response.ok) throw new Error(payload?.error || payload?.message || text || 'AI extraction failed.');
   const extracted = payload?.extracted || payload?.course || payload;
   return normalizeScorecardImportResult(extracted);
@@ -15929,7 +15256,7 @@ function renderScorecardImportReview() {
     const details = btn.closest('[data-import-tee]');
     if (details) details.open = true;
     setTimeout(() => {
-      try { details?.querySelector('[data-tee-field="teeName"]')?.focus({ preventScroll: true }); } catch (_) {}
+      try { details?.querySelector('[data-tee-field="teeName"]')?.focus({ preventScroll: true }); } catch  {}
     }, 0);
   }));
   document.getElementById('editImportedScorecardManuallyBtn')?.addEventListener('click', () => {
@@ -16931,22 +16258,6 @@ function buildNextRoundDraft(prior) {
   return draft;
 }
 
-function showPostRoundActions(match = getReviewOrActiveMatch()) {
-  const modal = document.getElementById('postRoundActionsPrompt');
-  if (!modal || !match) return;
-  const title = document.getElementById('postRoundActionsTitle');
-  const text = document.getElementById('postRoundActionsText');
-  if (title) title.textContent = 'Round Complete ✓';
-  if (text) text.textContent = `${completedHoles(match)} holes completed. What would you like to do?`;
-  const ledgerLabel = getLedgerOpenActionLabel(match);
-  const modalLedgerButton = document.getElementById('postRoundLedgerBtn');
-  const inlineLedgerButton = document.getElementById('postRoundInlineLedgerBtn');
-  if (modalLedgerButton) modalLedgerButton.textContent = ledgerLabel;
-  if (inlineLedgerButton) inlineLedgerButton.textContent = ledgerLabel;
-  modal.classList.remove('hidden');
-  modal.setAttribute('aria-hidden', 'false');
-}
-
 function hidePostRoundActions() {
   const modal = document.getElementById('postRoundActionsPrompt');
   if (!modal) return;
@@ -17090,7 +16401,7 @@ function renderSessionSummary() {
 function clonePlain(value) {
   try {
     return JSON.parse(JSON.stringify(value));
-  } catch (err) {
+  } catch  {
     return value;
   }
 }
@@ -17241,14 +16552,6 @@ function startJoinNewMatchSetup({ message = 'Enter the new shared match code.' }
     (nameInput || document.getElementById('setupJoinMatchCodeInput'))?.focus();
   }, 50);
   toast(message);
-}
-
-function resetToBlankMatchSetup() {
-  startCleanNewMatchSetup();
-}
-
-function clearActiveMatchForNewSetup() {
-  startCleanNewMatchSetup();
 }
 
 async function persistCurrentMatch({ applyDom = true, awaitShared = false, immediateShared = true, silent = true } = {}) {
@@ -17527,7 +16830,7 @@ function showRoundEndPrompt(mode, match = getActiveMatch()) {
   }
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
-  setTimeout(() => { try { primary.focus({ preventScroll: true }); } catch (_) {} }, 0);
+  setTimeout(() => { try { primary.focus({ preventScroll: true }); } catch  {} }, 0);
 }
 function getCourseLibraryStateLabel(course = {}) {
   if (course.cloudIncomplete) return 'Needs Attention';
@@ -17957,7 +17260,6 @@ function renderClassicPlayInputMode({ match, tee, metrics, scoringHoles, hole, c
   renderStatTrackingEntry(match, hole, metrics);
   renderSneakySandyPoleyNote(match, hole, metrics);
   renderGreeniesEntry(match, hole);
-  renderHoleJumpTiles(match);
   initializePlayInputs();
   const saveBtn = document.getElementById('saveScoresBtn');
   if (saveBtn) saveBtn.disabled = getScoreAccessState(match).role === 'viewer';
@@ -18257,7 +17559,6 @@ function renderPlayerPlayInputMode({ match, tee, metrics, scoringHoles, hole, co
   renderPlayerModeStatEntry(match, hole, metrics);
   renderSneakySandyPoleyNote(match, hole, metrics);
   renderGreeniesEntry(match, hole);
-  renderHoleJumpTiles(match);
   initializePlayInputs();
   const saveBtn = document.getElementById('saveScoresBtn');
   if (saveBtn) saveBtn.disabled = getScoreAccessState(match).role === 'viewer';
@@ -18303,7 +17604,6 @@ function renderCurrentMatch() {
     if (progressEl) progressEl.textContent = 'No active match.';
     emptyEl.classList.remove('hidden');
     wrapEl.classList.add('hidden');
-    const tileWrap = document.getElementById('holeJumpTiles'); if (tileWrap) tileWrap.innerHTML = '';
     renderMemoryQuickCapture(null);
     return;
   }
@@ -18331,14 +17631,6 @@ function renderCurrentMatch() {
   const hole = scoringHoles[currentHole - 1];
   renderHoleSelector(match, scoringHoles, metrics);
   renderCatchUpScoringBar(match, metrics);
-  const teamText = metrics?.teams?.length === 2 ? `${formatMatchDiff(metrics.matchDiff, match)} overall` : 'Singles leaderboard';
-  const teeYardages = hole ? [...new Map((metrics?.players || []).map(p => {
-    const playerTee = p.tee || tee;
-    const playerHole = getPlayerHole(match, p, currentHole - 1, tee) || hole;
-    const holeTeeName = getHoleTeeNameForDisplay(match.courseId, playerTee, currentHole - 1) || playerTee?.teeName || 'Tee';
-    const key = `${playerTee?.id || p.teeId || ''}|${holeTeeName}|${playerHole?.yardage || ''}`;
-    return [key, `${holeTeeName} ${playerHole?.yardage ? `${formatYardageValue(playerHole.yardage)} yds` : '— yds'}`];
-  })).values()].join(' · ') : '';
   const honorsStatusLine = getSneakySandyPoleyHonorsLine(match, metrics);
   const strokeBasisNote = document.getElementById('playStrokeBasisNote');
   if (strokeBasisNote) strokeBasisNote.textContent = getFeaturedCompetitionStrokeNote(match, metrics);
@@ -18359,105 +17651,10 @@ function renderCurrentMatch() {
 
 
 
-function getShortStatusName(name, maxLen = 10) {
-  // v28.21.1: Preserve live-status player names and let the header wrap naturally
-  // rather than truncating names with ellipses. Keep the maxLen argument for
-  // backward-compatible call sites, but do not shorten the returned label here.
-  return String(name || '').trim();
-}
-
 function getConciseTeamName(match, teamNo, metrics, maxLen = 12) {
   // v28.21.1: Preserve custom team names and player-derived team labels.
   // The live status line is styled to wrap instead of forcing truncation.
   return getTeamLabel(match, teamNo);
-}
-
-function formatConciseTeamDiff(match, metrics, diff) {
-  const n = Number(diff) || 0;
-  if (!Number.isFinite(n) || n === 0) return 'AS';
-  const teamNo = n > 0 ? 1 : 2;
-  return `${getConciseTeamName(match, teamNo, metrics)} +${Math.abs(n)}`;
-}
-
-function buildLiveNassauStatus(match, metrics) {
-  return getCompactGameStatus(match, metrics, 'nassau', (match?.selectedGames || []).find(g => g.key === 'nassau'));
-}
-
-function buildLiveTeamMatchStatus(match, metrics) {
-  const status = getCompactGameStatus(match, metrics, 'team_match', (match?.selectedGames || []).find(g => g.key === 'team_match'));
-  return status ? `Match: ${status}` : '';
-}
-
-function buildLiveIndividualMatchStatus(match, metrics) {
-  const pairings = getIndividualMatchPairings(match, metrics);
-  const pairing = pairings.find(p => ['match_play', 'nassau'].includes(String(p.game || '').toLowerCase())) || pairings[0];
-  if (!pairing) return '';
-  if (String(pairing.game || '').toLowerCase() === 'nassau') {
-    const diff = currentHole <= 9 ? pairing.front : pairing.back;
-    const segment = currentHole <= 9 ? 'F' : 'B';
-    if (!Number.isFinite(Number(diff)) || Number(diff) === 0) return `Match ${segment}: ${formatLeaderThruStatus('', 0, pairing.completedCount)}`;
-    const leader = Number(diff) > 0 ? pairing.playerA?.player?.name : pairing.playerB?.player?.name;
-    return `Match ${segment}: ${formatLeaderThruStatus(getShortStatusName(leader, 9), diff, pairing.completedCount)}`;
-  }
-  return `Match: ${formatSideMatchThruStatus(pairing)}`;
-}
-
-function getSkinCarryoverCount(match, metrics, cfg = {}) {
-  if (cfg.carryoverMode !== 'carry') return 0;
-  const basis = String(cfg.basis || 'net').toLowerCase();
-  const isTeam = cfg.skinsType === 'team';
-  let carry = 0;
-  (metrics?.holeResults || []).forEach(h => {
-    if (!h.completed) return;
-    let hasWinner = false;
-    if (isTeam) {
-      const scoredTeams = (metrics.teams || []).map(t => ({ team: t.team, value: getTeamHoleScore(h, t.team, basis, 'best_ball') })).filter(t => Number.isFinite(t.value));
-      if (scoredTeams.length >= 2) {
-        const best = Math.min(...scoredTeams.map(t => t.value));
-        hasWinner = scoredTeams.filter(t => t.value === best).length === 1;
-      }
-    } else {
-      const scoredPlayers = (h.playerScores || []).map(ps => ({ playerId: ps.playerId, value: getHoleValueForBasis(ps, basis) })).filter(p => Number.isFinite(p.value));
-      if (scoredPlayers.length >= 2) {
-        const best = Math.min(...scoredPlayers.map(p => p.value));
-        hasWinner = scoredPlayers.filter(p => p.value === best).length === 1;
-      }
-    }
-    carry = hasWinner ? 0 : carry + 1;
-  });
-  return carry;
-}
-
-function buildLiveSkinsStatus(match, metrics, cfg = {}) {
-  const skins = computeSkinResults(match, metrics, cfg);
-  const carry = getSkinCarryoverCount(match, metrics, cfg);
-  if (carry > 0) return `Skins: ${carry} CO`;
-  const counts = skins.counts || {};
-  const max = Math.max(0, ...Object.values(counts).map(Number));
-  if (max <= 0) return 'Skins: 0';
-  const leaders = Object.entries(counts).filter(([, n]) => Number(n) === max);
-  const label = cfg.skinsType === 'team'
-    ? getConciseTeamName(match, leaders[0]?.[0], metrics, 9)
-    : getShortStatusName(getPlayer(leaders[0]?.[0])?.name || 'Player', 9);
-  return `Skins: ${label} ${max}`;
-}
-
-function buildLiveNinePointStatus(match, metrics, cfg = {}) {
-  const nine = computeNinePointResults(match, metrics, cfg);
-  const rows = Array.isArray(nine.leaderboard) ? nine.leaderboard : [];
-  if (rows.length !== 3) return '';
-  const parts = rows.map(row => `${getShortStatusName(row.name)} ${formatSigned(Number(row.total) || 0)}`);
-  return `9PT: ${parts.join(' ')}`;
-}
-
-function buildLiveGreeniesStatus(match, metrics, cfg = {}) {
-  const greenies = getGreeniesResults(match, metrics, cfg);
-  const counts = greenies.counts || {};
-  const max = Math.max(0, ...Object.values(counts).map(Number));
-  if (max <= 0) return '';
-  const leaders = Object.entries(counts).filter(([, n]) => Number(n) === max);
-  const label = getShortStatusName(getPlayer(leaders[0]?.[0])?.name || 'Player', 8);
-  return `G: ${label} ${max}`;
 }
 
 function getCompactGameStatus(match, metrics, gameKey, cfg = null) {
@@ -18721,24 +17918,22 @@ function buildQuickScoreboardGameStatusRows(match, metrics) {
   return rows ? `<section class="quick-scoreboard-section"><h4>Active Games</h4><div class="quick-game-list">${rows}</div></section>` : '';
 }
 
-function buildLiveScoringStatusLine(match, metrics) {
-  if (!match || !metrics) return '';
-  const games = Array.isArray(match.selectedGames) ? match.selectedGames : [];
-  if (!games.length) return '';
-  const byKey = new Map(games.map(g => [g.key, g]));
-  const items = [];
-  const push = (text) => {
-    const clean = String(text || '').trim();
-    if (clean && items.length < 3) items.push(clean);
-  };
-  if (byKey.has('nassau')) push(buildLiveNassauStatus(match, metrics));
-  if (byKey.has('team_match')) push(buildLiveTeamMatchStatus(match, metrics));
-  if (byKey.has('individual_match')) push(buildLiveIndividualMatchStatus(match, metrics));
-  if (byKey.has('skins')) push(buildLiveSkinsStatus(match, metrics, byKey.get('skins')));
-  if (byKey.has('nine_point')) push(buildLiveNinePointStatus(match, metrics, byKey.get('nine_point')));
-  if (byKey.has('greenies')) push(buildLiveGreeniesStatus(match, metrics, byKey.get('greenies')));
-  if (byKey.has('sneaky_sandy_poley')) push(getSneakySandyPoleyStatus(match, metrics));
-  return items.slice(0, 3).join(' | ');
+function buildPlayHoleMetaText(hole) {
+  const yardage = Number(hole?.yardage);
+  return `Par ${Number(hole?.par) || '—'}${Number.isFinite(yardage) && yardage > 0 ? ` · ${formatYardageValue(yardage)} yd` : ''} · SI ${Number(hole?.strokeIndex) || '—'}`;
+}
+
+function buildPlayFeaturedStatusPair(match, metrics, fallbackGameKey = '') {
+  const compactMatchStatus = metrics ? getPrimaryMatchStatusLine(match, metrics) : '';
+  if (!compactMatchStatus) return '';
+  const statusOptions = getMatchStatusOptions(match);
+  const gameKey = match.matchStatusGame || fallbackGameKey || statusOptions[0]?.key || 'team_match';
+  const featuredLabel = getFeaturedGameLabel(match, gameKey);
+  return `<span>${escapeHtml(featuredLabel)}</span><strong>${escapeHtml(compactMatchStatus.replace(/^[^:]+:\s*/, ''))}</strong>`;
+}
+
+function buildPlaySaveState(match) {
+  return getPlayerModeSavePresentation(match);
 }
 
 function renderHoleSelector(match, scoringHoles = [], metrics = null) {
@@ -18755,19 +17950,16 @@ function renderHoleSelector(match, scoringHoles = [], metrics = null) {
   const isPlayerMode = getEffectivePlayInputMode(match) === PLAY_INPUT_MODES.PLAYER.key;
   if (isPlayerMode && playerHeader) {
     const hole = holes[currentHole - 1] || null;
-    const yardage = Number(hole?.yardage);
-    const compactMatchStatus = metrics ? getPrimaryMatchStatusLine(match, metrics) : '';
-    const statusOptions = getMatchStatusOptions(match);
-    const gameKey = match.matchStatusGame || statusOptions[0]?.key || 'team_match';
-    const featuredLabel = getFeaturedGameLabel(match, gameKey);
+    const holeMetaText = buildPlayHoleMetaText(hole);
+    const featuredStatusPair = buildPlayFeaturedStatusPair(match, metrics);
     const entryProgress = metrics ? getPlayerModeEntryProgress(match, metrics, metrics.tee, hole) : { complete: 0, total: 0 };
-    const saveState = getPlayerModeSavePresentation(match);
+    const saveState = buildPlaySaveState(match);
     const dataCompletion = getRoundDataCompletionState(match);
     const completionContext = currentHole === maxHole || dataCompletion.scoresComplete;
     playerHeader.classList.remove('hidden');
     const roundStatMode = normalizeStatTrackingMode(match.statTrackingMode || (match.statTrackingEnabled ? 'CASUAL' : 'NONE'));
     const memoryCount = getRoundMemories(match).length;
-    playerHeader.innerHTML = `<div class="player-mode-hole-title"><label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select><div class="player-mode-hole-meta">Par ${Number(hole?.par) || '—'}${Number.isFinite(yardage) && yardage > 0 ? ` · ${formatYardageValue(yardage)} yd` : ''} · SI ${Number(hole?.strokeIndex) || '—'}</div>${compactMatchStatus ? `<div class="player-mode-header-match-status"><span>${escapeHtml(featuredLabel)}</span><strong>${escapeHtml(compactMatchStatus.replace(/^[^:]+:\s*/, ''))}</strong></div>` : ''}</div><div class="player-mode-header-actions"><div class="player-mode-header-meta"><div class="player-mode-entry-counter">${entryProgress.complete} of ${entryProgress.total} entered</div><div class="player-mode-save-state" data-tone="${saveState.tone}" aria-live="polite">${escapeHtml(saveState.label)}</div><button type="button" class="secondary player-mode-overflow" data-player-mode-overflow aria-expanded="false" aria-controls="playerModeOverflowMenu" aria-label="More Play actions">•••</button></div></div><div id="playerModeOverflowMenu" class="player-mode-overflow-menu hidden"><button type="button" class="secondary" data-player-mode-add-memory>Add Memory${memoryCount ? ` (${memoryCount})` : ''}</button>${!completionContext ? '<button type="button" class="secondary" data-player-mode-end-early>End Round Early</button>' : ''}<label><span class="tiny">Scoring mode</span><select id="playerModeRoundScoringModeSelect" aria-label="Active round scoring mode">${Object.values(PLAY_INPUT_MODES).filter(mode => mode.available).map(mode => `<option value="${mode.key}" ${mode.key === (isPlayerMode ? 'PLAYER' : 'CLASSIC') ? 'selected' : ''}>${mode.label.replace(' Mode','')}</option>`).join('')}</select></label><label><span class="tiny">Stat mode</span><select id="playerModeRoundStatModeSelect" aria-label="Active round stat mode">${Object.values(STAT_TRACKING_MODES).map(mode => `<option value="${mode.key}" ${mode.key === roundStatMode ? 'selected' : ''}>${mode.label}</option>`).join('')}</select></label></div>`;
+    playerHeader.innerHTML = `<div class="player-mode-hole-title"><label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select><div class="player-mode-hole-meta">${holeMetaText}</div>${featuredStatusPair ? `<div class="player-mode-header-match-status">${featuredStatusPair}</div>` : ''}</div><div class="player-mode-header-actions"><div class="player-mode-header-meta"><div class="player-mode-entry-counter">${entryProgress.complete} of ${entryProgress.total} entered</div><div class="player-mode-save-state" data-tone="${saveState.tone}" aria-live="polite">${escapeHtml(saveState.label)}</div><button type="button" class="secondary player-mode-overflow" data-player-mode-overflow aria-expanded="false" aria-controls="playerModeOverflowMenu" aria-label="More Play actions">•••</button></div></div><div id="playerModeOverflowMenu" class="player-mode-overflow-menu hidden"><button type="button" class="secondary" data-player-mode-add-memory>Add Memory${memoryCount ? ` (${memoryCount})` : ''}</button>${!completionContext ? '<button type="button" class="secondary" data-player-mode-end-early>End Round Early</button>' : ''}<label><span class="tiny">Scoring mode</span><select id="playerModeRoundScoringModeSelect" aria-label="Active round scoring mode">${Object.values(PLAY_INPUT_MODES).filter(mode => mode.available).map(mode => `<option value="${mode.key}" ${mode.key === (isPlayerMode ? 'PLAYER' : 'CLASSIC') ? 'selected' : ''}>${mode.label.replace(' Mode','')}</option>`).join('')}</select></label><label><span class="tiny">Stat mode</span><select id="playerModeRoundStatModeSelect" aria-label="Active round stat mode">${Object.values(STAT_TRACKING_MODES).map(mode => `<option value="${mode.key}" ${mode.key === roundStatMode ? 'selected' : ''}>${mode.label}</option>`).join('')}</select></label></div>`;
     if (badge) badge.innerHTML = '';
     return;
   }
@@ -18776,14 +17968,12 @@ function renderHoleSelector(match, scoringHoles = [], metrics = null) {
     playerHeader.classList.add('hidden');
   }
   const hole = holes[currentHole - 1] || null;
-  const yardage = Number(hole?.yardage);
-  const resolvedGameKey = match.matchStatusGame || 'team_match';
-  const featuredLabel = getFeaturedGameLabel(match, resolvedGameKey);
-  const compactMatchStatus = metrics ? getPrimaryMatchStatusLine(match, metrics) : '';
-  const saveState = getPlayerModeSavePresentation(match);
+  const holeMetaText = buildPlayHoleMetaText(hole);
+  const featuredStatusPair = buildPlayFeaturedStatusPair(match, metrics, 'team_match');
+  const saveState = buildPlaySaveState(match);
   if (badge) badge.innerHTML = `<label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select>`;
   const classicContext = document.getElementById('classicHoleContext');
-  if (classicContext) classicContext.innerHTML = `<div class="classic-hole-meta">Par ${Number(hole?.par) || '—'}${Number.isFinite(yardage) && yardage > 0 ? ` · ${formatYardageValue(yardage)} yd` : ''} · SI ${Number(hole?.strokeIndex) || '—'}</div>${compactMatchStatus ? `<div class="classic-header-match-status"><span>${escapeHtml(featuredLabel)}</span><strong>${escapeHtml(compactMatchStatus.replace(/^[^:]+:\s*/, ''))}</strong></div>` : ''}<div class="classic-header-save-state" data-tone="${saveState.tone}">${escapeHtml(saveState.label)}</div>`;
+  if (classicContext) classicContext.innerHTML = `<div class="classic-hole-meta">${holeMetaText}</div>${featuredStatusPair ? `<div class="classic-header-match-status">${featuredStatusPair}</div>` : ''}<div class="classic-header-save-state" data-tone="${saveState.tone}">${escapeHtml(saveState.label)}</div>`;
   const classicModeSelect = document.getElementById('classicRoundScoringModeSelect');
   if (classicModeSelect) classicModeSelect.innerHTML = Object.values(PLAY_INPUT_MODES).filter(mode => mode.available).map(mode => `<option value="${mode.key}" ${mode.key === PLAY_INPUT_MODES.CLASSIC.key ? 'selected' : ''}>${mode.label.replace(' Mode','')}</option>`).join('');
   const classicStatSelect = document.getElementById('classicRoundStatModeSelect');
@@ -19025,29 +18215,6 @@ function renderGreeniesEntry(match, hole) {
     return `<label class="mini-check greenies-check ${editable ? '' : 'is-readonly'}"><input type="checkbox" data-greenies-winner="${row.player.id}" ${currentPick === row.player.id ? 'checked' : ''} ${editable ? '' : 'disabled'} /><span>${escapeHtml(row.player.name)}</span></label>`;
   }).join('') || '<div class="tiny">No greenies participants selected for this match.</div>'}</div><div class="tiny top-gap">${escapeHtml(helper)}</div></div>`;
 }
-function renderHoleJumpTiles(match) {
-  const wrap = document.getElementById('holeJumpTiles');
-  if (!wrap) return;
-  wrap.innerHTML = '';
-  wrap.classList.add('hidden');
-  return;
-  const holeCount = getPlayableHoleCount(match, getTee(match.courseId, match.teeId));
-  const played = Array.from({ length: holeCount }, (_, idx) => {
-    const hasScore = (match.players || []).some(mp => Number(mp.scores?.[idx]?.gross));
-    return hasScore;
-  });
-  const scoringHoles = getSelectedScoringHoles(match, getTee(match.courseId, match.teeId));
-  wrap.innerHTML = Array.from({ length: holeCount }, (_, idx) => {
-    const holeNo = idx + 1;
-    const displayHole = scoringHoles[idx]?.holeNumber || holeNo;
-    const classes = ['hole-jump-tile'];
-    if (holeNo === currentHole) classes.push('active');
-    classes.push('complete');
-    if (played[idx]) classes.push('played');
-    return `<button type="button" class="${classes.join(' ')}" data-jump-hole="${holeNo}">${displayHole}</button>`;
-  }).join('');
-}
-
 function isJoinedDeviceWaitingForAssignment(match) {
   if (!match || match.storageMode !== 'shared') return false;
   if (!isAssignedPlayersMode(match)) return false;
@@ -19174,7 +18341,7 @@ function triggerSmartScoreHaptic(preferences = getPlayerPreferences(), deviceCap
   try {
     deviceCapabilities.vibrate(18);
     return true;
-  } catch (err) {
+  } catch  {
     return false;
   }
 }
@@ -19184,7 +18351,7 @@ function flashCompletedScoreInput(inputEl) {
   inputEl.classList.remove('score-confirmed-flash');
   void inputEl.offsetWidth;
   inputEl.classList.add('score-confirmed-flash');
-  setTimeout(() => { try { inputEl.classList.remove('score-confirmed-flash'); } catch (err) {} }, 360);
+  setTimeout(() => { try { inputEl.classList.remove('score-confirmed-flash'); } catch  {} }, 360);
 }
 
 function allEditableScoresCompleteOnCurrentHole() {
@@ -19356,7 +18523,7 @@ function applyPendingScoreCommitFocus() {
         const end = String(liveTarget.value || '').length;
         if (typeof liveTarget.setSelectionRange === 'function') liveTarget.setSelectionRange(end, end);
         liveTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-      } catch (err) {}
+      } catch  {}
       pendingScoreCommitFocus = null;
     });
   }, 0);
@@ -20281,9 +19448,6 @@ function renderNineHoleConfigUi() {
   if (!customSelect.value) customSelect.value = '1';
   customWrap.classList.toggle('hidden', holeCount !== 9 || segmentSelect.value !== 'custom');
 }
-function getAssignmentSelections() {
-  return Array.from(document.querySelectorAll('[data-player-slot]')).map(el => el.value).filter(Boolean);
-}
 function getReferenceFallbackTeeId(courseId = null) {
   const resolvedCourseId = courseId ?? (document.getElementById('matchCourseSelect')?.value || '');
   const selectedTeeId = document.getElementById('matchTeeSelect')?.value || '';
@@ -20424,12 +19588,12 @@ function restoreSetupScrollAnchor(anchor = null) {
           const delta = nextTop - Number(anchor.anchorTop);
           window.scrollTo({ top: Math.max(0, (window.scrollY || 0) + delta), behavior: 'auto' });
         }
-        try { target.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' }); } catch (_) {}
+        try { target.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' }); } catch  {}
         return;
       }
       window.scrollTo({ top: Math.max(0, Number(anchor.scrollY) || 0), behavior: 'auto' });
-    } catch (_) {
-      try { window.scrollTo({ top: Math.max(0, Number(anchor.scrollY) || 0), behavior: 'auto' }); } catch (__) {}
+    } catch  {
+      try { window.scrollTo({ top: Math.max(0, Number(anchor.scrollY) || 0), behavior: 'auto' }); } catch  {}
     }
   };
   requestAnimationFrame(() => {
@@ -20656,9 +19820,6 @@ function handlePlayerComboboxKeydown(event) {
   }
 }
 
-function getCurrentSetupPlayerIds() {
-  return getSelectedPlayersFromSetup().map(row => row.playerId).filter(Boolean);
-}
 function collectStatTrackingPlayerIdsFromSetup(selectedPlayers = null) {
   const enabled = !!document.getElementById('enableStatTrackingInput')?.checked;
   if (!enabled) return [];
@@ -21286,12 +20447,6 @@ async function showNearbySavedCourses() {
   }
 }
 
-function renderSetupConfidencePanels() {
-  renderTodaysMatchSummary();
-  renderMatchTemplatesPanel();
-  renderRoundReadiness();
-}
-
 function getDefaultGameConfigs() {
   return [
     { key: 'nassau', basis: 'net', countingBalls: 1, scoringPolicyVersion: NASSAU_SCORING_POLICY_VERSION, handicapAllowanceMode: 'recommended', stakesFront: 5, stakesBack: 5, stakesOverall: 5 },
@@ -21342,26 +20497,6 @@ function getSelectedPlayersFromSetup() {
   }).filter(row => row.playerId);
 }
 
-function getSelectablePlayersForSlot(slot) {
-  const draft = getMatchPlayerDraft();
-  const currentId = draft[slot]?.playerId || document.querySelector(`[data-player-slot="${slot}"]`)?.value || '';
-  const selectedByOtherSlots = draft
-    .map((row, idx) => idx === slot ? '' : (row?.playerId || ''))
-    .filter(Boolean);
-  return state.players.filter(p => !selectedByOtherSlots.includes(p.id) || p.id === currentId);
-}
-function refreshMatchSetupUi() {
-  const selections = Array.from(document.querySelectorAll('[data-player-slot]')).map((el, idx) => ({
-    playerId: el.value,
-    teeId: document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || '',
-    slot: idx
-  }));
-  syncMatchPlayerDraft(selections);
-  syncReferenceTeeUi({ selections });
-  populateMatchPlayerPicker(selections);
-  renderGamesPicker(collectSelectedGames());
-  renderSetupHandicapPreview();
-}
 function updateMatchPlayerTee(slot, teeId = '') {
   const normalizedSlot = Number(slot);
   const scrollAnchor = captureSetupScrollAnchor(Number.isFinite(normalizedSlot) ? `#matchPlayersPicker [data-assignment-slot="${normalizedSlot}"]` : null);
@@ -22031,15 +21166,13 @@ function renderSetupSharedAdminPanel() {
   const canShareCode = !legacyCode && isPublished;
   const codeLabel = legacyCode ? 'Unsupported Legacy Code' : (isPublished ? 'Shared Match Code' : 'Unpublished Match Code');
   let participants = getSharedAssignmentParticipants(match);
-  let devices = getSharedAssignmentDevices(match);
-  if (match.sharedMatchId && hasSupabaseConfig() && isHost && !sharedParticipantPanelRefreshPending) {
+    if (match.sharedMatchId && hasSupabaseConfig() && isHost && !sharedParticipantPanelRefreshPending) {
     sharedParticipantPanelRefreshPending = true;
     refreshSharedDevicesForAssignment(match)
       .then(finalParticipants => {
         sharedParticipantPanelRefreshPending = false;
         const before = JSON.stringify(participants || []);
         participants = normalizeSharedParticipantList(finalParticipants || [], match.sharedDevices || [], match);
-        devices = getSharedAssignmentDevices(match);
         if (before !== JSON.stringify(participants)) {
           persist({ skipRender: true });
           renderAll();
@@ -22336,12 +21469,6 @@ function viewCompletedMatchSummary() {
   openExperienceDestination('leaderboard', 'story', { scroll: false });
   const storyCard = document.getElementById('roundStoryCard');
   if (storyCard) storyCard.open = true;
-}
-
-function getLedgerOpenActionLabel(match, { share = false } = {}) {
-  if (getAcceptedLedgerEntrySnapshot(match) || getFinalRoundRecap(match)) return share ? 'Share Match' : 'Open Ledger Entry';
-  if (getDraftRoundRecap(match)) return 'Review Story & Open Ledger';
-  return 'Create Story & Open Ledger';
 }
 
 function isPostRoundStoryReviewDisabled({ hasStory = false, generating = false, joinedWaiting = false } = {}) {
@@ -23092,7 +22219,7 @@ function installHandlers() {
       if (e.target.matches('input[data-score-player]')) return;
       setTimeout(() => {
         if (document.activeElement !== e.target) return;
-        try { e.target.scrollIntoView({ block: 'nearest', behavior: 'auto' }); } catch (_) {}
+        try { e.target.scrollIntoView({ block: 'nearest', behavior: 'auto' }); } catch  {}
       }, 180);
     }
   });
@@ -23591,7 +22718,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
     if (e.target.matches('.stat-putts-input') && !e.target.disabled && typeof e.target.select === 'function') {
       requestAnimationFrame(() => {
-        try { e.target.select(); } catch (err) {}
+        try { e.target.select(); } catch  {}
       });
     }
   });
@@ -24315,7 +23442,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       persist({ skipRender: true });
       scheduleSharedMatchSync(match, { immediate: false, silent: true });
       box.focus();
-      try { box.setSelectionRange(box.value.length, box.value.length); } catch (_) {}
+      try { box.setSelectionRange(box.value.length, box.value.length); } catch  {}
       return;
     }
     if (e.target.closest('#generateRoundRecapBtn')) {
@@ -24843,7 +23970,6 @@ function renderBuildInfoUi() {
 }
 
 let swRegistration = null;
-let appUpdateBannerVisible = false;
 let hasReloadedForServiceWorker = false;
 let userRequestedAppReload = false;
 let forceUnsafeAppReload = false;
@@ -24927,7 +24053,7 @@ async function resumeActiveSharedMatchOnStartup() {
   if (!sharedId) return;
   try {
     await loadSharedMatchFromCloud(sharedId, { activate: true, silent: true });
-  } catch (err) {
+  } catch  {
     const local = state.matches.find(m => (m.sharedMatchId === sharedId || m.sharedMatchRef === sharedId) && m.storageMode === 'shared');
     if (local) {
       state.activeMatchId = local.id;
@@ -24953,7 +24079,6 @@ function showUpdateBanner(options = {}) {
   const banner = document.getElementById('updateBanner');
   if (!banner) return;
   banner.classList.remove('hidden');
-  appUpdateBannerVisible = true;
   return true;
 }
 
@@ -24961,7 +24086,6 @@ function hideUpdateBanner() {
   const banner = document.getElementById('updateBanner');
   if (!banner) return;
   banner.classList.add('hidden');
-  appUpdateBannerVisible = false;
 }
 
 

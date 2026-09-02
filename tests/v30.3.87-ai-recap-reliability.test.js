@@ -45,7 +45,7 @@ test('client distinguishes deployment, contract, configuration, authorization, r
     'provider could not complete the request',
   ]) assert.match(app, new RegExp(expected, 'i'));
   assert.match(app, /roundRecapLastError/);
-  assert.match(app, /replace\(\/\[\^A-Z0-9_-\]\//);
+  assert.doesNotMatch(app, /function setRoundRecapFailure/);
 });
 
 test('recap failures remain isolated from scoring and local round persistence', () => {

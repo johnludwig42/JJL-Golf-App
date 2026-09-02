@@ -53,6 +53,10 @@ await page.waitForSelector('.page', { timeout: 60000 });
 await new Promise(resolveWait => setTimeout(resolveWait, 400));
 
 const audit = await page.evaluate(() => {
+  const playerLabels = [...document.querySelectorAll('[data-player-label]')].map(label => {
+    const box = label.getBoundingClientRect();
+    return { id: label.getAttribute('data-player-label'), text: label.textContent.trim(), top: box.top, bottom: box.bottom, color: getComputedStyle(label).fill };
+  });
   const pages = [...document.querySelectorAll('.page')].map((pageNode, index) => {
     const flow = pageNode.querySelector('.flow');
     const last = flow?.lastElementChild;
@@ -75,6 +79,12 @@ const audit = await page.evaluate(() => {
     labels: [...new Set(pages.map(page => page.label))],
     headings: [...document.querySelectorAll('.sechead')].map(node => node.textContent.trim()),
     fonts: [...document.fonts].map(font => font.family),
+    ninePoint: {
+      table: !!document.querySelector('[data-nine-point-hole-table]'),
+      lines: [...document.querySelectorAll('[data-player-line]')].map(line => ({ id: line.getAttribute('data-player-line'), color: line.getAttribute('stroke') })),
+      labels: playerLabels,
+      topThreeNote: document.body.textContent.includes('TOP THREE EMPHASISED'),
+    },
   };
 });
 
@@ -94,6 +104,15 @@ for (const family of ['Archivo', 'Inter', 'IBM Plex Mono']) {
   if (!audit.fonts.some(font => font.includes(family))) { console.error(`${family} did not load.`); failed = true; }
 }
 if (errors.length) { console.error(`Console errors:\n${errors.join('\n')}`); failed = true; }
+if (basename(input).includes('nine-point')) {
+  const uniqueColors = new Set(audit.ninePoint.lines.map(line => line.color));
+  const overlappingLabels = audit.ninePoint.labels.some((label, index, labels) => labels.slice(index + 1).some(other => label.top < other.bottom && other.top < label.bottom));
+  if (!audit.ninePoint.table) { console.error('9-Point hole-by-hole table missing.'); failed = true; }
+  if (audit.ninePoint.lines.length !== 3 || uniqueColors.size !== 3) { console.error('9-Point player lines are not uniquely colored.'); failed = true; }
+  if (audit.ninePoint.labels.length !== 3 || audit.ninePoint.labels.some(label => !label.text)) { console.error('9-Point direct player labels missing.'); failed = true; }
+  if (overlappingLabels) { console.error('9-Point end labels overlap.'); failed = true; }
+  if (audit.ninePoint.topThreeNote) { console.error('Small-field 9-Point chart retained the top-three footnote.'); failed = true; }
+}
 
 console.log(`${basename(input)} — Chrome ${await browser.version()}`);
 console.log(`${audit.pages.length} pages; ${audit.labels.length} ordered subjects; bundled fonts loaded.`);

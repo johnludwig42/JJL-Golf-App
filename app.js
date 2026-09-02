@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.27',
-  versionNumber: '31.0.27',
-  cacheName: 'the-dye-ledger-v31.0.27',
-  buildDate: '2026-09-02T19:00:00-04:00',
-  buildLabel: 'Course Tee Gender Sync Integrity'
+  version: 'v31.0.28',
+  versionNumber: '31.0.28',
+  cacheName: 'the-dye-ledger-v31.0.28',
+  buildDate: '2026-09-02T21:00:00-04:00',
+  buildLabel: 'Course Publish Status Recovery'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -12795,6 +12795,7 @@ function mergeSupabaseCourses(cloudCourses = []) {
         id: existing.id,
         cloudCourseId: course.cloudCourseId || course.id || existing.cloudCourseId,
         cloudSyncState: 'synced',
+        cloudSyncError: course.cloudIncomplete ? existing.cloudSyncError : '',
         tees: [...cloudTees, ...localOnlyTees],
       };
       updated += 1;
@@ -13207,6 +13208,12 @@ async function verifyPublishedCourse(client, courseId, localCourse) {
   }
   return { verified: true, tees: teeRows || [], holes: holeRows || [] };
 }
+function markCoursePublishVerified(course) {
+  if (!course) return course;
+  course.cloudSyncError = '';
+  course.cloudIncomplete = false;
+  return course;
+}
 async function publishCourseAtomically(client, course, existingCourse = null) {
   if (!saveCoursePublishRecovery(course)) throw new Error('A local recovery copy could not be saved. Publishing was stopped before any cloud changes.');
   const payload = buildAtomicCoursePublishPayload(course, existingCourse?.id || course.cloudCourseId || '');
@@ -13216,6 +13223,7 @@ async function publishCourseAtomically(client, course, existingCourse = null) {
   const cloudCourseId = String(result?.course_id || data?.course_id || existingCourse?.id || course.cloudCourseId || '');
   if (!cloudCourseId) throw new Error('Atomic course publishing did not return a course id. Local recovery copy retained.');
   await verifyPublishedCourse(client, cloudCourseId, course);
+  markCoursePublishVerified(course);
   course.cloudCourseId = cloudCourseId;
   (course.tees || []).forEach(tee => {
     const match = (result?.tees || []).find?.(row => getCloudTeeMatchKey({ teeName: row.tee_name, gender: row.gender }) === getCloudTeeMatchKey(tee));
@@ -13370,11 +13378,22 @@ async function syncCourseLibrary() {
     const localCourses = namedCourses.filter(isCourseCloudWriteCandidate);
     summary.current = namedCourses.length - localCourses.length;
     if (!localCourses.length) {
-      uiState.cloudCoursesStatus = 'Cloud sync complete. No local course changes are waiting to publish.';
+      const attentionCourseIds = namedCourses
+        .filter(course => getCourseLibraryStateLabel(course) === 'Needs Attention')
+        .map(getCourseStableIdentity)
+        .filter(Boolean);
+      if (attentionCourseIds.length) {
+        await runCourseCloudOperation(() => refreshSupabaseCoursesByIds(client, attentionCourseIds), 'Course attention refresh');
+        persist({ skipRender: true });
+      }
+      const remainingAttention = state.courses.filter(course => course?.name && getCourseLibraryStateLabel(course) === 'Needs Attention').length;
+      uiState.cloudCoursesStatus = remainingAttention
+        ? `Cloud verification refreshed. ${remainingAttention} ${remainingAttention === 1 ? 'course still requires' : 'courses still require'} attention.`
+        : (attentionCourseIds.length ? 'Cloud verification refreshed. Repaired course status is current.' : 'Cloud sync complete. No local course changes are waiting to publish.');
       const currentSummary = finishSummary(summary);
       renderAll();
       renderLocalCourseSyncResult(currentSummary);
-      toast('No local course changes are waiting to publish.');
+      toast(remainingAttention ? `${remainingAttention} ${remainingAttention === 1 ? 'course still requires' : 'courses still require'} attention.` : (attentionCourseIds.length ? 'Course status refreshed.' : 'No local course changes are waiting to publish.'));
       return currentSummary;
     }
     const writeAccess = await getCourseLibraryWriteAccess(client);
@@ -25448,6 +25467,7 @@ function installDyeLedgerLiveEngineAdapter() {
     insertOrUpdateCloudTeeHoles,
     buildAtomicCoursePublishPayload,
     verifyPublishedCourse,
+    markCoursePublishVerified,
     publishCourseAtomically,
     saveCoursePublishRecovery,
     clearCoursePublishRecovery,

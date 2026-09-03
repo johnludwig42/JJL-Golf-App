@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.36',
-  versionNumber: '31.0.36',
-  cacheName: 'the-dye-ledger-v31.0.36',
-  buildDate: '2026-09-02T09:32:00-04:00',
-  buildLabel: 'Post-Round Story Review Reliability'
+  version: 'v31.0.37',
+  versionNumber: '31.0.37',
+  cacheName: 'the-dye-ledger-v31.0.37',
+  buildDate: '2026-09-02T15:30:00-04:00',
+  buildLabel: 'Ledger Entry Story and Print Correctness'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -6726,7 +6726,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
   const humidity = Number(weather?.humidity ?? match?.roundContext?.weather?.humidity);
   const weatherNote = [weatherText, Number.isFinite(humidity) ? `Humidity ${Math.round(humidity)}%` : '']
     .filter(Boolean).join(' · ');
-  return {
+  const report = {
     meta: {
       roundId: String(match?.id || ''),
       appVersion: APP_VERSION,
@@ -6752,6 +6752,54 @@ function buildLedgerEntryReportModel(match, metrics = null) {
     partnership: computeBestBallPartnershipStatistics(match, effectiveMetrics),
     memories: (record.notes?.memories || []).map(memory => ({ hole: Number(memory.holeNumber || memory.hole || 0), text: String(memory.text || memory.note || memory.description || '') })).filter(memory => memory.text),
     payments: (record.transactions || []).map(payment => ({ from: String(payment.payerId), to: String(payment.payeeId), amt: Number(payment.amount) || 0 })),
+  };
+  report.meta.canonicalTurningPoint = resolveLedgerFeaturedTurningPoint(report);
+  return report;
+}
+
+function resolveLedgerFeaturedTurningPoint(report) {
+  const game = (report?.games || []).find(row => row?.featured) || report?.games?.[0];
+  if (!game || !['nassau', 'matchplay'].includes(game.type) || !Array.isArray(game.sides) || game.sides.length !== 2) return null;
+  const players = Array.isArray(report.players) ? report.players : [];
+  const holes = Array.isArray(report.holes) ? report.holes : [];
+  const allowanceKey = game?.allowance?.key || 'featured';
+  const bestN = Math.max(1, Number(game.bestN) || 1);
+  const sideTotal = (sideIndex, holeIndex) => {
+    const ids = new Set((game.sides[sideIndex]?.playerIds || []).map(String));
+    const values = players.filter(player => ids.has(String(player.id))).map(player => {
+      const gross = player?.gross?.[holeIndex];
+      const strokes = player?.strokes?.[allowanceKey]?.[holeIndex] ?? player?.strokes?.featured?.[holeIndex];
+      return Number.isFinite(gross) && gross > 0 ? gross - (Number(strokes) || 0) : null;
+    }).filter(Number.isFinite).sort((left, right) => left - right);
+    return values.length >= Math.min(bestN, ids.size) ? values.slice(0, Math.min(bestN, values.length)).reduce((sum, value) => sum + value, 0) : null;
+  };
+  const per = holes.map((hole, index) => {
+    const a = sideTotal(0, index), b = sideTotal(1, index);
+    return { index, holeNumber: Number(hole), a, b, winner: a === null || a === undefined || b === null || b === undefined || a === b ? null : a < b ? 0 : 1 };
+  });
+  const cumulative = [0];
+  per.forEach(row => cumulative.push(cumulative.at(-1) + (row.winner === 1 ? 1 : row.winner === 0 ? -1 : 0)));
+  const finalMargin = cumulative.at(-1);
+  const winningSideIndex = finalMargin > 0 ? 1 : finalMargin < 0 ? 0 : null;
+  let selected = null;
+  if (winningSideIndex !== null) {
+    const winnerIsAhead = value => winningSideIndex === 1 ? value > 0 : value < 0;
+    selected = per.filter(row => row.winner === winningSideIndex).find(row =>
+      winnerIsAhead(cumulative[row.index + 1]) && cumulative.slice(row.index + 1).every(winnerIsAhead)
+    ) || per.filter(row => row.winner === winningSideIndex).at(-1) || null;
+  } else {
+    selected = per.filter(row => row.winner !== null).at(-1) || null;
+  }
+  if (!selected) return null;
+  return {
+    gameId: String(game.id || ''), gameName: String(game.name || ''),
+    holeNumber: selected.holeNumber, holeIndex: selected.index, winningSideIndex,
+    winningSideKey: winningSideIndex === null ? null : String(game.sides[winningSideIndex]?.key || ''),
+    winningSideName: winningSideIndex === null ? null : String(report?.sides?.[game.sides[winningSideIndex]?.key]?.name || ''),
+    score: { sideOne: selected.a, sideTwo: selected.b },
+    marginBefore: cumulative[selected.index], marginAfter: cumulative[selected.index + 1],
+    tiedMatch: winningSideIndex === null,
+    rule: winningSideIndex === null ? 'last-contested-hole' : 'first-permanent-winning-lead',
   };
 }
 
@@ -6852,6 +6900,7 @@ function consumePendingLedgerEntryRevision(storage = localStorage) {
 
 function buildLedgerEntryFactsOnlyStory(record, match = null, metrics = null) {
   const story = buildRoundRecordStory(record);
+  const canonicalTurningPoint = match && metrics ? resolveLedgerFeaturedTurningPoint(buildLedgerEntryReportModel(match, metrics)) : null;
   const highlights = (record?.players || [])
     .filter(player => player?.signatureStat)
     .slice(0, 4)
@@ -6859,9 +6908,12 @@ function buildLedgerEntryFactsOnlyStory(record, match = null, metrics = null) {
   const trackedStatistics = match && metrics
     ? buildTrackedStatisticsStoryFacts(match, metrics).slice(0, 2).map(describeTrackedStatisticsForStory).filter(Boolean)
     : [];
-  const turning = story?.turningPoint ? describeRoundRecordEvent(record, story.turningPoint) : '';
+  const turning = canonicalTurningPoint
+    ? `${canonicalTurningPoint.winningSideName || 'The winning side'} established the lead that held through the finish.`
+    : story?.turningPoint ? describeRoundRecordEvent(record, story.turningPoint) : '';
   const opening = story?.narrative || `${buildRoundRecordResultLine(record)}.`;
-  const turningParagraph = turning ? `The round’s defining turn came on hole ${Number(story.turningPoint.holeNumber)}. ${turning}` : '';
+  const turningHole = canonicalTurningPoint?.holeNumber || story?.turningPoint?.holeNumber;
+  const turningParagraph = turning && turningHole ? `The round’s defining turn came on hole ${Number(turningHole)}. ${turning}` : '';
   const highlightParagraph = highlights.length ? `The scorecard supplied the individual highlights as well. ${highlights.join(' ')}` : '';
   const statisticsParagraph = trackedStatistics.length ? `The recorded statistics add context without changing the result. ${trackedStatistics.join(' ')}` : '';
   const partnership = match && metrics ? computeBestBallPartnershipStatistics(match, metrics) : null;
@@ -6896,14 +6948,17 @@ const STORY_SHARED_CONTENT_RULES = 'Keep Low Gross, Course Net, Featured Net, ga
 function buildLedgerEntryStoryPayload(match, metrics) {
   const payload = buildRoundRecapPayload(match, metrics);
   const partnershipPerformance = computeBestBallPartnershipStatistics(match, metrics);
+  const canonicalTurningPoint = resolveLedgerFeaturedTurningPoint(buildLedgerEntryReportModel(match, metrics));
   return {
     ...payload,
     reportPurpose: 'ledger-story',
     trackedStatistics: buildTrackedStatisticsStoryFacts(match, metrics),
     trackedStatisticsInstruction: 'Use relevant recorded tracked statistics to help explain the round. State the tracked-hole sample, and never interpret an unrecorded field as zero.',
     partnershipPerformance,
+    canonicalTurningPoint,
+    canonicalTurningPointInstruction: canonicalTurningPoint ? `The defining turn and turning point are Hole ${canonicalTurningPoint.holeNumber}. Do not give either label to another hole; other holes may be described only as highlights or part of the decisive stretch.` : '',
     partnershipPerformanceInstruction: partnershipPerformance ? 'Include a natural, concise observation about the supplied Partnership Performance. Keep its game and gross/net basis explicit. Counted identifies who supplied the team’s counting scores; Partnership Gain is the difference between the side’s lowest individual gross or net total, as applicable, and its hole-by-hole best-ball total; Ham & Egg Rating measures card complementarity on a 0–100 scale. Do not call either figure strokes gained or a percentage, and do not invent causes.' : '',
-    recapInstructions: `Write The Story of the Round for a Ledger Entry. Use only supplied authoritative facts. Target 400–500 words and never exceed 550. Write exactly 3–5 natural paragraphs separated by blank lines, with no headings or bullet lists. Write with the factual precision, pacing, and polish of a major golf publication. Open with the Featured Competition result, explain the decisive stretch and pivotal holes, recognize supported player and round highlights, and close with a concise perspective on what defined the round. ${STORY_SHARED_CONTENT_RULES} Do not discuss Greenies; the client adds their recorded results deterministically. Mention Memories, weather recorded after the first completed hole, tracked statistics, and Partnership Performance only when supplied and genuinely relevant. Return a self-contained narrative rather than listing report sections.`,
+    recapInstructions: `Write The Story of the Round for a Ledger Entry. Use only supplied authoritative facts. Target 400–500 words and never exceed 550. Write exactly 3–5 natural paragraphs separated by blank lines, with no headings or bullet lists. Write with the factual precision, pacing, and polish of a major golf publication. Open with the Featured Competition result, explain the decisive stretch and pivotal holes, recognize supported player and round highlights, and close with a concise perspective on what defined the round. When canonicalTurningPoint is supplied, it is the only hole that may be called the defining turn or turning point. Name every player with a positive final settlement position when describing who finished ahead. ${STORY_SHARED_CONTENT_RULES} Do not discuss Greenies; the client adds their recorded results deterministically. Mention Memories, weather recorded after the first completed hole, tracked statistics, and Partnership Performance only when supplied and genuinely relevant. Return a self-contained narrative rather than listing report sections.`,
   };
 }
 function addVerifiedGreeniesToLedgerStory(match, metrics, recapText) {
@@ -6969,7 +7024,7 @@ async function prepareLedgerEntryStory(match, metrics) {
   try {
     let text = addVerifiedGreeniesToLedgerStory(match, metrics, await requestStory());
     if (text.split(/\s+/).filter(Boolean).length > 600) throw new Error('The generated Story was too long to fit the Ledger Entry.');
-    const isBlockingFactIssue = issue => /^FALSE_|^UNVERIFIABLE_|^MISSING_PARTNERSHIP_REVIEW$/.test(String(issue?.code || ''));
+    const isBlockingFactIssue = issue => /^FALSE_|^UNVERIFIABLE_|^MISSING_(?:PARTNERSHIP_REVIEW|SETTLEMENT_WINNER)$/.test(String(issue?.code || ''));
     let blockingIssues = validateRoundRecapContent(match, metrics, text).issues.filter(isBlockingFactIssue);
     if (blockingIssues.length) {
       const repaired = await requestStory({
@@ -7386,6 +7441,23 @@ function validateRoundRecapContent(match, metrics, recapText) {
   const recap = String(recapText || '').trim();
   const issues = [];
   if (!recap) issues.push({ code: 'EMPTY_RECAP', message: 'The recap is empty.' });
+  const canonicalTurningPoint = resolveLedgerFeaturedTurningPoint(buildLedgerEntryReportModel(match, metrics));
+  const definingTurnClaims = [...recap.matchAll(/\b(?:defining\s+turn|turning\s+point)\b[^.!?\n]{0,80}?\b(?:hole|h)\s*#?\s*(\d{1,2})\b/gi)];
+  if (canonicalTurningPoint && definingTurnClaims.some(claim => Number(claim[1]) !== canonicalTurningPoint.holeNumber)) {
+    issues.push({ code: 'FALSE_DEFINING_TURN', message: `The featured competition identifies Hole ${canonicalTurningPoint.holeNumber} as the defining turn; no other hole may be labeled the defining turn or turning point.` });
+  }
+  const payoutContext = getPayoutReportContext(match, metrics);
+  const positiveSettlementPlayers = Object.entries(payoutContext?.finalTotals || {})
+    .filter(([, amount]) => Number(amount) > 0.0001)
+    .map(([playerId]) => getPlayer(playerId)?.name || playerId);
+  const normalizedRecapText = recap.toLocaleLowerCase();
+  const missingPositivePlayers = positiveSettlementPlayers.filter(name => {
+    const parts = String(name).trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+    return !parts.some(part => part.length > 1 && normalizedRecapText.includes(part));
+  });
+  if (positiveSettlementPlayers.length && missingPositivePlayers.length) {
+    issues.push({ code: 'MISSING_SETTLEMENT_WINNER', message: `The Story must name every player who finished ahead: ${positiveSettlementPlayers.join(', ')}.` });
+  }
   const closedMatchNotation = [...recap.matchAll(/\b(\d+)\s*&\s*(\d+)\b/g)];
   const zeroRemainingNotation = closedMatchNotation.find(result => Number(result[2]) === 0);
   const hasNassau = (match?.selectedGames || []).some(game => game?.key === 'nassau');
@@ -24658,6 +24730,7 @@ function installDyeLedgerLiveEngineAdapter() {
     buildMatchSummaryAnalyticsHighlights,
     buildLedgerEntryBody,
     buildLedgerEntryReportModel,
+    resolveLedgerFeaturedTurningPoint,
     normalizeAcceptedLedgerEntrySnapshot,
     getAcceptedLedgerEntrySnapshot,
     buildLedgerEntryStoryPayload,

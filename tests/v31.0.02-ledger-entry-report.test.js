@@ -189,7 +189,7 @@ test('Ledger Entry consumes the reviewed and saved Story without regenerating it
   assert.match(edgeFunction, /Do not discuss Greenies/);
   assert.match(shell, /id="returnToMatchBtn"[^>]*>‹ Return to Match<\/button>/);
   assert.match(shell, /@media print\{[\s\S]*?\.report-nav\{display:none!important\}/);
-  assert.match(shell, /\.ios-print-surface \.page\{height:10\.5in\}/);
+  assert.match(shell, /\.ios-print-surface \.page\{height:10in\}/);
   assert.match(shell, /@media print\{body\{background:#fff\}/);
   assert.match(bootstrap, /iPad\|iPhone\|iPod/);
   assert.match(bootstrap, /platform === 'MacIntel'/);

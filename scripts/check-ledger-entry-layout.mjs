@@ -19,6 +19,7 @@ if (!chrome) {
 
 const input = resolve(process.argv[2] || 'reports/ledger-entry-v31.0.02-reference.html');
 const output = resolve(process.argv[3] || 'reports/ledger-entry-v31.0.02-reference.pdf');
+const iosPrint = process.argv.includes('--ios');
 if (!existsSync(input)) {
   console.error(`Not found: ${input}`);
   process.exit(2);
@@ -43,6 +44,9 @@ await new Promise(resolveListen => server.listen(0, '127.0.0.1', resolveListen))
 const address = server.address();
 const page = await browser.newPage();
 await page.setViewport({ width: 1280, height: 900, deviceScaleFactor: 1 });
+if (iosPrint) {
+  await page.setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1');
+}
 const errors = [];
 page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
 page.on('pageerror', error => errors.push(`PAGE ERROR: ${error.message}`));
@@ -119,7 +123,12 @@ console.log(`${audit.pages.length} pages; ${audit.labels.length} ordered subject
 console.log(`Statistics pages: ${audit.pages.filter(row => row.label === 'Statistics').map(row => `${row.index} (${Math.max(0, row.headroom)}px headroom; ${row.statisticFragments.map(fragment => fragment.id).join(', ') || 'heading'})`).join(', ') || 'none'}.`);
 if (!failed) {
   await page.emulateMediaType('print');
-  await page.pdf({ path: output, format: 'letter', printBackground: true, preferCSSPageSize: true, margin: { top: 0, right: 0, bottom: 0, left: 0 } });
+  const pdf = await page.pdf({ path: output, format: 'letter', printBackground: true, preferCSSPageSize: true, margin: { top: 0, right: 0, bottom: 0, left: 0 } });
+  const physicalPages = (Buffer.from(pdf).toString('latin1').match(/\/Type\s*\/Page\b/g) || []).length;
+  if (physicalPages !== audit.pages.length) {
+    console.error(`Physical PDF page mismatch: ${physicalPages} sheets for ${audit.pages.length} designed pages${iosPrint ? ' on the iOS print surface' : ''}.`);
+    failed = true;
+  }
   console.log(`Wrote ${output}`);
 }
 await browser.close();

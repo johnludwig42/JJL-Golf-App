@@ -37,7 +37,7 @@ body{background:#2E322C;font-family:var(--body);color:var(--ink);font-size:9pt;l
 /* Safari on iPhone/iPad reserves roughly half an inch for its forced print
    furniture. This applies before layout() measures .flow, so the renderer
    repaginates instead of spilling each report footer onto an extra sheet. */
-.ios-print-surface .page{height:10.5in}
+.ios-print-surface .page{height:10in}
 @media screen{.page{margin:22px auto;box-shadow:0 2px 30px rgba(0,0,0,.45)}}
 @media print{body{background:#fff}.page{margin:0 auto;box-shadow:none;outline:none!important;break-after:page;page-break-after:always}
   .page:last-child{break-after:auto;page-break-after:auto}.report-nav{display:none!important}.page-overflow-diagnostic{display:none!important}}
@@ -228,8 +228,8 @@ tr:last-child td{border-bottom:none}
 </nav>
 <div id="probe"></div>
 <div id="doc"></div>
-<script src="../ledger-report/bootstrap.js?v=31.0.36"></script>
+<script src="../ledger-report/bootstrap.js?v=31.0.37"></script>
 <script src="./ledger-entry-nine-point-fixture.js"></script>
-<script type="module" src="../ledger-report/pack.js?v=31.0.36"></script>
-<script type="module" src="../ledger-report/engines.js?v=31.0.36"></script>
-<script type="module" src="../ledger-report/report.js?v=31.0.36"></script>
+<script type="module" src="../ledger-report/pack.js?v=31.0.37"></script>
+<script type="module" src="../ledger-report/engines.js?v=31.0.37"></script>
+<script type="module" src="../ledger-report/report.js?v=31.0.37"></script>

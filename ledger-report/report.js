@@ -3,7 +3,7 @@
    or derived from it. Stroke allocation comes from the app's engine, keyed by
    basis; the report never re-derives handicapping.
    ========================================================================== */
-import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.36';
+import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.37';
 
 const packPages = globalThis.packPages;
 const runGame = globalThis.runGame;
@@ -198,6 +198,12 @@ if(HAS_MONEY && PAY.length){
 
 const FR = FEAT && FEAT.R;
 const MARGIN = FR && FR.archetype==="margin" ? FR : null;
+if (FR && ROUND.meta?.canonicalTurningPoint?.gameId === FEAT?.id) {
+  const canonicalIndex = Number(ROUND.meta.canonicalTurningPoint.holeIndex);
+  if (Number.isInteger(canonicalIndex) && canonicalIndex >= 0 && canonicalIndex < NH) {
+    FR.turning = { ...(FR.turning || {}), i:canonicalIndex, hole:HOLES[canonicalIndex], canonical:true };
+  }
+}
 const WINK = MARGIN && MARGIN.winner!==null ? FEAT.sides[MARGIN.winner].key : null;
 const LOSEK = WINK ? SIDEKEYS.find(k=>k!==WINK) : null;
 
@@ -1083,10 +1089,10 @@ function scorecard(netKey, stkKey, label){
     ${Array.from({length:NH},()=>`<col style="width:${hw}%">`).join("")}
     ${totCols.map(()=>`<col style="width:${tw}%">`).join("")}</colgroup>`;
   const half=Math.ceil(NH/2);
-  const metaRow=(lab,arr)=>{ const show=value=>lab==="Yds"?qty(value):value; return `<tr class="rowmeta"><td>${lab}</td>`+
+  const metaRow=(lab,arr,{totals=true}={})=>{ const show=value=>lab==="Yds"?qty(value):value; return `<tr class="rowmeta"><td>${lab}</td>`+
     arr.map((v,i)=>`<td class="${i===half-1&&NH>9?'brd':''}">${show(v)}</td>`).join("")+
-    (NH>9?`<td class="tot">${show(sum(arr,0,half))}</td><td class="tot">${show(sum(arr,half))}</td>`:"")+
-    `<td class="tot">${show(sum(arr))}</td></tr>`; };
+    (NH>9?`<td class="tot">${totals?show(sum(arr,0,half)):""}</td><td class="tot">${totals?show(sum(arr,half)):""}</td>`:"")+
+    `<td class="tot">${totals?show(sum(arr)):""}</td></tr>`; };
   const body=P.map(p=>{
     const cells=p.gross.map((g,i)=>{
       const st=p.strokes[stkKey][i];
@@ -1106,7 +1112,7 @@ function scorecard(netKey, stkKey, label){
   return `<table class="sc">${cols}<thead data-rowhead><tr><th>Player</th>
     ${HOLES.map((hh,i)=>`<th class="${i===half-1&&NH>9?'brd':''}">${hh}</th>`).join("")}
     ${totCols.map(t=>`<th>${t}</th>`).join("")}</tr></thead>
-    <tbody>${metaRow("Yds",C.yds)}${metaRow("Par",C.par)}${metaRow("SI",C.si)}${body}</tbody></table>`;
+    <tbody>${metaRow("Yds",C.yds)}${metaRow("Par",C.par)}${metaRow("SI",C.si,{totals:false})}${body}</tbody></table>`;
 }
 const MKLEGEND = `<div class="mklegend">
   <span><span class="mk c2">2</span> Eagle or better</span>

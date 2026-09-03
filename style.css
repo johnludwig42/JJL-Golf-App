@@ -4060,13 +4060,21 @@ main,
 }
 .finish-up-card{margin-top:0;background:linear-gradient(145deg,#fff,#f4f8f6)}
 .finish-up-card h2{margin:4px 0 0}
+.post-round-progress{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.post-round-progress-step{display:flex;align-items:center;gap:6px;min-width:0;padding:7px 8px;border:1px solid var(--border);border-radius:10px;background:var(--card);color:var(--muted);font-size:.7rem;font-weight:700}
+.post-round-progress-step b{display:grid;place-items:center;flex:0 0 20px;width:20px;height:20px;border-radius:50%;background:var(--surface-soft,#eef4f1);color:var(--muted);font-size:.68rem}
+.post-round-progress-step span{min-width:0;overflow-wrap:anywhere}
+.post-round-progress-step[data-state="complete"]{border-color:rgba(11,93,59,.22);color:var(--accent)}
+.post-round-progress-step[data-state="complete"] b{background:var(--accent);color:#fff}
+.post-round-progress-step[data-state="working"]{border-color:rgba(138,97,0,.3);color:#8a6100}
+.post-round-progress-step[data-state="working"] b{background:#fff3cf;color:#8a6100}
 .finish-up-workflow{display:grid;border-top:1px solid var(--border)}
 .finish-up-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid var(--border)}
 .finish-up-row>div{min-width:0}
 .finish-up-row button{flex:0 0 auto;min-width:150px}
 .finish-up-next{padding-top:13px;border-top:1px solid var(--border)}
 .finish-up-card .quiet-action{border:0;background:transparent;color:var(--accent);padding:6px 0;min-height:36px;text-align:left;box-shadow:none}
-@media(max-width:520px){.finish-up-row{align-items:stretch;flex-direction:column;gap:8px}.finish-up-row button{width:100%;min-width:0}}
+@media(max-width:520px){.post-round-progress{grid-template-columns:1fr}.finish-up-row{align-items:stretch;flex-direction:column;gap:8px}.finish-up-row button{width:100%;min-width:0}}
 
 /* v29.3.2 Game Setup Cancel Path */
 .setup-cancel-btn {

@@ -1,6 +1,6 @@
 {
   "name": "the-dye-ledger",
-  "version": "31.0.37",
+  "version": "31.0.38",
   "private": true,
   "type": "module",
   "scripts": {
@@ -61,6 +61,7 @@
     "test:v31.0.35": "node --test tests/v31.0.35-score-stat-entry.test.js tests/v31.0.14-player-mode-entry-flow.test.js tests/v31.0.32-classic-play-navigation.test.js",
     "test:v31.0.36": "node --test tests/v31.0.36-post-round-story-navigation.browser.test.js tests/v31.0.21-story-review-surface.test.js tests/v31.0.31-post-round-setup-correctness.test.js",
     "test:v31.0.37": "node --test tests/v31.0.37-ledger-story-print-correctness.test.js tests/v31.0.18-story-ham-egg.test.js tests/v31.0.02-ledger-entry-report.test.js tests/report-layout.test.js",
+    "test:v31.0.38": "node --test tests/v31.0.38-post-round-ledger-workflow.test.js tests/v31.0.36-post-round-story-navigation.browser.test.js tests/v31.0.21-story-review-surface.test.js tests/v31.0.31-post-round-setup-correctness.test.js",
     "build:ledger-entry-fixture": "node scripts/generate-ledger-entry-fixture.js",
     "check:layout": "npm run build:ledger-entry-fixture && node scripts/check-ledger-entry-layout.mjs && node scripts/check-ledger-entry-layout.mjs reports/ledger-entry-v31.0.33-nine-point.html reports/ledger-entry-v31.0.33-nine-point.pdf && node scripts/check-ledger-entry-layout.mjs reports/ledger-entry-v31.0.02-reference.html reports/ledger-entry-v31.0.37-ios-reference.pdf --ios",
     "test:identity-security": "node --test tests/v30.3.75-identity-security.test.js",

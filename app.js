@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.37',
-  versionNumber: '31.0.37',
-  cacheName: 'the-dye-ledger-v31.0.37',
-  buildDate: '2026-09-02T15:30:00-04:00',
-  buildLabel: 'Ledger Entry Story and Print Correctness'
+  version: 'v31.0.38',
+  versionNumber: '31.0.38',
+  cacheName: 'the-dye-ledger-v31.0.38',
+  buildDate: '2026-09-03T06:54:00-04:00',
+  buildLabel: 'Guided Post-Round Ledger Workflow'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -7257,8 +7257,9 @@ function buildRoundRecapControls(match) {
   const recapPreview = recap ? (editing && canAuthor
     ? `<textarea id="roundRecapEditBox" class="round-recap-edit-box" rows="10">${escapeHtml(recap)}</textarea>`
     : `<div class="round-recap-preview">${formatRoundRecapHtml(recap)}</div>`) : '';
+  const saveStoryLabel = match.status === 'complete' ? 'Save Story & Preview Ledger' : 'Save Story';
   const storyActions = recap
-    ? `${canAuthor ? '<button id="acceptRoundRecapBtn" type="button">Save Story</button>' : ''}
+    ? `${canAuthor ? `<button id="acceptRoundRecapBtn" type="button">${saveStoryLabel}</button>` : ''}
        ${canAuthor ? `<button id="editRoundRecapBtn" type="button" class="secondary">${editing ? 'Stop Editing' : 'Edit'}</button>` : ''}
        ${canAuthor ? `<button id="generateRoundRecapBtn" type="button" class="secondary" ${disabled ? 'disabled' : ''}>Regenerate Story</button>` : ''}
        ${canAuthor ? '<button id="clearRoundRecapBtn" type="button" class="secondary">Clear Story</button>' : ''}`
@@ -7825,6 +7826,8 @@ function acceptRoundRecapForActiveMatch() {
   match.roundRecapValidationIssues = [];
   match.roundRecapLastError = null;
   uiState.roundRecapEditing = false;
+  const continueToLedger = match.status === 'complete' && !(match.storageMode === 'shared' && !isCurrentDeviceMatchHost(match));
+  if (continueToLedger) uiState.pendingLedgerOpenMatchId = match.id;
   persist({ skipRender: true });
   renderLeaderboard();
   toast('Story saved.');
@@ -21606,7 +21609,7 @@ async function openRoundStoryReview(match = getReviewOrActiveMatch(), { generate
     return false;
   }
   showRoundStoryReviewSurface(match);
-  if (openLedgerAfterSave && !getFinalRoundRecap(match)) uiState.pendingLedgerOpenMatchId = match.id;
+  if (openLedgerAfterSave) uiState.pendingLedgerOpenMatchId = match.id;
   if (generateIfMissing && !getFinalRoundRecap(match) && !getDraftRoundRecap(match)) {
     syncPostRoundWorkflowUi(match);
     await generateRoundRecapForActiveMatch({ match });
@@ -21640,6 +21643,8 @@ function getPostRoundWorkflowState(match) {
     ledgerAction: acceptedLedger || finalStory ? 'Open Ledger Entry' : 'Preview Ledger',
     storyDisabled: isPostRoundStoryReviewDisabled({ hasStory, generating, joinedWaiting }),
     ledgerReady: !!(acceptedLedger || finalStory),
+    storyReviewed: !!finalStory,
+    ledgerFinalized: !!acceptedLedger,
   };
 }
 
@@ -21667,6 +21672,9 @@ function syncPostRoundWorkflowUi(match = getReviewOrActiveMatch()) {
   const ledgerState = document.getElementById('postRoundLedgerState');
   const storyButton = document.getElementById('postRoundInlineGenerateRecapBtn');
   const ledgerButton = document.getElementById('postRoundInlineLedgerBtn');
+  const roundStep = document.getElementById('postRoundStepSaved');
+  const storyStep = document.getElementById('postRoundStepStory');
+  const ledgerStep = document.getElementById('postRoundStepLedger');
   if (!match || match.status !== 'complete') return;
   const workflow = getPostRoundWorkflowState(match);
   if (storyState) storyState.textContent = workflow.storyLabel;
@@ -21678,6 +21686,15 @@ function syncPostRoundWorkflowUi(match = getReviewOrActiveMatch()) {
   if (ledgerButton) {
     ledgerButton.textContent = workflow.ledgerAction;
     ledgerButton.classList.toggle('secondary', !workflow.ledgerReady);
+  }
+  if (roundStep) roundStep.dataset.state = 'complete';
+  if (storyStep) {
+    storyStep.dataset.state = workflow.storyReviewed ? 'complete' : (workflow.generating ? 'working' : 'pending');
+    storyStep.querySelector('span').textContent = workflow.storyReviewed ? 'Story saved' : (workflow.generating ? 'Story generating' : 'Story review');
+  }
+  if (ledgerStep) {
+    ledgerStep.dataset.state = workflow.ledgerFinalized ? 'complete' : 'pending';
+    ledgerStep.querySelector('span').textContent = workflow.ledgerFinalized ? 'Ledger finalized' : 'Ledger finalization';
   }
 }
 

@@ -40,7 +40,7 @@ function startServer() {
   return new Promise(resolveListen => server.listen(0, '127.0.0.1', () => resolveListen(server)));
 }
 
-function completedRound(roundEndReason = null) {
+function completedRound(roundEndReason = null, { savedStory = false } = {}) {
   const holes = Array.from({ length: 18 }, (_, idx) => ({ holeNumber: idx + 1, par: idx % 6 === 2 ? 3 : idx % 6 === 5 ? 5 : 4, strokeIndex: idx + 1, yardage: 400 }));
   const players = ['John', 'Tom', 'Mark', 'Phil'].map((name, idx) => ({ id: `p${idx + 1}`, name, index: 8 + idx * 3 }));
   return {
@@ -66,6 +66,7 @@ function completedRound(roundEndReason = null) {
       matchStatusGame: 'nassau',
       storageMode: 'local',
       roundRecapGenerated: `A ${roundEndReason ? 'shortened' : 'complete'} round Story is ready for review.`,
+      roundRecapFinal: savedStory ? `A ${roundEndReason ? 'shortened' : 'complete'} round Story is ready for review.` : '',
       players: players.map((player, idx) => ({
         playerId: player.id,
         team: idx % 2 === 0 ? 1 : 2,
@@ -133,6 +134,39 @@ test('Review Story visibly opens the correct early and full completed round befo
   try {
     await assertReviewFlow(browser, url, completedRound('weather'));
     await assertReviewFlow(browser, url, completedRound(null));
+  } finally {
+    await browser.close();
+    await new Promise(resolveClose => server.close(resolveClose));
+  }
+});
+
+test('saving an existing Story from a reopened full or early-ended round continues into that round Ledger Entry', { skip: !chrome }, async () => {
+  const server = await startServer();
+  const browser = await puppeteer.launch({ executablePath: chrome, headless: true, timeout: 60000, args: ['--disable-gpu', '--no-sandbox'] });
+  const address = server.address();
+  const url = `http://127.0.0.1:${address.port}/index.html`;
+  try {
+    for (const roundEndReason of [null, 'weather']) {
+      const fixture = completedRound(roundEndReason, { savedStory: true });
+      fixture.match.selectedGames = [];
+      await seedCompletedRound(browser, url, fixture);
+      const page = await browser.newPage();
+      await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
+      await page.goto(url, { waitUntil: 'load' });
+      await page.click('[data-tab="leaderboard"]');
+      await page.waitForSelector('#postRoundInlineGenerateRecapBtn:not([disabled])');
+      await page.click('#postRoundInlineGenerateRecapBtn');
+      await page.waitForSelector('#acceptRoundRecapBtn');
+      assert.equal(await page.$eval('#acceptRoundRecapBtn', button => button.textContent.trim()), 'Save Story & Preview Ledger');
+      const reportTargetPromise = browser.waitForTarget(target => /ledger-report\/shell\.html/.test(target.url()), { timeout: 30000 });
+      await page.click('#acceptRoundRecapBtn');
+      const reportTarget = await reportTargetPromise;
+      assert.match(reportTarget.url(), /ledger-report\/shell\.html/);
+      assert.match(reportTarget.url(), /reportKey=/);
+      const reportPage = await reportTarget.page();
+      await reportPage.close();
+      await page.close();
+    }
   } finally {
     await browser.close();
     await new Promise(resolveClose => server.close(resolveClose));

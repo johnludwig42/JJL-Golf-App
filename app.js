@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.38',
-  versionNumber: '31.0.38',
-  cacheName: 'the-dye-ledger-v31.0.38',
-  buildDate: '2026-09-03T06:54:00-04:00',
-  buildLabel: 'Guided Post-Round Ledger Workflow'
+  version: 'v31.0.39',
+  versionNumber: '31.0.39',
+  cacheName: 'the-dye-ledger-v31.0.39',
+  buildDate: '2026-09-07T14:57:00-04:00',
+  buildLabel: 'Play Header and Combo Tee Clarity'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -17588,8 +17588,9 @@ function renderPlayerModeScoreGrid(match, tee, metrics, hole) {
     const net = Number.isFinite(Number(score)) && Number(score) > 0 ? Number(score) - strokes : null;
     const entryStatus = getPlayerModeEntryStatus(match, metrics, playerMetric, score, par);
     const strokeText = strokes === 1 ? '= match stroke' : '= match strokes';
+    const playerHoleTeeLabel = getPlayerHoleTeeInfo(match, playerMetric, currentHole - 1, tee).label;
     return `<article class="player-mode-score-row player-mode-accordion-row ${isSelected ? 'is-selected is-expanded' : 'is-collapsed'} ${canEdit ? '' : 'score-row-readonly'}" data-player-mode-row="${escapeHtml(playerMetric.playerId)}">
-      <div class="player-mode-row-head"><button type="button" class="player-mode-player-select player-mode-accordion-trigger" data-player-mode-select="${escapeHtml(playerMetric.playerId)}" aria-expanded="${isSelected}" aria-controls="playerModeDetail-${escapeHtml(playerMetric.playerId)}" title="${isSelected ? 'Collapse' : 'Open'} entry for ${escapeHtml(playerMetric.player?.name || 'Player')}"><span class="player-mode-name-line"><strong>${escapeHtml(playerMetric.player?.name || 'Player')}</strong>${strokes > 0 ? `<span class="player-mode-strokes" aria-label="Receives ${strokes} match stroke${strokes === 1 ? '' : 's'}"><span aria-hidden="true">${'●'.repeat(strokes)}</span> <small>${strokeText}</small></span>` : ''}</span><span class="player-mode-collapsed-summary"><span class="player-mode-entry-status" data-status="${entryStatus.key}">${entryStatus.complete ? '<b aria-hidden="true">✓</b>' : ''}${escapeHtml(entryStatus.label)}</span>${Number.isFinite(net) ? `<small>${score} gross · ${net} match net</small>` : '<small>Tap to enter this player</small>'}</span><span class="player-mode-accordion-chevron" aria-hidden="true">${isSelected ? '⌃' : '⌄'}</span></button></div>
+      <div class="player-mode-row-head"><button type="button" class="player-mode-player-select player-mode-accordion-trigger" data-player-mode-select="${escapeHtml(playerMetric.playerId)}" aria-expanded="${isSelected}" aria-controls="playerModeDetail-${escapeHtml(playerMetric.playerId)}" title="${isSelected ? 'Collapse' : 'Open'} entry for ${escapeHtml(playerMetric.player?.name || 'Player')}"><span class="player-mode-player-identity"><span class="player-mode-name-line"><strong>${escapeHtml(playerMetric.player?.name || 'Player')}</strong>${strokes > 0 ? `<span class="player-mode-strokes" aria-label="Receives ${strokes} match stroke${strokes === 1 ? '' : 's'}"><span aria-hidden="true">${'●'.repeat(strokes)}</span> <small>${strokeText}</small></span>` : ''}</span>${playerHoleTeeLabel ? `<small class="player-mode-hole-tee">${escapeHtml(playerHoleTeeLabel)}</small>` : ''}</span><span class="player-mode-collapsed-summary"><span class="player-mode-entry-status" data-status="${entryStatus.key}">${entryStatus.complete ? '<b aria-hidden="true">✓</b>' : ''}${escapeHtml(entryStatus.label)}</span>${Number.isFinite(net) ? `<small>${score} gross · ${net} match net</small>` : '<small>Tap to enter this player</small>'}</span><span class="player-mode-accordion-chevron" aria-hidden="true">${isSelected ? '⌃' : '⌄'}</span></button></div>
       ${isSelected ? `<div id="playerModeDetail-${escapeHtml(playerMetric.playerId)}" class="player-mode-detail-slot" data-player-mode-detail-slot="${escapeHtml(playerMetric.playerId)}"></div>` : ''}
     </article>`;
   }).join('')}</section>`).join('');
@@ -18090,7 +18091,12 @@ function renderHoleSelector(match, scoringHoles = [], metrics = null) {
   const saveState = buildPlaySaveState(match);
   if (badge) badge.innerHTML = `<label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select>`;
   const classicContext = document.getElementById('classicHoleContext');
-  if (classicContext) classicContext.innerHTML = `<div class="classic-hole-meta">${holeMetaText}</div>${featuredStatusPair ? `<div class="classic-header-match-status">${featuredStatusPair}</div>` : ''}<div class="classic-header-save-state" data-tone="${saveState.tone}">${escapeHtml(saveState.label)}</div>`;
+  if (classicContext) classicContext.innerHTML = `<div class="classic-hole-meta">${holeMetaText}</div>${featuredStatusPair ? `<div class="classic-header-match-status">${featuredStatusPair}</div>` : ''}`;
+  const classicSaveState = document.getElementById('classicHeaderSaveState');
+  if (classicSaveState) {
+    classicSaveState.dataset.tone = saveState.tone;
+    classicSaveState.textContent = saveState.label;
+  }
   const classicModeSelect = document.getElementById('classicRoundScoringModeSelect');
   if (classicModeSelect) classicModeSelect.innerHTML = Object.values(PLAY_INPUT_MODES).filter(mode => mode.available).map(mode => `<option value="${mode.key}" ${mode.key === PLAY_INPUT_MODES.CLASSIC.key ? 'selected' : ''}>${mode.label.replace(' Mode','')}</option>`).join('');
   const classicStatSelect = document.getElementById('classicRoundStatModeSelect');

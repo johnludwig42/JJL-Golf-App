@@ -48,7 +48,9 @@ test('Classic and Player wrappers consume the shared builders without changing t
   assert.match(selector, /player-mode-save-state" data-tone="\$\{saveState\.tone\}" aria-live="polite"/);
   assert.match(selector, /classic-hole-meta">\$\{holeMetaText\}/);
   assert.match(selector, /classic-header-match-status">\$\{featuredStatusPair\}/);
-  assert.match(selector, /classic-header-save-state" data-tone="\$\{saveState\.tone\}"/);
+  assert.match(html, /id="classicHeaderSaveState" class="classic-header-save-state"/);
+  assert.match(selector, /classicSaveState\.dataset\.tone = saveState\.tone/);
+  assert.match(selector, /classicSaveState\.textContent = saveState\.label/);
   assert.equal((selector.match(/buildPlayHoleMetaText\(hole\)/g) || []).length, 2);
   assert.equal((selector.match(/buildPlaySaveState\(match\)/g) || []).length, 2);
 });

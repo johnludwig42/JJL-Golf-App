@@ -3,7 +3,7 @@
    or derived from it. Stroke allocation comes from the app's engine, keyed by
    basis; the report never re-derives handicapping.
    ========================================================================== */
-import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.39';
+import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.40';
 
 const packPages = globalThis.packPages;
 const runGame = globalThis.runGame;
@@ -185,7 +185,8 @@ const PAY = ROUND.payments||[];
 const sideMoney = k => sideOf(k).reduce((a,p)=>a+moneyOf(p.id),0);
 /* side games ordered by money moved, descending */
 const NINEPOINT = ROUND.games.find(g=>g.type==="ninepoint"&&g.R?.archetype==="cumulative") || null;
-const SIDEGAMES = ROUND.games.filter(g=>!g.featured&&g.type!=="ninepoint")
+const SIXES = ROUND.games.find(g=>g.type==="sixes"&&g.R?.archetype==="sixes") || null;
+const SIDEGAMES = ROUND.games.filter(g=>!g.featured&&!['ninepoint','sixes'].includes(g.type))
   .sort((a,b)=> Object.values(b.moneyBy).filter(v=>v>0).reduce((x,y)=>x+y,0)
               - Object.values(a.moneyBy).filter(v=>v>0).reduce((x,y)=>x+y,0));
 
@@ -252,7 +253,7 @@ add("hero", ()=>{
   const label = FEAT ? headerCompetitionLabel(FEAT.name, FEAT.allowance.label) : "No featured competition";
   w.appendChild(h("div",{class:"eyebrow",text:"Featured Competition · "+label}));
   let head;
-  if(FEAT?.type==="ninepoint"&&ROUND.meta.primaryMatchStatus){
+  if(["ninepoint","sixes"].includes(FEAT?.type)&&ROUND.meta.primaryMatchStatus){
     head=ROUND.meta.primaryMatchStatus;
   }
   else if(WINK){
@@ -280,6 +281,13 @@ function deckText(){
     parts.push(completed
       ? `Standings reflect ${completed} completed ${completed===1?"hole":"holes"} of individual 9-Point play.`
       : "The 9-Point game has not started.");
+  }
+  else if(FEAT?.type==="sixes"){
+    if(FR?.mode==="points") parts.push(FR.holesScored ? `Individual point standings reflect ${FR.holesScored} completed holes; segment records are informational.` : "The rotating-partnership Sixes points game has not started.");
+    else {
+      const decided=FR?.segments?.filter(segment=>segment.decided).length||0;
+      parts.push(decided ? `${decided} of three rotating-partnership segments ${decided===1?"is":"are"} decided; player points are informational.` : "The rotating-partnership Sixes match has not produced a decided segment.");
+    }
   }
   else if(WINK){
     if(HAS_MONEY){
@@ -392,7 +400,30 @@ function yAxisLabel(label){
 function chartSVG(){
   if(FR.archetype==="margin") return marginChart();
   if(FR.archetype==="cumulative") return cumulativeChart();
+  if(FR.archetype==="sixes") return FR.mode==="points" ? cumulativeChart() : sixesChart();
   return discreteChart();
+}
+
+function sixesChart(){
+  const {x0,x1,y0,y1}=CH;
+  const X=i=>x0+(x1-x0)*i/NH;
+  const rowY=index=>y0+22+index*42;
+  const rows=FR.segments.map((segment,segmentIndex)=>{
+    const y=rowY(segmentIndex);
+    const label=`${segment.sideA.label} vs ${segment.sideB.label}`;
+    const cells=(segment.holes||[]).map((hole,offset)=>{
+      const result=(segment.results||[]).find(row=>Number(row.holeNumber)===Number(hole));
+      const x=X(segmentIndex*6+offset);
+      const symbol=!result?.completed?"—":result.winner==="A"?"A":result.winner==="B"?"B":"½";
+      const fill=symbol==="A"?"#1E6B4F":symbol==="B"?"#B0821F":"#E4E4DC";
+      const color=["A","B"].includes(symbol)?"#fff":"#6E736C";
+      return `<rect x="${x+2}" y="${y}" width="${X(segmentIndex*6+offset+1)-x-4}" height="17" rx="2" fill="${fill}"/>
+        <text x="${(x+X(segmentIndex*6+offset+1))/2}" y="${y+11.5}" text-anchor="middle" font-family="Archivo" font-weight="700" font-size="7" fill="${color}">${symbol}</text>`;
+    }).join("");
+    return `<text x="${x0}" y="${y-5}" font-family="Archivo" font-weight="600" font-size="6.3" fill="#14211C">${segment.label.toUpperCase()} · ${label}</text>${cells}`;
+  }).join("");
+  const key=`<text x="${x0}" y="${CH.segY}" font-family="Archivo" font-weight="600" font-size="6.2" letter-spacing=".5" fill="#6E736C">A / B IDENTIFIES THE PARTNERSHIP LISTED FIRST / SECOND · ½ HALVED · — UNPLAYED</text>`;
+  return chartFrame(rows,yAxisLabel("SIXES SEGMENT"),key);
 }
 
 function marginChart(){
@@ -875,6 +906,39 @@ if(MARGIN){
       `<strong>BEST-BALL CARD TOTAL · BEST ${wn(FEAT.bestN||2).toUpperCase()} ${cardBasis}</strong> · ${cardTotals.map(side=>`${side.name.toUpperCase()} ${side.total}`).join(" · ")} · INFORMATIONAL AGGREGATE; THE ${FEAT.type==="nassau"?"NASSAU":"MATCH"} RESULT IS DETERMINED HOLE BY HOLE.`}));
     return w;
   }, {splittable:true, minRows:1});
+}
+
+/* ---- Sixes rotating partnerships ---- */
+if(SIXES?.R?.segments?.length){
+  add("sixesh",()=>secHead("Sixes · rotating partnerships",
+    `${String(SIXES.basis||"net").toUpperCase()} best ball · ${SIXES.R.mode==="points"?`${usd(SIXES.pointValue||0)} per point; segments informational`:`${usd(SIXES.stakePerSegment||0)} per segment; points informational`}.`),
+    {keepWithNext:true,breakBefore:!MARGIN,label:"Games"});
+  add("sixes",()=>{
+    const w=h("div",{"data-sixes-segment-table":""});
+    SIXES.R.segments.forEach(segment=>{
+      const resultByHole=new Map((segment.results||[]).map(row=>[Number(row.holeNumber),row]));
+      const heads=(segment.holes||[]).map(hole=>`<th>${hole}</th>`).join("");
+      const scoreRow=(sideKey,side)=>`<tr data-row><td class="l"><strong>${side.label}</strong></td>${(segment.holes||[]).map(hole=>{
+        const row=resultByHole.get(Number(hole));
+        const value=sideKey==="A"?row?.aScore:row?.bScore;
+        return `<td>${row?.completed&&isNum(value)?value:""}</td>`;
+      }).join("")}<td class="tot"><strong>${sideKey==="A"?segment.holesWonA:segment.holesWonB}</strong></td></tr>`;
+      const verdict=segment.decided ? segment.statusText : `${segment.statusText||"In progress"} · not final`;
+      w.appendChild(h("div",{"data-sixes-segment":"",html:
+        `<div class="subhead">${segment.label}<span>${verdict}</span></div>
+         <table class="sc sixes-results"><colgroup><col style="width:28%">${(segment.holes||[]).map(()=>'<col style="width:9%">').join("")}<col style="width:18%"></colgroup><thead data-rowhead><tr><th class="l">Partnership</th>${heads}<th class="tot">Won</th></tr></thead><tbody>
+         ${scoreRow("A",segment.sideA)}${scoreRow("B",segment.sideB)}</tbody></table>`}));
+    });
+    if(SIXES.R.mode==="points"){
+      const standings=(SIXES.R.ranked||[]).map(series=>`<tr data-row><td class="l">${nameCell(S(series.id))}</td><td>${series.total}</td><td class="n">${acct(SIXES.moneyBy?.[series.id]||0)}</td></tr>`).join("");
+      w.appendChild(h("div",{"data-sixes-points":"",html:`<div class="subhead">Player points<span>settlement basis</span></div><table class="dense"><thead data-rowhead><tr><th class="l">Player</th><th>Points</th><th class="n">Settlement</th></tr></thead><tbody>${standings}</tbody></table>`}));
+    }else{
+      const settlementRows=(SIXES.playerIds||[]).map(playerId=>`<tr data-row><td class="l">${nameCell(S(playerId))}</td>${SIXES.R.segments.map(segment=>`<td class="n">${segment.decided?acct(segment.amounts?.[playerId]||0):""}</td>`).join("")}<td class="n"><strong>${acct(SIXES.moneyBy?.[playerId]||0)}</strong></td></tr>`).join("");
+      w.appendChild(h("div",{"data-sixes-segment-settlement":"",html:`<div class="subhead">Settlement by segment<span>cross-footed to each player’s net</span></div><table class="dense"><thead data-rowhead><tr><th class="l">Player</th>${SIXES.R.segments.map(segment=>`<th class="n">${segment.label}</th>`).join("")}<th class="n">Net</th></tr></thead><tbody>${settlementRows}</tbody></table>`}));
+    }
+    w.appendChild(h("p",{class:"scnote",text:SIXES.R.mode==="points"?"Partnerships rotate after every six holes. Each segment is informational; blank cells are unplayed, not ties or zeroes.":"Partnerships rotate after every six holes. Each winning golfer receives the segment stake from one losing golfer; halved segments settle at $0. Blank settlement cells are incomplete."}));
+    return w;
+  },{splittable:true,minRows:2,keepTogetherWhenFits:true});
 }
 
 /* ---- 9-Point hole by hole ---- */

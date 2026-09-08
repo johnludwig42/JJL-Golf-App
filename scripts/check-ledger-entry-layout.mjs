@@ -49,11 +49,16 @@ if (iosPrint) {
 }
 const errors = [];
 page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-page.on('pageerror', error => errors.push(`PAGE ERROR: ${error.message}`));
+page.on('pageerror', error => errors.push(`PAGE ERROR: ${error.stack || error.message}`));
 const inputPath = input.slice(root.length).replaceAll('\\', '/').replace(/^\/+/, '');
 await page.goto(`http://127.0.0.1:${address.port}/${inputPath}`, { waitUntil: 'load', timeout: 60000 });
 await page.evaluate(() => document.fonts?.ready);
-await page.waitForSelector('.page', { timeout: 60000 });
+try {
+  await page.waitForSelector('.page', { timeout: 60000 });
+} catch (error) {
+  if (errors.length) console.error(`Console errors before layout:\n${errors.join('\n')}`);
+  throw error;
+}
 await new Promise(resolveWait => setTimeout(resolveWait, 400));
 
 const audit = await page.evaluate(() => {
@@ -89,6 +94,11 @@ const audit = await page.evaluate(() => {
       labels: playerLabels,
       topThreeNote: document.body.textContent.includes('TOP THREE EMPHASISED'),
     },
+    sixes: {
+      table: !!document.querySelector('[data-sixes-segment-table]'),
+      segments: document.querySelectorAll('[data-sixes-segment]').length,
+      rows: document.querySelectorAll('[data-sixes-segment] [data-row]').length,
+    },
   };
 });
 
@@ -116,6 +126,11 @@ if (basename(input).includes('nine-point')) {
   if (audit.ninePoint.labels.length !== 3 || audit.ninePoint.labels.some(label => !label.text)) { console.error('9-Point direct player labels missing.'); failed = true; }
   if (overlappingLabels) { console.error('9-Point end labels overlap.'); failed = true; }
   if (audit.ninePoint.topThreeNote) { console.error('Small-field 9-Point chart retained the top-three footnote.'); failed = true; }
+}
+if (basename(input).includes('sixes')) {
+  if (!audit.sixes.table) { console.error('Sixes rotating-partnership table missing.'); failed = true; }
+  if (audit.sixes.segments !== 3) { console.error(`Sixes fixture rendered ${audit.sixes.segments} segments instead of three.`); failed = true; }
+  if (audit.sixes.rows !== 6) { console.error(`Sixes fixture rendered ${audit.sixes.rows} partnership rows instead of six.`); failed = true; }
 }
 
 console.log(`${basename(input)} — Chrome ${await browser.version()}`);

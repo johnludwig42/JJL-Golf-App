@@ -17,6 +17,7 @@ const LIVE_FUNCTIONS_USED = [
   'computeNassauDiffsForBasis',
   'computeSkinResults',
   'computeNinePointResults',
+  'computeSixesResults',
   'buildSneakySandyPoleyLedger',
   'resolveSneakySandyPoleyProxSelection',
   'buildSharedSspFacts',

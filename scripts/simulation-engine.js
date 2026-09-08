@@ -287,6 +287,61 @@ export function computeNinePoint(metrics, cfg = {}) {
   return { playerIds, basis, stakePerPoint, totals, holes, amounts, paymentLines, completedHoles: holes.filter(h => h.completed).length };
 }
 
+export function computeSixes(metrics, cfg = {}) {
+  const playerIds = (cfg.playerIds || []).slice(0, 4);
+  const basis = String(cfg.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net';
+  const allowance = basis === 'gross' ? 0 : Math.max(0, Math.min(100, Number(cfg.handicapAllowancePercent) || 90));
+  const stakePerSegment = Math.max(0, Number(cfg.stakePerSegment) || 0);
+  const mode = cfg.mode === 'segments' ? 'segments' : 'points';
+  const pointValue = Number.isFinite(Number(cfg.pointValue)) ? Math.max(0, Number(cfg.pointValue)) : 1;
+  const selectedPlayers = playerIds.map(id => metrics.players.find(player => player.id === id)).filter(Boolean);
+  const amounts = Object.fromEntries(playerIds.map(id => [id, 0]));
+  const totals = Object.fromEntries(playerIds.map(id => [id, 0]));
+  if (playerIds.length !== 4 || new Set(playerIds).size !== 4 || selectedPlayers.length !== 4) return { playerIds, basis, stakePerSegment, segments: [], amounts, completedHoles: 0 };
+  const gameHandicaps = Object.fromEntries(selectedPlayers.map(player => [player.id, basis === 'gross' ? 0 : Math.round(player.unroundedCourseHdcp * allowance / 100)]));
+  const lowGameHandicap = Math.min(...Object.values(gameHandicaps));
+  const pairings = [[[playerIds[0], playerIds[1]], [playerIds[2], playerIds[3]]], [[playerIds[0], playerIds[2]], [playerIds[1], playerIds[3]]], [[playerIds[0], playerIds[3]], [playerIds[1], playerIds[2]]]];
+  let completedHoles = 0;
+  const segments = pairings.map((pairing, segmentIndex) => {
+    let holesWonA = 0;
+    let holesWonB = 0;
+    const holes = metrics.holeResults.slice(segmentIndex * 6, segmentIndex * 6 + 6).map(hole => {
+      const values = {};
+      playerIds.forEach(id => {
+        const score = hole.playerScores.find(row => row.playerId === id);
+        if (!Number.isFinite(score?.gross)) return;
+        const strokes = basis === 'gross' ? 0 : holeStrokeAllowanceForPlayer(hole.strokeIndex, gameHandicaps[id], lowGameHandicap);
+        values[id] = score.gross - strokes;
+      });
+      if (Object.keys(values).length !== 4) return { holeNumber: hole.holeNumber, completed: false, winner: null };
+      completedHoles += 1;
+      const aScore = Math.min(...pairing[0].map(id => values[id]));
+      const bScore = Math.min(...pairing[1].map(id => values[id]));
+      const winner = aScore < bScore ? 'A' : bScore < aScore ? 'B' : 'halved';
+      if (winner === 'A') holesWonA += 1;
+      if (winner === 'B') holesWonB += 1;
+      const winningIds = winner === 'A' ? pairing[0] : winner === 'B' ? pairing[1] : [];
+      winningIds.forEach(id => { totals[id] += 1; });
+      return { holeNumber: hole.holeNumber, completed: true, aScore, bScore, winner, points: Object.fromEntries(playerIds.map(id => [id, winningIds.includes(id) ? 1 : 0])) };
+    });
+    const played = holes.filter(hole => hole.completed).length;
+    const decided = played === 6 || Math.abs(holesWonA - holesWonB) > 6 - played;
+    const winner = decided ? (holesWonA > holesWonB ? 'A' : holesWonB > holesWonA ? 'B' : 'halved') : null;
+    if (mode === 'segments' && (winner === 'A' || winner === 'B')) {
+      const winners = winner === 'A' ? pairing[0] : pairing[1];
+      const losers = winner === 'A' ? pairing[1] : pairing[0];
+      winners.forEach(id => addAmount(amounts, id, stakePerSegment));
+      losers.forEach(id => addAmount(amounts, id, -stakePerSegment));
+    }
+    return { index: segmentIndex + 1, sideA: { playerIds: pairing[0] }, sideB: { playerIds: pairing[1] }, holes, holesWonA, holesWonB, decided, winner };
+  });
+  if (mode === 'points') playerIds.forEach((first, index) => playerIds.slice(index + 1).forEach(second => {
+    const amount = (totals[first] - totals[second]) * pointValue;
+    addAmount(amounts, first, amount); addAmount(amounts, second, -amount);
+  }));
+  return { playerIds, mode, basis, pointValue, pointsPerHoleWin: 1, stakePerSegment, teamScoringMode: 'best_ball', segmentResultMode: 'match', gameHandicaps, lowGameHandicap, segments, totals, amounts, completedHoles };
+}
+
 export const roundMoney = value => Math.round((Number(value) || 0) * 100) / 100;
 
 export function optimalSettlementRows(amountsByPlayer) {
@@ -344,6 +399,10 @@ export function computePayouts(roundInput) {
     if (cfg.key === 'nine_point') {
       const nine = computeNinePoint(metrics, cfg);
       addGame({ key: 'nine_point', label: `9-Point (${nine.basis})`, amounts: nine.amounts, paymentLines: nine.paymentLines, meta: nine });
+    }
+    if (cfg.key === 'sixes') {
+      const sixes = computeSixes(metrics, cfg);
+      addGame({ key: 'sixes', label: `Sixes (${sixes.basis})`, amounts: sixes.amounts, meta: sixes });
     }
   }
   Object.keys(finalTotals).forEach(id => { finalTotals[id] = roundMoney(finalTotals[id]); });
@@ -417,6 +476,16 @@ export function validateRound(roundInput) {
     const expected = nine.completedHoles * 9;
     const actual = Object.values(nine.totals).reduce((total, points) => total + points, 0);
     if (expected !== actual) failures.push(`9-Point totals are ${actual}; expected ${expected}.`);
+  }
+  const sixes = payout.games.find(game => game.key === 'sixes')?.meta;
+  if (sixes) {
+    if (sixes.segments.length !== 3) failures.push('Sixes must produce exactly three segments.');
+    const partnerSets = new Set(sixes.segments.flatMap(segment => [segment.sideA.playerIds, segment.sideB.playerIds]).map(pair => pair.slice().sort().join(':')));
+    if (partnerSets.size !== 6) failures.push('Sixes rotation does not give every golfer each partner exactly once.');
+    if (Math.abs(Object.values(sixes.amounts).reduce((total, amount) => total + amount, 0)) > 0.001) failures.push('Sixes settlement does not net to zero.');
+    sixes.segments.forEach(segment => {
+      if (segment.holes.some(hole => hole.completed && !['A', 'B', 'halved'].includes(hole.winner))) failures.push(`Sixes segment ${segment.index} has an invalid completed-hole result.`);
+    });
   }
   if (payout.settlementRows.some(row => row.amount > 100)) suspicious.push('A settlement row exceeds $100; confirm blowout/wager settings are intentional.');
   if (payout.metrics.completed === 0) warnings.push('No completed holes were available for settlement.');

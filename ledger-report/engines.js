@@ -12,7 +12,7 @@
  */
 
 const ARCHETYPE = {
-  nassau: "margin", matchplay: "margin", sixes: "margin",
+  nassau: "margin", matchplay: "margin", sixes: "sixes",
   strokeplay: "cumulative", points: "cumulative", ninepoint: "cumulative", wolf: "cumulative",
   skins: "discrete", greenies: "discrete", settlement: "settlement",
 };
@@ -199,17 +199,46 @@ function discreteEngine(game, ctx) {
            unit: game.unit || "dollars" };
 }
 
+/* Sixes rotates partnerships every six holes, so a fixed-side margin engine is
+   structurally incorrect. The application supplies its authoritative segment
+   results; this adapter exposes them to the report without recomputing against
+   ROUND.sides or changing settlement semantics. */
+function sixesEngine(game, ctx) {
+  const segments = (game.segments || []).map(segment => ({
+    ...segment,
+    results: Array.isArray(segment.results) ? segment.results : [],
+    holesWonA: Number(segment.holesWonA) || 0,
+    holesWonB: Number(segment.holesWonB) || 0,
+    decided: segment.decided === true,
+    complete: segment.complete === true,
+  }));
+  const holesScored = new Set(segments.flatMap(segment => segment.results.filter(row => row.completed).map(row => row.holeNumber))).size;
+  const pointsByHole = game.pointsByHole || {};
+  const series = (game.playerIds || []).map(id => {
+    const raw = Array.isArray(pointsByHole[id]) ? pointsByHole[id] : ctx.holes.map(() => null);
+    const run = [0]; raw.forEach(value => run.push(run.at(-1) + (isNum(value) ? value : 0)));
+    return { id, raw, run, total: Number(game.totals?.[id]) || run.at(-1), holesScored: raw.filter(isNum).length };
+  });
+  const ranked = series.slice().sort((a,b)=>b.total-a.total);
+  return {
+    archetype: "sixes", mode: game.mode === 'segments' ? 'segments' : 'points', segments, holesScored, series, ranked, turning: null,
+    complete: segments.length === 3 && segments.every(segment => segment.decided),
+    unit: game.mode === 'segments' ? "segments" : "points",
+  };
+}
+
 function runGame(game, ctx) {
   const a = game.archetype || ARCHETYPE[game.type];
   if (a === "margin") return marginEngine(game, ctx);
   if (a === "cumulative") return cumulativeEngine(game, ctx);
   if (a === "discrete") return discreteEngine(game, ctx);
+  if (a === "sixes") return sixesEngine(game, ctx);
   if (a === "settlement") return { archetype: "settlement", complete: true, unit: "dollars" };
   throw new Error(`unknown archetype for game type ${game.type}`);
 }
 
 globalThis.runGame = runGame;
-export { runGame, marginEngine, cumulativeEngine, discreteEngine, ARCHETYPE, isNum, played };
+export { runGame, marginEngine, cumulativeEngine, discreteEngine, sixesEngine, ARCHETYPE, isNum, played };
 if (typeof module !== "undefined")
-  module.exports = { runGame, marginEngine, cumulativeEngine, discreteEngine, ARCHETYPE,
+  module.exports = { runGame, marginEngine, cumulativeEngine, discreteEngine, sixesEngine, ARCHETYPE,
                      isNum, played };

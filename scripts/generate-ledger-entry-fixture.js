@@ -46,3 +46,85 @@ const ninePointHtml = html.replace(
 const ninePointOutput = resolve('reports', 'ledger-entry-v31.0.33-nine-point.html');
 writeFileSync(ninePointOutput, ninePointHtml, 'utf8');
 console.log(`Generated ${ninePointOutput} with a dedicated three-player 9-Point round.`);
+
+const sixesIds = ['john', 'phil', 'tom', 'drew'];
+const sixesNames = ['John Longlastname', 'Phil Player', 'Tom Tester', 'Drew Driver'];
+const rotations = [
+  [['john', 'phil'], ['tom', 'drew']],
+  [['john', 'tom'], ['phil', 'drew']],
+  [['john', 'drew'], ['phil', 'tom']],
+];
+const sixesSegments = rotations.map((pairing, segmentIndex) => {
+  const segmentHoles = holes.slice(segmentIndex * 6, segmentIndex * 6 + 6);
+  let holesWonA = 0;
+  let holesWonB = 0;
+  const results = segmentHoles.map((holeNumber, offset) => {
+    const aScore = 3 + ((offset + segmentIndex) % 3);
+    const bScore = 3 + ((offset + segmentIndex + 1) % 3);
+    const winner = aScore < bScore ? 'A' : bScore < aScore ? 'B' : 'halved';
+    if (winner === 'A') holesWonA += 1;
+    if (winner === 'B') holesWonB += 1;
+    return { holeNumber, completed: true, aScore, bScore, winner };
+  });
+  const winner = holesWonA > holesWonB ? 'A' : holesWonB > holesWonA ? 'B' : 'halved';
+  const side = ids => ({ playerIds: ids, label: ids.map(id => sixesNames[sixesIds.indexOf(id)]).join(' & ') });
+  const amounts = Object.fromEntries(sixesIds.map(id => [id, 0]));
+  if (winner !== 'halved') {
+    const winningIds = winner === 'A' ? pairing[0] : pairing[1];
+    const losingIds = winner === 'A' ? pairing[1] : pairing[0];
+    winningIds.forEach(id => { amounts[id] = 5; });
+    losingIds.forEach(id => { amounts[id] = -5; });
+  }
+  return {
+    label: `Segment ${segmentIndex + 1}`, holes: segmentHoles, sideA: side(pairing[0]), sideB: side(pairing[1]),
+    winner, statusText: winner === 'halved' ? 'Halved' : `${side(winner === 'A' ? pairing[0] : pairing[1]).label} won`,
+    holesWonA, holesWonB, decided: true, complete: true, amounts, results,
+  };
+});
+const sixesRound = {
+  meta: { course: 'Sixes Layout Club', layout: 'Blue', date: '2026-09-07', story: 'Four golfers rotated partners across three close six-hole matches.', primaryMatchStatus: 'Sixes · Segment matches · all three decided' },
+  holes,
+  card: { yds: holes.map((_, index) => 350 + index * 7), par, si: holes },
+  sides: {},
+  players: sixesIds.map((id, index) => ({
+    id, name: sixesNames[index], side: 'FIELD', tee: 'Blue', index: 0, ch: 0, ph: 0,
+    gross: par.map((value, holeIndex) => value + ((holeIndex + index) % 4 === 0 ? 1 : 0)),
+    strokes: { courseNet: zeroStrokes, featured: zeroStrokes, offLow: zeroStrokes },
+  })),
+  games: [{
+    id: 'sixes', name: 'Sixes (6-6-6)', type: 'sixes', featured: true, scope: 'team', unit: 'segments', lowWins: false, mode: 'segments',
+    playerIds: sixesIds, basis: 'net', allowance: { key: 'featured', label: '90% Game Net' }, stakePerSegment: 5,
+    teamScoringMode: 'best_ball', segmentResultMode: 'match', segments: sixesSegments,
+    totals: { john: 12, phil: 8, tom: 8, drew: 8 },
+    pointsByHole: Object.fromEntries(sixesIds.map(id => [id, sixesSegments.flatMap(segment => segment.results.map(result => result.completed && (result.winner === 'A' ? segment.sideA.playerIds : result.winner === 'B' ? segment.sideB.playerIds : []).includes(id) ? 1 : 0))])),
+    money: { john: 15, phil: -5, tom: -5, drew: -5 },
+  }],
+  memories: [], payments: [{ from: 'phil', to: 'john', amt: 5 }, { from: 'tom', to: 'john', amt: 5 }, { from: 'drew', to: 'john', amt: 5 }],
+};
+const sixesFixtureScript = resolve('reports', 'ledger-entry-sixes-fixture.js');
+writeFileSync(sixesFixtureScript, `globalThis.__DYE_LEDGER_ROUND__=${JSON.stringify(sixesRound)};\n`, 'utf8');
+const sixesHtml = html.replace(
+  /(<script src="\.\.\/ledger-report\/bootstrap\.js[^>]*><\/script>)/,
+  '$1\n<script src="./ledger-entry-sixes-fixture.js"></script>',
+);
+const sixesOutput = resolve('reports', 'ledger-entry-v31.0.40-sixes.html');
+writeFileSync(sixesOutput, sixesHtml, 'utf8');
+console.log(`Generated ${sixesOutput} with a dedicated four-player Sixes round.`);
+
+const sixesPointsRound = JSON.parse(JSON.stringify(sixesRound));
+sixesPointsRound.meta.primaryMatchStatus = 'Sixes: John 12 · Phil / Tom / Drew 8 pts thru 18';
+sixesPointsRound.games[0].mode = 'points';
+sixesPointsRound.games[0].unit = 'points';
+sixesPointsRound.games[0].scope = 'individual';
+sixesPointsRound.games[0].pointValue = 1;
+sixesPointsRound.games[0].pointsPerHoleWin = 1;
+sixesPointsRound.games[0].settlementMode = 'headToHead';
+sixesPointsRound.games[0].segments.forEach(segment => { segment.amounts = Object.fromEntries(sixesIds.map(id => [id, 0])); });
+sixesPointsRound.games[0].money = { john: 12, phil: -4, tom: -4, drew: -4 };
+sixesPointsRound.payments = [{ from: 'phil', to: 'john', amt: 4 }, { from: 'tom', to: 'john', amt: 4 }, { from: 'drew', to: 'john', amt: 4 }];
+const sixesPointsFixtureScript = resolve('reports', 'ledger-entry-sixes-points-fixture.js');
+writeFileSync(sixesPointsFixtureScript, `globalThis.__DYE_LEDGER_ROUND__=${JSON.stringify(sixesPointsRound)};\n`, 'utf8');
+const sixesPointsHtml = html.replace(/(<script src="\.\.\/ledger-report\/bootstrap\.js[^>]*><\/script>)/, '$1\n<script src="./ledger-entry-sixes-points-fixture.js"></script>');
+const sixesPointsOutput = resolve('reports', 'ledger-entry-v31.0.40-sixes-points.html');
+writeFileSync(sixesPointsOutput, sixesPointsHtml, 'utf8');
+console.log(`Generated ${sixesPointsOutput} with a dedicated Sixes player-points round.`);

@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current release: **v31.0.12 — Ledger Entry Correctness and Readability** on `release/v31.0.12`. This release corrects Ledger Entry narrative and competition presentation, clarifies handicap and carry disclosures, separates tracked performance from shot-pattern statistics, adds Fairway recovery lies, and orients match charts from the Winning Side perspective. It has no database migration.
+Current release: **v31.0.40 — Foundational Games: Sixes (6-6-6)** on `release/v31.0.40`. This release adds four-player rotating-partnership Sixes with Player Points (default) and Segment Matches scoring modes, round-wide game-handicap allocation, mode-specific settlement and finality, Shared Match compatibility, and complete live and Ledger Entry presentation. It has no database migration.
 
 ## 2. Development Roles
 

@@ -28,7 +28,8 @@ test('v30.3.81 removes the redundant setup checklist while retaining destination
 
 test('new game defaults are stamped with a versioned rules catalog and expose complete contracts', () => {
   const defaults = engine.getDefaultGameConfigs();
-  assert.equal(defaults.length, 10);
+  assert.equal(defaults.length, 11);
+  assert.ok(defaults.some(game => game.key === 'sixes'));
   assert.ok(defaults.every(game => game.rulesCatalogVersion === 1));
   for (const game of defaults) {
     const contract = engine.getCompetitionRulesContract(game.key, game);

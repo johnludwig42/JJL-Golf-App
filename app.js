@@ -17,9 +17,9 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.39',
-  versionNumber: '31.0.39',
-  cacheName: 'the-dye-ledger-v31.0.39',
+  version: 'v31.0.40',
+  versionNumber: '31.0.40',
+  cacheName: 'the-dye-ledger-v31.0.40',
   buildDate: '2026-09-07T14:57:00-04:00',
   buildLabel: 'Play Header and Combo Tee Clarity'
 };
@@ -488,11 +488,13 @@ const GAME_LIBRARY = [
   { key: 'greenies', label: 'Greenies' },
   { key: 'sneaky_sandy_poley', label: 'Sneaky / Sandy / Poley' },
   { key: 'nine_point', label: '9-Point Game' },
+  { key: 'sixes', label: 'Sixes (6-6-6)' },
 ];
 const GAME_SELECTION_GROUPS = Object.freeze([
   { label: 'Nassau & Match Play', keys: ['nassau', 'singles_match', 'individual_match', 'team_match'] },
   { label: 'Stroke & Hole Games', keys: ['team_stroke', 'skins', 'net_skins', 'greenies'] },
   { label: 'Specialty Games', keys: ['sneaky_sandy_poley', 'nine_point'] },
+  { label: 'Rotating Partnerships', keys: ['sixes'] },
 ]);
 
 const COMPETITION_RULES_CATALOG_VERSION = 1;
@@ -507,6 +509,7 @@ const COMPETITION_RULES_CATALOG = Object.freeze({
   greenies: Object.freeze({ scoringMethod: 'Selected participant closest to the pin on eligible par-3 holes', allowance: 'No handicap adjustment', tieTreatment: 'No winner unless a participant is selected', stakeMeaning: 'Amount won from every other selected participant', escalation: 'No implicit escalation', finality: 'Final when eligible results are saved and round scoring is complete' }),
   sneaky_sandy_poley: Object.freeze({ scoringMethod: 'Versioned SSP points ledger using saved manual facts and net low-ball/low-total results', allowance: 'Round allowance applied to net components', tieTreatment: 'Tied comparisons push for no base point', stakeMeaning: 'Final team point differential multiplied by dollars per point', escalation: 'Bridge/Re-Bridge and Umbee follow the saved SSP contract', finality: 'Final when all required scores and SSP facts are complete' }),
   nine_point: Object.freeze({ scoringMethod: 'Exactly nine points divided among three players on each completed hole', allowance: 'Saved gross or round-allowance net basis', tieTreatment: 'Points split according to the saved 9-Point scoring table', stakeMeaning: 'Final point differentials settle head-to-head at dollars per point', escalation: 'No implicit escalation', finality: 'Final when every required hole has three valid scores' }),
+  sixes: Object.freeze({ scoringMethod: 'Partnerships rotate every six holes so each player partners each other player once; the lower better ball wins the hole', allowance: 'Game-specific allowance is applied to each unrounded Course Handicap, then each Game Handicap is rounded before strokes are allocated from the lowest Game Handicap among the four Sixes players, constant for the whole round', tieTreatment: 'A tied hole is halved, awards nothing, and does not carry', stakeMeaning: 'Set by the saved scoring mode', escalation: 'No implicit escalation', finality: 'Set by the saved scoring mode' }),
 });
 
 function getCompetitionRulesContract(gameKey, config = {}) {
@@ -528,6 +531,16 @@ function getCompetitionRulesContract(gameKey, config = {}) {
     contract.finality = carryoverMode === 'carry'
       ? 'Final when all holes are complete; an unresolved carry after the final hole expires with no winner'
       : 'Final when all holes are complete';
+  }
+  if (gameKey === 'sixes') {
+    const mode = config.mode === 'segments' ? 'segments' : 'points';
+    contract.scoringMethod = `${base.scoringMethod} ${mode === 'points' ? 'and awards one point to each player on the winning side' : 'and the side winning more holes wins the six-hole segment'}`;
+    contract.stakeMeaning = mode === 'points'
+      ? 'Final point differentials settle head-to-head at the saved dollars per point'
+      : 'Each losing player owes the saved segment stake; the collected amount is divided equally among the winning players';
+    contract.finality = mode === 'points'
+      ? 'Final only when all 18 holes have four valid scores'
+      : 'Each segment is final when its six holes are complete or mathematically decided; the round is final only after all three segments are decided';
   }
   return Object.freeze(contract);
 }
@@ -2151,6 +2164,7 @@ function normalizeSelectedGamesOrder(games = []) {
     nassau: 10,
     team_match: 15,
     singles_match: 20,
+    sixes: 25,
     skins: 30,
     net_skins: 31,
     nine_point: 40,
@@ -2329,6 +2343,213 @@ function computeNinePointResults(match, metrics, cfg = {}) {
   result.settlements = optimalSettlementRows(result.amounts);
   return result;
 }
+function normalizeSixesConfig(config = {}) {
+  const basis = String(config?.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net';
+  return {
+    ...config,
+    key: 'sixes',
+    mode: config?.mode === 'segments' ? 'segments' : 'points',
+    basis,
+    playerIds: Array.isArray(config?.playerIds) ? config.playerIds.filter(Boolean).slice(0, 4) : [],
+    teamScoringMode: 'best_ball',
+    segmentResultMode: 'match',
+    pointsPerHoleWin: 1,
+    pointValue: Number.isFinite(Number(config?.pointValue ?? config?.stakePerPoint)) ? Math.max(0, Number(config?.pointValue ?? config?.stakePerPoint)) : 1,
+    stakePerSegment: Math.max(0, Number(config?.stakePerSegment) || 0),
+    handicapAllowanceMode: basis === 'gross' ? 'not_used' : (config?.handicapAllowanceMode === 'custom' ? 'custom' : 'recommended'),
+    handicapAllowancePercent: basis === 'gross' ? 0 : normalizeHandicapAllowancePercent(config?.handicapAllowancePercent, 90),
+  };
+}
+function getSixesPlayerOptions(players, selectedIds = []) {
+  const list = Array.isArray(players) ? players : [];
+  const chosen = Array.isArray(selectedIds) ? selectedIds.slice(0, 4) : [];
+  while (chosen.length < 4) chosen.push('');
+  return [0, 1, 2, 3].map(idx => {
+    const otherIds = new Set(chosen.filter((id, i) => i !== idx && id));
+    return list.filter(player => !otherIds.has(player.id) || player.id === chosen[idx]);
+  });
+}
+function computeSixesResults(match, metrics, inputConfig = {}) {
+  const cfg = normalizeSixesConfig(inputConfig);
+  const selectedIds = cfg.playerIds;
+  const chosenMetrics = selectedIds.map(id => metrics?.players?.find(player => String(player.playerId) === String(id))).filter(Boolean);
+  const uniqueIds = [...new Set(chosenMetrics.map(player => String(player.playerId)))];
+  const result = {
+    mode: cfg.mode,
+    basis: cfg.basis,
+    pointValue: cfg.pointValue,
+    pointsPerHoleWin: cfg.pointsPerHoleWin,
+    stakePerSegment: cfg.stakePerSegment,
+    teamScoringMode: cfg.teamScoringMode,
+    segmentResultMode: cfg.segmentResultMode,
+    handicapAllowancePercent: cfg.handicapAllowancePercent,
+    playerIds: uniqueIds,
+    players: chosenMetrics,
+    segments: [],
+    amounts: {},
+    totals: {},
+    settlements: [],
+    completedHoles: 0,
+    allSegmentsDecided: false,
+  };
+  uniqueIds.forEach(id => { result.amounts[id] = 0; });
+  uniqueIds.forEach(id => { result.totals[id] = 0; });
+  if (!metrics || uniqueIds.length !== 4 || chosenMetrics.length !== 4) return result;
+
+  const allowance = cfg.basis === 'gross' ? 0 : cfg.handicapAllowancePercent;
+  const gameHandicaps = Object.fromEntries(chosenMetrics.map(player => {
+    const raw = Number(player.unroundedCourseHdcp);
+    return [String(player.playerId), cfg.basis === 'gross' ? 0 : Math.round((Number.isFinite(raw) ? raw : 0) * allowance / 100)];
+  }));
+  const lowGameHandicap = Math.min(...Object.values(gameHandicaps));
+  result.gameHandicaps = gameHandicaps;
+  result.lowGameHandicap = lowGameHandicap;
+  const pairings = [
+    [[uniqueIds[0], uniqueIds[1]], [uniqueIds[2], uniqueIds[3]]],
+    [[uniqueIds[0], uniqueIds[2]], [uniqueIds[1], uniqueIds[3]]],
+    [[uniqueIds[0], uniqueIds[3]], [uniqueIds[1], uniqueIds[2]]],
+  ];
+  const playerName = id => chosenMetrics.find(player => String(player.playerId) === String(id))?.player?.name || 'Player';
+  const side = ids => ({ playerIds: ids.slice(), label: ids.map(playerName).join(' & ') });
+  const transferSegmentStake = (winnerIds, loserIds) => {
+    const segmentAmounts = Object.fromEntries(uniqueIds.map(id => [id, 0]));
+    const stake = cfg.stakePerSegment;
+    if (!stake) return segmentAmounts;
+    const pot = stake * loserIds.length;
+    const winnerShare = pot / winnerIds.length;
+    winnerIds.forEach(id => { segmentAmounts[id] += winnerShare; result.amounts[id] = (result.amounts[id] || 0) + winnerShare; });
+    loserIds.forEach(id => { segmentAmounts[id] -= stake; result.amounts[id] = (result.amounts[id] || 0) - stake; });
+    return segmentAmounts;
+  };
+  const holeResults = Array.isArray(metrics.holeResults) ? metrics.holeResults : [];
+  const holeByNumber = new Map(holeResults.map((hole, index) => [Number(hole?.holeNumber || index + 1), { hole, sourceIndex: index }]));
+  const orderedHoles = getActualPlayOrder(match, metrics).map(holeNumber => holeByNumber.get(Number(holeNumber))).filter(Boolean);
+
+  pairings.forEach((pairing, segmentIndex) => {
+    const start = segmentIndex * 6;
+    const holes = [];
+    let holesWonA = 0;
+    let holesWonB = 0;
+    const pointsByPlayer = Object.fromEntries(uniqueIds.map(id => [id, 0]));
+    for (let offset = 0; offset < 6; offset += 1) {
+      const holeIndex = start + offset;
+      const orderedHole = orderedHoles[holeIndex];
+      const hole = orderedHole?.hole;
+      const sourceIndex = Number.isInteger(orderedHole?.sourceIndex) ? orderedHole.sourceIndex : holeIndex;
+      const grossValues = {};
+      const values = {};
+      uniqueIds.forEach(id => {
+        const playerMetric = chosenMetrics.find(player => String(player.playerId) === id);
+        const score = hole?.playerScores?.find(row => String(row.playerId) === id);
+        const gross = Number(score?.gross) || null;
+        grossValues[id] = gross;
+        if (!gross) return;
+        if (cfg.basis === 'gross') values[id] = gross;
+        else {
+          const strokeIndex = Number(score?.strokeIndex || hole?.strokeIndex || getPlayerHole(match, playerMetric, sourceIndex, metrics?.tee)?.strokeIndex) || 0;
+          const strokes = holeStrokeAllowanceForPlayer(strokeIndex, gameHandicaps[id], lowGameHandicap);
+          values[id] = gross - strokes;
+        }
+      });
+      const completed = uniqueIds.every(id => Number.isFinite(values[id]));
+      if (!completed) {
+        holes.push({ holeNumber: hole?.holeNumber || holeIndex + 1, holePosition: holeIndex + 1, completed: false, grossValues, values, aScore: null, bScore: null, winner: null, points: Object.fromEntries(uniqueIds.map(id => [id, 0])), runningTotals: { ...result.totals } });
+        continue;
+      }
+      result.completedHoles += 1;
+      const aScore = Math.min(...pairing[0].map(id => values[id]));
+      const bScore = Math.min(...pairing[1].map(id => values[id]));
+      const winner = aScore < bScore ? 'A' : bScore < aScore ? 'B' : 'halved';
+      if (winner === 'A') holesWonA += 1;
+      if (winner === 'B') holesWonB += 1;
+      const points = Object.fromEntries(uniqueIds.map(id => [id, 0]));
+      const winningIds = winner === 'A' ? pairing[0] : winner === 'B' ? pairing[1] : [];
+      winningIds.forEach(id => {
+        points[id] = cfg.pointsPerHoleWin;
+        pointsByPlayer[id] += cfg.pointsPerHoleWin;
+        result.totals[id] += cfg.pointsPerHoleWin;
+      });
+      holes.push({ holeNumber: hole?.holeNumber || holeIndex + 1, holePosition: holeIndex + 1, segmentIndex: segmentIndex + 1, completed: true, grossValues, values, aScore, bScore, winner, points, runningTotals: { ...result.totals } });
+    }
+    const played = holes.filter(hole => hole.completed).length;
+    const remaining = 6 - played;
+    const complete = played === 6;
+    const decided = complete || Math.abs(holesWonA - holesWonB) > remaining;
+    const winner = decided ? (holesWonA > holesWonB ? 'A' : holesWonB > holesWonA ? 'B' : 'halved') : null;
+    const through = holes.filter(hole => hole.completed).at(-1)?.holeNumber || 0;
+    const lead = Math.abs(holesWonA - holesWonB);
+    const statusText = !played ? 'Not started' : winner === 'halved' ? 'Halved' : winner ? `${winner === 'A' ? side(pairing[0]).label : side(pairing[1]).label} won ${lead ? `${lead} up` : ''}`.trim() : lead ? `${holesWonA > holesWonB ? side(pairing[0]).label : side(pairing[1]).label} ${lead} up thru ${through}` : `All square thru ${through}`;
+    const segment = {
+      index: segmentIndex + 1,
+      label: `Segment ${segmentIndex + 1}`,
+      holePositions: holes.map(hole => hole.holePosition),
+      holeNumbers: holes.map(hole => hole.holeNumber),
+      sideA: side(pairing[0]),
+      sideB: side(pairing[1]),
+      holes,
+      holesWonA,
+      holesWonB,
+      holesHalved: holes.filter(holeRow => holeRow.completed && holeRow.winner === 'halved').length,
+      pointsByPlayer,
+      decided,
+      complete,
+      winner,
+      statusText,
+      amounts: Object.fromEntries(uniqueIds.map(id => [id, 0])),
+    };
+    result.segments.push(segment);
+    if (cfg.mode === 'segments' && winner === 'A') segment.amounts = transferSegmentStake(pairing[0], pairing[1]);
+    if (cfg.mode === 'segments' && winner === 'B') segment.amounts = transferSegmentStake(pairing[1], pairing[0]);
+  });
+  result.allSegmentsDecided = result.segments.length === 3 && result.segments.every(segment => segment.decided);
+  result.holes = result.segments.flatMap(segment => segment.holes);
+  if (cfg.mode === 'points') {
+    for (let i = 0; i < uniqueIds.length; i += 1) {
+      for (let j = i + 1; j < uniqueIds.length; j += 1) {
+        const first = uniqueIds[i], second = uniqueIds[j];
+        const amount = (result.totals[first] - result.totals[second]) * cfg.pointValue;
+        result.amounts[first] += amount;
+        result.amounts[second] -= amount;
+      }
+    }
+  }
+  result.leaderboard = uniqueIds.map(id => ({
+    playerId: id,
+    name: playerName(id),
+    total: result.totals[id] || 0,
+    amount: result.amounts[id] || 0,
+    teeName: chosenMetrics.find(player => String(player.playerId) === id)?.tee?.teeName || '',
+  })).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+  result.isFinal = cfg.mode === 'points' ? result.completedHoles === 18 : result.allSegmentsDecided;
+  result.settlements = optimalSettlementRows(result.amounts);
+  return result;
+}
+function buildSixesScorecard(match, metrics) {
+  const cfg = (match?.selectedGames || []).find(game => game.key === 'sixes') || {};
+  const sixes = computeSixesResults(match, metrics, cfg);
+  if (sixes.playerIds.length !== 4) return '<div class="tiny">Select 4 players in order to enable the Sixes scorecard.</div>';
+  const pointRows = sixes.leaderboard.map(row => `<tr><td class="scorecard-sticky-name"><strong>${escapeHtml(row.name)}</strong></td>${sixes.holes.map(hole => `<td>${hole.completed ? Number(hole.points[row.playerId] || 0) : '—'}</td>`).join('')}<td><strong>${row.total}</strong></td><td>${formatMoneyAccounting(row.amount)}</td></tr>`).join('');
+  return `<div class="sixes-scorecard"><div class="tiny"><strong>${sixes.mode === 'points' ? 'Player points determine settlement' : 'Player points · informational'}</strong> · ${sixes.mode === 'points' ? `${formatMoneyAccounting(sixes.pointValue)} per point` : `${formatMoneyAccounting(sixes.stakePerSegment)} per segment`}</div>
+    <div class="scorecard-scroll top-gap"><table class="scorecard-table"><thead><tr><th>Player</th>${sixes.holes.map(hole => `<th>H${hole.holeNumber}</th>`).join('')}<th>Pts</th><th>Payout</th></tr></thead><tbody>${pointRows}</tbody></table></div>
+    ${sixes.segments.map(segment => `<section class="sixes-segment">
+    <div class="sixes-segment-head"><strong>${escapeHtml(segment.label)}</strong><span>${escapeHtml(segment.statusText)}</span></div>
+    <div class="tiny">${escapeHtml(segment.sideA.label)} vs ${escapeHtml(segment.sideB.label)} · Holes ${segment.holeNumbers.join(', ')}</div>
+    <div class="scorecard-scroll"><table class="scorecard-table"><thead><tr><th>Side</th>${segment.holes.map(hole => `<th>H${hole.holeNumber}</th>`).join('')}<th>Won</th></tr></thead><tbody>
+      <tr><td class="scorecard-sticky-name"><strong>${escapeHtml(segment.sideA.label)}</strong></td>${segment.holes.map(hole => `<td>${hole.completed ? hole.aScore : '—'}</td>`).join('')}<td><strong>${segment.holesWonA}</strong></td></tr>
+      <tr><td class="scorecard-sticky-name"><strong>${escapeHtml(segment.sideB.label)}</strong></td>${segment.holes.map(hole => `<td>${hole.completed ? hole.bScore : '—'}</td>`).join('')}<td><strong>${segment.holesWonB}</strong></td></tr>
+    </tbody></table></div>
+  </section>`).join('')}<div class="tiny top-gap">${formatBasisLabel(sixes.basis)} · Best Ball · ${sixes.basis === 'net' ? `${sixes.handicapAllowancePercent}% allowance · ` : ''}${sixes.mode === 'points' ? 'Segments are informational.' : 'Points are informational.'}</div></div>`;
+}
+function formatSixesPointStandings(sixes, { firstNames = false } = {}) {
+  const groups = [];
+  (sixes?.leaderboard || []).forEach(row => {
+    const name = firstNames ? String(row.name || 'Player').trim().split(/\s+/)[0] : row.name;
+    const current = groups.at(-1);
+    if (current?.total === row.total) current.names.push(name);
+    else groups.push({ total: row.total, names: [name] });
+  });
+  return groups.map(group => `${group.names.join(' / ')} ${group.total}`).join(' · ');
+}
 function buildNinePointScorecard(match, metrics) {
   const cfg = (match?.selectedGames || []).find(g => g.key === 'nine_point') || {};
   const results = computeNinePointResults(match, metrics, cfg);
@@ -2416,6 +2637,7 @@ function resolveAutoFeaturedCompetition(match, metrics = null) {
   if (nonSideGames.length === 1) return nonSideGames[0].key;
   if (selected.some(g => g.key === 'nassau')) return 'nassau';
   if (selected.some(g => g.key === 'singles_match')) return 'singles_match';
+  if (selected.some(g => g.key === 'sixes')) return 'sixes';
   if (selected.some(g => g.key === 'nine_point')) return 'nine_point';
   const skinsOnly = selected.filter(g => ['skins', 'net_skins'].includes(g.key));
   if (skinsOnly.length === 1 && selected.length === 1) return skinsOnly[0].key;
@@ -2442,14 +2664,14 @@ function getFeaturedCompetitionHandicapContext(match, metrics = null) {
   const raw = (match.selectedGames || []).find(game => String(game?.key) === String(key)) || null;
   if (!raw) return { key, label, basis: 'none', mode: 'none', config: null };
   if (key === 'individual_match') return { key, label, basis: 'varies', mode: 'none', config: raw };
-  const implicitNet = ['nassau', 'singles_match', 'team_match', 'net_skins', 'nine_point', 'sneaky_sandy_poley'].includes(key);
+  const implicitNet = ['nassau', 'singles_match', 'team_match', 'net_skins', 'nine_point', 'sixes', 'sneaky_sandy_poley'].includes(key);
   const implicitGross = ['skins', 'greenies', 'long_drive', 'closest_to_pin'].includes(key);
   const requestedBasis = String(raw.basis || (implicitNet ? 'net' : implicitGross ? 'gross' : 'gross')).toLowerCase();
   const basis = requestedBasis === 'net' || requestedBasis === 'both' ? 'net' : 'gross';
   if (basis !== 'net') return { key, label, basis: 'gross', mode: 'none', config: raw };
   const config = key === 'nassau'
     ? normalizeNassauConfig(raw, match)
-    : { ...raw, handicapAllowancePercent: normalizeHandicapAllowancePercent(raw.handicapAllowancePercent, match.allowance), scoringPolicyVersion: Number(raw.scoringPolicyVersion || 0) };
+    : { ...raw, handicapAllowancePercent: normalizeHandicapAllowancePercent(raw.handicapAllowancePercent, key === 'sixes' ? 90 : match.allowance), scoringPolicyVersion: key === 'sixes' ? 1 : Number(raw.scoringPolicyVersion || 0) };
   return { key, label, basis: 'net', mode: 'relative', config };
 }
 function getFeaturedCompetitionStrokeAllowance(match, metrics, playerMetric, strokeIndex) {
@@ -2521,6 +2743,14 @@ function getFeaturedCompetitionResult(match, metrics) {
     const high = getHighRows(rows, 'amount');
     const result = high.rows.length && high.value > 0 ? formatAwardWinners(high.rows.map(r => r.name), formatMoneyAccounting(high.value)) : 'No 9-Point winner yet.';
     return { key, label: '9-Point', result, selection };
+  }
+  if (key === 'sixes') {
+    const sixes = computeSixesResults(match, metrics, (match.selectedGames || []).find(game => game.key === 'sixes') || {});
+    const decided = sixes.segments.filter(segment => segment.decided);
+    const result = sixes.mode === 'points'
+      ? (sixes.completedHoles ? `${formatSixesPointStandings(sixes)} · ${sixes.completedHoles} holes` : 'No Sixes points yet.')
+      : (decided.length ? decided.map(segment => `${segment.label}: ${segment.statusText}`).join(' · ') : 'No Sixes segment decided yet.');
+    return { key, label: 'Sixes', result, selection };
   }
   if (['skins','net_skins','greenies','individual_match'].includes(key)) {
     const ctx = getPayoutReportContext(match, metrics);
@@ -4841,7 +5071,9 @@ function getGameRelativeStrokeAllowance(holeStrokeIndex, playerMetric, metrics, 
   if (!playerMetric || !holeStrokeIndex) return 0;
   if (Number(config.scoringPolicyVersion || 0) < 1) return holeStrokeAllowanceForPlayer(holeStrokeIndex, playerMetric.playHdcp, metrics?.lowPlaying);
   const allowance = normalizeHandicapAllowancePercent(config.handicapAllowancePercent, 100);
-  const values = (metrics?.players || [])
+  const eligibleIds = config.key === 'sixes' ? new Set((config.playerIds || []).map(String)) : null;
+  const eligiblePlayers = (metrics?.players || []).filter(player => !eligibleIds || eligibleIds.has(String(player.playerId)));
+  const values = eligiblePlayers
     .map(player => Number(player.unroundedCourseHdcp))
     .filter(Number.isFinite)
     .map(courseHandicap => Math.round(courseHandicap * allowance / 100));
@@ -5617,9 +5849,11 @@ function applyScoreboardPrintView(view = "summary") {
   }
   const classicCard = document.querySelector('.print-section-classic-scorecard');
   const nineCard = document.getElementById('ninePointScorecardCard');
+  const sixesCard = document.getElementById('sixesScorecardCard');
   const cards = document.querySelectorAll('.leaderboard-cards, .print-section-match-status, .print-section-scoreboard-summary, .print-section-momentum, .print-section-payout, .print-section-stat-tracking, .print-section-notes');
   if (classicCard) classicCard.classList.toggle('print-preview-emphasis', requestedView === 'scorecard');
   if (nineCard) nineCard.classList.toggle('print-preview-emphasis', requestedView === 'scorecard');
+  if (sixesCard) sixesCard.classList.toggle('print-preview-emphasis', requestedView === 'scorecard');
   cards.forEach(card => card.classList.toggle('print-preview-muted', requestedView === 'scorecard'));
 }
 function buildPrintMeta(match, metrics, printView = "summary") {
@@ -6129,6 +6363,13 @@ function getGameClinchStates(match, metrics) {
       } else if (key === 'singles_match') {
         const singles = computeSinglesMatchPlayResult(match, metrics, cfg);
         states.push({ key, segment: 'overall', isClinched: singles.isClinched || singles.isComplete || singles.stakeType === 'per_hole', holesRemaining: singles.holesRemaining, resultText: singles.resultText });
+      } else if (key === 'sixes') {
+        const sixes = computeSixesResults(match, metrics, cfg);
+        if (sixes.mode === 'points') {
+          states.push({ key, segment: 'points', isClinched: sixes.completedHoles === 18, holesRemaining: Math.max(0, 18 - sixes.completedHoles), resultText: sixes.completedHoles === 18 ? 'Complete' : 'Points remain available' });
+        } else {
+          sixes.segments.forEach(segment => states.push({ key, segment: segment.label, isClinched: segment.decided, holesRemaining: segment.holes.filter(hole => !hole.completed).length, resultText: segment.statusText }));
+        }
       } else if (completion.isComplete) {
         states.push({ key, segment: 'overall', isClinched: true, holesRemaining: 0, resultText: 'Complete' });
       } else {
@@ -6159,6 +6400,10 @@ function areAllGamesFinal(match, metrics) {
   if (!states.length) return false;
   const selectedKeys = new Set((match?.selectedGames || []).map(g => g.key));
   if ([...selectedKeys].some(key => ['skins','net_skins','greenies','nine_point','team_stroke','individual_match'].includes(key))) return false;
+  if (selectedKeys.has('sixes')) {
+    const cfg = (match?.selectedGames || []).find(game => game.key === 'sixes') || {};
+    if (!computeSixesResults(match, metrics, cfg).isFinal) return false;
+  }
   if (selectedKeys.has('singles_match')) {
     const cfg = (match?.selectedGames || []).find(g => g.key === 'singles_match');
     const singles = computeSinglesMatchPlayResult(match, metrics, cfg);
@@ -6676,6 +6921,26 @@ function buildLedgerEntryReportModel(match, metrics = null) {
         settlementMode: 'headToHead',
         pointsByHole: Object.fromEntries(result.playerIds.map(playerId => [playerId, result.holes.map(hole => hole.completed ? Number(hole.points?.[playerId] || 0) : null)])),
         segments: [{ label: 'Round', holes: holeNumbers.slice() }],
+      };
+    }
+    if (config.key === 'sixes') {
+      const result = computeSixesResults(match, effectiveMetrics, config);
+      return {
+        ...common, type: 'sixes', scope: result.mode === 'points' ? 'individual' : 'team', unit: result.mode === 'points' ? 'points' : 'segments', lowWins: false,
+        playerIds: result.playerIds.slice(), basis: result.basis,
+        mode: result.mode, pointValue: result.pointValue, pointsPerHoleWin: result.pointsPerHoleWin,
+        settlementMode: result.mode === 'points' ? 'headToHead' : 'segments',
+        totals: { ...result.totals },
+        pointsByHole: Object.fromEntries(result.playerIds.map(playerId => [playerId, result.holes.map(hole => hole.completed ? Number(hole.points?.[playerId] || 0) : null)])),
+        allowance: { key: result.basis === 'gross' ? 'courseNet' : 'featured', label: result.basis === 'gross' ? 'Gross' : `${result.handicapAllowancePercent}% Game Net` },
+        stakePerSegment: result.stakePerSegment,
+        segments: result.segments.map(segment => ({
+          label: segment.label, holes: segment.holeNumbers.slice(), sideA: { ...segment.sideA }, sideB: { ...segment.sideB },
+          winner: segment.winner, statusText: segment.statusText, holesWonA: segment.holesWonA, holesWonB: segment.holesWonB,
+          amounts: { ...segment.amounts },
+          decided: segment.decided, complete: segment.complete,
+          results: segment.holes.map(hole => ({ holeNumber: hole.holeNumber, completed: hole.completed, aScore: hole.aScore, bScore: hole.bScore, winner: hole.winner })),
+        })),
       };
     }
     if (['skins', 'net_skins'].includes(config.key) && config.skinsType !== 'team') {
@@ -7305,6 +7570,18 @@ function summarizeSelectedGamesForRecap(match, metrics) {
           stakePerPoint: nine.stakePerPoint,
           completedHoles: nine.completedHoles,
           leaderboard: nine.leaderboard.map(r => ({ player: r.name, points: r.total, payout: Number(r.amount || 0) })),
+        };
+      } else if (cfg.key === 'sixes') {
+        const sixes = computeSixesResults(match, metrics, cfg);
+        item.summary = {
+          mode: sixes.mode,
+          basis: formatBasisLabel(sixes.basis),
+          format: 'Best Ball match play',
+          pointValue: sixes.pointValue,
+          pointStandings: sixes.leaderboard.map(row => ({ player: row.name, points: row.total, payout: Number(row.amount || 0) })),
+          stakePerSegment: sixes.stakePerSegment,
+          segments: sixes.segments.map(segment => ({ segment: segment.index, holes: segment.holeNumbers, sideA: segment.sideA.label, sideB: segment.sideB.label, status: segment.statusText, winner: segment.winner })),
+          amounts: Object.fromEntries(Object.entries(sixes.amounts).map(([id, amount]) => [getPlayer(id)?.name || id, Number(amount || 0)])),
         };
       } else if (cfg.key === 'individual_match') {
         item.summary = getIndividualMatchPairings(match, metrics).map(p => ({ label: p.label, game: getSideMatchGameLabel(p.game), basis: formatBasisLabel(p.basis), stake: Number(p.stake) || 0, status: p.status, completedHoles: p.completedCount }));
@@ -8105,6 +8382,8 @@ function buildLedgerEntryBody(match, metrics) {
   const scoreDistribution = completion.completedHoleCount >= 6 ? buildExportScoreDistributionSummary(match, metrics) : '';
   const showNinePoint = (match.selectedGames || []).some(game => game.key === 'nine_point');
   const ninePoint = showNinePoint ? `<section class="export-section export-section-nine-point"><div class="export-section-head"><h2>9-Point Ledger</h2><div class="export-section-sub">Points are authoritative; dollars equal points x the configured stake and reconcile separately.</div></div>${buildNinePointScorecard(match, metrics)}</section>` : '';
+  const showSixes = (match.selectedGames || []).some(game => game.key === 'sixes');
+  const sixes = showSixes ? `<section class="export-section export-section-sixes"><div class="export-section-head"><h2>Sixes Ledger</h2><div class="export-section-sub">Partnerships rotate by played position; the selected scoring mode identifies whether player points or segment matches carry the money.</div></div>${buildSixesScorecard(match, metrics)}</section>` : '';
   return `
     <div class="ledger-entry-contract" data-ledger-entry-version="1" data-ledger-status="${escapeHtml(getLedgerEntryStatus(record, match, metrics))}" data-ledger-featured-basis="${escapeHtml(basis.label)}"></div>
     <div class="ledger-entry-page-start ledger-entry-result-page" data-ledger-page-subject="Result"></div>
@@ -8125,6 +8404,7 @@ function buildLedgerEntryBody(match, metrics) {
     <section class="export-section export-section-games-summary"><div class="export-section-head"><h2>Games</h2><div class="export-section-sub">Every competitive result declares its handicap basis and unit. Featured basis: ${escapeHtml(basis.label)}.</div></div>${buildSelectedGamesSummary(match, metrics)}</section>
     ${buildExportMomentum(match, metrics)}
     ${ninePoint}
+    ${sixes}
     ${buildSneakySandyPoleyAuditDetail(match, metrics)}
     ${buildPressAuditSection(match, metrics, record)}
 
@@ -8160,6 +8440,8 @@ function buildSummaryExportBody(match, metrics) {
         </div>
       </div>
     </section>` : '';
+  const showSixes = (match.selectedGames || []).some(game => game.key === 'sixes');
+  const exportSixesScorecardHtml = showSixes ? `<section class="export-section export-section-sixes"><div class="export-section-head"><h2>Sixes Scorecard</h2><div class="export-section-sub">Rotation, hole-by-hole Best Ball results, segment outcomes, and settlement.</div></div><div class="fit-stage" data-fit="width" data-fit-min="0.72"><div class="fit-box">${buildSixesScorecard(match, metrics)}</div></div></section>` : '';
   const html = `
     ${exportRoundSnapshotHtml}
     ${buildRoundStorySection(match, metrics, roundRecord, { recapHtml: buildRoundRecapExport(match, metrics, { includeEmpty: true, embedded: true }) })}
@@ -8198,6 +8480,7 @@ function buildSummaryExportBody(match, metrics) {
     </section>
 
     ${exportNinePointScorecardHtml}
+    ${exportSixesScorecardHtml}
 
     <section class="export-section export-section-leaderboards">
       <div class="export-section-head"><h2>Leaderboards</h2><div class="export-section-sub">Full player and team tables supporting the executive highlights.</div></div>
@@ -9482,6 +9765,7 @@ function normalizeMatch(match) {
   match.selectedGames = normalizeSelectedGamesOrder(Array.isArray(match.selectedGames) ? match.selectedGames.map(game => {
     if (game?.key === 'sneaky_sandy_poley') return normalizeSneakySandyPoleyConfig(game);
     if (game?.key === 'nassau') return normalizeNassauConfig(game, match);
+    if (game?.key === 'sixes') return normalizeSixesConfig(game);
     return game;
   }).filter(Boolean) : []);
   normalizeSneakySandyPoleyInputs(match);
@@ -10360,6 +10644,14 @@ function getPrimaryMatchStatusLine(match, metrics, options = {}) {
     }).join(' · ');
     return status ? `${prefix}: ${status}` : `${prefix}: Not started`;
   }
+  if (key === 'sixes') {
+    const cfg = (match.selectedGames || []).find(game => game.key === 'sixes') || {};
+    const sixes = computeSixesResults(match, metrics, cfg);
+    const prefix = options.includesDraft ? 'Live Sixes' : 'Sixes';
+    if (sixes.mode === 'points') return sixes.completedHoles ? `${prefix}: ${formatSixesPointStandings(sixes, { firstNames: true })} pts thru ${sixes.completedHoles}` : `${prefix}: Not started`;
+    const segment = sixes.segments.find(row => !row.decided) || sixes.segments.at(-1);
+    return segment ? `${prefix}: Seg ${segment.index} — ${segment.statusText}` : `${prefix}: Not started`;
+  }
   const text = getCompactGameStatus(match, metrics, key);
   if (!text || text === 'Active') return '';
   if (key === 'sneaky_sandy_poley') {
@@ -10487,6 +10779,15 @@ function buildFeaturedMatchStatus(match, metrics, gameKey) {
     const nine = computeNinePointResults(match, metrics, cfg);
     const leaders = nine.leaderboard.map(row => `${escapeHtml(row.name)} (${row.total})`).join(' · ');
     return `<div class="match-status-head"><strong>9-Point Game</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Basis</div><div class="match-status-value">${escapeHtml(formatBasisLabel(nine.basis || cfg.basis))}</div></div><div class="match-status-tile"><div class="tiny">Leaders</div><div class="match-status-value">${leaders || 'Select 3 players'}</div></div><div class="match-status-tile"><div class="tiny">$ / point</div><div class="match-status-value">${formatMoneyAccounting(nine.stakePerPoint || cfg.stakePerPoint || 0)}</div></div></div><div class="nine-point-settlement-note top-gap">Hole scoring remains 9 points per hole. Payouts settle final point differentials head-to-head × the stake.</div>`;
+  }
+  if (gameKey === 'sixes') {
+    const sixes = computeSixesResults(match, metrics, cfg);
+    const segmentTiles = sixes.segments.map(segment => `<div class="match-status-tile"><div class="tiny">Segment ${segment.index} · ${escapeHtml(segment.sideA.label)} vs ${escapeHtml(segment.sideB.label)}</div><div class="match-status-value">${escapeHtml(segment.statusText)}</div></div>`).join('');
+    const modeTiles = sixes.mode === 'points'
+      ? `<div class="match-status-tile"><div class="tiny">Point standings</div><div class="match-status-value">${escapeHtml(formatSixesPointStandings(sixes))}</div></div><div class="match-status-tile"><div class="tiny">$ / point</div><div class="match-status-value">${formatMoneyAccounting(sixes.pointValue)}</div></div>`
+      : `${segmentTiles}<div class="match-status-tile"><div class="tiny">$ / segment</div><div class="match-status-value">${formatMoneyAccounting(sixes.stakePerSegment)}</div></div>`;
+    const informational = sixes.mode === 'points' ? `Segments are informational. ${sixes.segments.map(segment => `S${segment.index}: ${segment.statusText}`).join(' · ')}` : `Player points are informational. ${formatSixesPointStandings(sixes)}`;
+    return `<div class="match-status-head"><strong>Sixes (6-6-6)</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Basis</div><div class="match-status-value">${escapeHtml(formatBasisLabel(sixes.basis))} · Best Ball</div></div>${modeTiles}</div><div class="tiny top-gap">${escapeHtml(informational)}</div>`;
   }
   const concreteStatus = getTruthfulGameStatus(match, metrics, gameKey, cfg);
   const basis = ['nassau', 'team_match', 'singles_match', 'individual_match'].includes(gameKey) && cfg?.basis ? ` · ${formatBasisLabel(cfg.basis)}` : '';
@@ -11478,6 +11779,16 @@ function buildPlayerDetailGameStatusBlock(match, metrics, playerMetric) {
       add('9-Point', `${pointText} · ${nine.completedHoles || 0} hole(s) complete${moneyText}`);
     }
   }
+  const sixesCfg = games.find(game => game.key === 'sixes');
+  if (sixesCfg && (sixesCfg.playerIds || []).map(String).includes(playerId)) {
+    const sixes = computeSixesResults(match, metrics, sixesCfg);
+    const segments = sixes.segments.map(segment => {
+      const ownSide = segment.sideA.playerIds.includes(playerId) ? segment.sideA : segment.sideB;
+      const partnerId = ownSide.playerIds.find(id => id !== playerId);
+      return `S${segment.index} with ${getPlayer(partnerId)?.name || 'Partner'}: ${segment.statusText}`;
+    }).join(' · ');
+    add('Sixes', `${sixes.totals[playerId] || 0} pts · ${segments || 'Active'} · ${formatMoneyAccounting(sixes.amounts[playerId] || 0)}${sixes.mode === 'segments' ? ' · points informational' : ''}`);
+  }
   const side = getIndividualMatchPairings(match, metrics).find(pair => (
     String(pair.playerA?.playerId) === String(playerMetric.playerId) || String(pair.playerB?.playerId) === String(playerMetric.playerId)
   ));
@@ -11928,6 +12239,8 @@ function renderLeaderboard() {
   const statTrackingSummary = document.getElementById('statTrackingSummary');
   const ninePointCard = document.getElementById('ninePointScorecardCard');
   const ninePointScorecard = document.getElementById('ninePointScorecard');
+  const sixesCard = document.getElementById('sixesScorecardCard');
+  const sixesScorecard = document.getElementById('sixesScorecard');
   const holeMomentum = document.getElementById('holeMomentum');
   const momentumMeta = document.getElementById('momentumMeta');
   const payoutSummary = document.getElementById('payoutSummary');
@@ -12034,6 +12347,11 @@ function renderLeaderboard() {
     ninePointCard.classList.toggle('hidden', !hasNinePoint);
     if (hasNinePoint) ninePointScorecard.innerHTML = buildNinePointScorecard(match, metrics);
     else ninePointScorecard.innerHTML = '';
+  }
+  if (sixesCard && sixesScorecard) {
+    const hasSixes = (match.selectedGames || []).some(game => game.key === 'sixes');
+    sixesCard.classList.toggle('hidden', !hasSixes);
+    sixesScorecard.innerHTML = hasSixes ? buildSixesScorecard(match, metrics) : '';
   }
   const momentumCard = document.querySelector('.print-section-momentum');
   const showMomentum = hasTeamMomentumMatch(match, metrics);
@@ -17838,6 +18156,12 @@ function getCompactGameStatus(match, metrics, gameKey, cfg = null) {
     const margin = runner ? Number(lead.total || 0) - Number(runner.total || 0) : 0;
     return margin ? `${lead.name} +${margin}` : 'Tied';
   }
+  if (gameKey === 'sixes') {
+    const sixes = computeSixesResults(match, metrics, config);
+    if (sixes.mode === 'points') return sixes.completedHoles ? `${formatSixesPointStandings(sixes, { firstNames: true })} pts` : 'Active';
+    const segment = sixes.segments.find(row => !row.decided) || sixes.segments.at(-1);
+    return segment ? `Seg ${segment.index} — ${segment.statusText}` : 'Active';
+  }
   if (gameKey === 'sneaky_sandy_poley') {
     return getSneakySandyPoleyStatus(match, metrics).replace(/^SSP(?: Base)?:\s*/, '');
   }
@@ -18022,6 +18346,13 @@ function buildQuickScoreboardGameStatusRows(match, metrics) {
   const selected = getOrderedSelectedGames(match);
   if (!selected.length) return '';
   const rows = selected.map(cfg => {
+    if (cfg.key === 'sixes') {
+      const sixes = computeSixesResults(match, metrics, cfg);
+      const chips = sixes.mode === 'points'
+        ? sixes.leaderboard.map(row => `<span class="quick-game-chip"><b>${escapeHtml(String(row.name).split(/\s+/)[0])}</b> ${row.total}</span>`).join('')
+        : sixes.segments.map(segment => `<span class="quick-game-chip"><b>S${segment.index}</b> ${escapeHtml(segment.statusText)}</span>`).join('');
+      return `<div class="quick-game-row quick-game-row-sixes"><span>Sixes</span><div class="quick-game-chips">${chips || '<span class="quick-game-chip">Select 4 players</span>'}</div></div>`;
+    }
     const status = getTruthfulGameStatus(match, metrics, cfg.key, cfg);
     const label = cfg.key === 'sneaky_sandy_poley' ? 'SSP' : getGameLabel(cfg.key);
     const trend = cfg.key === 'sneaky_sandy_poley' ? getSneakySandyPoleySmartTrend(match, { metrics }) : '';
@@ -19108,6 +19439,26 @@ function computeLivePayoutGames(match, metrics) {
       pushGame(cfg.key, `9-Point Game (${formatBasisLabel(nine.basis)})`, amounts, 'side', paymentLines);
       return;
     }
+    if (cfg.key === 'sixes') {
+      const sixes = computeSixesResults(match, metrics, cfg);
+      const paymentLines = [];
+      if (sixes.mode === 'points') {
+        sixes.playerIds.forEach((first, index) => sixes.playerIds.slice(index + 1).forEach(second => {
+          const diff = sixes.totals[first] - sixes.totals[second];
+          const amount = Math.abs(diff * sixes.pointValue);
+          if (amount > 0.0001) paymentLines.push(diff > 0 ? { from: second, to: first, amount } : { from: first, to: second, amount });
+        }));
+      } else {
+        sixes.segments.forEach(segment => {
+          if (!['A', 'B'].includes(segment.winner) || !sixes.stakePerSegment) return;
+          const winners = segment.winner === 'A' ? segment.sideA.playerIds : segment.sideB.playerIds;
+          const losers = segment.winner === 'A' ? segment.sideB.playerIds : segment.sideA.playerIds;
+          losers.forEach(from => winners.forEach(to => paymentLines.push({ from, to, amount: sixes.stakePerSegment / winners.length, segment: segment.index })));
+        });
+      }
+      pushGame(cfg.key, `Sixes (${formatBasisLabel(sixes.basis)} · ${sixes.mode === 'points' ? 'Player Points' : 'Segment Matches'})`, { ...sixes.amounts }, sixes.mode === 'points' ? 'individual' : 'team', paymentLines, cfg.key, { sixes });
+      return;
+    }
     pushGame(cfg.key, getGameLabel(cfg.key), {});
   });
   getPressTree(match).records.forEach((press, index) => {
@@ -19204,6 +19555,10 @@ function buildSelectedGamesSummary(match, metrics) {
       const nine = computeNinePointResults(match, metrics, cfg);
       value = nine.leaderboard.length ? nine.leaderboard.map(row => `${row.name} (${row.total})`).join(' · ') : 'Select 3 players';
       sub = nine.leaderboard.length ? `${formatBasisLabel(nine.basis)} · ${formatMoneyAccounting(nine.stakePerPoint)} / point · ${nine.completedHoles} hole(s) complete · Final differentials settle head-to-head` : '9-Point Game requires three selected players with scores.';
+    } else if (cfg.key === 'sixes') {
+      const sixes = computeSixesResults(match, metrics, cfg);
+      value = sixes.mode === 'points' ? (formatSixesPointStandings(sixes) || 'Select 4 players in order') : (sixes.segments.length ? sixes.segments.map(segment => `S${segment.index}: ${segment.statusText}`).join(' · ') : 'Select 4 players in order');
+      sub = `${formatBasisLabel(sixes.basis)} · Best Ball · ${sixes.mode === 'points' ? `${formatMoneyAccounting(sixes.pointValue)} / point · segments informational` : `${formatMoneyAccounting(sixes.stakePerSegment)} / segment · points informational`} · ${sixes.completedHoles} completed hole${sixes.completedHoles === 1 ? '' : 's'}`;
     } else if (cfg.key === 'sneaky_sandy_poley') {
       const ledger = buildSneakySandyPoleyLedger(match, { metrics });
       const leader = ledger.finalLeader || {};
@@ -20378,12 +20733,18 @@ function getRoundReadinessState() {
   add(selectedGames.length ? 'Games selected' : 'Games intentionally omitted', selectedGames.length <= 5, 'Select no more than 5 games.');
   add(`Featured Competition: ${getFeaturedCompetitionDisplayName({ selectedGames }, featured === 'auto' ? resolveAutoFeaturedCompetition({ selectedGames }) : featured) || 'Auto'}`, !!featured, 'No Featured Competition selected.');
   const selectedKeys = new Set(selectedGames.map(g => g.key));
-  const featureMap = { nassau: 'nassau', singles_match: 'singles_match', skins: 'skins', net_skins: 'net_skins', nine_point: 'nine_point' };
+  const featureMap = { nassau: 'nassau', singles_match: 'singles_match', skins: 'skins', net_skins: 'net_skins', nine_point: 'nine_point', sixes: 'sixes' };
   if (featureMap[featured]) add('Featured Competition matches selected games', selectedKeys.has(featureMap[featured]), 'Featured Competition references a game that is not selected.');
   if (selectedKeys.has('singles_match')) add('Singles Match Play setup', draft.teamCount === 2 && draft.playersPerTeam === 1, 'Singles Match Play is designed for exactly two teams with one player each.');
   if (selectedKeys.has('nine_point')) {
     const cfg = selectedGames.find(g => g.key === 'nine_point');
     add('9-Point players selected', Array.isArray(cfg?.playerIds) && new Set(cfg.playerIds.filter(Boolean)).size === 3, 'Select exactly 3 players for 9-Point.');
+  }
+  if (selectedKeys.has('sixes')) {
+    const cfg = selectedGames.find(game => game.key === 'sixes');
+    add('Sixes players selected', Array.isArray(cfg?.playerIds) && new Set(cfg.playerIds.filter(Boolean)).size === 4, 'Select exactly 4 players in order for Sixes.');
+    add('Sixes uses 18 holes', Number(draft.holeCount) === 18, 'Sixes requires an 18-hole round.');
+    add('Sixes scoring mode', ['points', 'segments'].includes(normalizeSixesConfig(cfg).mode), 'Select a valid Sixes scoring mode.');
   }
   if (selectedKeys.has('sneaky_sandy_poley')) {
     const warnings = getSneakySandyPoleyTeamWarnings({
@@ -20393,7 +20754,7 @@ function getRoundReadinessState() {
     });
     add('Sneaky / Sandy / Poley team setup', warnings.length === 0, warnings[0] || 'Sneaky / Sandy / Poley requires two equal teams with an even number of players.');
   }
-  const coveredValidationPatterns = [/Course selection/i, /player slots/i, /valid tee/i, /course data/i, /Select up to 5/i, /9-Point/i, /Sneaky \/ Sandy \/ Poley/i];
+  const coveredValidationPatterns = [/Course selection/i, /player slots/i, /valid tee/i, /course data/i, /Select up to 5/i, /9-Point/i, /Sixes/i, /Sneaky \/ Sandy \/ Poley/i];
   validation.missingRequirements.filter(requirement => !coveredValidationPatterns.some(pattern => pattern.test(requirement))).forEach(requirement => add(requirement, false, requirement));
   const warnings = checks.filter(c => !c.ok);
   return { checks, warnings, ready: validation.ready && warnings.length === 0, validation, draft };
@@ -20592,6 +20953,7 @@ function getDefaultGameConfigs() {
     { key: 'greenies', stakePerPlayer: 1, participants: [] },
     getDefaultSneakySandyPoleyConfig(),
     { key: 'nine_point', basis: 'net', stakePerPoint: 1, playerIds: [] },
+    { key: 'sixes', mode: 'points', basis: 'net', playerIds: [], teamScoringMode: 'best_ball', segmentResultMode: 'match', pointsPerHoleWin: 1, pointValue: 1, stakePerSegment: 5, handicapAllowanceMode: 'recommended', handicapAllowancePercent: 90 },
   ].map(stampCompetitionRulesConfig);
 }
 function getGameConfig(key, existing = []) {
@@ -21010,6 +21372,40 @@ function renderGamesPicker(existing = []) {
         </div>
       </div>`;
     }
+    if (game.key === 'sixes') {
+      const players = getCurrentAssignablePlayers();
+      const selectedIds = Array.isArray(cfg.playerIds) ? cfg.playerIds.slice(0, 4) : [];
+      while (selectedIds.length < 4) selectedIds.push('');
+      const playerOptions = getSixesPlayerOptions(players, selectedIds);
+      const editingMatch = editingMatchId ? getMatch(editingMatchId) : null;
+      const orderLocked = !!editingMatch && completedHoles(editingMatch) > 0;
+      const mode = cfg.mode === 'segments' ? 'segments' : 'points';
+      const name = id => players.find(player => player.id === id)?.name || `Order ${selectedIds.indexOf(id) + 1}`;
+      const pairingRows = selectedIds.every(Boolean) ? [
+        `Segment 1 · ${name(selectedIds[0])} & ${name(selectedIds[1])} vs ${name(selectedIds[2])} & ${name(selectedIds[3])}`,
+        `Segment 2 · ${name(selectedIds[0])} & ${name(selectedIds[2])} vs ${name(selectedIds[1])} & ${name(selectedIds[3])}`,
+        `Segment 3 · ${name(selectedIds[0])} & ${name(selectedIds[3])} vs ${name(selectedIds[1])} & ${name(selectedIds[2])}`,
+      ] : [];
+      return `<div class="card inset-card game-config-card">
+        <div class="game-config-header"><div class="section-label">Sixes (6-6-6)</div><div class="tiny">Four golfers rotate partners every six holes; choose player points or three segment matches.</div></div>
+        <div class="grid two compact-grid top-gap">
+          <label><span>Scoring mode</span><select data-game-config="${game.key}" data-field="mode" ${orderLocked ? 'disabled aria-disabled="true"' : ''}><option value="points" ${mode === 'points' ? 'selected' : ''}>Player points</option><option value="segments" ${mode === 'segments' ? 'selected' : ''}>Segment matches</option></select></label>
+          <label><span>Basis</span><select data-game-config="${game.key}" data-field="basis"><option value="net" ${cfg.basis !== 'gross' ? 'selected' : ''}>Net</option><option value="gross" ${cfg.basis === 'gross' ? 'selected' : ''}>Gross</option></select></label>
+          ${mode === 'points'
+            ? `<label><span>$ per point</span><input type="number" min="0" step="0.01" data-game-config="${game.key}" data-field="pointValue" value="${cfg.pointValue ?? 1}" /></label><input type="hidden" data-game-config="${game.key}" data-field="stakePerSegment" value="${cfg.stakePerSegment ?? 5}" />`
+            : `<label><span>$ per segment</span><input type="number" min="0" step="0.01" data-game-config="${game.key}" data-field="stakePerSegment" value="${cfg.stakePerSegment ?? 5}" /></label><input type="hidden" data-game-config="${game.key}" data-field="pointValue" value="${cfg.pointValue ?? 1}" />`}
+          <label><span>Allowance</span><select data-game-config="${game.key}" data-field="handicapAllowanceMode" ${cfg.basis === 'gross' ? 'disabled' : ''}><option value="recommended" ${cfg.handicapAllowanceMode !== 'custom' ? 'selected' : ''}>Recommended (90%)</option><option value="custom" ${cfg.handicapAllowanceMode === 'custom' ? 'selected' : ''}>Custom</option></select></label>
+          <label><span>Allowance %</span><input type="number" min="0" max="100" data-game-config="${game.key}" data-field="handicapAllowancePercent" value="${cfg.basis === 'gross' ? 0 : (cfg.handicapAllowancePercent ?? 90)}" ${cfg.basis === 'gross' || cfg.handicapAllowanceMode !== 'custom' ? 'disabled' : ''} /></label>
+          ${[0,1,2,3].map(idx => `<label><span>Order ${idx + 1}</span><select data-sixes-player="${idx}" ${orderLocked ? 'disabled aria-disabled="true"' : ''}><option value="">Select player</option>${playerOptions[idx].map(player => `<option value="${player.id}" ${player.id === selectedIds[idx] ? 'selected' : ''}>${escapeHtml(player.name)}</option>`).join('')}</select></label>`).join('')}
+          <input type="hidden" data-game-config="${game.key}" data-field="teamScoringMode" value="best_ball" />
+          <input type="hidden" data-game-config="${game.key}" data-field="segmentResultMode" value="match" />
+          <input type="hidden" data-game-config="${game.key}" data-field="pointsPerHoleWin" value="1" />
+          <div class="tiny span-2">Net Sixes uses the WHS-recommended 90% Four-Ball match-play allowance. Game Handicaps are set once for the round from the lowest of the four golfers.</div>
+          ${orderLocked ? '<div class="tiny span-2 warning-text">Player order and scoring mode are locked because scoring has started.</div>' : ''}
+        </div>
+        <div class="sixes-pairing-preview top-gap"><strong>Partnership rotation</strong>${pairingRows.length ? pairingRows.map(row => `<div class="tiny">${escapeHtml(row)}</div>`).join('') : '<div class="tiny">Select four golfers in order to preview all three pairings.</div>'}</div>
+      </div>`;
+    }
     return `<div class="card inset-card game-config-card">
       <div class="game-config-header"><div class="section-label">${getGameLabel(game.key)}</div><div class="tiny">Configure basis and stakes</div></div>
       <div class="grid two compact-grid top-gap">
@@ -21061,6 +21457,11 @@ function collectSelectedGames() {
     if (key === 'nine_point') {
       const allowed = new Set(getCurrentAssignablePlayers().map(p => p.id));
       cfg.playerIds = [...new Set(Array.from(document.querySelectorAll('[data-nine-point-player]')).slice(0, 3).map(el => allowed.has(el.value) ? el.value : '').filter(Boolean))];
+    }
+    if (key === 'sixes') {
+      const allowed = new Set(getCurrentAssignablePlayers().map(player => player.id));
+      cfg.playerIds = Array.from(document.querySelectorAll('[data-sixes-player]')).slice(0, 4).map(element => allowed.has(element.value) ? element.value : '').filter(Boolean);
+      Object.assign(cfg, normalizeSixesConfig(cfg));
     }
     if (key === 'sneaky_sandy_poley') {
       Object.assign(cfg, normalizeSneakySandyPoleyConfig(cfg));
@@ -22542,12 +22943,12 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       renderStatTrackingPlayerSelector();
     }
     if (e.target && (e.target.id === 'smartScoreAdvanceInput' || e.target.id === 'smartScoreAdvancePresetSelect')) syncSmartScoreAdvancePresetUi();
-    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #featuredCompetitionSelect, #scoreEntryModeSelect, #roundPlayInputModeSelect, #roundStatTrackingModeSelect, #officialScorerNameInput, #sharedMatchEnabled, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-game-config], #enableStatTrackingInput, #smartScoreAdvanceInput, #smartScoreAdvancePresetSelect, #captureWeatherContextInput, [data-stat-track-player]')) {
+    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #featuredCompetitionSelect, #scoreEntryModeSelect, #roundPlayInputModeSelect, #roundStatTrackingModeSelect, #officialScorerNameInput, #sharedMatchEnabled, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-sixes-player], [data-game-config], #enableStatTrackingInput, #smartScoreAdvanceInput, #smartScoreAdvancePresetSelect, #captureWeatherContextInput, [data-stat-track-player]')) {
       setTimeout(() => { renderSetupHandicapPreview(); renderGamesPicker(collectSelectedGames()); renderFeaturedCompetitionSetup(collectSelectedGames()); renderTodaysMatchSummary(); renderRoundPreferenceSummary(); }, 0);
     }
   });
   document.getElementById('setup').addEventListener('input', e => {
-    if (e.target.matches('[data-team-name], [name="allowance"], #scoreEntryModeSelect, #officialScorerNameInput, [data-team-scorer-label], [data-team-scorer-code], [data-game-config], [data-nine-point-player], #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, #smartScoreAdvancePresetSelect')) {
+    if (e.target.matches('[data-team-name], [name="allowance"], #scoreEntryModeSelect, #officialScorerNameInput, [data-team-scorer-label], [data-team-scorer-code], [data-game-config], [data-nine-point-player], [data-sixes-player], #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, #smartScoreAdvancePresetSelect')) {
       renderSetupHandicapPreview();
       renderTodaysMatchSummary();
     }
@@ -23211,6 +23612,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (selectedGames.some(g => ['team_match','team_stroke'].includes(g.key)) && teamCount < 2) return toast('Team games require at least 2 teams.');
     if (selectedGames.some(g => g.key === 'nine_point') && selectedPlayers.length < 3) return toast('9-Point Game requires at least 3 assigned players.');
     if (selectedGames.some(g => g.key === 'nine_point' && (!Array.isArray(g.playerIds) || [...new Set(g.playerIds)].length !== 3))) return toast('Select 3 players for the 9-Point Game.');
+    if (selectedGames.some(g => g.key === 'sixes') && selectedPlayers.length < 4) return toast('Sixes requires 4 assigned players.');
+    if (selectedGames.some(g => g.key === 'sixes' && (!Array.isArray(g.playerIds) || g.playerIds.length !== 4 || [...new Set(g.playerIds)].length !== 4))) return toast('Select 4 players in order for Sixes.');
+    if (selectedGames.some(g => g.key === 'sixes') && Number(fd.get('holeCount')) !== 18) return toast('Sixes requires an 18-hole round.');
     if (selectedGames.some(g => g.key === 'sneaky_sandy_poley')) {
       const sspWarnings = getSneakySandyPoleyTeamWarnings({ teamCount, playersPerTeam, players: selectedPlayers });
       if (sspWarnings.length) return toast(sspWarnings[0]);
@@ -24002,6 +24406,9 @@ function getMatchSetupValidationState({ draft = null, fd = null, selectedPlayers
   if (games.some(g => ['team_match','team_stroke'].includes(g.key)) && teamCount < 2) missing.push('Team games require at least 2 teams');
   if (games.some(g => g.key === 'nine_point') && assignedPlayers.length < 3) missing.push('9-Point Game requires at least 3 assigned players');
   if (games.some(g => g.key === 'nine_point' && (!Array.isArray(g.playerIds) || [...new Set(g.playerIds)].length !== 3))) missing.push('Select 3 players for the 9-Point Game');
+  if (games.some(g => g.key === 'sixes') && assignedPlayers.length < 4) missing.push('Sixes requires 4 assigned players');
+  if (games.some(g => g.key === 'sixes' && (!Array.isArray(g.playerIds) || g.playerIds.length !== 4 || [...new Set(g.playerIds)].length !== 4))) missing.push('Select 4 players in order for Sixes');
+  if (games.some(g => g.key === 'sixes') && Number(requestedHoleCount) !== 18) missing.push('Sixes requires an 18-hole round');
   if (games.some(g => g.key === 'sneaky_sandy_poley')) missing.push(...getSneakySandyPoleyTeamWarnings({ teamCount, playersPerTeam, players: assignedPlayers }));
   const pressEditValidation = validatePressEditContract(source.active || null, games, { isHost: !source.active || isCurrentDeviceMatchHost(source.active) });
   if (!pressEditValidation.valid) missing.push(...pressEditValidation.reasons.map(reason => reason.message));
@@ -24668,6 +25075,7 @@ function installDyeLedgerLiveEngineAdapter() {
     playingHandicapFromInputs,
     computeMatchMetrics,
     computeLivePayoutGames,
+    areAllGamesFinal,
     getPayoutReportContext,
     optimalSettlementRows,
     computeTeamGameDiffs,
@@ -24713,6 +25121,10 @@ function installDyeLedgerLiveEngineAdapter() {
     voidPressRecord,
     computeSkinResults,
     computeNinePointResults,
+    computeSixesResults,
+    normalizeSixesConfig,
+    getSixesPlayerOptions,
+    buildSixesScorecard,
     buildSneakySandyPoleyLedger,
     getSneakySandyPoleyGreenyState,
     resolveSneakySandyPoleyValidation,

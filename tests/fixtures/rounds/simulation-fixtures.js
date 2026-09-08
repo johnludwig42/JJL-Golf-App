@@ -160,6 +160,18 @@ export const deterministicFixtures = [
       p4: [5, 6, 4, 5, 5, 6, 5, 4, 5],
     },
   }),
+  fixture({
+    scenario: 'sixes_rotating_partnerships',
+    purpose: 'Sixes rotates all six partnerships across three Best Ball match-play segments and settles every decided segment to zero.',
+    selectedGames: [{ key: 'sixes', mode: 'points', basis: 'net', playerIds: ['p1', 'p2', 'p3', 'p4'], teamScoringMode: 'best_ball', segmentResultMode: 'match', pointsPerHoleWin: 1, pointValue: 1, stakePerSegment: 5, handicapAllowancePercent: 90 }],
+    expectedInvariants: ['final_settlement_zero_sum', 'game_payouts_reconcile', 'save_reload_stable', 'sixes_rotation', 'sixes_settlement_zero_sum'],
+    scores: {
+      p1: [4, 5, 3, 4, 4, 5, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 3, 4],
+      p2: [5, 6, 4, 5, 5, 6, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 4, 5],
+      p3: [6, 6, 4, 5, 6, 6, 5, 4, 5, 6, 6, 4, 5, 6, 6, 5, 4, 5],
+      p4: [7, 7, 5, 6, 7, 7, 6, 5, 6, 7, 7, 5, 6, 7, 7, 6, 5, 6],
+    },
+  }),
   pressFixture('press_front_lane', 'Deterministic Front Press eligibility and original-wager fixture.', { parent: 'nassau', segment: 'FRONT', chainDepth: 1 }),
   pressFixture('press_back_lane', 'Deterministic Back Press eligibility and future-hole fixture.', { parent: 'nassau', segment: 'BACK', chainDepth: 1 }),
   pressFixture('press_overall_lane', 'Deterministic Overall Press eligibility and final-settlement fixture.', { parent: 'nassau', segment: 'OVERALL', chainDepth: 1 }),

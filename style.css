@@ -792,7 +792,8 @@ body.keyboard-open .top-tabs{
   body.printing-scorecard .payout-section,
   body.printing-scorecard #holeMomentum,
   body.printing-scorecard #classicScorecard,
-  body.printing-scorecard #ninePointScorecard {
+  body.printing-scorecard #ninePointScorecard,
+  body.printing-scorecard #sixesScorecard {
     break-inside: avoid;
     page-break-inside: avoid;
   }
@@ -853,6 +854,7 @@ body.keyboard-open .top-tabs{
     display:none !important;
   }
   body.printing-scorecard.printing-classic-only #ninePointScorecardCard,
+  body.printing-scorecard.printing-classic-only #sixesScorecardCard,
   body.printing-scorecard.printing-classic-only .scoreboard-card.print-section-classic-scorecard {
     display:block !important;
     border:none !important;
@@ -3037,6 +3039,15 @@ body.printing-scorecard .nine-point-scorecard-table td:nth-child(2){
   position: static !important;
   left: auto !important;
 }
+
+.sixes-scorecard{display:grid;gap:16px;}
+.sixes-segment{border:1px solid var(--border);border-radius:14px;padding:12px;background:#fff;break-inside:avoid;page-break-inside:avoid;}
+.sixes-segment-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px;}
+.sixes-segment-head span{font-size:12px;color:var(--muted);font-weight:800;text-align:right;}
+.sixes-pairing-preview{border-top:1px solid var(--border);padding-top:10px;display:grid;gap:4px;}
+.quick-game-chips{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:5px;}
+.quick-game-chip{border:1px solid var(--border);border-radius:999px;padding:3px 7px;background:var(--surface-soft,#f8fafc);font-size:11px;}
+@media (max-width:520px){.sixes-segment-head{display:grid;gap:2px}.sixes-segment-head span{text-align:left}.quick-game-row-sixes{align-items:flex-start}.quick-game-chips{justify-content:flex-start}}
 
 
 /* v28.4 Round Recap controls */

@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.40',
-  versionNumber: '31.0.40',
-  cacheName: 'the-dye-ledger-v31.0.40',
-  buildDate: '2026-09-07T14:57:00-04:00',
-  buildLabel: 'Play Header and Combo Tee Clarity'
+  version: 'v31.0.41',
+  versionNumber: '31.0.41',
+  cacheName: 'the-dye-ledger-v31.0.41',
+  buildDate: '2026-09-08T19:00:00-04:00',
+  buildLabel: 'Classic Play Header and Overflow Clarity'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -18385,6 +18385,43 @@ function buildPlaySaveState(match) {
   return getPlayerModeSavePresentation(match);
 }
 
+function getPlayOverflowMenu(trigger) {
+  const menuId = trigger?.getAttribute?.('aria-controls');
+  return menuId ? document.getElementById(menuId) : null;
+}
+
+function restorePlayOverflowTriggerFocus(kind = '') {
+  window.setTimeout(() => {
+    const selector = kind ? `[data-play-overflow-trigger="${cssEscape(kind)}"]` : '[data-play-overflow-trigger]';
+    document.querySelector(selector)?.focus({ preventScroll: true });
+  }, 0);
+}
+
+function closePlayOverflowMenus({ restoreFocus = false, preferredKind = '' } = {}) {
+  let closed = false;
+  let focusKind = preferredKind;
+  document.querySelectorAll('[data-play-overflow-trigger]').forEach(trigger => {
+    const menu = getPlayOverflowMenu(trigger);
+    const wasOpen = trigger.getAttribute('aria-expanded') === 'true' || (menu && !menu.classList.contains('hidden'));
+    if (wasOpen && !focusKind) focusKind = String(trigger.dataset.playOverflowTrigger || '');
+    menu?.classList.add('hidden');
+    trigger.setAttribute('aria-expanded', 'false');
+    closed = closed || wasOpen;
+  });
+  if (restoreFocus && closed) restorePlayOverflowTriggerFocus(focusKind);
+  return closed;
+}
+
+function togglePlayOverflowMenu(trigger) {
+  const menu = getPlayOverflowMenu(trigger);
+  if (!menu) return false;
+  const opening = menu.classList.contains('hidden');
+  closePlayOverflowMenus();
+  menu.classList.toggle('hidden', !opening);
+  trigger.setAttribute('aria-expanded', String(opening));
+  return opening;
+}
+
 function renderHoleSelector(match, scoringHoles = [], metrics = null) {
   const badge = document.getElementById('currentHoleBadge');
   const playerHeader = document.getElementById('playerModeHoleHeader');
@@ -18408,7 +18445,7 @@ function renderHoleSelector(match, scoringHoles = [], metrics = null) {
     playerHeader.classList.remove('hidden');
     const roundStatMode = normalizeStatTrackingMode(match.statTrackingMode || (match.statTrackingEnabled ? 'CASUAL' : 'NONE'));
     const memoryCount = getRoundMemories(match).length;
-    playerHeader.innerHTML = `<div class="player-mode-hole-title"><label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select><div class="player-mode-hole-meta">${holeMetaText}</div>${featuredStatusPair ? `<div class="player-mode-header-match-status">${featuredStatusPair}</div>` : ''}</div><div class="player-mode-header-actions"><div class="player-mode-header-meta"><div class="player-mode-entry-counter">${entryProgress.complete} of ${entryProgress.total} entered</div><div class="player-mode-save-state" data-tone="${saveState.tone}" aria-live="polite">${escapeHtml(saveState.label)}</div><button type="button" class="secondary player-mode-overflow" data-player-mode-overflow aria-expanded="false" aria-controls="playerModeOverflowMenu" aria-label="More Play actions">•••</button></div></div><div id="playerModeOverflowMenu" class="player-mode-overflow-menu hidden"><button type="button" class="secondary" data-player-mode-add-memory>Add Memory${memoryCount ? ` (${memoryCount})` : ''}</button>${!completionContext ? '<button type="button" class="secondary" data-player-mode-end-early>End Round Early</button>' : ''}<label><span class="tiny">Scoring mode</span><select id="playerModeRoundScoringModeSelect" aria-label="Active round scoring mode">${Object.values(PLAY_INPUT_MODES).filter(mode => mode.available).map(mode => `<option value="${mode.key}" ${mode.key === (isPlayerMode ? 'PLAYER' : 'CLASSIC') ? 'selected' : ''}>${mode.label.replace(' Mode','')}</option>`).join('')}</select></label><label><span class="tiny">Stat mode</span><select id="playerModeRoundStatModeSelect" aria-label="Active round stat mode">${Object.values(STAT_TRACKING_MODES).map(mode => `<option value="${mode.key}" ${mode.key === roundStatMode ? 'selected' : ''}>${mode.label}</option>`).join('')}</select></label></div>`;
+    playerHeader.innerHTML = `<div class="player-mode-hole-title"><label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select><div class="player-mode-hole-meta">${holeMetaText}</div>${featuredStatusPair ? `<div class="player-mode-header-match-status">${featuredStatusPair}</div>` : ''}</div><div class="player-mode-header-actions"><div class="player-mode-header-meta"><div class="player-mode-entry-counter">${entryProgress.complete} of ${entryProgress.total} entered</div><div class="player-mode-save-state" data-tone="${saveState.tone}" aria-live="polite">${escapeHtml(saveState.label)}</div><button type="button" class="secondary player-mode-overflow" data-player-mode-overflow data-play-overflow-trigger="player" aria-expanded="false" aria-controls="playerModeOverflowMenu" aria-label="More Play actions">•••</button></div></div><div id="playerModeOverflowMenu" class="play-overflow-menu player-mode-overflow-menu hidden" data-play-overflow-menu="player" role="group" aria-label="Player Mode Play options"><button type="button" class="secondary" data-player-mode-add-memory>Add Memory${memoryCount ? ` (${memoryCount})` : ''}</button>${!completionContext ? '<button type="button" class="secondary play-overflow-consequential" data-player-mode-end-early>End Round Early</button>' : ''}<label class="play-overflow-select-row"><span>Scoring mode</span><select id="playerModeRoundScoringModeSelect" aria-label="Active round scoring mode">${Object.values(PLAY_INPUT_MODES).filter(mode => mode.available).map(mode => `<option value="${mode.key}" ${mode.key === (isPlayerMode ? 'PLAYER' : 'CLASSIC') ? 'selected' : ''}>${mode.label.replace(' Mode','')}</option>`).join('')}</select></label><label class="play-overflow-select-row"><span>Stat mode</span><select id="playerModeRoundStatModeSelect" aria-label="Active round stat mode">${Object.values(STAT_TRACKING_MODES).map(mode => `<option value="${mode.key}" ${mode.key === roundStatMode ? 'selected' : ''}>${mode.label}</option>`).join('')}</select></label></div>`;
     if (badge) badge.innerHTML = '';
     return;
   }
@@ -18422,7 +18459,12 @@ function renderHoleSelector(match, scoringHoles = [], metrics = null) {
   const saveState = buildPlaySaveState(match);
   if (badge) badge.innerHTML = `<label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select>`;
   const classicContext = document.getElementById('classicHoleContext');
-  if (classicContext) classicContext.innerHTML = `<div class="classic-hole-meta">${holeMetaText}</div>${featuredStatusPair ? `<div class="classic-header-match-status">${featuredStatusPair}</div>` : ''}`;
+  if (classicContext) classicContext.innerHTML = `<div class="classic-hole-meta">${holeMetaText}</div>`;
+  const classicMatchStatus = document.getElementById('classicHeaderMatchStatus');
+  if (classicMatchStatus) {
+    classicMatchStatus.innerHTML = featuredStatusPair;
+    classicMatchStatus.classList.toggle('hidden', !featuredStatusPair);
+  }
   const classicSaveState = document.getElementById('classicHeaderSaveState');
   if (classicSaveState) {
     classicSaveState.dataset.tone = saveState.tone;
@@ -22755,10 +22797,15 @@ function installHandlers() {
   window.addEventListener('resize', repositionOpenPlayerComboboxes);
   window.addEventListener('orientationchange', repositionOpenPlayerComboboxes);
   document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && closePlayOverflowMenus({ restoreFocus: true })) return;
     if (e.key === 'Escape' && closeSharedMatchDetails()) return;
     if (e.key === 'Escape' && !document.getElementById('playerDetailDialog')?.classList.contains('hidden')) closePlayerDetailView();
     if (e.key === 'Escape' && !document.getElementById('quickScoreboardDialog')?.classList.contains('hidden')) closeQuickScoreboardView();
     if (e.key === 'Escape' && !document.getElementById('resetPlayerPreferencesDialog')?.classList.contains('hidden')) closeResetPlayerPreferencesDialog();
+  });
+  document.addEventListener('click', e => {
+    if (e.target.closest('[data-play-overflow-trigger], [data-play-overflow-menu]')) return;
+    closePlayOverflowMenus();
   });
   document.getElementById('gamesPicker').addEventListener('change', e => {
     if (!e.target.matches('[data-game-key]')) return;
@@ -22887,21 +22934,27 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   });
   document.getElementById('score').addEventListener('change', async e => {
     if (['playerModeRoundScoringModeSelect', 'classicRoundScoringModeSelect'].includes(e.target.id)) {
+      const overflowKind = e.target.id.startsWith('playerMode') ? 'player' : 'classic';
+      closePlayOverflowMenus();
       const prior = getEffectivePlayInputMode();
       const result = await switchPlayInputMode(e.target.value);
       if (!result.changed && result.reason) {
         e.target.value = prior;
         toast(result.reason === 'unavailable' ? 'That scoring mode is not available.' : 'Scoring mode was not changed because the current hole could not be saved safely.');
       }
+      restorePlayOverflowTriggerFocus(result.changed ? (overflowKind === 'player' ? 'classic' : 'player') : overflowKind);
       return;
     }
     if (['playerModeRoundStatModeSelect', 'classicRoundStatModeSelect'].includes(e.target.id)) {
+      const overflowKind = e.target.id.startsWith('playerMode') ? 'player' : 'classic';
+      closePlayOverflowMenus();
       const match = getActiveMatch();
       if (!match) return;
       match.statTrackingMode = normalizeStatTrackingMode(e.target.value);
       match.statTrackingEnabled = match.statTrackingMode !== 'NONE';
       if (match.statTrackingEnabled && !Array.isArray(match.statTrackingPlayerIds)) match.statTrackingPlayerIds = (match.players || []).map(player => String(player.playerId));
       persist();
+      restorePlayOverflowTriggerFocus(overflowKind);
       return;
     }
     if (e.target.matches('[data-greenies-winner]')) {
@@ -23028,22 +23081,12 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }, '#gameConfigs');
   });
   document.getElementById('score').addEventListener('click', e => {
-    const classicOverflowButton = e.target.closest('[data-classic-play-overflow]');
-    if (classicOverflowButton) {
-      const menu = document.getElementById('classicPlayOverflowMenu');
-      const opening = !!menu?.classList.contains('hidden');
-      menu?.classList.toggle('hidden', !opening);
-      classicOverflowButton.setAttribute('aria-expanded', String(opening));
-      return;
-    }
-    const overflowButton = e.target.closest('[data-player-mode-overflow]');
+    const overflowButton = e.target.closest('[data-play-overflow-trigger]');
     if (overflowButton) {
-      const menu = document.getElementById('playerModeOverflowMenu');
-      const opening = !!menu?.classList.contains('hidden');
-      menu?.classList.toggle('hidden', !opening);
-      overflowButton.setAttribute('aria-expanded', String(opening));
+      togglePlayOverflowMenu(overflowButton);
       return;
     }
+    if (e.target.closest('[data-play-overflow-menu] button')) closePlayOverflowMenus();
     if (e.target.closest('[data-player-mode-use-classic]')) {
       switchPlayInputMode(PLAY_INPUT_MODES.CLASSIC.key);
       return;

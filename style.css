@@ -314,7 +314,7 @@ main{padding-bottom:calc(64px + env(safe-area-inset-bottom) + var(--keyboard-off
 }
 .picker-check input { width: auto; margin: 0; }
 .score-hole-nav { align-items: center; justify-content: space-between; }
-.classic-header-secondary{grid-column:1 / -1;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:start;min-width:0}
+.classic-header-secondary{grid-column:1 / -1;position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:start;min-width:0}
 .classic-hole-context{min-width:0;display:grid;gap:3px;padding:2px 4px;text-align:left}
 .classic-hole-meta{font-size:.82rem;font-weight:750;color:var(--muted)}
 .classic-header-match-status{display:flex;align-items:baseline;flex-wrap:wrap;gap:3px 7px;min-width:0;font-size:.74rem}
@@ -325,8 +325,15 @@ main{padding-bottom:calc(64px + env(safe-area-inset-bottom) + var(--keyboard-off
 .classic-header-actions{display:flex;align-items:center;align-self:start;justify-content:flex-end;gap:6px;position:relative;white-space:nowrap}
 .classic-header-actions button{min-height:44px}
 .classic-play-overflow{width:44px;min-width:44px;padding:0;font-size:1.05rem}
-.classic-play-overflow-menu{position:absolute;z-index:1401;right:0;top:calc(100% + 6px);display:grid;gap:6px;width:190px;padding:8px;border:1px solid var(--border);border-radius:12px;background:var(--card);box-shadow:0 12px 30px rgba(0,0,0,.16)}
-.classic-play-overflow-menu.hidden{display:none!important}
+.play-overflow-menu{position:absolute;z-index:1420;display:grid;gap:8px;width:min(280px,calc(100dvw - 32px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px)));max-width:calc(100vw - 32px);min-width:0;padding:10px;border:1px solid var(--border);border-radius:12px;background:var(--card);box-shadow:0 12px 30px rgba(0,0,0,.16);white-space:normal;overflow-wrap:anywhere}
+.play-overflow-menu *{min-width:0;white-space:normal}
+.play-overflow-menu.hidden{display:none!important}
+.play-overflow-select-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(104px,auto);align-items:center;gap:10px;margin:0;font-size:.76rem;font-weight:750;color:var(--muted)}
+.play-overflow-select-row select{width:100%;min-height:44px;margin:0;padding:7px 30px 7px 9px;font-size:.86rem;color:var(--text)}
+.play-overflow-divider{height:1px;background:var(--border);margin:2px 0}
+.play-overflow-consequential{width:100%;min-height:44px;color:#7a2d2d;background:color-mix(in srgb,#9b2c2c 5%,var(--card));border-color:color-mix(in srgb,#9b2c2c 24%,var(--border))}
+.classic-play-overflow-menu{right:0;top:calc(100% + 6px)}
+.classic-header-match-status{grid-column:1 / -1;padding:5px 4px 1px;border-top:1px solid color-mix(in srgb,var(--border) 72%,transparent)}
 .play-input-mode-bar{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-bottom:8px;padding:8px 10px;border:1px solid var(--border);border-radius:12px;background:var(--surface-soft,#f6f8f7)}
 .play-input-mode-bar label{display:flex;align-items:center;gap:8px;margin:0}
 .play-input-mode-bar select{width:auto;min-width:150px;margin:0}
@@ -371,7 +378,7 @@ main{padding-bottom:calc(64px + env(safe-area-inset-bottom) + var(--keyboard-off
 .classic-putts-control{display:grid;gap:4px;min-width:76px}.classic-putts-control select,.classic-putts-more{min-height:44px;min-width:72px}.player-mode-bunker-toggle{display:flex;align-items:center;gap:8px;min-height:44px}.player-mode-bunker-toggle input{width:22px;height:22px}
 .player-mode-overflow{width:48px;min-width:48px;height:48px;padding:0;font-size:1.1rem}
 .fairway-hit-check{font-size:1.35rem;font-weight:900;line-height:1}
-.player-mode-overflow-menu{position:absolute;z-index:1401;right:0;top:60px;display:grid;gap:6px;width:190px;padding:8px;border:1px solid var(--border);border-radius:12px;background:var(--card);box-shadow:0 12px 30px rgba(0,0,0,.16)}
+.player-mode-overflow-menu{right:0;top:60px}
 .player-input-mode-active #playMatchSummary{margin:14px 0 18px;padding:18px 14px;border-left:5px solid #1261a0;border-right:5px solid #b17a00;border-radius:8px;background:var(--card);text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.06)}
 .player-input-mode-active #playMatchSummary .tiny{font-size:.82rem}.player-mode-score-list{display:grid;gap:14px;margin-top:4px;overflow:visible}
 .player-mode-featured-label{text-transform:uppercase;letter-spacing:.13em;color:#9a6a00;font-size:.72rem;font-weight:800}.player-mode-featured-result{margin-top:6px;font-size:1.35rem;font-weight:800}.player-mode-featured-through{margin-top:2px;color:var(--muted);font-size:.78rem}

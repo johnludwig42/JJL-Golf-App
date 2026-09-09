@@ -1,7 +1,7 @@
 # Wolf — Draft Implementation Spec
 
 **Status:** Product Owner decisions recorded 2026-09-07; ready for Codex planning
-**Suggested release:** v31.0.41 — Foundational Games: Wolf (ships after Sixes)
+**Suggested release:** v31.0.42 — Foundational Games: Wolf
 **Database migration:** None. New Shared Match facts channel inside the existing `sharedMatchMeta`.
 **Precedents to follow:** `nine_point` (per-hole points, head-to-head settlement) for calculation;
 `sneaky_sandy_poley` (per-hole manual facts, sequence lock, shared reconciliation) for everything else.
@@ -419,7 +419,7 @@ The same 27 sites listed in the Sixes spec, plus the Shared Match facts channel 
 
 ## 13. Test plan
 
-New `tests/v31.0.41-wolf.test.js`:
+New `tests/v31.0.42-wolf.test.js`:
 
 1. Rotation assigns the correct Wolf for positions 1–16 given a known order.
 2. Rotation follows played position, not hole number, under a shotgun start.

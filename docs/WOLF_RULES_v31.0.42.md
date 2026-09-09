@@ -1,16 +1,49 @@
-# Wolf — Draft Implementation Spec
+# Wolf — Implementation Spec
 
-**Status:** Product Owner decisions recorded 2026-09-07; ready for Codex planning
+**Status:** Amended 2026-09-08 — Wolf is **local scoring only** in this release. Shared Match support
+is deliberately deferred. Ready for Codex planning.
 **Suggested release:** v31.0.42 — Foundational Games: Wolf
-**Database migration:** None. New Shared Match facts channel inside the existing `sharedMatchMeta`.
+**Database migration:** None. No new Shared Match facts channel.
 **Precedents to follow:** `nine_point` (per-hole points, head-to-head settlement) for calculation;
-`sneaky_sandy_poley` (per-hole manual facts, sequence lock, shared reconciliation) for everything else.
+`sneaky_sandy_poley` (per-hole manual facts on the match, sequence lock) for the facts model — but
+**not** its synchronization layer.
 
-Wolf is materially harder than Sixes. It is the first game in The Dye Ledger where **a per-hole
-decision by a player, not a score, changes the money.** That decision has to be captured in Play,
-locked to a rotation, synchronized across devices, reconciled on conflict, blocked at round completion
-when missing, and reproduced faithfully in the Ledger Entry years later. The SSP subsystem already
-solves every one of those problems; Wolf should reuse its shape rather than invent a second one.
+Wolf is the first game in The Dye Ledger where **a per-hole decision by a player, not a score, changes
+the money.** That decision has to be captured in Play, locked to a rotation, blocked at round
+completion when missing, and reproduced faithfully in the Ledger Entry years later.
+
+---
+
+## 0. What changed in this amendment
+
+The original spec included a full Shared Match facts channel for Wolf declarations, mirroring
+`sspFacts` end to end. That is now **deferred to a future release.**
+
+**Why.** Wolf's declaration is a verbal announcement to the group — "I'm taking Ben" — recorded by the
+scorekeeper, exactly like everyone's scores. Unlike scores, where each player knows their own and
+per-device entry earns its keep, syncing a declaration buys almost nothing even in a group where
+everyone has a phone out. Wolf is a one-foursome game.
+
+**What it removes.** The declaration authority rule is gone entirely — there is no longer any
+"the Wolf for this hole, or the host, everything else rejected fail-closed." That rule would have made
+authorization depend on derived per-hole state, which depends on the locked rotation, which under
+`low_points` depends on frozen facts, which depend on sync ordering. Nothing in the codebase does that
+today, and this release no longer needs to. Also removed: five sync hook points, the three-way
+reconciliation path, conflict surfacing, and the completion parity gate for Wolf.
+
+The repository's own history supports the deferral. v30.3.96 shipped Shared Match identity and
+publication work and was followed by three consecutive hotfixes — v30.3.97, v30.3.98, v30.3.99 — then
+v31.0.01 as a reliability foundation. Shared Match changes here have historically needed follow-up
+releases, and Wolf's would have been the most coupled one yet.
+
+**What it does NOT remove.** The `low_points` final-holes rule and its freeze requirement stay. Sync
+ordering was what made the freeze difficult — a device that had not yet received hole 16 computing a
+different Wolf. On a single device that problem does not exist. The freeze still has to survive a score
+correction to an earlier hole, which is worth having and is now local, deterministic, and easy to test.
+
+**Local-only must fail closed, not merely be untested.** See §7 for the four hard requirements. The
+one that will actually bite is local-to-shared conversion: a Wolf round silently becoming shared is the
+failure mode to prevent.
 
 ---
 
@@ -20,22 +53,17 @@ solves every one of those problems; Wolf should reuse its shape rather than inve
 
 | # | Decision | Resolution |
 |---|---|---|
+| W0 | Shared Match | **Not supported in this release.** Wolf is local scoring only, blocked fail-closed per §7. |
 | W1 | Points scheme | **Confirmed** as the §3 table: 1 each for a Wolf-side win, 1 each to the opponents, 4 for a winning Lone Wolf, 1 each to the other three when the Lone Wolf loses. Stored as config values, not literals. |
+| W2 | Lone Wolf | Enabled. |
+| W3 | Blind Wolf | Available as a config toggle, default off. Doubles the Lone Wolf award. |
 | W4 | Holes 17 and 18 | **A game setup option** with three values. See §3.1 for the rule, the default, and the freeze requirement. |
+| W5 | Player count | Four only. |
+| W6 | Scoring basis | Net by default; Gross available. |
 | W7 | Undeclared hole | A hole scored but never declared **awards nothing, is disclosed, and blocks automatic round completion** until resolved. The app does not invent a declaration. |
-| — | Shared Match declaration authority | A device may declare for a hole if it is **assigned the Wolf for that hole, or is the host**. Every other write is rejected fail-closed. |
-| — | Games picker group | A new fourth group, **Rotating Partnerships**, shared with Sixes. |
-
-**Still open — proceeding on the defaults below unless the Product Owner says otherwise:**
-
-| # | Decision | Default assumed |
-|---|---|---|
-| W2 | **Lone Wolf** enabled? | Yes |
-| W3 | **Blind Wolf** (declared before anyone tees off, double the Lone Wolf award) enabled? | Available as a config toggle, default off |
-| W5 | **Player count.** Four only in v1, or also 3 and 5? | Four only |
-| W6 | **Scoring basis** default. | Net |
-| W8 | **Tie on a hole.** No points, or carry the hole's points forward. | No points, no carry |
-| W9 | **Settlement.** Head-to-head on final point differentials at `$ per point`, identical to 9-Point. | Head-to-head differentials |
+| W8 | Tied hole | No points, no carry. |
+| W9 | Settlement | Head-to-head on final point differentials at the saved dollars per point. |
+| — | Games picker group | Wolf joins the existing **Rotating Partnerships** group created in v31.0.40. |
 
 ---
 
@@ -60,7 +88,7 @@ partner (or just the Wolf when alone), the opponents' side is the low ball of th
 
 **Settlement:** final point totals settle head-to-head across all six unique pairs, exactly as
 `computeNinePointResults` already does. For each pair, the point differential times `$ per point`
-transfers from the lower to the higher. This produces a zero-sum result and reuses a tested path.
+transfers from the lower to the higher. Zero-sum, and it reuses a tested path.
 
 **Finality:** the game is final when every played hole has four scores and a resolved declaration.
 
@@ -89,12 +117,10 @@ With four players, sixteen holes is four clean rotations and everyone has been W
 times. Wolf is a folk game with no governing body, so there is no single official rule for the last
 two holes. Two conventions are widely published:
 
-- **Continue the rotation** — Order 1 is Wolf on 17 and Order 2 on 18. This is the base rule, and it
-  is what the app should do when nobody chooses otherwise. It is deterministic, knowable at setup, and
-  never surprises anyone.
-- **Last place is Wolf** — the player lowest in points is Wolf on 17 and the second-lowest on 18. This
-  is the more commonly played house rule, deliberately giving the trailing player a chance to catch up
-  and making the finish the most competitive stretch of the round.
+- **Continue the rotation** — Order 1 is Wolf on 17 and Order 2 on 18. This is the base rule and the
+  app's default. It is deterministic, knowable at setup, and never surprises anyone.
+- **Last place is Wolf** — the player lowest in points is Wolf on 17 and the second-lowest on 18. The
+  more commonly played house rule, giving the trailing player a chance to catch up.
 
 `finalHolesRule` is a setup option with three values:
 
@@ -102,37 +128,33 @@ two holes. Two conventions are widely published:
 |---|---|
 | `continue` | **Default.** Rotation continues: Order 1 on position 17, Order 2 on position 18. |
 | `low_points` | The player with the fewest points is Wolf on 17; the second-fewest on 18. |
-| `none` | No Wolf on 17 and 18. The holes are scored but award no Wolf points. |
+| `none` | No Wolf on 17 and 18. The holes are scored but award no Wolf points and need no declaration. |
 
 ### The freeze requirement for `low_points`
 
-`low_points` is the only rule in either game where **the Wolf's identity is derived from live
-standings rather than from setup.** That has consequences the implementation must handle explicitly:
+`low_points` is the only rule in the game where **the Wolf's identity is derived from live standings
+rather than from setup.** Even on a single device that has consequences:
 
 1. The Wolf for position 17 is unknowable until position 16 is complete and scored.
-2. If a score on an earlier hole is later corrected, a naive implementation would silently reassign
-   who was Wolf on 17 and 18 and rewrite money that has already been played for.
-3. In a Shared Match, two devices holding different score states would compute different Wolves for
-   the same hole.
+2. If a score on an earlier hole is later corrected, a naive implementation would silently reassign who
+   was Wolf on 17 and 18 and rewrite money that has already been played for.
 
 Therefore: **when `low_points` is selected, the app freezes the hole-17 and hole-18 Wolf assignments at
 the moment their qualifying hole first becomes complete, and stores them as saved facts.** Position 17
 freezes when position 16 first completes; position 18 freezes when position 17 first completes. The
 codebase already records `holeFirstCompletedAt`, which is the correct trigger.
 
-Once frozen, the assignment does not move, even if a later score correction changes the standings.
-The Ledger Entry discloses the frozen assignment and the standings it was based on, so the record
-explains itself years later.
+Once frozen, the assignment does not move, even if a later score correction changes the standings. The
+Ledger Entry discloses the frozen assignment and the standings it was based on, so the record explains
+itself years later.
 
 **Tie-break**, applied only at freeze time and in this order:
 
 1. Fewest points.
 2. If still tied, the player earlier in the saved rotation order.
 
-This is fully deterministic, so every device reaches the same answer from the same frozen facts.
-
-If the Product Owner would rather avoid the freeze machinery entirely, `continue` and `none` both
-remain available and neither needs it — only `low_points` does.
+Because sync is out of scope in this release, the freeze has no cross-device divergence to guard
+against — only score corrections. It stays fully deterministic.
 
 ---
 
@@ -147,8 +169,8 @@ remain available and neither needs it — only `low_points` does.
   playerIds: [],              // exactly 4, ordered — the rotation
   allowLoneWolf: true,        //                                       (W2)
   allowBlindWolf: false,      //                                       (W3)
-  finalHolesRule: 'continue', // 'continue' | 'low_points' | 'none'    (W4)
-  tieTreatment: 'no_points',  // 'no_points' | 'carry'                 (W8)
+  finalHolesRule: 'continue', // 'continue' | 'low_points' | 'none'     (W4)
+  tieTreatment: 'no_points',  // reserved; 'no_points' is the only implemented value (W8)
   points: {
     teamWin: 1,
     opponentsWin: 1,
@@ -166,7 +188,7 @@ remain available and neither needs it — only `low_points` does.
 
 ### 4.2 Per-hole manual facts on the match
 
-A new top-level `match.wolfInputs`, keyed by hole number as a string, exactly mirroring
+A new top-level `match.wolfInputs`, keyed by hole number as a string, mirroring the shape of
 `match.sneakySandyPoleyInputs`:
 
 ```js
@@ -176,12 +198,14 @@ match.wolfInputs = {
     choice: 'partner',        // 'partner' | 'lone' | 'blind' | ''
     partnerPlayerId: '',      // required and validated when choice === 'partner'
     declaredAt: '',           // ISO timestamp
-    declaredByParticipantId: '',
-    declaredByDeviceId: '',
     notes: '',                // <= 240 chars
   },
 }
 ```
+
+Device and participant attribution fields are intentionally absent — there is one scoring device in
+this release. A future Shared Match release adds them; their absence must not break forward
+compatibility, so normalization must tolerate unknown extra keys rather than rejecting the input.
 
 Required companions, one-for-one with the SSP functions at app.js ~3567–3765:
 
@@ -193,10 +217,9 @@ Required companions, one-for-one with the SSP functions at app.js ~3567–3765:
 
 ### 4.3 Rotation lock
 
-`match.wolfOrderLockedAt`, `match.wolfOrderLockedByParticipantId`, `match.wolfOrderLockedByDeviceId`,
-following `sspSequenceLockedAt`. The order locks the moment the first hole is scored. After that the
-setup control is read-only. Without this, reordering mid-round silently reassigns who was Wolf on
-already-played holes and rewrites the money.
+`match.wolfOrderLockedAt`, following `sspSequenceLockedAt`. The order locks the moment the first hole
+is scored. After that the setup control is read-only. Without this, reordering mid-round silently
+reassigns who was Wolf on already-played holes and rewrites the money.
 
 ### 4.4 Frozen final-hole assignments
 
@@ -213,7 +236,7 @@ match.wolfFinalHoleAssignments = {
 `standings` is stored so the Ledger Entry can show why that player was Wolf, and so a later score
 correction is visibly reconciled rather than silently rewriting history. Freeze position 17 when
 position 16 first completes and position 18 when position 17 first completes, keyed off the existing
-`holeFirstCompletedAt`. These entries travel with the Shared Match facts in §7.
+`holeFirstCompletedAt`.
 
 ---
 
@@ -259,9 +282,9 @@ Order of operations per hole:
 
 Head-to-head settlement across all six pairs, then `optimalSettlementRows(amounts)`.
 
-**Handicap:** identical rule to Sixes. Apply the game allowance to each unrounded Course Handicap,
-round each Game Handicap, then allocate relative strokes from the lowest Game Handicap **among the
-four Wolf players, constant for the whole round.** The low man does not change when the Wolf changes.
+**Handicap:** apply the game allowance to each unrounded Course Handicap, round each Game Handicap,
+then allocate relative strokes from the lowest Game Handicap **among the four Wolf players, constant
+for the whole round.** The low man does not change when the Wolf changes.
 
 **Do not use `match.players[].team` or `metrics.teams`.** Wolf sides change every hole. Read only
 `metrics.holeResults[].playerScores[]`.
@@ -270,8 +293,8 @@ four Wolf players, constant for the whole round.** The low man does not change w
 
 ## 6. Play experience
 
-The declaration control renders through the existing hole card, in **both** render paths — Classic at
-app.js ~17352 and Player Mode at ~17676 — the same way `renderSneakySandyPoleyEntry` does. Add
+The declaration control renders through the existing hole card, in **both** render paths — Classic and
+Player Mode — the same way `renderSneakySandyPoleyEntry` does. Add
 `renderWolfEntry(match, hole, metrics)` and call it from both. Neither mode calculates independently.
 
 The control shows:
@@ -284,50 +307,40 @@ The control shows:
 
 **`applyCurrentHoleDomToMatch` invariant.** The Wolf control is an accordion input. It must only be
 applied when it is actually present in the DOM. An absent control must never clear a saved
-declaration. This is the single highest-risk regression in this release and belongs in the test plan
-as an explicit case.
+declaration. This is the single highest-risk regression in this release and belongs in the test plan as
+an explicit case.
 
 **Completion gate.** `unresolvedHoles` must block automatic round completion and surface a clear
 review prompt, mirroring `hasUnresolvedSneakySandyPoleyValidation` at ~6143. Wording should name the
-holes: `Wolf is undeclared on holes 4 and 11. Declare or the holes score no points.` Per W7, the
-Product Owner may instead choose to default undeclared holes to Lone Wolf; that would remove the gate
-and is the simpler build, but it invents a fact the golfers did not state.
+holes: `Wolf is undeclared on holes 4 and 11. Declare or the holes score no points.`
 
 ---
 
-## 7. Shared Match
+## 7. Shared Match — excluded, fail closed
 
-Wolf declarations are manual facts and need a real synchronization channel. Copy the SSP pattern
-end to end:
+Wolf is **not available in a Shared Match** in this release. There is no `wolfFacts` channel, no
+reconciliation, no declaration authority rule, and Wolf never participates in the completion parity
+gate.
 
-- `buildSharedWolfFacts(match)` — settings, inputs, order lock, frozen final-hole assignments (§4.4),
-  `updatedAt`, `sourceDeviceId`
-- `flattenSharedWolfFacts(facts)` — field-level flattening for three-way comparison
-- `reconcileSharedWolfFacts(local, remote, baseline, { isHost })` — baseline three-way merge, surfacing
-  conflicts rather than silently overwriting
-- `applySharedWolfFacts(match, facts, { baseline })`
-- `match.sharedWolfBaseline`, `match.sharedWolfUpdatedAt`, `match.sharedWolfSourceDeviceId`,
-  `match.sharedWolfConflicts`
+Exclusion must be enforced, not merely undocumented. Four hard requirements:
 
-Hook points, mirroring `sspFacts` exactly:
+1. **Block Wolf at setup when the match is or will be shared.** Disable the picker pill with an
+   explanatory tooltip. The precedent already exists: `renderGamesPicker` disables `singles_match` via
+   `singlesBlocked` with a `blockedTitle` when the setup does not qualify. Reuse that mechanism
+   verbatim, with a message such as *"Wolf is available for local scoring only in this release."*
+2. **Block local-to-shared conversion when Wolf is selected.** This is the path that will actually
+   bite. The app supports converting a local match to a Shared Match, and a Wolf round silently
+   becoming shared is the failure mode to prevent. It needs its own explicit refusal, its own clear
+   message, and its own test.
+3. **`buildSelectedGamesForCloud` must not publish a Wolf config.** If a joining device encounters one
+   regardless — a forward-version round, say — it must refuse it and degrade safely through the
+   existing unknown-game normalization rather than rendering a partial game or a wrong settlement.
+4. **Wolf never enters the completion parity gate**, since it cannot be shared. Confirm no Wolf amount
+   reaches parity comparison.
 
-| Site | Line (v31.0.39) | Action |
-|---|---|---|
-| `course_snapshot.sharedMatchMeta` | ~13410 | add `wolfFacts: buildSharedWolfFacts(match)` |
-| Sync reconciliation | ~13675–13689 | reconcile and apply |
-| Baseline capture | ~13741 | store `sharedWolfBaseline` |
-| Join hydration | ~13889 | seed `wolfInputs`, baseline, sync state |
-| Live meta fetch default | ~14096 | add `wolfFacts: null` |
-
-**Declaration authority — approved.** A device may set the declaration for a hole if it is assigned
-the Wolf for that hole, or if it is the host. Every other device's write is rejected fail-closed. This
-is stricter than SSP and looser than Greenies, and it matches how a real group behaves: the Wolf calls
-it, and the host can correct it. A rejected write must produce a clear, non-destructive message and
-leave the local declaration untouched, never a silent no-op.
-
-**Order lock and frozen final-hole assignments** resolve deterministically on conflict, following
-`selectDeterministicSspSequenceLock`. Because both are written once from facts every device can
-reproduce, a conflict here indicates a real divergence and should be surfaced, not merged.
+Forward compatibility: `match.wolfInputs`, `wolfOrderLockedAt`, and `wolfFinalHoleAssignments` are
+additive on the match, so when a future release adds synchronization, existing local Wolf rounds open
+unchanged.
 
 ---
 
@@ -344,7 +357,7 @@ wolf: Object.freeze({
 }),
 ```
 
-Update the tie and escalation strings if W3 or W8 change.
+Adding a new key does not require bumping `COMPETITION_RULES_CATALOG_VERSION`. Do not bump it.
 
 ---
 
@@ -356,21 +369,24 @@ Config card, following `nine_point` at ~20997:
 - A rotation preview: `H1 Chad · H2 Pat · H3 Ben · H4 John · repeating`, plus the H17/H18 treatment
   stated in words per `finalHolesRule` — `Order 1 and Order 2 are Wolf again`, `Lowest two in points
   are Wolf, decided after 16`, or `No Wolf on 17 and 18`.
-- Scoring basis, `$ per point`, Lone Wolf toggle, Blind Wolf toggle, tie treatment.
+- Scoring basis, `$ per point`, Lone Wolf toggle, Blind Wolf toggle.
 - **Final holes** select with the three `finalHolesRule` values, defaulting to `continue`. When
   `low_points` is chosen, show a one-line disclosure that the last two Wolves are decided by standings
   after hole 16 and then fixed for the rest of the round.
 - The six point values, grouped and labelled, with the default scheme preselected.
 - A disclosure line naming the allowance and its authority.
+- A one-line note that Wolf is local scoring only in this release.
 
-Validation in `saveMatch` (~23212):
+Validation in `saveMatch` and the match-start path:
 
 - `Wolf requires 4 assigned players.`
 - `Select 4 players in order for Wolf.`
-- `Blind Wolf requires Lone Wolf to be enabled.` if that dependency holds under W3.
+- `Blind Wolf requires Lone Wolf to be enabled.`
 - Point values must be finite and non-negative.
+- `Wolf is available for local scoring only in this release.` when the match is or becomes shared.
 
-Readiness checklist (~20384): a Wolf row confirming four ordered players and a resolved points scheme.
+Readiness checklist (~20384): a Wolf row confirming four ordered players, a resolved points scheme, and
+a local (non-shared) match.
 
 ---
 
@@ -379,28 +395,40 @@ Readiness checklist (~20384): a Wolf row confirming four ordered players and a r
 | Surface | Requirement |
 |---|---|
 | Play header | Wolf on this hole plus the running leader |
-| `getPrimaryMatchStatusLine` ~10341 | `Wolf: Chad 11 pts thru 9` |
-| Quick Scoreboard ~17832 | Point totals, plus a badge when holes are undeclared |
-| Match status detail ~10486 | Tiles for Basis, `$ / point`, leader, undeclared count |
-| Scores tab ~12033 | A `wolfScorecardCard` mirroring `ninePointScorecardCard`: one row per player, one column per hole, showing points, with the Wolf and the choice marked on each hole |
-| Player detail ~11470 | Holes as Wolf, lone attempts and successes, points earned |
-| Games summary ~19203 | Leader, points, undeclared holes |
-| Ledger Entry ~8106 | A Wolf Ledger section. It must state the points scheme in force, list every hole with its Wolf, choice, sides, and result, disclose any hole that scored nothing because it was undeclared, and — under `low_points` — state the frozen hole-17 and hole-18 assignments and the standings they were based on |
-| Live payouts ~19089 | `group: 'individual'`, with `paymentLines` from the head-to-head differentials |
-| AI recap payload ~7301 | Wolf identity, choices, and outcomes per hole — this is rich narrative material and the Story should have it |
+| `getPrimaryMatchStatusLine` | `Wolf: Chad 11 pts thru 9` |
+| Quick Scoreboard | Point totals, plus a badge when holes are undeclared |
+| Match status detail | Tiles for Basis, `$ / point`, leader, undeclared count |
+| Scores tab | A `wolfScorecardCard` mirroring `ninePointScorecardCard`: one row per player, one column per hole showing points, with the Wolf and the choice marked on each hole |
+| Player detail | Holes as Wolf, lone attempts and successes, points earned |
+| Games summary | Leader, points, undeclared holes |
+| Ledger Entry | A Wolf Ledger section. It must state the points scheme in force, list every hole with its Wolf, choice, sides, and result, disclose any hole that scored nothing because it was undeclared, and — under `low_points` — state the frozen hole-17 and hole-18 assignments and the standings they were based on |
+| Live payouts | `group: 'individual'`, with `paymentLines` from the head-to-head differentials |
+| AI recap payload | Wolf identity, choices, and outcomes per hole — rich narrative material the Story should have |
+
+Note that v31.0.41 changed the Classic Play header and overflow menu. Wolf's featured status string
+must be verified against the new full-width featured competition row, not the old narrow metadata
+column.
 
 ---
 
 ## 11. Integration checklist for Codex
 
-The same 27 sites listed in the Sixes spec, plus the Shared Match facts channel in §7, plus:
+The same integration sites listed in §11 of `docs/SIXES_RULES_v31.0.40.md`, with `wolf` in place of
+`sixes`, plus:
 
-28. `renderWolfEntry` called from both Play render paths (~17352 Classic, ~17676 Player Mode)
-29. `applyCurrentHoleDomToMatch` — Wolf declaration handled as a present-only input
-30. Round completion gate alongside `hasUnresolvedSneakySandyPoleyValidation` (~6143)
-31. Early-completion guard list ~6161 — **add `wolf`**; points accrue to the final hole
-32. `index.html` — the Play entry container and the Scores tab `wolfScorecardCard`
-33. `style.css` — declaration control and Wolf scorecard styles
+- `renderWolfEntry` called from both Play render paths (Classic and Player Mode)
+- `applyCurrentHoleDomToMatch` — Wolf declaration handled as a present-only input
+- Round completion gate alongside `hasUnresolvedSneakySandyPoleyValidation`
+- Early-completion guard list — **add `wolf`**; points accrue to the final hole
+- The four §7 fail-closed sites: picker pill disable, local-to-shared conversion refusal,
+  `buildSelectedGamesForCloud` exclusion, and parity-gate exclusion
+- `index.html` — the Play entry container and the Scores tab `wolfScorecardCard`
+- `style.css` — declaration control and Wolf scorecard styles
+- Release chores — new cache name, `manifest.json` version, immutable branding filenames,
+  `package.json` bump to 31.0.42
+
+**All line numbers in the Sixes checklist predate v31.0.40 and v31.0.41.** Both shipped, and v31.0.41
+changed the Play header and overflow menu directly. Verify every site against current code.
 
 ---
 
@@ -411,9 +439,11 @@ The same 27 sites listed in the Sixes spec, plus the Shared Match facts channel 
 - `applyCurrentHoleDomToMatch` applies only inputs present in the DOM; an absent Wolf control never
   clears a saved declaration.
 - Unknown stays unknown: an undeclared hole scores nothing and is disclosed rather than assumed.
-- Shared Match stays authority-scoped, outbox-backed, idempotent, and parity-gated at completion.
+- Shared Match behavior is unchanged, because Wolf is excluded from it fail-closed.
 - Grind remains limited to four editable golfers; Wolf's four-player requirement is compatible.
 - Completed RoundRecords, course snapshots, and localStorage compatibility are untouched.
+- Sixes scoring shipped in v31.0.40 and is frozen. Do not refactor it, and do not extract shared
+  abstractions between Sixes and Wolf.
 
 ---
 
@@ -424,36 +454,47 @@ New `tests/v31.0.42-wolf.test.js`:
 1. Rotation assigns the correct Wolf for positions 1–16 given a known order.
 2. Rotation follows played position, not hole number, under a shotgun start.
 3. Each `finalHolesRule` produces the documented Wolf on positions 17 and 18.
-3a. Under `low_points`, the position-17 Wolf freezes when position 16 first completes, and a later
-    correction to an earlier hole's score does **not** move it.
-3b. Under `low_points`, a points tie at freeze time resolves to the player earlier in the rotation
-    order, and two devices with the same frozen facts agree.
-3c. Under `none`, positions 17 and 18 are scored, award no Wolf points, and require no declaration.
-4. Every row of the default points table awards correctly, including both tie cases.
-5. Lone Wolf compares the Wolf's single ball against the best ball of the other three.
-6. Blind Wolf awards the doubled value and is rejected when the toggle is off.
-7. A hole scored but undeclared awards nothing, appears in `unresolvedHoles`, and blocks completion.
-8. A partner id outside the other three for that hole is rejected by normalization.
-9. Net strokes come from the lowest Game Handicap among the four and do not change per hole.
-10. Settlement is zero-sum and matches `optimalSettlementRows`.
-11. **Regression:** rendering a hole card without the Wolf control, then saving, preserves the existing
+4. Under `low_points`, the position-17 Wolf freezes when position 16 first completes, and a later
+   correction to an earlier hole's score does **not** move it.
+5. Under `low_points`, a points tie at freeze time resolves to the player earlier in the rotation
+   order.
+6. Under `none`, positions 17 and 18 are scored, award no Wolf points, and require no declaration.
+7. Every row of the default points table awards correctly, including both tie cases.
+8. Lone Wolf compares the Wolf's single ball against the best ball of the other three.
+9. Blind Wolf awards the doubled value and is rejected when the toggle is off.
+10. A hole scored but undeclared awards nothing, appears in `unresolvedHoles`, and blocks completion.
+11. A partner id outside the other three for that hole is rejected by normalization.
+12. Normalization tolerates unknown extra keys in a hole input without discarding valid fields.
+13. Net strokes come from the lowest Game Handicap among the four and do not change per hole.
+14. Settlement is zero-sum and matches `optimalSettlementRows`.
+15. **Regression:** rendering a hole card without the Wolf control, then saving, preserves the existing
     declaration.
-12. Reordering is refused once the round has a scored hole.
-13. Shared Match: two devices declaring different partners on the same hole produce a surfaced
-    conflict, not a silent overwrite.
-14. Shared Match: a joined device that is not the Wolf and not the host cannot write a declaration.
-15. A joined device hydrates existing declarations on join and renders identical points.
-16. The rules catalog exposes the Wolf contract with all six fields populated.
+16. Reordering is refused once the round has a scored hole.
+17. **Fail-closed:** Wolf cannot be selected for a Shared Match, and the picker states why.
+18. **Fail-closed:** converting a local match with Wolf to a Shared Match is refused with a clear
+    message, and the local round is left intact.
+19. **Fail-closed:** `buildSelectedGamesForCloud` publishes no Wolf config, and a Wolf config arriving
+    from a foreign source degrades safely without producing a settlement.
+20. No Wolf amount reaches the completion parity comparison.
+21. Existing games are unchanged in a mixed-game round, including one with Sixes.
+22. Classic and Player Mode report identical Wolf state.
+23. The rules catalog exposes the Wolf contract with all six fields populated.
 
-Run `npm test`, then simulation comparison, release sanity, validation, lint, layout checks, and a
-two-device Shared Match acceptance run covering declaration, conflict, and completion.
+Final checks: focused v31.0.42 tests, full `npm test`, simulation comparison, release sanity,
+validation, lint, Ledger layout checks with a real Wolf fixture, and an iPhone-width visual review at
+320, 375, and 430. **No two-device acceptance run is required in this release** — Wolf is local only —
+but confirm an existing Shared Match round is unaffected by the release.
 
 ---
 
 ## 14. Deferred
 
+- **Shared Match support for Wolf**, including the `wolfFacts` channel, three-way reconciliation,
+  declaration authority scoped to the hole's Wolf or the host, conflict surfacing, and parity-gated
+  completion. This is its own release with its own two-device acceptance run.
 - Three-, five-, and six-player Wolf (W5).
 - Pig / Lone Wolf carryover variants.
+- Carry treatment for tied holes (`tieTreatment`).
 - Presses on Wolf.
 - Automatic Wolf order suggestion by handicap or by previous-round finish.
 - Declaration timestamps used to enforce declaration-before-tee-shot ordering; v1 records the timestamp

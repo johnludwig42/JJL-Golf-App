@@ -6322,10 +6322,16 @@ body.classic-mode-play-active{overflow-x:clip!important;overflow-y:visible!impor
 .wolf-entry > summary small { color: var(--muted); }
 .wolf-entry-controls { display: grid; gap: 10px; padding: 0 14px 14px; }
 .wolf-entry-controls label { display: grid; gap: 5px; }
+.wolf-entry-label { display: block; margin-bottom: 5px; }
+.wolf-declaration-options { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.wolf-declaration-options > button { font-weight: 700; overflow-wrap: anywhere; }
+.wolf-clear-declaration { width: auto; min-height: 44px; margin-top: 8px; border-style: dashed; color: var(--muted); }
 .wolf-entry-readback { padding: 8px 10px; border-radius: 10px; background: var(--soft, #f3f7f4); }
 .wolf-point-config { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
 .wolf-point-config > strong { grid-column: 1 / -1; }
 @media (max-width: 520px) {
+  .wolf-declaration-options,
+  .wolf-declaration-options.player-mode-five-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .wolf-point-config { grid-template-columns: 1fr; }
 }
 @media print {

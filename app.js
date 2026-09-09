@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.43',
-  versionNumber: '31.0.43',
-  cacheName: 'the-dye-ledger-v31.0.43',
-  buildDate: '2026-09-09T10:30:00-04:00',
-  buildLabel: 'Wolf Test Coverage and Adapter Metadata'
+  version: 'v31.0.44',
+  versionNumber: '31.0.44',
+  cacheName: 'the-dye-ledger-v31.0.44',
+  buildDate: '2026-09-09T12:00:00-04:00',
+  buildLabel: 'Wolf Declaration Experience'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -2635,6 +2635,25 @@ function normalizeWolfInputs(match) {
 function getWolfHoleInput(match, holeNumber, metrics = null) {
   return normalizeWolfHoleInput(match, match?.wolfInputs?.[String(Number(holeNumber))] || {}, holeNumber, metrics);
 }
+function buildWolfDeclarationDraftFromDom(prior = {}, choiceControl = null, partnerControl = null, notesControl = null, declaredAt = '') {
+  if (!choiceControl) return { ...prior };
+  const choice = String(choiceControl.value || '');
+  return {
+    ...prior,
+    choice,
+    partnerPlayerId: partnerControl ? String(partnerControl.value || '') : String(prior.partnerPlayerId || ''),
+    notes: notesControl ? String(notesControl.value || '').slice(0, 240) : String(prior.notes || ''),
+    declaredAt: choice ? (prior.declaredAt || declaredAt || new Date().toISOString()) : '',
+  };
+}
+function setWolfDeclarationDomChoice(entry, choice, partnerPlayerId = '') {
+  const choiceControl = entry?.querySelector?.('[data-wolf-choice]');
+  const partnerControl = entry?.querySelector?.('[data-wolf-partner]');
+  if (!choiceControl || !partnerControl) return false;
+  choiceControl.value = String(choice || '');
+  partnerControl.value = choice === 'partner' ? String(partnerPlayerId || '') : '';
+  return true;
+}
 function formatWolfStandings(wolf, { firstNames = false } = {}) {
   return (wolf?.playerIds || []).map(id => {
     const name = getPlayer(id)?.name || id;
@@ -3131,6 +3150,7 @@ const uiState = {
   pendingLedgerOpenMatchId: null,
   activeSetupDestination: '',
   nearbyCourseDistances: {},
+  wolfDismissedEntryKey: '',
 };
 let pendingNextRoundSessionContext = null;
 const roundRecapGenerationInFlight = new Map();
@@ -13812,13 +13832,9 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
   const wolfChoiceControl = document.querySelector('[data-wolf-choice]');
   if (isWolfEnabled(match) && wolfChoiceControl) {
     const prior = getWolfHoleInput(match, actualHoleNumber);
-    const raw = {
-      ...prior,
-      choice: String(wolfChoiceControl.value || ''),
-      partnerPlayerId: String(document.querySelector('[data-wolf-partner]')?.value || ''),
-      notes: String(document.querySelector('[data-wolf-notes]')?.value || '').slice(0, 240),
-      declaredAt: wolfChoiceControl.value ? (prior.declaredAt || new Date().toISOString()) : '',
-    };
+    const wolfPartnerControl = document.querySelector('[data-wolf-partner]');
+    const wolfNotesControl = document.querySelector('[data-wolf-notes]');
+    const raw = buildWolfDeclarationDraftFromDom(prior, wolfChoiceControl, wolfPartnerControl, wolfNotesControl);
     const next = normalizeWolfHoleInput(match, raw, actualHoleNumber);
     if (JSON.stringify(prior) !== JSON.stringify(next)) {
       match.wolfInputs = match.wolfInputs && typeof match.wolfInputs === 'object' ? match.wolfInputs : {};
@@ -18798,7 +18814,23 @@ function renderWolfEntry(match, hole, metrics) {
     return;
   }
   const status = !result?.scored ? 'Enter all four scores to resolve this hole.' : !result?.resolved ? 'Declaration needed — this hole currently awards no Wolf points.' : result.winner === 'tied' ? 'Hole tied · no points' : `${result.winner === 'wolf' ? 'Wolf side' : 'Opponents'} won`;
-  host.innerHTML = `<details class="wolf-entry" ${input.choice ? '' : 'open'}><summary><span><strong>Wolf · ${escapeHtml(wolf?.player?.name || 'Assignment pending')}</strong><small>Hole ${holeNumber} · Position ${position}</small></span><span>${escapeHtml(input.choice === 'partner' ? `Partner: ${partners.find(row => row.id === input.partnerPlayerId)?.name || 'Select'}` : input.choice === 'blind' ? 'Blind Wolf' : input.choice === 'lone' ? 'Lone Wolf' : 'Undeclared')}</span></summary><div class="wolf-entry-controls top-gap"><label><span>Declaration</span><select data-wolf-choice><option value="" ${!input.choice ? 'selected' : ''}>Select declaration</option><option value="partner" ${input.choice === 'partner' ? 'selected' : ''}>Take a partner</option>${cfg.allowLoneWolf ? `<option value="lone" ${input.choice === 'lone' ? 'selected' : ''}>Lone Wolf</option>` : ''}${cfg.allowBlindWolf ? `<option value="blind" ${input.choice === 'blind' ? 'selected' : ''}>Blind Wolf</option>` : ''}</select></label><label class="${input.choice === 'partner' ? '' : 'hidden'}" data-wolf-partner-row><span>Partner</span><select data-wolf-partner><option value="">Select partner</option>${partners.map(row => `<option value="${escapeHtml(row.id)}" ${row.id === input.partnerPlayerId ? 'selected' : ''}>${escapeHtml(row.name)}</option>`).join('')}</select></label><label><span>Optional note</span><input data-wolf-notes maxlength="240" value="${escapeHtml(input.notes)}"></label><div class="tiny wolf-entry-readback" aria-live="polite">${escapeHtml(status)}</div></div></details>`;
+  const entryKey = `${String(match.id || 'active')}:${holeNumber}`;
+  const autoOpen = !input.choice && uiState.wolfDismissedEntryKey !== entryKey;
+  const playingOrder = position && position !== holeNumber ? `${position}${position % 100 >= 11 && position % 100 <= 13 ? 'th' : position % 10 === 1 ? 'st' : position % 10 === 2 ? 'nd' : position % 10 === 3 ? 'rd' : 'th'} hole played` : '';
+  const holeContext = `Hole ${holeNumber}${playingOrder ? ` · ${playingOrder}` : ''}`;
+  const pendingGateHole = position >= 17 ? getWolfPlayOrder(match, metrics)[position - 2] : null;
+  const wolfLabel = wolf?.player?.name || (pendingGateHole ? `Assignment pending — decided after Hole ${pendingGateHole}` : 'Assignment pending');
+  const firstNameCounts = partners.reduce((counts, row) => { const first = String(row.name || 'Player').trim().split(/\s+/)[0] || 'Player'; counts[first] = (counts[first] || 0) + 1; return counts; }, {});
+  const partnerButtons = partners.map(row => {
+    const first = String(row.name || 'Player').trim().split(/\s+/)[0] || 'Player';
+    const label = firstNameCounts[first] === 1 ? first : row.name;
+    const active = input.choice === 'partner' && input.partnerPlayerId === row.id;
+    return `<button type="button" data-wolf-declaration="partner" data-wolf-partner-id="${escapeHtml(row.id)}" class="${active ? 'is-active' : ''}" aria-pressed="${active ? 'true' : 'false'}">${escapeHtml(label)}</button>`;
+  }).join('');
+  const loneActive = input.choice === 'lone';
+  const blindActive = input.choice === 'blind';
+  const declarationSummary = input.choice === 'partner' ? `Partner: ${partners.find(row => row.id === input.partnerPlayerId)?.name || 'Select'}` : input.choice === 'blind' ? 'Blind Wolf' : input.choice === 'lone' ? 'Lone Wolf' : 'Undeclared';
+  host.innerHTML = `<details class="wolf-entry" data-wolf-entry-key="${escapeHtml(entryKey)}" ${input.choice || !autoOpen ? '' : 'open'}><summary><span><strong>Wolf · ${escapeHtml(wolfLabel)}</strong><small>${escapeHtml(holeContext)}</small></span><span>${escapeHtml(declarationSummary)}</span></summary><div class="wolf-entry-controls top-gap"><div><span class="wolf-entry-label" id="wolfDeclarationLabel">Declaration</span><div class="player-mode-stat-options ${cfg.allowBlindWolf ? 'player-mode-five-options' : ''} wolf-declaration-options" role="group" aria-labelledby="wolfDeclarationLabel">${partnerButtons}${cfg.allowLoneWolf ? `<button type="button" data-wolf-declaration="lone" class="${loneActive ? 'is-active' : ''}" aria-pressed="${loneActive ? 'true' : 'false'}">Lone Wolf</button>` : ''}${cfg.allowBlindWolf ? `<button type="button" data-wolf-declaration="blind" class="${blindActive ? 'is-active' : ''}" aria-pressed="${blindActive ? 'true' : 'false'}">Blind Wolf</button>` : ''}</div>${input.choice ? '<button type="button" class="secondary wolf-clear-declaration" data-wolf-declaration="" aria-pressed="false">Clear declaration</button>' : ''}</div><input type="hidden" data-wolf-choice value="${escapeHtml(input.choice)}"><input type="hidden" data-wolf-partner value="${escapeHtml(input.partnerPlayerId)}"><label><span>Optional note</span><input data-wolf-notes maxlength="240" value="${escapeHtml(input.notes)}"></label><div class="tiny wolf-entry-readback" aria-live="polite">${escapeHtml(status)}</div></div></details>`;
   host.classList.remove('hidden');
 }
 function renderSneakySandyPoleyEntry(match, hole, metrics) {
@@ -23475,6 +23507,33 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       switchPlayInputMode(modeSwitch.dataset.playModeSwitch);
       return;
     }
+    const wolfSummary = e.target.closest('summary')?.closest('.wolf-entry');
+    if (wolfSummary) {
+      window.setTimeout(() => {
+        const key = String(wolfSummary.dataset.wolfEntryKey || '');
+        if (!key) return;
+        if (wolfSummary.open) {
+          if (uiState.wolfDismissedEntryKey === key) uiState.wolfDismissedEntryKey = '';
+        } else {
+          uiState.wolfDismissedEntryKey = key;
+        }
+      }, 0);
+      return;
+    }
+    const wolfDeclaration = e.target.closest('[data-wolf-declaration]');
+    if (wolfDeclaration) {
+      const match = getActiveMatch();
+      const entry = wolfDeclaration.closest('.wolf-entry');
+      const choiceControl = entry?.querySelector('[data-wolf-choice]');
+      const partnerControl = entry?.querySelector('[data-wolf-partner]');
+      if (!match || !choiceControl || !partnerControl) return;
+      const choice = String(wolfDeclaration.dataset.wolfDeclaration || '');
+      if (!setWolfDeclarationDomChoice(entry, choice, wolfDeclaration.dataset.wolfPartnerId || '')) return;
+      applyCurrentHoleDomToMatch(match);
+      persist({ skipRender: true });
+      renderCurrentMatch();
+      return;
+    }
     if (e.target.closest('[data-player-mode-previous]')) {
       saveCurrentHole({ targetHole: 'previous', silent: true });
       return;
@@ -25563,6 +25622,8 @@ function installDyeLedgerLiveEngineAdapter() {
     normalizeWolfHoleInput,
     normalizeWolfInputs,
     getWolfHoleInput,
+    buildWolfDeclarationDraftFromDom,
+    setWolfDeclarationDomChoice,
     getWolfPlayOrder,
     getWolfPlayerIdForPosition,
     computeWolfResults,

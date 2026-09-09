@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current release: **v31.0.43 — Wolf Test Coverage and Adapter Metadata** on `release/v31.0.43`. This behavior-neutral release closes verified Wolf test gaps, reports Wolf accurately in live-adapter coverage metadata, and preserves all scoring, settlement, presentation, persistence, and Shared Match behavior. No database migration is required.
+Current release: **v31.0.44 — Wolf Declaration Experience** on `release/v31.0.44`. This presentation-only release replaces Wolf's two-select declaration flow with a responsive one-tap choice row, preserves the authoritative Play save path, makes undeclared auto-open dismissible for the session, and clarifies pending and nonstandard playing-order context. Wolf remains local scoring only, and no database migration is required.
 
 ## 2. Development Roles
 

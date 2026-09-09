@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current release: **v31.0.40 — Foundational Games: Sixes (6-6-6)** on `release/v31.0.40`. This release adds four-player rotating-partnership Sixes with Player Points (default) and Segment Matches scoring modes, round-wide game-handicap allocation, mode-specific settlement and finality, Shared Match compatibility, and complete live and Ledger Entry presentation. It has no database migration.
+Current release: **v31.0.41 — Classic Play Overflow Menu and Featured Competition Row** on `release/v31.0.41`. This presentation-only release contains both Play overflow menus inside narrow mobile viewports, adds consistent dismissal and focus behavior, and gives the Classic featured competition its own full-width status row. It changes no scoring, statistics, persistence, synchronization, settlement, or reporting behavior and has no database migration.
 
 ## 2. Development Roles
 

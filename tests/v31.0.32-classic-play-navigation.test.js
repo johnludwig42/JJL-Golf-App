@@ -40,7 +40,9 @@ test('Classic header renders current-hole facts and one resolved featured status
   const selector = section('function renderHoleSelector', 'function renderSneakySandyPoleyEntry');
   assert.match(selector, /playerHeader\.innerHTML = ''/);
   assert.match(selector, /classic-hole-meta">\$\{holeMetaText\}/);
-  assert.match(selector, /classic-header-match-status">\$\{featuredStatusPair\}/);
+  assert.match(html, /id="classicHeaderMatchStatus" class="classic-header-match-status hidden"/);
+  assert.match(selector, /classicMatchStatus\.innerHTML = featuredStatusPair/);
+  assert.match(selector, /classicMatchStatus\.classList\.toggle\('hidden', !featuredStatusPair\)/);
   assert.match(selector, /buildPlayFeaturedStatusPair\(match, metrics, 'team_match'\)/);
   assert.match(selector, /buildPlaySaveState\(match\)/);
   const classic = section('function renderClassicPlayInputMode', 'function getEffectivePlayerStatTrackingMode');
@@ -63,10 +65,11 @@ test('Classic overflow relocates End Round Early without changing its completion
   assert.match(html, /id="classicPlayOverflowMenu"[\s\S]*id="endRoundEarlyBtn"/);
   assert.match(html, /id="classicRoundScoringModeSelect"/);
   assert.match(html, /id="classicRoundStatModeSelect"/);
-  assert.match(app, /data-classic-play-overflow/);
+  assert.match(html, /data-classic-play-overflow/);
+  assert.match(app, /togglePlayOverflowMenu\(overflowButton\)/);
   const finishUi = section('function syncFinishRoundUi', 'function renderScoreboard');
   assert.match(finishUi, /show\(scoringEarlyBtn, hasMatch && !isComplete && activeRound && !dataCompletion\?\.scoresComplete && \(!playerMode \|\| playerCompletionContext\)\)/);
-  assert.match(html, /When every score is entered, use Complete Round in Round Progress\./);
+  assert.doesNotMatch(html, /When every score is entered, use Complete Round in Round Progress\./);
 });
 
 test('Classic and Player remain adapters over one score, stat, GIR, net, and persistence contract', () => {

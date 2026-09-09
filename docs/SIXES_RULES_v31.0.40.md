@@ -291,7 +291,7 @@ Adding a new key does not require bumping `COMPETITION_RULES_CATALOG_VERSION`. D
 ## 8. Setup experience
 
 **Games picker group.** Add a fourth group to `GAME_SELECTION_GROUPS`, **Rotating Partnerships**,
-holding Sixes now and Wolf in v31.0.41.
+holding Sixes now and Wolf in v31.0.42.
 
 **Config card** (`renderGamesPicker`, follow the `nine_point` card at ~line 20997):
 

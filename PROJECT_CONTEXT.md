@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current release: **v31.0.42 — Foundational Games: Wolf** on `release/v31.0.42`. This release adds four-player, local-only Wolf with saved rotation order, partner/Lone/Blind declarations, gross or net scoring, configurable point schedules, head-to-head settlement, final-hole rules, and complete Play, Scores, Story, and Ledger Entry presentation. Wolf fails closed at the Shared Match boundary and requires no database migration.
+Current release: **v31.0.43 — Wolf Test Coverage and Adapter Metadata** on `release/v31.0.43`. This behavior-neutral release closes verified Wolf test gaps, reports Wolf accurately in live-adapter coverage metadata, and preserves all scoring, settlement, presentation, persistence, and Shared Match behavior. No database migration is required.
 
 ## 2. Development Roles
 

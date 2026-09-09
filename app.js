@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.42',
-  versionNumber: '31.0.42',
-  cacheName: 'the-dye-ledger-v31.0.42',
-  buildDate: '2026-09-08T23:00:00-04:00',
-  buildLabel: 'Foundational Games: Wolf'
+  version: 'v31.0.43',
+  versionNumber: '31.0.43',
+  cacheName: 'the-dye-ledger-v31.0.43',
+  buildDate: '2026-09-09T10:30:00-04:00',
+  buildLabel: 'Wolf Test Coverage and Adapter Metadata'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;

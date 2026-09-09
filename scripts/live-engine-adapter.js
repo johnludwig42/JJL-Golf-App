@@ -18,6 +18,7 @@ const LIVE_FUNCTIONS_USED = [
   'computeSkinResults',
   'computeNinePointResults',
   'computeSixesResults',
+  'computeWolfResults',
   'buildSneakySandyPoleyLedger',
   'resolveSneakySandyPoleyProxSelection',
   'buildSharedSspFacts',

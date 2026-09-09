@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.41',
-  versionNumber: '31.0.41',
-  cacheName: 'the-dye-ledger-v31.0.41',
-  buildDate: '2026-09-08T19:00:00-04:00',
-  buildLabel: 'Classic Play Header and Overflow Clarity'
+  version: 'v31.0.42',
+  versionNumber: '31.0.42',
+  cacheName: 'the-dye-ledger-v31.0.42',
+  buildDate: '2026-09-08T23:00:00-04:00',
+  buildLabel: 'Foundational Games: Wolf'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -489,12 +489,13 @@ const GAME_LIBRARY = [
   { key: 'sneaky_sandy_poley', label: 'Sneaky / Sandy / Poley' },
   { key: 'nine_point', label: '9-Point Game' },
   { key: 'sixes', label: 'Sixes (6-6-6)' },
+  { key: 'wolf', label: 'Wolf' },
 ];
 const GAME_SELECTION_GROUPS = Object.freeze([
   { label: 'Nassau & Match Play', keys: ['nassau', 'singles_match', 'individual_match', 'team_match'] },
   { label: 'Stroke & Hole Games', keys: ['team_stroke', 'skins', 'net_skins', 'greenies'] },
   { label: 'Specialty Games', keys: ['sneaky_sandy_poley', 'nine_point'] },
-  { label: 'Rotating Partnerships', keys: ['sixes'] },
+  { label: 'Rotating Partnerships', keys: ['sixes', 'wolf'] },
 ]);
 
 const COMPETITION_RULES_CATALOG_VERSION = 1;
@@ -510,6 +511,7 @@ const COMPETITION_RULES_CATALOG = Object.freeze({
   sneaky_sandy_poley: Object.freeze({ scoringMethod: 'Versioned SSP points ledger using saved manual facts and net low-ball/low-total results', allowance: 'Round allowance applied to net components', tieTreatment: 'Tied comparisons push for no base point', stakeMeaning: 'Final team point differential multiplied by dollars per point', escalation: 'Bridge/Re-Bridge and Umbee follow the saved SSP contract', finality: 'Final when all required scores and SSP facts are complete' }),
   nine_point: Object.freeze({ scoringMethod: 'Exactly nine points divided among three players on each completed hole', allowance: 'Saved gross or round-allowance net basis', tieTreatment: 'Points split according to the saved 9-Point scoring table', stakeMeaning: 'Final point differentials settle head-to-head at dollars per point', escalation: 'No implicit escalation', finality: 'Final when every required hole has three valid scores' }),
   sixes: Object.freeze({ scoringMethod: 'Partnerships rotate every six holes so each player partners each other player once; the lower better ball wins the hole', allowance: 'Game-specific allowance is applied to each unrounded Course Handicap, then each Game Handicap is rounded before strokes are allocated from the lowest Game Handicap among the four Sixes players, constant for the whole round', tieTreatment: 'A tied hole is halved, awards nothing, and does not carry', stakeMeaning: 'Set by the saved scoring mode', escalation: 'No implicit escalation', finality: 'Set by the saved scoring mode' }),
+  wolf: Object.freeze({ scoringMethod: 'The rotating Wolf chooses a partner or plays alone; best-ball sides are compared on each resolved hole', allowance: 'Game-specific allowance is applied to each unrounded Course Handicap, then each Game Handicap is rounded before strokes are allocated from the lowest Game Handicap among the four Wolf players, constant for the whole round', tieTreatment: 'A tied hole awards no points and does not carry', stakeMeaning: 'Final point differentials settle head-to-head at the saved dollars per point', escalation: 'Lone Wolf and Blind Wolf use the saved point schedule; no implicit escalation', finality: 'Final when every played Wolf hole has four valid scores and a resolved declaration' }),
 });
 
 function getCompetitionRulesContract(gameKey, config = {}) {
@@ -2165,6 +2167,7 @@ function normalizeSelectedGamesOrder(games = []) {
     team_match: 15,
     singles_match: 20,
     sixes: 25,
+    wolf: 26,
     skins: 30,
     net_skins: 31,
     nine_point: 40,
@@ -2550,6 +2553,197 @@ function formatSixesPointStandings(sixes, { firstNames = false } = {}) {
   });
   return groups.map(group => `${group.names.join(' / ')} ${group.total}`).join(' · ');
 }
+const WOLF_POINT_DEFAULTS = Object.freeze({ teamWin: 1, opponentsWin: 1, loneWolfWin: 4, loneWolfLoss: 1, blindWolfWin: 8, blindWolfLoss: 1 });
+function normalizeWolfConfig(config = {}) {
+  const basis = String(config?.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net';
+  const finalHolesRule = ['continue', 'low_points', 'none'].includes(config?.finalHolesRule) ? config.finalHolesRule : 'continue';
+  const rawPoints = config?.points && typeof config.points === 'object' ? config.points : {};
+  const points = Object.fromEntries(Object.entries(WOLF_POINT_DEFAULTS).map(([key, fallback]) => {
+    const value = Number(rawPoints[key]);
+    return [key, Number.isFinite(value) ? Math.max(0, value) : fallback];
+  }));
+  return {
+    ...config,
+    key: 'wolf',
+    basis,
+    playerIds: Array.isArray(config?.playerIds) ? config.playerIds.filter(Boolean).slice(0, 4).map(String) : [],
+    allowLoneWolf: config?.allowLoneWolf !== false,
+    allowBlindWolf: config?.allowBlindWolf === true,
+    finalHolesRule,
+    tieTreatment: 'no_points',
+    points,
+    pointValue: Number.isFinite(Number(config?.pointValue)) ? Math.max(0, Number(config.pointValue)) : 1,
+    handicapAllowanceMode: basis === 'gross' ? 'not_used' : (config?.handicapAllowanceMode === 'custom' ? 'custom' : 'recommended'),
+    handicapAllowancePercent: basis === 'gross' ? 0 : normalizeHandicapAllowancePercent(config?.handicapAllowancePercent, 100),
+  };
+}
+function getWolfConfig(match) {
+  const raw = (match?.selectedGames || []).find(game => game?.key === 'wolf');
+  return raw ? normalizeWolfConfig(raw) : null;
+}
+function isWolfEnabled(match) { return !!getWolfConfig(match); }
+function getWolfPlayerOptions(players, selectedIds = []) {
+  const chosen = Array.isArray(selectedIds) ? selectedIds.slice(0, 4).map(String) : [];
+  while (chosen.length < 4) chosen.push('');
+  return [0, 1, 2, 3].map(index => {
+    const otherIds = new Set(chosen.filter((id, otherIndex) => otherIndex !== index && id));
+    return (players || []).filter(player => !otherIds.has(String(player.id)) || String(player.id) === chosen[index]);
+  });
+}
+function getDefaultWolfHoleInput(match, holeNumber) {
+  return { holeNumber: Number(holeNumber) || 0, choice: '', partnerPlayerId: '', declaredAt: '', notes: '' };
+}
+function getWolfPlayOrder(match, metrics = null) {
+  if (metrics) return getActualPlayOrder(match, metrics).map(Number);
+  const tee = getMatchTee(match, match?.teeId);
+  return getSelectedScoringHoles(match, tee).map(hole => Number(hole.holeNumber));
+}
+function getWolfPlayerIdForPosition(match, position, cfg = getWolfConfig(match)) {
+  if (!cfg || cfg.playerIds.length !== 4 || position < 1) return '';
+  if (position >= 17) {
+    if (cfg.finalHolesRule === 'none') return '';
+    if (cfg.finalHolesRule === 'low_points') return String(match?.wolfFinalHoleAssignments?.[String(position)]?.playerId || '');
+  }
+  return String(cfg.playerIds[(position - 1) % 4] || '');
+}
+function normalizeWolfHoleInput(match, raw = {}, holeNumber, metrics = null) {
+  const base = raw && typeof raw === 'object' ? { ...raw } : {};
+  const normalized = { ...base, ...getDefaultWolfHoleInput(match, holeNumber), ...base };
+  normalized.holeNumber = Number(holeNumber || base.holeNumber) || 0;
+  normalized.choice = ['partner', 'lone', 'blind'].includes(String(base.choice || '')) ? String(base.choice) : '';
+  normalized.partnerPlayerId = String(base.partnerPlayerId || '');
+  normalized.declaredAt = String(base.declaredAt || '');
+  normalized.notes = String(base.notes || '').slice(0, 240);
+  const cfg = getWolfConfig(match);
+  const position = getWolfPlayOrder(match, metrics).indexOf(normalized.holeNumber) + 1;
+  const wolfId = getWolfPlayerIdForPosition(match, position, cfg);
+  const validPartners = new Set((cfg?.playerIds || []).filter(id => String(id) !== wolfId).map(String));
+  if (normalized.choice === 'partner' && normalized.partnerPlayerId && !validPartners.has(normalized.partnerPlayerId)) {
+    normalized.choice = '';
+    normalized.partnerPlayerId = '';
+  }
+  if (normalized.choice !== 'partner') normalized.partnerPlayerId = '';
+  if (normalized.choice === 'lone' && !cfg?.allowLoneWolf) normalized.choice = '';
+  if (normalized.choice === 'blind' && (!cfg?.allowLoneWolf || !cfg?.allowBlindWolf)) normalized.choice = '';
+  return normalized;
+}
+function normalizeWolfInputs(match) {
+  const raw = match?.wolfInputs && typeof match.wolfInputs === 'object' ? match.wolfInputs : {};
+  match.wolfInputs = Object.fromEntries(Object.entries(raw).map(([holeNumber, input]) => [String(Number(holeNumber)), normalizeWolfHoleInput(match, input, Number(holeNumber))]).filter(([key]) => Number(key) > 0));
+  return match.wolfInputs;
+}
+function getWolfHoleInput(match, holeNumber, metrics = null) {
+  return normalizeWolfHoleInput(match, match?.wolfInputs?.[String(Number(holeNumber))] || {}, holeNumber, metrics);
+}
+function formatWolfStandings(wolf, { firstNames = false } = {}) {
+  return (wolf?.playerIds || []).map(id => {
+    const name = getPlayer(id)?.name || id;
+    return { name: firstNames ? String(name).trim().split(/\s+/)[0] : name, total: Number(wolf.totals[id] || 0) };
+  }).sort((a, b) => b.total - a.total || a.name.localeCompare(b.name)).map(row => `${row.name} ${row.total}`).join(' · ');
+}
+function buildWolfScorecard(match, metrics) {
+  const wolf = computeWolfResults(match, metrics, getWolfConfig(match) || {});
+  if (wolf.playerIds.length !== 4) return '<div class="tiny">Select 4 players in order to enable the Wolf scorecard.</div>';
+  const playerName = id => getPlayer(id)?.name || id || '—';
+  const rows = wolf.holes.map(hole => `<tr><td>H${hole.holeNumber}</td><td>${escapeHtml(playerName(hole.wolfPlayerId))}</td><td>${escapeHtml(hole.noWolf ? 'No Wolf' : hole.choice === 'partner' ? `Partner · ${playerName(hole.partnerPlayerId)}` : hole.choice === 'blind' ? 'Blind Wolf' : hole.choice === 'lone' ? 'Lone Wolf' : 'Undeclared')}</td><td>${hole.resolved ? escapeHtml(hole.winner === 'wolf' ? 'Wolf side' : hole.winner === 'opponents' ? 'Opponents' : 'Tie') : '—'}</td>${wolf.playerIds.map(id => `<td>${hole.resolved ? Number(hole.points[id] || 0) : '—'}</td>`).join('')}</tr>`).join('');
+  const totals = `<tr><td colspan="4"><strong>Total</strong></td>${wolf.playerIds.map(id => `<td><strong>${Number(wolf.totals[id] || 0)}</strong><br><small>${formatMoneyAccounting(wolf.amounts[id] || 0)}</small></td>`).join('')}</tr>`;
+  return `<div class="wolf-scorecard"><div class="tiny"><strong>${escapeHtml(formatBasisLabel(wolf.basis))} Wolf</strong> · ${formatMoneyAccounting(wolf.pointValue)} per point · ${wolf.resolvedHoles} resolved hole${wolf.resolvedHoles === 1 ? '' : 's'}${wolf.unresolvedHoles.length ? ` · Needs declarations: ${wolf.unresolvedHoles.join(', ')}` : ''}</div><div class="scorecard-scroll top-gap"><table class="scorecard-table"><thead><tr><th>Hole</th><th>Wolf</th><th>Declaration</th><th>Result</th>${wolf.playerIds.map(id => `<th>${escapeHtml(String(playerName(id)).split(/\s+/)[0])}</th>`).join('')}</tr></thead><tbody>${rows}${totals}</tbody></table></div><div class="tiny top-gap">Tied holes award no points and do not carry. Settlement compares every player pair using final point differentials.</div></div>`;
+}
+function computeWolfResults(match, metrics, inputConfig = {}) {
+  const cfg = normalizeWolfConfig(inputConfig?.key ? inputConfig : (getWolfConfig(match) || inputConfig));
+  const chosenMetrics = cfg.playerIds.map(id => metrics?.players?.find(player => String(player.playerId) === id)).filter(Boolean);
+  const playerIds = [...new Set(chosenMetrics.map(player => String(player.playerId)))];
+  const result = { basis: cfg.basis, pointValue: cfg.pointValue, points: { ...cfg.points }, playerIds, players: chosenMetrics, holes: [], totals: {}, amounts: {}, settlements: [], unresolvedHoles: [], resolvedHoles: 0, completedHoles: 0, isFinal: false };
+  playerIds.forEach(id => { result.totals[id] = 0; result.amounts[id] = 0; });
+  if (!metrics || playerIds.length !== 4 || chosenMetrics.length !== 4) return result;
+  const allowance = cfg.basis === 'gross' ? 0 : cfg.handicapAllowancePercent;
+  const gameHandicaps = Object.fromEntries(chosenMetrics.map(player => [String(player.playerId), cfg.basis === 'gross' ? 0 : Math.round((Number(player.unroundedCourseHdcp) || 0) * allowance / 100)]));
+  const lowGameHandicap = Math.min(...Object.values(gameHandicaps));
+  result.gameHandicaps = gameHandicaps;
+  result.lowGameHandicap = lowGameHandicap;
+  const holeResults = Array.isArray(metrics.holeResults) ? metrics.holeResults : [];
+  const holeByNumber = new Map(holeResults.map((hole, index) => [Number(hole?.holeNumber || index + 1), { hole, sourceIndex: index }]));
+  const ordered = getWolfPlayOrder(match, metrics).map(holeNumber => holeByNumber.get(holeNumber)).filter(Boolean);
+  ordered.forEach((orderedHole, index) => {
+    const position = index + 1;
+    const hole = orderedHole.hole;
+    const holeNumber = Number(hole?.holeNumber || position);
+    const wolfPlayerId = getWolfPlayerIdForPosition(match, position, cfg);
+    const points = Object.fromEntries(playerIds.map(id => [id, 0]));
+    const values = {};
+    const grossValues = {};
+    playerIds.forEach(id => {
+      const playerMetric = chosenMetrics.find(player => String(player.playerId) === id);
+      const score = hole?.playerScores?.find(row => String(row.playerId) === id);
+      const gross = Number(score?.gross) || null;
+      grossValues[id] = gross;
+      if (!gross) return;
+      if (cfg.basis === 'gross') values[id] = gross;
+      else {
+        const strokeIndex = Number(score?.strokeIndex || hole?.strokeIndex || getPlayerHole(match, playerMetric, orderedHole.sourceIndex, metrics?.tee)?.strokeIndex) || 0;
+        values[id] = gross - holeStrokeAllowanceForPlayer(strokeIndex, gameHandicaps[id], lowGameHandicap);
+      }
+    });
+    const scored = playerIds.every(id => Number.isFinite(values[id]));
+    if (scored) result.completedHoles += 1;
+    const noWolf = position >= 17 && cfg.finalHolesRule === 'none';
+    const input = noWolf ? getDefaultWolfHoleInput(match, holeNumber) : getWolfHoleInput(match, holeNumber, metrics);
+    const declared = noWolf || !!input.choice;
+    const validPartner = input.choice !== 'partner' || (input.partnerPlayerId && input.partnerPlayerId !== wolfPlayerId && playerIds.includes(input.partnerPlayerId));
+    const resolved = scored && declared && validPartner && (noWolf || !!wolfPlayerId);
+    const row = { holeNumber, position, wolfPlayerId, choice: input.choice, partnerPlayerId: input.partnerPlayerId, declared, scored, resolved, noWolf, wolfSidePlayerIds: [], opponentPlayerIds: [], wolfSideScore: null, opponentScore: null, winner: null, points, grossValues, values, runningTotals: { ...result.totals } };
+    if (scored && !resolved && !noWolf) result.unresolvedHoles.push(holeNumber);
+    if (!resolved || noWolf) { result.holes.push(row); return; }
+    result.resolvedHoles += 1;
+    row.wolfSidePlayerIds = input.choice === 'partner' ? [wolfPlayerId, input.partnerPlayerId] : [wolfPlayerId];
+    row.opponentPlayerIds = playerIds.filter(id => !row.wolfSidePlayerIds.includes(id));
+    row.wolfSideScore = Math.min(...row.wolfSidePlayerIds.map(id => values[id]));
+    row.opponentScore = Math.min(...row.opponentPlayerIds.map(id => values[id]));
+    row.winner = row.wolfSideScore < row.opponentScore ? 'wolf' : row.opponentScore < row.wolfSideScore ? 'opponents' : 'tied';
+    if (row.winner === 'wolf') {
+      if (input.choice === 'partner') row.wolfSidePlayerIds.forEach(id => { points[id] = cfg.points.teamWin; });
+      else points[wolfPlayerId] = input.choice === 'blind' ? cfg.points.blindWolfWin : cfg.points.loneWolfWin;
+    } else if (row.winner === 'opponents') {
+      const award = input.choice === 'partner' ? cfg.points.opponentsWin : (input.choice === 'blind' ? cfg.points.blindWolfLoss : cfg.points.loneWolfLoss);
+      row.opponentPlayerIds.forEach(id => { points[id] = award; });
+    }
+    playerIds.forEach(id => { result.totals[id] += Number(points[id] || 0); });
+    row.runningTotals = { ...result.totals };
+    result.holes.push(row);
+  });
+  for (let i = 0; i < playerIds.length; i += 1) for (let j = i + 1; j < playerIds.length; j += 1) {
+    const first = playerIds[i], second = playerIds[j];
+    const amount = (result.totals[first] - result.totals[second]) * cfg.pointValue;
+    result.amounts[first] += amount;
+    result.amounts[second] -= amount;
+  }
+  result.leaderboard = playerIds.map(id => ({ playerId: id, name: chosenMetrics.find(player => String(player.playerId) === id)?.player?.name || 'Player', total: result.totals[id], amount: result.amounts[id] })).sort((a, b) => b.total - a.total || cfg.playerIds.indexOf(a.playerId) - cfg.playerIds.indexOf(b.playerId));
+  result.settlements = optimalSettlementRows(result.amounts);
+  result.isFinal = result.holes.length > 0 && result.holes.every(row => row.scored && (row.noWolf || row.resolved));
+  return result;
+}
+function ensureWolfLifecycleFacts(match, metrics, timestamp = new Date().toISOString()) {
+  const cfg = getWolfConfig(match);
+  if (!cfg || cfg.playerIds.length !== 4) return false;
+  let changed = false;
+  const anyScore = (match.players || []).some(player => (player.scores || []).some(score => Number(score?.gross) > 0));
+  if (anyScore && !match.wolfOrderLockedAt) { match.wolfOrderLockedAt = timestamp; changed = true; }
+  match.wolfFinalHoleAssignments = match.wolfFinalHoleAssignments && typeof match.wolfFinalHoleAssignments === 'object' ? match.wolfFinalHoleAssignments : {};
+  if (cfg.finalHolesRule !== 'low_points' || !metrics) return changed;
+  const order = getWolfPlayOrder(match, metrics);
+  for (const position of [17, 18]) {
+    if (match.wolfFinalHoleAssignments[String(position)]) continue;
+    const qualifierHole = order[position - 2];
+    if (!qualifierHole || !match.holeFirstCompletedAt?.[String(qualifierHole)]) continue;
+    const current = computeWolfResults(match, metrics, cfg);
+    const ranked = cfg.playerIds.map((playerId, rotationIndex) => ({ playerId, rotationIndex, points: Number(current.totals[playerId] || 0) })).sort((a, b) => a.points - b.points || a.rotationIndex - b.rotationIndex);
+    const playerId = position === 17 ? ranked[0]?.playerId : ranked.find(row => row.playerId !== match.wolfFinalHoleAssignments['17']?.playerId)?.playerId;
+    if (!playerId) continue;
+    match.wolfFinalHoleAssignments[String(position)] = { playerId, frozenAt: timestamp, standings: Object.fromEntries(cfg.playerIds.map(id => [id, Number(current.totals[id] || 0)])) };
+    changed = true;
+  }
+  return changed;
+}
 function buildNinePointScorecard(match, metrics) {
   const cfg = (match?.selectedGames || []).find(g => g.key === 'nine_point') || {};
   const results = computeNinePointResults(match, metrics, cfg);
@@ -2638,6 +2832,7 @@ function resolveAutoFeaturedCompetition(match, metrics = null) {
   if (selected.some(g => g.key === 'nassau')) return 'nassau';
   if (selected.some(g => g.key === 'singles_match')) return 'singles_match';
   if (selected.some(g => g.key === 'sixes')) return 'sixes';
+  if (selected.some(g => g.key === 'wolf')) return 'wolf';
   if (selected.some(g => g.key === 'nine_point')) return 'nine_point';
   const skinsOnly = selected.filter(g => ['skins', 'net_skins'].includes(g.key));
   if (skinsOnly.length === 1 && selected.length === 1) return skinsOnly[0].key;
@@ -2664,14 +2859,14 @@ function getFeaturedCompetitionHandicapContext(match, metrics = null) {
   const raw = (match.selectedGames || []).find(game => String(game?.key) === String(key)) || null;
   if (!raw) return { key, label, basis: 'none', mode: 'none', config: null };
   if (key === 'individual_match') return { key, label, basis: 'varies', mode: 'none', config: raw };
-  const implicitNet = ['nassau', 'singles_match', 'team_match', 'net_skins', 'nine_point', 'sixes', 'sneaky_sandy_poley'].includes(key);
+  const implicitNet = ['nassau', 'singles_match', 'team_match', 'net_skins', 'nine_point', 'sixes', 'wolf', 'sneaky_sandy_poley'].includes(key);
   const implicitGross = ['skins', 'greenies', 'long_drive', 'closest_to_pin'].includes(key);
   const requestedBasis = String(raw.basis || (implicitNet ? 'net' : implicitGross ? 'gross' : 'gross')).toLowerCase();
   const basis = requestedBasis === 'net' || requestedBasis === 'both' ? 'net' : 'gross';
   if (basis !== 'net') return { key, label, basis: 'gross', mode: 'none', config: raw };
   const config = key === 'nassau'
     ? normalizeNassauConfig(raw, match)
-    : { ...raw, handicapAllowancePercent: normalizeHandicapAllowancePercent(raw.handicapAllowancePercent, key === 'sixes' ? 90 : match.allowance), scoringPolicyVersion: key === 'sixes' ? 1 : Number(raw.scoringPolicyVersion || 0) };
+    : { ...raw, handicapAllowancePercent: normalizeHandicapAllowancePercent(raw.handicapAllowancePercent, key === 'sixes' ? 90 : key === 'wolf' ? 100 : match.allowance), scoringPolicyVersion: ['sixes','wolf'].includes(key) ? 1 : Number(raw.scoringPolicyVersion || 0) };
   return { key, label, basis: 'net', mode: 'relative', config };
 }
 function getFeaturedCompetitionStrokeAllowance(match, metrics, playerMetric, strokeIndex) {
@@ -2751,6 +2946,14 @@ function getFeaturedCompetitionResult(match, metrics) {
       ? (sixes.completedHoles ? `${formatSixesPointStandings(sixes)} · ${sixes.completedHoles} holes` : 'No Sixes points yet.')
       : (decided.length ? decided.map(segment => `${segment.label}: ${segment.statusText}`).join(' · ') : 'No Sixes segment decided yet.');
     return { key, label: 'Sixes', result, selection };
+  }
+  if (key === 'wolf') {
+    const wolf = computeWolfResults(match, metrics, getWolfConfig(match) || {});
+    const leaders = wolf.playerIds.map(id => ({ id, points: Number(wolf.totals[id] || 0), name: getPlayer(id)?.name || id })).sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
+    const high = leaders[0]?.points;
+    const tied = leaders.filter(row => row.points === high);
+    const result = !wolf.resolvedHoles ? 'No Wolf holes resolved yet.' : `${tied.map(row => row.name).join(tied.length > 1 ? ' and ' : '')} ${high} pt${high === 1 ? '' : 's'} · ${wolf.resolvedHoles} resolved hole${wolf.resolvedHoles === 1 ? '' : 's'}`;
+    return { key, label: 'Wolf', result, selection };
   }
   if (['skins','net_skins','greenies','individual_match'].includes(key)) {
     const ctx = getPayoutReportContext(match, metrics);
@@ -4832,9 +5035,17 @@ function getRoundDataCompletionState(match, metrics = null) {
       });
     }
   }
+  if (isWolfEnabled(match)) {
+    const wolf = computeWolfResults(match, effectiveMetrics, getWolfConfig(match) || {});
+    if (wolf.unresolvedHoles.length) unresolved.push({
+      type: 'wolf',
+      count: wolf.unresolvedHoles.length,
+      label: `Wolf declaration${wolf.unresolvedHoles.length === 1 ? '' : 's'} unresolved on hole${wolf.unresolvedHoles.length === 1 ? '' : 's'} ${wolf.unresolvedHoles.join(', ')}`,
+    });
+  }
   const scoresComplete = scoreCompletion.isComplete;
   const statsComplete = !unresolved.some(item => item.type === 'stats');
-  const gamesComplete = !unresolved.some(item => item.type === 'ssp');
+  const gamesComplete = !unresolved.some(item => ['ssp', 'wolf'].includes(item.type));
   return {
     isReadyToFinish: scoresComplete && statsComplete && gamesComplete,
     scoresComplete,
@@ -6370,6 +6581,9 @@ function getGameClinchStates(match, metrics) {
         } else {
           sixes.segments.forEach(segment => states.push({ key, segment: segment.label, isClinched: segment.decided, holesRemaining: segment.holes.filter(hole => !hole.completed).length, resultText: segment.statusText }));
         }
+      } else if (key === 'wolf') {
+        const wolf = computeWolfResults(match, metrics, cfg);
+        states.push({ key, segment: 'points', isClinched: wolf.isFinal, holesRemaining: Math.max(0, getPlayableHoleCount(match, metrics?.tee) - wolf.completedHoles), resultText: wolf.isFinal ? 'Complete' : `${wolf.unresolvedHoles.length} unresolved declaration${wolf.unresolvedHoles.length === 1 ? '' : 's'}` });
       } else if (completion.isComplete) {
         states.push({ key, segment: 'overall', isClinched: true, holesRemaining: 0, resultText: 'Complete' });
       } else {
@@ -6395,6 +6609,7 @@ function hasUnresolvedSneakySandyPoleyValidation(match, metrics) {
 function areAllGamesFinal(match, metrics) {
   const completion = getRoundCompletionState(match, metrics);
   if (hasUnresolvedSneakySandyPoleyValidation(match, metrics)) return false;
+  if (isWolfEnabled(match) && !computeWolfResults(match, metrics, getWolfConfig(match) || {}).isFinal) return false;
   if (completion.isComplete) return true;
   const states = getGameClinchStates(match, metrics);
   if (!states.length) return false;
@@ -6941,6 +7156,17 @@ function buildLedgerEntryReportModel(match, metrics = null) {
           decided: segment.decided, complete: segment.complete,
           results: segment.holes.map(hole => ({ holeNumber: hole.holeNumber, completed: hole.completed, aScore: hole.aScore, bScore: hole.bScore, winner: hole.winner })),
         })),
+      };
+    }
+    if (config.key === 'wolf') {
+      const result = computeWolfResults(match, effectiveMetrics, config);
+      return {
+        ...common, type: 'wolf', scope: 'individual', unit: 'points', lowWins: false,
+        playerIds: result.playerIds.slice(), basis: result.basis, pointValue: result.pointValue,
+        settlementMode: 'headToHead', totals: { ...result.totals }, unresolvedHoles: result.unresolvedHoles.slice(),
+        pointsByHole: Object.fromEntries(result.playerIds.map(playerId => [playerId, result.holes.map(hole => hole.resolved ? Number(hole.points?.[playerId] || 0) : null)])),
+        allowance: { key: result.basis === 'gross' ? 'courseNet' : 'featured', label: result.basis === 'gross' ? 'Gross' : `${getWolfConfig(match)?.handicapAllowancePercent || 100}% Game Net` },
+        holes: result.holes.map(hole => ({ holeNumber: hole.holeNumber, wolfPlayerId: hole.wolfPlayerId, choice: hole.choice, partnerPlayerId: hole.partnerPlayerId, winner: hole.winner, resolved: hole.resolved })),
       };
     }
     if (['skins', 'net_skins'].includes(config.key) && config.skinsType !== 'team') {
@@ -7582,6 +7808,14 @@ function summarizeSelectedGamesForRecap(match, metrics) {
           stakePerSegment: sixes.stakePerSegment,
           segments: sixes.segments.map(segment => ({ segment: segment.index, holes: segment.holeNumbers, sideA: segment.sideA.label, sideB: segment.sideB.label, status: segment.statusText, winner: segment.winner })),
           amounts: Object.fromEntries(Object.entries(sixes.amounts).map(([id, amount]) => [getPlayer(id)?.name || id, Number(amount || 0)])),
+        };
+      } else if (cfg.key === 'wolf') {
+        const wolf = computeWolfResults(match, metrics, cfg);
+        item.summary = {
+          basis: formatBasisLabel(wolf.basis), pointValue: wolf.pointValue,
+          resolvedHoles: wolf.resolvedHoles, unresolvedHoles: wolf.unresolvedHoles.slice(),
+          standings: wolf.playerIds.map(id => ({ player: getPlayer(id)?.name || id, points: Number(wolf.totals[id] || 0), payout: Number(wolf.amounts[id] || 0) })),
+          holes: wolf.holes.filter(hole => hole.resolved).map(hole => ({ hole: hole.holeNumber, wolf: getPlayer(hole.wolfPlayerId)?.name || hole.wolfPlayerId, declaration: hole.choice, partner: hole.partnerPlayerId ? (getPlayer(hole.partnerPlayerId)?.name || hole.partnerPlayerId) : '', winner: hole.winner })),
         };
       } else if (cfg.key === 'individual_match') {
         item.summary = getIndividualMatchPairings(match, metrics).map(p => ({ label: p.label, game: getSideMatchGameLabel(p.game), basis: formatBasisLabel(p.basis), stake: Number(p.stake) || 0, status: p.status, completedHoles: p.completedCount }));
@@ -8384,6 +8618,8 @@ function buildLedgerEntryBody(match, metrics) {
   const ninePoint = showNinePoint ? `<section class="export-section export-section-nine-point"><div class="export-section-head"><h2>9-Point Ledger</h2><div class="export-section-sub">Points are authoritative; dollars equal points x the configured stake and reconcile separately.</div></div>${buildNinePointScorecard(match, metrics)}</section>` : '';
   const showSixes = (match.selectedGames || []).some(game => game.key === 'sixes');
   const sixes = showSixes ? `<section class="export-section export-section-sixes"><div class="export-section-head"><h2>Sixes Ledger</h2><div class="export-section-sub">Partnerships rotate by played position; the selected scoring mode identifies whether player points or segment matches carry the money.</div></div>${buildSixesScorecard(match, metrics)}</section>` : '';
+  const showWolf = isWolfEnabled(match);
+  const wolf = showWolf ? `<section class="export-section export-section-wolf"><div class="export-section-head"><h2>Wolf Ledger</h2><div class="export-section-sub">Declarations, rotating Wolf assignments, hole results, point totals, and head-to-head settlement.</div></div>${buildWolfScorecard(match, metrics)}</section>` : '';
   return `
     <div class="ledger-entry-contract" data-ledger-entry-version="1" data-ledger-status="${escapeHtml(getLedgerEntryStatus(record, match, metrics))}" data-ledger-featured-basis="${escapeHtml(basis.label)}"></div>
     <div class="ledger-entry-page-start ledger-entry-result-page" data-ledger-page-subject="Result"></div>
@@ -8405,6 +8641,7 @@ function buildLedgerEntryBody(match, metrics) {
     ${buildExportMomentum(match, metrics)}
     ${ninePoint}
     ${sixes}
+    ${wolf}
     ${buildSneakySandyPoleyAuditDetail(match, metrics)}
     ${buildPressAuditSection(match, metrics, record)}
 
@@ -8442,6 +8679,8 @@ function buildSummaryExportBody(match, metrics) {
     </section>` : '';
   const showSixes = (match.selectedGames || []).some(game => game.key === 'sixes');
   const exportSixesScorecardHtml = showSixes ? `<section class="export-section export-section-sixes"><div class="export-section-head"><h2>Sixes Scorecard</h2><div class="export-section-sub">Rotation, hole-by-hole Best Ball results, segment outcomes, and settlement.</div></div><div class="fit-stage" data-fit="width" data-fit-min="0.72"><div class="fit-box">${buildSixesScorecard(match, metrics)}</div></div></section>` : '';
+  const showWolf = isWolfEnabled(match);
+  const exportWolfScorecardHtml = showWolf ? `<section class="export-section export-section-wolf"><div class="export-section-head"><h2>Wolf Scorecard</h2><div class="export-section-sub">Rotating assignments, declarations, point awards, and settlement.</div></div><div class="fit-stage" data-fit="width" data-fit-min="0.72"><div class="fit-box">${buildWolfScorecard(match, metrics)}</div></div></section>` : '';
   const html = `
     ${exportRoundSnapshotHtml}
     ${buildRoundStorySection(match, metrics, roundRecord, { recapHtml: buildRoundRecapExport(match, metrics, { includeEmpty: true, embedded: true }) })}
@@ -8481,6 +8720,7 @@ function buildSummaryExportBody(match, metrics) {
 
     ${exportNinePointScorecardHtml}
     ${exportSixesScorecardHtml}
+    ${exportWolfScorecardHtml}
 
     <section class="export-section export-section-leaderboards">
       <div class="export-section-head"><h2>Leaderboards</h2><div class="export-section-sub">Full player and team tables supporting the executive highlights.</div></div>
@@ -9766,9 +10006,13 @@ function normalizeMatch(match) {
     if (game?.key === 'sneaky_sandy_poley') return normalizeSneakySandyPoleyConfig(game);
     if (game?.key === 'nassau') return normalizeNassauConfig(game, match);
     if (game?.key === 'sixes') return normalizeSixesConfig(game);
+    if (game?.key === 'wolf') return normalizeWolfConfig(game);
     return game;
   }).filter(Boolean) : []);
   normalizeSneakySandyPoleyInputs(match);
+  normalizeWolfInputs(match);
+  match.wolfOrderLockedAt = String(match.wolfOrderLockedAt || '');
+  match.wolfFinalHoleAssignments = match.wolfFinalHoleAssignments && typeof match.wolfFinalHoleAssignments === 'object' ? match.wolfFinalHoleAssignments : {};
   ensureSspValidationStatCoverage(match);
   normalizeStatTrackingParticipants(match);
   match.greeniesWinners = match.greeniesWinners && typeof match.greeniesWinners === 'object' ? match.greeniesWinners : {};
@@ -10652,6 +10896,11 @@ function getPrimaryMatchStatusLine(match, metrics, options = {}) {
     const segment = sixes.segments.find(row => !row.decided) || sixes.segments.at(-1);
     return segment ? `${prefix}: Seg ${segment.index} — ${segment.statusText}` : `${prefix}: Not started`;
   }
+  if (key === 'wolf') {
+    const wolf = computeWolfResults(match, metrics, getWolfConfig(match) || {});
+    const prefix = options.includesDraft ? 'Live Wolf' : 'Wolf';
+    return wolf.resolvedHoles ? `${prefix}: ${formatWolfStandings(wolf, { firstNames: true })} pts thru ${wolf.completedHoles}` : `${prefix}: Not started`;
+  }
   const text = getCompactGameStatus(match, metrics, key);
   if (!text || text === 'Active') return '';
   if (key === 'sneaky_sandy_poley') {
@@ -10788,6 +11037,10 @@ function buildFeaturedMatchStatus(match, metrics, gameKey) {
       : `${segmentTiles}<div class="match-status-tile"><div class="tiny">$ / segment</div><div class="match-status-value">${formatMoneyAccounting(sixes.stakePerSegment)}</div></div>`;
     const informational = sixes.mode === 'points' ? `Segments are informational. ${sixes.segments.map(segment => `S${segment.index}: ${segment.statusText}`).join(' · ')}` : `Player points are informational. ${formatSixesPointStandings(sixes)}`;
     return `<div class="match-status-head"><strong>Sixes (6-6-6)</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Basis</div><div class="match-status-value">${escapeHtml(formatBasisLabel(sixes.basis))} · Best Ball</div></div>${modeTiles}</div><div class="tiny top-gap">${escapeHtml(informational)}</div>`;
+  }
+  if (gameKey === 'wolf') {
+    const wolf = computeWolfResults(match, metrics, cfg);
+    return `<div class="match-status-head"><strong>Wolf</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid"><div class="match-status-tile"><div class="tiny">Point standings</div><div class="match-status-value">${escapeHtml(formatWolfStandings(wolf) || 'Select 4 players')}</div></div><div class="match-status-tile"><div class="tiny">Resolved</div><div class="match-status-value">${wolf.resolvedHoles} of ${wolf.completedHoles} scored holes</div></div><div class="match-status-tile"><div class="tiny">$ / point</div><div class="match-status-value">${formatMoneyAccounting(wolf.pointValue)}</div></div></div>${wolf.unresolvedHoles.length ? `<div class="tiny warning-text top-gap">Declaration needed: holes ${wolf.unresolvedHoles.join(', ')}</div>` : ''}`;
   }
   const concreteStatus = getTruthfulGameStatus(match, metrics, gameKey, cfg);
   const basis = ['nassau', 'team_match', 'singles_match', 'individual_match'].includes(gameKey) && cfg?.basis ? ` · ${formatBasisLabel(cfg.basis)}` : '';
@@ -11789,6 +12042,11 @@ function buildPlayerDetailGameStatusBlock(match, metrics, playerMetric) {
     }).join(' · ');
     add('Sixes', `${sixes.totals[playerId] || 0} pts · ${segments || 'Active'} · ${formatMoneyAccounting(sixes.amounts[playerId] || 0)}${sixes.mode === 'segments' ? ' · points informational' : ''}`);
   }
+  const wolfCfg = games.find(game => game.key === 'wolf');
+  if (wolfCfg && (wolfCfg.playerIds || []).map(String).includes(playerId)) {
+    const wolf = computeWolfResults(match, metrics, wolfCfg);
+    add('Wolf', `${wolf.totals[playerId] || 0} pts · ${wolf.resolvedHoles} resolved · ${formatMoneyAccounting(wolf.amounts[playerId] || 0)}`);
+  }
   const side = getIndividualMatchPairings(match, metrics).find(pair => (
     String(pair.playerA?.playerId) === String(playerMetric.playerId) || String(pair.playerB?.playerId) === String(playerMetric.playerId)
   ));
@@ -12241,6 +12499,8 @@ function renderLeaderboard() {
   const ninePointScorecard = document.getElementById('ninePointScorecard');
   const sixesCard = document.getElementById('sixesScorecardCard');
   const sixesScorecard = document.getElementById('sixesScorecard');
+  const wolfCard = document.getElementById('wolfScorecardCard');
+  const wolfScorecard = document.getElementById('wolfScorecard');
   const holeMomentum = document.getElementById('holeMomentum');
   const momentumMeta = document.getElementById('momentumMeta');
   const payoutSummary = document.getElementById('payoutSummary');
@@ -12352,6 +12612,11 @@ function renderLeaderboard() {
     const hasSixes = (match.selectedGames || []).some(game => game.key === 'sixes');
     sixesCard.classList.toggle('hidden', !hasSixes);
     sixesScorecard.innerHTML = hasSixes ? buildSixesScorecard(match, metrics) : '';
+  }
+  if (wolfCard && wolfScorecard) {
+    const hasWolf = isWolfEnabled(match);
+    wolfCard.classList.toggle('hidden', !hasWolf);
+    wolfScorecard.innerHTML = hasWolf ? buildWolfScorecard(match, metrics) : '';
   }
   const momentumCard = document.querySelector('.print-section-momentum');
   const showMomentum = hasTeamMomentumMatch(match, metrics);
@@ -13400,7 +13665,7 @@ function reconcileSharedGreenies(match, incomingWinners = null, { isHost = isCur
   return { changed, winners: clonePlain(next) };
 }
 function buildSelectedGamesForCloud(match) {
-  const games = normalizeSelectedGamesOrder(match?.selectedGames || []).map(game => {
+  const games = normalizeSelectedGamesOrder(match?.selectedGames || []).filter(game => game?.key !== 'wolf').map(game => {
     const cloned = JSON.parse(JSON.stringify(game));
     if (cloned.key === 'nassau' && Number(cloned.scoringPolicyVersion || 0) >= 1) cloned.key = 'nassau_policy_v1';
     return cloned;
@@ -13413,7 +13678,7 @@ function buildSelectedGamesForCloud(match) {
   return games;
 }
 function hydrateSelectedGamesFromCloud(selectedGames = []) {
-  return normalizeSelectedGamesOrder((selectedGames || []).map(game => game?.key === 'nassau_policy_v1' ? { ...game, key: 'nassau' } : game));
+  return normalizeSelectedGamesOrder((selectedGames || []).filter(game => game?.key !== 'wolf').map(game => game?.key === 'nassau_policy_v1' ? { ...game, key: 'nassau' } : game));
 }
 function extractGreeniesWinnersFromSelectedGames(selectedGames) {
   const greeniesCfg = (selectedGames || []).find(g => g.key === 'greenies');
@@ -13543,6 +13808,23 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
     delete match.greeniesWinners[String(actualHoleNumber)];
     match.greeniesUpdatedAt = new Date().toISOString();
     mutated = true;
+  }
+  const wolfChoiceControl = document.querySelector('[data-wolf-choice]');
+  if (isWolfEnabled(match) && wolfChoiceControl) {
+    const prior = getWolfHoleInput(match, actualHoleNumber);
+    const raw = {
+      ...prior,
+      choice: String(wolfChoiceControl.value || ''),
+      partnerPlayerId: String(document.querySelector('[data-wolf-partner]')?.value || ''),
+      notes: String(document.querySelector('[data-wolf-notes]')?.value || '').slice(0, 240),
+      declaredAt: wolfChoiceControl.value ? (prior.declaredAt || new Date().toISOString()) : '',
+    };
+    const next = normalizeWolfHoleInput(match, raw, actualHoleNumber);
+    if (JSON.stringify(prior) !== JSON.stringify(next)) {
+      match.wolfInputs = match.wolfInputs && typeof match.wolfInputs === 'object' ? match.wolfInputs : {};
+      match.wolfInputs[String(actualHoleNumber)] = next;
+      mutated = true;
+    }
   }
   const progress = computeMatchProgress(match);
   if ((match.lastTouchedHole || 0) !== (progress.lastTouchedHole || 0)) {
@@ -16855,7 +17137,7 @@ function resetMatchSetupFormDomToBlank() {
   if (form) form.reset();
   const picker = document.getElementById('matchPlayersPicker');
   if (picker) picker.innerHTML = '';
-  document.querySelectorAll('[data-player-slot], [data-player-tee-slot], [data-team-name], [data-game-key], [data-game-config], [data-side-field], [data-nine-point-player], [data-greenie-player]').forEach(el => {
+  document.querySelectorAll('[data-player-slot], [data-player-tee-slot], [data-team-name], [data-game-key], [data-game-config], [data-side-field], [data-nine-point-player], [data-sixes-player], [data-wolf-player], [data-wolf-point], [data-greenie-player]').forEach(el => {
     if (el.type === 'checkbox' || el.type === 'radio') el.checked = false;
     else el.value = '';
   });
@@ -17423,6 +17705,11 @@ function completeActiveRound() {
       applyCurrentHoleDomToMatch(match);
     }
     normalizeMatch(match);
+    const wolfIssue = getRoundDataCompletionState(match).unresolved.find(item => item.type === 'wolf');
+    if (wolfIssue) {
+      toast(`${wolfIssue.label}. Review those holes before finishing the round.`);
+      throw new Error('WOLF_DECLARATIONS_UNRESOLVED');
+    }
     if (!persist({ skipRender: true })) throw new Error('ACTIVE_ROUND_SAVE_FAILED');
     const { candidate, metrics, wasReopened } = buildFinishedMatchCandidate(match);
     candidate.finalizationReceipt = clonePlain(candidate.roundRecordSnapshot?.finalizationReceipt || buildFinalizationReceipt(candidate, buildRoundRecord(candidate, metrics)));
@@ -17668,6 +17955,7 @@ function renderClassicPlayInputMode({ match, tee, metrics, scoringHoles, hole, c
     playMatchSummary.classList.add('hidden');
   }
   renderSneakySandyPoleyEntry(match, hole, metrics);
+  renderWolfEntry(match, hole, metrics);
   renderStatTrackingEntry(match, hole, metrics);
   renderSneakySandyPoleyNote(match, hole, metrics);
   renderGreeniesEntry(match, hole);
@@ -17992,6 +18280,7 @@ function renderPlayerPlayInputMode({ match, tee, metrics, scoringHoles, hole, co
     playMatchSummary.classList.add('hidden');
   }
   renderSneakySandyPoleyEntry(match, hole, metrics);
+  renderWolfEntry(match, hole, metrics);
   renderPlayerModeStatEntry(match, hole, metrics);
   renderSneakySandyPoleyNote(match, hole, metrics);
   renderGreeniesEntry(match, hole);
@@ -18161,6 +18450,10 @@ function getCompactGameStatus(match, metrics, gameKey, cfg = null) {
     if (sixes.mode === 'points') return sixes.completedHoles ? `${formatSixesPointStandings(sixes, { firstNames: true })} pts` : 'Active';
     const segment = sixes.segments.find(row => !row.decided) || sixes.segments.at(-1);
     return segment ? `Seg ${segment.index} — ${segment.statusText}` : 'Active';
+  }
+  if (gameKey === 'wolf') {
+    const wolf = computeWolfResults(match, metrics, config);
+    return wolf.resolvedHoles ? `${formatWolfStandings(wolf, { firstNames: true })} pts` : 'Active';
   }
   if (gameKey === 'sneaky_sandy_poley') {
     return getSneakySandyPoleyStatus(match, metrics).replace(/^SSP(?: Base)?:\s*/, '');
@@ -18353,6 +18646,11 @@ function buildQuickScoreboardGameStatusRows(match, metrics) {
         : sixes.segments.map(segment => `<span class="quick-game-chip"><b>S${segment.index}</b> ${escapeHtml(segment.statusText)}</span>`).join('');
       return `<div class="quick-game-row quick-game-row-sixes"><span>Sixes</span><div class="quick-game-chips">${chips || '<span class="quick-game-chip">Select 4 players</span>'}</div></div>`;
     }
+    if (cfg.key === 'wolf') {
+      const wolf = computeWolfResults(match, metrics, cfg);
+      const chips = wolf.playerIds.map(id => `<span class="quick-game-chip"><b>${escapeHtml(String(getPlayer(id)?.name || 'Player').split(/\s+/)[0])}</b> ${Number(wolf.totals[id] || 0)}</span>`).join('');
+      return `<div class="quick-game-row quick-game-row-wolf"><span>Wolf</span><div class="quick-game-chips">${chips || '<span class="quick-game-chip">Select 4 players</span>'}</div></div>${wolf.unresolvedHoles.length ? `<small>Needs declarations: H${wolf.unresolvedHoles.join(', H')}</small>` : ''}`;
+    }
     const status = getTruthfulGameStatus(match, metrics, cfg.key, cfg);
     const label = cfg.key === 'sneaky_sandy_poley' ? 'SSP' : getGameLabel(cfg.key);
     const trend = cfg.key === 'sneaky_sandy_poley' ? getSneakySandyPoleySmartTrend(match, { metrics }) : '';
@@ -18476,6 +18774,33 @@ function renderHoleSelector(match, scoringHoles = [], metrics = null) {
   if (classicStatSelect) classicStatSelect.innerHTML = Object.values(STAT_TRACKING_MODES).map(mode => `<option value="${mode.key}" ${mode.key === normalizeStatTrackingMode(match.statTrackingMode || (match.statTrackingEnabled ? 'CASUAL' : 'NONE')) ? 'selected' : ''}>${mode.label}</option>`).join('');
 }
 
+function renderWolfEntry(match, hole, metrics) {
+  const host = document.getElementById('wolfEntryWrap');
+  if (!host) return;
+  const cfg = getWolfConfig(match);
+  if (!cfg || match.storageMode === 'shared' || cfg.playerIds.length !== 4 || !hole) {
+    host.innerHTML = '';
+    host.classList.add('hidden');
+    return;
+  }
+  const holeNumber = Number(hole.holeNumber || currentHole);
+  const position = getWolfPlayOrder(match, metrics).indexOf(holeNumber) + 1;
+  const wolfId = getWolfPlayerIdForPosition(match, position, cfg);
+  const noWolf = position >= 17 && cfg.finalHolesRule === 'none';
+  const wolf = (metrics?.players || []).find(player => String(player.playerId) === wolfId);
+  const input = getWolfHoleInput(match, holeNumber, metrics);
+  const results = computeWolfResults(match, metrics, cfg);
+  const result = results.holes.find(row => row.holeNumber === holeNumber);
+  const partners = cfg.playerIds.filter(id => id !== wolfId).map(id => ({ id, name: (metrics?.players || []).find(player => String(player.playerId) === id)?.player?.name || getPlayer(id)?.name || 'Player' }));
+  if (noWolf) {
+    host.innerHTML = `<div class="tiny"><strong>Wolf</strong> · No Wolf on this hole under the saved final-holes rule.</div>`;
+    host.classList.remove('hidden');
+    return;
+  }
+  const status = !result?.scored ? 'Enter all four scores to resolve this hole.' : !result?.resolved ? 'Declaration needed — this hole currently awards no Wolf points.' : result.winner === 'tied' ? 'Hole tied · no points' : `${result.winner === 'wolf' ? 'Wolf side' : 'Opponents'} won`;
+  host.innerHTML = `<details class="wolf-entry" ${input.choice ? '' : 'open'}><summary><span><strong>Wolf · ${escapeHtml(wolf?.player?.name || 'Assignment pending')}</strong><small>Hole ${holeNumber} · Position ${position}</small></span><span>${escapeHtml(input.choice === 'partner' ? `Partner: ${partners.find(row => row.id === input.partnerPlayerId)?.name || 'Select'}` : input.choice === 'blind' ? 'Blind Wolf' : input.choice === 'lone' ? 'Lone Wolf' : 'Undeclared')}</span></summary><div class="wolf-entry-controls top-gap"><label><span>Declaration</span><select data-wolf-choice><option value="" ${!input.choice ? 'selected' : ''}>Select declaration</option><option value="partner" ${input.choice === 'partner' ? 'selected' : ''}>Take a partner</option>${cfg.allowLoneWolf ? `<option value="lone" ${input.choice === 'lone' ? 'selected' : ''}>Lone Wolf</option>` : ''}${cfg.allowBlindWolf ? `<option value="blind" ${input.choice === 'blind' ? 'selected' : ''}>Blind Wolf</option>` : ''}</select></label><label class="${input.choice === 'partner' ? '' : 'hidden'}" data-wolf-partner-row><span>Partner</span><select data-wolf-partner><option value="">Select partner</option>${partners.map(row => `<option value="${escapeHtml(row.id)}" ${row.id === input.partnerPlayerId ? 'selected' : ''}>${escapeHtml(row.name)}</option>`).join('')}</select></label><label><span>Optional note</span><input data-wolf-notes maxlength="240" value="${escapeHtml(input.notes)}"></label><div class="tiny wolf-entry-readback" aria-live="polite">${escapeHtml(status)}</div></div></details>`;
+  host.classList.remove('hidden');
+}
 function renderSneakySandyPoleyEntry(match, hole, metrics) {
   const wrap = document.getElementById('sneakySandyPoleyEntryWrap');
   if (!wrap) return;
@@ -19501,6 +19826,17 @@ function computeLivePayoutGames(match, metrics) {
       pushGame(cfg.key, `Sixes (${formatBasisLabel(sixes.basis)} · ${sixes.mode === 'points' ? 'Player Points' : 'Segment Matches'})`, { ...sixes.amounts }, sixes.mode === 'points' ? 'individual' : 'team', paymentLines, cfg.key, { sixes });
       return;
     }
+    if (cfg.key === 'wolf') {
+      const wolf = computeWolfResults(match, metrics, cfg);
+      const paymentLines = [];
+      wolf.playerIds.forEach((first, index) => wolf.playerIds.slice(index + 1).forEach(second => {
+        const diff = Number(wolf.totals[first] || 0) - Number(wolf.totals[second] || 0);
+        const amount = Math.abs(diff * wolf.pointValue);
+        if (amount > 0.0001) paymentLines.push(diff > 0 ? { from: second, to: first, amount } : { from: first, to: second, amount });
+      }));
+      pushGame(cfg.key, `Wolf (${formatBasisLabel(wolf.basis)} · Player Points)`, { ...wolf.amounts }, 'individual', paymentLines, cfg.key, { wolf });
+      return;
+    }
     pushGame(cfg.key, getGameLabel(cfg.key), {});
   });
   getPressTree(match).records.forEach((press, index) => {
@@ -19601,6 +19937,11 @@ function buildSelectedGamesSummary(match, metrics) {
       const sixes = computeSixesResults(match, metrics, cfg);
       value = sixes.mode === 'points' ? (formatSixesPointStandings(sixes) || 'Select 4 players in order') : (sixes.segments.length ? sixes.segments.map(segment => `S${segment.index}: ${segment.statusText}`).join(' · ') : 'Select 4 players in order');
       sub = `${formatBasisLabel(sixes.basis)} · Best Ball · ${sixes.mode === 'points' ? `${formatMoneyAccounting(sixes.pointValue)} / point · segments informational` : `${formatMoneyAccounting(sixes.stakePerSegment)} / segment · points informational`} · ${sixes.completedHoles} completed hole${sixes.completedHoles === 1 ? '' : 's'}`;
+    } else if (cfg.key === 'wolf') {
+      const wolf = computeWolfResults(match, metrics, cfg);
+      value = formatWolfStandings(wolf) || 'Select 4 players in order';
+      gameFinalityBlocked = wolf.unresolvedHoles.length > 0;
+      sub = `${formatBasisLabel(wolf.basis)} · ${formatMoneyAccounting(wolf.pointValue)} / point · ${wolf.resolvedHoles} resolved of ${wolf.completedHoles} scored hole${wolf.completedHoles === 1 ? '' : 's'}${wolf.unresolvedHoles.length ? ` · declarations needed: H${wolf.unresolvedHoles.join(', H')}` : ''}`;
     } else if (cfg.key === 'sneaky_sandy_poley') {
       const ledger = buildSneakySandyPoleyLedger(match, { metrics });
       const leader = ledger.finalLeader || {};
@@ -20750,6 +21091,11 @@ function getPlayerTeeSlotStates({ teamCount = 1, playersPerTeam = 1, requiredSlo
 
 function setSharedMatchDraftMode(draft, enabled) {
   const next = clonePlain(draft || {});
+  if (enabled && (next.selectedGames || []).some(game => game?.key === 'wolf')) {
+    next.wolfSharedConversionBlocked = true;
+    return next;
+  }
+  delete next.wolfSharedConversionBlocked;
   next.storageMode = enabled ? 'shared' : 'local';
   next.sharedMatchEnabled = !!enabled;
   next.cloudSyncState = enabled ? (next.cloudSyncState === 'local-only' ? 'pending' : (next.cloudSyncState || 'pending')) : 'local-only';
@@ -20775,7 +21121,7 @@ function getRoundReadinessState() {
   add(selectedGames.length ? 'Games selected' : 'Games intentionally omitted', selectedGames.length <= 5, 'Select no more than 5 games.');
   add(`Featured Competition: ${getFeaturedCompetitionDisplayName({ selectedGames }, featured === 'auto' ? resolveAutoFeaturedCompetition({ selectedGames }) : featured) || 'Auto'}`, !!featured, 'No Featured Competition selected.');
   const selectedKeys = new Set(selectedGames.map(g => g.key));
-  const featureMap = { nassau: 'nassau', singles_match: 'singles_match', skins: 'skins', net_skins: 'net_skins', nine_point: 'nine_point', sixes: 'sixes' };
+  const featureMap = { nassau: 'nassau', singles_match: 'singles_match', skins: 'skins', net_skins: 'net_skins', nine_point: 'nine_point', sixes: 'sixes', wolf: 'wolf' };
   if (featureMap[featured]) add('Featured Competition matches selected games', selectedKeys.has(featureMap[featured]), 'Featured Competition references a game that is not selected.');
   if (selectedKeys.has('singles_match')) add('Singles Match Play setup', draft.teamCount === 2 && draft.playersPerTeam === 1, 'Singles Match Play is designed for exactly two teams with one player each.');
   if (selectedKeys.has('nine_point')) {
@@ -20996,6 +21342,7 @@ function getDefaultGameConfigs() {
     getDefaultSneakySandyPoleyConfig(),
     { key: 'nine_point', basis: 'net', stakePerPoint: 1, playerIds: [] },
     { key: 'sixes', mode: 'points', basis: 'net', playerIds: [], teamScoringMode: 'best_ball', segmentResultMode: 'match', pointsPerHoleWin: 1, pointValue: 1, stakePerSegment: 5, handicapAllowanceMode: 'recommended', handicapAllowancePercent: 90 },
+    { key: 'wolf', basis: 'net', playerIds: [], allowLoneWolf: true, allowBlindWolf: false, finalHolesRule: 'continue', tieTreatment: 'no_points', points: { ...WOLF_POINT_DEFAULTS }, pointValue: 1, handicapAllowanceMode: 'recommended', handicapAllowancePercent: 100 },
   ].map(stampCompetitionRulesConfig);
 }
 function getGameConfig(key, existing = []) {
@@ -21214,11 +21561,13 @@ function renderGamesPicker(existing = []) {
   const selectedKeys = normalizedExisting.map(g => g.key);
   const editingPressFacts = getPressEditFacts(editingMatchId ? getMatch(editingMatchId) : null);
   const singlesEligibleInSetup = getCurrentSetupTeamCount() === 2 && Number(document.getElementById('playersPerTeamSelect')?.value || 1) === 1;
+  const wolfBlocked = !!document.getElementById('sharedMatchEnabled')?.checked || (editingMatchId ? getMatch(editingMatchId)?.storageMode === 'shared' : false);
   picker.innerHTML = GAME_SELECTION_GROUPS.map(group => `<section class="game-picker-group" aria-labelledby="game-group-${group.label.toLowerCase().replace(/[^a-z]+/g, '-')}"><div class="section-subhead" id="game-group-${group.label.toLowerCase().replace(/[^a-z]+/g, '-')}">${group.label}</div><div class="game-picker-group-options">${group.keys.map(key => GAME_LIBRARY.find(game => game.key === key)).filter(Boolean).map(game => {
     const singlesBlocked = game.key === 'singles_match' && !singlesEligibleInSetup;
+    const localWolfBlocked = game.key === 'wolf' && wolfBlocked;
     const pressParentLocked = editingPressFacts.rootGameKeys.includes(game.key);
-    const gameBlocked = singlesBlocked || pressParentLocked;
-    const blockedTitle = pressParentLocked ? 'This game cannot be removed because it has Press activity in this round.' : (singlesBlocked ? 'Singles Match Play requires two teams with one player on each team.' : '');
+    const gameBlocked = singlesBlocked || localWolfBlocked || pressParentLocked;
+    const blockedTitle = pressParentLocked ? 'This game cannot be removed because it has Press activity in this round.' : (localWolfBlocked ? 'Wolf is available for local scoring only in this release.' : (singlesBlocked ? 'Singles Match Play requires two teams with one player on each team.' : ''));
     return `
     <label class="game-pill ${selectedKeys.includes(game.key) ? 'selected' : ''} ${gameBlocked ? 'disabled' : ''}" ${blockedTitle ? `title="${escapeHtml(blockedTitle)}"` : ''}>
       <input type="checkbox" data-game-key="${game.key}" ${selectedKeys.includes(game.key) ? 'checked' : ''} ${gameBlocked ? 'disabled' : ''} />
@@ -21448,6 +21797,19 @@ function renderGamesPicker(existing = []) {
         <div class="sixes-pairing-preview top-gap"><strong>Partnership rotation</strong>${pairingRows.length ? pairingRows.map(row => `<div class="tiny">${escapeHtml(row)}</div>`).join('') : '<div class="tiny">Select four golfers in order to preview all three pairings.</div>'}</div>
       </div>`;
     }
+    if (game.key === 'wolf') {
+      const wolfCfg = normalizeWolfConfig(cfg);
+      const players = getCurrentAssignablePlayers();
+      const selectedIds = wolfCfg.playerIds.slice(0, 4);
+      while (selectedIds.length < 4) selectedIds.push('');
+      const playerOptions = getWolfPlayerOptions(players, selectedIds);
+      const editingMatch = editingMatchId ? getMatch(editingMatchId) : null;
+      const orderLocked = !!editingMatch?.wolfOrderLockedAt || (!!editingMatch && completedHoles(editingMatch) > 0);
+      const name = id => players.find(player => String(player.id) === String(id))?.name || `Order ${selectedIds.indexOf(id) + 1}`;
+      const rotation = selectedIds.every(Boolean) ? `H1 ${name(selectedIds[0])} · H2 ${name(selectedIds[1])} · H3 ${name(selectedIds[2])} · H4 ${name(selectedIds[3])} · repeating` : 'Select four golfers in order to preview the rotation.';
+      const finalRuleText = wolfCfg.finalHolesRule === 'low_points' ? 'Lowest two in points are Wolf after hole 16, then fixed.' : wolfCfg.finalHolesRule === 'none' ? 'No Wolf on positions 17 and 18.' : 'Order 1 and Order 2 are Wolf again on positions 17 and 18.';
+      return `<div class="card inset-card game-config-card wolf-config-card"><div class="game-config-header"><div class="section-label">Wolf</div><div class="tiny">Four-player rotating Wolf with partner, Lone Wolf, and optional Blind Wolf declarations.</div></div><div class="setup-warning top-gap">Wolf is available for local scoring only in this release.</div><div class="grid two compact-grid top-gap"><label><span>Basis</span><select data-game-config="wolf" data-field="basis"><option value="net" ${wolfCfg.basis === 'net' ? 'selected' : ''}>Net</option><option value="gross" ${wolfCfg.basis === 'gross' ? 'selected' : ''}>Gross</option></select></label><label><span>$ per point</span><input type="number" min="0" step="0.01" data-game-config="wolf" data-field="pointValue" value="${wolfCfg.pointValue}"></label><label><span>Final holes</span><select data-game-config="wolf" data-field="finalHolesRule"><option value="continue" ${wolfCfg.finalHolesRule === 'continue' ? 'selected' : ''}>Continue rotation</option><option value="low_points" ${wolfCfg.finalHolesRule === 'low_points' ? 'selected' : ''}>Lowest in points</option><option value="none" ${wolfCfg.finalHolesRule === 'none' ? 'selected' : ''}>No Wolf</option></select></label><label><span>Allowance</span><select data-game-config="wolf" data-field="handicapAllowanceMode" ${wolfCfg.basis === 'gross' ? 'disabled' : ''}><option value="recommended" ${wolfCfg.handicapAllowanceMode !== 'custom' ? 'selected' : ''}>Recommended (100%)</option><option value="custom" ${wolfCfg.handicapAllowanceMode === 'custom' ? 'selected' : ''}>Custom</option></select></label><label><span>Allowance %</span><input type="number" min="0" max="100" data-game-config="wolf" data-field="handicapAllowancePercent" value="${wolfCfg.handicapAllowancePercent}" ${wolfCfg.basis === 'gross' || wolfCfg.handicapAllowanceMode !== 'custom' ? 'disabled' : ''}></label><label class="inline-check"><input type="checkbox" data-game-config="wolf" data-field="allowLoneWolf" ${wolfCfg.allowLoneWolf ? 'checked' : ''}><span>Allow Lone Wolf</span></label><label class="inline-check"><input type="checkbox" data-game-config="wolf" data-field="allowBlindWolf" ${wolfCfg.allowBlindWolf ? 'checked' : ''}><span>Allow Blind Wolf</span></label>${[0,1,2,3].map(index => `<label><span>Order ${index + 1}</span><select data-wolf-player="${index}" ${orderLocked ? 'disabled aria-disabled="true"' : ''}><option value="">Select player</option>${playerOptions[index].map(player => `<option value="${player.id}" ${String(player.id) === selectedIds[index] ? 'selected' : ''}>${escapeHtml(player.name)}</option>`).join('')}</select></label>`).join('')}<div class="tiny span-2"><strong>Rotation:</strong> ${escapeHtml(rotation)}</div><div class="tiny span-2">${escapeHtml(finalRuleText)}</div>${orderLocked ? '<div class="tiny span-2 warning-text">Wolf order is locked because scoring has started.</div>' : ''}<div class="wolf-point-config span-2"><strong>Point schedule</strong>${Object.entries(WOLF_POINT_DEFAULTS).map(([key, fallback]) => `<label><span>${escapeHtml(({ teamWin:'Partner-side win', opponentsWin:'Opponents win', loneWolfWin:'Lone Wolf win', loneWolfLoss:'Lone Wolf loss', blindWolfWin:'Blind Wolf win', blindWolfLoss:'Blind Wolf loss' })[key])}</span><input type="number" min="0" step="1" data-wolf-point="${key}" value="${wolfCfg.points[key] ?? fallback}"></label>`).join('')}</div></div></div>`;
+    }
     return `<div class="card inset-card game-config-card">
       <div class="game-config-header"><div class="section-label">${getGameLabel(game.key)}</div><div class="tiny">Configure basis and stakes</div></div>
       <div class="grid two compact-grid top-gap">
@@ -21504,6 +21866,12 @@ function collectSelectedGames() {
       const allowed = new Set(getCurrentAssignablePlayers().map(player => player.id));
       cfg.playerIds = Array.from(document.querySelectorAll('[data-sixes-player]')).slice(0, 4).map(element => allowed.has(element.value) ? element.value : '').filter(Boolean);
       Object.assign(cfg, normalizeSixesConfig(cfg));
+    }
+    if (key === 'wolf') {
+      const allowed = new Set(getCurrentAssignablePlayers().map(player => String(player.id)));
+      cfg.playerIds = Array.from(document.querySelectorAll('[data-wolf-player]')).slice(0, 4).map(element => allowed.has(String(element.value)) ? String(element.value) : '').filter(Boolean);
+      cfg.points = Object.fromEntries(Array.from(document.querySelectorAll('[data-wolf-point]')).map(input => [input.dataset.wolfPoint, Number(input.value)]));
+      Object.assign(cfg, normalizeWolfConfig(cfg));
     }
     if (key === 'sneaky_sandy_poley') {
       Object.assign(cfg, normalizeSneakySandyPoleyConfig(cfg));
@@ -22737,6 +23105,10 @@ function installHandlers() {
   });
   document.getElementById('scoreEntryModeSelect').addEventListener('change', e => preserveSetupScrollDuring(() => { renderScoringControlConfig(); renderTodaysMatchSummary(); }, '#scoreEntryModeSelect'));
   document.getElementById('sharedMatchEnabled')?.addEventListener('change', e => preserveSetupScrollDuring(() => {
+    if (e.target.checked && collectSelectedGames().some(game => game.key === 'wolf')) {
+      e.target.checked = false;
+      toast('Wolf is available for local scoring only in this release. Remove Wolf before enabling Shared Match.');
+    }
     const modeSelect = document.getElementById('scoreEntryModeSelect');
     if (!e.target.checked && modeSelect?.value === 'assigned_players') modeSelect.value = 'single_device';
     renderScoringControlConfig(editingMatchId ? getMatch(editingMatchId) : null);
@@ -22933,6 +23305,13 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
   document.getElementById('score').addEventListener('change', async e => {
+    if (e.target.matches('[data-wolf-choice], [data-wolf-partner]')) {
+      const match = getActiveMatch();
+      if (!match) return;
+      applyCurrentHoleDomToMatch(match);
+      persist();
+      return;
+    }
     if (['playerModeRoundScoringModeSelect', 'classicRoundScoringModeSelect'].includes(e.target.id)) {
       const overflowKind = e.target.id.startsWith('playerMode') ? 'player' : 'classic';
       closePlayOverflowMenus();
@@ -22996,12 +23375,12 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       renderStatTrackingPlayerSelector();
     }
     if (e.target && (e.target.id === 'smartScoreAdvanceInput' || e.target.id === 'smartScoreAdvancePresetSelect')) syncSmartScoreAdvancePresetUi();
-    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #featuredCompetitionSelect, #scoreEntryModeSelect, #roundPlayInputModeSelect, #roundStatTrackingModeSelect, #officialScorerNameInput, #sharedMatchEnabled, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-sixes-player], [data-game-config], #enableStatTrackingInput, #smartScoreAdvanceInput, #smartScoreAdvancePresetSelect, #captureWeatherContextInput, [data-stat-track-player]')) {
+    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #featuredCompetitionSelect, #scoreEntryModeSelect, #roundPlayInputModeSelect, #roundStatTrackingModeSelect, #officialScorerNameInput, #sharedMatchEnabled, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-sixes-player], [data-wolf-player], [data-wolf-point], [data-game-config], #enableStatTrackingInput, #smartScoreAdvanceInput, #smartScoreAdvancePresetSelect, #captureWeatherContextInput, [data-stat-track-player]')) {
       setTimeout(() => { renderSetupHandicapPreview(); renderGamesPicker(collectSelectedGames()); renderFeaturedCompetitionSetup(collectSelectedGames()); renderTodaysMatchSummary(); renderRoundPreferenceSummary(); }, 0);
     }
   });
   document.getElementById('setup').addEventListener('input', e => {
-    if (e.target.matches('[data-team-name], [name="allowance"], #scoreEntryModeSelect, #officialScorerNameInput, [data-team-scorer-label], [data-team-scorer-code], [data-game-config], [data-nine-point-player], [data-sixes-player], #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, #smartScoreAdvancePresetSelect')) {
+    if (e.target.matches('[data-team-name], [name="allowance"], #scoreEntryModeSelect, #officialScorerNameInput, [data-team-scorer-label], [data-team-scorer-code], [data-game-config], [data-nine-point-player], [data-sixes-player], [data-wolf-player], [data-wolf-point], #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, #smartScoreAdvancePresetSelect')) {
       renderSetupHandicapPreview();
       renderTodaysMatchSummary();
     }
@@ -23658,6 +24037,10 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (selectedGames.some(g => g.key === 'sixes') && selectedPlayers.length < 4) return toast('Sixes requires 4 assigned players.');
     if (selectedGames.some(g => g.key === 'sixes' && (!Array.isArray(g.playerIds) || g.playerIds.length !== 4 || [...new Set(g.playerIds)].length !== 4))) return toast('Select 4 players in order for Sixes.');
     if (selectedGames.some(g => g.key === 'sixes') && Number(fd.get('holeCount')) !== 18) return toast('Sixes requires an 18-hole round.');
+    if (selectedGames.some(g => g.key === 'wolf') && selectedPlayers.length < 4) return toast('Wolf requires 4 assigned players.');
+    if (selectedGames.some(g => g.key === 'wolf' && (!Array.isArray(g.playerIds) || g.playerIds.length !== 4 || [...new Set(g.playerIds)].length !== 4))) return toast('Select 4 players in order for Wolf.');
+    if (selectedGames.some(g => g.key === 'wolf' && g.allowBlindWolf && !g.allowLoneWolf)) return toast('Blind Wolf requires Lone Wolf to be enabled.');
+    if (selectedGames.some(g => g.key === 'wolf') && sharedMatchEnabled) return toast('Wolf is available for local scoring only in this release.');
     if (selectedGames.some(g => g.key === 'sneaky_sandy_poley')) {
       const sspWarnings = getSneakySandyPoleyTeamWarnings({ teamCount, playersPerTeam, players: selectedPlayers });
       if (sspWarnings.length) return toast(sspWarnings[0]);
@@ -23933,6 +24316,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
           match.sspSequenceLockedMode = sspCfg.sspSequenceMode;
           match.sspStartingHonorsTeamId = sspCfg.startingHonorsTeamId;
         }
+        ensureWolfLifecycleFacts(match, computeMatchMetrics(match));
       }
     } catch (orderErr) {
       recordAppError(orderErr, 'Actual Play Order Tracking');
@@ -24452,6 +24836,10 @@ function getMatchSetupValidationState({ draft = null, fd = null, selectedPlayers
   if (games.some(g => g.key === 'sixes') && assignedPlayers.length < 4) missing.push('Sixes requires 4 assigned players');
   if (games.some(g => g.key === 'sixes' && (!Array.isArray(g.playerIds) || g.playerIds.length !== 4 || [...new Set(g.playerIds)].length !== 4))) missing.push('Select 4 players in order for Sixes');
   if (games.some(g => g.key === 'sixes') && Number(requestedHoleCount) !== 18) missing.push('Sixes requires an 18-hole round');
+  if (games.some(g => g.key === 'wolf') && assignedPlayers.length < 4) missing.push('Wolf requires 4 assigned players');
+  if (games.some(g => g.key === 'wolf' && (!Array.isArray(g.playerIds) || g.playerIds.length !== 4 || [...new Set(g.playerIds)].length !== 4))) missing.push('Select 4 players in order for Wolf');
+  if (games.some(g => g.key === 'wolf' && g.allowBlindWolf && !g.allowLoneWolf)) missing.push('Blind Wolf requires Lone Wolf to be enabled');
+  if (games.some(g => g.key === 'wolf') && isShared) missing.push('Wolf is available for local scoring only in this release');
   if (games.some(g => g.key === 'sneaky_sandy_poley')) missing.push(...getSneakySandyPoleyTeamWarnings({ teamCount, playersPerTeam, players: assignedPlayers }));
   const pressEditValidation = validatePressEditContract(source.active || null, games, { isHost: !source.active || isCurrentDeviceMatchHost(source.active) });
   if (!pressEditValidation.valid) missing.push(...pressEditValidation.reasons.map(reason => reason.message));
@@ -25168,6 +25556,19 @@ function installDyeLedgerLiveEngineAdapter() {
     normalizeSixesConfig,
     getSixesPlayerOptions,
     buildSixesScorecard,
+    normalizeWolfConfig,
+    getWolfConfig,
+    isWolfEnabled,
+    getWolfPlayerOptions,
+    normalizeWolfHoleInput,
+    normalizeWolfInputs,
+    getWolfHoleInput,
+    getWolfPlayOrder,
+    getWolfPlayerIdForPosition,
+    computeWolfResults,
+    ensureWolfLifecycleFacts,
+    formatWolfStandings,
+    buildWolfScorecard,
     buildSneakySandyPoleyLedger,
     getSneakySandyPoleyGreenyState,
     resolveSneakySandyPoleyValidation,

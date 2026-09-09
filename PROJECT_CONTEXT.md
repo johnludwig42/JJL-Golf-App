@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current release: **v31.0.41 — Classic Play Overflow Menu and Featured Competition Row** on `release/v31.0.41`. This presentation-only release contains both Play overflow menus inside narrow mobile viewports, adds consistent dismissal and focus behavior, and gives the Classic featured competition its own full-width status row. It changes no scoring, statistics, persistence, synchronization, settlement, or reporting behavior and has no database migration.
+Current release: **v31.0.42 — Foundational Games: Wolf** on `release/v31.0.42`. This release adds four-player, local-only Wolf with saved rotation order, partner/Lone/Blind declarations, gross or net scoring, configurable point schedules, head-to-head settlement, final-hole rules, and complete Play, Scores, Story, and Ledger Entry presentation. Wolf fails closed at the Shared Match boundary and requires no database migration.
 
 ## 2. Development Roles
 

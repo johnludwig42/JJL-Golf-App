@@ -342,6 +342,39 @@ export function computeSixes(metrics, cfg = {}) {
   return { playerIds, mode, basis, pointValue, pointsPerHoleWin: 1, stakePerSegment, teamScoringMode: 'best_ball', segmentResultMode: 'match', gameHandicaps, lowGameHandicap, segments, totals, amounts, completedHoles };
 }
 
+export function computeWolf(metrics, cfg = {}) {
+  const playerIds = (cfg.playerIds || []).slice(0, 4);
+  const basis = String(cfg.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net';
+  const pointValue = Math.max(0, Number(cfg.pointValue) || 0);
+  const pointsCfg = { teamWin:1, opponentsWin:1, loneWolfWin:4, loneWolfLoss:1, blindWolfWin:8, blindWolfLoss:1, ...(cfg.points || {}) };
+  const totals = Object.fromEntries(playerIds.map(id => [id, 0]));
+  const amounts = Object.fromEntries(playerIds.map(id => [id, 0]));
+  const inputs = metrics.round.wolfInputs || {};
+  const holes = metrics.holeResults.map((hole, index) => {
+    const wolfPlayerId = playerIds[index % 4];
+    const input = inputs[String(hole.holeNumber)] || {};
+    const values = Object.fromEntries(playerIds.map(id => { const score=hole.playerScores.find(row=>row.playerId===id); return [id,basis==='gross'?score?.gross:score?.net]; }));
+    const scored = playerIds.every(id => Number.isFinite(values[id]));
+    const choice = ['partner','lone','blind'].includes(input.choice) ? input.choice : '';
+    const partnerPlayerId = String(input.partnerPlayerId || '');
+    const wolfSide = choice === 'partner' ? [wolfPlayerId, partnerPlayerId] : [wolfPlayerId];
+    const opponents = playerIds.filter(id => !wolfSide.includes(id));
+    if (!scored || !choice || (choice === 'partner' && (!playerIds.includes(partnerPlayerId) || partnerPlayerId === wolfPlayerId))) return { holeNumber:hole.holeNumber,resolved:false,points:Object.fromEntries(playerIds.map(id=>[id,0])) };
+    const wolfScore = Math.min(...wolfSide.map(id => values[id]));
+    const opponentScore = Math.min(...opponents.map(id => values[id]));
+    const winner = wolfScore < opponentScore ? 'wolf' : opponentScore < wolfScore ? 'opponents' : 'tied';
+    const points = Object.fromEntries(playerIds.map(id => [id,0]));
+    if (winner === 'wolf') {
+      if (choice === 'partner') wolfSide.forEach(id => { points[id] = pointsCfg.teamWin; });
+      else points[wolfPlayerId] = choice === 'blind' ? pointsCfg.blindWolfWin : pointsCfg.loneWolfWin;
+    } else if (winner === 'opponents') opponents.forEach(id => { points[id] = choice === 'blind' ? pointsCfg.blindWolfLoss : choice === 'lone' ? pointsCfg.loneWolfLoss : pointsCfg.opponentsWin; });
+    playerIds.forEach(id => { totals[id] += points[id]; });
+    return { holeNumber:hole.holeNumber,resolved:true,winner,points };
+  });
+  playerIds.forEach((first,index)=>playerIds.slice(index+1).forEach(second=>{ const amount=(totals[first]-totals[second])*pointValue; addAmount(amounts,first,amount); addAmount(amounts,second,-amount); }));
+  return { playerIds,basis,pointValue,totals,amounts,holes,resolvedHoles:holes.filter(h=>h.resolved).length };
+}
+
 export const roundMoney = value => Math.round((Number(value) || 0) * 100) / 100;
 
 export function optimalSettlementRows(amountsByPlayer) {
@@ -403,6 +436,10 @@ export function computePayouts(roundInput) {
     if (cfg.key === 'sixes') {
       const sixes = computeSixes(metrics, cfg);
       addGame({ key: 'sixes', label: `Sixes (${sixes.basis})`, amounts: sixes.amounts, meta: sixes });
+    }
+    if (cfg.key === 'wolf') {
+      const wolf = computeWolf(metrics, cfg);
+      addGame({ key: 'wolf', label: `Wolf (${wolf.basis})`, amounts: wolf.amounts, meta: wolf });
     }
   }
   Object.keys(finalTotals).forEach(id => { finalTotals[id] = roundMoney(finalTotals[id]); });
@@ -486,6 +523,11 @@ export function validateRound(roundInput) {
     sixes.segments.forEach(segment => {
       if (segment.holes.some(hole => hole.completed && !['A', 'B', 'halved'].includes(hole.winner))) failures.push(`Sixes segment ${segment.index} has an invalid completed-hole result.`);
     });
+  }
+  const wolf = payout.games.find(game => game.key === 'wolf')?.meta;
+  if (wolf) {
+    if (Math.abs(Object.values(wolf.amounts).reduce((total, amount) => total + amount, 0)) > 0.001) failures.push('Wolf settlement does not net to zero.');
+    if (wolf.holes.some(hole => hole.resolved && !['wolf','opponents','tied'].includes(hole.winner))) failures.push('Wolf has an invalid resolved-hole result.');
   }
   if (payout.settlementRows.some(row => row.amount > 100)) suspicious.push('A settlement row exceeds $100; confirm blowout/wager settings are intentional.');
   if (payout.metrics.completed === 0) warnings.push('No completed holes were available for settlement.');

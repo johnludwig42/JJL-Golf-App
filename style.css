@@ -6304,3 +6304,31 @@ html.quick-scoreboard-open,body.quick-scoreboard-open{overflow:hidden!important;
 /* Player Mode owns the root scroll surface so its hole header can remain below the fixed app chrome. */
 body.player-mode-play-active{overflow-x:clip!important;overflow-y:visible!important}
 body.classic-mode-play-active{overflow-x:clip!important;overflow-y:visible!important}
+.wolf-entry {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface, #fff);
+  overflow: hidden;
+}
+.wolf-entry > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+.wolf-entry > summary span:first-child { display: grid; gap: 2px; }
+.wolf-entry > summary small { color: var(--muted); }
+.wolf-entry-controls { display: grid; gap: 10px; padding: 0 14px 14px; }
+.wolf-entry-controls label { display: grid; gap: 5px; }
+.wolf-entry-readback { padding: 8px 10px; border-radius: 10px; background: var(--soft, #f3f7f4); }
+.wolf-point-config { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.wolf-point-config > strong { grid-column: 1 / -1; }
+@media (max-width: 520px) {
+  .wolf-point-config { grid-template-columns: 1fr; }
+}
+@media print {
+  .export-section-wolf { break-inside: auto; }
+  .wolf-scorecard table { font-size: 8pt; }
+}

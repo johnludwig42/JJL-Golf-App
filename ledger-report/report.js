@@ -3,7 +3,7 @@
    or derived from it. Stroke allocation comes from the app's engine, keyed by
    basis; the report never re-derives handicapping.
    ========================================================================== */
-import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.41';
+import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.42';
 
 const packPages = globalThis.packPages;
 const runGame = globalThis.runGame;
@@ -186,7 +186,8 @@ const sideMoney = k => sideOf(k).reduce((a,p)=>a+moneyOf(p.id),0);
 /* side games ordered by money moved, descending */
 const NINEPOINT = ROUND.games.find(g=>g.type==="ninepoint"&&g.R?.archetype==="cumulative") || null;
 const SIXES = ROUND.games.find(g=>g.type==="sixes"&&g.R?.archetype==="sixes") || null;
-const SIDEGAMES = ROUND.games.filter(g=>!g.featured&&!['ninepoint','sixes'].includes(g.type))
+const WOLF = ROUND.games.find(g=>g.type==="wolf"&&g.R?.archetype==="cumulative") || null;
+const SIDEGAMES = ROUND.games.filter(g=>!g.featured&&!['ninepoint','sixes','wolf'].includes(g.type))
   .sort((a,b)=> Object.values(b.moneyBy).filter(v=>v>0).reduce((x,y)=>x+y,0)
               - Object.values(a.moneyBy).filter(v=>v>0).reduce((x,y)=>x+y,0));
 
@@ -253,7 +254,7 @@ add("hero", ()=>{
   const label = FEAT ? headerCompetitionLabel(FEAT.name, FEAT.allowance.label) : "No featured competition";
   w.appendChild(h("div",{class:"eyebrow",text:"Featured Competition · "+label}));
   let head;
-  if(["ninepoint","sixes"].includes(FEAT?.type)&&ROUND.meta.primaryMatchStatus){
+  if(["ninepoint","sixes","wolf"].includes(FEAT?.type)&&ROUND.meta.primaryMatchStatus){
     head=ROUND.meta.primaryMatchStatus;
   }
   else if(WINK){
@@ -288,6 +289,10 @@ function deckText(){
       const decided=FR?.segments?.filter(segment=>segment.decided).length||0;
       parts.push(decided ? `${decided} of three rotating-partnership segments ${decided===1?"is":"are"} decided; player points are informational.` : "The rotating-partnership Sixes match has not produced a decided segment.");
     }
+  }
+  else if(FEAT?.type==="wolf"){
+    const completed=FR?.holesScored||0;
+    parts.push(completed ? `Wolf standings reflect ${completed} resolved holes; declarations and point awards are shown in the game ledger.` : "The Wolf game has not produced a resolved hole.");
   }
   else if(WINK){
     if(HAS_MONEY){
@@ -938,6 +943,19 @@ if(SIXES?.R?.segments?.length){
     }
     w.appendChild(h("p",{class:"scnote",text:SIXES.R.mode==="points"?"Partnerships rotate after every six holes. Each segment is informational; blank cells are unplayed, not ties or zeroes.":"Partnerships rotate after every six holes. Each winning golfer receives the segment stake from one losing golfer; halved segments settle at $0. Blank settlement cells are incomplete."}));
     return w;
+  },{splittable:true,minRows:2,keepTogetherWhenFits:true});
+}
+
+/* ---- Wolf declarations and points ---- */
+if(WOLF?.R?.series.some(series=>series.raw.some(isNum))){
+  add("wolfh",()=>secHead("Wolf · declarations and points",
+    `${String(WOLF.basis||"net").toUpperCase()} · ${usd(WOLF.pointValue||0)} per point · tied holes award zero and do not carry.`),
+    {keepWithNext:true,breakBefore:!MARGIN,label:"Games"});
+  add("wolf",()=>{
+    const name=id=>S(id)?.name||"—";
+    const detail=(WOLF.holes||[]).filter(row=>row.resolved).map(row=>`<tr data-row><td>H${row.holeNumber}</td><td class="l">${name(row.wolfPlayerId)}</td><td class="l">${row.choice==="partner"?`Partner · ${name(row.partnerPlayerId)}`:row.choice==="blind"?"Blind Wolf":row.choice==="lone"?"Lone Wolf":"No Wolf"}</td><td class="l">${row.winner==="wolf"?"Wolf side":row.winner==="opponents"?"Opponents":"Tie"}</td></tr>`).join("");
+    const standings=(WOLF.R.ranked||[]).map(series=>`<tr data-row><td class="l">${nameCell(S(series.id))}</td><td>${series.total}</td><td class="n">${acct(WOLF.moneyBy?.[series.id]||0)}</td></tr>`).join("");
+    return h("div",{"data-wolf-ledger":"",html:`<div class="subhead">Hole declarations<span>recorded facts and resolved side</span></div><table class="dense"><thead data-rowhead><tr><th>Hole</th><th class="l">Wolf</th><th class="l">Declaration</th><th class="l">Winner</th></tr></thead><tbody>${detail}</tbody></table><div class="subhead">Player points<span>head-to-head settlement</span></div><table class="dense"><thead data-rowhead><tr><th class="l">Player</th><th>Points</th><th class="n">Settlement</th></tr></thead><tbody>${standings}</tbody></table><p class="scnote">Every unique player pair settles its final point differential at the configured dollars per point. Blank or unresolved holes never create points.</p>`});
   },{splittable:true,minRows:2,keepTogetherWhenFits:true});
 }
 

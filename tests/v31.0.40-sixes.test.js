@@ -35,7 +35,7 @@ function makeFixture({ mode = 'points', basis = 'gross', scoresByPlayer = null, 
 test('release identity and selectable Sixes surfaces are present', () => {
   assert.equal(packageJson.version, currentVersionBare);
   assert.match(appSource, /key: 'sixes', label: 'Sixes \(6-6-6\)'/);
-  assert.match(appSource, /label: 'Rotating Partnerships', keys: \['sixes'\]/);
+  assert.match(appSource, /label: 'Rotating Partnerships', keys: \['sixes', 'wolf'\]/);
   assert.match(indexSource, /id="sixesScorecardCard"/);
 });
 

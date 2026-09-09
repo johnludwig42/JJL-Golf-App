@@ -141,6 +141,8 @@ export function buildLiveMatchFromRound(roundInput) {
     scoringAccessMode: round.scoringAccessMode || 'single_device',
     sharedParticipants: cloneJson(round.sharedParticipants || []),
     sharedPlayerAssignments: cloneJson(round.sharedAssignments || {}),
+    wolfInputs: cloneJson(round.wolfInputs || {}),
+    playedHoleOrder: cloneJson(round.playedHoleOrder || []),
     players: round.players.map((player, idx) => ({
       playerId: player.id,
       team: Number(player.team) || 1,

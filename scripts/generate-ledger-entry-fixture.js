@@ -128,3 +128,38 @@ const sixesPointsHtml = html.replace(/(<script src="\.\.\/ledger-report\/bootstr
 const sixesPointsOutput = resolve('reports', 'ledger-entry-v31.0.40-sixes-points.html');
 writeFileSync(sixesPointsOutput, sixesPointsHtml, 'utf8');
 console.log(`Generated ${sixesPointsOutput} with a dedicated Sixes player-points round.`);
+
+const wolfRound = JSON.parse(JSON.stringify(sixesPointsRound));
+wolfRound.meta.course = 'Wolf Layout Club';
+wolfRound.meta.date = '2026-09-08';
+wolfRound.meta.story = 'Four golfers rotated as Wolf, chose partners, and settled the recorded point differentials.';
+wolfRound.meta.primaryMatchStatus = 'Wolf: John 12 · Phil 8 · Tom 5 · Drew 3 pts thru 18';
+const wolfPoints = { john: Array(18).fill(0), phil: Array(18).fill(0), tom: Array(18).fill(0), drew: Array(18).fill(0) };
+const wolfHoles = holes.map((holeNumber, index) => {
+  const wolfPlayerId = sixesIds[index % 4];
+  const partnerPlayerId = sixesIds[(index + 1) % 4];
+  const winner = index % 5 === 4 ? 'tied' : index % 2 === 0 ? 'wolf' : 'opponents';
+  if (winner === 'wolf') { wolfPoints[wolfPlayerId][index] = 1; wolfPoints[partnerPlayerId][index] = 1; }
+  if (winner === 'opponents') sixesIds.filter(id => ![wolfPlayerId, partnerPlayerId].includes(id)).forEach(id => { wolfPoints[id][index] = 1; });
+  return { holeNumber, wolfPlayerId, choice: 'partner', partnerPlayerId, winner, resolved: true };
+});
+const wolfTotals = Object.fromEntries(sixesIds.map(id => [id, wolfPoints[id].reduce((sum, value) => sum + value, 0)]));
+const wolfMoney = Object.fromEntries(sixesIds.map(id => [id, 0]));
+sixesIds.forEach((first, index) => sixesIds.slice(index + 1).forEach(second => {
+  const amount = wolfTotals[first] - wolfTotals[second];
+  wolfMoney[first] += amount; wolfMoney[second] -= amount;
+}));
+wolfRound.games = [{
+  id:'wolf', name:'Wolf', type:'wolf', featured:true, scope:'individual', unit:'points', lowWins:false,
+  playerIds:sixesIds, basis:'net', allowance:{key:'featured',label:'100% Game Net'}, pointValue:1,
+  settlementMode:'headToHead', totals:wolfTotals, pointsByHole:wolfPoints, holes:wolfHoles,
+  money:wolfMoney,
+}];
+wolfRound.meta.primaryMatchStatus = `Wolf: ${sixesIds.map(id=>`${sixesNames[sixesIds.indexOf(id)].split(' ')[0]} ${wolfTotals[id]}`).join(' · ')} pts thru 18`;
+wolfRound.payments = [];
+const wolfFixtureScript = resolve('reports', 'ledger-entry-wolf-fixture.js');
+writeFileSync(wolfFixtureScript, `globalThis.__DYE_LEDGER_ROUND__=${JSON.stringify(wolfRound)};\n`, 'utf8');
+const wolfHtml = html.replace(/(<script src="\.\.\/ledger-report\/bootstrap\.js[^>]*><\/script>)/, '$1\n<script src="./ledger-entry-wolf-fixture.js"></script>');
+const wolfOutput = resolve('reports', 'ledger-entry-v31.0.42-wolf.html');
+writeFileSync(wolfOutput, wolfHtml, 'utf8');
+console.log(`Generated ${wolfOutput} with a dedicated four-player Wolf round.`);

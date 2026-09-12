@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.44',
-  versionNumber: '31.0.44',
-  cacheName: 'the-dye-ledger-v31.0.44',
-  buildDate: '2026-09-09T12:00:00-04:00',
-  buildLabel: 'Wolf Declaration Experience'
+  version: 'v31.0.45',
+  versionNumber: '31.0.45',
+  cacheName: 'the-dye-ledger-v31.0.45',
+  buildDate: '2026-09-12T12:00:00-04:00',
+  buildLabel: 'Wolf Setup Reliability'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -24082,6 +24082,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const uniqueIds = new Set(selectedPlayers.map(p => p.playerId));
     if (selectedPlayers.length !== uniqueIds.size) return toast('Each player can only be selected once.');
     const selectedGames = collectSelectedGames();
+    const scoringAccessMode = normalizeScoringAccessMode(fd.get('scoreEntryMode') || 'single_device');
+    const scoreEntryMode = getLegacyScoreEntryMode(scoringAccessMode);
+    const sharedMatchEnabled = (scoringAccessMode === 'assigned_players' || fd.get('sharedMatchEnabled') === 'on') && hasSupabaseConfig();
     if (selectedGames.length > 5) return toast('Select up to 5 gambling games.');
     if (selectedGames.some(g => g.key === 'nassau') && teamCount !== 2) return toast('Nassau requires exactly 2 teams.');
     if (selectedGames.some(g => g.key === 'nassau')) {
@@ -24108,10 +24111,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const pressEditValidation = validatePressEditContract(existing, selectedGames, { isHost: !existing || isCurrentDeviceMatchHost(existing) });
     if (!pressEditValidation.valid) return toast(pressEditValidation.primaryReason?.message || 'Press settings could not be updated.');
     const validatedSelectedGames = pressEditValidation.proposedGames;
-    const scoringAccessMode = normalizeScoringAccessMode(fd.get('scoreEntryMode') || 'single_device');
-    const scoreEntryMode = getLegacyScoreEntryMode(scoringAccessMode);
     const officialScorerName = String(fd.get('officialScorerName') || '').trim() || 'Official scorer';
-    const sharedMatchEnabled = (scoringAccessMode === 'assigned_players' || fd.get('sharedMatchEnabled') === 'on') && hasSupabaseConfig();
     if (sharedMatchEnabled) {
       const accountUser = await getSupabaseUser();
       if (!window.DyeLedgerIdentitySecurity?.isDurableAccountSession?.({ user: accountUser })) {

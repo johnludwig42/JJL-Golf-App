@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current release: **v31.0.44 — Wolf Declaration Experience** on `release/v31.0.44`. This presentation-only release replaces Wolf's two-select declaration flow with a responsive one-tap choice row, preserves the authoritative Play save path, makes undeclared auto-open dismissible for the session, and clarifies pending and nonstandard playing-order context. Wolf remains local scoring only, and no database migration is required.
+Current release: **v31.0.45 — Wolf Setup Reliability** on `release/v31.0.45`. This focused hotfix restores Wolf Match Setup submission by initializing scoring authority before synchronous Wolf validation and replaces false-confidence source assertions with executable setup coverage. It also audits intermittent readiness-state reporting without changing scoring, persistence, shared-match, or Ledger Entry contracts. No database migration is required.
 
 ## 2. Development Roles
 

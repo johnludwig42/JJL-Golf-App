@@ -320,6 +320,10 @@ main{padding-bottom:calc(64px + env(safe-area-inset-bottom) + var(--keyboard-off
 .classic-header-match-status{display:flex;align-items:baseline;flex-wrap:wrap;gap:3px 7px;min-width:0;font-size:.74rem}
 .classic-header-match-status span{color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
 .classic-header-match-status strong{color:var(--accent);overflow-wrap:anywhere}
+.classic-header-current-pairing,.player-mode-header-current-pairing{display:flex;align-items:baseline;flex-wrap:wrap;gap:3px 7px;min-width:0;font-size:.74rem}
+.classic-header-current-pairing span,.player-mode-header-current-pairing span{color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.classic-header-current-pairing strong,.player-mode-header-current-pairing strong{color:var(--ink);overflow-wrap:anywhere}
+.classic-header-current-pairing{margin-top:4px}
 .classic-header-save-state{font-size:.68rem;font-weight:700;color:var(--accent)}
 .classic-header-save-state[data-tone="attention"]{color:#9b2c2c}.classic-header-save-state[data-tone="working"],.classic-header-save-state[data-tone="warning"]{color:#8a6100}
 .classic-header-actions{display:flex;align-items:center;align-self:start;justify-content:flex-end;gap:6px;position:relative;white-space:nowrap}
@@ -373,6 +377,7 @@ main{padding-bottom:calc(64px + env(safe-area-inset-bottom) + var(--keyboard-off
 .player-mode-hole-title .hole-select{width:auto;min-width:145px;padding:4px 34px 4px 0;border:0;background-color:transparent;font-size:1.65rem;font-weight:800;color:var(--text)}
 .player-mode-hole-meta{margin-top:3px;font-size:.9rem;color:var(--muted)}
 .player-mode-header-match-status{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 7px;margin-top:7px;font-size:.74rem}.player-mode-header-match-status span{color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em}.player-mode-header-match-status strong{color:var(--accent);overflow-wrap:anywhere}
+.player-mode-header-current-pairing{margin-top:7px}
 .player-mode-save-state{color:var(--accent);font-weight:700;font-size:.7rem;white-space:nowrap}.player-mode-save-state[data-tone="attention"]{color:#9b2c2c}.player-mode-save-state[data-tone="working"],.player-mode-save-state[data-tone="warning"]{color:#8a6100}.player-mode-entry-counter{font-size:.72rem;font-weight:750;color:var(--text);white-space:nowrap}
 .player-mode-header-actions{display:grid;justify-items:stretch;align-self:end;gap:8px;min-width:148px}.player-mode-header-meta{display:grid;grid-template-columns:auto auto;align-items:center;justify-content:end;gap:3px 9px}.player-mode-header-meta .player-mode-entry-counter,.player-mode-header-meta .player-mode-save-state{grid-column:1}.player-mode-header-meta .player-mode-overflow{grid-column:2;grid-row:1 / span 2}.player-mode-gir-result strong{font-size:2rem;line-height:1}.player-mode-gir-result strong[aria-label^="Missed"]{color:#9b2c2c}
 .classic-putts-control{display:grid;gap:4px;min-width:76px}.classic-putts-control select,.classic-putts-more{min-height:44px;min-width:72px}.player-mode-bunker-toggle{display:flex;align-items:center;gap:8px;min-height:44px}.player-mode-bunker-toggle input{width:22px;height:22px}

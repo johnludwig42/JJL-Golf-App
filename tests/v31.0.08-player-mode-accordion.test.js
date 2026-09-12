@@ -129,6 +129,7 @@ test('Player Mode uses one collapsible score-and-stat card per golfer without ch
   assert.match(app, /derived\.value \? '✓' : '✕'/);
   assert.match(app, /Saved ✓/);
   assert.match(css, /body\.player-mode-play-active \.app-footer-version\{display:none\}/);
-  const playerModeStyles = css.split(/\r?\n/).filter(line => /player-mode|play-input-mode-bar/.test(line)).join('\n');
+  const playerModeStyles = css.split(/\r?\n/).filter(line => /player-mode|play-input-mode-bar/.test(line) && !/player-mode-header-current-pairing/.test(line)).join('\n');
   assert.doesNotMatch(playerModeStyles, /var\(--(?:ink|panel|line)\)/);
+  assert.match(css, /player-mode-header-current-pairing strong[^\n]*color:var\(--ink\)/);
 });

@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current release: **v31.0.45 — Wolf Setup Reliability** on `release/v31.0.45`. This focused hotfix restores Wolf Match Setup submission by initializing scoring authority before synchronous Wolf validation and replaces false-confidence source assertions with executable setup coverage. It also audits intermittent readiness-state reporting without changing scoring, persistence, shared-match, or Ledger Entry contracts. No database migration is required.
+Current release: **v31.0.46 — Specialty Game Play Context** on `release/v31.0.46`. This focused presentation release gives Sixes and Wolf a clear current-pairing line in both Classic and Player Mode, separates playing-group context from competitive standings, and clarifies 9-Point, Sixes, and Wolf standings labels. Scoring, persistence, Shared Match, and Ledger Entry contracts are unchanged. No database migration is required.
 
 ## 2. Development Roles
 

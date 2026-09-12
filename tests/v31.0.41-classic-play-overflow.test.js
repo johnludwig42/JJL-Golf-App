@@ -58,7 +58,8 @@ test('Classic featured competition has a dedicated full-width row and keeps the 
   assert.match(html, /id="classicHoleContext"[\s\S]*id="classicHeaderActions"[\s\S]*id="classicHeaderMatchStatus"/);
   assert.match(css, /\.classic-header-match-status\{grid-column:1 \/ -1/);
   const selector = sourceSection('function renderHoleSelector', 'function renderSneakySandyPoleyEntry');
-  assert.match(selector, /classicContext\.innerHTML = `<div class="classic-hole-meta">\$\{holeMetaText\}<\/div>`/);
+  assert.match(selector, /classicContext\.innerHTML = `<div class="classic-hole-meta">\$\{holeMetaText\}<\/div>\$\{currentPairingPair/);
+  assert.match(selector, /classic-header-current-pairing/);
   assert.match(selector, /classicMatchStatus\.innerHTML = featuredStatusPair/);
   assert.equal((selector.match(/buildPlayFeaturedStatusPair\(/g) || []).length, 2);
 });

@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.45',
-  versionNumber: '31.0.45',
-  cacheName: 'the-dye-ledger-v31.0.45',
-  buildDate: '2026-09-12T12:00:00-04:00',
-  buildLabel: 'Wolf Setup Reliability'
+  version: 'v31.0.46',
+  versionNumber: '31.0.46',
+  cacheName: 'the-dye-ledger-v31.0.46',
+  buildDate: '2026-09-12T18:00:00-04:00',
+  buildLabel: 'Specialty Game Play Context'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -18691,8 +18691,46 @@ function buildPlayFeaturedStatusPair(match, metrics, fallbackGameKey = '') {
   if (!compactMatchStatus) return '';
   const statusOptions = getMatchStatusOptions(match);
   const gameKey = match.matchStatusGame || fallbackGameKey || statusOptions[0]?.key || 'team_match';
-  const featuredLabel = getFeaturedGameLabel(match, gameKey);
+  const featuredLabel = gameKey === 'nine_point' ? '9-Point standings'
+    : gameKey === 'sixes' ? 'Sixes standings'
+      : gameKey === 'wolf' ? 'Wolf standings'
+        : getFeaturedGameLabel(match, gameKey);
   return `<span>${escapeHtml(featuredLabel)}</span><strong>${escapeHtml(compactMatchStatus.replace(/^[^:]+:\s*/, ''))}</strong>`;
+}
+
+function buildPlayCurrentPairingPair(match, metrics, hole = null) {
+  if (!match || !metrics) return '';
+  const selectedGames = Array.isArray(match.selectedGames) ? match.selectedGames : [];
+  const featured = resolveFeaturedCompetitionKey(match, metrics);
+  const config = selectedGames.find(game => game.key === featured && ['sixes', 'wolf'].includes(game.key))
+    || selectedGames.find(game => ['sixes', 'wolf'].includes(game.key));
+  if (!config) return '';
+  if (config.key === 'sixes') {
+    const sixes = computeSixesResults(match, metrics, config);
+    const segment = sixes.segments.find(row => row.holePositions.includes(currentHole));
+    if (!segment) return '';
+    return `<span>${escapeHtml(`Segment ${segment.index} pairing`)}</span><strong>${escapeHtml(`${segment.sideA.label} vs ${segment.sideB.label}`)}</strong>`;
+  }
+  if (match.storageMode === 'shared') return '';
+  const wolfConfig = normalizeWolfConfig(config);
+  const scoringHoles = getSelectedScoringHoles(match, metrics.tee);
+  const actualHoleNumber = Number(hole?.holeNumber || scoringHoles[currentHole - 1]?.holeNumber || currentHole);
+  const position = getWolfPlayOrder(match, metrics).indexOf(actualHoleNumber) + 1;
+  const wolfId = getWolfPlayerIdForPosition(match, position, wolfConfig);
+  const wolfName = metrics.players.find(player => String(player.playerId) === String(wolfId))?.player?.name || getPlayer(wolfId)?.name || 'Assignment pending';
+  const noWolf = position >= 17 && wolfConfig.finalHolesRule === 'none';
+  if (noWolf) return '<span>Current pairing</span><strong>No Wolf this hole</strong>';
+  if (!wolfId) return '<span>Current Wolf</span><strong>Assignment pending</strong>';
+  const input = getWolfHoleInput(match, actualHoleNumber, metrics);
+  if (!input.choice) return `<span>Current Wolf</span><strong>${escapeHtml(`${wolfName} to declare`)}</strong>`;
+  const opponentIds = wolfConfig.playerIds.filter(id => String(id) !== String(wolfId) && String(id) !== String(input.partnerPlayerId || ''));
+  const opponentNames = opponentIds.map(id => metrics.players.find(player => String(player.playerId) === String(id))?.player?.name || getPlayer(id)?.name || 'Player');
+  if (input.choice === 'partner') {
+    const partnerName = metrics.players.find(player => String(player.playerId) === String(input.partnerPlayerId))?.player?.name || getPlayer(input.partnerPlayerId)?.name || 'Partner pending';
+    return `<span>Current pairing</span><strong>${escapeHtml(`${wolfName} / ${partnerName} vs ${opponentNames.join(' / ')}`)}</strong>`;
+  }
+  const declaration = input.choice === 'blind' ? 'Blind Wolf' : 'Lone Wolf';
+  return `<span>Current pairing</span><strong>${escapeHtml(`${declaration}: ${wolfName} vs ${opponentNames.join(' / ')}`)}</strong>`;
 }
 
 function buildPlaySaveState(match) {
@@ -18752,6 +18790,7 @@ function renderHoleSelector(match, scoringHoles = [], metrics = null) {
     const hole = holes[currentHole - 1] || null;
     const holeMetaText = buildPlayHoleMetaText(hole);
     const featuredStatusPair = buildPlayFeaturedStatusPair(match, metrics);
+    const currentPairingPair = buildPlayCurrentPairingPair(match, metrics, hole);
     const entryProgress = metrics ? getPlayerModeEntryProgress(match, metrics, metrics.tee, hole) : { complete: 0, total: 0 };
     const saveState = buildPlaySaveState(match);
     const dataCompletion = getRoundDataCompletionState(match);
@@ -18759,7 +18798,7 @@ function renderHoleSelector(match, scoringHoles = [], metrics = null) {
     playerHeader.classList.remove('hidden');
     const roundStatMode = normalizeStatTrackingMode(match.statTrackingMode || (match.statTrackingEnabled ? 'CASUAL' : 'NONE'));
     const memoryCount = getRoundMemories(match).length;
-    playerHeader.innerHTML = `<div class="player-mode-hole-title"><label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select><div class="player-mode-hole-meta">${holeMetaText}</div>${featuredStatusPair ? `<div class="player-mode-header-match-status">${featuredStatusPair}</div>` : ''}</div><div class="player-mode-header-actions"><div class="player-mode-header-meta"><div class="player-mode-entry-counter">${entryProgress.complete} of ${entryProgress.total} entered</div><div class="player-mode-save-state" data-tone="${saveState.tone}" aria-live="polite">${escapeHtml(saveState.label)}</div><button type="button" class="secondary player-mode-overflow" data-player-mode-overflow data-play-overflow-trigger="player" aria-expanded="false" aria-controls="playerModeOverflowMenu" aria-label="More Play actions">•••</button></div></div><div id="playerModeOverflowMenu" class="play-overflow-menu player-mode-overflow-menu hidden" data-play-overflow-menu="player" role="group" aria-label="Player Mode Play options"><button type="button" class="secondary" data-player-mode-add-memory>Add Memory${memoryCount ? ` (${memoryCount})` : ''}</button>${!completionContext ? '<button type="button" class="secondary play-overflow-consequential" data-player-mode-end-early>End Round Early</button>' : ''}<label class="play-overflow-select-row"><span>Scoring mode</span><select id="playerModeRoundScoringModeSelect" aria-label="Active round scoring mode">${Object.values(PLAY_INPUT_MODES).filter(mode => mode.available).map(mode => `<option value="${mode.key}" ${mode.key === (isPlayerMode ? 'PLAYER' : 'CLASSIC') ? 'selected' : ''}>${mode.label.replace(' Mode','')}</option>`).join('')}</select></label><label class="play-overflow-select-row"><span>Stat mode</span><select id="playerModeRoundStatModeSelect" aria-label="Active round stat mode">${Object.values(STAT_TRACKING_MODES).map(mode => `<option value="${mode.key}" ${mode.key === roundStatMode ? 'selected' : ''}>${mode.label}</option>`).join('')}</select></label></div>`;
+    playerHeader.innerHTML = `<div class="player-mode-hole-title"><label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select><div class="player-mode-hole-meta">${holeMetaText}</div>${currentPairingPair ? `<div class="player-mode-header-current-pairing">${currentPairingPair}</div>` : ''}${featuredStatusPair ? `<div class="player-mode-header-match-status">${featuredStatusPair}</div>` : ''}</div><div class="player-mode-header-actions"><div class="player-mode-header-meta"><div class="player-mode-entry-counter">${entryProgress.complete} of ${entryProgress.total} entered</div><div class="player-mode-save-state" data-tone="${saveState.tone}" aria-live="polite">${escapeHtml(saveState.label)}</div><button type="button" class="secondary player-mode-overflow" data-player-mode-overflow data-play-overflow-trigger="player" aria-expanded="false" aria-controls="playerModeOverflowMenu" aria-label="More Play actions">•••</button></div></div><div id="playerModeOverflowMenu" class="play-overflow-menu player-mode-overflow-menu hidden" data-play-overflow-menu="player" role="group" aria-label="Player Mode Play options"><button type="button" class="secondary" data-player-mode-add-memory>Add Memory${memoryCount ? ` (${memoryCount})` : ''}</button>${!completionContext ? '<button type="button" class="secondary play-overflow-consequential" data-player-mode-end-early>End Round Early</button>' : ''}<label class="play-overflow-select-row"><span>Scoring mode</span><select id="playerModeRoundScoringModeSelect" aria-label="Active round scoring mode">${Object.values(PLAY_INPUT_MODES).filter(mode => mode.available).map(mode => `<option value="${mode.key}" ${mode.key === (isPlayerMode ? 'PLAYER' : 'CLASSIC') ? 'selected' : ''}>${mode.label.replace(' Mode','')}</option>`).join('')}</select></label><label class="play-overflow-select-row"><span>Stat mode</span><select id="playerModeRoundStatModeSelect" aria-label="Active round stat mode">${Object.values(STAT_TRACKING_MODES).map(mode => `<option value="${mode.key}" ${mode.key === roundStatMode ? 'selected' : ''}>${mode.label}</option>`).join('')}</select></label></div>`;
     if (badge) badge.innerHTML = '';
     return;
   }
@@ -18770,10 +18809,11 @@ function renderHoleSelector(match, scoringHoles = [], metrics = null) {
   const hole = holes[currentHole - 1] || null;
   const holeMetaText = buildPlayHoleMetaText(hole);
   const featuredStatusPair = buildPlayFeaturedStatusPair(match, metrics, 'team_match');
+  const currentPairingPair = buildPlayCurrentPairingPair(match, metrics, hole);
   const saveState = buildPlaySaveState(match);
   if (badge) badge.innerHTML = `<label class="sr-only" for="currentHoleSelect">Select hole</label><select id="currentHoleSelect" class="hole-select" aria-label="Select hole">${options}</select>`;
   const classicContext = document.getElementById('classicHoleContext');
-  if (classicContext) classicContext.innerHTML = `<div class="classic-hole-meta">${holeMetaText}</div>`;
+  if (classicContext) classicContext.innerHTML = `<div class="classic-hole-meta">${holeMetaText}</div>${currentPairingPair ? `<div class="classic-header-current-pairing">${currentPairingPair}</div>` : ''}`;
   const classicMatchStatus = document.getElementById('classicHeaderMatchStatus');
   if (classicMatchStatus) {
     classicMatchStatus.innerHTML = featuredStatusPair;

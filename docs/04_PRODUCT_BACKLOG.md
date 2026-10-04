@@ -12,6 +12,18 @@ Status: Living Document
 
 This backlog is the source of approved product direction. It is not a release plan, and not every item is scheduled.
 
+## Approved games development program — October 3, 2026
+
+See [Games Development Roadmap](GAMES_DEVELOPMENT_ROADMAP.md) for phased scope, dependencies, and acceptance criteria. This extends existing roadmap commitments; release numbers and dates are not assigned.
+
+- NOW: four-device live Shared Match acceptance, including post-upload corrections, competing edits, interrupted delivery, and completion parity.
+- NEXT: extend existing Match Templates/saved rosters into reusable group game configurations with a shared rules summary; add live wager explanations; deliver configurable Dots/Trash while preserving SSP.
+- NEXT: expand skins house rules, evaluate opt-in automatic presses, and extend Wolf to three/five players after four-player acceptance.
+- NEXT: incorporate the roadmap's input/visual program: descriptive game selection, progressively disclosed settings, contextual current-hole inputs, compact active-game navigation, skins/carry visibility, shared rules examples, and tappable balance explanations. Prioritize selection/settings/inputs and validate on small iPhones in both Play modes.
+- FUTURE: independent game instances where current side-match support is insufficient; local-first Trip/Event aggregation; Stableford/Quota, Vegas, and standalone Low Ball–Low Total; later team-score formats.
+- Excluded by Product Owner direction: payment tracking, confirmations, payment integrations, and expense splitting. Calculated winnings and recommended round/trip settlements remain in scope.
+- Measure setup time, scoring effort, explanation access, and recovery reliability before claiming competitive superiority.
+
 Priority labels:
 
 - NOW: Needed before commercial launch or required for core trust.
@@ -219,10 +231,10 @@ NEXT:
 
 FUTURE:
 
-- Wolf.
-- Sixes / Round Robin.
-- Best Ball.
-- Press Engine.
+- Wolf: implemented in v31.0.42–v31.0.46; group-size expansion is planned in the Games Development Roadmap.
+- Sixes / Round Robin: implemented in v31.0.40; further format flexibility is planned separately.
+- Best Ball: existing team best-ball paths remain the foundation for future format expansion.
+- Press Engine: existing manual/threshold-prompted presses remain the foundation for optional automatic policy work.
 
 ## 6. Analytics & Coaching
 

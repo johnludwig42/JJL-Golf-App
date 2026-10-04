@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.46',
-  versionNumber: '31.0.46',
-  cacheName: 'the-dye-ledger-v31.0.46',
-  buildDate: '2026-09-12T18:00:00-04:00',
-  buildLabel: 'Specialty Game Play Context'
+  version: 'v31.0.47',
+  versionNumber: '31.0.47',
+  cacheName: 'the-dye-ledger-v31.0.47',
+  buildDate: '2026-10-04T18:00:00-04:00',
+  buildLabel: 'Approved Course Revision'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -12808,6 +12808,7 @@ function normalizeCloudCourseRow(row = {}) {
     source: 'supabase',
     cloudCourseId: id,
     cloudPublicationStatus: String(row.publication_status || 'approved').toLowerCase(),
+    cloudRevisionDraft: row.publication_status === 'draft' && row.source === 'user',
     cloudOwnerUserId: String(row.owner_user_id || ''),
   };
 }
@@ -13202,6 +13203,10 @@ async function refreshSupabaseCoursesByIds(client, courseIds = []) {
 }
 function isCourseCloudWriteCandidate(course = {}) {
   if (!String(course?.name || '').trim()) return false;
+  if (String(course.cloudPublicationStatus || '').toLowerCase() === 'approved') return false;
+  if (course.cloudRevisionDraft === true && String(course.cloudPublicationStatus || '').toLowerCase() === 'draft') {
+    return course.cloudSyncState === 'pending-sync';
+  }
   if (course?.cloudTeeRepairPending === true && String(course?.cloudPublicationStatus || '').toLowerCase() === 'draft') return true;
   // A prior bulk-sync bug marked downloaded catalog rows as pending. Their
   // cloud identity/source is authoritative evidence that they are cache rows,
@@ -16527,7 +16532,7 @@ function renderCourses() {
     const sourceLabel = (c.cloudCourseId || c.source === 'supabase') ? 'Cloud + device' : 'This device';
     const libraryState = getCourseLibraryStateLabel(c);
     const canApproveDraft = uiState.courseLibraryMaintainer && String(c.cloudPublicationStatus || '').toLowerCase() === 'draft' && !!c.cloudCourseId && !c.cloudIncomplete;
-    const approvedReadOnly = libraryState === 'Approved';
+    const approvedReadOnly = String(c.cloudPublicationStatus || '').toLowerCase() === 'approved';
     return `
     <div class="item compact-item library-item-card course-card ${expanded ? 'expanded' : 'collapsed'}">
       <div class="item-header compact-item-header library-item-header course-card-header">
@@ -16542,6 +16547,7 @@ function renderCourses() {
         </button>
         <div class="actions wrap compact-actions library-item-actions-inline">
           <button class="secondary" data-edit-course="${c.id}" ${approvedReadOnly ? 'disabled title="Approved catalog courses are protected."' : ''}>Edit course</button>
+          ${approvedReadOnly && uiState.courseLibraryMaintainer && c.cloudCourseId ? `<button class="secondary" data-revise-course="${c.id}">Revise Approved Course</button>` : ''}
           <button class="secondary" data-new-tee="${c.id}" ${approvedReadOnly ? 'disabled title="Approved catalog courses are protected."' : ''}>Add Tee Manually</button>
           ${canApproveDraft ? `<button data-approve-course="${c.id}">${libraryState === 'Needs Attention' ? 'Retry Approval' : 'Approve'}</button>` : ''}
           <details class="library-item-more-actions">
@@ -16597,10 +16603,46 @@ function removeLocalCourse(courseId) {
   persist();
   return before !== state.courses.length;
 }
+async function requestCourseRevision(client, course) {
+  const access = await getCourseLibraryWriteAccess(client);
+  if (!access.allowed || !access.isMaintainer) throw new Error('This Account is not authorized to revise approved courses.');
+  const cloudCourseId = getCourseCloudId(course);
+  if (!cloudCourseId || String(course.cloudPublicationStatus || '').toLowerCase() !== 'approved') throw new Error('Select an approved cloud course to revise.');
+  const { data, error } = await runCourseCloudOperation(() => client.rpc('revise_approved_course', { p_course_id: cloudCourseId }), 'Course revision', { retries: 0 });
+  if (error) throw new Error(error.code === 'PGRST202' ? 'Course revision is not available on the server yet. The approved course has not been changed.' : (error.message || 'Course revision failed.'));
+  const row = Array.isArray(data) ? data[0] : data;
+  if (String(row?.id || '') !== String(cloudCourseId) || row?.publication_status !== 'draft' || String(row?.owner_user_id || '') !== access.userId) throw new Error('The server did not confirm an editable draft. Refresh the Course Library before retrying.');
+  markCourseFromCloudRow(course, row);
+  course.cloudRevisionDraft = true;
+  return row;
+}
+async function reviseApprovedCourse(courseId) {
+  const course = getCourse(courseId);
+  if (!course || uiState.cloudCoursesLoading) return;
+  if (!window.confirm(`Revise ${course.name}?\n\nThe course will return to Draft under your Account and temporarily leave the public catalog until approved again. Existing downloaded courses and saved round snapshots are preserved.`)) return;
+  uiState.cloudCoursesLoading = true;
+  renderCourses();
+  try {
+    const client = await ensureSupabaseClient({ anonymousAuth: false });
+    await requestCourseRevision(client, course);
+    uiState.cloudCoursesStatus = `${course.name} is ready to edit. Publish Local Changes when finished, then Approve it again.`;
+    persist({ skipRender: true });
+    renderCourses();
+    loadCourseEditor(course.id);
+    toast('Course returned to Draft. You can edit its details and tees.');
+  } catch (error) {
+    uiState.cloudCoursesStatus = `Course revision needs attention: ${error?.message || 'Please retry.'}`;
+    toast(uiState.cloudCoursesStatus, 5000);
+  } finally {
+    uiState.cloudCoursesLoading = false;
+    renderCourses();
+  }
+}
 async function approveCourseLibraryDraft(courseId) {
   const course = getCourse(courseId);
   const cloudCourseId = getCourseCloudId(course);
   if (!course || !cloudCourseId) return toast('Upload this course draft before approving it.');
+  if (course.cloudRevisionDraft && isCourseCloudWriteCandidate(course)) return toast('Publish Local Changes before approving this revised course.');
   if (!window.confirm(`Approve ${course.name || 'this course'} for the shared Course Library?\n\nApproved courses are protected from normal browser edits.`)) return;
   if (uiState.cloudCoursesLoading) return toast('Course Library is already working. Please wait.');
   uiState.cloudCoursesLoading = true;
@@ -17557,6 +17599,7 @@ function markCourseFromCloudRow(course, row = {}) {
   if (!course || !row?.id) return course;
   course.cloudCourseId = String(row.id);
   course.cloudPublicationStatus = String(row.publication_status || course.cloudPublicationStatus || 'draft').toLowerCase();
+  if (course.cloudPublicationStatus === 'approved') course.cloudRevisionDraft = false;
   course.cloudOwnerUserId = String(row.owner_user_id || course.cloudOwnerUserId || '');
   course.cloudSyncState = course.cloudPublicationStatus === 'approved' ? 'approved' : 'draft-uploaded';
   course.cloudSyncError = '';
@@ -23082,12 +23125,14 @@ function installHandlers() {
     }
     const editCourse = e.target.dataset.editCourse;
     const approveCourse = e.target.dataset.approveCourse;
+    const reviseCourse = e.target.dataset.reviseCourse;
     const deleteLocalCourse = e.target.dataset.deleteCourseLocal;
     const deleteCloudCourse = e.target.dataset.deleteCourseCloud;
     const deleteCourseAll = e.target.dataset.deleteCourseAll;
     const newTee = e.target.dataset.newTee; const editTee = e.target.dataset.editTee; const copyTee = e.target.dataset.copyTee; const deleteTee = e.target.dataset.deleteTee;
     if (editCourse) loadCourseEditor(editCourse);
     if (approveCourse) { approveCourseLibraryDraft(approveCourse); return; }
+    if (reviseCourse) { void reviseApprovedCourse(reviseCourse); return; }
     if (deleteLocalCourse) { handleDeleteLocalCourse(deleteLocalCourse); return; }
     if (deleteCloudCourse) { handleDeleteCloudCourse(deleteCloudCourse); return; }
     if (deleteCourseAll) { handleDeleteCourseEverywhere(deleteCourseAll); return; }
@@ -25845,6 +25890,7 @@ function installDyeLedgerLiveEngineAdapter() {
     refreshSupabaseCoursesByIds,
     runCourseCloudOperation,
     getCourseLibraryStateLabel,
+    requestCourseRevision,
     getPlayerHoleTeeInfo,
     buildScorecardImportRequestBody,
     getScorecardImportReviewWarnings,

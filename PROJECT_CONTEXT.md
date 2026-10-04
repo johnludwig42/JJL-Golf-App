@@ -167,6 +167,8 @@ Avoid:
 
 ## 7. Current Status
 
+Current development: **v31.0.47 — Approved Course Revision**, on `codex/v31.0.47-course-revision`. Adds an explicit maintainer-only return-to-Draft action and protected server function. Server deployment and live acceptance are pending; v31.0.46 remains the production baseline. See `BUILD_NOTES_v31.0.47.md` for ownership, catalog visibility, and deployment details.
+
 Production baseline when this file was created:
 
 ```text
@@ -184,6 +186,10 @@ v31.0.09 — Release Assurance & Offline Ledger Reliability
 ```
 
 ## 8. Near-Term Roadmap
+
+The approved Games Development Roadmap also includes input/visual refinements: clearer game selection, simpler settings, contextual hole inputs, compact active-game navigation, visible skins/carry details, shared rules examples, and balance drill-ins. Integrate these with related game releases, preserve existing specialty headers, and validate small-iPhone usability before acceptance.
+
+Approved October 3, 2026: [Games Development Roadmap](docs/GAMES_DEVELOPMENT_ROADMAP.md) extends this sequence with four-device acceptance, reusable group setups/shared rules, wager explanations, Dots/Trash, house-rule and Wolf flexibility, and later Trip/Event and selected-format expansion. Preserve existing release commitments; assign versions during release planning. Payment tracking is excluded; calculated game results and recommended settlements remain in scope.
 
 1. v30.3.78 — Scores, Summary Usability & Player Insights (deployed)
 2. v30.3.79 — Shared Match Summary Optimization, Expanded Round Analytics, and clear Scores/Quick Scoreboard roles (deployed)
@@ -280,15 +286,16 @@ Audit and harden:
 - 9-Point
 
 Add before Event Edition:
-- Wolf
-- Sixes / Round Robin
-- Best Ball
+- Wolf — implemented in v31.0.42, with follow-up presentation work through v31.0.46; expand group sizes later.
+- Sixes / Round Robin — implemented in v31.0.40.
+- Best Ball — existing team best-ball functionality is the foundation; additional variants follow separate scope review.
 
 Stableford can be developed later and should not delay the core wagering/group-game library.
 
 Future:
-- Press Engine
-- Junk Games Framework
+- Press Engine extensions — build on existing manual and threshold-prompted presses.
+- Junk Games Framework — configurable Dots/Trash, preserving SSP.
+- See the approved Games Development Roadmap for phases, dependencies, and acceptance targets.
 
 ## 10. Documentation Strategy
 

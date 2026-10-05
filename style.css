@@ -2463,7 +2463,7 @@ main, .panel, .card, .item, .grid, .actions, .item-header, .compact-item-header{
   .setup-start-round-card .preview-card-actions{grid-template-columns:1fr}
   .shared-title-sync-diagnostics{position:fixed;top:calc(var(--app-chrome-height,100px) + 8px);left:10px;right:10px;width:auto;max-height:70vh;overflow:auto}
 }
-.game-picker-group{display:grid;gap:8px;align-content:start;padding:10px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.68)}
+.game-picker-group{display:grid;gap:8px;align-content:start;padding:0;border:0;border-radius:0;background:transparent}
 .game-picker-group-options{display:grid;gap:8px}
 .game-picker-group .section-subhead{font-weight:800;color:var(--text)}
 .preference-field-label{font-weight:750;color:var(--text)}
@@ -6343,3 +6343,31 @@ body.classic-mode-play-active{overflow-x:clip!important;overflow-y:visible!impor
   .export-section-wolf { break-inside: auto; }
   .wolf-scorecard table { font-size: 8pt; }
 }
+
+/* v31.0.48: focused game setup and score-entry presentation. */
+.game-picker-shell{border:0;background:transparent;padding:0}
+.games-picker{gap:20px}
+.game-pill{align-items:flex-start;gap:12px;padding:12px;border-radius:8px;box-shadow:none;min-height:48px;font-weight:400}
+.game-pill input{flex:0 0 auto;width:20px;height:20px;margin-top:2px;accent-color:var(--accent)}
+.game-choice-copy{display:grid;gap:5px;min-width:0}
+.game-choice-copy strong{font-size:1rem;line-height:1.3}
+.game-choice-description{font-size:.875rem;line-height:1.4;font-weight:400;color:var(--text)}
+.game-choice-players{font-size:.8125rem;line-height:1.4;color:var(--muted)}
+.game-choice-restriction{font-size:.8125rem;line-height:1.4;color:#745016}
+.game-pill.disabled{opacity:1;background:#f3f5f4;color:#53605a}
+.game-pill.selected{box-shadow:inset 3px 0 0 var(--accent)}
+.game-pill:focus-within{outline:2px solid var(--accent);outline-offset:3px}
+.game-config-card{box-shadow:none;border-radius:10px;background:var(--card)}
+.game-config-header{align-items:flex-start;flex-wrap:wrap}
+.game-config-header .tiny{text-align:left;font-size:.8125rem;line-height:1.4}
+.game-advanced-options{margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
+.game-advanced-options summary{cursor:pointer;min-height:44px;padding:10px 0;font-size:.875rem;font-weight:650;color:var(--text)}
+.player-mode-player-detail .player-mode-expanded-meta{font-size:.8125rem}
+.player-mode-more-score.is-active>span{color:#fff;font-weight:800;font-size:1.125rem}
+.player-mode-more-score input:focus{color:var(--text);background:var(--card);caret-color:var(--text)}
+.player-mode-more-score:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.player-mode-detail-score>button b{font-size:1.125rem;font-variant-numeric:tabular-nums}
+.player-mode-detail-score>button small{font-size:.75rem}
+.player-mode-detail-score>button.is-active b,.player-mode-detail-score>button.is-active small{color:#fff}
+.player-mode-hole-tee{font-size:.75rem;line-height:1.35}
+@media(max-width:520px){.games-picker{grid-template-columns:minmax(0,1fr)}.game-config-card .grid.two{gap:12px}.game-choice-copy strong{font-size:1rem}}

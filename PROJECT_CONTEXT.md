@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current release: **v31.0.46 — Specialty Game Play Context** on `release/v31.0.46`. This focused presentation release gives Sixes and Wolf a clear current-pairing line in both Classic and Player Mode, separates playing-group context from competitive standings, and clarifies 9-Point, Sixes, and Wolf standings labels. Scoring, persistence, Shared Match, and Ledger Entry contracts are unchanged. No database migration is required.
+Current development release: **v31.0.48 — Game Setup & Score Entry Polish** on `codex/v31.0.48-game-setup-polish`. Adds game descriptions and participant guidance, lighter picker presentation, expandable handicap options, and clearer Player Mode custom-score entry. Navigation and scoring/sync contracts are unchanged; no database migration is required. The Product Owner confirmed the v31.0.47 approved-course revision workflow works before authorizing this release.
 
 ## 2. Development Roles
 

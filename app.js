@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.47',
-  versionNumber: '31.0.47',
-  cacheName: 'the-dye-ledger-v31.0.47',
-  buildDate: '2026-10-04T18:00:00-04:00',
-  buildLabel: 'Approved Course Revision'
+  version: 'v31.0.48',
+  versionNumber: '31.0.48',
+  cacheName: 'the-dye-ledger-v31.0.48',
+  buildDate: '2026-10-05T07:40:00-04:00',
+  buildLabel: 'Game Setup & Score Entry Polish'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -18297,8 +18297,8 @@ function renderPlayerModeStatEntry(match, hole, metrics) {
   const detailIncomplete = getPlayerModeRequiredDetailState(match, metrics, selected, metrics?.tee, hole).incomplete;
   const detailedReadback = buildPlayerModeDetailedReadback({ derived, stat, recovery, approachLabels });
   wrap.innerHTML = `<div class="player-mode-player-detail player-mode-stat-card" data-player-stat-mode="${tracksStats ? mode.active : 'NONE'}">
-    <div class="player-mode-expanded-meta"><span>${escapeHtml(getPlayerHoleTeeInfo(match, selected, currentHole - 1, metrics?.tee).label)}${strokes > 0 ? ` · ${'●'.repeat(strokes)}` : ''}${Number.isFinite(net) ? ` · net ${net}` : ''}</span><span class="player-mode-stat-badge">${tracksStats ? mode.active.charAt(0) + mode.active.slice(1).toLowerCase() : 'Score only'}</span></div>
-    <div class="player-mode-stat-section"><span class="player-mode-stat-label">Gross Score</span><div class="player-mode-score-choices player-mode-detail-score" role="group" aria-label="Gross score for ${escapeHtml(selected.player?.name || 'Player')}">${scoreChoices.map(value => `<button type="button" data-player-score-value="${value}" data-player-score-player="${escapeHtml(selected.playerId)}" class="${Number(gross) === value ? 'is-active' : ''}" ${canEdit ? '' : 'disabled'}><b>${value}</b><small>${escapeHtml(getPlayerModeScoreLabel(value, par))}</small></button>`).join('')}<label class="player-mode-more-score ${otherScoreSelected ? 'is-active' : ''}"><span>${otherScoreSelected ? escapeHtml(String(gross)) : 'Other'}</span><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" min="1" max="25" data-score-player="${escapeHtml(selected.playerId)}" data-score-locked="${canEdit ? '0' : '1'}" data-hole-par="${par}" value="${gross || ''}" ${canEdit ? '' : 'disabled'} /></label></div></div>
+    <div class="player-mode-expanded-meta"><span>${Number.isFinite(net) ? `Net ${net}` : 'Score not entered'}${strokes > 0 ? ` · ${strokes} match stroke${strokes === 1 ? '' : 's'}` : ''}</span><span class="player-mode-stat-badge">${tracksStats ? mode.active.charAt(0) + mode.active.slice(1).toLowerCase() : 'Score only'}</span></div>
+    <div class="player-mode-stat-section"><span class="player-mode-stat-label">Gross Score</span><div class="player-mode-score-choices player-mode-detail-score" role="group" aria-label="Gross score for ${escapeHtml(selected.player?.name || 'Player')}">${scoreChoices.map(value => `<button type="button" data-player-score-value="${value}" data-player-score-player="${escapeHtml(selected.playerId)}" class="${Number(gross) === value ? 'is-active' : ''}" ${canEdit ? '' : 'disabled'}><b>${value}</b><small>${escapeHtml(getPlayerModeScoreLabel(value, par))}</small></button>`).join('')}<label class="player-mode-more-score ${otherScoreSelected ? 'is-active' : ''}"><span>${otherScoreSelected ? escapeHtml(String(gross)) : 'Other'}</span><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" min="1" max="25" aria-label="Other gross score for ${escapeHtml(selected.player?.name || 'Player')}" data-score-player="${escapeHtml(selected.playerId)}" data-score-locked="${canEdit ? '0' : '1'}" data-hole-par="${par}" value="${gross || ''}" ${canEdit ? '' : 'disabled'} /></label></div></div>
     ${tracksStats ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Putts</span><div class="player-mode-stat-options player-mode-six-options">${[0,1,2,3,4].map(value => choice('putts', value, value, stat.puttsSource !== 'default' && stat.putts === value)).join('')}<label class="player-mode-more-stat"><span>Other</span><input class="stat-putts-input" type="tel" inputmode="numeric" min="0" max="9" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="putts" data-putts-source="${escapeHtml(stat.puttsSource)}" value="${stat.puttsSource === 'default' ? '' : stat.putts}" ${canEdit ? '' : 'disabled'} /></label></div></div>
     <div class="player-mode-core-actions"><div class="player-mode-readback player-mode-core-readback" aria-live="polite">${escapeHtml(coreReadback)}</div><button type="button" class="secondary player-mode-more-detail-toggle" data-player-mode-more-detail data-incomplete="${detailIncomplete}" aria-label="${detailOpen ? 'Hide detail' : `More detail${detailIncomplete ? ', incomplete' : ''}`}" aria-expanded="${detailOpen}" aria-controls="playerModeMoreDetail-${escapeHtml(selected.playerId)}"><span>${detailOpen ? 'Hide detail' : 'More detail'}${!detailOpen && detailIncomplete ? '<b aria-hidden="true">•</b>' : ''}</span></button></div>
     <div id="playerModeMoreDetail-${escapeHtml(selected.playerId)}" class="player-mode-more-detail" ${detailOpen ? '' : 'hidden'}>
@@ -21668,10 +21668,56 @@ function enforcePressSetupLimitInput(input) {
     : `Maximum Re-Presses cannot be lower than the existing chain depth of ${facts.deepestRePressDepth}.`);
   return false;
 }
+const GAME_SETUP_GUIDANCE = Object.freeze({
+  nassau: ['Two teams', 'Three wagers: front nine, back nine, and overall.'],
+  singles_match: ['Two golfers · 1 vs 1', 'Win holes in a head-to-head match.'],
+  individual_match: ['Selected golfer pairs', 'Separate side matches with their own stakes.'],
+  team_match: ['Two teams', 'Each team’s best ball competes hole by hole.'],
+  team_stroke: ['Teams', 'Compare best-ball or combined stroke totals.'],
+  skins: ['Golfers or teams', 'Unique low score wins; choose whether ties carry.'],
+  net_skins: ['Golfers or teams', 'Skins with handicap strokes applied.'],
+  greenies: ['Selected golfers', 'Closest to the pin on eligible par-three holes.'],
+  sneaky_sandy_poley: ['Two teams', 'Team points for saved events and low-ball/low-total results.'],
+  nine_point: ['Exactly three golfers', 'Divide nine points on each completed hole.'],
+  sixes: ['Exactly four golfers', 'Partners rotate every six holes; the format stays the same.'],
+  wolf: ['Exactly four golfers · local only', 'The rotating Wolf chooses a partner or plays alone.'],
+});
+
+function updateGameSetupAllowanceSummary(card) {
+  const summary = card?.querySelector('.game-advanced-options summary');
+  if (!summary) return;
+  const allowance = card.querySelector('[data-field="handicapAllowancePercent"]')?.value;
+  const basis = card.querySelector('[data-field="basis"]')?.value;
+  summary.textContent = `Handicap options · ${basis === 'gross' ? 'Not used for gross' : `${allowance ?? '100'}% allowance`}`;
+}
+
+function simplifyGameSetupDetails(configsWrap, expanded = {}) {
+  const advancedFields = new Set(['handicapAllowanceMode', 'handicapAllowancePercent']);
+  configsWrap.querySelectorAll('.game-config-card').forEach(card => {
+    const controls = Array.from(card.querySelectorAll('[data-game-config]'));
+    const key = controls[0]?.dataset.gameConfig;
+    const labels = [...new Set(controls.filter(control => advancedFields.has(control.dataset.field)).map(control => control.closest('label')).filter(Boolean))];
+    if (!key || !labels.length) return;
+    const details = document.createElement('details');
+    details.className = 'game-advanced-options';
+    details.dataset.gameAdvanced = key;
+    details.open = expanded[key] === true;
+    const summary = document.createElement('summary');
+    const grid = document.createElement('div');
+    grid.className = 'grid two compact-grid top-gap';
+    labels.forEach(label => grid.appendChild(label));
+    details.append(summary, grid);
+    const press = card.querySelector('.press-setup');
+    card.insertBefore(details, press || null);
+    updateGameSetupAllowanceSummary(card);
+  });
+}
+
 function renderGamesPicker(existing = []) {
   const picker = document.getElementById('gamesPicker');
   const configsWrap = document.getElementById('gameConfigs');
   if (!picker || !configsWrap) return;
+  const expanded = Object.fromEntries(Array.from(configsWrap.querySelectorAll('[data-game-advanced]')).map(details => [details.dataset.gameAdvanced, details.open]));
   const normalizedExisting = normalizeSelectedGamesOrder(existing || []);
   const selectedKeys = normalizedExisting.map(g => g.key);
   const editingPressFacts = getPressEditFacts(editingMatchId ? getMatch(editingMatchId) : null);
@@ -21686,7 +21732,7 @@ function renderGamesPicker(existing = []) {
     return `
     <label class="game-pill ${selectedKeys.includes(game.key) ? 'selected' : ''} ${gameBlocked ? 'disabled' : ''}" ${blockedTitle ? `title="${escapeHtml(blockedTitle)}"` : ''}>
       <input type="checkbox" data-game-key="${game.key}" ${selectedKeys.includes(game.key) ? 'checked' : ''} ${gameBlocked ? 'disabled' : ''} />
-      <span>${getGameLabel(game.key)}</span>
+      <span class="game-choice-copy"><strong>${getGameLabel(game.key)}</strong><span class="game-choice-description">${escapeHtml(GAME_SETUP_GUIDANCE[game.key]?.[1] || '')}</span><span class="game-choice-players">${escapeHtml(GAME_SETUP_GUIDANCE[game.key]?.[0] || '')}</span>${blockedTitle ? `<span class="game-choice-restriction">${escapeHtml(blockedTitle)}</span>` : ''}</span>
     </label>`;
   }).join('')}</div></section>`).join('');
   const selectedGames = normalizeSelectedGamesOrder(GAME_LIBRARY.filter(g => selectedKeys.includes(g.key)));
@@ -21936,6 +21982,7 @@ function renderGamesPicker(existing = []) {
       </div>${buildPressSetupControls(game.key, cfg)}
     </div>`;
   }).join('');
+  simplifyGameSetupDetails(configsWrap, expanded);
   configsWrap.insertAdjacentHTML('beforeend', buildCompetitionRulesSummary(normalizedExisting.filter(game => selectedKeys.includes(game.key))));
   syncSmartScoreAdvancePresetUi({ selectedGames: normalizedExisting });
 }
@@ -23564,6 +23611,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
   document.getElementById('gameConfigs')?.addEventListener('change', e => {
+    updateGameSetupAllowanceSummary(e.target.closest('.game-config-card'));
     if (!e.target.matches('[data-game-config="nassau"][data-field="basis"], [data-game-config="nassau"][data-field="countingBalls"], [data-game-config="nassau"][data-field="handicapAllowanceMode"]')) return;
     preserveSetupScrollDuring(() => {
       const configs = collectSelectedGames();

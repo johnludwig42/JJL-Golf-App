@@ -90,6 +90,8 @@ The baseline already includes multiple games, individual side matches, match tem
 
 ## Input and visual improvement program — NEXT
 
+Development delivery v31.0.48 covers clearer game descriptions and participant guidance, lighter selection rows, expandable handicap settings with preserved values, and Player Mode custom-score contrast and labeling. Local browser and scoring checks are complete; production acceptance is pending. The remaining visual program and game expansions below stay on the roadmap.
+
 Approved October 3, 2026 following the website/illustrated-guide comparison. These are design proposals requiring usability validation, not findings from hands-on use of Squabbit. Integrate them into related phases without a whole-app redesign.
 
 Prioritize clearer game selection, simpler settings, and contextual game inputs first. Shared rules preview belongs with reusable group setup; active-game navigation, skins visibility, and balance drill-ins belong with wager explanations.

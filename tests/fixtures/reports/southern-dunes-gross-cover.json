@@ -1,0 +1,35 @@
+{
+  "hero": "Hush & Lud — lowest score 71",
+  "positions": [
+    "Hush & Lud11T1111111111111111",
+    "Magic & Crabby Pants44444444T3T33T33T22222",
+    "Mark & KellT22T12222222222T23T3T33",
+    "Neil & KappyT23333333T3T34T3444T3T34"
+  ],
+  "par": [],
+  "ticks": [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6"
+  ],
+  "dots": 0,
+  "leadFixed": null,
+  "colors": [
+    "rgb(52, 118, 95)",
+    "rgb(138, 103, 154)",
+    "rgb(37, 78, 112)",
+    "rgb(155, 72, 20)"
+  ],
+  "endNames": [],
+  "legendNames": [
+    "Hush & Lud",
+    "Magic & Crabby Pants",
+    "Mark & Kell",
+    "Neil & Kappy"
+  ],
+  "plottedEnd": 706
+}

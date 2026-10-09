@@ -8,18 +8,18 @@
   <meta name="theme-color" content="#111814" media="(prefers-color-scheme: dark)" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=31.0.53&amp;rev=202610090708" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v31.0.53.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v31.0.53.png" />
-  <link rel="shortcut icon" href="./branding/favicon-32-v31.0.53.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v31.0.53.png" />
-  <link rel="stylesheet" href="style.css?v=31.0.53&amp;rev=202610090708" />
+  <link rel="manifest" href="manifest.json?v=31.0.54&amp;rev=202610092143" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v31.0.54.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v31.0.54.png" />
+  <link rel="shortcut icon" href="./branding/favicon-32-v31.0.54.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v31.0.54.png" />
+  <link rel="stylesheet" href="style.css?v=31.0.54&amp;rev=202610092143" />
 </head>
 <body>
   <div class="app-chrome"><header class="app-header compact-header">
     <div class="brand-wrap">
       <div class="brand-mark">
-        <img src="./branding/apple-touch-icon-v31.0.53.png" alt="The Dye Ledger" />
+        <img src="./branding/apple-touch-icon-v31.0.54.png" alt="The Dye Ledger" />
       </div>
       <div>
       <h1>The Dye Ledger</h1>
@@ -997,7 +997,7 @@
       <div class="card tight-card app-updates-card" data-experience-section="support">
         <h2>App Updates</h2>
         <div class="app-update-summary">
-          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v31.0.53</strong></div>
+          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v31.0.54</strong></div>
           <div><span class="muted-label">Build Date</span><strong id="appBuildTimestamp">loading…</strong></div>
           <div><span class="muted-label">Cache</span><span id="appActiveCacheName" class="break-word">checking…</span></div>
           <div><span class="muted-label">Update Available</span><strong id="appUpdateAvailableStatus">checking…</strong></div>
@@ -1045,6 +1045,10 @@
   </main>
   <script id="appReleaseNotesData" type="application/json">[
   {
+    "version": "v31.0.54",
+    "summary": "Adds stroke-play leader-gap charts and position strips, a handicap table, and a consistent off-low report basis."
+  },
+  {
     "version": "v31.0.53",
     "summary": "Follows your device appearance with dark surfaces and readable status colors, while keeping printed reports light."
   },
@@ -1059,10 +1063,6 @@
   {
     "version": "v31.0.50",
     "summary": "Select saved group setups from Match, start fresh rounds with preserved game settings, and review round rules before and during play."
-  },
-  {
-    "version": "v31.0.49",
-    "summary": "Aligns report charts, standings and handicap labels with the saved competition, improves tie descriptions and scoring-only page layout."
   }
 ]</script>
 
@@ -1080,7 +1080,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v31.0.53</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
+    <span id="appVersionFooter">v31.0.54</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
@@ -1214,8 +1214,9 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=31.0.53&amp;rev=202610090708"></script>
-  <script src="identity-security.js?v=31.0.53&amp;rev=202610090708"></script>
-  <script src="app.js?v=31.0.53&amp;rev=202610090708"></script>
+  <script src="supabase-config.js?v=31.0.54&amp;rev=202610092143"></script>
+  <script src="identity-security.js?v=31.0.54&amp;rev=202610092143"></script>
+  <script src="ledger-report/stroke-play.js?v=31.0.54"></script>
+  <script src="app.js?v=31.0.54&amp;rev=202610092143"></script>
 </body>
 </html>

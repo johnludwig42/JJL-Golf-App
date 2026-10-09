@@ -1,0 +1,33 @@
+{
+  "hero": "Mark & Kell and Magic & Crabby Pants — tied at 70",
+  "positions": [
+    "Magic & Crabby Pants44444444T3T2T2T3T2T2T1T1T1T1",
+    "Mark & KellT22T1T1T12T1T1111111T1T1T1T1",
+    "Hush & Lud11T1T1T11T1T124T22T2T23443",
+    "Neil & KappyT23333333T3T24T3444334"
+  ],
+  "par": [],
+  "ticks": [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4"
+  ],
+  "dots": 0,
+  "leadFixed": null,
+  "colors": [
+    "rgb(138, 103, 154)",
+    "rgb(37, 78, 112)",
+    "rgb(52, 118, 95)",
+    "rgb(155, 72, 20)"
+  ],
+  "endNames": [],
+  "legendNames": [
+    "Magic & Crabby Pants",
+    "Mark & Kell",
+    "Hush & Lud",
+    "Neil & Kappy"
+  ],
+  "plottedEnd": 706
+}

@@ -76,6 +76,10 @@ export function auditStyleContract(css, exceptions = {}) {
 // selectors, media conditions, declaration ordering, or cascade specificity.
 export function expandColorTokens(css) {
   const root = postcss.parse(css);
+  // This helper represents the frozen light cascade, not a media-query engine.
+  root.walkAtRules('media', rule => {
+    if (rule.params.includes('prefers-color-scheme: dark')) rule.remove();
+  });
   const tokens = new Map();
   root.walkDecls(declaration => { if (isColorTokenDeclaration(declaration)) tokens.set(declaration.prop, declaration.value); });
   const expand = value => value.replace(/var\((--color-[a-z\d-]+)\)/g, (_, key) => {

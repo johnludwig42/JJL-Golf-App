@@ -101,7 +101,7 @@ function sixesFixture() {
 }
 
 async function seed(browser, url, data) {
-  const page = await browser.newPage();
+  const page = await offlinePage(browser, url);
   await page.evaluateOnNewDocument(() => { window.__DYE_LEDGER_LIVE_ENGINE_ADAPTER__ = true; });
   await page.goto(url, { waitUntil: 'load' });
   await page.waitForFunction(() => Boolean(window.__DYE_LEDGER_LIVE_ENGINE__));
@@ -112,6 +112,18 @@ async function seed(browser, url, data) {
     localStorage.setItem('the-dye-ledger-v20', JSON.stringify(engine.seedState(state)));
   }, data);
   await page.close();
+}
+
+// Local menu assertions must not race worker updates or course-library fetches.
+async function offlinePage(browser, url) {
+  const page=await browser.newPage();
+  await page.evaluateOnNewDocument(()=>{
+    Object.defineProperty(navigator,'onLine',{value:false,configurable:true});
+    Object.defineProperty(navigator,'serviceWorker',{value:{controller:null,ready:Promise.resolve({active:null}),addEventListener(){},register:async()=>({active:null,waiting:null,installing:null,addEventListener(){},update:async()=>{}}),getRegistration:async()=>null,getRegistrations:async()=>[]},configurable:true});
+  });
+  await page.setRequestInterception(true);
+  page.on('request',request=>request.url().startsWith(new URL(url).origin)?request.continue():request.abort());
+  return page;
 }
 
 async function assertMenuContained(page, kind, width) {
@@ -141,7 +153,7 @@ test('both Play menus stay contained and preserve dismissal behavior across boun
   const url = `http://127.0.0.1:${server.address().port}/index.html`;
   try {
     await seed(browser, url, sixesFixture());
-    const page = await browser.newPage();
+    const page = await offlinePage(browser, url);
     await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 1 });
     await page.goto(url, { waitUntil: 'load' });
     await page.click('[data-tab="score"]');

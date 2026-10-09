@@ -26,6 +26,25 @@ test('styles contain no color literals outside semantic tokens and no new px fon
   assert.deepEqual(exceptions.colors, []);
 });
 
+test('dark token overrides are screen-scoped, registered and cannot alter print colors', () => {
+  const catalog=JSON.parse(readFileSync(new URL('./fixtures/design/dark-color-token-catalog.json',import.meta.url),'utf8'));
+  const light=JSON.parse(readFileSync(new URL('./fixtures/design/color-token-catalog.json',import.meta.url),'utf8'));
+  const overrides=[];
+  postcss.parse(css).walkAtRules('media',media=>{
+    if(!media.params.includes('prefers-color-scheme: dark'))return;
+    assert.equal(media.params,'screen and (prefers-color-scheme: dark)');
+    media.walkDecls(declaration=>{
+      if(!declaration.prop.startsWith('--'))return;
+      assert.ok(isColorTokenDeclaration(declaration));
+      assert.ok(!declaration.prop.startsWith('--color-print-'));
+      assert.ok(light.some(token=>token.name===declaration.prop));
+      overrides.push(`${declaration.prop}: ${declaration.value}`);
+    });
+  });
+  assert.deepEqual(overrides.sort(),catalog.map(token=>`${token.name}: ${token.value}`).sort());
+  assert.ok(catalog.length>200);
+});
+
 test('guardrail detects raw hex, functions, names and variable fallback colors', () => {
   for (const value of ['#123456', 'rgb(1 2 3 / .5)', 'rgb(calc(200 + 5),0,0)', 'hsl(20 50% 50%)', 'rebeccapurple', 'var(--new-color, #abc)']) {
     assert.ok(auditStyleContract(`${css}\n.new-component{color:${value}}`, exceptions).violations.length, value);

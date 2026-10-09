@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current development release: **v31.0.52 — Design Token Foundation** on `codex/v31.0.52-design-token-foundation`. Semantic stylesheet colors, exact CSS drift exceptions, a frozen light baseline and computed/pixel browser coverage are implemented. Presentation only; no domain, record, persistence or shared-match changes. The approved follow-on sequence is documented in `docs/DESIGN_TOKEN_FOUNDATION.md`. Dark mode and bottom navigation are not included. Real iPhone acceptance and foundation review are required before v31.0.53.
+Current development release: **v31.0.53 — System Dark Mode** on `codex/v31.0.53-dark-mode`. The app follows system appearance through screen-scoped semantic colors, with computed contrast coverage and fixed light print/report styles. Presentation only; no domain, record, persistence or shared-match changes. See `docs/SYSTEM_DARK_MODE.md` and the approved sequence in `docs/DESIGN_TOKEN_FOUNDATION.md`. Typography and iOS text-size-adjust removal remain in v31.0.54; bottom navigation remains deferred. Real iPhone acceptance is required before release approval.
 
 ## 2. Development Roles
 

@@ -4,21 +4,22 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>The Dye Ledger</title>
-  <meta name="theme-color" content="#0b5d3b" />
+  <meta name="theme-color" content="#0b5d3b" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#111814" media="(prefers-color-scheme: dark)" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=31.0.52&amp;rev=202610090449" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v31.0.52.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v31.0.52.png" />
-  <link rel="shortcut icon" href="./branding/favicon-32-v31.0.52.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v31.0.52.png" />
-  <link rel="stylesheet" href="style.css?v=31.0.52&amp;rev=202610090449" />
+  <link rel="manifest" href="manifest.json?v=31.0.53&amp;rev=202610090708" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v31.0.53.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v31.0.53.png" />
+  <link rel="shortcut icon" href="./branding/favicon-32-v31.0.53.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v31.0.53.png" />
+  <link rel="stylesheet" href="style.css?v=31.0.53&amp;rev=202610090708" />
 </head>
 <body>
   <div class="app-chrome"><header class="app-header compact-header">
     <div class="brand-wrap">
       <div class="brand-mark">
-        <img src="./branding/apple-touch-icon-v31.0.52.png" alt="The Dye Ledger" />
+        <img src="./branding/apple-touch-icon-v31.0.53.png" alt="The Dye Ledger" />
       </div>
       <div>
       <h1>The Dye Ledger</h1>
@@ -996,7 +997,7 @@
       <div class="card tight-card app-updates-card" data-experience-section="support">
         <h2>App Updates</h2>
         <div class="app-update-summary">
-          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v31.0.52</strong></div>
+          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v31.0.53</strong></div>
           <div><span class="muted-label">Build Date</span><strong id="appBuildTimestamp">loading…</strong></div>
           <div><span class="muted-label">Cache</span><span id="appActiveCacheName" class="break-word">checking…</span></div>
           <div><span class="muted-label">Update Available</span><strong id="appUpdateAvailableStatus">checking…</strong></div>
@@ -1044,6 +1045,10 @@
   </main>
   <script id="appReleaseNotesData" type="application/json">[
   {
+    "version": "v31.0.53",
+    "summary": "Follows your device appearance with dark surfaces and readable status colors, while keeping printed reports light."
+  },
+  {
     "version": "v31.0.52",
     "summary": "Establishes semantic color tokens and CSS drift guardrails while preserving the current light appearance."
   },
@@ -1058,10 +1063,6 @@
   {
     "version": "v31.0.49",
     "summary": "Aligns report charts, standings and handicap labels with the saved competition, improves tie descriptions and scoring-only page layout."
-  },
-  {
-    "version": "v31.0.48",
-    "summary": "Adds game descriptions and group-size guidance, expandable handicap options, and clearer Player Mode score entry."
   }
 ]</script>
 
@@ -1079,7 +1080,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v31.0.52</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
+    <span id="appVersionFooter">v31.0.53</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
@@ -1213,8 +1214,8 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=31.0.52&amp;rev=202610090449"></script>
-  <script src="identity-security.js?v=31.0.52&amp;rev=202610090449"></script>
-  <script src="app.js?v=31.0.52&amp;rev=202610090449"></script>
+  <script src="supabase-config.js?v=31.0.53&amp;rev=202610090708"></script>
+  <script src="identity-security.js?v=31.0.53&amp;rev=202610090708"></script>
+  <script src="app.js?v=31.0.53&amp;rev=202610090708"></script>
 </body>
 </html>

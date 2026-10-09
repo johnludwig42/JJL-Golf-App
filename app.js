@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.53',
-  versionNumber: '31.0.53',
-  cacheName: 'the-dye-ledger-v31.0.53',
-  buildDate: '2026-10-09T07:08:00-04:00',
-  buildLabel: 'System Dark Mode'
+  version: 'v31.0.54',
+  versionNumber: '31.0.54',
+  cacheName: 'the-dye-ledger-v31.0.54',
+  buildDate: '2026-10-09T22:54:49.515Z',
+  buildLabel: 'Stroke Play Ledger Graphic'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -7119,15 +7119,24 @@ function buildLedgerEntryReportModel(match, metrics = null) {
     if (config.key === 'team_stroke') {
       const scoringMode = resolveTeamStrokeScoringMode(config.scoringMode);
       const seriesByHole = teamMetrics.map((team, index) => {
-        const scores = holes.map((hole, holeIndex) => {
-          const result = effectiveMetrics.holeResults?.[holeIndex];
-          if (!result?.completed) return null;
-          const value = getTeamHoleScore(result, team.team, common.basis, scoringMode);
-          return Number.isFinite(value) ? value : null;
+        const counting = holes.map((hole,holeIndex)=>{
+          const result=effectiveMetrics.holeResults?.[holeIndex];
+          if(!result?.completed)return null;
+          const candidates=(result.playerScores||[]).filter(row=>Number(row.team)===Number(team.team)).map(row=>{
+            const playerMetric=playerMetrics.find(player=>String(player.playerId)===String(row.playerId));
+            const playerHole=getPlayerHole(match,playerMetric,holeIndex,effectiveMetrics.tee)||hole;
+            const strokes=common.basis==='gross'?0:getGameRelativeStrokeAllowance(Number(playerHole.strokeIndex),playerMetric,effectiveMetrics,config);
+            return {gross:Number(row.gross),strokes,value:Number(row.gross)-strokes,playerId:String(row.playerId)};
+          }).sort((a,b)=>a.value-b.value||a.playerId.localeCompare(b.playerId));
+          return scoringMode==='aggregate'?candidates:candidates.slice(0,1);
         });
-        const pars = holes.map(hole => Number(hole.par) * (scoringMode === 'aggregate' ? team.members.length : 1));
-        return { id: teamKeys[index], name: sides[teamKeys[index]].name, scores, pars,
-          raw: scores.map((score, i) => score === null ? null : score - pars[i]) };
+        const scores=counting.map(rows=>rows?rows.reduce((sum,row)=>sum+row.value,0):null);
+        const pars=holes.map(hole=>Number(hole.par)*(scoringMode==='aggregate'?team.members.length:1));
+        return {id:teamKeys[index],name:sides[teamKeys[index]].name,scores,pars,
+          gross:counting.map(rows=>rows?rows.reduce((sum,row)=>sum+row.gross,0):null),
+          strokes:counting.map(rows=>rows?rows.reduce((sum,row)=>sum+row.strokes,0):null),
+          countingPlayerIds:counting.map(rows=>rows?.map(row=>row.playerId)||[]),
+          raw:scores.map((score,i)=>score===null?null:score-pars[i])};
       });
       return { ...common, type: 'strokeplay', scope: 'team', unit: 'strokes', lowWins: true,
         scoringMode, seriesByHole,
@@ -7234,7 +7243,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
   if (!games.some(game => game.featured)) {
     const grossOverview = featuredKey === 'stroke_gross';
     games.push({
-      id: grossOverview ? 'stroke-gross' : 'stroke-net', name: grossOverview ? 'Stroke Play · Gross' : 'Stroke Play · Course Net', type: 'strokeplay', featured: true,
+      id: grossOverview ? 'stroke-gross' : 'stroke-net', name: grossOverview ? 'Stroke Play · Gross' : 'Stroke Play · Net', type: 'strokeplay', featured: true,
       overviewOnly: !['stroke_net', 'stroke_gross'].includes(featuredKey),
       scope: 'individual', unit: 'strokes', lowWins: true, basis: grossOverview ? 'gross' : 'net', allowance: { key: 'courseNet', label: grossOverview ? 'Gross' : 'Full Course Handicap' },
       pointsByHole: Object.fromEntries(players.map(player => [player.id, player.gross.map((gross, index) => gross == null ? null : gross - (grossOverview ? 0 : player.strokes.courseNet[index]) - Number(holes[index]?.par || 0))])),
@@ -7254,6 +7263,36 @@ function buildLedgerEntryReportModel(match, metrics = null) {
       basis: parentNassau.basis, allowance: clonePlain(parentNassau.allowance), stakePerSegment: Number(press.stake || press.config?.wagerAmount || 0) || 0,
       unit: 'dollars', money: gameMoney(press), parentGameId: parentNassau.id,
     });
+  });
+  // Report metadata only: carry each game's existing allocation independently.
+  games.forEach(game=>{
+    const config=selectedGames.find(row=>String(row.key)===String(game.id));
+    const fixedGross=game.basis==='gross'||['skins','greenies','long_drive','closest_to_pin'].includes(config?.key);
+    const knownNet=game.type==='strokeplay'||['nassau','team_match','singles_match','sixes','wolf','nine_point','net_skins'].includes(config?.key);
+    const key='game:'+game.id;
+    game.handicaps={};
+    playerMetrics.forEach(playerMetric=>{
+      const player=players.find(row=>row.id===String(playerMetric.playerId));
+      if(!player)return;
+      let allocation=null;
+      if(fixedGross)allocation=holes.map(()=>0);
+      else if(game.id==='stroke-net')allocation=holes.map((hole,i)=>getGameRelativeStrokeAllowance(Number((getPlayerHole(match,playerMetric,i,effectiveMetrics.tee)||hole).strokeIndex),playerMetric,effectiveMetrics,{}));
+      else if(knownNet&&config){
+        const policy=config.key==='nassau'?normalizeNassauConfig(config,match):config;
+        allocation=holes.map((hole,i)=>{
+          const playerHole=getPlayerHole(match,playerMetric,i,effectiveMetrics.tee)||hole;
+          return getGameRelativeStrokeAllowance(Number(playerHole.strokeIndex),playerMetric,effectiveMetrics,policy);
+        });
+      }
+      player.strokes[key]=allocation||holes.map(()=>0);
+      game.handicaps[player.id]=allocation?allocation.reduce((sum,value)=>sum+value,0):null;
+    });
+    if(knownNet||fixedGross)game.allowance={...game.allowance,key};
+    if(game.id==='stroke-net'&&!game.overviewOnly){
+      game.allowance.label=String(match.allowance||100)+'% · Off lowest Playing Handicap · report basis';
+      game.pointsByHole=Object.fromEntries(players.map(player=>[player.id,player.gross.map((gross,i)=>gross===null?null:gross-player.strokes[key][i]-Number(holes[i]?.par||0))]));
+      players.forEach(player=>{player.strokes.featured=player.strokes[key].slice();player.ph=game.handicaps[player.id];});
+    }
   });
   const course = effectiveMetrics.course || match.courseSnapshot || {};
   const tee = effectiveMetrics.tee || {};
@@ -7295,6 +7334,14 @@ function buildLedgerEntryReportModel(match, metrics = null) {
 
 function resolveLedgerFeaturedTurningPoint(report) {
   const game = (report?.games || []).find(row => row?.featured) || report?.games?.[0];
+  if(game?.type==='strokeplay' && !game.overviewOnly && globalThis.DYE_LEDGER_STROKE_REPORT){
+    const summary=globalThis.DYE_LEDGER_STROKE_REPORT.buildStrokePlaySummary(game,report);
+    if(!summary?.complete||summary.leadFixed<0)return null;
+    return {gameId:game.id,gameName:game.name,holeIndex:summary.leadFixed,holeNumber:report.holes[summary.leadFixed],
+      rule:'final-leader-set-established',tiedMatch:summary.winners.length>1,
+      winningSideName:summary.winners.map(row=>row.name).join(' and '),
+      strokePlay:summary,swing:summary.swing};
+  }
   if (!game || !['nassau', 'matchplay'].includes(game.type) || !Array.isArray(game.sides) || game.sides.length !== 2) return null;
   const players = Array.isArray(report.players) ? report.players : [];
   const holes = Array.isArray(report.holes) ? report.holes : [];
@@ -7436,7 +7483,9 @@ function consumePendingLedgerEntryRevision(storage = localStorage) {
 
 function buildLedgerEntryFactsOnlyStory(record, match = null, metrics = null) {
   const story = buildRoundRecordStory(record);
-  const canonicalTurningPoint = match && metrics ? resolveLedgerFeaturedTurningPoint(buildLedgerEntryReportModel(match, metrics)) : null;
+  const reportModel=match&&metrics?buildLedgerEntryReportModel(match,metrics):null;
+  const canonicalTurningPoint=reportModel?resolveLedgerFeaturedTurningPoint(reportModel):null;
+  const strokeSummary=reportModel&&globalThis.DYE_LEDGER_STROKE_REPORT?.buildStrokePlaySummary(reportModel.games.find(game=>game.featured),reportModel);
   const highlights = (record?.players || [])
     .filter(player => player?.signatureStat)
     .slice(0, 4)
@@ -7444,13 +7493,15 @@ function buildLedgerEntryFactsOnlyStory(record, match = null, metrics = null) {
   const trackedStatistics = match && metrics
     ? buildTrackedStatisticsStoryFacts(match, metrics).slice(0, 2).map(describeTrackedStatisticsForStory).filter(Boolean)
     : [];
-  const turning = canonicalTurningPoint
+  const turning = strokeSummary?globalThis.DYE_LEDGER_STROKE_REPORT.strokePlayCallout(strokeSummary,reportModel):canonicalTurningPoint
     ? `${canonicalTurningPoint.winningSideName || 'The winning side'} established the lead that held through the finish.`
     : story?.turningPoint ? describeRoundRecordEvent(record, story.turningPoint) : '';
-  const opening = story?.narrative || `${buildRoundRecordResultLine(record)}.`;
+  const opening=strokeSummary?.winners?.length
+    ? reportModel.games.find(game=>game.featured).name+' uses '+strokeSummary.basis.toLowerCase()+' scores: '+reportModel.games.find(game=>game.featured).allowance.label+'. '+strokeSummary.winners.map(row=>row.name).join(' and ')+' '+(strokeSummary.winners.length>1?'finished tied':'finished lowest')+' at '+strokeSummary.winners[0].total+' ('+globalThis.DYE_LEDGER_STROKE_REPORT.toPar(strokeSummary.winners[0].relative)+' to par).'
+    : story?.narrative || buildRoundRecordResultLine(record)+'.';
   const turningHole = canonicalTurningPoint?.holeNumber || story?.turningPoint?.holeNumber;
   const turningParagraph = turning && turningHole ? `The round’s defining turn came on hole ${Number(turningHole)}. ${turning}` : '';
-  const highlightParagraph = highlights.length ? `The scorecard supplied the individual highlights as well. ${highlights.join(' ')}` : '';
+  const highlightParagraph = !strokeSummary && highlights.length ? `The scorecard supplied the individual highlights as well. ${highlights.join(' ')}` : '';
   const statisticsParagraph = trackedStatistics.length ? `The recorded statistics add context without changing the result. ${trackedStatistics.join(' ')}` : '';
   const partnership = match && metrics ? computeBestBallPartnershipStatistics(match, metrics) : null;
   const partnershipParagraph = partnership?.sides?.length
@@ -7489,7 +7540,9 @@ function buildLedgerEntryStoryPayload(match, metrics) {
     ...payload,
     reportPurpose: 'ledger-story',
     reportCompetition: buildLedgerEntryReportModel(match, metrics)?.games?.find(game => game.featured),
-    reportCompetitionInstruction: 'Use reportCompetition for the featured result and its saved handicap basis. Course Net is a separate informational measure; never present its total as the game score.',
+    reportCompetitionInstruction: payload.authoritativeFacts?.strokePlay
+      ? 'Use only authoritativeFacts.strokePlay for all stroke-play scores, to-par statements, lead-fixed and swing claims. Name its basis once. Do not discuss full-course net totals. A tied winning group shares the lead; never claim an outright winner.'
+      : 'Use reportCompetition for the featured result and its saved handicap basis. Course Net is a separate informational measure; never present its total as the game score.',
     trackedStatistics: buildTrackedStatisticsStoryFacts(match, metrics),
     trackedStatisticsInstruction: 'Use relevant recorded tracked statistics to help explain the round. State the tracked-hole sample, and never interpret an unrecorded field as zero.',
     partnershipPerformance,
@@ -8206,6 +8259,32 @@ function buildRoundRecapPayload(match, metrics) {
     summary: normalizedRecapWeather.summary,
   } : null;
   const partnershipPerformance = computeBestBallPartnershipStatistics(match, metrics);
+  const reportModel=globalThis.DYE_LEDGER_STROKE_REPORT?buildLedgerEntryReportModel(match,metrics):null;
+  const reportGame=reportModel?.games.find(game=>game.featured);
+  const strokeSummary=reportGame?globalThis.DYE_LEDGER_STROKE_REPORT.buildStrokePlaySummary(reportGame,reportModel):null;
+  if(strokeSummary)playerSummaries.forEach((row,i)=>{
+    const reportPlayer=reportModel.players[i];
+    const allocated=reportPlayer.strokes[reportGame.allowance.key];
+    row.playingHandicap=allocated.reduce((sum,value)=>sum+value,0);
+    row.net=reportPlayer.gross.reduce((sum,value,j)=>sum+(value===null?0:value-allocated[j]),0);
+    row.netToPar=reportPlayer.gross.reduce((sum,value,j)=>sum+(value===null?0:value-allocated[j]-reportModel.card.par[j]),0);
+    if(strokeSummary.net)delete row.gross;
+    else {delete row.net;delete row.netToPar;}
+  });
+  const authoritativeFacts=buildRoundRecapAuthoritativeFacts(match, metrics, playerSummaries, finalSettlement, payoutGames);
+  if(strokeSummary){
+    const leaderboard=strokeSummary.ranked.map(row=>({player:row.name,value:row.total,toPar:row.relative,position:row.position}));
+    const basisKey=strokeSummary.net?'Net':'Gross',otherKey=strokeSummary.net?'Gross':'Net';
+    authoritativeFacts[basisKey.toLowerCase()+'Leaderboard']=leaderboard;
+    authoritativeFacts['low'+basisKey+'Players']=strokeSummary.winners.map(row=>row.name);
+    authoritativeFacts['low'+basisKey+'Player']=authoritativeFacts['low'+basisKey+'Players'].join(', ');
+    authoritativeFacts['low'+basisKey+'Score']=strokeSummary.winners[0]?.total??null;
+    delete authoritativeFacts[otherKey.toLowerCase()+'Leaderboard'];
+    delete authoritativeFacts['low'+otherKey+'Players'];delete authoritativeFacts['low'+otherKey+'Player'];delete authoritativeFacts['low'+otherKey+'Score'];
+    authoritativeFacts.strokePlay={basis:strokeSummary.basis,allocation:reportGame.allowance.label,leaderboard,
+      leadFixedHole:strokeSummary.leadFixed>=0?reportModel.holes[strokeSummary.leadFixed]:null,
+      swing:strokeSummary.swing,callout:globalThis.DYE_LEDGER_STROKE_REPORT.strokePlayCallout(strokeSummary,reportModel)};
+  }
   return {
     app: 'The Dye Ledger',
     recapContentSpecVersion: ROUND_RECAP_CONTENT_SPEC_VERSION,
@@ -8232,7 +8311,7 @@ function buildRoundRecapPayload(match, metrics) {
       selected: getFeaturedCompetitionSelection(match),
       resolved: resolveFeaturedCompetitionKey(match, metrics),
       label: getFeaturedCompetitionResult(match, metrics).label,
-      result: getFeaturedCompetitionResult(match, metrics).result,
+      result: strokeSummary?.winners?.length?strokeSummary.winners.map(row=>row.name).join(' and ')+' '+(strokeSummary.winners.length>1?'tied at ':'finished at ')+strokeSummary.winners[0].total:getFeaturedCompetitionResult(match, metrics).result,
     },
     memories: getRoundMemories(match).map(m => ({ text: m.text, category: m.category, holeNumber: m.holeNumber, author: m.createdByName, createdByName: m.createdByName, createdAt: m.createdAt, timestamp: m.timestamp })),
     partnershipPerformance,
@@ -8242,7 +8321,7 @@ function buildRoundRecapPayload(match, metrics) {
     finalSettlement,
     payoutGames,
     momentum,
-    authoritativeFacts: buildRoundRecapAuthoritativeFacts(match, metrics, playerSummaries, finalSettlement, payoutGames),
+    authoritativeFacts,
   };
 }
 async function runRoundRecapGeneration(match, { automatic = false, silent = false } = {}) {

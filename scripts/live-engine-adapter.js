@@ -83,6 +83,7 @@ function createBrowserShim() {
 export function loadLiveEngine(appPath = DEFAULT_APP_PATH) {
   const sandbox = createBrowserShim();
   vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(new URL('../ledger-report/stroke-play.js',import.meta.url),'utf8'),sandbox);
   vm.runInContext(fs.readFileSync(appPath, 'utf8'), sandbox, { filename: appPath });
   if (!sandbox.__DYE_LEDGER_LIVE_ENGINE__) {
     throw new Error('Live engine adapter failed to load from app.js.');

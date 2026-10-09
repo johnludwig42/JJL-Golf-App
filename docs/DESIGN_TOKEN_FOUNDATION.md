@@ -4,10 +4,11 @@
 
 1. v31.0.52: semantic colors, literal conversion, and drift guardrail; preserve light appearance.
 2. v31.0.53: system dark-mode palette and AA body-text contrast.
-3. v31.0.54: rem typography and spacing scales, minimum readable text, real iOS Larger Text acceptance.
-4. v31.0.55: buttons, grouped rows, and a common sheet component layer.
-5. v31.0.56: bring Play and Insights into the experience system and connect the existing SVG navigation assets.
-6. v31.0.57: density, preferences, empty states, and balance detail within Quick Scoreboard.
+3. v31.0.54: focused stroke-play Ledger Entry report interlude.
+4. v31.0.55: rem typography and spacing scales, minimum readable text, real iOS Larger Text acceptance.
+5. v31.0.56: buttons, grouped rows, and a common sheet component layer.
+6. v31.0.57: bring Play and Insights into the experience system and connect the existing SVG navigation assets.
+7. v31.0.58: density, preferences, empty states, and balance detail within Quick Scoreboard.
 
 Bottom navigation is deferred. Any later prototype must account for score-entry controls, the keyboard and safe areas. Diagnostics remain quickly reachable. Domain logic, Round/record contracts, persistence and shared scoring are outside this program.
 

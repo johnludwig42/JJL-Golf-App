@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current development release: **v31.0.53 — System Dark Mode** on `codex/v31.0.53-dark-mode`. The app follows system appearance through screen-scoped semantic colors, with computed contrast coverage and fixed light print/report styles. Presentation only; no domain, record, persistence or shared-match changes. See `docs/SYSTEM_DARK_MODE.md` and the approved sequence in `docs/DESIGN_TOKEN_FOUNDATION.md`. Typography and iOS text-size-adjust removal remain in v31.0.54; bottom navigation remains deferred. Real iPhone acceptance is required before release approval.
+Current development release: **v31.0.54 — Stroke Play Ledger Graphic** on `codex/v31.0.54-stroke-play-report`. Stroke reports use leader-gap charts, position strips, lead-fixed/swing analysis and a handicap table. All newly generated net reports use off-low playing allocations, as explicitly requested, even though individual Low Net in-app scoring remains full-course handicap. App scoring, records, persistence, shared matches and accepted snapshots are preserved. See `BUILD_NOTES_v31.0.54.md`. The visual roadmap resumes with typography and iOS text scaling in v31.0.55; bottom navigation remains deferred. PDF and iPhone acceptance remain separate from automated verification.
 
 ## 2. Development Roles
 

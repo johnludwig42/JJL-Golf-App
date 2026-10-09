@@ -1,3 +1,4 @@
+import { expandColorTokens } from '../scripts/css-token-contract.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -5,7 +6,7 @@ import { currentVersionBareRegexEscaped, currentVersionRegexEscaped } from './su
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
-const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+const css = expandColorTokens(readFileSync(new URL('../style.css', import.meta.url), 'utf8'));
 const notes = readFileSync(new URL('../BUILD_NOTES_v30.3.82.md', import.meta.url), 'utf8');
 const contract = readFileSync(new URL('../docs/PRODUCT_EXPERIENCE_SYSTEM_v30.3.82.md', import.meta.url), 'utf8');
 

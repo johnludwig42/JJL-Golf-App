@@ -309,7 +309,8 @@ test('complete payout context includes active and final Press contributions exac
   assert.deepEqual(JSON.parse(JSON.stringify(f.engine.getPayoutReportContext(f.match, f.metrics).finalTotals)), JSON.parse(JSON.stringify(complete.finalTotals)));
   assert.equal(JSON.stringify(f.match), before);
 
-  f.match.players.forEach(player => { for (let index = 5; index < 9; index += 1) player.scores[index].gross = player.team === 1 ? 4 : 5; });
+  // A completion timestamp alone no longer finalizes an incomplete settlement.
+  f.match.players.forEach(player => { for (let index = 5; index < 18; index += 1) player.scores[index].gross = player.team === 1 ? 4 : 5; });
   f.metrics = f.engine.computeMatchMetrics(f.match);
   f.match.status = 'complete'; f.match.completedAt = '2026-07-12T20:00:00Z';
   const finalContext = f.engine.getPayoutReportContext(f.match, f.metrics);

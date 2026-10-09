@@ -25,7 +25,7 @@ test('current release identity and immutable assets are aligned', () => {
 
 test('the default release gate automatically discovers every test file', () => {
   assert.equal(pkg.scripts.pretest, undefined);
-  assert.equal(pkg.scripts.test, 'node --test tests');
+  assert.match(pkg.scripts.test, /^node --test(?: --test-concurrency=\d+)? tests$/);
   const testFiles = readdirSync(new URL('./', import.meta.url)).filter(name => name.endsWith('.test.js'));
   assert.ok(testFiles.length >= 58);
 });

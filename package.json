@@ -1,12 +1,12 @@
 {
   "name": "the-dye-ledger",
-  "version": "31.0.51",
+  "version": "31.0.52",
   "private": true,
   "type": "module",
   "scripts": {
     "lint": "eslint app.js service-worker.js scripts/**/*.js",
     "validate": "node scripts/validate-release.js",
-    "test": "node --test tests",
+    "test": "node --test --test-concurrency=1 tests",
     "test:v30.3.77": "node --test tests/v30.3.77-pwa-round-completion.test.js tests/v30.3.77-calculation-assurance.test.js",
     "test:v30.3.78": "node --test tests/v30.3.78-summary-insights.test.js",
     "test:v30.3.79": "node --test tests/v30.3.79-match-summary-recap.test.js",
@@ -94,6 +94,7 @@
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "@fontsource/inter": "^5.3.0",
     "eslint": "^9.0.0",
+    "postcss": "^8.5.29",
     "puppeteer-core": "^23.0.0",
     "supabase": "^2.109.1"
   }

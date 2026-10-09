@@ -1,3 +1,4 @@
+import { expandColorTokens } from '../scripts/css-token-contract.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
@@ -5,7 +6,7 @@ import { loadLiveEngine } from '../scripts/live-engine-adapter.js';
 
 const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+const css = expandColorTokens(readFileSync(new URL('../style.css', import.meta.url), 'utf8'));
 
 test('v31.0.08 immutable Player Mode release assets remain available', () => {
   assert.equal(existsSync(new URL('../BUILD_NOTES_v31.0.08.md', import.meta.url)), true);

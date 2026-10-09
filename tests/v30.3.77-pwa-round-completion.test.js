@@ -1,3 +1,4 @@
+import { expandColorTokens } from '../scripts/css-token-contract.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -8,7 +9,7 @@ const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const manifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
 const worker = readFileSync(new URL('../service-worker.js', import.meta.url), 'utf8');
-const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+const css = expandColorTokens(readFileSync(new URL('../style.css', import.meta.url), 'utf8'));
 
 const players = [{ id: 'a', name: 'Alpha', index: 0 }, { id: 'b', name: 'Bravo', index: 0 }];
 const holes = Array.from({ length: 18 }, (_, index) => ({ holeNumber: index + 1, par: 4, strokeIndex: index + 1 }));

@@ -48,7 +48,7 @@ test('hand-off opportunity denominator counts only adjacent sole-contributor pai
 
 test('Ledger presentation uses the refined names, denominators, postable score, and print-safe spacing', () => {
   assert.match(reportSource, /Bird\+/);
-  assert.match(reportSource, /Postable/);
+  assert.match(reportSource, /Adjusted<br>gross/);
   assert.match(reportSource, /Partnership Gain/);
   assert.match(reportSource, /Ham &amp; Egg<br>Rating \/100/);
   assert.match(reportSource, /Counted shows how often each partner supplied the team’s counting score/);

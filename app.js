@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.51',
-  versionNumber: '31.0.51',
-  cacheName: 'the-dye-ledger-v31.0.51',
-  buildDate: '2026-10-08T21:40:00-04:00',
-  buildLabel: 'Wager Balance Explanations'
+  version: 'v31.0.52',
+  versionNumber: '31.0.52',
+  cacheName: 'the-dye-ledger-v31.0.52',
+  buildDate: '2026-10-09T04:49:00-04:00',
+  buildLabel: 'Design Token Foundation'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;

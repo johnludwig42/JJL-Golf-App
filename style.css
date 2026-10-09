@@ -6383,3 +6383,30 @@ body.classic-mode-play-active{overflow-x:clip!important;overflow-y:visible!impor
 .group-rules-game{padding-top:12px;border-top:1px solid var(--border);overflow-wrap:anywhere}
 .group-rules-game strong{display:block;margin-bottom:4px}
 @media(max-width:520px){.saved-group-setup{grid-template-columns:minmax(0,1fr)}.saved-group-setup button{width:100%}}
+
+/* Wager explanations use the game's existing amounts and score facts. */
+.wager-balance-list{display:grid;gap:8px;margin-top:12px}
+.wager-balance-button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:44px;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;font-variant-numeric:tabular-nums}
+.wager-balance-button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.balance-explanation-dialog{width:min(680px,calc(100% - 24px));max-height:85dvh;overflow:auto;margin:auto;padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--card);color:var(--text)}
+.balance-explanation-dialog::backdrop{background:rgba(0,0,0,.45)}
+.balance-explanation-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.balance-explanation-header h3{margin:0}
+.balance-explanation-total{display:grid;gap:6px;padding:12px;background:#edf5f0;border-radius:8px;margin-bottom:12px}
+.balance-explanation-total strong{font-size:1.5rem;font-variant-numeric:tabular-nums}
+.balance-change-note{margin:12px 0;padding:10px;border-left:3px solid var(--accent);font-size:.875rem}
+.balance-game-list{display:grid;gap:10px;margin:12px 0}
+.balance-game-detail{border:1px solid var(--border);border-radius:8px}
+.balance-game-detail summary{display:flex;justify-content:space-between;gap:12px;padding:12px;min-height:44px;cursor:pointer}
+.balance-game-body{padding:0 12px 12px;font-size:.875rem;line-height:1.5;overflow-wrap:anywhere}
+.balance-game-body section{margin-top:12px}
+.balance-game-body ul{padding-left:20px}
+.balance-reconciliation{padding-top:12px;border-top:1px solid var(--border);font-size:.875rem}
+@media(max-width:520px){.balance-explanation-header{align-items:flex-start}.balance-explanation-header h3{font-size:1.125rem}.balance-explanation-dialog{padding:12px}}
+
+.balance-explanation-header h3{min-width:0;overflow-wrap:anywhere}
+.balance-game-detail summary strong{flex:1;min-width:0;overflow-wrap:anywhere}
+.balance-game-detail summary b{white-space:nowrap}
+.balance-game-chevron{font-size:1.25rem;line-height:1;flex:0 0 auto}
+.balance-game-detail[open] .balance-game-chevron{transform:rotate(90deg)}
+.balance-game-detail summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:8px}

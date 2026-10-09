@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current development release: **v31.0.50 — Saved Group Setups & Round Rules** on `codex/v31.0.50-saved-group-setups`. Existing Match Templates are selectable from Match and a new-round overview. Selected setups start fresh drafts and preserve current golfer indexes; missing library entries are flagged. Round rules are available before and during play. Templates remain device-local; prior rounds and scorer assignments are not imported. No migration is required.
+Current development release: **v31.0.51 — Wager Balance Explanations** on `codex/v31.0.51-wager-explanations`. Tappable balances in Scores and Quick Scoreboard show authoritative game contributions and available hole/press facts. Frozen records are preserved, unsaved previews are labeled, and changes compare to the last review within the current app session. No migration or scoring-rule change; live four-device/PWA acceptance remains open.
 
 ## 2. Development Roles
 

@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.50',
-  versionNumber: '31.0.50',
-  cacheName: 'the-dye-ledger-v31.0.50',
-  buildDate: '2026-10-08T20:43:00-04:00',
-  buildLabel: 'Saved Group Setups & Round Rules'
+  version: 'v31.0.51',
+  versionNumber: '31.0.51',
+  cacheName: 'the-dye-ledger-v31.0.51',
+  buildDate: '2026-10-08T21:40:00-04:00',
+  buildLabel: 'Wager Balance Explanations'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -12237,15 +12237,136 @@ function formatCompactCurrency(amount, { signed = false } = {}) {
   if (!signed || Math.abs(value) < 0.0001) return money;
   return value < 0 ? `-${money}` : `+${money}`;
 }
+function getBalanceGameFacts(match, metrics, config, game, playerId) {
+  const facts = [];
+  const playerName = id => getPlayer(id)?.name || String(id);
+  if (game.meta?.press) {
+    const press = game.meta.press;
+    facts.push(`Holes ${press.startingHole}–${press.endingHole} · depth ${press.pressDepth || 1} · stake ${formatCompactCurrency(press.wagerAmount)} · ${game.meta.settlement?.status || 'Projected'}`);
+    facts.push(`Parent: ${press.parentGameId}. Presses are separate contributions within their parent game.`);
+  } else if (config.key === 'nassau') {
+    const basis = game.key === 'nassau_gross' ? 'gross' : 'net';
+    const policy = normalizeNassauConfig({ ...config, basis }, match);
+    ['front','back','overall'].filter(key=>key!=='back'||metrics.holeResults.length>9).forEach(key=>{
+      const result = getQuickNassauComponentState(match, metrics, policy, key);
+      facts.push(`${key}: ${result.result} · stake ${formatCompactCurrency(result.stake)} · ${result.status}`);
+    });
+    (metrics.holeResults || []).filter(hole=>hole.completed).forEach(hole=>{
+      const first = resolveTeamHoleScore(hole, 1, policy, { metrics });
+      const second = resolveTeamHoleScore(hole, 2, policy, { metrics });
+      const score = hole.playerScores.find(row=>String(row.playerId)===String(playerId));
+      const player = metrics.players.find(row=>String(row.playerId)===String(playerId));
+      const strokeIndex = score?.strokeIndex || getPlayerHole(match, player, metrics.holeResults.indexOf(hole), metrics.tee)?.strokeIndex || hole.strokeIndex;
+      const strokes = basis === 'gross' ? 0 : getGameRelativeStrokeAllowance(strokeIndex, player, metrics, policy);
+      facts.push(`Hole ${hole.holeNumber}: counting scores ${first} vs ${second}${score ? ` · your gross ${score.gross}, ${strokes} game strokes` : ''}`);
+    });
+  } else if (['skins','net_skins'].includes(config.key)) {
+    const result = computeSkinResults(match, metrics, config.key==='net_skins'?{...config,basis:'net'}:config);
+    result.winnersByHole.forEach(row=>facts.push(`Hole ${row.holeNumber}: ${row.winnerType==='team'?getTeamLabel(match,row.winner):playerName(row.winner)} won ${row.value} skin${row.value===1?'':'s'}`));
+    facts.push(`${result.unresolvedCarry || 0} unresolved carry skins · ${result.finalCarryTreatment} at the end of the round`);
+  } else if (config.key === 'greenies') {
+    getGreeniesResults(match, metrics, config).winnersByHole.forEach(row=>facts.push(`Hole ${row.holeNumber}: ${playerName(row.winner)} won the Greenie`));
+  } else if (['nine_point','wolf','sixes'].includes(config.key)) {
+    const result = config.key==='nine_point' ? computeNinePointResults(match,metrics,config) : config.key==='wolf' ? (game.meta?.wolf || computeWolfResults(match,metrics,config)) : (game.meta?.sixes || computeSixesResults(match,metrics,config));
+    facts.push(`Point standings: ${Object.entries(result.totals || {}).map(([id,value])=>`${playerName(id)} ${value} pts`).join(' · ')}`);
+    (result.holes || []).filter(row=>row.completed||row.resolved).forEach(row=>facts.push(`Hole ${row.holeNumber}: ${Number(row.points?.[playerId] || 0)} points to you${row.choice ? ` · ${row.choice} declaration` : ''}`));
+    (result.segments || []).forEach(row=>facts.push(`Segment ${row.index}: ${row.statusText || 'In progress'}`));
+    if (result.unresolvedHoles?.length) facts.push(`Declarations needed on holes ${result.unresolvedHoles.join(', ')}; no awards are assumed.`);
+  } else if (config.key === 'sneaky_sandy_poley') {
+    const ledger = buildSneakySandyPoleyLedger(match, { metrics });
+    Object.values(ledger.holes || {}).filter(row=>row.counted).forEach(row=>facts.push(`Hole ${row.holeNumber}: ${Object.entries(row.finalPointsByTeam || {}).map(([id,value])=>`Team ${id}: ${value} pts`).join(' · ')}`));
+  } else if (config.key === 'team_stroke') {
+    const result = getTeamStrokeScoreboardData(match, metrics, config);
+    result.rows.forEach(row=>facts.push(`${getTeamLabel(match,row.team)}: ${row.total} ${result.basis} strokes · ${result.scoringMode.replace('_',' ')}`));
+  } else if (config.key === 'individual_match') {
+    getIndividualMatchPairings(match, metrics).forEach(row=>facts.push(`${row.label}: ${row.resultText || row.statusText || row.diff} · stake ${formatCompactCurrency(row.stake)}`));
+  } else {
+    const result = buildExecutiveDriverRows(match, metrics).find(row=>row.key===config.key);
+    if (result) facts.push(result.result || result.value || result.status || 'Current result');
+  }
+  (game.paymentLines || []).filter(row=>String(row.from)===String(playerId)||String(row.to)===String(playerId)).forEach(row=>facts.push(`${playerName(row.from)} would pay ${playerName(row.to)} ${formatCompactCurrency(row.amount)} within this game`));
+  return facts.filter(Boolean);
+}
+
+function buildBalanceExplanation(match, metrics, playerId) {
+  const context = buildEffectiveScoresContext(match, metrics);
+  const player = context.players.find(row=>String(row.id)===String(playerId));
+  if (!player) return null;
+  const groups = [];
+  if (context.frozen) {
+    (context.record.games || []).filter(game=>game.type!=='press').forEach(game=>{
+      const key = game.config?.key || game.type || game.gameId;
+      const facts = [];
+      (game.componentResults || []).forEach(row=>facts.push(`${row.component}: ${row.result} · stake ${formatCompactCurrency(row.stake)} · ${row.status}`));
+      (game.holeResults || []).filter(row=>row.status==='complete').forEach(row=>facts.push(`Hole ${row.holeNumber}: saved counting scores ${row.team1} vs ${row.team2}`));
+      const presses = (context.record.games || []).filter(row=>row.type==='press' && (row.config?.outcomeGameKey===key || String(row.rootGameId || '').startsWith(key)));
+      presses.forEach(row=>{
+        const pressId = row.config?.pressId || row.gameId;
+        const transactions = (context.record.pressTransactions || []).filter(transaction=>transaction.pressId===pressId);
+        const amount = transactions.reduce((sum,transaction)=>sum+(String(transaction.payeeId)===String(player.id)?Number(transaction.amount):0)-(String(transaction.payerId)===String(player.id)?Number(transaction.amount):0),0);
+        facts.push(`Press: holes ${row.holeStart}–${row.holeEnd} · depth ${row.pressDepth} · stake ${formatCompactCurrency(row.stake)} · ${row.status}${transactions.length?` · your recorded contribution ${formatFinalNetSettlementMoney(amount)}`:''}. Included in this game's recorded total.`);
+      });
+      (context.record.events || []).filter(row=>row.gameId===key && row.title).forEach(row=>facts.push(row.title));
+      if (!facts.length) facts.push('Detailed hole awards were not captured in this saved record. The recorded game total is preserved.');
+      groups.push({key,label:getGameLabel(key)||key,amount:Number(game.amounts?.[player.id] || 0),config:game.config || {},entries:[{label:'Recorded game contribution',amount:Number(game.amounts?.[player.id] || 0),facts}]});
+    });
+  } else {
+    context.payout.selected.forEach(config=>{
+      const entries = context.payout.payoutGames.filter(game=>game.sourceKey===config.key||game.key===config.key).map(game=>({label:game.label,amount:Number(game.amounts?.[player.id] || 0),facts:getBalanceGameFacts(match,context.metrics,config,game,player.id)}));
+      groups.push({key:config.key,label:getGameLabel(config.key),config,amount:entries.reduce((sum,row)=>sum+row.amount,0),entries});
+    });
+  }
+  const total = Number(context.totals[player.id] || 0);
+  const explained = groups.reduce((sum,group)=>sum+group.amount,0);
+  const scores = (context.record.holes || []).flatMap(hole=>(hole.scores || []).map(score=>({key:`${hole.holeNumber}:${score.playerId}`,hole:hole.holeNumber,playerId:score.playerId,gross:score.gross})));
+  return {roundId:match.id,playerId:player.id,name:player.name,total,groups,explained,reconciles:Math.abs(explained-total)<0.0001,final:context.final,source:context.frozen?'Saved round record':'Current scores',scores};
+}
+
+const reviewedWagerBalances = new Map();
+let currentBalanceExplanation = null;
+let balanceExplanationReturnFocus = null;
+let quickWagerPreviewMatch = null;
+
+function renderBalanceExplanation(model, prior = null) {
+  const changeKeys = prior ? [...new Set([...model.groups.map(group=>group.key),...prior.groups.map(group=>group.key)])] : [];
+  const changes = changeKeys.map(key=>{const current=model.groups.find(group=>group.key===key),old=prior.groups.find(group=>group.key===key);return {label:current?.label || old?.label,delta:(current?.amount||0)-(old?.amount||0)};}).filter(row=>Math.abs(row.delta)>0.0001);
+  const correctedHoles = prior ? model.scores.filter(score=>{const old=prior.scores.find(row=>row.key===score.key);return old && old.gross !== null && old.gross !== undefined && old.gross!==score.gross;}).map(score=>score.hole) : [];
+  const cents = amount => Math.sign(Number(amount)) * Math.round(Number(Math.abs(Number(amount)).toFixed(2))*100);
+  const rounding = model.reconciles ? cents(model.total)-model.groups.reduce((sum,group)=>sum+cents(group.amount),0) : 0;
+  const changeText = prior ? `<div class="balance-change-note">Since your previous review: ${formatFinalNetSettlementMoney(model.total-prior.total)}${correctedHoles.length ? ` · score corrections on holes ${[...new Set(correctedHoles)].join(', ')}` : ''}${changes.length ? `<div>${changes.map(row=>`${escapeHtml(row.label)} ${formatFinalNetSettlementMoney(row.delta)}`).join(' · ')}</div>` : ''}</div>` : '';
+  return `<div class="balance-explanation-total"><span>${model.final?'Final':'Projected'} balance · ${escapeHtml(model.source)}</span><strong>${formatFinalNetSettlementMoney(model.total)}</strong><span>${model.total>0.0001?'You are ahead':model.total< -0.0001?'You are down':'You are even'} across the selected games.</span></div>${changeText}<div class="tiny">Tap a game for its results, stakes and contributing holes.</div><div class="balance-game-list">${model.groups.map(group=>{
+    const contract = getCompetitionRulesContract(group.key,group.config);
+    return `<details class="balance-game-detail"><summary><strong>${escapeHtml(group.label)}</strong><b>${formatFinalNetSettlementMoney(group.amount)}</b><span class="balance-game-chevron" aria-hidden="true">›</span></summary><div class="balance-game-body"><div>${escapeHtml(contract.basis)} · ${escapeHtml(contract.scoringMethod)}</div><div>${escapeHtml(['gross','event'].includes(contract.basis)?'No handicap strokes in this game.':contract.allowance)}</div>${group.entries.map(entry=>`<section><strong>${escapeHtml(entry.label)} · ${formatFinalNetSettlementMoney(entry.amount)}</strong>${entry.facts.length?`<ul>${entry.facts.map(fact=>`<li>${escapeHtml(fact)}</li>`).join('')}</ul>`:'<div>No money result yet for this entry.</div>'}</section>`).join('')}</div></details>`;
+  }).join('') || '<div>No wager-producing games selected.</div>'}</div>${rounding ? `<div class="tiny">Display rounding: ${formatFinalNetSettlementMoney(rounding/100)}. Game amounts are shown to the nearest cent.</div>` : ''}<div class="tiny">Changes compare with your previous review while the app remains open.</div><div class="balance-reconciliation" role="status">${model.reconciles ? `Game contributions${rounding?' plus display rounding':''} total ${formatFinalNetSettlementMoney(model.explained)} and match this balance.` : `Captured game contributions total ${formatFinalNetSettlementMoney(model.explained)}; the recorded balance differs by ${formatFinalNetSettlementMoney(model.total-model.explained)}. Historical detail is incomplete.`}</div>`;
+}
+
+function openBalanceExplanation(playerId, matchId, trigger = null) {
+  const stored = getMatch(matchId);
+  if (!stored) return toast('This round is no longer available.');
+  const match = trigger?.closest('#quickScoreboardDialog') && quickWagerPreviewMatch?.id===stored.id ? quickWagerPreviewMatch : stored;
+  const model = buildBalanceExplanation(match,computeMatchMetrics(match),playerId);
+  const dialog = document.getElementById('balanceExplanationDialog');
+  if (!model || !dialog) return;
+  if (match!==stored && JSON.stringify(match.players.map(row=>row.scores))!==JSON.stringify(stored.players.map(row=>row.scores))) {model.final=false;model.source='On-screen score preview · save scores to retain these values';}
+  const prior = reviewedWagerBalances.get(`${model.roundId}:${model.playerId}`);
+  document.getElementById('balanceExplanationTitle').textContent = `${model.name} · Balance explanation`;
+  document.getElementById('balanceExplanationBody').innerHTML = renderBalanceExplanation(model,prior);
+  currentBalanceExplanation = model;
+  if (!dialog.open) {balanceExplanationReturnFocus=trigger;dialog.showModal();}
+}
+
 function buildQuickSettlementHero(match, metrics, payout = getPayoutReportContext(match, metrics), record = null) {
   const frozen = record && isFrozenRoundRecord(record);
-  const final = frozen || (!!match && match.status === 'complete' && !!match.completedAt);
+  const final = !!match && match.status === 'complete' && (!getRoundCompletionState(match, metrics).isIncomplete || areAllGamesFinal(match, metrics));
   const payments = frozen ? (record.transactions || []).map(row => ({ from: row.payerId, to: row.payeeId, amount: row.amount })) : optimalSettlementRows(payout.finalTotals || {});
   const playerName = id => frozen ? (record.players || []).find(player => player.playerId === id)?.displayName || id : getPlayer(id)?.name || id;
   const verb = final ? 'pays' : 'would pay';
   const lines = payments.map(row => `<div class="quick-settlement-payment"><strong>${escapeHtml(playerName(row.from))}</strong> ${verb} <strong>${escapeHtml(playerName(row.to))}</strong> <b>${formatCompactCurrency(row.amount)}</b></div>`).join('');
   const support = final ? `${payments.length} payment${payments.length === 1 ? '' : 's'} · All games reconciled` : 'Based on scores currently entered';
-  return `<section class="quick-scoreboard-section quick-settlement-hero" data-settlement-state="${final ? 'final' : 'provisional'}"><h4>${final ? 'Final' : 'Provisional'} Settlement</h4>${lines || '<div class="quick-settlement-payment"><strong>No payment required</strong></div>'}<div class="quick-settlement-reconcile">${support}</div></section>`;
+  const totals = frozen ? record.settlement?.netPositions || {} : payout.finalTotals;
+  const players = frozen ? record.players.map(player=>({id:player.playerId,name:player.displayName})) : payout.players;
+  const balances = players.map(player=>`<button type="button" class="wager-balance-button" data-balance-player="${escapeHtml(player.id)}" data-balance-match="${escapeHtml(match.id)}" aria-label="Explain ${escapeHtml(player.name)} balance"><span>${escapeHtml(player.name)}</span><strong>${formatFinalNetSettlementMoney(Number(totals[player.id] || 0))}</strong></button>`).join('');
+  return `<section class="quick-scoreboard-section quick-settlement-hero" data-settlement-state="${final ? 'final' : 'provisional'}"><h4>${final ? 'Final' : 'Provisional'} Settlement</h4>${lines || '<div class="quick-settlement-payment"><strong>No payment required</strong></div>'}<div class="quick-settlement-reconcile">${support}</div><div class="wager-balance-list">${balances}</div></section>`;
 }
 function getQuickNassauComponentState(match, metrics, cfg, component) {
   const diffs = computeNassauDiffsForBasis(metrics, String(cfg.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net', cfg);
@@ -12395,6 +12516,7 @@ function openQuickScoreboardView() {
   const previewMatch = document.getElementById('score')?.classList.contains('active') ? JSON.parse(JSON.stringify(match)) : match;
   if (previewMatch !== match) applyCurrentHoleDomToMatch(previewMatch);
   const metrics = computeMatchMetrics(previewMatch);
+  quickWagerPreviewMatch = previewMatch;
   body.innerHTML = buildQuickScoreboardView(previewMatch, metrics);
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
@@ -12500,7 +12622,7 @@ function buildScoresOutcomeHero(context) {
     <div class="scores-outcome-feature-label">${escapeHtml(outcome.label)}</div>
     <div class="scores-outcome-result" data-scores-outcome="${escapeHtml(outcome.type)}" data-scores-outcome-key="${escapeHtml(outcome.key)}">${escapeHtml(outcome.result)}</div>
     <div class="scores-outcome-meta">${escapeHtml(completion.label)}${legacyFallback ? ' · Legacy saved-round compatibility view' : ''}</div>
-    ${topMoney ? `<div class="scores-money-summary"><span>${final ? 'Top final money position' : 'Current money position'}</span><strong>${escapeHtml(topName)} ${formatFinalNetSettlementMoney(topMoney.amount)}</strong></div>` : '<div class="scores-money-summary"><span>Money position</span><strong>Even · no payment currently required</strong></div>'}
+    ${topMoney ? `<div class="scores-money-summary"><span>${final ? 'Top final money position' : 'Current money position'}</span><button type="button" class="wager-balance-button" data-balance-player="${escapeHtml(topMoney.id)}" data-balance-match="${escapeHtml(context.match.id)}" aria-label="Explain ${escapeHtml(topName)} balance"><strong>${escapeHtml(topName)} ${formatFinalNetSettlementMoney(topMoney.amount)}</strong></button></div>` : '<div class="scores-money-summary"><span>Money position</span><strong>Even · no payment currently required</strong></div>'}
     ${warning}
   </section>`;
 }
@@ -12514,7 +12636,7 @@ function buildScoresSettlement(context) {
   const name = id => context.players.find(player => String(player.id) === String(id))?.name || 'Unknown';
   const routes = settlements.length ? settlements.map(row => `<div class="settle-up-row"><div class="settle-up-route"><strong>${escapeHtml(name(row.from))}</strong> ${verb} <strong>${escapeHtml(name(row.to))}</strong></div><div class="settle-up-amount"><strong>${formatMoneyAccounting(row.amount)}</strong></div></div>`).join('') : '<div class="tiny">No payment required.</div>';
   const balances = context.players.map(player => ({ player, amount: Number(context.totals[player.id] || 0) }));
-  const balanceHtml = balances.map(({ player, amount }) => `<div class="final-net-settlement-row"><div class="final-net-settlement-player" title="${escapeHtml(player.name)}"><strong>${escapeHtml(player.name)}</strong></div><div class="final-net-settlement-amount"><span class="sr-only">${amount > 0 ? 'receives' : amount < 0 ? 'owes' : 'even'}</span><strong>${formatFinalNetSettlementMoney(amount)}</strong></div></div>`).join('');
+  const balanceHtml = balances.map(({ player, amount }) => `<div class="final-net-settlement-row"><div class="final-net-settlement-player" title="${escapeHtml(player.name)}"><strong>${escapeHtml(player.name)}</strong></div><div class="final-net-settlement-amount"><span class="sr-only">${amount > 0 ? 'receives' : amount < 0 ? 'owes' : 'even'}</span><button type="button" class="wager-balance-button" data-balance-player="${escapeHtml(player.id)}" data-balance-match="${escapeHtml(context.match.id)}" aria-label="Explain ${escapeHtml(player.name)} balance"><strong>${formatFinalNetSettlementMoney(amount)}</strong></button></div></div>`).join('');
   return `<section class="scores-settlement-contract" data-settlement-state="${context.final ? 'final' : 'provisional'}"><h3>${heading}</h3><div class="tiny">${context.final ? 'Final payment routes settle all configured money games.' : 'Based on scores currently entered; payment routes may change.'}</div><div class="final-net-settlement-list top-gap">${balanceHtml}</div><div class="scores-payment-routes top-gap" aria-label="${heading} payment routes">${routes}</div></section>`;
 }
 
@@ -23041,6 +23163,19 @@ function applySmartPuttsAdjustmentFromCheckbox(checkbox) {
 }
 
 function installHandlers() {
+  document.addEventListener('click', event => {
+    const button = event.target.closest('[data-balance-player]');
+    if (button) openBalanceExplanation(button.dataset.balancePlayer,button.dataset.balanceMatch,button);
+  });
+  const balanceDialog = document.getElementById('balanceExplanationDialog');
+  document.getElementById('balanceExplanationCloseBtn')?.addEventListener('click',()=>balanceDialog.close());
+  balanceDialog?.addEventListener('click',event=>{if(event.target===balanceDialog)balanceDialog.close();});
+  balanceDialog?.addEventListener('close',()=>{
+    if(currentBalanceExplanation)reviewedWagerBalances.set(`${currentBalanceExplanation.roundId}:${currentBalanceExplanation.playerId}`,currentBalanceExplanation);
+    currentBalanceExplanation=null;
+    if(balanceExplanationReturnFocus?.isConnected)balanceExplanationReturnFocus.focus({preventScroll:true});
+    balanceExplanationReturnFocus=null;
+  });
   const setupDraftForm = document.getElementById('matchForm');
   setupDraftForm?.addEventListener('input', scheduleSetupDraftSave);
   setupDraftForm?.addEventListener('change', scheduleSetupDraftSave);
@@ -23464,6 +23599,7 @@ function installHandlers() {
   window.addEventListener('resize', repositionOpenPlayerComboboxes);
   window.addEventListener('orientationchange', repositionOpenPlayerComboboxes);
   document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.getElementById('balanceExplanationDialog')?.open) return;
     if (e.key === 'Escape' && closePlayOverflowMenus({ restoreFocus: true })) return;
     if (e.key === 'Escape' && closeSharedMatchDetails()) return;
     if (e.key === 'Escape' && !document.getElementById('playerDetailDialog')?.classList.contains('hidden')) closePlayerDetailView();
@@ -25962,6 +26098,8 @@ function installDyeLedgerLiveEngineAdapter() {
     getCurrentPressOpportunities,
     buildQuickScoreboardGameStatusRows,
     buildGameMoneyContributionRows,
+    buildBalanceExplanation,
+    renderBalanceExplanation,
     buildQuickScoreboardMomentumCharts,
     getTruthfulGameStatus,
     getCatchUpMissingHoleQueue,

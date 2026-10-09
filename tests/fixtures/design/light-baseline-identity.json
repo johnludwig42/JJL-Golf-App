@@ -1,0 +1,5 @@
+{
+  "sha256": "a8ad3db151d0676d762c19a94615d08437e30071b581ab4e2b4a763aee2a2395",
+  "source": "Frozen stylesheet from the preceding committed release. Do not refresh it during the design-foundation program without explicit baseline review.",
+  "lineEndings": "Hash normalizes CRLF to LF for Git checkout portability."
+}

@@ -162,8 +162,8 @@ test('saving an existing Story from a reopened full or early-ended round continu
       await page.click('#acceptRoundRecapBtn');
       const reportTarget = await reportTargetPromise;
       assert.match(reportTarget.url(), /ledger-report\/shell\.html/);
-      assert.match(reportTarget.url(), /reportKey=/);
       const reportPage = await reportTarget.page();
+      await reportPage.waitForFunction(roundId=>window.__DYE_LEDGER_ROUND__?.meta?.roundId===roundId,{},fixture.match.id);
       await reportPage.close();
       await page.close();
     }

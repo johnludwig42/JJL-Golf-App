@@ -1,3 +1,4 @@
+import { expandColorTokens } from '../scripts/css-token-contract.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -108,7 +109,7 @@ test('completed Match Summary exposes a safe Create New Match action while retai
 
 test('compact Play player metadata preserves a full-cell tap target without shrinking score controls', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = expandColorTokens(readFileSync(new URL('../style.css', import.meta.url), 'utf8'));
   assert.match(html, /<th>Strokes<\/th>/);
   assert.doesNotMatch(html, /<th>Game Stroke<\/th>/);
   assert.match(css, /score-player-name\{[\s\S]*min-height:0!important;[\s\S]*height:auto;[\s\S]*line-height:1\.15;/);
@@ -321,7 +322,7 @@ test('Quick Scoreboard inserts collapsed Score Distribution in order and preserv
 
 test('responsive source paths contain internal scrolling, width-fit momentum, desktop summary reuse, and canonical branding', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = expandColorTokens(readFileSync(new URL('../style.css', import.meta.url), 'utf8'));
   const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   assert.match(html, new RegExp(`src="\\./branding/apple-touch-icon-${currentVersionRegexEscaped}\\.png" alt="The Dye Ledger"`));
   assert.match(html, /id="playMatchSummary"[^>]*aria-label="Featured match status"/);
@@ -336,7 +337,7 @@ test('responsive source paths contain internal scrolling, width-fit momentum, de
 
 test('Quick Scoreboard reuses the native bounded scorecard scroller and Play Greenies stay compact without changing controls', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const css = expandColorTokens(readFileSync(new URL('../style.css', import.meta.url), 'utf8'));
   const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   assert.match(css, /body\s*\{\s*touch-action:\s*auto;/);
   assert.match(app, /quick-classic-scorecard"\$\{quickPreferences\.classicScorecardExpanded \? ' open' : ''\}><summary>Classic Scorecard<\/summary>\$\{buildClassicScorecardPanel\(match, metrics, \{ readOnly: true \}\)\}<\/details>/);

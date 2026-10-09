@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current development release: **v31.0.51 — Wager Balance Explanations** on `codex/v31.0.51-wager-explanations`. Tappable balances in Scores and Quick Scoreboard show authoritative game contributions and available hole/press facts. Frozen records are preserved, unsaved previews are labeled, and changes compare to the last review within the current app session. No migration or scoring-rule change; live four-device/PWA acceptance remains open.
+Current development release: **v31.0.52 — Design Token Foundation** on `codex/v31.0.52-design-token-foundation`. Semantic stylesheet colors, exact CSS drift exceptions, a frozen light baseline and computed/pixel browser coverage are implemented. Presentation only; no domain, record, persistence or shared-match changes. The approved follow-on sequence is documented in `docs/DESIGN_TOKEN_FOUNDATION.md`. Dark mode and bottom navigation are not included. Real iPhone acceptance and foundation review are required before v31.0.53.
 
 ## 2. Development Roles
 

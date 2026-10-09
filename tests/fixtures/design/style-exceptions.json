@@ -1,0 +1,1188 @@
+{
+  "policy": "Exact pre-existing px typography only; shrink entries as they migrate. No wildcard/color exceptions. Do not add new px font sizes.",
+  "colors": [],
+  "pxFontSizes": [
+    {
+      "key": ".scores-outcome-head h2 | font-size: clamp(20px,4vw,30px)",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".scores-outcome-result | font-size: clamp(22px,5vw,38px)",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".scores-money-summary span | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".ssp-validation-state | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".compact-header h1 | font-size: 22px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".sub | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".tab-label | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".tab, button, .button-link | font-size: 13px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".card h2 | font-size: 16px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "label span, .section-label | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "input, select, textarea | font-size: 14px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".compact-actions button, .compact-actions .button-link | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".mini-title | font-size: 14px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".item-title | font-size: 14px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".muted | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".tiny | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".result | font-size: 13px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".toast | font-size: 13px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".update-banner-copy strong | font-size: 13px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".update-banner-copy span | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".app-footer-version | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".strong | font-size: 13px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".badge | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".hole-grid th,\n.hole-grid td,\n.score-grid th,\n.score-grid td,\n.leader-table th,\n.leader-table td | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".hole-grid input, .score-grid input | font-size: 13px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".picker-check | font-size: 13px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".momentum-pill | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".momentum-pill span | font-size: 13px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > .tab | font-size: 10px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > .tab-label | font-size: 10px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".player-tee-select select | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".game-pill | font-size: 13px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".payout-game-table th,.payout-game-table td,.settlement-table th,.settlement-table td | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:760px) > .score-grid input | font-size: 16px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".scorecard-table th,.scorecard-table td | font-size: 12px",
+      "count": 2,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:760px) > .scorecard-table th,.scorecard-table td | font-size: 11px",
+      "count": 2,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".score-grid input.score-input | font-size: 16px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".match-status-value | font-size: 13px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".game-summary-title | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".game-summary-value | font-size: 13px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".game-summary-sub | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".score-sub | font-size: 10px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".handicap-preview-name | font-size: 13px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".handicap-preview-meta | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".leader-mobile-grid | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".leader-mobile-label | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:760px) > .leader-table th,.leader-table td | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:760px) > #leaderboard .card h2 | font-size: 15px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".score-sub | font-size: 11px",
+      "count": 2,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:760px) > .item-header h2,.scoreboard-card h2 | font-size: 18px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:760px) > .match-status-value | font-size: 15px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:760px) > .compact-result | font-size: 14px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:760px) > .score-sub | font-size: 10px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".scoreboard-collapsible summary::after | font-size: 14px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".match-status-meta | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".print-round-title | font-size: 24px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media print > body.printing-scorecard .scorecard-table,\n  body.printing-scorecard .leader-table,\n  body.printing-scorecard .payout-game-table,\n  body.printing-scorecard .settlement-table | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "#leaderboard .match-status-value,#leaderboard .game-summary-value | font-size: 16px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > #score #currentHoleBadge | font-size: 15px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > #score .score-grid th,#score .score-grid td | font-size: 13px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > #score .score-grid input.score-input | font-size: 18px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > #score #saveScoresBtn | font-size: 16px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > #leaderboard .scoreboard-section-title h2,\n  #leaderboard .item-header h2 | font-size: 17px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > #leaderboard .scoreboard-section-title .tiny,\n  #leaderboard .item-header .tiny,\n  #leaderboard .game-summary-sub,\n  #leaderboard .match-status-meta,\n  #leaderboard .tiny | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > #leaderboard .match-status-value,\n  #leaderboard .game-summary-value | font-size: 15px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > #leaderboard .scorecard-table,\n  #leaderboard .leader-table,\n  #leaderboard .payout-game-table,\n  #leaderboard .settlement-table | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > #leaderboard #scoreboardPrintViewSelect,\n  #leaderboard #scoreboardShareRoundBtn | font-size: 16px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > #leaderboard .match-status-value,\n  #leaderboard .game-summary-value | font-size: 14px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".course-expand-icon | font-size: 18px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:760px) > #setup input[type=\"date\"] | font-size: 16px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:760px) > #matchPlayersPicker .lookup-field input,\n  #matchPlayersPicker .quick-player-select select,\n  #matchPlayersPicker .player-tee-select select | font-size: 16px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".player-card-label | font-size: 16px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".player-search-main.player-label-inline | font-size: 16px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".player-card-hint | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".sheet-header h3 | font-size: 22px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".sheet-search input | font-size: 16px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".player-search-main | font-size: 16px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".player-search-sub | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".smart-score-preset-wrap span | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media print and (max-width: 760px) > body.printing-scorecard .print-round-title | font-size: 18px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media print and (max-width: 760px) > body.printing-scorecard .print-round-sub | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media print and (max-width: 760px) > body.printing-scorecard.printing-summary .scorecard-table,\n  body.printing-scorecard.printing-summary .leader-table,\n  body.printing-scorecard.printing-summary .payout-game-table,\n  body.printing-scorecard.printing-summary .settlement-table,\n  body.printing-scorecard.printing-classic-only .scorecard-table | font-size: 9.5px !important",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > body | font-size: 16px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > .compact-header h1 | font-size: 20px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > input, select, textarea | font-size: 16px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > .compact-actions button, .compact-actions .button-link | font-size: 13px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > .result | font-size: 14px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > .sheet-header h3 | font-size: 20px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 640px) > .tab-label | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 640px) > #setup .player-tee-select select | font-size: 16px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 640px) > #score .score-grid th, #score .score-grid td | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 640px) > #score .score-grid input.score-input | font-size: 17px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 430px) > .compact-header h1 | font-size: 18px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 430px) > .card h2 | font-size: 15px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 430px) > .tab-label | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 430px) > .player-card-label | font-size: 15px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 430px) > .player-card-hint | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 430px) > .badge, .big-badge | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "#leaderboard .payout-section-team .team-payout-fixed-table th,\n#leaderboard .payout-section-team .team-payout-fixed-table td,\n#leaderboard .payout-section-team .payout-game-table-team th,\n#leaderboard .payout-section-team .payout-game-table-team td | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:760px) > #leaderboard .payout-section-team .team-payout-fixed-table th,\n  #leaderboard .payout-section-team .team-payout-fixed-table td,\n  #leaderboard .payout-section-team .payout-game-table-team th,\n  #leaderboard .payout-section-team .payout-game-table-team td | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "#leaderboard .team-payout-mobile-topline-label | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "#leaderboard .team-payout-window-chip | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "#leaderboard .team-payout-mobile-legend | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "#leaderboard .team-payout-mobile-table th,\n#leaderboard .team-payout-mobile-table td | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "#leaderboard .team-payout-mobile-table thead th | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "#leaderboard .team-payout-mobile-table thead th | font-size: 10px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "#leaderboard .team-payout-window-chip | font-size: 10.5px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "#leaderboard .team-payout-mobile-topline-label | font-size: 10px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "#leaderboard .team-payout-mobile-legend | font-size: 10.5px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".library-item-more-actions>summary | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:560px) > .handicap-preview-header,.handicap-preview-meta,#setup .persistent-preview-card .handicap-preview-meta | font-size: 10px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:560px) > .handicap-preview-header | font-size: 8px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:560px) > .handicap-preview-meta .tiny,#setup .persistent-preview-card .handicap-preview-meta .tiny | font-size: 8px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".momentum-axis-tick | font-size: 11px !important",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".momentum-axis-unit | font-size: 9px !important",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".momentum-chart text | font-size: 10px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".momentum-chart .momentum-side-label | font-size: 13px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".momentum-chart--compact .momentum-side-label | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".momentum-chart--compact .momentum-axis-tick | font-size: 10px !important",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".momentum-chart--compact .momentum-axis-unit | font-size: 8px !important",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:430px) > #score .score-step-btn | font-size: 16px !important",
+      "count": 2,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:430px) > .round-record-result | font-size: clamp(22px,8vw,31px)",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:390px) > #leaderboard .team-payout-mobile-table th,\n  #leaderboard .team-payout-mobile-table td | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:390px) > #leaderboard .team-payout-mobile-table thead th | font-size: 9.5px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:760px) > #leaderboard .settlement-table-responsive th,\n  #leaderboard .settlement-table-responsive td | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".hole-select | font-size: 15px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "#setup .setup-action-btn | font-size: 14px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "#setup .setup-match-actions .setup-action-btn:not(.hidden) | font-size: 13px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:760px) > #setup .setup-match-actions .setup-action-btn:not(.hidden) | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:760px) > .handicap-preview-meta,\n  #setup .persistent-preview-card .handicap-preview-meta | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:760px) > .handicap-preview-meta .tiny,\n  #setup .persistent-preview-card .handicap-preview-meta .tiny | font-size: 9px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".final-net-settlement-crossfoot | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".nine-point-settlement-note | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".gross-game-section-total | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".sixes-segment-head span | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".quick-game-chip | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".round-recap-supporting-details > summary | font-size: 13px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".player-hole-stat-details summary | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".player-hole-stat-table | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".player-hole-stat-table thead th | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "#score #holeSummary .score-live-status | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:760px) > #score #holeSummary .score-live-status | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".stat-matrix-table | font-size: 13px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".stat-matrix-table thead th | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".stat-matrix-team | font-size: 10px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".stat-step-btn | font-size: 16px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 520px) > .stat-matrix-table | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".ssp-ledger-adjustment-line,\n.ssp-ledger-match-line | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".icon-tabs .tab-icon-svg | font-size: 22px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".top-tabs.icon-tabs .tab-icon-svg | font-size: 21px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".top-tabs.icon-tabs .tab-label | font-size: 10.5px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > .top-tabs.icon-tabs .tab-icon-svg | font-size: 20px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > .top-tabs.icon-tabs .tab-label | font-size: 10px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 380px) > .top-tabs.icon-tabs .tab-label | font-size: 9.5px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "#score #holeSummary .score-hole-meta | font-size: 14px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "#score #holeSummary .score-live-status | font-size: 13px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "#score #holeSummary .score-primary-status | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:760px) > #score #holeSummary .score-hole-meta | font-size: 13px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:760px) > #score #holeSummary .score-live-status | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:760px) > #score #holeSummary .score-primary-status | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".round-recap-preview | font-size: 15px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".round-recap-edit-box | font-size: 15px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:760px) > .round-recap-preview | font-size: 15px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".recap-input-row | font-size: 13px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:760px) > .recap-input-row | font-size: 12.5px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".player-hole-stat-grid .player-hole-stat-table | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".player-hole-stat-grid thead th | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".diag-json | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".mini-table | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".missing-score-summary::before | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".export-provisional-label | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > .app-footer-version | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width: 760px) > .app-footer-version #appVersionFooterBuild | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".diagnostics-pre | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".score-step-btn | font-size: 18px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".score-step-btn | font-size: 17px !important",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:480px) > .score-step-btn | font-size: 16px !important",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".momentum-point-value | font-size: 10px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".quick-scoreboard-momentum .momentum-axis-tick | font-size: 12px !important",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".quick-scoreboard-momentum .momentum-point-value | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".quick-scoreboard-momentum .momentum-chart text:not(.momentum-point-value):not(.momentum-side-label):not(.momentum-axis-tick) | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".ssp-momentum-result | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".ssp-momentum text | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".ssp-momentum-final | font-size: 12px !important",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".ssp-momentum-swings | font-size: 12px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".round-snapshot-badge | font-size: 10px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".round-snapshot-kicker,.round-snapshot-row span,.round-snapshot-award span | font-size: 10px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".round-snapshot-title | font-size: 17px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".round-snapshot-detail,.round-snapshot-players | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".round-snapshot-awards-title | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".round-snapshot-section-title | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".executive-driver-row span,.executive-driver-row small | font-size: 10px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".executive-driver-impact | font-size: 11px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".settlement-balance-title | font-size: 10px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": ".settlement-even-line | font-size: 10px",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "#score .score-step-btn | font-size: 15px !important",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    },
+    {
+      "key": "@media (max-width:430px) > #score .score-grid th,#score .score-grid td | font-size: 12px !important",
+      "count": 1,
+      "reason": "Existing light-mode typography deferred to the approved Type and Spacing Scale release.",
+      "removeBy": "v31.0.54"
+    }
+  ]
+}

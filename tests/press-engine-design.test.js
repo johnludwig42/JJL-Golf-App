@@ -156,13 +156,15 @@ test('Quick Scoreboard presents base Nassau components before nested presses and
 
 test('Quick settlement uses lifecycle grammar and correct singular/plural reconciliation copy', () => {
   const fixture = seed(buildMatch({ scores: scoredThrough(2) }));
-  const singular = fixture.engine.buildQuickSettlementHero(fixture.match, fixture.metrics, { finalTotals: { p1: 10, p3: -10 } });
+  const singular = fixture.engine.buildQuickSettlementHero(fixture.match, fixture.metrics, { ...fixture.engine.getPayoutReportContext(fixture.match,fixture.metrics), finalTotals: { p1: 10, p3: -10 } });
   assert.match(singular, /Provisional Settlement/);
   assert.match(singular, /Phil<\/strong> would pay <strong>John/);
   assert.match(singular, /\$10/);
   assert.match(singular, /Based on scores currently entered/);
+  fixture.match.players.forEach(player=>{player.scores=rows(scoredThrough(18)[player.playerId]);});
+  fixture.metrics=fixture.engine.computeMatchMetrics(fixture.match);
   fixture.match.status = 'complete'; fixture.match.completedAt = '2026-07-12T20:00:00Z';
-  const plural = fixture.engine.buildQuickSettlementHero(fixture.match, fixture.metrics, { finalTotals: { p1: 10.5, p2: 4, p3: -10.5, p4: -4 } });
+  const plural = fixture.engine.buildQuickSettlementHero(fixture.match, fixture.metrics, { ...fixture.engine.getPayoutReportContext(fixture.match,fixture.metrics), finalTotals: { p1: 10.5, p2: 4, p3: -10.5, p4: -4 } });
   assert.match(plural, /Final Settlement/);
   assert.match(plural, / pays /);
   assert.match(plural, /2 payments · All games reconciled/);

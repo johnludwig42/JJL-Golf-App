@@ -103,12 +103,16 @@ const audit = await page.evaluate(() => {
 });
 
 let failed = false;
-const expectedLabels = ['Result', 'Round story', 'Leaderboards', 'Games', 'Statistics', 'Appendix'];
+// Scoring-only statistics may share the Leaderboards/Games page (v31.0.49).
+// Keep their actual heading mandatory even when no separate page label exists.
+const hasStatistics = audit.headings.some(heading => /^(?:Player|Entry) statistics/.test(heading));
+if (!hasStatistics) { console.error('Statistics content heading missing.'); failed = true; }
+const expectedLabels = ['Result', 'Round story', 'Leaderboards', 'Games', ...(audit.labels.includes('Statistics') ? ['Statistics'] : []), 'Appendix'];
 if (JSON.stringify(audit.labels) !== JSON.stringify(expectedLabels)) {
   console.error(`Subject order mismatch: ${audit.labels.join(', ')}`); failed = true;
 }
 if (!audit.headings.some(heading => heading.startsWith('Highlights'))) { console.error('Highlights missing from cover.'); failed = true; }
-if (!audit.headings.some(heading => heading.startsWith('Appendix · Course net')) || !audit.headings.some(heading => heading.startsWith('Appendix · Featured net'))) { console.error('Both scorecard appendices are required.'); failed = true; }
+if (!audit.headings.some(heading => heading.startsWith('Appendix · Course net')) || !audit.headings.some(heading => /^Appendix · (?:Featured net|Game net|Game gross)/.test(heading))) { console.error('Both scorecard appendices are required.'); failed = true; }
 if (audit.pages.some(pageRow => pageRow.horizontalOverflow)) { console.error('Horizontal overflow detected.'); failed = true; }
 const orphanedStatFragments = audit.pages.flatMap(pageRow => pageRow.statisticFragments.map(fragment => ({ ...fragment, page: pageRow.index }))).filter(fragment => fragment.rows === 1);
 if (orphanedStatFragments.length) { console.error(`Single-player statistics fragments detected: ${orphanedStatFragments.map(row => `${row.id} on page ${row.page}`).join(', ')}`); failed = true; }

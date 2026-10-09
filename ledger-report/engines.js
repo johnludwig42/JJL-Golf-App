@@ -112,7 +112,12 @@ function cumulativeEngine(game, ctx) {
   const net = {};
   players.forEach(p => { net[p.id] = netOfPlayer(p, game); });
 
-  const series = players.map(p => {
+  const series = game.seriesByHole ? game.seriesByHole.map(entry => {
+    const raw = entry.raw;
+    const run = [0];
+    raw.forEach(value => run.push(run.at(-1) + (isNum(value) ? value : 0)));
+    return { ...entry, raw, run, total: run.at(-1), scoreTotal: sum(entry.scores), holesScored: raw.filter(isNum).length };
+  }) : players.map(p => {
     const raw = byHole ? byHole[p.id]
       : net[p.id].map((v, i) => isNum(v) ? v - ctx.par[i] : null);
     const run = [0];
@@ -123,27 +128,23 @@ function cumulativeEngine(game, ctx) {
              holesScored: raw.filter(isNum).length };
   });
 
-  const better = game.lowWins ? (a, b) => a < b : (a, b) => a > b;
-  const ranked = series.slice().sort((a, b) => game.lowWins ? a.total - b.total : b.total - a.total);
+  const rankValue = row => game.seriesByHole ? row.scoreTotal : row.total;
+  const ranked = series.slice().sort((a,b) => game.lowWins ? rankValue(a)-rankValue(b) : rankValue(b)-rankValue(a));
   const winner = ranked[0];
-
-  // leader at each hole, so a lead change is detectable
-  const leadAt = holes.map((_, i) => {
-    let best = null;
-    series.forEach(s => { if (!best || better(s.run[i + 1], best.run[i + 1])) best = s; });
-    return best.id;
+  const winners = ranked.filter(row => rankValue(row) === rankValue(winner));
+  const leadersAt = holes.map((_,i) => {
+    if (!series.every(row => isNum(row.raw[i]))) return [];
+    const values = series.map(row => game.seriesByHole ? sum(row.scores.slice(0,i+1)) : row.run[i+1]);
+    const best = game.lowWins ? Math.min(...values) : Math.max(...values);
+    return series.filter((row,index) => values[index] === best).map(row => row.id);
   });
-  const holesScored = Math.max(...series.map(s => s.holesScored));
-  const complete = holesScored === holes.length;
+  const leadAt = leadersAt.map(ids => ids.length === 1 ? ids[0] : null);
+  const holesScored = Math.min(...series.map(row => row.holesScored));
+  const complete = series.every(row => row.holesScored === holes.length);
   let turning = null;
-  for (let i = 1; i < leadAt.length; i++) {
-    if (leadAt[i] !== leadAt[i - 1] && leadAt[i] === winner.id) turning = { i, hole: holes[i] };
-  }
-  if (!turning) {
-    const gains = series.find(s => s.id === winner.id).raw
-      .map((v, i) => ({ i, hole: holes[i], gain: !isNum(v) ? -Infinity : game.lowWins ? -v : v }))
-      .sort((a, b) => b.gain - a.gain);
-    turning = gains[0] && gains[0].gain > 0 ? gains[0] : null;
+  if (complete && winners.length === 1) {
+    const index = leadAt.findIndex((id,i) => id === winner.id && leadAt.slice(i).every(value => value === winner.id));
+    if (index >= 0) turning = { i:index, hole:holes[index] };
   }
 
   const segments = (game.segments || []).map(s => {
@@ -152,7 +153,7 @@ function cumulativeEngine(game, ctx) {
   });
 
   return { archetype: "cumulative", series, ranked, winner, leadAt, turning, segments,
-           net, unit: game.unit || "points", holesScored, complete };
+           net, winners, leadersAt, unit: game.unit || "points", holesScored, complete };
 }
 
 /* ---------- discrete ---------- */

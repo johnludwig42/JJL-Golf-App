@@ -21,3 +21,4 @@ coverage/
 
 # Temporary document-review renders
 tmp/pdfs/
+tmp/report-qa/

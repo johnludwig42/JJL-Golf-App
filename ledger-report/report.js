@@ -3,7 +3,7 @@
    or derived from it. Stroke allocation comes from the app's engine, keyed by
    basis; the report never re-derives handicapping.
    ========================================================================== */
-import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.46';
+import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.49';
 
 const packPages = globalThis.packPages;
 const runGame = globalThis.runGame;
@@ -99,7 +99,7 @@ const C = ROUND.card, HOLES = ROUND.holes, NH = HOLES.length;
 const P = ROUND.players, SIDES = ROUND.sides;
 const PAR_TOTAL = C.par.reduce((a,b)=>a+b,0);
 const S = id => P.find(p=>p.id===id);
-const nameOf = id => S(id).name;
+const nameOf = id => S(id)?.name || SIDES[id]?.name || id;
 const isNum = v => typeof v==="number" && Number.isFinite(v);
 const played = v => isNum(v) && v>0;      /* null gross = hole not played */
 const sum = (a,f=0,t=a.length) => a.slice(f,t).reduce((x,y)=>x+(isNum(y)?y:0),0);
@@ -252,10 +252,15 @@ const add = (id, build, opts={}) => BLOCKS.push({id,build,...opts});
 add("hero", ()=>{
   const w = h("div",{style:"padding-bottom:2px"});
   const label = FEAT ? headerCompetitionLabel(FEAT.name, FEAT.allowance.label) : "No featured competition";
-  w.appendChild(h("div",{class:"eyebrow",text:"Featured Competition · "+label}));
+  w.appendChild(h("div",{class:"eyebrow",text:(FEAT?.overviewOnly ? "Scoring overview · " : "Featured Competition · ")+label}));
   let head;
   if(["ninepoint","sixes","wolf"].includes(FEAT?.type)&&ROUND.meta.primaryMatchStatus){
     head=ROUND.meta.primaryMatchStatus;
+  }
+  else if(FR?.archetype==="cumulative" && FEAT?.type==="strokeplay") {
+    const leaders=FR.winners || [FR.winner];
+    const total=row=>FEAT.seriesByHole ? row.scoreTotal : row.total + sum(C.par.filter((_,i)=>isNum(FR.net[row.id][i])));
+    head=`${listw(leaders.map(row=>nameOf(row.id)))} — ${leaders.length>1?'tied at':'lowest score'} ${total(leaders[0])}${FR.complete?'':' through '+FR.holesScored+' holes'}`;
   }
   else if(WINK){
     const swept = FEAT?.type==="nassau" && MARGIN.segments.length>1 && MARGIN.segments.every(segment=>WINK===FEAT.sides[1].key ? segment.margin>0 : segment.margin<0);
@@ -293,6 +298,9 @@ function deckText(){
   else if(FEAT?.type==="wolf"){
     const completed=FR?.holesScored||0;
     parts.push(completed ? `Wolf standings reflect ${completed} resolved holes; declarations and point awards are shown in the game ledger.` : "The Wolf game has not produced a resolved hole.");
+  }
+  else if(FEAT?.type==="strokeplay" && FR) {
+    parts.push(`${FEAT.overviewOnly?'Scoring overview':'Saved competition'}: ${FEAT.basis==='gross'?'gross':'net'}${FEAT.scoringMode?' · '+FEAT.scoringMode.replace('_',' '):''} · ${FEAT.allowance.label}. ${FR.holesScored} of ${NH} holes scored for every entry.`);
   }
   else if(WINK){
     if(HAS_MONEY){
@@ -357,7 +365,7 @@ if(HAS_SIDES) add("strip", ()=>{
 });
 
 /* ---- featured competition chart ---- */
-if(FR) add("charth", ()=>{ const perspective=getWinningMarginPerspective(MARGIN||{}); const side=FEAT.sides?.[perspective.sideIndex]; return secHead("Featured Competition by hole",
+if(FR) add("charth", ()=>{ const perspective=getWinningMarginPerspective(MARGIN||{}); const side=FEAT.sides?.[perspective.sideIndex]; return secHead(FEAT.overviewOnly?"Scoring overview by hole":"Featured Competition by hole",
   `${headerCompetitionLabel(FEAT.name, FEAT.allowance.label)}${MARGIN&&side?` · Winning Side perspective: ${SIDES[side.key].name}`:""}`); }, {keepWithNext:true, label:"Result"});
 if(FR) add("chart", ()=>{ const w=h("div"); w.innerHTML=chartSVG(); return w; });
 
@@ -483,7 +491,7 @@ function cumulativeChart(){
   const emphasized = FR.series.length<=4 ? FR.series.map(s=>s.id) : FR.ranked.slice(0,3).map(s=>s.id);
   const individualColors=["#7A3E9D","#B35C00","#007C91","#8A6A00","#B2355C","#4B61A8"];
   const usesSideIdentity=HAS_SIDES && FEAT?.scope!=="individual";
-  const chartColor=(series)=>usesSideIdentity ? SIDES[S(series.id).side].color : individualColors[FR.series.findIndex(row=>row.id===series.id)%individualColors.length];
+  const chartColor=(series)=>usesSideIdentity ? (SIDES[series.id] || SIDES[S(series.id)?.side]).color : individualColors[FR.series.findIndex(row=>row.id===series.id)%individualColors.length];
   const paths = FR.series.map(s=>{
     const lead = emphasized.includes(s.id);
     const p = s.run.map((v,i)=>`${i?"L":"M"}${X(i)} ${Y(v)}`).join(" ");
@@ -492,7 +500,7 @@ function cumulativeChart(){
       opacity="${lead?1:.28}"/>`;
   }).join("");
   const labeled = (FR.series.length<=4 ? FR.ranked : FR.ranked.slice(0,3)).map(s=>({s,y:Y(s.run[NH])})).sort((a,b)=>a.y-b.y);
-  const labelGap=10;
+  const labelGap=14;
   labeled.forEach((entry,index)=>{ entry.y=Math.max(index?labeled[index-1].y+labelGap:y0,entry.y); });
   for(let index=labeled.length-1;index>=0;index-=1){
     const ceiling=index===labeled.length-1?y1:labeled[index+1].y-labelGap;
@@ -504,7 +512,7 @@ function cumulativeChart(){
     const label=first.length>11?`${first.slice(0,10)}…`:first;
     const tied=totalCounts.get(s.total)>1?" (T)":"";
     return `<text data-player-label="${s.id}" x="${x1+2}" y="${y+3}" text-anchor="end" font-family="Archivo"
-      font-weight="700" font-size="7" fill="${chartColor(s)}">${label}${tied} ${s.total>0?"+":""}${s.total}</text>`;
+      font-weight="700" font-size="8" fill="${chartColor(s)}">${label}${tied} ${s.total>0?"+":""}${s.total}</text>`;
   }).join("");
   const tp=FR.turning;
   const band = tp?`<rect x="${X(tp.i)}" y="${y0}" width="${X(tp.i+1)-X(tp.i)}" height="${y1-y0}"
@@ -512,9 +520,9 @@ function cumulativeChart(){
     font-family="Archivo" font-weight="600" font-size="6.6" letter-spacing="1.4" fill="#B0821F">TURNING POINT</text>`:"";
   const ticks=[lo,(lo+hi)/2,hi].map(v=>`<line x1="${x0}" y1="${Y(v)}" x2="${x1}" y2="${Y(v)}" stroke="#E4E4DC" stroke-width=".5"/>
     <text x="${x0-8}" y="${Y(v)+2.6}" text-anchor="end" font-family="IBM Plex Mono" font-size="6.5" fill="#6E736C">${Math.round(v*10)/10}</text>`).join("");
-  return chartFrame(`${ticks}${band}${paths}${tags}`,yAxisLabel(`CUMULATIVE ${String(FR.unit).toUpperCase()}`),
+  return chartFrame(`${ticks}${band}${paths}${tags}`,yAxisLabel(FR.unit==="strokes" ? "CUMULATIVE SCORE RELATIVE TO PAR" : `CUMULATIVE ${String(FR.unit).toUpperCase()}`),
     `<text x="${x0}" y="${CH.segY}" font-family="Archivo" font-weight="600" font-size="6.4"
-      letter-spacing="1.4" fill="#6E736C">CUMULATIVE ${String(FR.unit).toUpperCase()}${FR.series.length>4?' · TOP THREE EMPHASISED':''}</text>`);
+      letter-spacing="1.4" fill="#6E736C">${FR.unit==="strokes" ? "SCORE RELATIVE TO PAR" : `CUMULATIVE ${String(FR.unit).toUpperCase()}`}${FR.series.length>4?' · TOP THREE EMPHASISED':''}</text>`);
 }
 
 function discreteChart(){
@@ -545,12 +553,12 @@ if(FR && FR.turning) add("turning", ()=>{
   if(MARGIN){
     body = describeMarginTurningPoint({ margin:MARGIN, game:FEAT, sides:SIDES, players:P, holeIndex:i });
   } else if(FR.archetype==="cumulative"){
-    body = `<b>${nameOf(FR.winner.id)}</b> takes the lead here and holds it to the end.`;
+    body = `<b>${nameOf(FR.winner.id)}</b> establishes the outright lead here and retains it through the finish.`;
   } else {
     body = `<b>${tp.winner?nameOf(tp.winner):"Carry"}</b> takes the largest pot of the round, ${usd(tp.value)}.`;
   }
   w.innerHTML = `<div class="k">Turning point · Hole ${hole} · Par ${C.par[i]} · ${qty(C.yds[i])} yds · SI ${C.si[i]}</div>
-    <p>${body} Selected by the featured competition’s deterministic turning-point rule.</p>`;
+    <p>${body}</p>`;
   return w;
 });
 
@@ -651,7 +659,7 @@ function recapBeats(){
     const top=P.slice().sort((a,b)=>a.tot-b.tot).slice(0,Math.min(4,P.length));
     const nTop=top.filter(p=>p.side===LOSEK).length;
     beats.push(lg<wg
-      ? `${SIDES[LOSEK].name} had the better ball-striking day and it bought them nothing. They posted ${lg} gross to the ${SIDES[WINK].name}' ${wg} and took ${wn(nTop)} of the ${wn(top.length)} lowest scores in the field, but the featured game was best-${wn(FEAT.bestN||2)} net, and best-${wn(FEAT.bestN||2)} net rewards the side with players who can go low on the same hole.`
+      ? `${SIDES[LOSEK].name} had the lower combined gross total. They posted ${lg} gross to the ${SIDES[WINK].name}' ${wg} and took ${wn(nTop)} of the ${wn(top.length)} lowest scores in the field, but the featured game was best-${wn(FEAT.bestN||2)} net, and best-${wn(FEAT.bestN||2)} net rewards the side with players who can go low on the same hole.`
       : `${SIDES[WINK].name} won this the straightforward way. They posted ${wg} gross to the ${SIDES[LOSEK].name}' ${lg} and took ${wn(top.length-nTop)} of the ${wn(top.length)} lowest scores in the field.`);
     const lb = MARGIN.per.map(r=>({i:r.i,hole:r.hole,
       gain: LOSEK===FEAT.sides[1].key?Math.max(0,r.a-r.b):Math.max(0,r.b-r.a)}))
@@ -687,18 +695,26 @@ function recapBeats(){
     }
   } else {
     const byG=P.slice().sort((a,b)=>a.tot-b.tot), byN=P.slice().sort((a,b)=>a.cnetT-b.cnetT);
+    if(FEAT?.type==="strokeplay" && FR){
+      const leaders=FR.winners || [FR.winner];
+      const score=row=>FEAT.seriesByHole?row.scoreTotal:row.total+sum(C.par.filter((_,i)=>isNum(FR.net[row.id][i])));
+      beats.push(`${FEAT.name} finished ${FR.complete?'':'provisionally '}${leaders.length>1?'tied':'with the lowest score'} at ${score(leaders[0])} for ${listw(leaders.map(row=>nameOf(row.id)))}. The saved ${FEAT.basis} basis is ${FEAT.allowance.label}.`);
+    }
     if(P.length>1){
-      beats.push(`${byG[0].name} signed for the low round of the day, a ${byG[0].tot}, ${byG[1].tot===byG[0].tot?"tied with":"clear of"} ${byG[1].name} at ${byG[1].tot}. On full course handicap the card went to ${byN[0].name} at net ${byN[0].cnetT}.`);
-      const beat=P.slice().sort((a,b)=>(a.cnetT-a.parPlayed)-(b.cnetT-b.parPlayed))[0];
-      beats.push(`${beat.name} played ${Math.abs(beat.cnetT-beat.parPlayed)} ${beat.cnetT-beat.parPlayed<0?"under":"over"} his handicap, the best relative performance in the field off a course handicap of ${beat.ch}.`);
+      const grossLeaders=byG.filter(row=>row.tot===byG[0].tot), netLeaders=byN.filter(row=>row.cnetT===byN[0].cnetT);
+      beats.push(`The low gross score was ${byG[0].tot} for ${listw(grossLeaders.map(row=>row.name))}. Separately, full-course-handicap net honors went to ${listw(netLeaders.map(row=>row.name))} at ${byN[0].cnetT}${netLeaders.length>1?' in a tie':''}.`);
+      const bestRelative=Math.min(...P.map(row=>row.cnetT-row.parPlayed));
+      const relativeLeaders=P.filter(row=>row.cnetT-row.parPlayed===bestRelative);
+      beats.push(`${listw(relativeLeaders.map(row=>row.name))} recorded ${bestRelative===0?'even':`${Math.abs(bestRelative)} ${bestRelative<0?'under':'over'}`} par on the full-course-handicap net basis${relativeLeaders.length>1?', sharing the lowest relative score':''}.`);
     } else {
       const p=P[0], d=p.tot-p.parPlayed;
       beats.push(`${p.name} went round in ${p.tot}, ${d===0?"level with":d>0?d+" over":Math.abs(d)+" under"} par, for a net ${p.cnetT} off ${p.ch}.`);
       const best=bestStretch(p), worst=worstStretch(p);
       beats.push(`The best stretch came at holes ${best.from}–${best.to}, ${best.rel<=0?Math.abs(best.rel)+" under":best.rel+" over"} par across ${wn(best.n)} holes. The round came apart at ${worst.from}–${worst.to}, ${worst.rel} over.`);
     }
-    const bird=P.map(p=>({p,n:p.gross.filter((g,i)=>g<C.par[i]).length})).sort((a,b)=>b.n-a.n)[0];
-    beats.push(`${bird.p.name} led the field with ${plur(bird.n,"birdie")}.`);
+    const birds=P.map(p=>({p,n:p.delta.filter(value=>value<0).length}));
+    const bestBirdies=Math.max(...birds.map(row=>row.n));
+    if(bestBirdies>0)beats.push(`${listw(birds.filter(row=>row.n===bestBirdies).map(row=>row.p.name))} ${birds.filter(row=>row.n===bestBirdies).length>1?'shared the birdie-or-better lead':'led the field'} with ${bestBirdies} birdie-or-better ${bestBirdies===1?'score':'scores'}.`);
   }
 
   if(HAS_MONEY && WINK){
@@ -751,16 +767,33 @@ if(ROUND.meta.weather || ROUND.memories.length){
 }
 
 /* ---- leaderboard ---- */
-add("lbh", ()=>secHead("Player leaderboard",
+ROUND.games.filter(game=>game.type==="strokeplay" && !game.overviewOnly).forEach((game,index)=>{
+  add(`stroke-standings-header-${index}`,()=>secHead(`${game.name} standings`,
+    `${game.basis==='gross'?'Gross':'Net'} · ${game.scoringMode?.replace('_',' ') || 'individual'} · ${game.allowance.label}`),
+    {keepWithNext:true,breakBefore:index===0,label:"Leaderboards"});
+  add(`stroke-standings-${index}`,()=>{
+    const rows=game.R?.ranked || [];
+    const score=row=>game.seriesByHole ? row.scoreTotal : row.total+sum(C.par.filter((_,i)=>isNum(game.R.net[row.id][i])));
+    const html=rows.map(row=>{
+      const tied=rows.filter(other=>score(other)===score(row)).length>1;
+      const rank=rows.findIndex(other=>score(other)===score(row))+1;
+      const money=game.seriesByHole ? sideOf(row.id).reduce((total,player)=>total+(game.moneyBy[player.id]||0),0) : (game.moneyBy[row.id]||0);
+      return `<tr data-row><td>${tied?'T':''}${rank}</td><td>${nameOf(row.id)}</td><td class="n">${row.holesScored}</td><td class="n"><b>${score(row)}</b></td><td class="n">${row.total>0?'+':''}${row.total}</td><td class="n">${acct(money)}</td></tr>`;
+    }).join('');
+    const w=h('div');w.innerHTML=`<table data-stroke-standings><thead data-rowhead><tr><th>Rank</th><th>Entry / team</th><th class="n">Holes</th><th class="n">${game.basis==='gross'?'Gross':'Game net'}</th><th class="n">To par</th><th class="n">Winnings</th></tr></thead><tbody>${html}</tbody></table><div class="note">${game.R?.complete?'Final scores; tied scores share a rank.':'Provisional scores; compare only entries with equal completed-hole counts.'}</div>`;
+    return w;
+  },{splittable:true,minRows:2});
+});
+add("lbh", ()=>secHead("Entry leaderboard",
   "Ranked by course net. Every net column declares its basis."),
-  {keepWithNext:true, breakBefore:true, label:"Leaderboards"});
+  {keepWithNext:true, breakBefore:!ROUND.games.some(game=>game.type==="strokeplay"&&!game.overviewOnly), label:"Leaderboards"});
 add("lb", ()=>{
   const money = HAS_MONEY;
   const cols = [
-    ["l","Player","22%"],["n","Idx","5%"],["n",NH<18?"CH /<br>alloc.":"CH","5%"],
+    ["l","Entry","22%"],["n","Idx","5%"],["n",NH<18?"CH /<br>alloc.":"CH","5%"],
     ...(NH>9?[["n","Out","5%"],["n","In","5%"]]:[]),
-    ["n","Gross","6%"],["n","Postable","7%"],["n","Net<br>full CH","8%"],["n","To<br>par","6%"],
-    ["n","Net<br>featured","8%"],["n","Bird+","5%"],["n","Dbl+","5%"],
+    ["n","Gross","6%"],["n","Adjusted<br>gross","7%"],["n","Net<br>full CH","8%"],["n","To<br>par","6%"],
+    ["n",FEAT?.basis==="gross"?"Game<br>gross":"Game<br>net","8%"],["n","Bird+","5%"],["n","Dbl+","5%"],
     ...(COMPLETE?[]:[["n","Holes","6%"]]),
     ...(money?[["n","Money","10%"]]:[])];
   const rows=P.slice().sort((a,b)=>a.cnetT-b.cnetT).map(p=>{
@@ -779,7 +812,7 @@ add("lb", ()=>{
   const w=h("div");
   w.innerHTML=`<table><colgroup>${cols.map(c=>`<col style="width:${c[2]}">`).join("")}</colgroup>
     <thead data-rowhead><tr>${cols.map(c=>`<th class="${c[0]}">${c[1]}</th>`).join("")}</tr></thead>
-    <tbody>${rows}</tbody></table><div class="note" style="padding-top:6px">POSTABLE IS ADJUSTED GROSS FOR HANDICAP-POSTING PURPOSES; IT IS NOT COURSE NET OR FEATURED NET.${NH<18?' CH IS THE 18-HOLE COURSE HANDICAP BASIS; ALLOC. IS THE NUMBER OF COURSE-NET STROKES APPLIED TO THIS NINE.':''}</div>`;
+    <tbody>${rows}</tbody></table><div class="note" style="padding-top:6px">ADJUSTED GROSS IS FOR INDIVIDUAL HANDICAP POSTING WHEN THE ROUND IS ELIGIBLE. COMBINED TEAM SCORECARDS ARE NOT INDIVIDUAL POSTING SCORES. GAME NET AND COURSE NET USE THEIR DECLARED BASES.${NH<18?' CH IS THE 18-HOLE COURSE HANDICAP BASIS; ALLOC. IS THE NUMBER OF COURSE-NET STROKES APPLIED TO THIS NINE.':''}</div>`;
   return w;
 }, {splittable:true, minRows:3});
 
@@ -1013,9 +1046,9 @@ SIDEGAMES.forEach((g,gi)=>{
 });
 
 /* ---- player statistics ---- */
-add("statsh", ()=>secHead("Player statistics",
-  "Scoring plus recorded ball-striking, short-game and putting statistics."),
-  {keepWithNext:true, breakBefore:true, label:"Statistics"});
+add("statsh", ()=>secHead("Entry statistics",
+  TRACKED_PLAYERS.length ? "Scoring plus recorded ball-striking, short-game and putting statistics." : "Scoring statistics from each recorded entry; no shot statistics were recorded."),
+  {keepWithNext:true, breakBefore:P.some(p=>p.statistics?.tracked?.trackedHoles), label:"Statistics"});
 if(!P.some(p=>p.statistics)) add("stats", ()=>{
   const types=[3,4,5].filter(t=>C.par.includes(t));
   const idxOf=t=>C.par.map((v,i)=>v===t?i:-1).filter(i=>i>=0);
@@ -1058,7 +1091,7 @@ function buildTrackedStatisticsPage(page){
       <td class="n">${rate(s.birdieOrBetter,holes)}</td><td class="n">${rate(s.parOrBetter,holes)}</td><td class="n">${rate(s.bogeyOrBetter,holes)}</td>
       <td class="n">${num(t.trackedHoles)?rate(num(t.trackedHoles)-num(t.penaltyHoles),t.trackedHoles):"—"}</td></tr>`; }).join("");
   if(page==="performance") w.innerHTML=table("Scoring","Completed, scored holes; rates show count/sample.",
-    ["Player","Holes","Gross avg","Birdie+","Par+","No double+","Penalty-free"],scoring);
+    ["Entry","Holes","Gross avg","Birdie+","Par+","No double+","Penalty-free"],scoring);
   const tracked=P.filter(p=>p.statistics?.tracked?.trackedHoles);
   if(tracked.length){
     const ball=tracked.map(p=>{ const s=obj(p.statistics),t=obj(s.tracked); return `<tr data-row><td class="l">${nameCell(p)}</td><td class="n">${num(t.trackedHoles)}</td>
@@ -1205,17 +1238,17 @@ const MKLEGEND = `<div class="mklegend">
   <span style="margin-left:auto"><span class="stk" style="color:var(--brass);font-weight:600">·</span> handicap stroke</span></div>`;
 
 add("sc1h", ()=>secHead("Appendix · Course net",
-  "Full course handicap. Does not determine the featured competition."),
+  "Full course handicap. Separate from game-specific scoring unless that game uses this basis."),
   {keepWithNext:true, breakBefore:true, label:"Appendix"});
 add("sc1", ()=>{ const w=h("div"); w.innerHTML=scorecard("cnet","courseNet")+MKLEGEND; return w; },
   {splittable:true, minRows:2});
-add("sc2h", ()=>{ const w=secHead("Appendix · Featured net",
+add("sc2h", ()=>{ const w=secHead(FEAT?.basis==="gross"?"Appendix · Game gross":"Appendix · Game net",
   FEAT?FEAT.allowance.label:"—"); w.classList.add("appendix-scorecard-separator"); return w; }, {keepWithNext:true});
 add("sc2", ()=>{ const w=h("div");
   w.innerHTML=scorecard("fnet","featured")
-    +`<p class="scnote">Gross above, featured net below; marks are set against par in both rows.
-      Playing handicap is ${FEAT?FEAT.allowance.label.toLowerCase():"—"}, so ${LOWMAN.name} plays off scratch.
-      Course net on the card above is informational only and will differ.</p>`;
+    +`<p class="scnote">Gross above, ${FEAT?.basis==="gross"?"game gross":"game net"} below; marks are set against par in both rows.
+      Saved game basis: ${FEAT?FEAT.allowance.label:"—"}. Each entry’s allocated game strokes are shown beside its name.
+      Course net above uses full course handicap and may differ. No handicap-posting eligibility is implied for combined team entries.</p>`;
   return w; }, {splittable:true, minRows:2});
 
 /* ==========================================================================
@@ -1308,7 +1341,7 @@ function layout(){
 
 /* initials ladder, then CSS ellipsis as the last resort */
 function fitNames(){
-  document.querySelectorAll(".dist .who .fitname, td.l .nm").forEach(n=>{
+  document.querySelectorAll(".dist .who .fitname").forEach(n=>{
     const cell=n.closest(".who")||n.closest("td");
     if(!cell) return;
     if(cell.scrollWidth<=cell.clientWidth+1) return;

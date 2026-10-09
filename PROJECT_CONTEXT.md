@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current development release: **v31.0.48 — Game Setup & Score Entry Polish** on `codex/v31.0.48-game-setup-polish`. Adds game descriptions and participant guidance, lighter picker presentation, expandable handicap options, and clearer Player Mode custom-score entry. Navigation and scoring/sync contracts are unchanged; no database migration is required. The Product Owner confirmed the v31.0.47 approved-course revision workflow works before authorizing this release.
+Current development release: **v31.0.49 — Report Competition Consistency** on `codex/v31.0.49-report-competition-consistency`. Team Stroke Play charts and standings use saved game scores; cumulative ties, handicap labels, entry names, story checks and scoring-only pagination are improved. Scoring and cloud contracts are unchanged. No migration is needed; accepted reports remain frozen until explicitly unlocked and regenerated.
 
 ## 2. Development Roles
 

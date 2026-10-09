@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.48',
-  versionNumber: '31.0.48',
-  cacheName: 'the-dye-ledger-v31.0.48',
-  buildDate: '2026-10-05T07:40:00-04:00',
-  buildLabel: 'Game Setup & Score Entry Polish'
+  version: 'v31.0.49',
+  versionNumber: '31.0.49',
+  cacheName: 'the-dye-ledger-v31.0.49',
+  buildDate: '2026-10-08T08:36:00-04:00',
+  buildLabel: 'Report Competition Consistency'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -7092,6 +7092,11 @@ function buildLedgerEntryReportModel(match, metrics = null) {
   });
   if (!Object.keys(sides).length) sides.FIELD = { name: 'Field', color: '#2C4A6E' };
   players.forEach(player => { if (!sides[player.side]) player.side = Object.keys(sides)[0]; });
+  teamMetrics.forEach((team, index) => {
+    if (team.members.length === 1 && !String(match.teamNames?.[index] || '').trim()) {
+      sides[teamKeys[index]].name = players.find(player => player.side === teamKeys[index])?.name || sides[teamKeys[index]].name;
+    }
+  });
 
   const gameMoney = gameRecord => Object.fromEntries(players.map(player => [player.id, Number(gameRecord?.amounts?.[player.id]) || 0]));
   const sideRows = teamMetrics.slice(0, 2).map((team, index) => ({
@@ -7111,6 +7116,24 @@ function buildLedgerEntryReportModel(match, metrics = null) {
       money: gameMoney(frozen),
       basis: String(config.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net',
     };
+    if (config.key === 'team_stroke') {
+      const scoringMode = resolveTeamStrokeScoringMode(config.scoringMode);
+      const seriesByHole = teamMetrics.map((team, index) => {
+        const scores = holes.map((hole, holeIndex) => {
+          const result = effectiveMetrics.holeResults?.[holeIndex];
+          if (!result?.completed) return null;
+          const value = getTeamHoleScore(result, team.team, common.basis, scoringMode);
+          return Number.isFinite(value) ? value : null;
+        });
+        const pars = holes.map(hole => Number(hole.par) * (scoringMode === 'aggregate' ? team.members.length : 1));
+        return { id: teamKeys[index], name: sides[teamKeys[index]].name, scores, pars,
+          raw: scores.map((score, i) => score === null ? null : score - pars[i]) };
+      });
+      return { ...common, type: 'strokeplay', scope: 'team', unit: 'strokes', lowWins: true,
+        scoringMode, seriesByHole,
+        allowance: { key: 'featured', label: common.basis === 'gross' ? 'Gross · no handicap strokes' : `${normalizeHandicapAllowancePercent(Number(config.scoringPolicyVersion) >= 1 ? config.handicapAllowancePercent : match.allowance, 100)}% · Off lowest Playing Handicap` },
+        segments: [{ label: 'Round', holes: holeNumbers.slice() }] };
+    }
     if (config.key === 'nassau') {
       const policy = normalizeNassauConfig(config, match);
       const segments = [];
@@ -7209,10 +7232,12 @@ function buildLedgerEntryReportModel(match, metrics = null) {
     };
   });
   if (!games.some(game => game.featured)) {
+    const grossOverview = featuredKey === 'stroke_gross';
     games.push({
-      id: 'stroke-net', name: 'Stroke Play · Course Net', type: 'strokeplay', featured: true,
-      scope: 'individual', unit: 'strokes', lowWins: true, basis: 'net', allowance: { key: 'courseNet', label: 'Full Course Handicap' },
-      pointsByHole: Object.fromEntries(players.map(player => [player.id, player.gross.map((gross, index) => gross == null ? null : gross - player.strokes.courseNet[index] - Number(holes[index]?.par || 0))])),
+      id: grossOverview ? 'stroke-gross' : 'stroke-net', name: grossOverview ? 'Stroke Play · Gross' : 'Stroke Play · Course Net', type: 'strokeplay', featured: true,
+      overviewOnly: !['stroke_net', 'stroke_gross'].includes(featuredKey),
+      scope: 'individual', unit: 'strokes', lowWins: true, basis: grossOverview ? 'gross' : 'net', allowance: { key: 'courseNet', label: grossOverview ? 'Gross' : 'Full Course Handicap' },
+      pointsByHole: Object.fromEntries(players.map(player => [player.id, player.gross.map((gross, index) => gross == null ? null : gross - (grossOverview ? 0 : player.strokes.courseNet[index]) - Number(holes[index]?.par || 0))])),
       money: Object.fromEntries(players.map(player => [player.id, 0])), segments: [{ label: 'Round', holes: holeNumbers.slice() }],
     });
   }
@@ -7455,7 +7480,7 @@ function buildDeterministicLedgerEntryStory(match, metrics, fallbackReason = 'se
     fallbackReason,
   };
 }
-const STORY_SHARED_CONTENT_RULES = 'Keep Low Gross, Course Net, Featured Net, game results, points, dollars, and settlement distinct. For Nassau, name each component (Front, Back, and Overall) and express its margin in prose as “2 up” for the winning side, “2 down” for the losing side, and “halved” or “all square” for a tie; never use closed-match notation such as “2 & 0” for a Nassau component. Do not invent shots, quotations, emotions, motives, swing mechanics, club choice, causation, or untracked statistics. State provisional scope for incomplete rounds.';
+const STORY_SHARED_CONTENT_RULES = 'Keep Low Gross, Course Net, Featured Net, game results, points, dollars, and settlement distinct. For Nassau, name each component (Front, Back, and Overall) and express its margin in prose as “2 up” for the winning side, “2 down” for the losing side, and “halved” or “all square” for a tie; never use closed-match notation such as “2 & 0” for a Nassau component. Do not invent shots, quotations, emotions, motives, swing mechanics, club choice, causation, or untracked statistics. State provisional scope for incomplete rounds. Weather is a single recorded snapshot; never infer that it helped scoring or shot execution. A paired display name does not establish an individual player or a team scoring format.';
 function buildLedgerEntryStoryPayload(match, metrics) {
   const payload = buildRoundRecapPayload(match, metrics);
   const partnershipPerformance = computeBestBallPartnershipStatistics(match, metrics);
@@ -7463,6 +7488,8 @@ function buildLedgerEntryStoryPayload(match, metrics) {
   return {
     ...payload,
     reportPurpose: 'ledger-story',
+    reportCompetition: buildLedgerEntryReportModel(match, metrics)?.games?.find(game => game.featured),
+    reportCompetitionInstruction: 'Use reportCompetition for the featured result and its saved handicap basis. Course Net is a separate informational measure; never present its total as the game score.',
     trackedStatistics: buildTrackedStatisticsStoryFacts(match, metrics),
     trackedStatisticsInstruction: 'Use relevant recorded tracked statistics to help explain the round. State the tracked-hole sample, and never interpret an unrecorded field as zero.',
     partnershipPerformance,
@@ -7972,6 +7999,21 @@ function validateGreeniesNarrativeClaims(match, metrics, recapText) {
 function validateRoundRecapContent(match, metrics, recapText) {
   const recap = String(recapText || '').trim();
   const issues = [];
+  const trackedFacts = buildTrackedStatisticsStoryFacts(match, metrics);
+  if (!trackedFacts.length && /\b(?:solid|strong|excellent|better)\s+ball[ -]striking\b/i.test(recap)) {
+    issues.push({ code:'UNVERIFIABLE_BALL_STRIKING', message:'Ball-striking quality cannot be inferred from gross scores without recorded shot statistics.' });
+  }
+  if (/\b(?:weather|conditions|skies|wind)\b[^.!?]{0,240}\b(?:facilitating|enabled|helped|allowed|contributed|provided a comfortable setting)\b/i.test(recap)) {
+    issues.push({ code:'UNVERIFIABLE_WEATHER_CAUSATION', message:'A weather snapshot does not establish an effect on scoring or shot execution. Describe recorded conditions only.' });
+  }
+  if (resolveFeaturedCompetitionKey(match, metrics) === 'team_stroke') {
+    const config = (match.selectedGames || []).find(game => game.key === 'team_stroke') || {};
+    const expected = getTeamStrokeScoreboardData(match, metrics, config).leader?.total;
+    const claims = [...recap.matchAll(/\b(?:featured competition|team stroke play)\b[^.!?]{0,160}?\b(?:at|score of|total of)\s+(\d{1,3})\b/gi)];
+    if (Number.isFinite(expected) && claims.some(claim => Number(claim[1]) !== expected)) {
+      issues.push({ code:'FALSE_FEATURED_STROKE_RESULT', message:`The saved Team Stroke Play leading score is ${expected}; full-course-handicap net is a separate measure.` });
+    }
+  }
   if (!recap) issues.push({ code: 'EMPTY_RECAP', message: 'The recap is empty.' });
   const canonicalTurningPoint = resolveLedgerFeaturedTurningPoint(buildLedgerEntryReportModel(match, metrics));
   const definingTurnClaims = [...recap.matchAll(/\b(?:defining\s+turn|turning\s+point)\b[^.!?\n]{0,80}?\b(?:hole|h)\s*#?\s*(\d{1,2})\b/gi)];

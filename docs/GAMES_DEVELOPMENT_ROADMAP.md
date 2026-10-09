@@ -33,11 +33,12 @@ The baseline already includes multiple games, individual side matches, match tem
 
 ## Phase 2 — Explainable wagers and configurable side games
 
-### 3. Live wager explanations — NEXT
+### 3. Live wager explanations — v31.0.51 development delivery
 
 - Extend Quick Scoreboard and Games & Results with a concise per-player balance breakdown and drill-in to contributing games, holes, handicap strokes, skins, and nested presses.
 - Explain projected versus final results and changes caused by score corrections. Keep points separate from dollars and preserve incomplete-round truth.
 - Reuse authoritative calculation/report outputs; no independent presentation-layer scoring engine. Keep the current-hole scoring workspace compact.
+- Development delivery: tappable balances, game-level facts, projected/final and saved-record sources, session-based change comparisons, and explicit rounding/history gaps are implemented. Real shared-device acceptance remains open; legacy detail is shown only when captured.
 - Acceptance: reach a balance explanation within two taps; every displayed component reconciles with game detail and the combined net position in live, saved, shared, and exported views.
 
 ### 4. Configurable Dots / Trash — NEXT

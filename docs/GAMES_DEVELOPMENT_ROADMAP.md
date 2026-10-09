@@ -22,12 +22,13 @@ The baseline already includes multiple games, individual side matches, match tem
 - Use a disposable test round/environment and synthetic golfers; retain sanitized diagnostic evidence. The 100-round four-scorekeeper simulation modeled transport and ledger propagation and is not this acceptance gate.
 - Acceptance: no lost scores, duplicate wagers, unauthorized overwrites, or false synchronized/final states; all authorized sessions converge after delivery resumes. Real iPhone/PWA behavior must be observed separately from browser automation.
 
-### 2. Reusable group game configurations and shared rules summary — NEXT
+### 2. Reusable group game configurations and shared rules summary — v31.0.50 development delivery
 
 - Audit existing Match Templates, saved rosters, and preferences; extend them to save a group's selected games, participants, stakes, allowances, press policy, partnerships, and house rules.
 - Start another round from “Our Saturday Game,” select the course/date, and review only relevant changes. Keep current handicaps, tee selection, identity, and assignment validity explicit; never silently reuse stale round facts.
 - Give all participants a concise shared rules summary: who plays whom, scoring basis, strokes, ties/carryovers, stakes, declarations, and press rules. Reuse the authoritative versioned rules contract.
 - Snapshot the chosen configuration into each round; subsequent template changes must not rewrite prior rounds. Preserve existing template compatibility and offline operation.
+- Development delivery: direct saved-setup selection, current-library checks, fresh-round isolation, and round-scoped rules preview are implemented. Existing local Match Templates remain compatible. Four-device review and usability timing remain acceptance work.
 - Acceptance target: start a saved group game in under one minute, measured with representative golfers; restored settings and shared summaries match the saved round contract.
 
 ## Phase 2 — Explainable wagers and configurable side games

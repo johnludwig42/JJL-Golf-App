@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current development release: **v31.0.49 — Report Competition Consistency** on `codex/v31.0.49-report-competition-consistency`. Team Stroke Play charts and standings use saved game scores; cumulative ties, handicap labels, entry names, story checks and scoring-only pagination are improved. Scoring and cloud contracts are unchanged. No migration is needed; accepted reports remain frozen until explicitly unlocked and regenerated.
+Current development release: **v31.0.50 — Saved Group Setups & Round Rules** on `codex/v31.0.50-saved-group-setups`. Existing Match Templates are selectable from Match and a new-round overview. Selected setups start fresh drafts and preserve current golfer indexes; missing library entries are flagged. Round rules are available before and during play. Templates remain device-local; prior rounds and scorer assignments are not imported. No migration is required.
 
 ## 2. Development Roles
 

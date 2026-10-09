@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.49',
-  versionNumber: '31.0.49',
-  cacheName: 'the-dye-ledger-v31.0.49',
-  buildDate: '2026-10-08T08:36:00-04:00',
-  buildLabel: 'Report Competition Consistency'
+  version: 'v31.0.50',
+  versionNumber: '31.0.50',
+  cacheName: 'the-dye-ledger-v31.0.50',
+  buildDate: '2026-10-08T20:43:00-04:00',
+  buildLabel: 'Saved Group Setups & Round Rules'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -9932,7 +9932,7 @@ function createEmptyMatch(overrides = {}) {
     courseId: overrides.courseId || '',
     teeId: overrides.teeId || '',
     format: 'teams',
-    allowance: Number(overrides.allowance) || 100,
+    allowance: normalizeHandicapAllowancePercent(overrides.allowance, 100),
     holeCount: Number(overrides.holeCount) === 9 ? 9 : 18,
     nineHoleSegment: overrides.nineHoleSegment || 'front',
     customStartHole: Number(overrides.customStartHole) || 1,
@@ -10022,7 +10022,7 @@ function normalizeMatch(match) {
   match.courseId = match.courseId || '';
   match.teeId = match.teeId || '';
   match.format = match.format || 'teams';
-  match.allowance = Number(match.allowance) || 100;
+  match.allowance = normalizeHandicapAllowancePercent(match.allowance, 100);
   match.holeCount = getRequestedHoleCount(match);
   match.nineHoleSegment = getNineHoleSegment(match);
   match.customStartHole = Math.max(1, Math.min(10, Number(match.customStartHole) || 1));
@@ -10495,7 +10495,7 @@ function renderSetupHandicapPreview() {
   if (!wrap) return;
   let courseId = document.getElementById('matchCourseSelect')?.value || '';
   let teeId = document.getElementById('matchTeeSelect')?.value || '';
-  const allowance = Number(document.querySelector('#matchForm [name="allowance"]')?.value || 100) || 100;
+  const allowance = normalizeHandicapAllowancePercent(document.querySelector('#matchForm [name="allowance"]')?.value, 100);
   const teamNames = Array.from(document.querySelectorAll('[data-team-name]')).map(el => el.value || '');
   const draftSelections = Array.isArray(uiState.matchPlayerDraft) ? uiState.matchPlayerDraft : [];
   const selected = Array.from({ length: Math.max(document.querySelectorAll('[data-player-slot]').length, draftSelections.length) }, (_, idx) => {
@@ -14043,7 +14043,7 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
       course_handicap: Number(courseHdcp) || 0,
       playing_handicap: Number(playHdcp) || 0,
       handicap_snapshot: {
-        allowance: Number(match.allowance) || 100,
+        allowance: normalizeHandicapAllowancePercent(match.allowance, 100),
         assignedDeviceId: getAssignedDeviceForPlayer(match, player.id) || match.sharedHostDeviceId || getSharedDeviceId(),
         assignedParticipantId: getAssignedParticipantForPlayer(match, player.id) || match.sharedHostParticipantId || getCurrentSharedParticipantId(match),
         playerIndex: Number(player.index) || 0,
@@ -14072,7 +14072,7 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
     reference_tee_id: match.teeId || '',
     course_snapshot: { ...courseSnapshot, sharedMatchMeta: { tripId: match.tripId || null, eventId: match.eventId || null, scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device'), matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || ''), hostDeviceId: match.sharedHostDeviceId || getSharedDeviceId(), hostParticipantId: match.sharedHostParticipantId || getCurrentSharedParticipantId(match), devices: Array.isArray(match.sharedDevices) ? match.sharedDevices : [], participants: getSharedAssignmentParticipants(match), playerAssignments: match.sharedPlayerAssignments || {}, playerAssignmentState: match.sharedPlayerAssignmentState || {}, memories: getRoundMemories(match), memoriesUpdatedAt: new Date().toISOString(), roundContext: normalizeRoundContext(match.roundContext), roundTiming: match.roundTiming || { startedAt: null, endedAt: null }, holeFirstCompletedAt: match.holeFirstCompletedAt || {}, greeniesWinners: isCurrentDeviceMatchHost(match) ? clonePlain(match.greeniesWinners || {}) : {}, greeniesUpdatedAt: match.greeniesUpdatedAt || null, sspFacts: buildSharedSspFacts(match), pressConfig: normalizePressConfig(match.pressConfig), presses: isCurrentDeviceMatchHost(match) ? clonePlain(match.presses || []) : [], roundRecordSnapshot: isCurrentDeviceMatchHost(match) && isFrozenRoundRecord(match.roundRecordSnapshot) ? clonePlain(match.roundRecordSnapshot) : null, ledgerEntrySnapshot: isCurrentDeviceMatchHost(match) ? clonePlain(getAcceptedLedgerEntrySnapshot(match)) : null } },
     format: match.format || 'teams',
-    allowance: Number(match.allowance) || 100,
+    allowance: normalizeHandicapAllowancePercent(match.allowance, 100),
     hole_count: getRequestedHoleCount(match),
     nine_hole_segment: getNineHoleSegment(match),
     custom_start_hole: Number(match.customStartHole) || 1,
@@ -14524,7 +14524,7 @@ function hydrateMatchFromCloudBundle(bundle) {
     courseId: courseIds.courseId,
     teeId: courseIds.teeId,
     format: matchRow?.format || 'teams',
-    allowance: Number(matchRow?.allowance) || 100,
+    allowance: normalizeHandicapAllowancePercent(matchRow?.allowance, 100),
     holeCount,
     nineHoleSegment: String(matchRow?.nine_hole_segment || 'front'),
     customStartHole: Math.max(1, Math.min(10, Number(matchRow?.custom_start_hole) || 1)),
@@ -18418,6 +18418,8 @@ async function switchPlayInputMode(nextMode) {
 
 function renderCurrentMatch() {
   const match = getActiveMatch();
+  const rulesWrap = document.getElementById('playGroupRulesPreview');
+  if (rulesWrap) rulesWrap.innerHTML = match ? buildGroupRulesPreview(match, rulesWrap.querySelector('details')?.open || false) : '';
   const metaEl = document.getElementById('currentMatchMeta');
   const progressEl = document.getElementById('currentMatchProgress');
   const emptyEl = document.getElementById('scoreEntryEmpty');
@@ -20952,6 +20954,7 @@ function getSmartScoreAdvancePresetFromSetup() {
 
 
 function renderTodaysMatchSummary() {
+  renderSetupGroupRulesPreview();
   const wrap = document.getElementById('todaysMatchSummary');
   if (!wrap) { renderRoundReadiness(); return; }
   const courseId = document.getElementById('matchCourseSelect')?.value || '';
@@ -20997,13 +21000,59 @@ function readMatchTemplates() {
   }
 }
 
+function renderSavedGroupSetupSelectors(templates = readMatchTemplates()) {
+  document.querySelectorAll('[data-group-setup-select]').forEach(select => {
+    const selected = select.value;
+    select.innerHTML = '<option value="">Choose a saved setup</option>' + templates.map(template => `<option value="${escapeHtml(template.id)}">${escapeHtml(template.name || 'Saved setup')}</option>`).join('');
+    if (templates.some(template => template.id === selected)) select.value = selected;
+    select.disabled = !templates.length;
+    const button = document.querySelector(`[data-load-group-setup="${select.id}"]`);
+    if (button) button.disabled = !select.value;
+  });
+  document.getElementById('savedGroupSetupLanding')?.classList.toggle('hidden', !!getActiveMatch());
+  document.getElementById('savedGroupSetupOverview')?.classList.toggle('hidden', !!editingMatchId);
+}
+
+function buildGroupRulesPreview(round, open = false) {
+  const games = round?.selectedGames || [];
+  const players = round?.players || [];
+  const name = id => getPlayer(id)?.name || 'Choose golfer';
+  const roster = players.filter(player => player.playerId).map(player => `${name(player.playerId)} (${round.teamNames?.[Number(player.team)-1] || `Team ${player.team}`})`).join(' · ');
+  const rows = games.map(game => {
+    const contract = getCompetitionRulesContract(game.key, game);
+    const fields = [['stakesFront','Front'],['stakesBack','Back'],['stakesOverall','Overall'],['stake','Stake'],['pointValue','$ per point'],['stakePerPoint','$ per point'],['stakePerSegment','Segment stake']];
+    const stakes = fields.filter(([field]) => game[field] !== undefined).map(([field,label]) => `${label}: $${Number(game[field]).toFixed(2)}`).join(' · ');
+    const ids = Array.isArray(game.playerIds) ? game.playerIds : Array.isArray(game.participants) ? game.participants : [];
+    const participants = ids.length ? ids.map(name).join(', ') : 'Round golfers / teams';
+    const pairing = (game.matchups || []).map(row => `${name(row.playerAId)} vs ${name(row.playerBId)} · ${row.game} · ${row.basis} · $${Number(row.stake || 0).toFixed(2)}`).join('; ');
+    const press = getGameEscalationCapability(game.key) === 'PRESS' ? normalizePressConfig(game) : null;
+    const pressText = press ? (press.pressesEnabled ? `Presses: ${press.pressType === 'PROMPT_AT_THRESHOLD' ? `prompt at ${press.autoPressThreshold} down` : 'manual'} · max ${press.maxPressesPerRound} per round · max ${press.maxRePresses} re-presses · inherited stake` : 'Presses off') : contract.escalation;
+    const allowance = contract.basis === 'gross' || contract.basis === 'event' ? 'No handicap strokes' : `${normalizeHandicapAllowancePercent(game.handicapAllowancePercent, round.allowance)}% · ${contract.allowance}`;
+    const options = [['scoringMode','Team scoring'],['mode','Mode'],['countingBalls','Counting balls'],['finalHolesRule','Final holes'],['allowLoneWolf','Lone Wolf'],['allowBlindWolf','Blind Wolf']].filter(([field]) => game[field] !== undefined).map(([field,label]) => `${label}: ${String(game[field]).replaceAll('_',' ')}`).join(' · ');
+    const pointSchedule = game.points && typeof game.points === 'object' ? Object.entries(game.points).map(([key,value]) => `${key.replace(/([A-Z])/g,' $1')}: ${Number(value)}`).join(' · ') : '';
+    const pointRate = ['nine_point','wolf'].includes(game.key) || (game.key === 'sixes' && game.mode !== 'segments') ? Number(game.pointValue ?? game.stakePerPoint) : NaN;
+    const pointExample = Number.isFinite(pointRate) ? `A 5-point head-to-head difference at $${pointRate.toFixed(2)} per point is $${(5*pointRate).toFixed(2)}.` : '';
+    return `<div class="group-rules-game"><strong>${escapeHtml(getGameLabel(game.key))} · ${escapeHtml(contract.basis)}</strong><div>${escapeHtml(pairing || participants)}</div><div>${escapeHtml(stakes || 'No stake specified')}${options ? ` · ${escapeHtml(options)}` : ''}</div><div>${escapeHtml(allowance)}</div><div>${escapeHtml(contract.tieTreatment)} · ${escapeHtml(pressText)}</div>${pointSchedule ? `<div>${escapeHtml(pointSchedule)}</div>` : ''}${pointExample ? `<div>${escapeHtml(pointExample)}</div>` : ''}</div>`;
+  }).join('');
+  return `<details class="group-rules-preview" ${open ? 'open' : ''}><summary>Round rules · ${games.length} selected game${games.length === 1 ? '' : 's'}</summary><div class="group-rules-body"><div>${escapeHtml(roster || 'Choose golfers in Players.')}</div><div>${round?.storageMode === 'shared' ? 'Shared round · scorer assignments belong to this round.' : 'Local scoring on this device.'}</div>${rows || '<div>No selected games. Review the Featured Competition in Games.</div>'}<div class="tiny">These are this round’s saved settings. Templates edited later do not change this round. Rules catalog v${COMPETITION_RULES_CATALOG_VERSION}.</div></div></details>`;
+}
+
+function renderSetupGroupRulesPreview() {
+  const wrap = document.getElementById('setupGroupRulesPreview');
+  if (!wrap) return;
+  const open = wrap.querySelector('details')?.open || false;
+  wrap.innerHTML = buildGroupRulesPreview({ selectedGames: collectSelectedGames(), players: getSelectedPlayersFromSetup(), teamNames: Array.from(document.querySelectorAll('[data-team-name]')).map(input=>input.value), allowance: Number(document.querySelector('#matchForm [name="allowance"]')?.value), storageMode: document.getElementById('sharedMatchEnabled')?.checked ? 'shared' : 'local' }, open);
+}
+
 function writeMatchTemplates(templates) {
   try {
     const cleaned = Array.isArray(templates) ? templates.slice(0, 50) : [];
     localStorage.setItem(MATCH_TEMPLATES_STORAGE_KEY, JSON.stringify(cleaned));
+    return true;
   } catch (err) {
     recordAppError(err, 'Write Match Templates');
     toast('Could not save match template on this device.');
+    return false;
   }
 }
 
@@ -21032,7 +21081,7 @@ function buildTemplateFromCurrentSetup(nameOverride = '') {
     matchName: String(fd.get('name') || '').trim(),
     courseId: String(fd.get('courseId') || ''),
     teeId: String(fd.get('teeId') || ''),
-    allowance: Number(fd.get('allowance')) || 100,
+    allowance: normalizeHandicapAllowancePercent(fd.get('allowance'), 100),
     holeCount: Number(fd.get('holeCount')) === 9 ? 9 : 18,
     nineHoleSegment: String(fd.get('nineHoleSegment') || 'front'),
     customStartHole: Math.max(1, Math.min(10, Number(fd.get('customStartHole')) || 1)),
@@ -21055,9 +21104,7 @@ function buildTemplateFromCurrentSetup(nameOverride = '') {
   };
 }
 
-function applyMatchTemplate(templateId) {
-  const template = readMatchTemplates().find(t => t.id === templateId);
-  if (!template) return toast('Template not found.');
+function buildDraftFromMatchTemplate(template) {
   const preferenceDefaults = mergeNewMatchDefaults({
     smartScoreAdvancePreset: template.smartScoreAdvancePreset,
     captureWeatherContext: Object.prototype.hasOwnProperty.call(template, 'captureWeatherContext') ? template.captureWeatherContext : null,
@@ -21073,14 +21120,14 @@ function applyMatchTemplate(templateId) {
     name: template.matchName || template.name || 'Round',
     courseId: template.courseId || '',
     teeId: template.teeId || '',
-    allowance: Number(template.allowance) || 100,
+    allowance: normalizeHandicapAllowancePercent(template.allowance, 100),
     holeCount: Number(template.holeCount) === 9 ? 9 : 18,
     nineHoleSegment: template.nineHoleSegment || 'front',
     customStartHole: Math.max(1, Math.min(10, Number(template.customStartHole) || 1)),
     teamCount: Number(template.teamCount) || 1,
     playersPerTeam: Number(template.playersPerTeam) || 1,
     teamNames: Array.isArray(template.teamNames) ? template.teamNames.slice() : [],
-    selectedGames: normalizeSelectedGamesOrder(Array.isArray(template.selectedGames) ? template.selectedGames : []),
+    selectedGames: normalizeSelectedGamesOrder(JSON.parse(JSON.stringify(Array.isArray(template.selectedGames) ? template.selectedGames : []))),
     featuredCompetition: normalizeFeaturedCompetition(template.featuredCompetition || 'auto'),
     scoringAccessMode: normalizeScoringAccessMode(template.scoringAccessMode || 'single_device'),
     officialScorerName: template.officialScorerName || 'Official scorer',
@@ -21106,10 +21153,49 @@ function applyMatchTemplate(templateId) {
     completedAt: null,
     status: 'active'
   });
+  const warnings = [];
+  const course = getCourse(draft.courseId);
+  if (!course) {
+    draft.courseId = ''; draft.teeId = '';
+    warnings.push('Choose a course and tees for this round.');
+  }
+  const validTees = new Set((course?.tees || []).map(tee => String(tee.id)));
+  if (draft.teeId && !validTees.has(String(draft.teeId))) {
+    draft.teeId = ''; warnings.push('The saved reference tee is no longer available; review tees.');
+  }
+  draft.players = draft.players.map(player => {
+    if (!getPlayer(player.playerId)) {
+      warnings.push('A saved golfer is no longer in your library; choose a replacement in Players.');
+      return { ...player, playerId: '', teeId: '' };
+    }
+    if (player.teeId && !validTees.has(player.teeId)) {
+      warnings.push('A saved player tee is no longer available; review tees in Players.');
+      return { ...player, teeId: '' };
+    }
+    return player;
+  });
+  draft.teamScorers = [];
   synchronizeFeaturedCompetition(draft, { requestedSelection: draft.featuredCompetition });
+  return { draft, warnings: [...new Set(warnings)] };
+
+}
+
+function applyMatchTemplate(templateId) {
+  if (editingMatchId || getActiveMatch()) return toast('Create a fresh match before loading a saved setup. Your current round has not changed.');
+  const template = readMatchTemplates().find(row => row.id === templateId);
+  if (!template) return toast('Saved setup not found.');
+  const { draft, warnings } = buildDraftFromMatchTemplate(template);
+  setupWorkflowMode = 'create';
   loadMatchEditor(null, draft);
-  renderMatchTemplatesPanel();
-  toast('Template applied. Review setup, then start round.');
+  document.querySelectorAll('[data-group-setup-select]').forEach(select => { select.value = templateId; });
+  renderSavedGroupSetupSelectors();
+  const notice = document.getElementById('groupSetupNotice');
+  if (notice) {
+    notice.textContent = [`Loaded “${template.name || 'Saved setup'}”. Review the course, tees and current handicaps.`, ...warnings, draft.storageMode === 'shared' ? 'Scorer assignments must be made for the new shared round.' : ''].filter(Boolean).join(' ');
+    notice.classList.remove('hidden');
+  }
+  scheduleSetupDraftSave();
+  toast('Saved setup loaded. Review the rules, then start your fresh round.');
 }
 
 function saveCurrentSetupAsTemplate() {
@@ -21118,7 +21204,7 @@ function saveCurrentSetupAsTemplate() {
   const template = buildTemplateFromCurrentSetup(name);
   const templates = readMatchTemplates();
   templates.unshift(template);
-  writeMatchTemplates(templates);
+  if (!writeMatchTemplates(templates)) return;
   renderMatchTemplatesPanel();
   toast('Match template saved.');
 }
@@ -21163,6 +21249,7 @@ function renderMatchTemplatesPanel() {
   const wrap = document.getElementById('matchTemplatesPanel');
   if (!wrap) return;
   const templates = readMatchTemplates();
+  renderSavedGroupSetupSelectors(templates);
   if (!templates.length) {
     wrap.innerHTML = `<div class="empty-state-card compact-empty-state"><strong>No templates saved yet.</strong><br>Create your first Match Template from the current setup. Templates save setup only — never scores or results.</div>`;
     return;
@@ -22410,6 +22497,7 @@ function renderSetupSharedAdminPanel() {
 }
 
 function renderMatchSetupState() {
+  renderSavedGroupSetupSelectors();
   const wrap = document.getElementById('matchSetupFormWrap');
   const msg = document.getElementById('setupLockMsg');
   const entry = document.getElementById('setupEntryCard');
@@ -22789,6 +22877,7 @@ function cancelMatchSetupChanges() {
 }
 
 function loadMatchEditor(matchId = null, draftMatch = null) {
+  document.getElementById('groupSetupNotice')?.classList.add('hidden');
   const form = document.getElementById('matchForm');
   editingMatchId = matchId;
   const bottomCancelBtn = document.getElementById('cancelMatchEditBtn');
@@ -22817,7 +22906,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
     form.reset();
     form.elements.namedItem('date').value = draft.date || todayIso();
     form.elements.namedItem('name').value = draft.name === 'Round' ? '' : (draft.name || '');
-    form.elements.namedItem('allowance').value = draft.allowance || 100;
+    form.elements.namedItem('allowance').value = draft.allowance ?? 100;
     form.elements.namedItem('holeCount').value = String(getRequestedHoleCount(draft));
     document.getElementById('nineHoleSegmentSelect').value = draft.nineHoleSegment || 'front';
     document.getElementById('customNineHoleStartSelect').value = String(draft.customStartHole || 1);
@@ -22853,7 +22942,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
   form.elements.namedItem('date').value = match.date;
   form.elements.namedItem('name').value = match.name || '';
   populateMatchCourseSelects(match.courseId || '', match.teeId || '');
-  form.elements.namedItem('allowance').value = match.allowance || 100;
+  form.elements.namedItem('allowance').value = match.allowance ?? 100;
   form.elements.namedItem('holeCount').value = String(getRequestedHoleCount(match));
   document.getElementById('nineHoleSegmentSelect').value = getNineHoleSegment(match);
   document.getElementById('customNineHoleStartSelect').value = String(Math.max(1, Math.min(10, Number(match.customStartHole) || 1)));
@@ -23570,6 +23659,11 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
   document.getElementById('setup').addEventListener('change', e => {
+    if (e.target.matches('[data-group-setup-select]')) {
+      const button = document.querySelector(`[data-load-group-setup="${e.target.id}"]`);
+      if (button) button.disabled = !e.target.value;
+      return;
+    }
     if (e.target?.matches('[data-game-config][data-field="maxPressesPerRound"], [data-game-config][data-field="maxRePresses"]')) {
       if (!enforcePressSetupLimitInput(e.target)) return;
       document.querySelectorAll(`[data-game-config][data-field="${e.target.dataset.field}"]`).forEach(input => { if (input !== e.target) input.value = e.target.value; });
@@ -23592,6 +23686,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     }
   });
   document.getElementById('setup').addEventListener('click', e => {
+    const savedSetupSelectId = e.target.closest('[data-load-group-setup]')?.dataset.loadGroupSetup;
+    if (savedSetupSelectId) { applyMatchTemplate(document.getElementById(savedSetupSelectId)?.value); return; }
+    if (e.target.id === 'saveGroupSetupOverviewBtn') { saveCurrentSetupAsTemplate(); return; }
     const applyTemplateId = e.target.closest('[data-apply-template]')?.dataset.applyTemplate;
     if (applyTemplateId) { applyMatchTemplate(applyTemplateId); return; }
     const renameTemplateId = e.target.closest('[data-rename-template]')?.dataset.renameTemplate;
@@ -24310,7 +24407,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       courseId: String(fd.get('courseId') || ''),
       teeId: String(fd.get('teeId') || syncReferenceTeeUi({ selections: selectedPlayers, forceAuto: !uiState.referenceTeeManual }) || selectedPlayers[0]?.teeId || ''),
       format: 'teams',
-      allowance: Number(fd.get('allowance')) || 100,
+      allowance: normalizeHandicapAllowancePercent(fd.get('allowance'), 100),
       holeCount: Number(fd.get('holeCount')) === 9 ? 9 : 18,
       nineHoleSegment: Number(fd.get('holeCount')) === 9 ? String(fd.get('nineHoleSegment') || 'front') : 'front',
       customStartHole: Number(fd.get('holeCount')) === 9 ? Math.max(1, Math.min(10, Number(fd.get('customStartHole')) || 1)) : 1,
@@ -25721,6 +25818,7 @@ function installDyeLedgerLiveEngineAdapter() {
     getCompetitionRulesContract,
     stampCompetitionRulesConfig,
     buildCompetitionRulesSummary,
+    buildDraftFromMatchTemplate,
     openExperienceDestination,
     closeExperienceDestination,
     setSharedMatchDraftMode,

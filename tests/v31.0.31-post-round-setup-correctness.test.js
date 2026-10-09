@@ -88,7 +88,7 @@ test('all live featured-game mutation paths invoke the authoritative resolver', 
   assert.match(app, /function normalizeMatch\(match\)[\s\S]*synchronizeFeaturedCompetition\(match, \{ requestedStatusGame: match\.matchStatusGame \}\)/);
   assert.match(app, /if \(!statusOptions\.find[\s\S]*synchronizeFeaturedCompetition\(match, \{ requestedSelection:/);
   assert.match(app, /function hydrateMatchFromCloudBundle[\s\S]*synchronizeFeaturedCompetition\(hydrated, \{ authority: 'cloud'/);
-  assert.match(app, /function applyMatchTemplate[\s\S]*synchronizeFeaturedCompetition\(draft, \{ requestedSelection: draft\.featuredCompetition \}\)/);
+  assert.match(app, /function buildDraftFromMatchTemplate[\s\S]*synchronizeFeaturedCompetition\(draft, \{ requestedSelection: draft\.featuredCompetition \}\)/);
   assert.match(app, /function buildNextRoundDraft[\s\S]*synchronizeFeaturedCompetition\(draft, \{ requestedSelection: 'auto' \}\)/);
   assert.match(app, /e\.target\.id === 'matchStatusGameSelect'[\s\S]*synchronizeFeaturedCompetition\(match, \{ requestedSelection: e\.target\.value \}\)/);
 });

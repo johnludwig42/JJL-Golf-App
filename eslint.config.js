@@ -60,7 +60,7 @@ export default [
     ]
   },
   {
-    files: ["app.js", "service-worker.js"],
+    files: ["app.js", "app-presentation.js", "service-worker.js"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "script",

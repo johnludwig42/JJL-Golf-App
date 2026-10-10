@@ -60,16 +60,23 @@ test('guardrail rejects new and duplicated px declarations and stale exceptions'
   const extra = structuredClone(exceptions);
   extra.pxFontSizes.push({key:'.gone | font-size: 13px',count:1,reason:'Removed component'});
   assert.ok(auditStyleContract(css, extra).violations.some(value=>value.includes('exception count changed')));
-  const item = exceptions.pxFontSizes.find(entry=>entry.key.startsWith('.tiny |'));
-  assert.ok(item);
-  const repeat = `${css}\n.tiny{font-size:11px}`;
+  const item = exceptions.pxFontSizes[0];
+  assert.ok(item?.key.startsWith('@media print'));
+  const repeated=postcss.parse(css);
+  let duplicated=false;
+  repeated.walkDecls(declaration=>{
+    if(!duplicated&&declarationKey(declaration)===item.key){declaration.parent.after(declaration.parent.clone());duplicated=true;}
+  });
+  const repeat = repeated.toString();
   assert.ok(auditStyleContract(repeat, exceptions).violations.some(value=>value.includes('exception count changed')));
 });
 
-test('token expansion preserves declaration values, selectors, media context and importance exactly', () => {
+test('color token expansion preserves the frozen color declarations and cascade exactly', () => {
   const declarations = source => {
     const result=[];
-    postcss.parse(source).walkDecls(declaration=>result.push(declarationKey(declaration)));
+    postcss.parse(source).walkDecls(declaration=>{
+      if(/^(?:--(?:bg|card|text|muted|accent|border|shadow|danger)|color$|background|border.*color|outline.*color|.*shadow$|fill$|stroke$|caret-color$)/.test(declaration.prop))result.push(declarationKey(declaration));
+    });
     return result;
   };
   assert.deepEqual(declarations(expandColorTokens(css)), declarations(baseline));

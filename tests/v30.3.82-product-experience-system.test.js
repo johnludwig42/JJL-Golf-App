@@ -30,8 +30,8 @@ test('Scores, Library, and More use one shared overview and focused-destination 
 test('Match, Scores, Library, Insights, and More share one tab-identity header treatment', () => {
   assert.match(html, /id="matchSectionHeader" class="card tight-card match-section-header product-tab-header"/);
   assert.equal((html.match(/class="[^"]*\bproduct-tab-header\b(?!-)[^"]*"/g) || []).length, 5);
-  assert.match(css, /\.product-tab-header\{padding:16px!important;border-left:0!important;background:#fff!important;text-align:left\}/);
-  assert.match(css, /\.product-tab-header h2\{margin:0 0 5px!important;font-size:1\.35rem!important;line-height:1\.2\}/);
+  assert.match(css, /\.product-tab-header\{padding:var\(--space-4\)!important;border-left:0!important;background:#fff!important;text-align:left\}/);
+  assert.match(css, /\.product-tab-header h2\{margin:0 0 var\(--space-1\)!important;font-size:var\(--type-title\)!important;line-height:var\(--leading-heading\)\}/);
   assert.match(css, /\.product-tab-header-copy\{flex:1 1 auto;width:100%;min-width:0;text-align:left\}/);
 });
 

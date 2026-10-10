@@ -141,9 +141,9 @@ test('current metadata and immutable PWA assets remain consistent', () => {
 });
 
 test('Add Memory uses the Quick Scoreboard floating mobile-window treatment', () => {
-  assert.match(css, /#addMemoryDialog\s*\{[\s\S]*?padding:calc\(var\(--app-chrome-height,[\s\S]*?\) 12px/s);
+  assert.match(css, /#addMemoryDialog\s*\{[\s\S]*?padding:calc\(var\(--app-chrome-height,[\s\S]*?\) var\(--space-3\)/s);
   assert.match(css, /#addMemoryDialog \.memory-sheet\s*\{[\s\S]*?max-width:100%;[\s\S]*?overflow-y:auto;[\s\S]*?overflow-x:hidden;[\s\S]*?border-radius:16px;/s);
-  assert.match(css, /\.memory-sheet > label,[\s\S]*?margin-left:14px;[\s\S]*?margin-right:14px;/s);
+  assert.match(css, /\.memory-sheet > label,[\s\S]*?margin-left:var\(--space-3\);[\s\S]*?margin-right:var\(--space-3\);/s);
 });
 
 test('More shows exactly the current and four preceding release notes', () => {

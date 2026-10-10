@@ -29,8 +29,8 @@ test('Quick Scoreboard and authoritative Play scoring controls remain intact', (
   assert.match(html, /id="quickScoreboardBtn"[^>]*>Scoreboard<\/button>/);
   assert.match(app, /openQuickScoreboardView/);
   assert.match(app, /buildQuickScoreboardView/);
-  assert.match(css, /\.quick-scoreboard-momentum \.momentum-axis-tick\{font-size:12px!important;font-weight:850\}/);
-  assert.match(css, /\.quick-scoreboard-momentum \.momentum-point-value\{font-size:12px;font-weight:900/);
+  assert.match(css, /\.quick-scoreboard-momentum \.momentum-axis-tick\{font-size:calc\(var\(--type-label\) \* var\(--graphic-text-scale,1\)\)!important;font-weight:var\(--weight-semibold\)\}/);
+  assert.match(css, /\.quick-scoreboard-momentum \.momentum-point-value\{font-size:calc\(var\(--type-label\) \* var\(--graphic-text-scale,1\)\);font-weight:var\(--weight-semibold\)/);
 });
 
 test('fairway-conditioned GIR is derived from eligible tracked holes and preserved additively', () => {

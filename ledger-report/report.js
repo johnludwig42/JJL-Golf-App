@@ -3,9 +3,9 @@
    or derived from it. Stroke allocation comes from the app's engine, keyed by
    basis; the report never re-derives handicapping.
    ========================================================================== */
-import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.60';
+import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.61';
 
-import './stroke-play.js?v=31.0.60';
+import './stroke-play.js?v=31.0.61';
 const {buildStrokePlaySummary,roundEntryColors,strokePlayChart,strokePlayStrip,strokePlayCallout,handicapTable,toPar}=globalThis.DYE_LEDGER_STROKE_REPORT;
 
 const packPages = globalThis.packPages;
@@ -146,7 +146,7 @@ P.forEach(p=>{
   p.parPlayed = p.playedIdx.reduce((a,i)=>a+C.par[i],0);
   p.delta = p.playedIdx.map(i=>p.gross[i]-C.par[i]);
   p.tot = sum(p.gross); p.cnetT = sum(p.cnet); p.fnetT = sum(p.fnet); p.onetT = sum(p.onet);
-  p.postable = isNum(p.postable) ? p.postable : p.tot;
+  p.postable = ROUND.meta?.teamScored ? '—' : isNum(p.postable) ? p.postable : p.tot;
   p.half = Math.ceil(NH/2);
   p.out = sum(p.gross,0,p.half); p.inn = sum(p.gross,p.half);
 });
@@ -204,6 +204,7 @@ if(HAS_MONEY && PAY.length){
 const FR = FEAT && FEAT.R;
 const STROKE=buildStrokePlaySummary(FEAT,ROUND);
 const HAS_STROKE=ROUND.games.some(game=>game.type==='strokeplay'&&!game.overviewOnly);
+
 if(HAS_STROKE){const colors=roundEntryColors(ROUND);Object.entries(SIDES).forEach(([id,side])=>side.color=colors[id]);P.forEach(player=>player.color=colors[player.id]);}
 const MARGIN = FR && FR.archetype==="margin" ? FR : null;
 if (FR && ROUND.meta?.canonicalTurningPoint?.gameId === FEAT?.id) {
@@ -323,7 +324,7 @@ function deckText(){
       parts.push("No wagers recorded on this round.");
       SIDEGAMES.map(sideGameDeckResult).filter(Boolean).forEach(result=>parts.push(result));
     }
-  } else parts.push("No featured competition on this round. Scoring and awards below.");
+  } else parts.push(ROUND.meta?.teamScored ? "Two-man Scramble. One shared-ball card per team; no wagers or individual handicap posting." : "No featured competition on this round. Scoring and awards below.");
   return parts.join(" ");
 }
 function sideGameDeckResult(game){
@@ -350,6 +351,21 @@ function sideGameDeckResult(game){
 }
 
 /* ---- side strip ---- */
+if(ROUND.meta?.teamScored) add('scramble-teams',()=>{
+  const wrapper=h('div'),table=h('table',{'data-scramble-teams':''});
+  const heading=h('tr');
+  ['Team','Holes','Gross','Course Net'].forEach(text=>heading.appendChild(h('th',{text})));
+  const head=h('thead');head.appendChild(heading);table.appendChild(head);
+  const body=h('tbody');
+  P.forEach(player=>{
+    const row=h('tr');
+    [player.name,player.nPlayed,player.tot,player.cnetT].forEach(text=>row.appendChild(h('td',{text:String(text)})));
+    body.appendChild(row);
+  });
+  table.appendChild(body);wrapper.appendChild(table);
+  wrapper.appendChild(h('p',{class:'note',text:'Team completion is independent of whole-field completion. Net uses the assigned team Course Handicap. Shared-ball cards are excluded from individual statistics and posting.'}));
+  return wrapper;
+},{keepTogetherWhenFits:true});
 if(HAS_SIDES) add("strip", ()=>{
   const outer = h("div",{class:"strip-wrap"});
   const w = h("div",{class:"strip",
@@ -601,6 +617,7 @@ if(HAS_MONEY){
 }
 
 /* ---- highlights ---- */
+if (!ROUND.meta?.teamScored) {
 add("awardsh", ()=>secHead("Highlights",
   "Ties are shown as ties, never resolved by row order."),
   {keepWithNext:true, label:"Result"});
@@ -628,6 +645,8 @@ add("awards", ()=>{
     html:`<div class="k">${k}${t?" (T)":""}</div><div class="v">${v}</div><div class="n">${n}</div>`})));
   return w;
 });
+
+}
 
 if(HAS_STROKE){
   add('handicapsh',()=>secHead('Handicaps','Allocated handicaps by competition. Partner indices are shown separately.'),{keepWithNext:true,label:'Result'});
@@ -1076,6 +1095,7 @@ SIDEGAMES.forEach((g,gi)=>{
 });
 
 /* ---- player statistics ---- */
+if (!ROUND.meta?.teamScored) {
 add("statsh", ()=>secHead("Entry statistics",
   TRACKED_PLAYERS.length ? "Scoring plus recorded ball-striking, short-game and putting statistics." : "Scoring statistics from each recorded entry; no shot statistics were recorded."),
   {keepWithNext:true, breakBefore:P.some(p=>p.statistics?.tracked?.trackedHoles), label:"Statistics"});
@@ -1202,6 +1222,8 @@ if(TRACKED_PLAYERS.length){
     {keepWithNext:true, label:"Statistics"});
   trackedStatisticsGroups("patterns").forEach(group=>
     add(`stats-patterns-${group.id}`,group.build,{splittable:true,minRows:2,keepTogetherWhenFits:true}));
+}
+
 }
 
 if(ROUND.partnership?.sides?.length){

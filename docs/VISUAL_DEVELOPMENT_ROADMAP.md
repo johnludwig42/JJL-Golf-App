@@ -1,6 +1,6 @@
 # Visual and Usability Development Roadmap
 
-**October 10 priority override:** Flamtana v31.0.60 Assigned Team Index → v31.0.61 Two-man Scramble → v31.0.62 Flamtana Special precede all further roadmap work. The event is October 16, 2026. Preferences/Setup Density and other planned work wait until this sequence is addressed. Only .60 is authorized now. See [accepted build plan](FLAMTANA_SPECIAL_BUILD_PLAN.md) for rules, correctness safeguards and manual settlement fallback.
+**October 10 priority override:** Flamtana v31.0.60 Assigned Team Index → v31.0.61 Two-man Scramble → v31.0.62 Flamtana Special precede all further roadmap work. The event is October 16, 2026. Preferences/Setup Density and other planned work wait until this sequence is addressed. v31.0.61 is now authorized. See [accepted build plan](FLAMTANA_SPECIAL_BUILD_PLAN.md) for rules, correctness safeguards and manual settlement fallback.
 
 
 Updated October 10, 2026 following the local v31.0.57 product review. This is the

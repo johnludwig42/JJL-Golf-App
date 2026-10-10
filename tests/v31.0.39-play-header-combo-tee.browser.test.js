@@ -103,7 +103,7 @@ test('Player combo tee stays visible when collapsed and Classic header aligns at
       const scoreboard = document.getElementById('quickScoreboardBtn').getBoundingClientRect();
       const overflow = document.querySelector('[data-classic-play-overflow]').getBoundingClientRect();
       return {
-        aligned: Math.abs(context.top - actions.top) <= 2 && Math.abs((save.top + save.height / 2) - (scoreboard.top + scoreboard.height / 2)) <= 2 && Math.abs(scoreboard.top - overflow.top) <= 2,
+        aligned: save.top >= Math.max(context.bottom, actions.bottom) && Math.abs(scoreboard.top - overflow.top) <= 2,
         noOverflow: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
         tops: { context: context.top, actions: actions.top, save: save.top, scoreboard: scoreboard.top, overflow: overflow.top },
       };

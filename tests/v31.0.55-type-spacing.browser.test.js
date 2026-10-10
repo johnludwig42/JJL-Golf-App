@@ -6,7 +6,9 @@ import {chrome,startServer,openVisualPage} from './support/design-browser.js';
 
 async function inspect(page){return page.evaluate(()=>{
   const issues=[],fonts=[];
-  const allowedScroll='.score-grid-wrap,.hole-grid-wrap,.leader-table-wrap,.scorecard-wrap,.payout-table-wrap,.table-scroll-region,.classic-grid-section,.team-payout-scroll-pane,.quick-scoreboard-table-wrap';
+  // Navigation deliberately scrolls within its own row at enlarged text;
+  // its focus/selection reachability is checked by the navigation browser suite.
+  const allowedScroll='.top-tabs,.score-grid-wrap,.hole-grid-wrap,.leader-table-wrap,.scorecard-wrap,.payout-table-wrap,.table-scroll-region,.classic-grid-section,.team-payout-scroll-pane,.quick-scoreboard-table-wrap';
   for(const node of document.querySelectorAll('body *')){
     if(['STYLE','SCRIPT','OPTION'].includes(node.tagName)||!node.checkVisibility({checkOpacity:true,checkVisibilityCSS:true}))continue;
     if(node.closest('.sr-only,.visually-hidden'))continue;

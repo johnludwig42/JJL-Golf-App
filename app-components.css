@@ -7,6 +7,13 @@
 }
 @media screen {
   html{scroll-padding-block-start:calc(var(--app-chrome-height,0px) + var(--space-4))}
+  /* One row at ordinary text sizes; independent horizontal scroll at larger text. */
+  .app-chrome .top-tabs.icon-tabs{display:flex;gap:var(--space-half);padding-inline:var(--space-2);overflow-x:auto;overscroll-behavior-x:contain;scroll-padding-inline:var(--space-2)}
+  .app-chrome .top-tabs.icon-tabs .tab{flex:1 0 auto;min-width:var(--control-height);min-height:54px;padding:var(--space-1) var(--space-half);gap:var(--space-half)}
+  .app-chrome .top-tabs.icon-tabs .tab-label{white-space:nowrap;overflow-wrap:normal}
+  .app-chrome .top-tabs.icon-tabs .tab-icon-svg{display:block;width:22px;height:22px;flex:0 0 auto;color:inherit}
+  .app-chrome .top-tabs.icon-tabs .tab-icon-svg svg{display:block;width:100%;height:100%}
+  .app-chrome .top-tabs.icon-tabs .tab:focus-visible{outline:2px solid var(--color-content-accent);outline-offset:-3px}
   :is(#setup,#score,#leaderboard,#courses,#players,#settings,#insights,.sheet-backdrop,.modal-backdrop,dialog) :is(button,.button-link):not(.tab) {
     box-sizing:border-box;min-height:var(--control-height);gap:var(--space-2);
     border-radius:var(--control-radius);padding:var(--space-2) var(--space-4);
@@ -29,6 +36,15 @@
   #score .classic-header-actions{align-items:flex-start}
   #score .classic-header-save-state{display:inline-flex;align-items:center;min-height:var(--control-height)}
   #score .classic-header-actions button,#score .wolf-declaration-options button{padding:var(--space-2);font-size:var(--type-label)}
+  #score .player-mode-score-choices{grid-template-columns:repeat(auto-fit,minmax(min(100%,max(72px,4rem)),1fr))}
+  #score .player-mode-score-choices>button{padding:var(--space-2) var(--space-1);overflow-wrap:normal;min-height:56px}
+  #score .player-mode-score-choices>button small{white-space:nowrap;overflow-wrap:normal}
+  #score .player-mode-more-score{height:auto;min-height:56px;align-self:stretch;border-radius:var(--control-radius)}
+  #score :is(.player-mode-score-row,.player-mode-stat-card,.classic-hole-command,.round-progress-card){border-radius:var(--surface-radius)}
+  #score .player-mode-player-select{border-radius:0;text-align:left}
+  #score .player-mode-bottom-actions{z-index:1401}
+  /* A keyboard-height viewport cannot accommodate two tall sticky headers. */
+  @media (max-height:600px){#score .player-mode-hole-header{position:static}}
   :is(#setup,#courses,#players,#settings,#insights) :is(.card,.item,.library-item) {
     border-radius:var(--surface-radius);padding:var(--space-4);
   }

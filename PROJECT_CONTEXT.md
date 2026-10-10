@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current development release: **v31.0.57 — Component Consistency** on `codex/v31.0.57-component-consistency`. A screen-only component layer unifies control sizing/states, card/list spacing and overlay headings/scrolling. Footer ink is readable and wraps with larger text. Numeric steppers and player-name controls have 44px minimum touch heights; important declarations fall from 640 to 617. The color/type foundations and fixed paper styles are retained. Scoring, records, storage and shared matches are unchanged. See `BUILD_NOTES_v31.0.57.md` and `docs/SCREEN_COMPONENTS.md`. v31.0.58 follows with Play/Insights consistency and tab icon migration. Bottom navigation remains deferred. Real iPhone Larger Text/keyboard acceptance is separate from browser verification.
+Current development release: **v31.0.58 — Play & Navigation** on `codex/v31.0.58-play-navigation`. Score choices reflow with intact labels; Play shares component surface shapes. Main navigation uses six labeled SVG icons in a compact top row, scrolling independently at enlarged text sizes with current-page semantics and selected-tab visibility. Insights links to existing Scores statistics and Library rounds without introducing analytics. The v31.0.57 component/footer/Memory improvements and fixed paper styles are retained. Scoring, records, storage and shared matches are unchanged. See `BUILD_NOTES_v31.0.58.md` and `docs/VISUAL_DEVELOPMENT_ROADMAP.md`. Next: Preferences/setup density, Results/overlays, then separately scoped useful Insights. Bottom navigation remains deferred. Real iPhone Larger Text/keyboard acceptance is separate from browser verification.
 
 ## 2. Development Roles
 
@@ -186,6 +186,8 @@ v31.0.09 — Release Assurance & Offline Ledger Reliability
 ```
 
 ## 8. Near-Term Roadmap
+
+Updated October 10, 2026: the [Visual and Usability Development Roadmap](docs/VISUAL_DEVELOPMENT_ROADMAP.md) is the current visual-program sequence. v31.0.58 delivers narrow Player Mode score labels, Play consistency, SVG tab icons, compact top navigation and Insights presentation in development. Follow with Preferences/setup density, consolidated Results status and consistent overlays, then separately scoped useful Insights and actionable empty states. Bottom navigation remains deferred. Real iPhone and four-device Shared Match acceptance remain open; roadmap inclusion is not deployment. Later release numbers are assigned during planning.
 
 The approved Games Development Roadmap also includes input/visual refinements: clearer game selection, simpler settings, contextual hole inputs, compact active-game navigation, visible skins/carry details, shared rules examples, and balance drill-ins. Integrate these with related game releases, preserve existing specialty headers, and validate small-iPhone usability before acceptance.
 

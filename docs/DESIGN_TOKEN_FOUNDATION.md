@@ -6,9 +6,14 @@
 2. v31.0.53: system dark-mode palette and AA body-text contrast.
 3. v31.0.54: focused stroke-play Ledger Entry report interlude.
 4. v31.0.55: rem typography and spacing scales, minimum readable text, real iOS Larger Text acceptance.
-5. v31.0.56: buttons, grouped rows, and a common sheet component layer.
-6. v31.0.57: bring Play and Insights into the experience system and connect the existing SVG navigation assets.
-7. v31.0.58: density, preferences, empty states, and balance detail within Quick Scoreboard.
+5. v31.0.56: semantic color-token consolidation and separate action/accent roles.
+6. v31.0.57: common controls, cards and overlays; footer and Memory dismissal fixes.
+7. v31.0.58: Play consistency, narrow score-label readability, navigation SVG icons, compact top navigation and Insights presentation.
+
+The [Visual and Usability Development Roadmap](VISUAL_DEVELOPMENT_ROADMAP.md)
+records the October 10, 2026 review and remaining sequence: Preferences/setup
+density, Results/overlay clarity, separately scoped useful Insights, and later
+navigation evaluation. Subsequent release numbers are unassigned.
 
 Bottom navigation is deferred. Any later prototype must account for score-entry controls, the keyboard and safe areas. Diagnostics remain quickly reachable. Domain logic, Round/record contracts, persistence and shared scoring are outside this program.
 

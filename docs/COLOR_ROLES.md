@@ -53,3 +53,7 @@ dark suite continues to check visible app text broadly. A broader light scan fou
 the dim build-date footer at approximately 2.91:1. Its appearance is preserved by
 this release's exact-light invariant; address it in a separately approved
 accessibility/component change rather than silently restyling it here.
+
+v31.0.57 addresses that footer with full-opacity secondary ink in the separate
+screen component layer. The isolated color-refactor baseline remains frozen;
+current component browser checks assert the corrected contrast.

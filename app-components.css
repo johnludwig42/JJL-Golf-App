@@ -1,0 +1,63 @@
+/* Screen components. Paper retains the independent fixed stylesheet. */
+:root {
+  --control-height: 44px;
+  --control-radius: 12px;
+  --surface-radius: 16px;
+  --overlay-radius: 20px;
+}
+@media screen {
+  html{scroll-padding-block-start:calc(var(--app-chrome-height,0px) + var(--space-4))}
+  :is(#setup,#score,#leaderboard,#courses,#players,#settings,#insights,.sheet-backdrop,.modal-backdrop,dialog) :is(button,.button-link):not(.tab) {
+    box-sizing:border-box;min-height:var(--control-height);gap:var(--space-2);
+    border-radius:var(--control-radius);padding:var(--space-2) var(--space-4);
+    font-size:var(--type-secondary);font-weight:var(--weight-semibold);line-height:var(--leading-control);
+    white-space:normal;overflow-wrap:anywhere;touch-action:manipulation;
+    transition:background-color .15s ease,border-color .15s ease,box-shadow .15s ease;
+  }
+  :is(#setup,#score,#leaderboard,#courses,#players,#settings,#insights,.sheet-backdrop,.modal-backdrop,dialog) :is(button,.button-link):focus-visible {
+    outline:2px solid var(--color-content-accent);outline-offset:3px;
+  }
+  :is(#setup,#score,#leaderboard,#courses,#players,#settings,#insights,.sheet-backdrop,.modal-backdrop,dialog) button:disabled {
+    opacity:1;cursor:default;background:var(--color-surface-disabled);color:var(--color-content-disabled);box-shadow:none;
+  }
+  @media (hover:hover) {
+    :is(button,.button-link):not(.tab):not(:disabled):hover{filter:brightness(.96)}
+  }
+  :is(button,.button-link):not(.tab):not(:disabled):active{filter:brightness(.92)}
+  #score .gross-score-stepper button,#score .stat-step-btn{padding:var(--space-1);border-radius:var(--control-radius);height:max(44px,2.5rem);min-height:max(44px,2.5rem)}
+  #score .gross-score-stepper button{width:44px;min-width:44px}
+  #score .classic-header-actions{align-items:flex-start}
+  #score .classic-header-save-state{display:inline-flex;align-items:center;min-height:var(--control-height)}
+  #score .classic-header-actions button,#score .wolf-declaration-options button{padding:var(--space-2);font-size:var(--type-label)}
+  :is(#setup,#courses,#players,#settings,#insights) :is(.card,.item,.library-item) {
+    border-radius:var(--surface-radius);padding:var(--space-4);
+  }
+  :is(.item-header,.library-item-header){align-items:flex-start;gap:var(--space-3);flex-wrap:wrap}
+  :is(.item-header,.library-item-header) .actions{gap:var(--space-2);flex-wrap:wrap}
+  :is(.item-title,.library-item-identity){min-width:0;overflow-wrap:anywhere}
+  :is(.sheet-header,.quick-scoreboard-topbar,.player-detail-topbar,.balance-explanation-header) {
+    display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-3);flex-wrap:wrap;
+  }
+  :is(.sheet-header,.quick-scoreboard-topbar,.player-detail-topbar) {
+    padding:var(--space-4);border-bottom:1px solid var(--color-border-default);
+  }
+  :is(.sheet-header,.quick-scoreboard-topbar,.player-detail-topbar,.balance-explanation-header) :is(h2,h3){margin:0;line-height:var(--leading-heading)}
+  :is(.sheet-header,.quick-scoreboard-topbar,.player-detail-topbar,.balance-explanation-header) button{flex:0 0 auto;min-width:var(--control-height)}
+  .sheet-card{border-radius:var(--overlay-radius);max-height:calc(100dvh - var(--keyboard-offset,0px) - 2 * var(--space-4) - env(safe-area-inset-top) - env(safe-area-inset-bottom));min-height:0;overflow-y:auto;overscroll-behavior:contain}
+  .sheet-results{min-height:0;overscroll-behavior:contain;scroll-padding:var(--space-4);padding:var(--space-4)}
+  .sheet-search{padding:var(--space-3) var(--space-4)}
+  .modal-backdrop{padding:var(--space-4);overflow:auto;overscroll-behavior:contain}
+  .modal-card{box-sizing:border-box;border-radius:var(--overlay-radius);max-height:calc(100dvh - 2 * var(--space-4) - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow:auto;overscroll-behavior:contain}
+  :is(#roundEndPrompt,#postRoundActionsPrompt,#playerDetailDialog,#addMemoryDialog,#newMatchConflictDialog) :is(.modal-card,.sheet-card){max-height:calc(100dvh - var(--keyboard-offset,0px) - 2 * var(--space-4) - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+  .sheet-header{position:sticky;top:0;z-index:5;background:var(--color-surface-card)}
+  dialog.balance-explanation-dialog{border-radius:var(--overlay-radius);max-height:calc(100dvh - 2 * var(--space-4));overscroll-behavior:contain;scroll-padding:var(--space-4)}
+  .quick-scoreboard-modal{border-radius:var(--overlay-radius)}
+  .player-search-result,.sheet-action{border-radius:var(--control-radius);min-height:var(--control-height);text-align:left}
+  .app-footer-version{position:static;inset:auto;width:auto;min-height:var(--control-height);margin:0 var(--space-3) var(--space-3);box-sizing:border-box}
+  .app-footer-version #appVersionFooterBuild{opacity:1;color:var(--color-content-secondary);white-space:normal;max-width:100%;min-width:0;overflow-wrap:anywhere}
+  @media (max-width:760px){
+    .sheet-backdrop{padding:0;align-items:flex-end}
+    .sheet-card{border-radius:var(--overlay-radius) var(--overlay-radius) 0 0;max-height:calc(100dvh - env(safe-area-inset-top));padding-bottom:env(safe-area-inset-bottom)}
+  }
+  @media (prefers-reduced-motion:reduce){:is(button,.button-link){transition:none}}
+}

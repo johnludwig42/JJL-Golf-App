@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current development release: **v31.0.56 — Token Consolidation** on `codex/v31.0.56-token-consolidation`. Color roles separate filled actions from accent ink and remove numbered names. A 38-role shared palette is documented alongside exact surface-specific and paper roles; total roles remain 322 because exact light pixels take precedence over the proposed 30–40 total. Eight redundant dark override rules are removed; ten remain for native placeholders and shared screen/export surfaces. Typography and print metrics from v31.0.55 are preserved, as are scoring, records, storage and shared matches. See `BUILD_NOTES_v31.0.56.md` and `docs/COLOR_ROLES.md`. Components shift to v31.0.57; Play/Insights consistency and icon migration shift to v31.0.58. Bottom navigation remains deferred. Real iPhone Larger Text/keyboard acceptance is separate from browser verification.
+Current development release: **v31.0.57 — Component Consistency** on `codex/v31.0.57-component-consistency`. A screen-only component layer unifies control sizing/states, card/list spacing and overlay headings/scrolling. Footer ink is readable and wraps with larger text. Numeric steppers and player-name controls have 44px minimum touch heights; important declarations fall from 640 to 617. The color/type foundations and fixed paper styles are retained. Scoring, records, storage and shared matches are unchanged. See `BUILD_NOTES_v31.0.57.md` and `docs/SCREEN_COMPONENTS.md`. v31.0.58 follows with Play/Insights consistency and tab icon migration. Bottom navigation remains deferred. Real iPhone Larger Text/keyboard acceptance is separate from browser verification.
 
 ## 2. Development Roles
 

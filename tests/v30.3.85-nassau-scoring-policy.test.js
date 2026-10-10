@@ -122,7 +122,7 @@ test('setup and scorecard UX expose the approved model without altering the clas
   assert.match(app, /toggleButton\('match', 'Match Net'/);
   assert.match(app, /aria-pressed="\$\{active \? 'true' : 'false'\}"/);
   assert.match(app, /Individual totals use Course Net based on each player’s full Course Handicap\./);
-  assert.match(css, /scorecard-view-controls \.segmented-control button\.active\{background:var\(--accent,#0b5d3b\);color:#fff/);
+  assert.match(css, /scorecard-view-controls \.segmented-control button\.active\{background:#0b5d3b;color:#fff/);
   assert.doesNotMatch(css, /scorecard-view-controls[^\n]*(?:--green|--ink|--surface-soft)/);
   assert.match(app, /scorecard-sticky-name/);
   assert.match(app, /scorecard-sticky-team/);

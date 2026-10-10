@@ -17,6 +17,7 @@ export function startServer() {
       response.writeHead(200, { 'Content-Type': contentTypes[extname(file).toLowerCase()] || 'application/octet-stream' });
       let body=readFileSync(file);
       if(pathname==='index.html' && parsedUrl.searchParams.get('auditStyle')==='baseline')body=body.toString().replace(/href="style\.css[^"]*"/,'href="tests/fixtures/design/light-style-baseline.css"').replace(/<link[^>]*href="app-print\.css[^>]*>/,'');
+      if(pathname==='index.html' && parsedUrl.searchParams.get('auditStyle')==='tokens')body=body.toString().replace(/href="style\.css[^"]*"/,'href="tests/fixtures/design/token-consolidation-baseline.css"');
       response.end(body);
     } catch {
       if (!response.headersSent) response.writeHead(404);
@@ -54,7 +55,7 @@ export async function openVisualPage(browser,url,scenario,width,baseline=false,d
   await page.setRequestInterception(true);
   page.on('request',request=>request.url().startsWith(url)?request.continue():request.abort());
   const errors=[];page.on('pageerror',error=>errors.push(String(error)));
-  await page.goto(url+'index.html'+(baseline?'?auditStyle=baseline':''),{waitUntil:'networkidle0'});
+  await page.goto(url+'index.html'+(baseline?'?auditStyle='+(baseline==='tokens'?'tokens':'baseline'):''),{waitUntil:'networkidle0'});
   await page.addStyleTag({content:'*,*::before,*::after{animation:none!important;transition:none!important}'});
   if(['classic','player','player-expanded','player-stats','quick','quick-charts','overflow'].includes(scenario))await page.click('[data-tab="score"]');
   if(['player-expanded','player-stats'].includes(scenario) && !await page.$('.player-mode-player-detail'))await page.click('.player-mode-player-select');

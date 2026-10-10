@@ -43,6 +43,13 @@ baseline continues to protect color declarations and computed paints; exact
 paper metrics and screenshot equality are retained through `app-print.css`.
 The separate type-scale tests check minimum text size and enlarged-text reflow.
 
+In v31.0.56 the color registry is consolidated and its numbered extraction names
+are replaced by shared or surface/state-specific roles. The original baseline
+remains frozen; source checks resolve compatibility aliases and normalize only
+equivalent white/hex/decimal notation. A separate frozen v31.0.55 baseline checks
+exact computed styles and pixels. See [Color roles](COLOR_ROLES.md) for the shared
+palette, retained exact-paint roles and remaining dark exceptions.
+
 Print families are intentionally fixed to their light values. Later dark-mode overrides should be screen-scoped, and must not override the `--color-print-*` families. Ledger Entry has its own stylesheet and remains light. Both print-media checks and the complete `npm run check:layout` HTML/PDF/iOS reference gate remain mandatory.
 
 ## Approval

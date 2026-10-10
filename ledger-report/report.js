@@ -3,9 +3,9 @@
    or derived from it. Stroke allocation comes from the app's engine, keyed by
    basis; the report never re-derives handicapping.
    ========================================================================== */
-import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.61';
+import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.62';
 
-import './stroke-play.js?v=31.0.61';
+import './stroke-play.js?v=31.0.62';
 const {buildStrokePlaySummary,roundEntryColors,strokePlayChart,strokePlayStrip,strokePlayCallout,handicapTable,toPar}=globalThis.DYE_LEDGER_STROKE_REPORT;
 
 const packPages = globalThis.packPages;
@@ -100,9 +100,10 @@ document.title = `Ledger Entry Report — ${ROUND.meta.course}, ${new Intl.DateT
    ========================================================================== */
 const C = ROUND.card, HOLES = ROUND.holes, NH = HOLES.length;
 const P = ROUND.players, SIDES = ROUND.sides;
+const MONEY_PLAYERS = ROUND.settlementPlayers || P;
 const PAR_TOTAL = C.par.reduce((a,b)=>a+b,0);
 const S = id => P.find(p=>p.id===id);
-const nameOf = id => S(id)?.name || SIDES[id]?.name || id;
+const nameOf = id => S(id)?.name || MONEY_PLAYERS.find(player=>player.id===id)?.name || SIDES[id]?.name || id;
 const isNum = v => typeof v==="number" && Number.isFinite(v);
 const played = v => isNum(v) && v>0;      /* null gross = hole not played */
 const sum = (a,f=0,t=a.length) => a.slice(f,t).reduce((x,y)=>x+(isNum(y)?y:0),0);
@@ -195,9 +196,9 @@ const SIDEGAMES = ROUND.games.filter(g=>!g.featured&&!['ninepoint','sixes','wolf
               - Object.values(a.moneyBy).filter(v=>v>0).reduce((x,y)=>x+y,0));
 
 if(HAS_MONEY && PAY.length){
-  const chk={}; P.forEach(p=>chk[p.id]=0);
+  const chk={}; MONEY_PLAYERS.forEach(p=>chk[p.id]=0);
   PAY.forEach(x=>{chk[x.from]-=x.amt; chk[x.to]+=x.amt;});
-  P.forEach(p=>{ if(Math.abs(chk[p.id]-moneyOf(p.id))>1e-9)
+  MONEY_PLAYERS.forEach(p=>{ if(Math.abs(chk[p.id]-moneyOf(p.id))>1e-9)
     console.error(`SETTLEMENT MISMATCH ${p.name}: games ${moneyOf(p.id)} vs payments ${chk[p.id]}`); });
 }
 
@@ -284,7 +285,10 @@ add("hero", ()=>{
       ? `${listw(tied.map(p=>p.name))} — tied low net, ${lo.cnetT}`
       : `${lo.name} — low net, ${lo.cnetT}`;
   }
-  w.appendChild(h("h1",{html:head}));
+  if(ROUND.meta?.flamtanaFinal && FEAT?.finalization?.final) {
+    w.appendChild(h('h1',{text:FEAT.finalization.winnerIds.map(nameOf).join(' and ')+' — Featured '+(FEAT.finalization.winnerIds.length>1?'split':'winner')}));
+    w.appendChild(h('p',{class:'deck',text:head+' · Saved card-off evidence below.'}));
+  } else w.appendChild(h("h1",{html:head}));
   w.appendChild(h("p",{class:"deck",text:deckText()}));
   return w;
 });
@@ -590,16 +594,34 @@ if(FR && FR.turning && !STROKE) add("turning", ()=>{
   return w;
 });
 
+/* Saved Flamtana evidence; no result is inferred from chart margins. */
+if(ROUND.meta?.flamtana) {
+  add('flamtana-evidence-head',()=>secHead('Flamtana results and tie evidence', ROUND.meta.flamtanaFinal ? 'Final saved results · stroke totals, never holes won.' : 'Provisional · card-off and payments await finalization.'),{keepWithNext:true});
+  (ROUND.meta.flamtanaEvidence || []).forEach((component,index)=>add('flamtana-evidence-'+index,()=>{
+    const w=h('div',{'data-flamtana-evidence':component.label});
+    w.appendChild(h('div',{class:'subhead',text:component.label}));
+    w.appendChild(h('p',{text:component.result.final ? 'Winner'+(component.result.winnerIds.length>1?'s: ':': ')+component.result.winnerIds.map(nameOf).join(' / ')+(component.result.split?' · split':'') : 'Provisional'}));
+    (component.result.evidence||[]).forEach(step=>w.appendChild(h('p',{text:step.label+': '+step.totals.map(row=>nameOf(row.id)+' '+row.total).join(' / ')})));
+    (component.result.shares||[]).forEach(share=>w.appendChild(h('p',{text:nameOf(share.teamId)+' pool share '+usd(share.grossPoolShare)+' to '+share.recipients.map(nameOf).join(' / ')+(share.unbacked?' (unbacked; partners paid)':'')})));
+    return w;
+  }));
+  add('flamtana-picks',()=>{
+    const w=h('div',{'data-flamtana-picks':''});w.appendChild(h('div',{class:'subhead',text:'Eight saved Calcutta picks'}));
+    (ROUND.flamtanaPicks||[]).forEach(pick=>w.appendChild(h('p',{'data-row':'',text:pick.name+' backs '+nameOf(pick.teamId)})));
+    return w;
+  },{splittable:true,minRows:2});
+}
+
 /* ---- settlement ---- */
 if(HAS_MONEY){
   add("settleh", ()=>secHead("Settlement",
-    `${cap(plur(ROUND.games.length,"game"))}, netted to ${plur(PAY.length,"payment")}.`),
+    `${ROUND.meta?.flamtana ? "Four wagers, five result components" : cap(plur(ROUND.games.length,"game"))}, netted to ${plur(PAY.length,"payment")}.`),
     {keepWithNext:true});
   add("settle", ()=>{
     const w=h("div",{class:"split"});
     const gs = ROUND.games;
     const cols = `<colgroup><col style="width:38%">${gs.map(()=>`<col style="width:${52/gs.length}%">`).join("")}<col style="width:20%"></colgroup>`;
-    const rows = P.map(p=>`<tr data-row><td class="l">${nameCell(p)}</td>
+    const rows = MONEY_PLAYERS.map(p=>`<tr data-row><td class="l">${nameCell(p)}</td>
       ${gs.map(g=>`<td class="n ${(g.moneyBy[p.id]||0)<0?'neg':''}">${acct(g.moneyBy[p.id]||0)}</td>`).join("")}
       <td class="n ${moneyOf(p.id)<0?'neg':'pos'}">${acct(moneyOf(p.id))}</td></tr>`).join("");
     w.appendChild(h("div",{html:
@@ -813,7 +835,7 @@ if(ROUND.meta.weather || ROUND.memories.length){
 /* ---- leaderboard ---- */
 ROUND.games.filter(game=>game.type==="strokeplay" && !game.overviewOnly).forEach((game,index)=>{
   add(`stroke-standings-header-${index}`,()=>secHead(`${game.name} standings`,
-    `${game.basis==='gross'?'Gross':'Net'} · ${game.scoringMode?.replace('_',' ') || 'individual'} · ${game.allowance.label}`),
+    `${game.basis==='gross'?'Gross':'Net'} · ${game.scoringMode?.replace('_',' ') || (ROUND.meta?.teamScored ? 'team stroke total' : 'individual')} · ${game.allowance.label}`),
     {keepWithNext:true,breakBefore:index===0,label:"Leaderboards"});
   add(`stroke-standings-${index}`,()=>{
     const rows=game.R?.ranked || [];
@@ -821,7 +843,7 @@ ROUND.games.filter(game=>game.type==="strokeplay" && !game.overviewOnly).forEach
     const html=rows.map(row=>{
       const tied=rows.filter(other=>score(other)===score(row)).length>1;
       const rank=rows.findIndex(other=>score(other)===score(row))+1;
-      const money=game.seriesByHole ? sideOf(row.id).reduce((total,player)=>total+(game.moneyBy[player.id]||0),0) : (game.moneyBy[row.id]||0);
+      const money=game.seriesByHole ? (game.sides?.find(side=>side.key===row.id)?.playerIds || sideOf(row.id).map(player=>player.id)).reduce((total,id)=>total+(game.moneyBy[id]||0),0) : (game.moneyBy[row.id]||0);
       return `<tr data-row><td>${tied?'T':''}${rank}</td><td style="color:${SIDES[row.id]?.color||S(row.id)?.color||'#14211c'}">${nameOf(row.id)}</td><td class="n">${row.holesScored}</td><td class="n"><b>${score(row)}</b></td><td class="n">${row.total>0?'+':''}${row.total}</td><td class="n">${acct(money)}</td></tr>`;
     }).join('');
     const w=h('div');w.innerHTML=`<table data-stroke-standings><thead data-rowhead><tr><th>Rank</th><th>Entry / team</th><th class="n">Holes</th><th class="n">${game.basis==='gross'?'Gross':'Game net'}</th><th class="n">To par</th><th class="n">Winnings</th></tr></thead><tbody>${html}</tbody></table><div class="note">${game.R?.complete?'Final scores; tied scores share a rank.':'Provisional scores; compare only entries with equal completed-hole counts.'}</div>`;
@@ -1063,6 +1085,17 @@ SIDEGAMES.forEach((g,gi)=>{
       const summary=buildStrokePlaySummary(g,ROUND);w.className='stroke-detail';
       w.innerHTML=strokePlayChart(summary,ROUND)+strokePlayStrip(summary,ROUND,'position')+'<p class="note"></p>';
       w.querySelector('p.note').textContent=strokePlayCallout(summary,ROUND);return w;
+    }
+    if(ROUND.meta?.flamtana && g.type==='settlement'){
+      const table=h('table',{class:'dense','data-calcutta-ledger':''}),body=h('tbody');
+      MONEY_PLAYERS.forEach(player=>{
+        const row=h('tr',{'data-row':''}),pick=ROUND.flamtanaPicks.find(saved=>saved.playerId===player.id);
+        row.appendChild(h('td',{text:player.name}));row.appendChild(h('td',{text:'Backs '+nameOf(pick?.teamId)}));
+        row.appendChild(h('td',{class:'n',text:acct(g.moneyBy[player.id]||0)}));body.appendChild(row);
+      });
+      table.appendChild(body);w.appendChild(table);
+      w.appendChild(h('p',{class:'note',text:g.finalization?.final ? 'Final Calcutta net positions. The pool follows the saved Featured result; tied-team shares and unbacked partners are recorded in the evidence above.' : 'Provisional Calcutta. No payments are final until the Featured result is finalized.'}));
+      return w;
     }
     if(g.R && g.R.archetype==="discrete"){
       const rows=g.R.per.map(x=>`<tr data-row><td class="l">H${x.hole}</td>

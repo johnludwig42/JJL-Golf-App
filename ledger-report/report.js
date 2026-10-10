@@ -3,9 +3,9 @@
    or derived from it. Stroke allocation comes from the app's engine, keyed by
    basis; the report never re-derives handicapping.
    ========================================================================== */
-import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.58';
+import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.59';
 
-import './stroke-play.js?v=31.0.58';
+import './stroke-play.js?v=31.0.59';
 const {buildStrokePlaySummary,roundEntryColors,strokePlayChart,strokePlayStrip,strokePlayCallout,handicapTable,toPar}=globalThis.DYE_LEDGER_STROKE_REPORT;
 
 const packPages = globalThis.packPages;

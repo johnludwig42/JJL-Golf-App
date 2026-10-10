@@ -33,6 +33,8 @@ Local inspection does not establish deployed status or physical-device acceptanc
 | v31.0.58 | Intact score labels, shared Play surfaces, compact SVG navigation, links to existing statistics/history from Insights |
 
 Development delivery is distinct from live promotion and real iPhone acceptance.
+The Product Owner confirmed all eight v31.0.58 manual iPhone checks passed on
+October 10, 2026. Four-device Shared Match acceptance remains separate.
 
 ## Remaining sequence
 
@@ -40,7 +42,7 @@ Development delivery is distinct from live promotion and real iPhone acceptance.
 
 The compact top row recovers 56px on the tested 375px phone at normal text size.
 Normal text fits all six tabs at 320/375/430px; enlarged text scrolls within the
-navigation row. Real-device acceptance remains pending. The scope below records
+navigation row. All eight manual iPhone acceptance checks passed. The scope below records
 the delivery and its acceptance contract.
 
 - First fix Eagle/Birdie and other score-choice labels at narrow phone widths.
@@ -61,7 +63,17 @@ the delivery and its acceptance contract.
   enlarged text and keyboard-open scoring. Score choices remain legible; active tab,
   navigation, save/advance and game facts remain accessible without page overflow.
 
-### 2. Preferences and setup density — NEXT focused release
+### 2. v31.0.59 — Play Screen Refinement — development delivered
+
+- Move collapsed Round rules below scoring, save controls and guidance in both views.
+- Keep Classic Prev / Hole / Next together; allow readable Par, yardage and SI.
+- Preserve direct Scoreboard access and a compact, comfortable overflow button.
+- Give save and backup status a separate readable row in both views.
+- Preserve larger text, touch targets, specialty game facts and existing behavior.
+- Verified narrow phones, both appearances, enlarged text, keyboard-height saving,
+  overflow access and all seven release gates (1,327 tests). Real iPhone acceptance pending.
+
+### 3. Preferences and setup density — NEXT after Play refinement
 
 - Group Preferences into concise rows; use accessible trailing switches for binary
   choices and segmented controls for genuine alternatives such as Classic/Player.
@@ -72,7 +84,7 @@ the delivery and its acceptance contract.
   are easy to locate, saved values survive disclosure/mode changes, and enlarged
   text remains readable. Compare representative tasks and scrolling before/after.
 
-### 3. Results clarity and overlay consistency — subsequent focused release
+### 4. Results clarity and overlay consistency — subsequent focused release
 
 - Consolidate Round Status, Round status and Match status into one clear progress
   summary with focused competition detail.
@@ -86,7 +98,7 @@ the delivery and its acceptance contract.
   reachable within two taps, reliable back/close/focus behavior, and reachable
   controls with the scoring keyboard open. Diagnostics stay quick to reach.
 
-### 4. Useful Insights and actionable empty states — separately scoped feature
+### 5. Useful Insights and actionable empty states — separately scoped feature
 
 - Replace the Coming Soon destination with a small useful first experience.
 - Audit existing authoritative statistics and coverage first. Prefer question-led
@@ -100,7 +112,7 @@ the delivery and its acceptance contract.
   Define eligibility, sample-size/coverage disclosure, architecture and tests before
   implementation; preserve existing Insights Foundation commitments.
 
-### 5. Navigation prototype and final acceptance — after the preceding work
+### 6. Navigation prototype and final acceptance — after the preceding work
 
 - Reassess whether compact top navigation solves the space problem before deciding
   whether to prototype bottom navigation.
@@ -110,7 +122,7 @@ the delivery and its acceptance contract.
   actual devices exercising Shared Match offline/reconnect, corrections, pending
   saves and completion parity. Automated simulations do not replace these checks.
 
-Versions after v31.0.58 are unassigned until each release is scoped. Physical-device
+Versions after v31.0.59 are unassigned until each release is scoped. Physical-device
 acceptance should accompany every applicable release, not wait for the final stage.
 
 ## Guardrails and broader roadmap

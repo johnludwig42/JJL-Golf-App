@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current development release: **v31.0.55 — Type and Spacing Scale** on `codex/v31.0.55-type-spacing-scale`. Screen typography uses shared rem-based roles, minimum readable text, calmer weights/case and fixed logical spacing steps. Touch WebKit uses its system-body Dynamic Type hook; score choices, preferences and actions reflow with larger text. SVG annotation sizes remain readable after viewBox scaling. Fixed print metrics are isolated in `app-print.css`; Ledger Entry is unchanged. Scoring, records, persistence and shared matches are preserved. See `BUILD_NOTES_v31.0.55.md`. Components follow in v31.0.56; bottom navigation remains deferred. Real iPhone Larger Text/keyboard acceptance is separate from browser verification.
+Current development release: **v31.0.56 — Token Consolidation** on `codex/v31.0.56-token-consolidation`. Color roles separate filled actions from accent ink and remove numbered names. A 38-role shared palette is documented alongside exact surface-specific and paper roles; total roles remain 322 because exact light pixels take precedence over the proposed 30–40 total. Eight redundant dark override rules are removed; ten remain for native placeholders and shared screen/export surfaces. Typography and print metrics from v31.0.55 are preserved, as are scoring, records, storage and shared matches. See `BUILD_NOTES_v31.0.56.md` and `docs/COLOR_ROLES.md`. Components shift to v31.0.57; Play/Insights consistency and icon migration shift to v31.0.58. Bottom navigation remains deferred. Real iPhone Larger Text/keyboard acceptance is separate from browser verification.
 
 ## 2. Development Roles
 

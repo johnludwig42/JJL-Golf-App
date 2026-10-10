@@ -45,6 +45,8 @@ export function isColorTokenDeclaration(declaration) {
 
 export function auditStyleContract(css, exceptions = {}) {
   const root = postcss.parse(css);
+  const colorTokens=new Set();
+  root.walkDecls(d=>{if(isColorTokenDeclaration(d))colorTokens.add(d.prop);});
   const designTokens=new Set();
   root.walkDecls(declaration=>{if(declaration.parent.selector===':root'&&/^--(?:type|space|weight|leading)-/.test(declaration.prop))designTokens.add(declaration.prop);});
   const violations = [];
@@ -54,6 +56,8 @@ export function auditStyleContract(css, exceptions = {}) {
   root.walkDecls(declaration => {
     const key = declarationKey(declaration);
     const location = `${declaration.source.start.line}:${declaration.source.start.column}`;
+    if(/^--color-.*-\d+$/.test(declaration.prop))violations.push(`${location} numbered color token is forbidden; name its intended role: ${declaration.prop}`);
+    for(const match of declaration.value.matchAll(/var\((--color-[a-z\d-]+)/g))if(!colorTokens.has(match[1]))violations.push(`${location} undefined color role ${match[1]}`);
     if(/^--(?:type|space|weight|leading)-/.test(declaration.prop)&&declaration.parent.selector!==':root')violations.push(`${location} design token override outside the root layer: ${key}`);
     for(const match of declaration.value.matchAll(/var\((--(?:type|space|weight|leading)-[a-z\d-]+)/g)){
       if(!designTokens.has(match[1]))violations.push(`${location} undefined design token ${match[1]}: ${key}`);
@@ -94,10 +98,15 @@ export function expandColorTokens(css) {
   });
   const tokens = new Map();
   root.walkDecls(declaration => { if (isColorTokenDeclaration(declaration)) tokens.set(declaration.prop, declaration.value); });
-  const expand = value => value.replace(/var\((--color-[a-z\d-]+)\)/g, (_, key) => {
+  const expand = (value,depth=0) => {
+    if(depth>20)throw new Error('Cyclic color recipe');
+    const expanded=value.replace(/var\((--color-[a-z\d-]+)(?:,[^()]*)?\)/g, (_, key) => {
     if (!tokens.has(key)) throw new Error(`Undefined color token: ${key}`);
-    return tokens.get(key);
+    return expand(tokens.get(key),depth+1);
   });
+    if(/var\(--color-/.test(expanded))return expand(expanded,depth+1);
+    return expanded;
+  };
   root.walkDecls(declaration => { if (!isColorTokenDeclaration(declaration)) declaration.value = expand(declaration.value); });
   root.walkRules(rule => { if (rule.nodes.every(node => node.type === 'comment' || (node.type === 'decl' && isColorTokenDeclaration(node)))) rule.remove(); });
   return root.toString();

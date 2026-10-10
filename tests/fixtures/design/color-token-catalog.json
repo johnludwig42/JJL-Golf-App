@@ -2,1299 +2,381 @@
   {
     "name": "--color-surface-page",
     "value": "#f3f6f4",
-    "family": "surface-page",
+    "family": "surface",
     "usage": [
       ":root",
       ":root"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "surface page"
   },
   {
     "name": "--color-surface-card",
-    "value": "#ffffff",
-    "family": "surface-card",
+    "value": "#fff",
+    "family": "surface",
     "usage": [
       ":root",
       ":root",
       ".momentum-pill.tied",
-      ".momentum-pill.tied"
-    ]
+      ".momentum-pill.tied",
+      "#leaderboard .scores-outcome-hero",
+      ".game-pill",
+      ".mini-check",
+      ".scorecard-wrap",
+      "input, select, textarea",
+      ".hole-grid-wrap, .score-grid-wrap, .leader-table-wrap",
+      ".game-pill",
+      ".payout-game-table,.settlement-table",
+      ".momentum-chart .momentum-side-label",
+      ".momentum-point-value",
+      ".ssp-momentum-final"
+    ],
+    "scope": "shared",
+    "purpose": "surface card"
   },
   {
     "name": "--color-content-primary",
     "value": "#19312a",
-    "family": "content-primary",
+    "family": "content",
     "usage": [
       ":root",
       ":root"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "content primary"
   },
   {
     "name": "--color-content-secondary",
     "value": "#5b6f68",
-    "family": "content-secondary",
+    "family": "content",
     "usage": [
       ":root",
       ":root"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "content secondary"
   },
   {
     "name": "--color-action-primary",
     "value": "#0b5d3b",
-    "family": "action-primary",
+    "family": "action",
     "usage": [
       ":root",
-      ":root"
-    ]
+      ":root",
+      ".experience-destination-card:hover,.experience-destination-card:focus-visible"
+    ],
+    "scope": "shared",
+    "purpose": "action primary"
   },
   {
     "name": "--color-surface-accent-subtle",
     "value": "#e7f4ee",
-    "family": "surface-accent-subtle",
+    "family": "surface",
     "usage": [
       ":root",
       ":root"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "surface accent subtle"
   },
   {
     "name": "--color-border-default",
     "value": "#d7e3dc",
-    "family": "border-default",
+    "family": "border",
     "usage": [
       ":root",
       ":root"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "border default"
   },
   {
     "name": "--color-content-danger",
     "value": "#8c2c2c",
-    "family": "content-danger",
+    "family": "content",
     "usage": [
       ":root",
       ":root"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "content danger"
   },
   {
     "name": "--color-shadow-ink",
     "value": "rgba(0,0,0,.05)",
-    "family": "shadow-ink",
+    "family": "shadow",
     "usage": [
       ":root",
       "#score .score-grid-wrap",
       "#leaderboard .scoreboard-card",
       "#leaderboard .scoreboard-card"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "shadow ink"
   },
   {
     "name": "--color-border-success",
     "value": "rgba(11,93,59,.24)",
-    "family": "border-success",
+    "family": "border",
     "usage": [
       "#leaderboard .scores-outcome-hero",
       ".completed-summary-session-banner"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "border success"
   },
   {
     "name": "--color-surface-subtle",
     "value": "#f2f8f5",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       "#leaderboard .scores-outcome-hero"
-    ]
-  },
-  {
-    "name": "--color-surface-card-2",
-    "value": "#fff",
-    "family": "surface-card",
-    "usage": [
-      "#leaderboard .scores-outcome-hero",
-      ".game-pill",
-      ".mini-check",
-      ".scorecard-wrap"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-2",
-    "value": "#e8f3ed",
-    "family": "surface-subtle",
-    "usage": [
-      ".scores-state-badge"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "surface subtle"
   },
   {
     "name": "--color-content-success",
     "value": "#0b5d3b",
-    "family": "content-success",
+    "family": "content",
     "usage": [
       ".scores-state-badge",
       ".ssp-validation-state[data-state=\"validated\"] strong",
       ".payout-total-positive",
       ".score-dots"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "content success"
   },
   {
     "name": "--color-border-warning",
     "value": "#d97706",
-    "family": "border-warning",
+    "family": "border",
     "usage": [
       ".scores-visible-warning"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "border warning"
   },
   {
     "name": "--color-surface-warning",
     "value": "#fff7ed",
-    "family": "surface-warning",
+    "family": "surface",
     "usage": [
       ".scores-visible-warning",
       ".import-completeness-warning"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "surface warning"
   },
   {
     "name": "--color-content-warning",
     "value": "#7c2d12",
-    "family": "content-warning",
+    "family": "content",
     "usage": [
       ".scores-visible-warning",
       ".import-completeness-warning"
-    ]
-  },
-  {
-    "name": "--color-content-danger-2",
-    "value": "#9f1239",
-    "family": "content-danger",
-    "usage": [
-      ".ssp-validation-state[data-state=\"invalidated\"] strong",
-      ".danger-lite"
-    ]
-  },
-  {
-    "name": "--color-shadow-ink-2",
-    "value": "rgba(0,0,0,.10)",
-    "family": "shadow-ink",
-    "usage": [
-      ".brand-mark"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-3",
-    "value": "#eef3f0",
-    "family": "surface-subtle",
-    "usage": [
-      ".icon-tabs .tab"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "content warning"
   },
   {
     "name": "--color-surface-selected",
     "value": "#0b5d3b",
-    "family": "surface-selected",
+    "family": "surface",
     "usage": [
       ".icon-tabs .tab.active",
       ".icon-tabs .tab.active",
       ".icon-tabs .tab.active",
-      "#leaderboard .team-payout-window-chip.active"
-    ]
-  },
-  {
-    "name": "--color-surface-selected-2",
-    "value": "#14613f",
-    "family": "surface-selected",
-    "usage": [
-      ".icon-tabs .tab.active",
-      ".icon-tabs .tab.active",
-      ".icon-tabs .tab.active"
-    ]
+      "#leaderboard .team-payout-window-chip.active",
+      ".setup-start-round-card",
+      ".install-step-icon",
+      ".report-layer--hero"
+    ],
+    "scope": "shared",
+    "purpose": "surface selected"
   },
   {
     "name": "--color-content-on-accent",
-    "value": "white",
-    "family": "content-on-accent",
+    "value": "#fff",
+    "family": "content",
     "usage": [
       ".icon-tabs .tab.active",
       ".tab, button, .button-link",
       ".tab.active",
-      ".toast"
-    ]
-  },
-  {
-    "name": "--color-border-success-2",
-    "value": "#0b5d3b",
-    "family": "border-success",
-    "usage": [
+      ".toast",
       ".icon-tabs .tab.active",
-      ".game-pill.selected",
-      ".icon-tabs .tab.active",
-      ".player-search-result.is-selected"
-    ]
+      ".icon-tabs .tab.active .tab-label,.icon-tabs .tab.active .tab-icon-svg",
+      "#leaderboard .team-payout-window-chip.active",
+      ".setup-start-round-card .setup-action-btn"
+    ],
+    "scope": "shared",
+    "purpose": "content on accent"
   },
   {
     "name": "--color-shadow-accent",
     "value": "rgba(11,93,59,.18)",
-    "family": "shadow-accent",
+    "family": "shadow",
     "usage": [
       ".icon-tabs .tab.active",
       ".icon-tabs .tab.active",
       "#leaderboard .team-payout-window-chip.active"
-    ]
-  },
-  {
-    "name": "--color-content-success-2",
-    "value": "#174f36",
-    "family": "content-success",
-    "usage": [
-      ".tab-icon-svg"
-    ]
-  },
-  {
-    "name": "--color-content-danger-3",
-    "value": "#f4ecd7",
-    "family": "content-danger",
-    "usage": [
-      ".icon-tabs .tab.active .tab-icon-svg"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "shadow accent"
   },
   {
     "name": "--color-effect-transparent",
     "value": "transparent",
-    "family": "effect-transparent",
+    "family": "effect",
     "usage": [
       ".tab, button, .button-link, select, input",
       ".classic-header-match-status",
       ".player-mode-score-row.is-selected td",
       ".player-mode-player-select"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-4",
-    "value": "#dfe8e3",
-    "family": "surface-subtle",
-    "usage": [
-      ".tab"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-5",
-    "value": "#edf2ef",
-    "family": "surface-subtle",
-    "usage": [
-      "button.secondary, .secondary",
-      "code",
-      ".library-item-more-actions>summary"
-    ]
-  },
-  {
-    "name": "--color-surface-card-3",
-    "value": "white",
-    "family": "surface-card",
-    "usage": [
-      "input, select, textarea",
-      ".hole-grid-wrap, .score-grid-wrap, .leader-table-wrap",
-      ".game-pill",
-      ".payout-game-table,.settlement-table"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-6",
-    "value": "#fbfdfc",
-    "family": "surface-subtle",
-    "usage": [
-      ".item",
-      ".result",
-      ".match-status-tile",
-      ".game-summary-card"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "effect transparent"
   },
   {
     "name": "--color-surface-success",
     "value": "rgba(25,49,42,.95)",
-    "family": "surface-success",
+    "family": "surface",
     "usage": [
       ".toast"
-    ]
-  },
-  {
-    "name": "--color-border-success-3",
-    "value": "rgba(11,93,59,.18)",
-    "family": "border-success",
-    "usage": [
-      ".update-banner",
-      ".library-course-card",
-      ".player-detail-hero",
-      ".stat-hole-review"
-    ]
-  },
-  {
-    "name": "--color-surface-card-4",
-    "value": "rgba(255,255,255,.98)",
-    "family": "surface-card",
-    "usage": [
-      ".update-banner",
-      "#leaderboard .scorecard-wrap::before",
-      "#leaderboard .scorecard-wrap::after"
-    ]
-  },
-  {
-    "name": "--color-shadow-ink-3",
-    "value": "rgba(0,0,0,.14)",
-    "family": "shadow-ink",
-    "usage": [
-      ".update-banner",
-      ".scorecard-view-controls .segmented-control button.active"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "surface success"
   },
   {
     "name": "--color-surface-chrome",
     "value": "rgba(244,248,246,.97)",
-    "family": "surface-chrome",
+    "family": "surface",
     "usage": [
       ".app-footer-version"
-    ]
-  },
-  {
-    "name": "--color-border-success-4",
-    "value": "rgba(11,93,59,.12)",
-    "family": "border-success",
-    "usage": [
-      ".app-footer-version",
-      "#score .score-hole-nav",
-      "#score .score-hole-nav",
-      "#score .actions.top-gap.wrap.compact-actions"
-    ]
-  },
-  {
-    "name": "--color-border-success-5",
-    "value": "#cfe4d8",
-    "family": "border-success",
-    "usage": [
-      ".badge",
-      ".game-summary-card-accent"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-7",
-    "value": "#f8fbf9",
-    "family": "surface-subtle",
-    "usage": [
-      ".hole-grid th, .score-grid th, .leader-table th",
-      ".momentum-pill",
-      ".game-picker-shell",
-      ".payout-game-table th,.settlement-table th"
-    ]
-  },
-  {
-    "name": "--color-content-warning-2",
-    "value": "#9b2c2c",
-    "family": "content-warning",
-    "usage": [
-      ".classic-header-save-state[data-tone=\"attention\"]",
-      ".player-mode-save-state[data-tone=\"attention\"]"
-    ]
-  },
-  {
-    "name": "--color-content-warning-3",
-    "value": "#8a6100",
-    "family": "content-warning",
-    "usage": [
-      ".classic-header-save-state[data-tone=\"working\"],.classic-header-save-state[data-tone=\"warning\"]",
-      ".player-mode-save-state[data-tone=\"working\"],.player-mode-save-state[data-tone=\"warning\"]",
-      ".player-mode-team[data-player-mode-team=\"2\"]>header strong",
-      ".player-mode-entry-status[data-status=\"stats-needed\"]"
-    ]
-  },
-  {
-    "name": "--color-shadow-ink-4",
-    "value": "rgba(0,0,0,.16)",
-    "family": "shadow-ink",
-    "usage": [
-      ".play-overflow-menu",
-      "#leaderboard .payout-game-table th:first-child,\r\n  #leaderboard .payout-game-table td:first-child,\r\n  #leaderboard .settlement-table th:first-child,\r\n  #leaderboard .settlement-table td:first-child"
-    ]
-  },
-  {
-    "name": "--color-content-danger-4",
-    "value": "#7a2d2d",
-    "family": "content-danger",
-    "usage": [
-      ".play-overflow-consequential"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "surface chrome"
   },
   {
     "name": "--color-surface-danger",
     "value": "#9b2c2c",
-    "family": "surface-danger",
+    "family": "surface",
     "usage": [
       ".play-overflow-consequential"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "surface danger"
   },
   {
     "name": "--color-border-danger",
     "value": "#9b2c2c",
-    "family": "border-danger",
+    "family": "border",
     "usage": [
       ".play-overflow-consequential"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-8",
-    "value": "#f6f8f7",
-    "family": "surface-subtle",
-    "usage": [
-      ".play-input-mode-bar",
-      ".player-mode-derived",
-      ".player-mode-core-readback",
-      ".player-mode-detail-slot"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-9",
-    "value": "rgba(244,248,246,.96)",
-    "family": "surface-subtle",
-    "usage": [
-      "#score .score-hole-nav",
-      "#score .score-hole-nav",
-      "#leaderboard .panel-head"
-    ]
-  },
-  {
-    "name": "--color-shadow-ink-5",
-    "value": "rgba(0,0,0,.08)",
-    "family": "shadow-ink",
-    "usage": [
-      "#score .score-hole-nav",
-      "#score .actions.top-gap.wrap.compact-actions"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "border danger"
   },
   {
     "name": "--color-shadow-highlight",
     "value": "rgba(255,255,255,.35)",
-    "family": "shadow-highlight",
+    "family": "shadow",
     "usage": [
       ".player-mode-score-choices>button.is-active,.player-mode-stat-options>button.is-active,.player-mode-more-score.is-active",
       ".player-mode-approach-grid>button.is-active",
       ".preference-segments input:checked+span"
-    ]
-  },
-  {
-    "name": "--color-shadow-accent-2",
-    "value": "rgba(0,55,35,.22)",
-    "family": "shadow-accent",
-    "usage": [
-      ".player-mode-score-choices>button.is-active,.player-mode-stat-options>button.is-active,.player-mode-more-score.is-active",
-      ".player-mode-approach-grid>button.is-active"
-    ]
-  },
-  {
-    "name": "--color-surface-selected-3",
-    "value": "#f6f8f7",
-    "family": "surface-selected",
-    "usage": [
-      ".player-mode-approach-grid>button.is-derived:not(.is-active)"
-    ]
-  },
-  {
-    "name": "--color-surface-warning-2",
-    "value": "#fff3cd",
-    "family": "surface-warning",
-    "usage": [
-      ".player-mode-warning"
-    ]
-  },
-  {
-    "name": "--color-content-warning-4",
-    "value": "#a66b00",
-    "family": "content-warning",
-    "usage": [
-      ".player-mode-more-detail-toggle b"
-    ]
-  },
-  {
-    "name": "--color-content-secondary-2",
-    "value": "#9b2c2c",
-    "family": "content-secondary",
-    "usage": [
-      ".player-mode-gir-result strong[aria-label^=\"Missed\"]"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "shadow highlight"
   },
   {
     "name": "--color-border-info",
     "value": "#1261a0",
-    "family": "border-info",
+    "family": "border",
     "usage": [
       ".player-input-mode-active #playMatchSummary",
       ".player-mode-team[data-player-mode-team=\"1\"]>header"
-    ]
-  },
-  {
-    "name": "--color-border-warning-2",
-    "value": "#b17a00",
-    "family": "border-warning",
-    "usage": [
-      ".player-input-mode-active #playMatchSummary"
-    ]
-  },
-  {
-    "name": "--color-shadow-ink-6",
-    "value": "rgba(0,0,0,.06)",
-    "family": "shadow-ink",
-    "usage": [
-      ".player-input-mode-active #playMatchSummary",
-      ".app-chrome",
-      ".app-chrome"
-    ]
-  },
-  {
-    "name": "--color-content-secondary-3",
-    "value": "#9a6a00",
-    "family": "content-secondary",
-    "usage": [
-      ".player-mode-featured-label"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "border info"
   },
   {
     "name": "--color-content-info",
     "value": "#1261a0",
-    "family": "content-info",
+    "family": "content",
     "usage": [
       ".player-mode-team[data-player-mode-team=\"1\"]>header strong"
-    ]
-  },
-  {
-    "name": "--color-border-warning-3",
-    "value": "#a87400",
-    "family": "border-warning",
-    "usage": [
-      ".player-mode-team[data-player-mode-team=\"2\"]>header"
-    ]
-  },
-  {
-    "name": "--color-shadow-accent-3",
-    "value": "rgba(0,55,35,.09)",
-    "family": "shadow-accent",
-    "usage": [
-      ".player-mode-score-row.is-expanded"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-10",
-    "value": "#dfeae4",
-    "family": "surface-subtle",
-    "usage": [
-      ".player-mode-stat-badge"
-    ]
-  },
-  {
-    "name": "--color-surface-success-2",
-    "value": "#1f6e47",
-    "family": "surface-success",
-    "usage": [
-      ".momentum-pill.team1",
-      ".momentum-pill.team1"
-    ]
-  },
-  {
-    "name": "--color-surface-danger-2",
-    "value": "#9f3030",
-    "family": "surface-danger",
-    "usage": [
-      ".momentum-pill.team2",
-      ".momentum-pill.team2"
-    ]
-  },
-  {
-    "name": "--color-surface-warning-3",
-    "value": "#fafafa",
-    "family": "surface-warning",
-    "usage": [
-      ".momentum-pill.pending"
-    ]
-  },
-  {
-    "name": "--color-content-warning-5",
-    "value": "#8e9a94",
-    "family": "content-warning",
-    "usage": [
-      ".momentum-pill.pending"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-11",
-    "value": "#f7faf8",
-    "family": "surface-subtle",
-    "usage": [
-      ".inset-card",
-      ".player-combobox-count",
-      ".score-distribution-table thead th",
-      ".score-distribution-table thead th:first-child"
-    ]
-  },
-  {
-    "name": "--color-border-default-2",
-    "value": "#d9e6df",
-    "family": "border-default",
-    "usage": [
-      ".inset-card",
-      ".game-pill",
-      ".mini-check"
-    ]
-  },
-  {
-    "name": "--color-surface-selected-4",
-    "value": "#eef7f2",
-    "family": "surface-selected",
-    "usage": [
-      ".game-pill.selected"
-    ]
-  },
-  {
-    "name": "--color-surface-chrome-2",
-    "value": "rgba(243,246,244,0)",
-    "family": "surface-chrome",
-    "usage": [
-      ".top-tabs"
-    ]
-  },
-  {
-    "name": "--color-shadow-ink-7",
-    "value": "rgba(0,0,0,.04)",
-    "family": "shadow-ink",
-    "usage": [
-      ".top-tabs",
-      ".scorecard-table thead th"
-    ]
-  },
-  {
-    "name": "--color-shadow-ink-8",
-    "value": "rgba(0,0,0,.07)",
-    "family": "shadow-ink",
-    "usage": [
-      "body.keyboard-open .top-tabs",
-      ".app-chrome",
-      ".app-chrome",
-      ".app-chrome"
-    ]
-  },
-  {
-    "name": "--color-shadow-accent-4",
-    "value": "rgba(11,93,59,.08)",
-    "family": "shadow-accent",
-    "usage": [
-      ".game-pill.selected",
-      ".setup-round-hero"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-12",
-    "value": "#fcfefd",
-    "family": "surface-subtle",
-    "usage": [
-      ".game-config-card"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-13",
-    "value": "#fbfcfb",
-    "family": "surface-subtle",
-    "usage": [
-      ".payout-game-table tfoot td",
-      "#leaderboard .payout-game-table tfoot .payout-sticky-player",
-      "#leaderboard .payout-game-table-team tfoot .payout-sticky-player",
-      "#leaderboard .payout-table-wrap-team .payout-game-table-team tfoot .payout-sticky-player"
-    ]
-  },
-  {
-    "name": "--color-content-danger-5",
-    "value": "#9f3030",
-    "family": "content-danger",
-    "usage": [
-      ".payout-total-negative"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-14",
-    "value": "#eef7f2",
-    "family": "surface-subtle",
-    "usage": [
-      ".game-summary-card-accent"
-    ]
-  },
-  {
-    "name": "--color-content-on-accent-2",
-    "value": "#fff",
-    "family": "content-on-accent",
-    "usage": [
-      ".icon-tabs .tab.active",
-      ".icon-tabs .tab.active .tab-label,.icon-tabs .tab.active .tab-icon-svg",
-      "#leaderboard .team-payout-window-chip.active",
-      ".setup-start-round-card .setup-action-btn"
-    ]
-  },
-  {
-    "name": "--color-shadow-highlight-2",
-    "value": "rgba(255,255,255,.7)",
-    "family": "shadow-highlight",
-    "usage": [
-      ".scorecard-wrap"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-15",
-    "value": "#fcfdfc",
-    "family": "surface-subtle",
-    "usage": [
-      ".scorecard-table tbody tr:nth-child(odd) td"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-16",
-    "value": "#f4f8f6",
-    "family": "surface-subtle",
-    "usage": [
-      ".scorecard-table thead th",
-      ".finish-up-card",
-      ".player-detail-section .scorecard-no-team-col thead th:nth-child(2)",
-      ".scorecard-table:not(.nine-point-scorecard-table) thead .scorecard-sticky-name"
-    ]
-  },
-  {
-    "name": "--color-shadow-accent-5",
-    "value": "rgba(11,93,59,.05)",
-    "family": "shadow-accent",
-    "usage": [
-      ".scorecard-table .scorecard-sticky-name",
-      ".scorecard-table .scorecard-sticky-team"
-    ]
-  },
-  {
-    "name": "--color-border-success-6",
-    "value": "#2b7a4b",
-    "family": "border-success",
-    "usage": [
-      ".score-birdie",
-      ".score-eagle"
-    ]
-  },
-  {
-    "name": "--color-shadow-accent-6",
-    "value": "#2b7a4b",
-    "family": "shadow-accent",
-    "usage": [
-      ".score-eagle"
-    ]
-  },
-  {
-    "name": "--color-border-warning-4",
-    "value": "#a07a14",
-    "family": "border-warning",
-    "usage": [
-      ".score-bogey",
-      ".score-doublebogey"
-    ]
-  },
-  {
-    "name": "--color-shadow-ink-9",
-    "value": "#a07a14",
-    "family": "shadow-ink",
-    "usage": [
-      ".score-doublebogey"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "content info"
   },
   {
     "name": "--color-print-surface-card",
     "value": "#fff",
-    "family": "print-surface-card",
+    "family": "print-surface",
     "usage": [
       "body.printing-scorecard",
       "body.printing-scorecard .scorecard-table th,\r\n  body.printing-scorecard .scorecard-table td,\r\n  body.printing-scorecard .leader-table th,\r\n  body.printing-scorecard .leader-table td,\r\n  body.printing-scorecard .payout-game-table th,\r\n  body.printing-scorecard .payout-game-table td,\r\n  body.printing-scorecard .settlement-table th,\r\n  body.printing-scorecard .settlement-table td",
       "body.printing-scorecard",
-      ".score-number"
-    ]
+      ".score-number",
+      ".ssp-momentum-dot"
+    ],
+    "scope": "print",
+    "purpose": "Preserved paint for body.printing-scorecard; body.printing-scorecard .scorecard-table th,\r\n  body.printing-scorecard .scorecard-table td,\r\n  body.printing-scorecard .leader-table th,\r\n  body.printing-scorecard .leader-table td,\r\n  body.printing-scorecard .payout-game-table th,\r\n  body.printing-scorecard .payout-game-table td,\r\n  body.printing-scorecard .settlement-table th,\r\n  body.printing-scorecard .settlement-table td; .score-number"
   },
   {
     "name": "--color-print-content-primary",
     "value": "#000",
-    "family": "print-content-primary",
+    "family": "print-content",
     "usage": [
       "body.printing-scorecard"
-    ]
+    ],
+    "scope": "print",
+    "purpose": "Preserved paint for body.printing-scorecard"
   },
   {
     "name": "--color-print-border-default",
     "value": "#111",
-    "family": "print-border-default",
+    "family": "print-border",
     "usage": [
       "body.printing-scorecard .print-round-meta"
-    ]
-  },
-  {
-    "name": "--color-print-border-default-2",
-    "value": "#ddd",
-    "family": "print-border-default",
-    "usage": [
-      "body.printing-scorecard .scoreboard-card,\r\n  body.printing-scorecard details.scoreboard-collapsible"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-17",
-    "value": "#eef8f2",
-    "family": "surface-subtle",
-    "usage": [
-      ".completed-summary-session-banner"
-    ]
-  },
-  {
-    "name": "--color-content-success-3",
-    "value": "#174b32",
-    "family": "content-success",
-    "usage": [
-      ".completed-summary-session-banner"
-    ]
-  },
-  {
-    "name": "--color-shadow-accent-7",
-    "value": "rgba(11,93,59,.06)",
-    "family": "shadow-accent",
-    "usage": [
-      ".completed-summary-session-banner"
-    ]
-  },
-  {
-    "name": "--color-surface-card-5",
-    "value": "rgba(255,255,255,.55)",
-    "family": "surface-card",
-    "usage": [
-      ".side-match-row",
-      ".setup-advanced-details"
-    ]
-  },
-  {
-    "name": "--color-content-secondary-4",
-    "value": "#42574d",
-    "family": "content-secondary",
-    "usage": [
-      "#leaderboard .game-summary-sub,#leaderboard .match-status-meta,#leaderboard .tiny"
-    ]
-  },
-  {
-    "name": "--color-surface-card-6",
-    "value": "rgba(255,255,255,.96)",
-    "family": "surface-card",
-    "usage": [
-      "#score .actions.top-gap.wrap.compact-actions",
-      ".round-record-momentum",
-      ".player-detail-topbar",
-      ".quick-scoreboard-topbar"
-    ]
-  },
-  {
-    "name": "--color-border-success-7",
-    "value": "rgba(11,93,59,.10)",
-    "family": "border-success",
-    "usage": [
-      "#leaderboard .leader-mobile-card",
-      "#matchPlayersPicker .lookup-picker-row"
-    ]
-  },
-  {
-    "name": "--color-shadow-highlight-3",
-    "value": "rgba(255,255,255,.98)",
-    "family": "shadow-highlight",
-    "usage": [
-      ".scorecard-table th:first-child,.scorecard-table td:first-child",
-      "#leaderboard .scorecard-wrap::after"
-    ]
-  },
-  {
-    "name": "--color-shadow-ink-10",
-    "value": "rgba(0,0,0,.18)",
-    "family": "shadow-ink",
-    "usage": [
-      ".scorecard-table th:nth-child(2),.scorecard-table td:nth-child(2)"
-    ]
-  },
-  {
-    "name": "--color-surface-card-7",
-    "value": "rgba(255,255,255,1)",
-    "family": "surface-card",
-    "usage": [
-      "#leaderboard .scorecard-wrap::before",
-      "#leaderboard .scorecard-wrap::before"
-    ]
-  },
-  {
-    "name": "--color-surface-card-8",
-    "value": "rgba(255,255,255,0)",
-    "family": "surface-card",
-    "usage": [
-      "#leaderboard .scorecard-wrap::after"
-    ]
-  },
-  {
-    "name": "--color-shadow-ink-11",
-    "value": "rgba(0,0,0,.22)",
-    "family": "shadow-ink",
-    "usage": [
-      "#leaderboard .payout-game-table th:first-child,\r\n  #leaderboard .payout-game-table td:first-child",
-      ".nine-point-scorecard-table .scorecard-sticky-name"
-    ]
-  },
-  {
-    "name": "--color-shadow-ink-12",
-    "value": "rgba(0,0,0,.24)",
-    "family": "shadow-ink",
-    "usage": [
-      "#leaderboard .payout-game-table th:first-child,\r\n  #leaderboard .payout-game-table td:first-child,\r\n  #leaderboard .payout-game-table tfoot td:first-child",
-      ".sheet-card",
-      "#leaderboard .payout-game-table .payout-sticky-player",
-      "#leaderboard .payout-game-table-team .payout-sticky-player"
-    ]
-  },
-  {
-    "name": "--color-border-success-8",
-    "value": "rgba(11,93,59,.16)",
-    "family": "border-success",
-    "usage": [
-      ".player-card-trigger",
-      ".ssp-ledger-preview",
-      "#score #holeSummary .score-primary-status",
-      ".quick-ssp-money"
-    ]
-  },
-  {
-    "name": "--color-content-success-4",
-    "value": "#123a28",
-    "family": "content-success",
-    "usage": [
-      ".player-card-trigger",
-      ".player-search-result,.sheet-action",
-      ".ssp-ledger-mini-row strong,\r\n.ssp-ledger-mini-grid strong"
-    ]
-  },
-  {
-    "name": "--color-shadow-ink-13",
-    "value": "rgba(0,0,0,.02)",
-    "family": "shadow-ink",
-    "usage": [
-      ".player-card-trigger"
-    ]
-  },
-  {
-    "name": "--color-border-success-9",
-    "value": "rgba(11,93,59,.30)",
-    "family": "border-success",
-    "usage": [
-      ".player-card-trigger.has-selection"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-18",
-    "value": "#f7fbf9",
-    "family": "surface-subtle",
-    "usage": [
-      ".player-card-trigger.has-selection",
-      ".sheet-search input",
-      ".editable-scorecard-cell:hover"
-    ]
-  },
-  {
-    "name": "--color-content-secondary-5",
-    "value": "#4b6356",
-    "family": "content-secondary",
-    "usage": [
-      ".player-card-hint"
-    ]
+    ],
+    "scope": "print",
+    "purpose": "Preserved paint for body.printing-scorecard .print-round-meta"
   },
   {
     "name": "--color-overlay-scrim",
     "value": "rgba(7,24,17,.48)",
-    "family": "overlay-scrim",
+    "family": "overlay",
     "usage": [
       ".sheet-backdrop"
-    ]
-  },
-  {
-    "name": "--color-surface-success-3",
-    "value": "rgba(17,54,38,.18)",
-    "family": "surface-success",
-    "usage": [
-      ".sheet-handle"
-    ]
-  },
-  {
-    "name": "--color-border-success-10",
-    "value": "rgba(11,93,59,.14)",
-    "family": "border-success",
-    "usage": [
-      ".sheet-search input",
-      "#leaderboard .team-payout-window-chip",
-      ".ssp-ledger-final-row",
-      ".ssp-note-field"
-    ]
-  },
-  {
-    "name": "--color-surface-selected-5",
-    "value": "#f4fbf7",
-    "family": "surface-selected",
-    "usage": [
-      ".player-search-result.is-selected"
-    ]
-  },
-  {
-    "name": "--color-content-success-5",
-    "value": "#4d6658",
-    "family": "content-success",
-    "usage": [
-      ".player-search-sub"
-    ]
-  },
-  {
-    "name": "--color-content-danger-6",
-    "value": "#8b2e2e",
-    "family": "content-danger",
-    "usage": [
-      ".sheet-action.danger"
-    ]
-  },
-  {
-    "name": "--color-surface-danger-3",
-    "value": "#fff9f8",
-    "family": "surface-danger",
-    "usage": [
-      ".sheet-action.danger"
-    ]
-  },
-  {
-    "name": "--color-border-danger-2",
-    "value": "#c62828",
-    "family": "border-danger",
-    "usage": [
-      ".picker-row--error"
-    ]
-  },
-  {
-    "name": "--color-shadow-ink-14",
-    "value": "rgba(198,40,40,.14)",
-    "family": "shadow-ink",
-    "usage": [
-      ".picker-row--error"
-    ]
-  },
-  {
-    "name": "--color-surface-danger-4",
-    "value": "rgba(198,40,40,.04)",
-    "family": "surface-danger",
-    "usage": [
-      ".picker-row--error"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "overlay scrim"
   },
   {
     "name": "--color-print-effect-transparent",
     "value": "transparent",
-    "family": "print-effect-transparent",
+    "family": "print-effect",
     "usage": [
       "body.printing-scorecard.printing-classic-only .print-section-classic-scorecard",
       ".score-number",
       ".scoreboard-export-card .scoreboard-round-actions",
       ".scoreboard-export-card #missingScoreWarning"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-19",
-    "value": "#f4f4f4",
-    "family": "surface-subtle",
-    "usage": [
-      ".score-row-readonly .score-input"
-    ]
-  },
-  {
-    "name": "--color-content-primary-2",
-    "value": "#666",
-    "family": "content-primary",
-    "usage": [
-      ".score-row-readonly .score-input"
-    ]
-  },
-  {
-    "name": "--color-content-danger-7",
-    "value": "#9b2c2c",
-    "family": "content-danger",
-    "usage": [
-      ".stat-derived-cell .stat-derived-symbol.is-miss"
-    ]
-  },
-  {
-    "name": "--color-border-success-11",
-    "value": "rgba(12,55,33,.08)",
-    "family": "border-success",
-    "usage": [
-      ".stat-summary-list div",
-      ".score-distribution-table th,.score-distribution-table td",
-      ".player-hole-stat-details",
-      ".player-hole-stat-table th,\r\n.player-hole-stat-table td"
-    ]
-  },
-  {
-    "name": "--color-surface-success-4",
-    "value": "rgba(22,163,74,.12)",
-    "family": "surface-success",
-    "usage": [
-      ".scoreboard-round-actions .round-complete-pill"
-    ]
-  },
-  {
-    "name": "--color-content-success-6",
-    "value": "#166534",
-    "family": "content-success",
-    "usage": [
-      ".scoreboard-round-actions .round-complete-pill"
-    ]
+    ],
+    "scope": "print",
+    "purpose": "Preserved paint for body.printing-scorecard.printing-classic-only .print-section-classic-scorecard; .score-number; .scoreboard-export-card .scoreboard-round-actions"
   },
   {
     "name": "--color-surface-info",
     "value": "rgba(15,23,42,.18)",
-    "family": "surface-info",
+    "family": "surface",
     "usage": [
       "#leaderboard .payout-section-team .team-payout-scroll-pane::-webkit-scrollbar-thumb"
-    ]
-  },
-  {
-    "name": "--color-content-secondary-6",
-    "value": "#64748b",
-    "family": "content-secondary",
-    "usage": [
-      "#leaderboard .team-payout-mobile-topline-label"
-    ]
-  },
-  {
-    "name": "--color-content-info-2",
-    "value": "#334155",
-    "family": "content-info",
-    "usage": [
-      "#leaderboard .team-payout-window-chip",
-      "#leaderboard .team-payout-mobile-table thead th",
-      ".gross-game-payment-row"
-    ]
-  },
-  {
-    "name": "--color-shadow-ink-15",
-    "value": "rgba(15,23,42,.04)",
-    "family": "shadow-ink",
-    "usage": [
-      "#leaderboard .team-payout-window-chip"
-    ]
-  },
-  {
-    "name": "--color-content-info-3",
-    "value": "#64748b",
-    "family": "content-info",
-    "usage": [
-      "#leaderboard .team-payout-mobile-legend"
-    ]
-  },
-  {
-    "name": "--color-content-info-4",
-    "value": "#0f172a",
-    "family": "content-info",
-    "usage": [
-      "#leaderboard .team-payout-mobile-legend.is-open"
-    ]
-  },
-  {
-    "name": "--color-shadow-ink-16",
-    "value": "rgba(0,0,0,.2)",
-    "family": "shadow-ink",
-    "usage": [
-      "#leaderboard .team-payout-mobile-player-head,\r\n#leaderboard .team-payout-mobile-player-cell"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-20",
-    "value": "#f8fafc",
-    "family": "surface-subtle",
-    "usage": [
-      "#leaderboard .team-payout-mobile-total-head,\r\n#leaderboard .team-payout-mobile-total-cell",
-      ".quick-game-chip",
-      ".round-recap-control-card"
-    ]
-  },
-  {
-    "name": "--color-shadow-accent-8",
-    "value": "rgba(20,44,31,.16)",
-    "family": "shadow-accent",
-    "usage": [
-      ".player-combobox-list",
-      ".library-item-more-menu"
-    ]
-  },
-  {
-    "name": "--color-surface-selected-6",
-    "value": "#e8f2ec",
-    "family": "surface-selected",
-    "usage": [
-      ".player-combobox-option:hover,.player-combobox-option.is-active"
-    ]
-  },
-  {
-    "name": "--color-shadow-accent-9",
-    "value": "rgba(20,44,31,.08)",
-    "family": "shadow-accent",
-    "usage": [
-      ".setup-start-round-card"
-    ]
-  },
-  {
-    "name": "--color-surface-success-5",
-    "value": "#0b7a45",
-    "family": "surface-success",
-    "usage": [
-      ".setup-start-round-card .setup-action-btn"
-    ]
-  },
-  {
-    "name": "--color-border-success-12",
-    "value": "#0b7a45",
-    "family": "border-success",
-    "usage": [
-      ".setup-start-round-card .setup-action-btn"
-    ]
-  },
-  {
-    "name": "--color-shadow-accent-10",
-    "value": "rgba(11,122,69,.2)",
-    "family": "shadow-accent",
-    "usage": [
-      ".setup-start-round-card .setup-action-btn"
-    ]
-  },
-  {
-    "name": "--color-border-success-13",
-    "value": "rgba(11,93,59,.35)",
-    "family": "border-success",
-    "usage": [
-      ".setup-start-round-card .setup-cancel-btn"
-    ]
-  },
-  {
-    "name": "--color-shadow-accent-11",
-    "value": "rgba(20,44,31,.18)",
-    "family": "shadow-accent",
-    "usage": [
-      ".shared-title-sync-diagnostics"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-21",
-    "value": "#f4fbf7",
-    "family": "surface-subtle",
-    "usage": [
-      ".library-page-header",
-      ".quick-settlement-hero"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-22",
-    "value": "#f6faf8",
-    "family": "surface-subtle",
-    "usage": [
-      ".library-section-disclosure>summary:hover"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "surface info"
   },
   {
     "name": "--color-focus-ring",
@@ -1305,1661 +387,3056 @@
       ".library-maintenance-card>summary:focus-visible,.library-import-details>summary:focus-visible",
       ".editable-scorecard-cell:hover",
       ".quick-disclosure>summary:focus-visible"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "focus ring"
   },
   {
-    "name": "--color-surface-subtle-23",
+    "name": "--color-graphic-stroke-neutral",
+    "value": "#5d6b64",
+    "family": "graphic-stroke",
+    "usage": [
+      ".momentum-zero-baseline"
+    ],
+    "scope": "shared",
+    "purpose": "graphic stroke neutral"
+  },
+  {
+    "name": "--color-graphic-fill-neutral",
+    "value": "#53615a",
+    "family": "graphic-fill",
+    "usage": [
+      ".momentum-axis-tick"
+    ],
+    "scope": "shared",
+    "purpose": "graphic fill neutral"
+  },
+  {
+    "name": "--color-print-content-info",
+    "value": "#172033",
+    "family": "print-content",
+    "usage": [
+      ".score-number"
+    ],
+    "scope": "print",
+    "purpose": "Preserved paint for .score-number"
+  },
+  {
+    "name": "--color-print-border-success",
+    "value": "#2b7a4b",
+    "family": "print-border",
+    "usage": [
+      ".score-birdie",
+      ".score-eagle",
+      ".score-eagle"
+    ],
+    "scope": "print",
+    "purpose": "Preserved paint for .score-birdie; .score-eagle"
+  },
+  {
+    "name": "--color-print-border-warning",
+    "value": "#a07a14",
+    "family": "print-border",
+    "usage": [
+      ".score-bogey",
+      ".score-doublebogey",
+      ".score-doublebogey"
+    ],
+    "scope": "print",
+    "purpose": "Preserved paint for .score-bogey; .score-doublebogey"
+  },
+  {
+    "name": "--color-print-surface-warning",
+    "value": "#fff7ed",
+    "family": "print-surface",
+    "usage": [
+      ".incomplete-round-warning,\r\n.export-incomplete-warning",
+      ".export-provisional-label",
+      ".export-provisional-detail"
+    ],
+    "scope": "print",
+    "purpose": "Preserved paint for .incomplete-round-warning,\r\n.export-incomplete-warning; .export-provisional-label; .export-provisional-detail"
+  },
+  {
+    "name": "--color-print-content-warning",
+    "value": "#7c2d12",
+    "family": "print-content",
+    "usage": [
+      ".incomplete-round-warning,\r\n.export-incomplete-warning",
+      ".export-provisional-detail",
+      ".export-provisional-label"
+    ],
+    "scope": "print",
+    "purpose": "Preserved paint for .incomplete-round-warning,\r\n.export-incomplete-warning; .export-provisional-detail; .export-provisional-label"
+  },
+  {
+    "name": "--color-print-surface-subtle",
+    "value": "#f7faf8",
+    "family": "print-surface",
+    "usage": [
+      "#scoreboardPrintViewHint"
+    ],
+    "scope": "print",
+    "purpose": "Preserved paint for #scoreboardPrintViewHint"
+  },
+  {
+    "name": "--color-print-content-success",
+    "value": "#30513f",
+    "family": "print-content",
+    "usage": [
+      "#scoreboardPrintViewHint"
+    ],
+    "scope": "print",
+    "purpose": "Preserved paint for #scoreboardPrintViewHint"
+  },
+  {
+    "name": "--color-graphic-stroke-info",
+    "value": "#9ca3af",
+    "family": "graphic-stroke",
+    "usage": [
+      ".ssp-momentum-zero"
+    ],
+    "scope": "shared",
+    "purpose": "graphic stroke info"
+  },
+  {
+    "name": "--color-print-graphic-stroke-success",
+    "value": "#0b5d3b",
+    "family": "print-graphic",
+    "usage": [
+      ".ssp-momentum-line",
+      ".ssp-momentum-dot"
+    ],
+    "scope": "print",
+    "purpose": "Preserved paint for .ssp-momentum-line; .ssp-momentum-dot"
+  },
+  {
+    "name": "--color-surface-disabled",
+    "value": "#f3f5f4",
+    "family": "surface",
+    "usage": [
+      ".game-pill.disabled"
+    ],
+    "scope": "shared",
+    "purpose": "surface disabled"
+  },
+  {
+    "name": "--color-content-disabled",
+    "value": "#53605a",
+    "family": "content",
+    "usage": [
+      ".game-pill.disabled"
+    ],
+    "scope": "shared",
+    "purpose": "content disabled"
+  },
+  {
+    "name": "--color-surface-scores-state-badge",
+    "value": "#e8f3ed",
+    "family": "surface",
+    "usage": [
+      ".scores-state-badge"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .scores-state-badge"
+  },
+  {
+    "name": "--color-content-danger-strong",
+    "value": "#9f1239",
+    "family": "content",
+    "usage": [
+      ".ssp-validation-state[data-state=\"invalidated\"] strong",
+      ".danger-lite"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .ssp-validation-state[data-state=\"invalidated\"] strong; .danger-lite"
+  },
+  {
+    "name": "--color-shadow-brand-mark",
+    "value": "rgba(0,0,0,.10)",
+    "family": "shadow",
+    "usage": [
+      ".brand-mark"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .brand-mark"
+  },
+  {
+    "name": "--color-surface-navigation-icon",
+    "value": "#eef3f0",
+    "family": "surface",
+    "usage": [
+      ".icon-tabs .tab"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .icon-tabs .tab"
+  },
+  {
+    "name": "--color-surface-navigation-selected-gradient",
+    "value": "#14613f",
+    "family": "surface",
+    "usage": [
+      ".icon-tabs .tab.active",
+      ".icon-tabs .tab.active",
+      ".icon-tabs .tab.active"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .icon-tabs .tab.active"
+  },
+  {
+    "name": "--color-border-selected",
+    "value": "#0b5d3b",
+    "family": "border",
+    "usage": [
+      ".icon-tabs .tab.active",
+      ".game-pill.selected",
+      ".icon-tabs .tab.active",
+      ".player-search-result.is-selected"
+    ],
+    "scope": "shared",
+    "purpose": "border selected"
+  },
+  {
+    "name": "--color-content-navigation-icon",
+    "value": "#174f36",
+    "family": "content",
+    "usage": [
+      ".tab-icon-svg"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .tab-icon-svg"
+  },
+  {
+    "name": "--color-content-navigation-selected-icon",
+    "value": "#f4ecd7",
+    "family": "content",
+    "usage": [
+      ".icon-tabs .tab.active .tab-icon-svg"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .icon-tabs .tab.active .tab-icon-svg"
+  },
+  {
+    "name": "--color-surface-navigation",
+    "value": "#dfe8e3",
+    "family": "surface",
+    "usage": [
+      ".tab"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .tab"
+  },
+  {
+    "name": "--color-surface-secondary-action",
+    "value": "#edf2ef",
+    "family": "surface",
+    "usage": [
+      "button.secondary, .secondary",
+      "code",
+      ".library-item-more-actions>summary"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for button.secondary, .secondary; code; .library-item-more-actions>summary"
+  },
+  {
+    "name": "--color-surface-list-item",
+    "value": "#fbfdfc",
+    "family": "surface",
+    "usage": [
+      ".item",
+      ".result",
+      ".match-status-tile",
+      ".game-summary-card"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .item; .result; .match-status-tile"
+  },
+  {
+    "name": "--color-border-update-banner",
+    "value": "rgba(11,93,59,.18)",
+    "family": "border",
+    "usage": [
+      ".update-banner",
+      ".library-course-card",
+      ".player-detail-hero",
+      ".stat-hole-review",
+      ".round-end-reason-option",
+      ".round-end-reason-option"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .update-banner; .library-course-card; .player-detail-hero"
+  },
+  {
+    "name": "--color-surface-update-banner",
+    "value": "rgba(255,255,255,.98)",
+    "family": "surface",
+    "usage": [
+      ".update-banner",
+      "#leaderboard .scorecard-wrap::before",
+      "#leaderboard .scorecard-wrap::after",
+      ".scorecard-table th:first-child,.scorecard-table td:first-child",
+      "#leaderboard .scorecard-wrap::after"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .update-banner; #leaderboard .scorecard-wrap::before; #leaderboard .scorecard-wrap::after"
+  },
+  {
+    "name": "--color-shadow-update-banner",
+    "value": "rgba(0,0,0,.14)",
+    "family": "shadow",
+    "usage": [
+      ".update-banner",
+      ".scorecard-view-controls .segmented-control button.active"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .update-banner; .scorecard-view-controls .segmented-control button.active"
+  },
+  {
+    "name": "--color-border-app-footer-version",
+    "value": "rgba(11,93,59,.12)",
+    "family": "border",
+    "usage": [
+      ".app-footer-version",
+      "#score .score-hole-nav",
+      "#score .score-hole-nav",
+      "#score .actions.top-gap.wrap.compact-actions"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .app-footer-version; #score .score-hole-nav; #score .actions.top-gap.wrap.compact-actions"
+  },
+  {
+    "name": "--color-border-badge",
+    "value": "#cfe4d8",
+    "family": "border",
+    "usage": [
+      ".badge",
+      ".game-summary-card-accent"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .badge; .game-summary-card-accent"
+  },
+  {
+    "name": "--color-surface-table-heading",
+    "value": "#f8fbf9",
+    "family": "surface",
+    "usage": [
+      ".hole-grid th, .score-grid th, .leader-table th",
+      ".momentum-pill",
+      ".game-picker-shell",
+      ".payout-game-table th,.settlement-table th"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .hole-grid th, .score-grid th, .leader-table th; .momentum-pill; .game-picker-shell"
+  },
+  {
+    "name": "--color-content-save-attention",
+    "value": "#9b2c2c",
+    "family": "content",
+    "usage": [
+      ".classic-header-save-state[data-tone=\"attention\"]",
+      ".player-mode-save-state[data-tone=\"attention\"]",
+      ".player-mode-gir-result strong[aria-label^=\"Missed\"]",
+      ".stat-derived-cell .stat-derived-symbol.is-miss"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .classic-header-save-state[data-tone=\"attention\"]; .player-mode-save-state[data-tone=\"attention\"]; .player-mode-gir-result strong[aria-label^=\"Missed\"]"
+  },
+  {
+    "name": "--color-content-save-pending",
+    "value": "#8a6100",
+    "family": "content",
+    "usage": [
+      ".classic-header-save-state[data-tone=\"working\"],.classic-header-save-state[data-tone=\"warning\"]",
+      ".player-mode-save-state[data-tone=\"working\"],.player-mode-save-state[data-tone=\"warning\"]",
+      ".player-mode-team[data-player-mode-team=\"2\"]>header strong",
+      ".player-mode-entry-status[data-status=\"stats-needed\"]"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .classic-header-save-state[data-tone=\"working\"],.classic-header-save-state[data-tone=\"warning\"]; .player-mode-save-state[data-tone=\"working\"],.player-mode-save-state[data-tone=\"warning\"]; .player-mode-team[data-player-mode-team=\"2\"]>header strong"
+  },
+  {
+    "name": "--color-shadow-play-overflow-menu",
+    "value": "rgba(0,0,0,.16)",
+    "family": "shadow",
+    "usage": [
+      ".play-overflow-menu",
+      "#leaderboard .payout-game-table th:first-child,\r\n  #leaderboard .payout-game-table td:first-child,\r\n  #leaderboard .settlement-table th:first-child,\r\n  #leaderboard .settlement-table td:first-child"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .play-overflow-menu; #leaderboard .payout-game-table th:first-child,\r\n  #leaderboard .payout-game-table td:first-child,\r\n  #leaderboard .settlement-table th:first-child,\r\n  #leaderboard .settlement-table td:first-child"
+  },
+  {
+    "name": "--color-content-play-overflow-consequential",
+    "value": "#7a2d2d",
+    "family": "content",
+    "usage": [
+      ".play-overflow-consequential"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .play-overflow-consequential"
+  },
+  {
+    "name": "--color-surface-play-input-mode-bar",
+    "value": "#f6f8f7",
+    "family": "surface",
+    "usage": [
+      ".play-input-mode-bar",
+      ".player-mode-derived",
+      ".player-mode-core-readback",
+      ".player-mode-detail-slot"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .play-input-mode-bar; .player-mode-derived; .player-mode-core-readback"
+  },
+  {
+    "name": "--color-surface-score-hole-nav",
+    "value": "rgba(244,248,246,.96)",
+    "family": "surface",
+    "usage": [
+      "#score .score-hole-nav",
+      "#score .score-hole-nav",
+      "#leaderboard .panel-head"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for #score .score-hole-nav; #leaderboard .panel-head"
+  },
+  {
+    "name": "--color-shadow-score-hole-nav",
+    "value": "rgba(0,0,0,.08)",
+    "family": "shadow",
+    "usage": [
+      "#score .score-hole-nav",
+      "#score .actions.top-gap.wrap.compact-actions"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for #score .score-hole-nav; #score .actions.top-gap.wrap.compact-actions"
+  },
+  {
+    "name": "--color-shadow-player-mode-score-choices",
+    "value": "rgba(0,55,35,.22)",
+    "family": "shadow",
+    "usage": [
+      ".player-mode-score-choices>button.is-active,.player-mode-stat-options>button.is-active,.player-mode-more-score.is-active",
+      ".player-mode-approach-grid>button.is-active"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .player-mode-score-choices>button.is-active,.player-mode-stat-options>button.is-active,.player-mode-more-score.is-active; .player-mode-approach-grid>button.is-active"
+  },
+  {
+    "name": "--color-surface-player-mode-approach-grid",
+    "value": "#f6f8f7",
+    "family": "surface",
+    "usage": [
+      ".player-mode-approach-grid>button.is-derived:not(.is-active)"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .player-mode-approach-grid>button.is-derived:not(.is-active)"
+  },
+  {
+    "name": "--color-surface-player-mode-warning",
+    "value": "#fff3cd",
+    "family": "surface",
+    "usage": [
+      ".player-mode-warning"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .player-mode-warning"
+  },
+  {
+    "name": "--color-content-player-mode-more-detail-toggle",
+    "value": "#a66b00",
+    "family": "content",
+    "usage": [
+      ".player-mode-more-detail-toggle b"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .player-mode-more-detail-toggle b"
+  },
+  {
+    "name": "--color-border-player-mode-summary",
+    "value": "#b17a00",
+    "family": "border",
+    "usage": [
+      ".player-input-mode-active #playMatchSummary"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .player-input-mode-active #playMatchSummary"
+  },
+  {
+    "name": "--color-shadow-player-input-mode-active",
+    "value": "rgba(0,0,0,.06)",
+    "family": "shadow",
+    "usage": [
+      ".player-input-mode-active #playMatchSummary",
+      ".app-chrome",
+      ".app-chrome"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .player-input-mode-active #playMatchSummary; .app-chrome"
+  },
+  {
+    "name": "--color-content-featured-competition",
+    "value": "#9a6a00",
+    "family": "content",
+    "usage": [
+      ".player-mode-featured-label"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .player-mode-featured-label"
+  },
+  {
+    "name": "--color-border-team-second",
+    "value": "#a87400",
+    "family": "border",
+    "usage": [
+      ".player-mode-team[data-player-mode-team=\"2\"]>header"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .player-mode-team[data-player-mode-team=\"2\"]>header"
+  },
+  {
+    "name": "--color-shadow-player-mode-score-row",
+    "value": "rgba(0,55,35,.09)",
+    "family": "shadow",
+    "usage": [
+      ".player-mode-score-row.is-expanded"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .player-mode-score-row.is-expanded"
+  },
+  {
+    "name": "--color-surface-player-mode-stat-badge",
+    "value": "#dfeae4",
+    "family": "surface",
+    "usage": [
+      ".player-mode-stat-badge"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .player-mode-stat-badge"
+  },
+  {
+    "name": "--color-surface-team-first",
+    "value": "#1f6e47",
+    "family": "surface",
+    "usage": [
+      ".momentum-pill.team1",
+      ".momentum-pill.team1"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .momentum-pill.team1"
+  },
+  {
+    "name": "--color-surface-team-second",
+    "value": "#9f3030",
+    "family": "surface",
+    "usage": [
+      ".momentum-pill.team2",
+      ".momentum-pill.team2"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .momentum-pill.team2"
+  },
+  {
+    "name": "--color-surface-momentum-pending",
+    "value": "#fafafa",
+    "family": "surface",
+    "usage": [
+      ".momentum-pill.pending"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .momentum-pill.pending"
+  },
+  {
+    "name": "--color-content-momentum-pending",
+    "value": "#8e9a94",
+    "family": "content",
+    "usage": [
+      ".momentum-pill.pending"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .momentum-pill.pending"
+  },
+  {
+    "name": "--color-surface-inset-card",
+    "value": "#f7faf8",
+    "family": "surface",
+    "usage": [
+      ".inset-card",
+      ".player-combobox-count",
+      ".score-distribution-table thead th",
+      ".score-distribution-table thead th:first-child",
+      ".round-complete-warning"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .inset-card; .player-combobox-count; .score-distribution-table thead th"
+  },
+  {
+    "name": "--color-border-inset-card",
+    "value": "#d9e6df",
+    "family": "border",
+    "usage": [
+      ".inset-card",
+      ".game-pill",
+      ".mini-check"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .inset-card; .game-pill; .mini-check"
+  },
+  {
+    "name": "--color-surface-game-pill",
+    "value": "#eef7f2",
+    "family": "surface",
+    "usage": [
+      ".game-pill.selected"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .game-pill.selected"
+  },
+  {
+    "name": "--color-surface-top-tabs",
+    "value": "rgba(243,246,244,0)",
+    "family": "surface",
+    "usage": [
+      ".top-tabs"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .top-tabs"
+  },
+  {
+    "name": "--color-shadow-top-tabs",
+    "value": "rgba(0,0,0,.04)",
+    "family": "shadow",
+    "usage": [
+      ".top-tabs",
+      ".scorecard-table thead th"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .top-tabs; .scorecard-table thead th"
+  },
+  {
+    "name": "--color-shadow-keyboard-open",
+    "value": "rgba(0,0,0,.07)",
+    "family": "shadow",
+    "usage": [
+      "body.keyboard-open .top-tabs",
+      ".app-chrome",
+      ".app-chrome",
+      ".app-chrome"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for body.keyboard-open .top-tabs; .app-chrome"
+  },
+  {
+    "name": "--color-shadow-game-pill",
+    "value": "rgba(11,93,59,.08)",
+    "family": "shadow",
+    "usage": [
+      ".game-pill.selected",
+      ".setup-round-hero"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .game-pill.selected; .setup-round-hero"
+  },
+  {
+    "name": "--color-surface-game-config-card",
+    "value": "#fcfefd",
+    "family": "surface",
+    "usage": [
+      ".game-config-card"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .game-config-card"
+  },
+  {
+    "name": "--color-surface-payout-game-table",
+    "value": "#fbfcfb",
+    "family": "surface",
+    "usage": [
+      ".payout-game-table tfoot td",
+      "#leaderboard .payout-game-table tfoot .payout-sticky-player",
+      "#leaderboard .payout-game-table-team tfoot .payout-sticky-player",
+      "#leaderboard .payout-table-wrap-team .payout-game-table-team tfoot .payout-sticky-player"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .payout-game-table tfoot td; #leaderboard .payout-game-table tfoot .payout-sticky-player; #leaderboard .payout-game-table-team tfoot .payout-sticky-player"
+  },
+  {
+    "name": "--color-content-payout-total-negative",
+    "value": "#9f3030",
+    "family": "content",
+    "usage": [
+      ".payout-total-negative"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .payout-total-negative"
+  },
+  {
+    "name": "--color-surface-game-summary-card-accent",
+    "value": "#eef7f2",
+    "family": "surface",
+    "usage": [
+      ".game-summary-card-accent"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .game-summary-card-accent"
+  },
+  {
+    "name": "--color-shadow-scorecard-wrap",
+    "value": "rgba(255,255,255,.7)",
+    "family": "shadow",
+    "usage": [
+      ".scorecard-wrap",
+      ".import-tee-card"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .scorecard-wrap; .import-tee-card"
+  },
+  {
+    "name": "--color-surface-scorecard-alternate-row",
+    "value": "#fcfdfc",
+    "family": "surface",
+    "usage": [
+      ".scorecard-table tbody tr:nth-child(odd) td"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .scorecard-table tbody tr:nth-child(odd) td"
+  },
+  {
+    "name": "--color-surface-scorecard-heading",
+    "value": "#f4f8f6",
+    "family": "surface",
+    "usage": [
+      ".scorecard-table thead th",
+      ".finish-up-card",
+      ".player-detail-section .scorecard-no-team-col thead th:nth-child(2)",
+      ".scorecard-table:not(.nine-point-scorecard-table) thead .scorecard-sticky-name"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .scorecard-table thead th; .finish-up-card; .player-detail-section .scorecard-no-team-col thead th:nth-child(2)"
+  },
+  {
+    "name": "--color-shadow-scorecard-table",
+    "value": "rgba(11,93,59,.05)",
+    "family": "shadow",
+    "usage": [
+      ".scorecard-table .scorecard-sticky-name",
+      ".scorecard-table .scorecard-sticky-team"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .scorecard-table .scorecard-sticky-name; .scorecard-table .scorecard-sticky-team"
+  },
+  {
+    "name": "--color-border-score-under-par",
+    "value": "#2b7a4b",
+    "family": "border",
+    "usage": [
+      ".score-birdie",
+      ".score-eagle"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .score-birdie; .score-eagle"
+  },
+  {
+    "name": "--color-shadow-score-eagle",
+    "value": "#2b7a4b",
+    "family": "shadow",
+    "usage": [
+      ".score-eagle"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .score-eagle"
+  },
+  {
+    "name": "--color-border-score-over-par",
+    "value": "#a07a14",
+    "family": "border",
+    "usage": [
+      ".score-bogey",
+      ".score-doublebogey"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .score-bogey; .score-doublebogey"
+  },
+  {
+    "name": "--color-shadow-score-double-bogey",
+    "value": "#a07a14",
+    "family": "shadow",
+    "usage": [
+      ".score-doublebogey"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .score-doublebogey"
+  },
+  {
+    "name": "--color-print-border-card",
+    "value": "#ddd",
+    "family": "print-border",
+    "usage": [
+      "body.printing-scorecard .scoreboard-card,\r\n  body.printing-scorecard details.scoreboard-collapsible"
+    ],
+    "scope": "print",
+    "purpose": "Preserved paint for body.printing-scorecard .scoreboard-card,\r\n  body.printing-scorecard details.scoreboard-collapsible"
+  },
+  {
+    "name": "--color-surface-completed-summary-session-banner",
+    "value": "#eef8f2",
+    "family": "surface",
+    "usage": [
+      ".completed-summary-session-banner"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .completed-summary-session-banner"
+  },
+  {
+    "name": "--color-content-completed-summary-session-banner",
+    "value": "#174b32",
+    "family": "content",
+    "usage": [
+      ".completed-summary-session-banner"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .completed-summary-session-banner"
+  },
+  {
+    "name": "--color-shadow-completed-summary-session-banner",
+    "value": "rgba(11,93,59,.06)",
+    "family": "shadow",
+    "usage": [
+      ".completed-summary-session-banner"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .completed-summary-session-banner"
+  },
+  {
+    "name": "--color-surface-side-match-row",
+    "value": "rgba(255,255,255,.55)",
+    "family": "surface",
+    "usage": [
+      ".side-match-row",
+      ".setup-advanced-details",
+      ".stat-participants-card"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .side-match-row; .setup-advanced-details; .stat-participants-card"
+  },
+  {
+    "name": "--color-content-game-summary-sub",
+    "value": "#42574d",
+    "family": "content",
+    "usage": [
+      "#leaderboard .game-summary-sub,#leaderboard .match-status-meta,#leaderboard .tiny"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for #leaderboard .game-summary-sub,#leaderboard .match-status-meta,#leaderboard .tiny"
+  },
+  {
+    "name": "--color-surface-actions",
+    "value": "rgba(255,255,255,.96)",
+    "family": "surface",
+    "usage": [
+      "#score .actions.top-gap.wrap.compact-actions",
+      ".round-record-momentum",
+      ".player-detail-topbar",
+      ".quick-scoreboard-topbar"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for #score .actions.top-gap.wrap.compact-actions; .round-record-momentum; .player-detail-topbar"
+  },
+  {
+    "name": "--color-border-leader-mobile-card",
+    "value": "rgba(11,93,59,.10)",
+    "family": "border",
+    "usage": [
+      "#leaderboard .leader-mobile-card",
+      "#matchPlayersPicker .lookup-picker-row"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for #leaderboard .leader-mobile-card; #matchPlayersPicker .lookup-picker-row"
+  },
+  {
+    "name": "--color-shadow-scorecard-table-ink",
+    "value": "rgba(0,0,0,.18)",
+    "family": "shadow",
+    "usage": [
+      ".scorecard-table th:nth-child(2),.scorecard-table td:nth-child(2)",
+      ".modal-card"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .scorecard-table th:nth-child(2),.scorecard-table td:nth-child(2); .modal-card"
+  },
+  {
+    "name": "--color-surface-scorecard-wrap",
+    "value": "rgba(255,255,255,1)",
+    "family": "surface",
+    "usage": [
+      "#leaderboard .scorecard-wrap::before",
+      "#leaderboard .scorecard-wrap::before"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for #leaderboard .scorecard-wrap::before"
+  },
+  {
+    "name": "--color-surface-scorecard-wrap-card",
+    "value": "rgba(255,255,255,0)",
+    "family": "surface",
+    "usage": [
+      "#leaderboard .scorecard-wrap::after"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for #leaderboard .scorecard-wrap::after"
+  },
+  {
+    "name": "--color-shadow-payout-game-table",
+    "value": "rgba(0,0,0,.22)",
+    "family": "shadow",
+    "usage": [
+      "#leaderboard .payout-game-table th:first-child,\r\n  #leaderboard .payout-game-table td:first-child",
+      ".nine-point-scorecard-table .scorecard-sticky-name"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for #leaderboard .payout-game-table th:first-child,\r\n  #leaderboard .payout-game-table td:first-child; .nine-point-scorecard-table .scorecard-sticky-name"
+  },
+  {
+    "name": "--color-shadow-payout-game-table-ink",
+    "value": "rgba(0,0,0,.24)",
+    "family": "shadow",
+    "usage": [
+      "#leaderboard .payout-game-table th:first-child,\r\n  #leaderboard .payout-game-table td:first-child,\r\n  #leaderboard .payout-game-table tfoot td:first-child",
+      ".sheet-card",
+      "#leaderboard .payout-game-table .payout-sticky-player",
+      "#leaderboard .payout-game-table-team .payout-sticky-player"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for #leaderboard .payout-game-table th:first-child,\r\n  #leaderboard .payout-game-table td:first-child,\r\n  #leaderboard .payout-game-table tfoot td:first-child; .sheet-card; #leaderboard .payout-game-table .payout-sticky-player"
+  },
+  {
+    "name": "--color-border-player-card-trigger",
+    "value": "rgba(11,93,59,.16)",
+    "family": "border",
+    "usage": [
+      ".player-card-trigger",
+      ".ssp-ledger-preview",
+      "#score #holeSummary .score-primary-status",
+      ".quick-ssp-money"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .player-card-trigger; .ssp-ledger-preview; #score #holeSummary .score-primary-status"
+  },
+  {
+    "name": "--color-content-player-card-trigger",
+    "value": "#123a28",
+    "family": "content",
+    "usage": [
+      ".player-card-trigger",
+      ".player-search-result,.sheet-action",
+      ".ssp-ledger-mini-row strong,\r\n.ssp-ledger-mini-grid strong"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .player-card-trigger; .player-search-result,.sheet-action; .ssp-ledger-mini-row strong,\r\n.ssp-ledger-mini-grid strong"
+  },
+  {
+    "name": "--color-shadow-player-card-trigger",
+    "value": "rgba(0,0,0,.02)",
+    "family": "shadow",
+    "usage": [
+      ".player-card-trigger"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .player-card-trigger"
+  },
+  {
+    "name": "--color-border-player-card-trigger-success",
+    "value": "rgba(11,93,59,.30)",
+    "family": "border",
+    "usage": [
+      ".player-card-trigger.has-selection"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .player-card-trigger.has-selection"
+  },
+  {
+    "name": "--color-surface-player-card-trigger",
+    "value": "#f7fbf9",
+    "family": "surface",
+    "usage": [
+      ".player-card-trigger.has-selection",
+      ".sheet-search input",
+      ".editable-scorecard-cell:hover"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .player-card-trigger.has-selection; .sheet-search input; .editable-scorecard-cell:hover"
+  },
+  {
+    "name": "--color-content-player-card-hint",
+    "value": "#4b6356",
+    "family": "content",
+    "usage": [
+      ".player-card-hint"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .player-card-hint"
+  },
+  {
+    "name": "--color-surface-sheet-handle",
+    "value": "rgba(17,54,38,.18)",
+    "family": "surface",
+    "usage": [
+      ".sheet-handle"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .sheet-handle"
+  },
+  {
+    "name": "--color-border-sheet-search",
+    "value": "rgba(11,93,59,.14)",
+    "family": "border",
+    "usage": [
+      ".sheet-search input",
+      "#leaderboard .team-payout-window-chip",
+      ".ssp-ledger-final-row",
+      ".ssp-note-field"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .sheet-search input; #leaderboard .team-payout-window-chip; .ssp-ledger-final-row"
+  },
+  {
+    "name": "--color-surface-player-search-result",
+    "value": "#f4fbf7",
+    "family": "surface",
+    "usage": [
+      ".player-search-result.is-selected"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .player-search-result.is-selected"
+  },
+  {
+    "name": "--color-content-player-search-sub",
+    "value": "#4d6658",
+    "family": "content",
+    "usage": [
+      ".player-search-sub"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .player-search-sub"
+  },
+  {
+    "name": "--color-content-sheet-danger-action",
+    "value": "#8b2e2e",
+    "family": "content",
+    "usage": [
+      ".sheet-action.danger"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .sheet-action.danger"
+  },
+  {
+    "name": "--color-surface-sheet-danger-action",
+    "value": "#fff9f8",
+    "family": "surface",
+    "usage": [
+      ".sheet-action.danger"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .sheet-action.danger"
+  },
+  {
+    "name": "--color-border-picker-row-error",
+    "value": "#c62828",
+    "family": "border",
+    "usage": [
+      ".picker-row--error"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .picker-row--error"
+  },
+  {
+    "name": "--color-shadow-picker-row-error",
+    "value": "rgba(198,40,40,.14)",
+    "family": "shadow",
+    "usage": [
+      ".picker-row--error"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .picker-row--error"
+  },
+  {
+    "name": "--color-surface-picker-row-error",
+    "value": "rgba(198,40,40,.04)",
+    "family": "surface",
+    "usage": [
+      ".picker-row--error"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .picker-row--error"
+  },
+  {
+    "name": "--color-surface-score-row-readonly",
+    "value": "#f4f4f4",
+    "family": "surface",
+    "usage": [
+      ".score-row-readonly .score-input"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .score-row-readonly .score-input"
+  },
+  {
+    "name": "--color-content-readonly",
+    "value": "#666",
+    "family": "content",
+    "usage": [
+      ".score-row-readonly .score-input"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .score-row-readonly .score-input"
+  },
+  {
+    "name": "--color-border-stat-summary-list",
+    "value": "rgba(12,55,33,.08)",
+    "family": "border",
+    "usage": [
+      ".stat-summary-list div",
+      ".score-distribution-table th,.score-distribution-table td",
+      ".player-hole-stat-details",
+      ".player-hole-stat-table th,\r\n.player-hole-stat-table td"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .stat-summary-list div; .score-distribution-table th,.score-distribution-table td; .player-hole-stat-details"
+  },
+  {
+    "name": "--color-surface-scoreboard-round-actions",
+    "value": "rgba(22,163,74,.12)",
+    "family": "surface",
+    "usage": [
+      ".scoreboard-round-actions .round-complete-pill"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .scoreboard-round-actions .round-complete-pill"
+  },
+  {
+    "name": "--color-content-scoreboard-round-actions",
+    "value": "#166534",
+    "family": "content",
+    "usage": [
+      ".scoreboard-round-actions .round-complete-pill"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .scoreboard-round-actions .round-complete-pill"
+  },
+  {
+    "name": "--color-content-team-payout-mobile-topline-label",
+    "value": "#64748b",
+    "family": "content",
+    "usage": [
+      "#leaderboard .team-payout-mobile-topline-label"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for #leaderboard .team-payout-mobile-topline-label"
+  },
+  {
+    "name": "--color-content-team-payout-window-chip",
+    "value": "#334155",
+    "family": "content",
+    "usage": [
+      "#leaderboard .team-payout-window-chip",
+      "#leaderboard .team-payout-mobile-table thead th",
+      ".gross-game-payment-row"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for #leaderboard .team-payout-window-chip; #leaderboard .team-payout-mobile-table thead th; .gross-game-payment-row"
+  },
+  {
+    "name": "--color-shadow-team-payout-window-chip",
+    "value": "rgba(15,23,42,.04)",
+    "family": "shadow",
+    "usage": [
+      "#leaderboard .team-payout-window-chip"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for #leaderboard .team-payout-window-chip"
+  },
+  {
+    "name": "--color-content-team-payout-mobile-legend",
+    "value": "#64748b",
+    "family": "content",
+    "usage": [
+      "#leaderboard .team-payout-mobile-legend"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for #leaderboard .team-payout-mobile-legend"
+  },
+  {
+    "name": "--color-content-team-payout-mobile-legend-info",
+    "value": "#0f172a",
+    "family": "content",
+    "usage": [
+      "#leaderboard .team-payout-mobile-legend.is-open"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for #leaderboard .team-payout-mobile-legend.is-open"
+  },
+  {
+    "name": "--color-shadow-team-payout-mobile-player-head",
+    "value": "rgba(0,0,0,.2)",
+    "family": "shadow",
+    "usage": [
+      "#leaderboard .team-payout-mobile-player-head,\r\n#leaderboard .team-payout-mobile-player-cell"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for #leaderboard .team-payout-mobile-player-head,\r\n#leaderboard .team-payout-mobile-player-cell"
+  },
+  {
+    "name": "--color-surface-team-payout-mobile-total-head",
+    "value": "#f8fafc",
+    "family": "surface",
+    "usage": [
+      "#leaderboard .team-payout-mobile-total-head,\r\n#leaderboard .team-payout-mobile-total-cell",
+      ".quick-game-chip",
+      ".round-recap-control-card"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for #leaderboard .team-payout-mobile-total-head,\r\n#leaderboard .team-payout-mobile-total-cell; .quick-game-chip; .round-recap-control-card"
+  },
+  {
+    "name": "--color-shadow-player-combobox-list",
+    "value": "rgba(20,44,31,.16)",
+    "family": "shadow",
+    "usage": [
+      ".player-combobox-list",
+      ".library-item-more-menu"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .player-combobox-list; .library-item-more-menu"
+  },
+  {
+    "name": "--color-surface-player-combobox-option",
     "value": "#e8f2ec",
-    "family": "surface-subtle",
+    "family": "surface",
+    "usage": [
+      ".player-combobox-option:hover,.player-combobox-option.is-active"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .player-combobox-option:hover,.player-combobox-option.is-active"
+  },
+  {
+    "name": "--color-shadow-setup-start-round-card",
+    "value": "rgba(20,44,31,.08)",
+    "family": "shadow",
+    "usage": [
+      ".setup-start-round-card"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-start-round-card"
+  },
+  {
+    "name": "--color-surface-setup-start-round-card",
+    "value": "#0b7a45",
+    "family": "surface",
+    "usage": [
+      ".setup-start-round-card .setup-action-btn"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-start-round-card .setup-action-btn"
+  },
+  {
+    "name": "--color-border-setup-start-round-card",
+    "value": "#0b7a45",
+    "family": "border",
+    "usage": [
+      ".setup-start-round-card .setup-action-btn"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-start-round-card .setup-action-btn"
+  },
+  {
+    "name": "--color-shadow-setup-start-round-card-accent",
+    "value": "rgba(11,122,69,.2)",
+    "family": "shadow",
+    "usage": [
+      ".setup-start-round-card .setup-action-btn"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-start-round-card .setup-action-btn"
+  },
+  {
+    "name": "--color-border-setup-start-round-card-success",
+    "value": "rgba(11,93,59,.35)",
+    "family": "border",
+    "usage": [
+      ".setup-start-round-card .setup-cancel-btn"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-start-round-card .setup-cancel-btn"
+  },
+  {
+    "name": "--color-shadow-shared-title-sync-diagnostics",
+    "value": "rgba(20,44,31,.18)",
+    "family": "shadow",
+    "usage": [
+      ".shared-title-sync-diagnostics"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .shared-title-sync-diagnostics"
+  },
+  {
+    "name": "--color-surface-library-page-header",
+    "value": "#f4fbf7",
+    "family": "surface",
+    "usage": [
+      ".library-page-header",
+      ".quick-settlement-hero"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .library-page-header; .quick-settlement-hero"
+  },
+  {
+    "name": "--color-surface-library-section-disclosure",
+    "value": "#f6faf8",
+    "family": "surface",
+    "usage": [
+      ".library-section-disclosure>summary:hover"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .library-section-disclosure>summary:hover"
+  },
+  {
+    "name": "--color-surface-library-section-disclosure-subtle",
+    "value": "#e8f2ec",
+    "family": "surface",
     "usage": [
       ".library-section-disclosure>summary::after",
       ".library-status-badge",
       ".setup-advanced-card>summary::after,.setup-section-disclosure>summary::after,.setup-supporting-details>summary::after,.library-maintenance-card>summary::after,.library-import-details>summary::after",
       ".readiness-weather-status > span"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .library-section-disclosure>summary::after; .library-status-badge; .setup-advanced-card>summary::after,.setup-section-disclosure>summary::after,.setup-supporting-details>summary::after,.library-maintenance-card>summary::after,.library-import-details>summary::after"
   },
   {
-    "name": "--color-border-success-14",
+    "name": "--color-border-library-empty-state",
     "value": "rgba(11,93,59,.28)",
-    "family": "border-success",
+    "family": "border",
     "usage": [
       ".library-empty-state",
       ".quick-settlement-hero"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .library-empty-state; .quick-settlement-hero"
   },
   {
-    "name": "--color-shadow-accent-12",
+    "name": "--color-shadow-library-item-card",
     "value": "rgba(20,44,31,.045)",
-    "family": "shadow-accent",
+    "family": "shadow",
     "usage": [
       ".library-item-card"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .library-item-card"
   },
   {
-    "name": "--color-border-warning-5",
+    "name": "--color-border-round-library-card-unfinished",
     "value": "#d49a28",
-    "family": "border-warning",
+    "family": "border",
     "usage": [
       ".round-library-card[data-round-status=\"unfinished\"]",
       ".round-readiness-card"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-library-card[data-round-status=\"unfinished\"]; .round-readiness-card"
   },
   {
-    "name": "--color-surface-danger-5",
+    "name": "--color-surface-round-library-card-unfinished",
     "value": "#fff0cc",
-    "family": "surface-danger",
+    "family": "surface",
     "usage": [
-      ".round-library-card[data-round-status=\"unfinished\"] .library-status-badge"
-    ]
+      ".round-library-card[data-round-status=\"unfinished\"] .library-status-badge",
+      ".setup-round-status[data-status=\"active\"]"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-library-card[data-round-status=\"unfinished\"] .library-status-badge; .setup-round-status[data-status=\"active\"]"
   },
   {
-    "name": "--color-content-warning-6",
+    "name": "--color-content-round-library-card-unfinished",
     "value": "#7a4a00",
-    "family": "content-warning",
+    "family": "content",
     "usage": [
       ".round-library-card[data-round-status=\"unfinished\"] .library-status-badge",
       ".setup-destination-status.attention"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-library-card[data-round-status=\"unfinished\"] .library-status-badge; .setup-destination-status.attention"
   },
   {
-    "name": "--color-focus-ring-2",
+    "name": "--color-focus-ring-library-item-actions-inline",
     "value": "rgba(11,93,59,.26)",
     "family": "focus-ring",
     "usage": [
       ".library-item-actions-inline button:focus-visible,.library-item-more-actions>summary:focus-visible"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .library-item-actions-inline button:focus-visible,.library-item-more-actions>summary:focus-visible"
   },
   {
-    "name": "--color-border-success-15",
+    "name": "--color-border-setup-round-hero",
     "value": "rgba(11,93,59,.22)",
-    "family": "border-success",
+    "family": "border",
     "usage": [
       ".setup-round-hero",
       ".post-round-progress-step[data-state=\"complete\"]",
       ".round-end-review-status"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-round-hero; .post-round-progress-step[data-state=\"complete\"]; .round-end-review-status"
   },
   {
-    "name": "--color-surface-card-9",
+    "name": "--color-surface-setup-round-hero",
     "value": "rgba(255,255,255,.92)",
-    "family": "surface-card",
+    "family": "surface",
     "usage": [
       ".setup-round-hero"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-round-hero"
   },
   {
-    "name": "--color-surface-subtle-24",
+    "name": "--color-surface-setup-round-hero-subtle",
     "value": "rgba(232,245,237,.98)",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".setup-round-hero"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-round-hero"
   },
   {
-    "name": "--color-surface-subtle-25",
+    "name": "--color-surface-setup-round-status",
     "value": "#eef2f0",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".setup-round-status,.readiness-count"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-round-status,.readiness-count"
   },
   {
-    "name": "--color-content-primary-3",
+    "name": "--color-content-setup-round-status",
     "value": "#526159",
-    "family": "content-primary",
+    "family": "content",
     "usage": [
       ".setup-round-status,.readiness-count"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-round-status,.readiness-count"
   },
   {
-    "name": "--color-surface-success-6",
+    "name": "--color-surface-setup-round-status-ready",
     "value": "#dff3e6",
-    "family": "surface-success",
+    "family": "surface",
     "usage": [
       ".setup-round-status[data-status=\"ready\"],.readiness-count"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-round-status[data-status=\"ready\"],.readiness-count"
   },
   {
-    "name": "--color-content-success-7",
+    "name": "--color-content-setup-round-status-ready",
     "value": "#11633b",
-    "family": "content-success",
+    "family": "content",
     "usage": [
       ".setup-round-status[data-status=\"ready\"],.readiness-count"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-round-status[data-status=\"ready\"],.readiness-count"
   },
   {
-    "name": "--color-surface-selected-7",
-    "value": "#fff0cc",
-    "family": "surface-selected",
-    "usage": [
-      ".setup-round-status[data-status=\"active\"]"
-    ]
-  },
-  {
-    "name": "--color-content-warning-7",
+    "name": "--color-content-setup-round-status-active",
     "value": "#8a5400",
-    "family": "content-warning",
+    "family": "content",
     "usage": [
       ".setup-round-status[data-status=\"active\"]"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-round-status[data-status=\"active\"]"
   },
   {
-    "name": "--color-surface-card-10",
+    "name": "--color-surface-setup-round-hero-card",
     "value": "rgba(255,255,255,.72)",
-    "family": "surface-card",
+    "family": "surface",
     "usage": [
       ".setup-round-hero .setup-summary-list",
       ".scorecard-import-selection-card",
-      ".round-end-review-facts>div"
-    ]
+      ".round-end-review-facts>div",
+      ".shared-assignment-diagnostics",
+      ".round-end-reason-option",
+      ".match-template-row",
+      ".round-readiness-status",
+      ".readiness-weather-status"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-round-hero .setup-summary-list; .scorecard-import-selection-card; .round-end-review-facts>div"
   },
   {
-    "name": "--color-border-success-16",
+    "name": "--color-border-setup-round-hero-success",
     "value": "rgba(11,93,59,.1)",
-    "family": "border-success",
+    "family": "border",
     "usage": [
       ".setup-round-hero .setup-summary-row",
       ".setup-round-hero .setup-summary-row,.setup-round-hero .setup-summary-row:nth-last-child(-n+2)"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-round-hero .setup-summary-row; .setup-round-hero .setup-summary-row,.setup-round-hero .setup-summary-row:nth-last-child(-n+2)"
   },
   {
-    "name": "--color-surface-card-11",
+    "name": "--color-surface-advanced-option-group",
     "value": "rgba(255,255,255,.6)",
-    "family": "surface-card",
+    "family": "surface",
     "usage": [
-      ".advanced-option-group"
-    ]
+      ".advanced-option-group",
+      ".compact-empty-state"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .advanced-option-group; .compact-empty-state"
   },
   {
-    "name": "--color-surface-subtle-26",
+    "name": "--color-surface-setup-supporting-details",
     "value": "rgba(248,250,249,.8)",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".setup-supporting-details"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-supporting-details"
   },
   {
-    "name": "--color-surface-success-7",
-    "value": "#0b5d3b",
-    "family": "surface-success",
-    "usage": [
-      ".setup-start-round-card",
-      ".install-step-icon",
-      ".report-layer--hero"
-    ]
-  },
-  {
-    "name": "--color-shadow-accent-13",
+    "name": "--color-shadow-setup-start-round-card-accent-depth",
     "value": "rgba(11,93,59,.2)",
-    "family": "shadow-accent",
+    "family": "shadow",
     "usage": [
       ".setup-start-round-card"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-start-round-card"
   },
   {
-    "name": "--color-content-on-accent-3",
+    "name": "--color-content-on-accent-muted",
     "value": "rgba(255,255,255,.78)",
-    "family": "content-on-accent",
+    "family": "content",
     "usage": [
       ".setup-start-round-card .tiny"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "content on accent muted"
   },
   {
-    "name": "--color-border-default-3",
+    "name": "--color-border-setup-start-round-card-default",
     "value": "#fff",
-    "family": "border-default",
+    "family": "border",
     "usage": [
       ".setup-start-round-card .setup-action-btn"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-start-round-card .setup-action-btn"
   },
   {
-    "name": "--color-border-warning-6",
+    "name": "--color-border-readiness-check",
     "value": "rgba(180,83,9,.24)",
-    "family": "border-warning",
+    "family": "border",
     "usage": [
       ".readiness-check.warn"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .readiness-check.warn"
   },
   {
-    "name": "--color-surface-warning-4",
+    "name": "--color-surface-readiness-check",
     "value": "#fff8e8",
-    "family": "surface-warning",
+    "family": "surface",
     "usage": [
-      ".readiness-check.warn"
-    ]
+      ".readiness-check.warn",
+      ".catch-up-scoring-bar"
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .readiness-check.warn; .catch-up-scoring-bar"
   },
   {
-    "name": "--color-surface-warning-5",
+    "name": "--color-surface-readiness-check-warning",
     "value": "#f7d99b",
-    "family": "surface-warning",
+    "family": "surface",
     "usage": [
       ".readiness-check.warn>span"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .readiness-check.warn>span"
   },
   {
-    "name": "--color-content-warning-8",
+    "name": "--color-content-readiness-check",
     "value": "#74420a",
-    "family": "content-warning",
+    "family": "content",
     "usage": [
       ".readiness-check.warn>span"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .readiness-check.warn>span"
   },
   {
-    "name": "--color-border-success-17",
+    "name": "--color-border-readiness-complete-details",
     "value": "rgba(22,163,74,.16)",
-    "family": "border-success",
+    "family": "border",
     "usage": [
       ".readiness-complete-details"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .readiness-complete-details"
   },
   {
-    "name": "--color-surface-success-8",
+    "name": "--color-surface-readiness-complete-details",
     "value": "rgba(22,163,74,.05)",
-    "family": "surface-success",
+    "family": "surface",
     "usage": [
       ".readiness-complete-details"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .readiness-complete-details"
   },
   {
-    "name": "--color-content-success-8",
+    "name": "--color-content-readiness-complete-details",
     "value": "#17633d",
-    "family": "content-success",
+    "family": "content",
     "usage": [
       ".readiness-complete-details>summary"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .readiness-complete-details>summary"
   },
   {
-    "name": "--color-shadow-accent-14",
+    "name": "--color-shadow-library-course-card",
     "value": "rgba(20,44,31,.06)",
-    "family": "shadow-accent",
+    "family": "shadow",
     "usage": [
       ".library-course-card:not(.library-maintenance-card)"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .library-course-card:not(.library-maintenance-card)"
   },
   {
-    "name": "--color-surface-subtle-27",
+    "name": "--color-surface-library-course-actions-card",
     "value": "#f7fbf8",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".library-course-actions-card",
       ".ssp-header-actions",
       ".ssp-chip span",
       ".ssp-ledger-preview"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .library-course-actions-card; .ssp-header-actions; .ssp-chip span"
   },
   {
-    "name": "--color-surface-subtle-28",
+    "name": "--color-surface-install-instruction-steps",
     "value": "#f8faf9",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".install-instruction-steps li"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .install-instruction-steps li"
   },
   {
-    "name": "--color-border-warning-7",
+    "name": "--color-border-catch-up-scoring-bar",
     "value": "rgba(154,91,0,.28)",
-    "family": "border-warning",
+    "family": "border",
     "usage": [
       ".catch-up-scoring-bar"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .catch-up-scoring-bar"
   },
   {
-    "name": "--color-surface-danger-6",
-    "value": "#fff8e8",
-    "family": "surface-danger",
-    "usage": [
-      ".catch-up-scoring-bar"
-    ]
-  },
-  {
-    "name": "--color-graphic-stroke-neutral",
-    "value": "#5d6b64",
-    "family": "graphic-stroke-neutral",
-    "usage": [
-      ".momentum-zero-baseline"
-    ]
-  },
-  {
-    "name": "--color-graphic-stroke-neutral-2",
+    "name": "--color-graphic-stroke-momentum-y-axis",
     "value": "#9aa7a0",
-    "family": "graphic-stroke-neutral",
+    "family": "graphic-stroke",
     "usage": [
       ".momentum-y-axis"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .momentum-y-axis"
   },
   {
-    "name": "--color-graphic-stroke-neutral-3",
+    "name": "--color-graphic-stroke-momentum-gridline",
     "value": "#dce3df",
-    "family": "graphic-stroke-neutral",
+    "family": "graphic-stroke",
     "usage": [
       ".momentum-gridline"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .momentum-gridline"
   },
   {
-    "name": "--color-graphic-fill-neutral",
-    "value": "#53615a",
-    "family": "graphic-fill-neutral",
-    "usage": [
-      ".momentum-axis-tick"
-    ]
-  },
-  {
-    "name": "--color-graphic-fill-neutral-2",
+    "name": "--color-graphic-fill-momentum-axis-unit",
     "value": "#68756e",
-    "family": "graphic-fill-neutral",
+    "family": "graphic-fill",
     "usage": [
       ".momentum-axis-unit"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .momentum-axis-unit"
   },
   {
-    "name": "--color-graphic-fill-neutral-3",
+    "name": "--color-graphic-fill-point",
     "value": "#fff",
-    "family": "graphic-fill-neutral",
+    "family": "graphic-fill",
     "usage": [
       ".momentum-chart-dot",
       ".ssp-momentum-dot"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .momentum-chart-dot; .ssp-momentum-dot"
   },
   {
-    "name": "--color-graphic-stroke-neutral-4",
-    "value": "#fff",
-    "family": "graphic-stroke-neutral",
-    "usage": [
-      ".momentum-chart .momentum-side-label",
-      ".momentum-point-value",
-      ".ssp-momentum-final"
-    ]
-  },
-  {
-    "name": "--color-surface-success-9",
+    "name": "--color-surface-report-hero-gradient-end",
     "value": "#174b38",
-    "family": "surface-success",
+    "family": "surface",
     "usage": [
       ".report-layer--hero"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .report-layer--hero"
   },
   {
-    "name": "--color-surface-success-10",
+    "name": "--color-surface-report-hero-gradient-start",
     "value": "#0b3325",
-    "family": "surface-success",
+    "family": "surface",
     "usage": [
       ".report-layer--hero"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .report-layer--hero"
   },
   {
-    "name": "--color-content-on-accent-4",
+    "name": "--color-content-on-accent-secondary",
     "value": "rgba(255,255,255,.9)",
-    "family": "content-on-accent",
+    "family": "content",
     "usage": [
       ".round-record-storyline"
-    ]
+    ],
+    "scope": "shared",
+    "purpose": "content on accent secondary"
   },
   {
-    "name": "--color-border-success-18",
+    "name": "--color-border-round-record-turning",
     "value": "#bfe8cf",
-    "family": "border-success",
+    "family": "border",
     "usage": [
       ".round-record-turning"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-record-turning"
   },
   {
-    "name": "--color-surface-card-12",
+    "name": "--color-surface-round-record-turning",
     "value": "rgba(255,255,255,.1)",
-    "family": "surface-card",
+    "family": "surface",
     "usage": [
       ".round-record-turning"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-record-turning"
   },
   {
-    "name": "--color-border-default-4",
+    "name": "--color-border-round-record-footer",
     "value": "rgba(255,255,255,.2)",
-    "family": "border-default",
+    "family": "border",
     "usage": [
       ".round-record-footer"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-record-footer"
   },
   {
-    "name": "--color-print-content-info",
-    "value": "#172033",
-    "family": "print-content-info",
-    "usage": [
-      ".score-number"
-    ]
-  },
-  {
-    "name": "--color-print-border-success",
-    "value": "#2b7a4b",
-    "family": "print-border-success",
-    "usage": [
-      ".score-birdie",
-      ".score-eagle"
-    ]
-  },
-  {
-    "name": "--color-print-shadow-accent",
-    "value": "#2b7a4b",
-    "family": "print-shadow-accent",
-    "usage": [
-      ".score-eagle"
-    ]
-  },
-  {
-    "name": "--color-print-border-warning",
-    "value": "#a07a14",
-    "family": "print-border-warning",
-    "usage": [
-      ".score-bogey",
-      ".score-doublebogey"
-    ]
-  },
-  {
-    "name": "--color-print-shadow-ink",
-    "value": "#a07a14",
-    "family": "print-shadow-ink",
-    "usage": [
-      ".score-doublebogey"
-    ]
-  },
-  {
-    "name": "--color-shadow-ink-17",
+    "name": "--color-shadow-score-distribution-table",
     "value": "rgba(0,0,0,.28)",
-    "family": "shadow-ink",
+    "family": "shadow",
     "usage": [
       ".score-distribution-table th:first-child,.score-distribution-table td:first-child"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .score-distribution-table th:first-child,.score-distribution-table td:first-child"
   },
   {
-    "name": "--color-surface-subtle-29",
+    "name": "--color-surface-final-net-settlement-card",
     "value": "#fbfcfd",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".final-net-settlement-card",
       ".scoreboard-round-actions"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .final-net-settlement-card; .scoreboard-round-actions"
   },
   {
-    "name": "--color-border-success-19",
+    "name": "--color-border-settle-up-card",
     "value": "rgba(12,55,33,.10)",
-    "family": "border-success",
+    "family": "border",
     "usage": [
       ".settle-up-card",
       ".scorecard-import-file-row",
       ".gross-game-card-total",
       ".stat-matrix-table th,.stat-matrix-table td"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .settle-up-card; .scorecard-import-file-row; .gross-game-card-total"
   },
   {
-    "name": "--color-border-success-20",
+    "name": "--color-border-nine-point-settlement-note",
     "value": "rgba(21,91,55,.16)",
-    "family": "border-success",
+    "family": "border",
     "usage": [
       ".nine-point-settlement-note"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .nine-point-settlement-note"
   },
   {
-    "name": "--color-surface-success-11",
+    "name": "--color-surface-nine-point-settlement-note",
     "value": "rgba(21,91,55,.06)",
-    "family": "surface-success",
+    "family": "surface",
     "usage": [
       ".nine-point-settlement-note"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .nine-point-settlement-note"
   },
   {
-    "name": "--color-surface-success-12",
+    "name": "--color-surface-library-connected-marker",
     "value": "#177245",
-    "family": "surface-success",
+    "family": "surface",
     "usage": [
       ".course-library-status.is-connected::before"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .course-library-status.is-connected::before"
   },
   {
-    "name": "--color-surface-warning-6",
+    "name": "--color-surface-library-loading-marker",
     "value": "#b7791f",
-    "family": "surface-warning",
+    "family": "surface",
     "usage": [
       ".course-library-status.is-loading::before"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .course-library-status.is-loading::before"
   },
   {
-    "name": "--color-surface-info-2",
+    "name": "--color-surface-library-unavailable-marker",
     "value": "#718096",
-    "family": "surface-info",
+    "family": "surface",
     "usage": [
       ".course-library-status.is-unavailable::before,.course-library-status.is-not-configured::before"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .course-library-status.is-unavailable::before,.course-library-status.is-not-configured::before"
   },
   {
-    "name": "--color-border-warning-8",
+    "name": "--color-border-import-completeness-warning",
     "value": "#b45309",
-    "family": "border-warning",
+    "family": "border",
     "usage": [
       ".import-completeness-warning"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .import-completeness-warning"
   },
   {
-    "name": "--color-content-warning-9",
+    "name": "--color-content-warning-text",
     "value": "#9a5a00",
-    "family": "content-warning",
+    "family": "content",
     "usage": [
       ".warning-text"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .warning-text"
   },
   {
-    "name": "--color-surface-card-13",
-    "value": "rgba(255,255,255,0.7)",
-    "family": "surface-card",
-    "usage": [
-      ".import-tee-card"
-    ]
-  },
-  {
-    "name": "--color-border-success-21",
+    "name": "--color-border-gross-game-detail-card",
     "value": "rgba(12,55,33,.12)",
-    "family": "border-success",
+    "family": "border",
     "usage": [
       ".gross-game-detail-card",
       ".round-recap-story-target"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .gross-game-detail-card; .round-recap-story-target"
   },
   {
-    "name": "--color-border-success-22",
+    "name": "--color-border-gross-game-detail-toggle",
     "value": "rgba(12,55,33,.18)",
-    "family": "border-success",
+    "family": "border",
     "usage": [
       ".gross-game-detail-toggle",
       ".memory-feed-empty"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .gross-game-detail-toggle; .memory-feed-empty"
   },
   {
-    "name": "--color-content-success-9",
+    "name": "--color-content-gross-game-detail-toggle",
     "value": "#0c3721",
-    "family": "content-success",
+    "family": "content",
     "usage": [
       ".gross-game-detail-toggle",
       ".gross-game-player-name"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .gross-game-detail-toggle; .gross-game-player-name"
   },
   {
-    "name": "--color-focus-ring-3",
+    "name": "--color-focus-ring-gross-game-detail-toggle",
     "value": "rgba(11,93,59,.22)",
     "family": "focus-ring",
     "usage": [
       ".gross-game-detail-toggle:focus-visible"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .gross-game-detail-toggle:focus-visible"
   },
   {
-    "name": "--color-content-info-5",
+    "name": "--color-content-gross-game-section-title",
     "value": "#243247",
-    "family": "content-info",
+    "family": "content",
     "usage": [
       ".gross-game-section-title"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .gross-game-section-title"
   },
   {
-    "name": "--color-surface-card-14",
-    "value": "rgba(255,255,255,0.55)",
-    "family": "surface-card",
-    "usage": [
-      ".stat-participants-card"
-    ]
-  },
-  {
-    "name": "--color-border-success-23",
+    "name": "--color-border-setup-summary-card",
     "value": "#2f6f4e",
-    "family": "border-success",
+    "family": "border",
     "usage": [
       ".setup-summary-card",
       ".match-templates-card,\r\n.round-readiness-card"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-summary-card; .match-templates-card,\r\n.round-readiness-card"
   },
   {
-    "name": "--color-shadow-accent-15",
+    "name": "--color-shadow-stat-matrix-table",
     "value": "rgba(12,55,33,.10)",
-    "family": "shadow-accent",
+    "family": "shadow",
     "usage": [
       ".stat-matrix-table .stat-player-col",
       ".player-hole-stat-fixed"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .stat-matrix-table .stat-player-col; .player-hole-stat-fixed"
   },
   {
-    "name": "--color-surface-subtle-30",
+    "name": "--color-surface-stat-step-btn",
     "value": "#f4f7f5",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".stat-step-btn"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .stat-step-btn"
   },
   {
-    "name": "--color-focus-ring-4",
+    "name": "--color-focus-ring-preference-segments",
     "value": "rgba(11,93,59,.24)",
     "family": "focus-ring",
     "usage": [
       ".preference-segments input:focus-visible+span",
       ".setup-destination-card:focus-visible"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .preference-segments input:focus-visible+span; .setup-destination-card:focus-visible"
   },
   {
-    "name": "--color-border-default-5",
+    "name": "--color-border-shared-match-panel",
     "value": "#d7e0da",
-    "family": "border-default",
+    "family": "border",
     "usage": [
       ".shared-match-panel",
       ".shared-assignment-row",
       ".setup-choice-btn",
       ".setup-role-badge"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .shared-match-panel; .shared-assignment-row; .setup-choice-btn"
   },
   {
-    "name": "--color-surface-success-13",
+    "name": "--color-surface-shared-match-panel",
     "value": "rgba(11, 93, 59, 0.04)",
-    "family": "surface-success",
+    "family": "surface",
     "usage": [
       ".shared-match-panel"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .shared-match-panel"
   },
   {
-    "name": "--color-content-primary-4",
+    "name": "--color-content-shared-match-code",
     "value": "#66736c",
-    "family": "content-primary",
+    "family": "content",
     "usage": [
       ".shared-match-code span",
       ".session-round-row span"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .shared-match-code span; .session-round-row span"
   },
   {
-    "name": "--color-surface-subtle-31",
+    "name": "--color-surface-setup-choice-btn",
     "value": "#eef6f1",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".setup-choice-btn"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-choice-btn"
   },
   {
-    "name": "--color-content-primary-5",
+    "name": "--color-content-setup-choice-btn",
     "value": "#6c756f",
-    "family": "content-primary",
+    "family": "content",
     "usage": [
       ".setup-choice-btn > span",
       ".modal-card p",
       ".ssp-status-row span"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-choice-btn > span; .modal-card p; .ssp-status-row span"
   },
   {
-    "name": "--color-surface-subtle-32",
+    "name": "--color-surface-readonly-setup-card",
     "value": "#fbf7ef",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".readonly-setup-card"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .readonly-setup-card"
   },
   {
-    "name": "--color-focus-ring-5",
+    "name": "--color-surface-setup-choice-hover",
     "value": "#e5f1eb",
-    "family": "focus-ring",
+    "family": "surface",
     "usage": [
       ".setup-choice-btn:hover,\r\n.setup-choice-btn:focus-visible"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-choice-btn:hover,\r\n.setup-choice-btn:focus-visible"
   },
   {
-    "name": "--color-focus-ring-6",
+    "name": "--color-focus-ring-setup-choice-btn-ring",
     "value": "#b9d1c4",
     "family": "focus-ring",
     "usage": [
       ".setup-choice-btn:hover,\r\n.setup-choice-btn:focus-visible"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-choice-btn:hover,\r\n.setup-choice-btn:focus-visible"
   },
   {
-    "name": "--color-overlay-scrim-2",
+    "name": "--color-overlay-modal-backdrop",
     "value": "rgba(0, 0, 0, 0.28)",
-    "family": "overlay-scrim",
+    "family": "overlay",
     "usage": [
       ".modal-backdrop"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .modal-backdrop"
   },
   {
-    "name": "--color-shadow-ink-18",
-    "value": "rgba(0,0,0,0.18)",
-    "family": "shadow-ink",
-    "usage": [
-      ".modal-card"
-    ]
-  },
-  {
-    "name": "--color-border-warning-9",
+    "name": "--color-border-setup-warning",
     "value": "#e2b66b",
-    "family": "border-warning",
+    "family": "border",
     "usage": [
       ".setup-warning"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-warning"
   },
   {
-    "name": "--color-surface-warning-7",
+    "name": "--color-surface-setup-warning",
     "value": "#fff7e7",
-    "family": "surface-warning",
+    "family": "surface",
     "usage": [
       ".setup-warning"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-warning"
   },
   {
-    "name": "--color-content-warning-10",
+    "name": "--color-content-setup-warning",
     "value": "#6b4608",
-    "family": "content-warning",
+    "family": "content",
     "usage": [
       ".setup-warning",
       ".ssp-ledger-warning"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-warning; .ssp-ledger-warning"
   },
   {
-    "name": "--color-border-success-24",
+    "name": "--color-border-ssp-status-row",
     "value": "rgba(7,93,59,.36)",
-    "family": "border-success",
+    "family": "border",
     "usage": [
       ".ssp-status-row .ssp-multiplier-status"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .ssp-status-row .ssp-multiplier-status"
   },
   {
-    "name": "--color-surface-subtle-33",
+    "name": "--color-surface-ssp-status-row",
     "value": "#f2faf5",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".ssp-status-row .ssp-multiplier-status"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .ssp-status-row .ssp-multiplier-status"
   },
   {
-    "name": "--color-content-success-10",
+    "name": "--color-content-ssp-status-row",
     "value": "#053d26",
-    "family": "content-success",
+    "family": "content",
     "usage": [
       ".ssp-status-row .ssp-multiplier-status"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .ssp-status-row .ssp-multiplier-status"
   },
   {
-    "name": "--color-border-success-25",
+    "name": "--color-border-ssp-header-actions",
     "value": "rgba(7,93,59,.2)",
-    "family": "border-success",
+    "family": "border",
     "usage": [
       ".ssp-header-actions"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .ssp-header-actions"
   },
   {
-    "name": "--color-content-secondary-7",
+    "name": "--color-content-ssp-header-actions-label",
     "value": "#355b49",
-    "family": "content-secondary",
+    "family": "content",
     "usage": [
       ".ssp-header-actions-label"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .ssp-header-actions-label"
   },
   {
-    "name": "--color-border-success-26",
+    "name": "--color-border-ssp-chip",
     "value": "#053d26",
-    "family": "border-success",
+    "family": "border",
     "usage": [
       ".ssp-chip input:checked + span"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .ssp-chip input:checked + span"
   },
   {
-    "name": "--color-surface-success-14",
+    "name": "--color-surface-ssp-chip",
     "value": "#075d3b",
-    "family": "surface-success",
+    "family": "surface",
     "usage": [
       ".ssp-chip input:checked + span"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .ssp-chip input:checked + span"
   },
   {
-    "name": "--color-shadow-accent-16",
+    "name": "--color-shadow-ssp-chip",
     "value": "rgba(7,93,59,.16)",
-    "family": "shadow-accent",
+    "family": "shadow",
     "usage": [
       ".ssp-chip input:checked + span"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .ssp-chip input:checked + span"
   },
   {
-    "name": "--color-border-info-2",
+    "name": "--color-border-ssp-ledger-team-detail",
     "value": "rgba(15,23,42,.12)",
-    "family": "border-info",
+    "family": "border",
     "usage": [
       ".ssp-ledger-team-detail + .ssp-ledger-team-detail"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .ssp-ledger-team-detail + .ssp-ledger-team-detail"
   },
   {
-    "name": "--color-focus-ring-7",
+    "name": "--color-focus-ring-player-detail-trigger",
     "value": "rgba(11,93,59,.35)",
     "family": "focus-ring",
     "usage": [
       ".player-detail-trigger:focus-visible"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .player-detail-trigger:focus-visible"
   },
   {
-    "name": "--color-content-danger-8",
+    "name": "--color-content-danger-lite",
     "value": "#8a1f11",
-    "family": "content-danger",
+    "family": "content",
     "usage": [
       ".danger-lite"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .danger-lite"
   },
   {
-    "name": "--color-focus-ring-8",
+    "name": "--color-focus-ring-danger-lite",
     "value": "#d9afa8",
     "family": "focus-ring",
     "usage": [
       ".danger-lite:hover,\r\n.danger-lite:focus-visible"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .danger-lite:hover,\r\n.danger-lite:focus-visible"
   },
   {
-    "name": "--color-focus-ring-9",
+    "name": "--color-surface-danger-action-hover",
     "value": "#fff3f1",
-    "family": "focus-ring",
+    "family": "surface",
     "usage": [
       ".danger-lite:hover,\r\n.danger-lite:focus-visible"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .danger-lite:hover,\r\n.danger-lite:focus-visible"
   },
   {
-    "name": "--color-surface-subtle-34",
+    "name": "--color-surface-post-round-progress-step",
     "value": "#eef4f1",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".post-round-progress-step b"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .post-round-progress-step b"
   },
   {
-    "name": "--color-border-warning-10",
+    "name": "--color-border-post-round-progress-step-working",
     "value": "rgba(138,97,0,.3)",
-    "family": "border-warning",
+    "family": "border",
     "usage": [
       ".post-round-progress-step[data-state=\"working\"]"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .post-round-progress-step[data-state=\"working\"]"
   },
   {
-    "name": "--color-surface-danger-7",
+    "name": "--color-surface-post-round-progress-step-working",
     "value": "#fff3cf",
-    "family": "surface-danger",
+    "family": "surface",
     "usage": [
       ".post-round-progress-step[data-state=\"working\"] b"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .post-round-progress-step[data-state=\"working\"] b"
   },
   {
-    "name": "--color-border-success-27",
+    "name": "--color-border-shared-status-grid",
     "value": "rgba(22, 101, 52, 0.14)",
-    "family": "border-success",
+    "family": "border",
     "usage": [
       ".shared-status-grid > div,\r\n.shared-device-row,\r\n.shared-assignment-row"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .shared-status-grid > div,\r\n.shared-device-row,\r\n.shared-assignment-row"
   },
   {
-    "name": "--color-surface-card-15",
+    "name": "--color-surface-shared-status-grid",
     "value": "rgba(255, 255, 255, 0.62)",
-    "family": "surface-card",
+    "family": "surface",
     "usage": [
       ".shared-status-grid > div,\r\n.shared-device-row,\r\n.shared-assignment-row"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .shared-status-grid > div,\r\n.shared-device-row,\r\n.shared-assignment-row"
   },
   {
-    "name": "--color-border-success-28",
+    "name": "--color-border-shared-match-status-good",
     "value": "rgba(22, 163, 74, 0.28)",
-    "family": "border-success",
+    "family": "border",
     "usage": [
       ".shared-match-status-good"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .shared-match-status-good"
   },
   {
-    "name": "--color-border-warning-11",
+    "name": "--color-border-shared-match-status-warning",
     "value": "rgba(202, 138, 4, 0.32)",
-    "family": "border-warning",
+    "family": "border",
     "usage": [
       ".shared-match-status-warning"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .shared-match-status-warning"
   },
   {
-    "name": "--color-border-info-3",
+    "name": "--color-border-shared-match-status-working",
     "value": "rgba(37, 99, 235, 0.28)",
-    "family": "border-info",
+    "family": "border",
     "usage": [
       ".shared-match-status-working"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .shared-match-status-working"
   },
   {
-    "name": "--color-surface-info-3",
+    "name": "--color-surface-memory-quick-divider",
     "value": "rgba(148, 163, 184, 0.28)",
-    "family": "surface-info",
+    "family": "surface",
     "usage": [
       ".memory-quick-divider"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .memory-quick-divider"
   },
   {
-    "name": "--color-surface-chrome-3",
+    "name": "--color-surface-app-chrome",
     "value": "rgba(243,246,244,.96)",
-    "family": "surface-chrome",
+    "family": "surface",
     "usage": [
       ".app-chrome",
       ".app-chrome",
       ".app-chrome"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .app-chrome"
   },
   {
-    "name": "--color-border-warning-12",
+    "name": "--color-border-round-recap-review-warning",
     "value": "#d59a32",
-    "family": "border-warning",
+    "family": "border",
     "usage": [
       ".round-recap-review-warning"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-recap-review-warning"
   },
   {
-    "name": "--color-surface-warning-8",
+    "name": "--color-surface-round-recap-review-warning",
     "value": "#fff7e6",
-    "family": "surface-warning",
+    "family": "surface",
     "usage": [
       ".round-recap-review-warning"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-recap-review-warning"
   },
   {
-    "name": "--color-content-warning-11",
+    "name": "--color-content-round-recap-review-warning",
     "value": "#5e4318",
-    "family": "content-warning",
+    "family": "content",
     "usage": [
       ".round-recap-review-warning"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-recap-review-warning"
   },
   {
-    "name": "--color-surface-chrome-4",
+    "name": "--color-surface-app-chrome-chrome",
     "value": "rgba(243,246,244,.98)",
-    "family": "surface-chrome",
+    "family": "surface",
     "usage": [
       ".app-chrome",
       ".app-chrome",
       ".app-chrome .top-tabs",
       ".app-chrome"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .app-chrome; .app-chrome .top-tabs"
   },
   {
-    "name": "--color-border-default-6",
+    "name": "--color-border-shared-assignment-diagnostics",
     "value": "rgba(120, 120, 120, 0.45)",
-    "family": "border-default",
+    "family": "border",
     "usage": [
       ".shared-assignment-diagnostics"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .shared-assignment-diagnostics"
   },
   {
-    "name": "--color-surface-card-16",
-    "value": "rgba(255, 255, 255, 0.72)",
-    "family": "surface-card",
-    "usage": [
-      ".shared-assignment-diagnostics"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-35",
+    "name": "--color-surface-diag-json",
     "value": "rgba(0, 0, 0, 0.06)",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".diag-json"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .diag-json"
   },
   {
-    "name": "--color-border-default-7",
+    "name": "--color-border-mini-table",
     "value": "rgba(120, 120, 120, 0.25)",
-    "family": "border-default",
+    "family": "border",
     "usage": [
       ".mini-table th,\r\n.mini-table td"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .mini-table th,\r\n.mini-table td"
   },
   {
-    "name": "--color-print-border-warning-2",
+    "name": "--color-print-border-warning-incomplete-round-warning",
     "value": "rgba(180, 83, 9, .28)",
-    "family": "print-border-warning",
-    "usage": [
-      ".incomplete-round-warning,\r\n.export-incomplete-warning"
-    ]
-  },
-  {
-    "name": "--color-print-surface-warning",
-    "value": "#fff7ed",
-    "family": "print-surface-warning",
-    "usage": [
-      ".incomplete-round-warning,\r\n.export-incomplete-warning"
-    ]
-  },
-  {
-    "name": "--color-print-content-warning",
-    "value": "#7c2d12",
-    "family": "print-content-warning",
+    "family": "print-border",
     "usage": [
       ".incomplete-round-warning,\r\n.export-incomplete-warning",
-      ".export-provisional-detail"
-    ]
+      ".export-provisional-label"
+    ],
+    "scope": "print",
+    "purpose": "Preserved paint for .incomplete-round-warning,\r\n.export-incomplete-warning; .export-provisional-label"
   },
   {
-    "name": "--color-border-warning-13",
+    "name": "--color-border-round-complete-warning",
     "value": "rgba(12,55,33,.18)",
-    "family": "border-warning",
+    "family": "border",
     "usage": [
       ".round-complete-warning"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-complete-warning"
   },
   {
-    "name": "--color-surface-warning-9",
-    "value": "#f7faf8",
-    "family": "surface-warning",
-    "usage": [
-      ".round-complete-warning"
-    ]
-  },
-  {
-    "name": "--color-print-border-success-2",
+    "name": "--color-print-border-success-scoreboard-export-card",
     "value": "rgba(12,55,33,.14)",
-    "family": "print-border-success",
+    "family": "print-border",
     "usage": [
       ".scoreboard-export-card"
-    ]
+    ],
+    "scope": "print",
+    "purpose": "Preserved paint for .scoreboard-export-card"
   },
   {
-    "name": "--color-print-shadow-ink-2",
+    "name": "--color-print-shadow-ink-scoreboard-export-card",
     "value": "rgba(15, 23, 42, .06)",
-    "family": "print-shadow-ink",
+    "family": "print-shadow",
     "usage": [
       ".scoreboard-export-card"
-    ]
+    ],
+    "scope": "print",
+    "purpose": "Preserved paint for .scoreboard-export-card"
   },
   {
-    "name": "--color-print-border-success-3",
+    "name": "--color-print-border-success-scoreboard-print-view-hint",
     "value": "rgba(12,55,33,.12)",
-    "family": "print-border-success",
+    "family": "print-border",
     "usage": [
       "#scoreboardPrintViewHint"
-    ]
+    ],
+    "scope": "print",
+    "purpose": "Preserved paint for #scoreboardPrintViewHint"
   },
   {
-    "name": "--color-print-surface-subtle",
-    "value": "#f7faf8",
-    "family": "print-surface-subtle",
-    "usage": [
-      "#scoreboardPrintViewHint"
-    ]
-  },
-  {
-    "name": "--color-print-content-success",
-    "value": "#30513f",
-    "family": "print-content-success",
-    "usage": [
-      "#scoreboardPrintViewHint"
-    ]
-  },
-  {
-    "name": "--color-border-info-4",
+    "name": "--color-border-scoreboard-round-actions",
     "value": "rgba(15,23,42,.08)",
-    "family": "border-info",
+    "family": "border",
     "usage": [
       ".scoreboard-round-actions",
       ".readiness-check"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .scoreboard-round-actions; .readiness-check"
   },
   {
-    "name": "--color-print-border-warning-3",
-    "value": "rgba(180,83,9,.28)",
-    "family": "print-border-warning",
-    "usage": [
-      ".export-provisional-label"
-    ]
-  },
-  {
-    "name": "--color-print-surface-danger",
-    "value": "#fff7ed",
-    "family": "print-surface-danger",
-    "usage": [
-      ".export-provisional-label",
-      ".export-provisional-detail"
-    ]
-  },
-  {
-    "name": "--color-print-content-secondary",
-    "value": "#7c2d12",
-    "family": "print-content-secondary",
-    "usage": [
-      ".export-provisional-label"
-    ]
-  },
-  {
-    "name": "--color-border-success-29",
+    "name": "--color-border-app-updates-card",
     "value": "rgba(15, 64, 43, 0.10)",
-    "family": "border-success",
+    "family": "border",
     "usage": [
       ".app-updates-card .app-update-summary > div"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .app-updates-card .app-update-summary > div"
   },
   {
-    "name": "--color-content-warning-12",
+    "name": "--color-content-warning-inline",
     "value": "#8a2d12",
-    "family": "content-warning",
+    "family": "content",
     "usage": [
       ".warning-text"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .warning-text"
   },
   {
-    "name": "--color-surface-warning-10",
+    "name": "--color-surface-warning-text",
     "value": "#fff6ee",
-    "family": "surface-warning",
+    "family": "surface",
     "usage": [
       ".warning-text"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .warning-text"
   },
   {
-    "name": "--color-border-warning-14",
+    "name": "--color-border-warning-text",
     "value": "#f1c49e",
-    "family": "border-warning",
+    "family": "border",
     "usage": [
       ".warning-text"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .warning-text"
   },
   {
-    "name": "--color-print-border-warning-4",
+    "name": "--color-print-border-warning-export-provisional-detail",
     "value": "rgba(180, 83, 9, 0.32)",
-    "family": "print-border-warning",
+    "family": "print-border",
     "usage": [
       ".export-provisional-detail"
-    ]
+    ],
+    "scope": "print",
+    "purpose": "Preserved paint for .export-provisional-detail"
   },
   {
-    "name": "--color-border-success-30",
-    "value": "rgba(11, 93, 59, 0.18)",
-    "family": "border-success",
-    "usage": [
-      ".round-end-reason-option",
-      ".round-end-reason-option"
-    ]
-  },
-  {
-    "name": "--color-surface-card-17",
-    "value": "rgba(255,255,255,0.72)",
-    "family": "surface-card",
-    "usage": [
-      ".round-end-reason-option",
-      ".match-template-row",
-      ".round-readiness-status",
-      ".readiness-weather-status"
-    ]
-  },
-  {
-    "name": "--color-border-danger-3",
+    "name": "--color-border-danger-lite",
     "value": "rgba(159,18,57,.25)",
-    "family": "border-danger",
+    "family": "border",
     "usage": [
       ".danger-lite"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .danger-lite"
   },
   {
-    "name": "--color-surface-card-18",
-    "value": "rgba(255,255,255,0.6)",
-    "family": "surface-card",
-    "usage": [
-      ".compact-empty-state"
-    ]
-  },
-  {
-    "name": "--color-border-success-31",
+    "name": "--color-border-round-readiness-status",
     "value": "rgba(22,163,74,.35)",
-    "family": "border-success",
+    "family": "border",
     "usage": [
       ".round-readiness-status.ready"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-readiness-status.ready"
   },
   {
-    "name": "--color-surface-success-15",
+    "name": "--color-surface-round-readiness-status",
     "value": "rgba(22,163,74,.08)",
-    "family": "surface-success",
+    "family": "surface",
     "usage": [
       ".round-readiness-status.ready"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-readiness-status.ready"
   },
   {
-    "name": "--color-border-warning-15",
+    "name": "--color-border-round-readiness-status-warning",
     "value": "rgba(217,119,6,.35)",
-    "family": "border-warning",
+    "family": "border",
     "usage": [
       ".round-readiness-status.review"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-readiness-status.review"
   },
   {
-    "name": "--color-surface-warning-11",
+    "name": "--color-surface-round-readiness-status-warning",
     "value": "rgba(217,119,6,.08)",
-    "family": "surface-warning",
+    "family": "surface",
     "usage": [
       ".round-readiness-status.review"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-readiness-status.review"
   },
   {
-    "name": "--color-surface-warning-12",
+    "name": "--color-surface-weather-warning",
     "value": "#fff4db",
-    "family": "surface-warning",
+    "family": "surface",
     "usage": [
       ".readiness-weather-status.warn > span"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .readiness-weather-status.warn > span"
   },
   {
-    "name": "--color-content-warning-13",
+    "name": "--color-content-weather-warning",
     "value": "#9a5b00",
-    "family": "content-warning",
+    "family": "content",
     "usage": [
       ".readiness-weather-status.warn > span"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .readiness-weather-status.warn > span"
   },
   {
-    "name": "--color-surface-subtle-36",
+    "name": "--color-surface-weather-info",
     "value": "#edf3fb",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".readiness-weather-status.info > span"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .readiness-weather-status.info > span"
   },
   {
-    "name": "--color-content-info-6",
+    "name": "--color-content-readiness-weather-status-info",
     "value": "#265b8f",
-    "family": "content-info",
+    "family": "content",
     "usage": [
       ".readiness-weather-status.info > span"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .readiness-weather-status.info > span"
   },
   {
-    "name": "--color-surface-card-19",
+    "name": "--color-surface-readiness-check-card",
     "value": "rgba(255,255,255,0.58)",
-    "family": "surface-card",
+    "family": "surface",
     "usage": [
       ".readiness-check"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .readiness-check"
   },
   {
-    "name": "--color-content-success-11",
+    "name": "--color-content-readiness-check-success",
     "value": "#15803d",
-    "family": "content-success",
+    "family": "content",
     "usage": [
       ".readiness-check.ok > span"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .readiness-check.ok > span"
   },
   {
-    "name": "--color-content-warning-14",
+    "name": "--color-content-readiness-check-warning",
     "value": "#b45309",
-    "family": "content-warning",
+    "family": "content",
     "usage": [
       ".readiness-check.warn > span"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .readiness-check.warn > span"
   },
   {
-    "name": "--color-surface-subtle-37",
+    "name": "--color-surface-round-end-review-status",
     "value": "#eaf5ee",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".round-end-review-status"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-end-review-status"
   },
   {
-    "name": "--color-surface-danger-8",
+    "name": "--color-surface-round-review-provisional",
     "value": "#fff7e8",
-    "family": "surface-danger",
+    "family": "surface",
     "usage": [
       ".round-end-review-status.provisional"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-end-review-status.provisional"
   },
   {
-    "name": "--color-border-warning-16",
+    "name": "--color-border-round-end-review-status",
     "value": "rgba(180,83,9,.28)",
-    "family": "border-warning",
+    "family": "border",
     "usage": [
       ".round-end-review-status.provisional"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-end-review-status.provisional"
   },
   {
-    "name": "--color-content-success-12",
+    "name": "--color-content-round-end-review-ok",
     "value": "#176b45",
-    "family": "content-success",
+    "family": "content",
     "usage": [
       ".round-end-review-ok"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-end-review-ok"
   },
   {
-    "name": "--color-surface-card-20",
+    "name": "--color-surface-round-end-reason-option",
     "value": "rgba(255,255,255,0.84)",
-    "family": "surface-card",
+    "family": "surface",
     "usage": [
       ".round-end-reason-option"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-end-reason-option"
   },
   {
-    "name": "--color-shadow-accent-17",
+    "name": "--color-shadow-fixed",
     "value": "rgba(11,93,59,.10)",
-    "family": "shadow-accent",
+    "family": "shadow",
     "usage": [
       "0%",
       "0%"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for 0%"
   },
   {
-    "name": "--color-surface-subtle-38",
+    "name": "--color-surface-score-confirmation-start",
     "value": "#e7f2ec",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       "0%",
       ".score-input.score-confirmed-flash"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for 0%; .score-input.score-confirmed-flash"
   },
   {
-    "name": "--color-surface-success-16",
+    "name": "--color-surface-score-confirmation-peak",
     "value": "#d8ebdf",
-    "family": "surface-success",
+    "family": "surface",
     "usage": [
       "45%"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for 45%"
   },
   {
-    "name": "--color-shadow-accent-18",
+    "name": "--color-shadow-fixed-accent",
     "value": "rgba(11,93,59,.14)",
-    "family": "shadow-accent",
+    "family": "shadow",
     "usage": [
       "45%"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for 45%"
   },
   {
-    "name": "--color-surface-subtle-39",
+    "name": "--color-surface-quick-nassau-component",
     "value": "#fafcfb",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".quick-nassau-component",
       ".quick-native-game"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .quick-nassau-component; .quick-native-game"
   },
   {
-    "name": "--color-focus-ring-10",
+    "name": "--color-focus-ring-table-scroll-region",
     "value": "rgba(11,93,59,.30)",
     "family": "focus-ring",
     "usage": [
       ".table-scroll-region:focus-visible"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .table-scroll-region:focus-visible"
   },
   {
-    "name": "--color-focus-ring-11",
+    "name": "--color-focus-ring-press-opportunity-row",
     "value": "#f5faf7",
     "family": "focus-ring",
     "usage": [
       ".press-opportunity-row:hover,.press-opportunity-row:focus-visible"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .press-opportunity-row:hover,.press-opportunity-row:focus-visible"
   },
   {
-    "name": "--color-graphic-stroke-info",
-    "value": "#9ca3af",
-    "family": "graphic-stroke-info",
-    "usage": [
-      ".ssp-momentum-zero"
-    ]
-  },
-  {
-    "name": "--color-graphic-stroke-neutral-5",
+    "name": "--color-graphic-stroke-ssp-momentum-axis",
     "value": "#c8d2cc",
-    "family": "graphic-stroke-neutral",
+    "family": "graphic-stroke",
     "usage": [
       ".ssp-momentum-axis"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .ssp-momentum-axis"
   },
   {
-    "name": "--color-surface-subtle-40",
+    "name": "--color-surface-round-snapshot-badge-complete",
     "value": "#edf7f1",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".round-snapshot-badge-complete"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-snapshot-badge-complete"
   },
   {
-    "name": "--color-surface-info-4",
+    "name": "--color-surface-round-snapshot-badge-clinched",
     "value": "#eff6ff",
-    "family": "surface-info",
+    "family": "surface",
     "usage": [
       ".round-snapshot-badge-clinched"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-snapshot-badge-clinched"
   },
   {
-    "name": "--color-content-info-7",
+    "name": "--color-content-round-snapshot-badge-clinched",
     "value": "#1d4ed8",
-    "family": "content-info",
+    "family": "content",
     "usage": [
       ".round-snapshot-badge-clinched"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-snapshot-badge-clinched"
   },
   {
-    "name": "--color-surface-danger-9",
+    "name": "--color-surface-round-snapshot-badge-provisional",
     "value": "#fff7ed",
-    "family": "surface-danger",
+    "family": "surface",
     "usage": [
       ".round-snapshot-badge-provisional"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-snapshot-badge-provisional"
   },
   {
-    "name": "--color-content-warning-15",
+    "name": "--color-content-round-snapshot-badge-provisional",
     "value": "#9a3412",
-    "family": "content-warning",
+    "family": "content",
     "usage": [
       ".round-snapshot-badge-provisional"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .round-snapshot-badge-provisional"
   },
   {
-    "name": "--color-surface-subtle-41",
+    "name": "--color-surface-report-appendix",
     "value": "#fcfdff",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".report-section--appendix"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .report-section--appendix"
   },
   {
-    "name": "--color-print-graphic-stroke-success",
-    "value": "#0b5d3b",
-    "family": "print-graphic-stroke-success",
-    "usage": [
-      ".ssp-momentum-line",
-      ".ssp-momentum-dot"
-    ]
-  },
-  {
-    "name": "--color-print-graphic-fill-neutral",
-    "value": "#fff",
-    "family": "print-graphic-fill-neutral",
-    "usage": [
-      ".ssp-momentum-dot"
-    ]
-  },
-  {
-    "name": "--color-surface-subtle-42",
+    "name": "--color-surface-score-team-heading",
     "value": "#f4f8f5",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       "#score .score-team-heading th"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for #score .score-team-heading th"
   },
   {
-    "name": "--color-content-success-13",
+    "name": "--color-content-score-team-heading",
     "value": "#315446",
-    "family": "content-success",
+    "family": "content",
     "usage": [
       "#score .score-team-heading th"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for #score .score-team-heading th"
   },
   {
-    "name": "--color-shadow-accent-19",
+    "name": "--color-shadow-score-team-heading",
     "value": "rgba(11,93,59,.72)",
-    "family": "shadow-accent",
+    "family": "shadow",
     "usage": [
       "#score .score-team-heading th"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for #score .score-team-heading th"
   },
   {
-    "name": "--color-surface-subtle-43",
+    "name": "--color-surface-setup-hub-status",
     "value": "#eef2ef",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".setup-hub-status,.setup-destination-status"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-hub-status,.setup-destination-status"
   },
   {
-    "name": "--color-content-success-14",
+    "name": "--color-content-setup-hub-status",
     "value": "#385044",
-    "family": "content-success",
+    "family": "content",
     "usage": [
       ".setup-hub-status,.setup-destination-status"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-hub-status,.setup-destination-status"
   },
   {
-    "name": "--color-surface-success-17",
+    "name": "--color-surface-setup-status-ready",
     "value": "#e2f2e7",
-    "family": "surface-success",
+    "family": "surface",
     "usage": [
       ".setup-hub-status.ready,.setup-destination-status.ready"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-hub-status.ready,.setup-destination-status.ready"
   },
   {
-    "name": "--color-surface-warning-13",
+    "name": "--color-surface-setup-status-attention",
     "value": "#fff0d8",
-    "family": "surface-warning",
+    "family": "surface",
     "usage": [
       ".setup-destination-status.attention"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-destination-status.attention"
   },
   {
-    "name": "--color-border-default-8",
+    "name": "--color-border-setup-destination-card",
     "value": "#d4dfd8",
-    "family": "border-default",
+    "family": "border",
     "usage": [
       ".setup-destination-card"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-destination-card"
   },
   {
-    "name": "--color-shadow-accent-20",
+    "name": "--color-shadow-setup-destination-card",
     "value": "rgba(10,45,28,.04)",
-    "family": "shadow-accent",
+    "family": "shadow",
     "usage": [
       ".setup-destination-card"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-destination-card"
   },
   {
-    "name": "--color-content-success-15",
+    "name": "--color-content-setup-destination-card",
     "value": "#617168",
-    "family": "content-success",
+    "family": "content",
     "usage": [
       ".setup-destination-card small"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-destination-card small"
   },
   {
-    "name": "--color-border-default-9",
+    "name": "--color-border-setup-destination-toolbar",
     "value": "#dce4df",
-    "family": "border-default",
+    "family": "border",
     "usage": [
       ".setup-destination-toolbar"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .setup-destination-toolbar"
   },
   {
-    "name": "--color-border-default-10",
+    "name": "--color-border-competition-rule-row",
     "value": "#d7e3db",
-    "family": "border-default",
+    "family": "border",
     "usage": [
       ".competition-rule-row",
       ".experience-destination-card"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .competition-rule-row; .experience-destination-card"
   },
   {
-    "name": "--color-focus-ring-12",
-    "value": "#0b5d3b",
-    "family": "focus-ring",
-    "usage": [
-      ".experience-destination-card:hover,.experience-destination-card:focus-visible"
-    ]
-  },
-  {
-    "name": "--color-focus-ring-13",
+    "name": "--color-focus-ring-experience-destination-card",
     "value": "#f7fbf8",
     "family": "focus-ring",
     "usage": [
       ".experience-destination-card:hover,.experience-destination-card:focus-visible"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .experience-destination-card:hover,.experience-destination-card:focus-visible"
   },
   {
-    "name": "--color-content-success-16",
+    "name": "--color-content-experience-destination-card",
     "value": "#586b61",
-    "family": "content-success",
+    "family": "content",
     "usage": [
       ".experience-destination-card small"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .experience-destination-card small"
   },
   {
-    "name": "--color-surface-subtle-44",
+    "name": "--color-surface-experience-status",
     "value": "#edf4ef",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".experience-status"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .experience-status"
   },
   {
-    "name": "--color-content-success-17",
+    "name": "--color-content-experience-status",
     "value": "#244c38",
-    "family": "content-success",
+    "family": "content",
     "usage": [
       ".experience-status"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .experience-status"
   },
   {
-    "name": "--color-surface-subtle-45",
+    "name": "--color-surface-scorecard-view-controls",
     "value": "#e7f4ee",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".scorecard-view-controls .segmented-control"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .scorecard-view-controls .segmented-control"
   },
   {
-    "name": "--color-content-success-18",
+    "name": "--color-content-scorecard-view-controls",
     "value": "#19312a",
-    "family": "content-success",
+    "family": "content",
     "usage": [
       ".scorecard-view-controls .segmented-control button"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .scorecard-view-controls .segmented-control button"
   },
   {
-    "name": "--color-surface-subtle-46",
+    "name": "--color-surface-wolf-entry-readback",
     "value": "#f3f7f4",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".wolf-entry-readback"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .wolf-entry-readback"
   },
   {
-    "name": "--color-content-warning-16",
+    "name": "--color-content-game-choice-restriction",
     "value": "#745016",
-    "family": "content-warning",
+    "family": "content",
     "usage": [
       ".game-choice-restriction"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .game-choice-restriction"
   },
   {
-    "name": "--color-surface-disabled",
-    "value": "#f3f5f4",
-    "family": "surface-disabled",
-    "usage": [
-      ".game-pill.disabled"
-    ]
-  },
-  {
-    "name": "--color-content-disabled",
-    "value": "#53605a",
-    "family": "content-disabled",
-    "usage": [
-      ".game-pill.disabled"
-    ]
-  },
-  {
-    "name": "--color-overlay-scrim-3",
+    "name": "--color-overlay-balance-explanation-dialog",
     "value": "rgba(0,0,0,.45)",
-    "family": "overlay-scrim",
+    "family": "overlay",
     "usage": [
       ".balance-explanation-dialog::backdrop"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .balance-explanation-dialog::backdrop"
   },
   {
-    "name": "--color-surface-subtle-47",
+    "name": "--color-surface-balance-explanation-total",
     "value": "#edf5f0",
-    "family": "surface-subtle",
+    "family": "surface",
     "usage": [
       ".balance-explanation-total"
-    ]
+    ],
+    "scope": "surface-specific",
+    "purpose": "Preserved paint for .balance-explanation-total"
+  },
+  {
+    "name": "--color-content-accent",
+    "value": "#0b5d3b",
+    "family": "content",
+    "usage": [
+      ":root --accent"
+    ],
+    "scope": "shared",
+    "purpose": "content accent"
   }
 ]

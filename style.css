@@ -7104,3 +7104,10 @@ body.classic-mode-play-active{overflow-x:clip!important;overflow-y:visible!impor
 @supports(font:-apple-system-body){@media screen and (hover:none){html{font:-apple-system-body}}}
 
 @media screen{.momentum-chart svg,.ssp-momentum svg,.round-record-momentum svg{overflow:visible}.momentum-chart svg text,.ssp-momentum svg text,.round-record-momentum svg text{font-size:calc(var(--type-caption) * var(--graphic-text-scale,1))!important}.momentum-chart svg .momentum-point-value,.momentum-chart svg .momentum-side-label{font-size:calc(var(--type-label) * var(--graphic-text-scale,1))!important}}
+
+/* Team score controls: preserve touch targets over legacy Classic stepper sizes. */
+  #score .gross-score-stepper.team-score-stepper{display:grid!important;grid-template-columns:44px 44px!important;width:92px!important;max-width:92px!important;gap:4px!important}
+  #score .team-score-stepper .score-input{grid-column:1/-1;grid-row:1;width:100%!important;min-width:0!important;max-width:none!important;height:max(44px,2.5rem)!important;min-height:max(44px,2.5rem)!important}
+  #score .team-score-stepper [data-score-step="down"]{grid-column:1;grid-row:2}
+  #score .team-score-stepper [data-score-step="up"]{grid-column:2;grid-row:2}
+  #score .team-score-stepper .score-step-btn{width:44px!important;min-width:44px!important;max-width:44px!important}

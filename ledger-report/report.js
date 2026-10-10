@@ -3,10 +3,10 @@
    or derived from it. Stroke allocation comes from the app's engine, keyed by
    basis; the report never re-derives handicapping.
    ========================================================================== */
-import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.63';
+import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.64';
 
-import './stroke-play.js?v=31.0.63';
-import { compactFlamtanaEvidence, formatFlamtanaMatchedSteps } from './flamtana-evidence.js?v=31.0.63';
+import './stroke-play.js?v=31.0.64';
+import { compactFlamtanaEvidence, formatFlamtanaMatchedSteps } from './flamtana-evidence.js?v=31.0.64';
 const {buildStrokePlaySummary,roundEntryColors,strokePlayChart,strokePlayStrip,strokePlayCallout,handicapTable,toPar}=globalThis.DYE_LEDGER_STROKE_REPORT;
 
 const packPages = globalThis.packPages;

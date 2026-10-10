@@ -19,11 +19,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.63',
-  versionNumber: '31.0.63',
-  cacheName: 'the-dye-ledger-v31.0.63',
-  buildDate: '2026-10-10T20:46:53.051Z',
-  buildLabel: 'Flamtana Report Readability'
+  version: 'v31.0.64',
+  versionNumber: '31.0.64',
+  cacheName: 'the-dye-ledger-v31.0.64',
+  buildDate: '2026-10-10T22:14:27.651Z',
+  buildLabel: 'Flamtana Setup and Scoring'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -402,6 +402,8 @@ function getAppDiagnosticsText() {
     getMatchSetupDiagnosticsText(),
     ''
   ];
+  const joinDiagnostic = getLastSharedJoinDiagnostic();
+  if (joinDiagnostic) lines.push('Last Shared Join Failure: ' + JSON.stringify(joinDiagnostic));
   if (activeSharedMatch?.storageMode === 'shared') {
     lines.push(getSharedSyncDiagnosticsExportText(activeSharedMatch));
     lines.push('');
@@ -1918,9 +1920,16 @@ function getSharedMatchReadinessLines(match, participants = getSharedAssignmentP
   const lines = [];
   if (isHost) {
     if (!joined.length) lines.push('Waiting for joined devices...');
-    else lines.push(`${joined.length} joined device${joined.length === 1 ? '' : 's'}.`);
+    else lines.push(`${joined.length} registered device${joined.length === 1 ? '' : 's'}. Confirm the remote device has opened this match; registration alone does not confirm download.`);
     if (isAssignedPlayersMode(match)) lines.push(`${assigned} of ${total} players assigned.`);
     const scrambleError = getScrambleSetupError(match, { assignments: true });
+    if (isTeamScoredRound(match)) [1,2].forEach(group => {
+      const rows = match.players.filter(player => Math.ceil(Number(player.team) / 2) === group);
+      const assigned = rows.map(player => getAssignedParticipantForPlayer(match, player.playerId));
+      const unique = [...new Set(assigned)];
+      const owner = unique.length === 1 && unique[0] ? getSharedParticipantById(match, unique[0]) : null;
+      lines.push('Foursome ' + group + ' (T' + (group * 2 - 1) + ' + T' + (group * 2) + '): ' + (owner ? owner.deviceName || owner.name || 'Assigned device' : 'Assign all four golfers to the same device.'));
+    });
     if (scrambleError) lines.push(scrambleError);
     else if (!isAssignedPlayersMode(match) || assigned >= total) lines.push('Ready to start scoring.');
   } else {
@@ -5894,6 +5903,16 @@ function ensureRoundTimingStarted(match, timestamp = new Date().toISOString()) {
   if (match.roundTiming.startedAt) return false;
   match.roundTiming.startedAt = timestamp;
   return true;
+}
+async function prepareSharedScoringStart(match, { refresh = refreshSharedDevicesForAssignment, online = navigator.onLine !== false && hasSupabaseConfig() } = {}) {
+  if (!match) return { error: 'No Shared Match is active.' };
+  let refreshWarning = '';
+  if (online) {
+    try { await refresh(match); }
+    catch { refreshWarning = 'Could not refresh devices; using saved assignments. Check backup before finishing.'; }
+  }
+  const error = getScrambleSetupError(match, { assignments: true });
+  return { error, refreshWarning };
 }
 function ensureRoundTimingEnded(match, timestamp = new Date().toISOString(), { overwrite = false } = {}) {
   if (!match) return false;
@@ -10381,7 +10400,7 @@ function buildFlamtanaSetupControls(raw) {
   const cfg = normalizeFlamtanaConfig(raw);
   const players = getSelectedPlayersFromSetup();
   return `<div class="card inset-card game-config-card"><div class="section-label">Flamtana Special</div>
-    <p class="tiny">Four wagers, full team Course Net. Foursome 1 = T1 + T2; Foursome 2 = T3 + T4. Foursome totals sum each hole's lower team net score. All eight Calcutta picks are required before Start. Both devices must use v31.0.63 or newer.</p>
+    <p class="tiny">Four wagers, full team Course Net. Foursome 1 = T1 + T2; Foursome 2 = T3 + T4. Foursome totals sum each hole's lower team net score. All eight Calcutta picks are required before Start. Both devices must use v31.0.64 or newer.</p>
     <div class="grid two compact-grid">${['featured','group','foursome','calcutta'].map(key => `<label><span>${escapeHtml(key[0].toUpperCase() + key.slice(1))} $ per player</span><input type="number" min="0" step="0.01" data-game-config="flamtana_special" data-field="${key}Stake" value="${cfg[key + 'Stake']}"></label>`).join('')}
     <label class="span-2"><span>Tie rule for all three scoring wagers</span><select data-game-config="flamtana_special" data-field="tieMethod">${Object.entries(FLAMTANA_TIE_METHODS).map(([key,label]) => `<option value="${key}" ${cfg.tieMethod === key ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
     <input type="hidden" data-game-config="flamtana_special" data-field="scoringPolicyVersion" value="1">
@@ -10522,7 +10541,7 @@ function computeFlamtanaResults(match, metrics = null, { finalize = match?.statu
 }
 function getScrambleSetupError(match, { assignments = false } = {}) {
   if (!isTeamScoredRound(match)) return '';
-  if (Number(match.teamScoringPolicyVersion) !== 1) return 'Update to v31.0.63 or newer to score this team format.';
+  if (Number(match.teamScoringPolicyVersion) !== 1) return 'Update to v31.0.64 or newer to score this team format.';
   if (Number(match.teamCount) !== 4 || Number(match.playersPerTeam) !== 2 || Number(match.holeCount) !== 18 || (match.players || []).length !== 8 || new Set(match.players.map(p => p.playerId)).size !== 8) return 'Two-man Scramble requires eight golfers, four two-player teams and 18 holes.';
   if (match.storageMode !== 'shared' || normalizeScoringAccessMode(match.scoringAccessMode) !== 'assigned_players') return 'Two-man Scramble requires a Shared Match with assigned-player scoring.';
   if (!hasAssignedTeamIndex(match)) return 'Use assigned team indexes for Two-man Scramble.';
@@ -10578,7 +10597,7 @@ function buildScrambleScoreGridRows(match, tee, metrics, visiblePlayers, hole) {
     const editable = !setupError && !!match.roundTiming?.startedAt && members.length === 2 && members.every(member => canEditPlayerScore(match, team, member.playerId));
     const playerHole = getPlayerHole(match, p, currentHole - 1, tee) || hole;
     const strokes = holeCourseNetStrokeAllowance(playerHole?.strokeIndex, p.courseHdcp);
-    return '<tr><td><strong>' + escapeHtml(getTeamLabel(match, team)) + '</strong><div class="tiny">' + members.map(m => escapeHtml(m.player.name)).join(' / ') + '</div><div class="tiny">Team index ' + Number(p.assignedTeamIndex).toFixed(1) + ' · Playing HCP ' + p.courseHdcp + '</div><div class="tiny">' + (score.inconsistent ? 'Pending / unequal partner scores: ' + score.values.map(v => v ?? '—').join(' / ') + '. Re-enter the team score to resolve, or deliberately clear it.' : score.complete ? 'Team hole complete' : 'Team score not entered') + '</div></td><td><input class="score-input" type="tel" inputmode="numeric" autocomplete="off" min="1" max="25" aria-label="Gross score for ' + escapeHtml(getTeamLabel(match, team)) + '" data-team-inconsistent="' + (score.inconsistent ? '1' : '0') + '" data-score-team="' + team + '" data-score-player="' + escapeHtml(p.playerId) + '" data-hole-par="' + Number(playerHole?.par || 4) + '" value="' + (score.gross ?? '') + '" ' + (editable ? '' : 'disabled') + '></td><td>' + formatStrokesDisplay(strokes) + '</td><td class="score-net-cell">' + (score.complete ? score.gross - strokes : '—') + '</td></tr>';
+    return '<tr><td><strong>' + escapeHtml(getTeamLabel(match, team)) + '</strong><div class="tiny">' + members.map(m => escapeHtml(m.player.name)).join(' / ') + '</div><div class="tiny">Team index ' + Number(p.assignedTeamIndex).toFixed(1) + ' · Playing HCP ' + p.courseHdcp + '</div><div class="tiny">' + (score.inconsistent ? 'Pending / unequal partner scores: ' + score.values.map(v => v ?? '—').join(' / ') + '. Re-enter the team score to resolve, or deliberately clear it.' : score.complete ? 'Team hole complete' : 'Team score not entered') + '</div></td><td><div class="gross-score-stepper team-score-stepper"><button type="button" class="score-step-btn" data-score-step="down" data-score-step-player="' + escapeHtml(p.playerId) + '" aria-label="Decrease team score" ' + (editable ? '' : 'disabled') + '>−</button><input class="score-input" type="tel" inputmode="numeric" autocomplete="off" min="1" max="25" aria-label="Gross score for ' + escapeHtml(getTeamLabel(match, team)) + '" data-team-inconsistent="' + (score.inconsistent ? '1' : '0') + '" data-score-team="' + team + '" data-score-player="' + escapeHtml(p.playerId) + '" data-hole-par="' + Number(playerHole?.par || 4) + '" value="' + (score.gross ?? '') + '" ' + (editable ? '' : 'disabled') + '><button type="button" class="score-step-btn" data-score-step="up" data-score-step-player="' + escapeHtml(p.playerId) + '" aria-label="Increase team score" ' + (editable ? '' : 'disabled') + '>+</button></div></td><td>' + formatStrokesDisplay(strokes) + '</td><td class="score-net-cell">' + (score.complete ? score.gross - strokes : '—') + '</td></tr>';
   }).join('') + '<tr><td colspan="4"><div class="tiny">One shared-ball score per team. Team completion is separate from all four teams completing this hole. No individual statistics or postable scores. If a scoring device drops out, the host can enter or correct all four teams here. Keep the foursome assignments; check backup and parity before finishing.</div></td></tr>';
 }
 function restoreScrambleSetup(match) {
@@ -10586,6 +10605,28 @@ function restoreScrambleSetup(match) {
   if (input) input.checked = isTeamScoredRound(match);
 }
 
+function updateMatchTeamTee(team, teeId = '') {
+  const course = getCourse(document.getElementById('matchCourseSelect')?.value || '');
+  if (teeId && !course?.tees?.some(tee => String(tee.id) === String(teeId))) return false;
+  const draft = syncMatchPlayerDraft(getCurrentMatchEditorSelectionsSnapshot());
+  const members = draft.filter(row => Number(row.team) === Number(team));
+  if (members.length !== 2) return false;
+  members.forEach(row => {
+    row.teeId = String(teeId || '');
+    const input = document.querySelector(`[data-player-tee-slot="${row.slot}"]`);
+    if (input) input.value = row.teeId;
+  });
+  uiState.matchPlayerDraft = draft;
+  normalizeDraftTeeAssignments({ forceDefault: false });
+  const reference = getReferenceTeeStats(null, uiState.matchPlayerDraft);
+  if (!reference.showReferenceSelector) uiState.referenceTeeManual = false;
+  syncReferenceTeeUi({ selections: uiState.matchPlayerDraft, forceAuto: !uiState.referenceTeeManual });
+  renderGamesPicker(collectSelectedGames());
+  renderSetupHandicapPreview();
+  renderTodaysMatchSummary();
+  scheduleSetupDraftSave();
+  return true;
+}
 function finiteHandicapIndex(value) {
   return value === null || value === undefined || String(value).trim() === '' || !Number.isFinite(Number(value)) ? null : Number(value);
 }
@@ -14997,13 +15038,11 @@ async function fetchSharedMatchBundle(matchId) {
     client.from('match_notes').select('*').eq('match_id', matchId).limit(1),
     client.from('match_memberships').select('*').eq('match_id', matchId).eq('status', 'active').order('joined_at'),
   ]);
-  if (matchError) throw matchError;
-  if (teamsError) throw teamsError;
-  if (playersError) throw playersError;
-  if (scoresError) throw scoresError;
-  if (notesError) throw notesError;
+  for (const [table, error] of [['matches',matchError],['match_teams',teamsError],['match_players',playersError],['score_entries',scoresError],['match_notes',notesError]]) {
+    if (error) { const failure = new Error(String(error.message || 'Shared Match download failed.'), { cause: error }); failure.code = error.code; failure.status = error.status; failure.sharedJoinTable = table; throw failure; }
+  }
   if (membershipsError) console.warn('Could not read shared match memberships.', membershipsError);
-  if (!matchRow) throw new Error('Shared match not found.');
+  if (!matchRow) { const failure = new Error('Shared match not found.'); failure.code = 'SHARED_MATCH_NOT_FOUND'; failure.sharedJoinTable = 'matches'; throw failure; }
   const bundle = { matchRow, teams: teams || [], players: players || [], scoreEntries: scoreEntries || [], notes: notesRows?.[0] || null, memberships: memberships || [] };
   cacheCloudMatchBundle(matchId, bundle);
   return bundle;
@@ -15749,28 +15788,58 @@ async function registerSharedJoinDevice(match, {
   await merge(match, { includeAssignments: !isHost(match) });
   return { registered: !!registered, published };
 }
-async function loadSharedMatchFromCloud(matchId, { activate = true, silent = false, requireRegistration = false } = {}) {
+function classifySharedJoinFailure(error, { phase = 'download', authorized = false } = {}) {
+  const code = getSharedSafeErrorCode(error), raw = String(error?.message || '').toLowerCase(), status = Number(error?.status || 0);
+  const table = ['matches','match_teams','match_players','score_entries','match_notes','match_memberships'].includes(error?.sharedJoinTable) ? error.sharedJoinTable : '';
+  const action = phase === 'register' ? 'scorer registration' : 'the match download';
+  let kind = phase === 'authorize' ? 'service' : phase === 'register' ? 'registration' : 'download', message = authorized ? 'This device joined, but '+action+' could not finish. Tap Retry Join. If it continues, copy diagnostics from Support.' : 'The Shared Match could not be loaded. Tap Retry Join; if it continues, copy diagnostics from Support.';
+  if (authorized && phase === 'download' && (code === 'SHARED_MATCH_NOT_FOUND' || /^shared match not found\.?$/.test(raw))) {
+    kind = 'visibility'; message = 'Joining was accepted, but this device could not read the match from cloud. Tap Retry Join; if it continues, copy diagnostics from Support.';
+  } else if (code === 'SHARED_MATCH_NOT_FOUND' || (phase === 'authorize' && code === 'P0002') || /^shared match not found\.?$/.test(raw)) {
+    kind = 'not_found'; message = 'No active Shared Match was found for this code. Verify the current code on the host and tap Retry Sync there before Retry Join.';
+  } else if (status === 401 || /jwt|authentication session|session.*expired|token.*expired/.test(raw)) {
+    kind = 'authentication'; message = 'Your sign-in session needs attention. Sign in again, then tap Retry Join.';
+  } else if (code === '42501' || status === 403 || /permission|row.level|policy/.test(raw)) {
+    kind = 'permission'; message = (authorized ? 'This device joined, but cloud access blocked '+(phase==='register'?'scorer registration':'the match download')+'. ' : 'Cloud access blocked joining this match. ') + 'Tap Retry Join; if it continues, copy diagnostics from Support.';
+  } else if (code === '22023') {
+    kind = 'invalid_code'; message = 'Check the Shared Match code, then tap Retry Join.';
+  } else if (status >= 500 || /network|fetch|offline|timeout|unavailable/.test(raw)) {
+    kind = 'connection'; message = (authorized ? 'This device joined, but '+action+' could not reach the service. ' : 'Could not reach the Shared Match service. ') + 'Check your connection and tap Retry Join.';
+  }
+  const friendly = new Error(message, { cause: error });
+  friendly.code = code; friendly.sharedJoinPhase = phase; friendly.sharedJoinTable = table; friendly.sharedJoinKind = kind; friendly.sharedJoinAuthorized = authorized;
+  try { localStorage.setItem(STORAGE_KEY + ':shared-join-diagnostic', JSON.stringify({ occurredAt: new Date().toISOString(), phase, table, kind, code, authorized })); } catch {}
+  return friendly;
+}
+function getLastSharedJoinDiagnostic() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY + ':shared-join-diagnostic') || 'null'); } catch { return null; }
+}
+async function fetchSharedJoinBundle(matchId, { requireRegistration = false, authorize = authorizeSharedMatchJoin, fetchBundle = fetchSharedMatchBundleWithRetry, readCached = readCachedCloudMatchBundle } = {}) {
   let cloudId = normalizeMatchCode(matchId || '');
   if (!cloudId) throw new Error('Enter a shared match code.');
-  console.debug('[SharedJoin]', 'normalized match code', { input: matchId, normalized: cloudId });
-  if (requireRegistration) cloudId = await authorizeSharedMatchJoin(cloudId);
-  let bundle = null;
-  try {
-    bundle = await fetchSharedMatchBundleWithRetry(cloudId);
-  } catch (err) {
-    bundle = readCachedCloudMatchBundle(cloudId);
-    if (!bundle) {
-      const friendly = new Error('Match not found. Please verify the code and try again.');
-      friendly.cause = err;
-      throw friendly;
-    }
+  let authorized = false;
+  if (requireRegistration) {
+    try { cloudId = await authorize(cloudId); authorized = true; }
+    catch (error) { throw classifySharedJoinFailure(error, { phase: 'authorize' }); }
   }
+  try {
+    const bundle = await fetchBundle(cloudId);
+    try { localStorage.removeItem(STORAGE_KEY + ':shared-join-diagnostic'); } catch {}
+    return { cloudId, bundle, fromCache: false };
+  } catch (error) {
+    const bundle = readCached(cloudId);
+    if (bundle) return { cloudId, bundle, fromCache: true };
+    throw classifySharedJoinFailure(error, { phase: 'download', authorized });
+  }
+}
+async function loadSharedMatchFromCloud(matchId, { activate = true, silent = false, requireRegistration = false } = {}) {
+  const { bundle, fromCache } = await fetchSharedJoinBundle(matchId, { requireRegistration });
   const hydrated = hydrateMatchFromCloudBundle(bundle);
   if (hydrated.storageMode === 'shared') {
     try {
       await registerSharedJoinDevice(hydrated, { requireRegistration });
     } catch (err) {
-      if (requireRegistration) throw err;
+      if (requireRegistration) throw classifySharedJoinFailure(err, { phase: 'register', authorized: true });
       console.warn('Could not register this device with the shared match.', err);
     }
   }
@@ -15792,7 +15861,7 @@ async function loadSharedMatchFromCloud(matchId, { activate = true, silent = fal
     scheduleSharedMatchSync(hydrated, { immediate: true, silent: true });
     startSharedConnectionFastRefresh({ reason: 'join-match' });
   }
-  if (!silent) toast('Shared match loaded from Supabase.');
+  if (!silent) toast(fromCache ? 'Saved match copy opened. Retry Sync to check cloud updates.' : 'Shared match loaded from Supabase.');
   return hydrated;
 }
 
@@ -20009,6 +20078,7 @@ function applySmartScoreStep(inputEl, direction) {
     if (!Number.isFinite(current)) return false;
     next = Math.max(1, Math.round(current + (direction >= 0 ? 1 : -1)));
   }
+  if (inputEl.dataset.scoreTeam) { next = Math.min(25, next); inputEl.dataset.teamScoreTouched = '1'; }
   inputEl.value = String(next);
   updateLiveNetForScoreInput(inputEl);
   schedulePendingScoreAutoAdvance(inputEl);
@@ -21311,6 +21381,7 @@ function populateMatchPlayerPicker(selected = []) {
   uiState.matchPlayerDraft = draftSelections;
   const selectedBySlot = draftSelections.map(s => s.playerId || '');
   const teeBySlot = draftSelections.map(s => Object.prototype.hasOwnProperty.call(s, 'teeId') ? String(s.teeId || '') : String(defaultTeeId || ''));
+  const teamTees = !!document.getElementById('teamScoringEnabled')?.checked;
   const teamNames = Array.from({ length: teamCount }, (_, i) => String(document.querySelector(`[data-team-name="${i + 1}"]`)?.value || '').trim().slice(0,25));
   container.innerHTML = Array.from({ length: slotCount }, (_, idx) => {
     const teamNo = Math.floor(idx / playersPerTeam) + 1;
@@ -21324,7 +21395,11 @@ function populateMatchPlayerPicker(selected = []) {
     const slotLabel = `${teamLabel}, Player ${slotNo}`;
     const inputId = `playerCombobox_${idx}`;
     const listId = `playerComboboxList_${idx}`;
-    const teeSelect = teeOptions.length
+    const pairTees = teeBySlot.slice(Math.floor(idx / playersPerTeam) * playersPerTeam, Math.floor(idx / playersPerTeam) * playersPerTeam + playersPerTeam);
+    const teamTee = new Set(pairTees).size === 1 ? pairTees[0] : '';
+    const teeSelect = teamTees
+      ? `<input type="hidden" data-player-tee-slot="${idx}" data-slot-team="${teamNo}" value="${escapeHtml(currentTeeId)}">${slotNo === 1 ? `<label class="tiny player-tee-select"><span>${escapeHtml(teamLabel)} tee — both partners</span><select data-team-tee="${teamNo}"><option value="">Choose a tee for both partners</option>${teeOptions.map(t => `<option value="${escapeHtml(t.id)}" ${t.id === teamTee ? 'selected' : ''}>${t.label}</option>`).join('')}</select></label><div class="tiny">Teams may use different tees. Both partners on this team use the selected tee.</div>` : ''}`
+      : teeOptions.length
       ? `<label class="tiny player-tee-select"><span>${escapeHtml(slotLabel)} handicap tee</span><select data-player-tee-slot="${idx}" data-slot-team="${teamNo}"><option value="">Select tee</option>${teeOptions.map(t => `<option value="${t.id}" ${t.id === currentTeeId ? 'selected' : ''}>${t.label}</option>`).join('')}</select></label>`
       : '<div class="tiny">Select a course first to choose tees.</div>';
     return `
@@ -24170,6 +24245,7 @@ function installHandlers() {
   });
   const matchPlayersPickerEl = document.getElementById('matchPlayersPicker');
   const handleMatchPlayersPickerSelectionChange = e => {
+    if (e.target.matches('[data-team-tee]')) { updateMatchTeamTee(Number(e.target.dataset.teamTee), e.target.value || ''); return; }
     if (e.target.matches('[data-player-combobox-slot]')) { closePlayerCombobox(e.target, { restoreInvalid: true }); return; }
     if (e.target.matches('[data-player-tee-slot]')) {
       preserveSetupScrollDuring(() => updateMatchPlayerTee(Number(e.target.dataset.playerTeeSlot), e.target.value || ''), `#matchPlayersPicker [data-assignment-slot="${Number(e.target.dataset.playerTeeSlot)}"]`);
@@ -24425,7 +24501,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       renderStatTrackingPlayerSelector();
     }
     if (e.target && (e.target.id === 'smartScoreAdvanceInput' || e.target.id === 'smartScoreAdvancePresetSelect')) syncSmartScoreAdvancePresetUi();
-    if (e.target.matches('#teamScoringEnabled, #assignedTeamIndexEnabled, [data-assigned-team-index], [data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #featuredCompetitionSelect, #scoreEntryModeSelect, #roundPlayInputModeSelect, #roundStatTrackingModeSelect, #officialScorerNameInput, #sharedMatchEnabled, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-sixes-player], [data-wolf-player], [data-wolf-point], [data-flamtana-pick], [data-game-config], #enableStatTrackingInput, #smartScoreAdvanceInput, #smartScoreAdvancePresetSelect, #captureWeatherContextInput, [data-stat-track-player]')) {
+    if (e.target.id === 'teamScoringEnabled') populateMatchPlayerPicker(getCurrentMatchEditorSelectionsSnapshot());
+    if (e.target.matches('#teamScoringEnabled, #assignedTeamIndexEnabled, [data-team-tee], [data-assigned-team-index], [data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #featuredCompetitionSelect, #scoreEntryModeSelect, #roundPlayInputModeSelect, #roundStatTrackingModeSelect, #officialScorerNameInput, #sharedMatchEnabled, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-sixes-player], [data-wolf-player], [data-wolf-point], [data-flamtana-pick], [data-game-config], #enableStatTrackingInput, #smartScoreAdvanceInput, #smartScoreAdvancePresetSelect, #captureWeatherContextInput, [data-stat-track-player]')) {
       setTimeout(() => { renderSetupHandicapPreview(); renderGamesPicker(collectSelectedGames()); renderFeaturedCompetitionSetup(collectSelectedGames()); renderTodaysMatchSummary(); renderRoundPreferenceSummary(); }, 0);
     }
   });
@@ -24911,7 +24988,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       startSharedConnectionFastRefresh({ reason: 'joined-device-waiting-assignment' });
       activateTab('setup');
     } catch (err) {
-      console.error(err);
+      if (err.sharedJoinKind) console.warn('[SharedJoin]', err.sharedJoinPhase, err.sharedJoinTable, err.code);
+      else console.error(err);
       if (joinButton) joinButton.textContent = 'Retry Join';
       toast(err.message || 'Match not found. Check the code, then tap Retry Join.');
     }
@@ -24939,13 +25017,14 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (e.target.closest('[data-start-shared-scoring]')) {
       const match = getActiveMatch();
       if (!match) return;
-      const error = getScrambleSetupError(match, { assignments: true });
+      const { error, refreshWarning } = await prepareSharedScoringStart(match);
       if (error) return toast(error, 6200);
       if (ensureRoundTimingStarted(match)) {
         persist({ skipRender: true });
         scheduleSharedMatchSync(match, { immediate: true, silent: true });
       }
       activateTab('score');
+      if (refreshWarning) toast(refreshWarning, 6200);
       return;
     }
     if (e.target.closest('#setupSyncSharedMatchNowBtn')) {
@@ -26898,6 +26977,7 @@ function installDyeLedgerLiveEngineAdapter() {
     isCanonicalSharedMatchCode,
     getReusableCanonicalSharedMatchCode,
     isLegacySharedMatchRecord,
+    classifySharedJoinFailure, getLastSharedJoinDiagnostic, fetchSharedJoinBundle, prepareSharedScoringStart, updateMatchTeamTee, applySmartScoreStep,
     fetchSharedMatchBundleWithRetry,
     registerSharedJoinDevice,
     readSharedScoreOutbox,

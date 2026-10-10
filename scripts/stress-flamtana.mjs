@@ -6,7 +6,8 @@ import {loadLiveEngine} from './live-engine-adapter.js';
 import {scrambleFixture} from '../tests/support/scramble-fixture.js';
 import {chrome,startServer} from '../tests/support/design-browser.js';
 
-const directory='tmp/report-qa/v62/stress';
+const directory=process.env.FLAMTANA_STRESS_OUTPUT || 'tmp/report-qa/v62/stress';
+const baselineDirectory=process.env.FLAMTANA_STRESS_BASELINE || '';
 fs.mkdirSync(directory,{recursive:true});
 let randomState=620050;
 const random=()=>{randomState=(Math.imul(randomState,1664525)+1013904223)>>>0;return randomState/4294967296;};
@@ -74,6 +75,12 @@ try{
   winners.forEach((team,index)=>{const backers=data.players.filter(player=>picks[player.id]===team+1).map(player=>player.id);credit(calcutta,backers.length?backers:groups[team],Math.trunc(pool/winners.length)+(index<pool%winners.length?1:0));});expected.push(calcutta);
   result.components.forEach((component,index)=>{const actual=Object.fromEntries(Object.entries(component.amounts).map(([id,amount])=>[id,Math.round(amount*100)]));assert.deepEqual(plain(actual),expected[index]);assert.equal(sum(Object.values(actual)),0);});
   const report=engine.buildLedgerEntryReportModel(finished),engineMs=performance.now()-start;
+  if(baselineDirectory){
+   const baseline=JSON.parse(fs.readFileSync(baselineDirectory+'/round-'+String(run+1).padStart(2,'0')+'.js','utf8').replace(/^globalThis\.__DYE_LEDGER_ROUND__=/,'').replace(/;\s*$/,''));
+   assert.equal(JSON.stringify(report.games.map(game=>({id:game.id,money:game.money}))),JSON.stringify(baseline.games.map(game=>({id:game.id,money:game.money}))),'Settlement bytes changed from .62');
+   assert.equal(JSON.stringify(report.payments),JSON.stringify(baseline.payments),'Combined payment bytes changed from .62');
+   assert.equal(JSON.stringify(report.meta.flamtanaEvidence),JSON.stringify(baseline.meta.flamtanaEvidence),'Complete saved evidence changed from .62');
+  }
   assert.equal(report.games.length,5);assert.equal(report.players.length,4);assert.equal(report.settlementPlayers.length,8);
   assert.deepEqual(plain(report.games[3].seriesByHole.map(side=>side.scores)),foursome);
   const reloaded=engine.seedState(plain({players:data.players,courses:[data.course],matches:[finished]})).matches[0];assert.equal(JSON.stringify(reloaded.roundRecordSnapshot),JSON.stringify(record));
@@ -85,6 +92,15 @@ try{
   await page.goto('http://127.0.0.1:'+server.address().port+'/'+htmlFile,{waitUntil:'load'});await page.evaluate(()=>document.fonts.ready);await page.waitForSelector('.page');
   const audit=await page.evaluate(()=>({pages:[...document.querySelectorAll('.page')].map(node=>{const flow=node.querySelector('.flow'),last=flow?.lastElementChild;return {overflow:last?last.getBoundingClientRect().bottom-flow.getBoundingClientRect().top-flow.clientHeight:0,horizontal:node.scrollWidth>node.clientWidth+1};}),stats:document.querySelectorAll('[data-ledger-stat-category]').length,picks:document.querySelectorAll('[data-flamtana-picks] [data-row]').length,calcutta:document.querySelectorAll('[data-calcutta-ledger] [data-row]').length,standings:document.querySelectorAll('[data-stroke-standings]').length}));
   assert.deepEqual(errors,[]);assert.equal(audit.stats,0);assert.equal(audit.picks,8);assert.equal(audit.calcutta,8);assert.equal(audit.standings,4);assert.ok(audit.pages.every(page=>!page.horizontal&&page.overflow<=1),JSON.stringify(audit.pages));
+  const printed=await page.$$eval('[data-flamtana-evidence]',blocks=>blocks.map(block=>({label:block.dataset.flamtanaEvidence,steps:[...block.querySelectorAll('[data-flamtana-step]')].map(step=>step.dataset.flamtanaStep),matched:[...block.querySelectorAll('[data-flamtana-matched]')].map(step=>step.dataset.flamtanaMatched),reference:!!block.querySelector('[data-flamtana-featured-reference]'),exhausted:!!block.querySelector('[data-flamtana-exhausted]')})));
+  report.meta.flamtanaEvidence.forEach(component=>{
+   const block=printed.find(block=>block.label===component.label);
+   if(component.label==='Calcutta'){assert.equal(block.reference,true);assert.equal(block.steps.length,0);return;}
+   const steps=component.result.evidence,required=steps.filter((step,i)=>i===0||JSON.stringify(step.remaining)!==JSON.stringify(steps[i-1].remaining));
+   required.forEach(step=>assert.ok(block.steps.includes(step.label),'Dropped candidate-set change: '+step.label));
+   steps.forEach(step=>assert.ok(block.steps.includes(step.label)||block.matched.some(labels=>labels.split(' / ').includes(step.label)),'Dropped comparison: '+step.label));
+   if(component.result.final&&component.result.split&&component.result.tieMethod!=='split')assert.equal(block.exhausted,true);
+  });
   await page.emulateMediaType('print');const pdf=await page.pdf({path:directory+'/'+name+'.pdf',format:'letter',printBackground:true,preferCSSPageSize:true});
   const physical=(Buffer.from(pdf).toString('latin1').match(/\/Type\s*\/Page\b/g)||[]).length;assert.equal(physical,audit.pages.length);
   if(run===0||kind===4||kind===9)await page.screenshot({path:directory+'/'+name+'.png',fullPage:false});

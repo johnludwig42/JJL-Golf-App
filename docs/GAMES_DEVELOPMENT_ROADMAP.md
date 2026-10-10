@@ -9,6 +9,11 @@ This program extends the current development roadmap. It does not replace or reo
 
 ## Product goal and scope
 
+**Post-event follow-up, after October 16, 2026:** add Flamtana Special to
+scripts/simulation-engine.js and the standing simulation comparison gate.
+simulate:compare currently does not exercise Flamtana. Keep the dedicated
+50-round stress harness as current coverage. Do not implement this during .63.
+
 Make The Dye Ledger the easiest, most trustworthy app for a regular golf group playing several money games. Prioritize reliable shared scoring, repeatable setup, understandable results, and useful game flexibility over matching every competitor format.
 
 Payment tracking is excluded: no paid/unpaid states, payment confirmations, partial-payment records, payment requests, payment integrations, or expense splitting. Existing wager calculations, net positions, and settlement recommendations remain in scope. Trip settlement means a calculated recommended settlement, not tracking actual payments.

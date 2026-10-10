@@ -92,6 +92,8 @@ The baseline already includes multiple games, individual side matches, match tem
 
 ## Input and visual improvement program — NEXT
 
+October 10, 2026 update: follow the [Visual and Usability Development Roadmap](VISUAL_DEVELOPMENT_ROADMAP.md) for the current release sequence and review findings. Foundations and Play/navigation refinements through v31.0.58 are delivered in development. Preferences/setup density is next, followed by Results repetition, overlay navigation and useful Insights before further game expansion. Four-device acceptance remains an immediate parallel priority. Useful Insights is separately scoped functional work, not a presentation-only change; other established product commitments remain tracked.
+
 Development delivery v31.0.48 covers clearer game descriptions and participant guidance, lighter selection rows, expandable handicap settings with preserved values, and Player Mode custom-score contrast and labeling. Local browser and scoring checks are complete; production acceptance is pending. The remaining visual program and game expansions below stay on the roadmap.
 
 Approved October 3, 2026 following the website/illustrated-guide comparison. These are design proposals requiring usability validation, not findings from hands-on use of Squabbit. Integrate them into related phases without a whole-app redesign.

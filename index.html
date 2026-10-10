@@ -8,20 +8,20 @@
   <meta name="theme-color" content="#111814" media="(prefers-color-scheme: dark)" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=31.0.57&amp;rev=202610100401" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v31.0.57.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v31.0.57.png" />
-  <link rel="shortcut icon" href="./branding/favicon-32-v31.0.57.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v31.0.57.png" />
-  <link rel="stylesheet" href="style.css?v=31.0.57&amp;rev=202610100401" />
-  <link rel="stylesheet" media="screen" href="app-components.css?v=31.0.57" />
-  <link rel="stylesheet" media="print" href="app-print.css?v=31.0.57" />
+  <link rel="manifest" href="manifest.json?v=31.0.58&amp;rev=202610101117" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v31.0.58.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v31.0.58.png" />
+  <link rel="shortcut icon" href="./branding/favicon-32-v31.0.58.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v31.0.58.png" />
+  <link rel="stylesheet" href="style.css?v=31.0.58&amp;rev=202610101117" />
+  <link rel="stylesheet" media="screen" href="app-components.css?v=31.0.58" />
+  <link rel="stylesheet" media="print" href="app-print.css?v=31.0.58" />
 </head>
 <body>
   <div class="app-chrome"><header class="app-header compact-header">
     <div class="brand-wrap">
       <div class="brand-mark">
-        <img src="./branding/apple-touch-icon-v31.0.57.png" alt="The Dye Ledger" />
+        <img src="./branding/apple-touch-icon-v31.0.58.png" alt="The Dye Ledger" />
       </div>
       <div>
       <h1>The Dye Ledger</h1>
@@ -32,13 +32,13 @@
   </header>
 
   
-  <nav class="tabs tabs-6 compact-tabs top-tabs icon-tabs">
-    <button class="tab active" data-tab="setup"><span class="tab-icon-svg" aria-hidden="true">🏌️</span><span class="tab-label">Match</span></button>
-    <button class="tab" data-tab="score"><span class="tab-icon-svg" aria-hidden="true">⛳</span><span class="tab-label">Play</span></button>
-    <button class="tab" data-tab="leaderboard"><span class="tab-icon-svg" aria-hidden="true">🏆</span><span class="tab-label">Scores</span></button>
-    <button class="tab" data-tab="courses"><span class="tab-icon-svg" aria-hidden="true">📚</span><span class="tab-label">Library</span></button>
-    <button class="tab" data-tab="insights"><span class="tab-icon-svg" aria-hidden="true">📈</span><span class="tab-label">Insights</span></button>
-    <button class="tab" data-tab="settings"><span class="tab-icon-svg" aria-hidden="true">⚙️</span><span class="tab-label">More</span></button>
+  <nav class="tabs tabs-6 compact-tabs top-tabs icon-tabs" aria-label="Main navigation">
+    <button class="tab active" data-tab="setup" aria-current="page"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="setup.svg?v=31.0.58#tab-icon" /></svg></span><span class="tab-label">Match</span></button>
+    <button class="tab" data-tab="score"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="scoring.svg?v=31.0.58#tab-icon" /></svg></span><span class="tab-label">Play</span></button>
+    <button class="tab" data-tab="leaderboard"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="leaderboard.svg?v=31.0.58#tab-icon" /></svg></span><span class="tab-label">Scores</span></button>
+    <button class="tab" data-tab="courses"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="library.svg?v=31.0.58#tab-icon" /></svg></span><span class="tab-label">Library</span></button>
+    <button class="tab" data-tab="insights"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="insights.svg?v=31.0.58#tab-icon" /></svg></span><span class="tab-label">Insights</span></button>
+    <button class="tab" data-tab="settings"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="settings.svg?v=31.0.58#tab-icon" /></svg></span><span class="tab-label">More</span></button>
   </nav>
   </div>
 
@@ -796,19 +796,16 @@
         <div class="item-header compact-item-header">
           <div class="product-tab-header-copy">
             <h2>Insights</h2>
-            <div class="tiny">Learn from scoring trends, course history, and player performance.</div>
+            <div class="tiny">Explore the scores and statistics recorded in your rounds.</div>
           </div>
         </div>
       </header>
-      <div class="card tight-card">
-        <h2>Coming Soon</h2>
-        <div>Future insights will help you learn from your golf history.</div>
-        <ul class="tiny top-gap">
-          <li>Player trends and scoring averages</li>
-          <li>Course and hole performance</li>
-          <li>Stat reports and historical comparisons</li>
-          <li>Betting history and partner trends</li>
-        </ul>
+      <div class="card tight-card experience-overview">
+        <div class="experience-destination-grid">
+          <button type="button" class="experience-destination-card" data-insights-view="statistics"><span><strong>Round statistics</strong><small>Review the current or selected round's scoring and captured statistics</small></span><span class="experience-status">Scores ›</span></button>
+          <button type="button" class="experience-destination-card" data-insights-view="rounds"><span><strong>Saved rounds</strong><small>Choose a recorded round to review its results and statistics</small></span><span class="experience-status">Library ›</span></button>
+        </div>
+        <p class="tiny top-gap">Start with a recorded round. Trends across rounds and historical comparisons are planned for a future release.</p>
       </div>
 
     </section>
@@ -999,7 +996,7 @@
       <div class="card tight-card app-updates-card" data-experience-section="support">
         <h2>App Updates</h2>
         <div class="app-update-summary">
-          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v31.0.57</strong></div>
+          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v31.0.58</strong></div>
           <div><span class="muted-label">Build Date</span><strong id="appBuildTimestamp">loading…</strong></div>
           <div><span class="muted-label">Cache</span><span id="appActiveCacheName" class="break-word">checking…</span></div>
           <div><span class="muted-label">Update Available</span><strong id="appUpdateAvailableStatus">checking…</strong></div>
@@ -1047,6 +1044,10 @@
   </main>
   <script id="appReleaseNotesData" type="application/json">[
   {
+    "version": "v31.0.58",
+    "summary": "Improves narrow score labels, compact navigation with SVG icons, Play styling and access to round statistics from Insights."
+  },
+  {
     "version": "v31.0.57",
     "summary": "Unifies screen controls, cards and overlays, improves control states and restores readable footer text."
   },
@@ -1061,10 +1062,6 @@
   {
     "version": "v31.0.54",
     "summary": "Adds stroke-play leader-gap charts and position strips, a handicap table, and a consistent off-low report basis."
-  },
-  {
-    "version": "v31.0.53",
-    "summary": "Follows your device appearance with dark surfaces and readable status colors, while keeping printed reports light."
   }
 ]</script>
 
@@ -1082,7 +1079,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v31.0.57</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
+    <span id="appVersionFooter">v31.0.58</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
@@ -1216,10 +1213,10 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=31.0.57&amp;rev=202610100401"></script>
-  <script src="identity-security.js?v=31.0.57&amp;rev=202610100401"></script>
-  <script src="ledger-report/stroke-play.js?v=31.0.57"></script>
-  <script src="app-presentation.js?v=31.0.57"></script>
-  <script src="app.js?v=31.0.57&amp;rev=202610100401"></script>
+  <script src="supabase-config.js?v=31.0.58&amp;rev=202610101117"></script>
+  <script src="identity-security.js?v=31.0.58&amp;rev=202610101117"></script>
+  <script src="ledger-report/stroke-play.js?v=31.0.58"></script>
+  <script src="app-presentation.js?v=31.0.58"></script>
+  <script src="app.js?v=31.0.58&amp;rev=202610101117"></script>
 </body>
 </html>

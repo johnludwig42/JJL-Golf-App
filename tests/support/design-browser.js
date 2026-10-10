@@ -5,7 +5,7 @@ import {extname,resolve} from 'node:path';
 import {loadLiveEngine} from '../../scripts/live-engine-adapter.js';
 const root = resolve('.');
 export const chrome = [process.env.CHROME_PATH, 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/chromium'].filter(Boolean).find(existsSync);
-const contentTypes = { '.css':'text/css; charset=utf-8','.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.woff2':'font/woff2' };
+const contentTypes = { '.css':'text/css; charset=utf-8','.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.svg':'image/svg+xml','.woff2':'font/woff2' };
 
 export function startServer({foundation=false}={}) {
   const server = createServer((request, response) => {
@@ -41,11 +41,11 @@ export function visualFixture(mode='CLASSIC', setup=false, stats=false) {
   return {state,storage:[...storage]};
 }
 
-export async function openVisualPage(browser,url,scenario,width,baseline=false,dark=false,print=false) {
+export async function openVisualPage(browser,url,scenario,width,baseline=false,dark=false,print=false,fixtureOverride=null) {
   const page=await browser.newPage();
   await page.setViewport({width,height:812,deviceScaleFactor:1});
   await page.emulateMediaFeatures([{name:'prefers-color-scheme',value:dark?'dark':'light'}]);
-  const fixture=visualFixture(scenario.startsWith('player')?'PLAYER':'CLASSIC',['setup','games'].includes(scenario),scenario==='player-stats');
+  const fixture=fixtureOverride||visualFixture(scenario.startsWith('player')?'PLAYER':'CLASSIC',['setup','games'].includes(scenario),scenario==='player-stats');
   await page.evaluateOnNewDocument(fixture=>{
     // Isolate color equivalence from worker caches and external cloud services.
     Object.defineProperty(navigator,'serviceWorker',{value:{controller:null,ready:Promise.resolve({active:null}),addEventListener(){},register:async()=>({active:null,waiting:null,installing:null,addEventListener(){},update:async()=>{}}),getRegistration:async()=>null,getRegistrations:async()=>[]},configurable:true});
@@ -60,7 +60,13 @@ export async function openVisualPage(browser,url,scenario,width,baseline=false,d
   await page.addStyleTag({content:'*,*::before,*::after{animation:none!important;transition:none!important}'});
   if(['classic','player','player-expanded','player-stats','quick','quick-charts','overflow'].includes(scenario))await page.click('[data-tab="score"]');
   if(['player-expanded','player-stats'].includes(scenario) && !await page.$('.player-mode-player-detail'))await page.click('.player-mode-player-select');
-  if(scenario==='player-stats')await page.click('[data-player-mode-more-detail]');
+  if(scenario==='player-stats'){
+    // Reveal the actual detail control above sticky actions before clicking it.
+    // A viewport-visible button may still be obscured by the scoring action bar.
+    await page.$eval('[data-player-mode-more-detail]',n=>n.scrollIntoView({block:'center'}));
+    await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+    await page.click('[data-player-mode-more-detail]');
+  }
   if(scenario==='overflow')await page.click('[data-play-overflow-trigger="classic"]');
   if(['results','balance','scorecards'].includes(scenario)){
     await page.click('[data-tab="leaderboard"]');await page.click(`#leaderboard [data-experience-target="${scenario==='scorecards'?'scorecards':'results'}"]`);

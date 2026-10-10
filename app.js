@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.57',
-  versionNumber: '31.0.57',
-  cacheName: 'the-dye-ledger-v31.0.57',
-  buildDate: '2026-10-10T04:01:10.525Z',
-  buildLabel: 'Component Consistency'
+  version: 'v31.0.58',
+  versionNumber: '31.0.58',
+  cacheName: 'the-dye-ledger-v31.0.58',
+  buildDate: '2026-10-10T11:17:50.318Z',
+  buildLabel: 'Play & Navigation'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -22925,7 +22925,20 @@ function closeExperienceDestination(tabId, { scroll = true } = {}) {
 function activateTab(tabId) {
   const previousTabId = document.querySelector('.panel.active')?.id || '';
   const activePlayMode = getEffectivePlayInputMode(getActiveMatch());
-  document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tabId));
+  document.querySelectorAll('.tab').forEach(el => {
+    const selected = el.dataset.tab === tabId;
+    el.classList.toggle('active', selected);
+    if (selected) el.setAttribute('aria-current', 'page');
+    else el.removeAttribute('aria-current');
+  });
+  const selectedTab = document.querySelector('.top-tabs .tab.active');
+  const tabRow = selectedTab?.closest('.top-tabs');
+  if (selectedTab && tabRow) {
+    const selectedBox = selectedTab.getBoundingClientRect();
+    const rowBox = tabRow.getBoundingClientRect();
+    if (selectedBox.left < rowBox.left) tabRow.scrollLeft -= rowBox.left - selectedBox.left;
+    else if (selectedBox.right > rowBox.right) tabRow.scrollLeft += selectedBox.right - rowBox.right;
+  }
   document.querySelectorAll('.panel').forEach(el => el.classList.toggle('active', el.id === tabId));
   document.body?.classList.toggle('player-mode-play-active', tabId === 'score' && activePlayMode === PLAY_INPUT_MODES.PLAYER.key);
   document.body?.classList.toggle('classic-mode-play-active', tabId === 'score' && activePlayMode === PLAY_INPUT_MODES.CLASSIC.key);
@@ -23364,6 +23377,14 @@ function installHandlers() {
     }
   });
   document.addEventListener('click', event => {
+    const insightsButton = event.target.closest?.('[data-insights-view]');
+    if (insightsButton) {
+      const destination = insightsButton.dataset.insightsView;
+      const tabId = destination === 'statistics' ? 'leaderboard' : 'courses';
+      activateTab(tabId);
+      openExperienceDestination(tabId, destination);
+      return;
+    }
     const destinationButton = event.target.closest?.('[data-experience-target]');
     if (destinationButton) {
       const panel = destinationButton.closest('.panel');

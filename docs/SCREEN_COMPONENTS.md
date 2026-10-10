@@ -19,3 +19,12 @@ current app is checked by dark contrast, enlarged-text/scoring and component
 browser suites. Printed metrics and Ledger Entry reports remain independent.
 Real hardware acceptance is still required; reduced viewport tests do not emulate
 all Safari keyboard or Dynamic Type behavior.
+
+v31.0.58 extends this screen layer to Play surface radii and reflowing score
+choices. Short score labels remain intact instead of breaking at arbitrary
+letters. The six navigation destinations share labeled monochrome SVG artwork
+and one compact top row; enlarged text uses independent horizontal scrolling.
+Browser coverage checks artwork rendering, current-page state, keyboard/selection
+reachability, reduced-viewport score saving and the existing Insights routes.
+The Player action bar remains above the hole header; below 600px viewport height,
+the hole header scrolls with content so it cannot cover Save during keyboard use.

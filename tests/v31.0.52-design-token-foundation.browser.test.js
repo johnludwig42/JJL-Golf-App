@@ -4,7 +4,7 @@ import puppeteer from 'puppeteer-core';
 import {chrome,startServer,openVisualPage,computedPaint} from './support/design-browser.js';
 
 test('semantic tokens preserve light colors across app surfaces and exact fixed print metrics', {skip:!chrome,timeout:240000},async t=>{
-  const server=await startServer(),browser=await puppeteer.launch({executablePath:chrome,headless:true,args:['--no-sandbox','--disable-gpu']});
+  const server=await startServer({foundation:true}),browser=await puppeteer.launch({executablePath:chrome,headless:true,args:['--no-sandbox','--disable-gpu']});
   const url=`http://127.0.0.1:${server.address().port}/`;
   try{
     const cases=['setup','games','classic','player','results','library','preferences','insights','quick','balance'];

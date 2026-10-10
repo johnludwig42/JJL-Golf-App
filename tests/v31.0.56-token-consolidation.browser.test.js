@@ -4,7 +4,7 @@ import {chrome,startServer,openVisualPage,computedPaint} from './support/design-
 import {textContrast} from './support/text-contrast.js';
 
 test('token consolidation preserves v31.0.55 light pixels and default action contrast',{skip:!chrome,timeout:240000},async t=>{
- const server=await startServer(),browser=await puppeteer.launch({executablePath:chrome,headless:true,args:['--no-sandbox','--disable-gpu']});
+ const server=await startServer({foundation:true}),browser=await puppeteer.launch({executablePath:chrome,headless:true,args:['--no-sandbox','--disable-gpu']});
  const url=`http://127.0.0.1:${server.address().port}/`;
  try{
   for(const width of [375,1280])for(const scenario of ['setup','games','classic','player-stats','results','scorecards','library','preferences','support','insights','quick-charts','balance'])await t.test(`${scenario} light at ${width}px`,async()=>{

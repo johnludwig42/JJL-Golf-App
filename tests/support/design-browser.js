@@ -7,7 +7,7 @@ const root = resolve('.');
 export const chrome = [process.env.CHROME_PATH, 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/chromium'].filter(Boolean).find(existsSync);
 const contentTypes = { '.css':'text/css; charset=utf-8','.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.json':'application/json; charset=utf-8','.png':'image/png','.woff2':'font/woff2' };
 
-export function startServer() {
+export function startServer({foundation=false}={}) {
   const server = createServer((request, response) => {
     try {
       const parsedUrl = new URL(request.url, 'http://127.0.0.1');
@@ -16,6 +16,7 @@ export function startServer() {
       if (!file.toLowerCase().startsWith(root.toLowerCase())) throw new Error('outside root');
       response.writeHead(200, { 'Content-Type': contentTypes[extname(file).toLowerCase()] || 'application/octet-stream' });
       let body=readFileSync(file);
+      if(pathname==='index.html'&&foundation)body=body.toString().replace(/<link[^>]*href="app-components\.css[^>]*>/,'');
       if(pathname==='index.html' && parsedUrl.searchParams.get('auditStyle')==='baseline')body=body.toString().replace(/href="style\.css[^"]*"/,'href="tests/fixtures/design/light-style-baseline.css"').replace(/<link[^>]*href="app-print\.css[^>]*>/,'');
       if(pathname==='index.html' && parsedUrl.searchParams.get('auditStyle')==='tokens')body=body.toString().replace(/href="style\.css[^"]*"/,'href="tests/fixtures/design/token-consolidation-baseline.css"');
       response.end(body);

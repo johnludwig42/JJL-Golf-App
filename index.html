@@ -8,20 +8,20 @@
   <meta name="theme-color" content="#111814" media="(prefers-color-scheme: dark)" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <link rel="manifest" href="manifest.json?v=31.0.59&amp;rev=202610101213" />
-  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v31.0.59.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v31.0.59.png" />
-  <link rel="shortcut icon" href="./branding/favicon-32-v31.0.59.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v31.0.59.png" />
-  <link rel="stylesheet" href="style.css?v=31.0.59&amp;rev=202610101213" />
-  <link rel="stylesheet" media="screen" href="app-components.css?v=31.0.59" />
-  <link rel="stylesheet" media="print" href="app-print.css?v=31.0.59" />
+  <link rel="manifest" href="manifest.json?v=31.0.60&amp;rev=202610101427" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./branding/favicon-32-v31.0.60.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="./branding/favicon-16-v31.0.60.png" />
+  <link rel="shortcut icon" href="./branding/favicon-32-v31.0.60.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./branding/apple-touch-icon-v31.0.60.png" />
+  <link rel="stylesheet" href="style.css?v=31.0.60&amp;rev=202610101427" />
+  <link rel="stylesheet" media="screen" href="app-components.css?v=31.0.60" />
+  <link rel="stylesheet" media="print" href="app-print.css?v=31.0.60" />
 </head>
 <body>
   <div class="app-chrome"><header class="app-header compact-header">
     <div class="brand-wrap">
       <div class="brand-mark">
-        <img src="./branding/apple-touch-icon-v31.0.59.png" alt="The Dye Ledger" />
+        <img src="./branding/apple-touch-icon-v31.0.60.png" alt="The Dye Ledger" />
       </div>
       <div>
       <h1>The Dye Ledger</h1>
@@ -33,12 +33,12 @@
 
   
   <nav class="tabs tabs-6 compact-tabs top-tabs icon-tabs" aria-label="Main navigation">
-    <button class="tab active" data-tab="setup" aria-current="page"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="setup.svg?v=31.0.59#tab-icon" /></svg></span><span class="tab-label">Match</span></button>
-    <button class="tab" data-tab="score"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="scoring.svg?v=31.0.59#tab-icon" /></svg></span><span class="tab-label">Play</span></button>
-    <button class="tab" data-tab="leaderboard"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="leaderboard.svg?v=31.0.59#tab-icon" /></svg></span><span class="tab-label">Scores</span></button>
-    <button class="tab" data-tab="courses"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="library.svg?v=31.0.59#tab-icon" /></svg></span><span class="tab-label">Library</span></button>
-    <button class="tab" data-tab="insights"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="insights.svg?v=31.0.59#tab-icon" /></svg></span><span class="tab-label">Insights</span></button>
-    <button class="tab" data-tab="settings"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="settings.svg?v=31.0.59#tab-icon" /></svg></span><span class="tab-label">More</span></button>
+    <button class="tab active" data-tab="setup" aria-current="page"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="setup.svg?v=31.0.60#tab-icon" /></svg></span><span class="tab-label">Match</span></button>
+    <button class="tab" data-tab="score"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="scoring.svg?v=31.0.60#tab-icon" /></svg></span><span class="tab-label">Play</span></button>
+    <button class="tab" data-tab="leaderboard"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="leaderboard.svg?v=31.0.60#tab-icon" /></svg></span><span class="tab-label">Scores</span></button>
+    <button class="tab" data-tab="courses"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="library.svg?v=31.0.60#tab-icon" /></svg></span><span class="tab-label">Library</span></button>
+    <button class="tab" data-tab="insights"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="insights.svg?v=31.0.60#tab-icon" /></svg></span><span class="tab-label">Insights</span></button>
+    <button class="tab" data-tab="settings"><span class="tab-icon-svg" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><use href="settings.svg?v=31.0.60#tab-icon" /></svg></span><span class="tab-label">More</span></button>
   </nav>
   </div>
 
@@ -201,6 +201,11 @@
               <div id="assignmentSummary" class="tiny">Choose teams first. Each player will have a tee selection.</div>
             </div>
             <div id="matchPlayersPicker" class="assignment-grid top-gap"></div>
+            <div class="top-gap assigned-team-index-setup">
+              <label class="inline-check"><input id="assignedTeamIndexEnabled" name="assignedTeamIndexEnabled" type="checkbox"><span>Use assigned team indexes</span></label>
+              <div class="tiny">For two-player teams. Starts with the partners’ average Handicap Index; edit as needed. Both partners use the same tee. No additional round or game allowance applies. Each golfer still enters their own score.</div>
+              <div id="assignedTeamIndexFields" class="grid two compact-grid top-gap hidden"></div>
+            </div>
             <details class="setup-supporting-details top-gap">
               <summary>Player Handicap Preview</summary>
               <div class="tiny top-gap">Handicap Index and Course Handicap for each selected tee. Competition adjustments appear under Games &amp; Stat Tracking.</div>
@@ -996,7 +1001,7 @@
       <div class="card tight-card app-updates-card" data-experience-section="support">
         <h2>App Updates</h2>
         <div class="app-update-summary">
-          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v31.0.59</strong></div>
+          <div><span class="muted-label">Current Version</span><strong id="appVersionLabel">v31.0.60</strong></div>
           <div><span class="muted-label">Build Date</span><strong id="appBuildTimestamp">loading…</strong></div>
           <div><span class="muted-label">Cache</span><span id="appActiveCacheName" class="break-word">checking…</span></div>
           <div><span class="muted-label">Update Available</span><strong id="appUpdateAvailableStatus">checking…</strong></div>
@@ -1044,6 +1049,10 @@
   </main>
   <script id="appReleaseNotesData" type="application/json">[
   {
+    "version": "v31.0.60",
+    "summary": "Adds editable round-specific team indexes with a saved handicap snapshot and no further round or game allowance."
+  },
+  {
     "version": "v31.0.59",
     "summary": "Moves Round rules below scoring and improves Play header facts, actions and save-status readability."
   },
@@ -1058,10 +1067,6 @@
   {
     "version": "v31.0.56",
     "summary": "Consolidates color roles and fixes default dark action contrast while preserving light and print appearance."
-  },
-  {
-    "version": "v31.0.55",
-    "summary": "Adds a shared type and spacing scale, readable captions and support for larger device text, while preserving printed reports."
   }
 ]</script>
 
@@ -1079,7 +1084,7 @@
 
   <div class="footer app-footer-version">
     <span>The Dye Ledger</span>
-    <span id="appVersionFooter">v31.0.59</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
+    <span id="appVersionFooter">v31.0.60</span><span id="appVersionFooterBuild" class="tiny">loading…</span>
   </div>
 
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
@@ -1213,10 +1218,10 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-config.js?v=31.0.59&amp;rev=202610101213"></script>
-  <script src="identity-security.js?v=31.0.59&amp;rev=202610101213"></script>
-  <script src="ledger-report/stroke-play.js?v=31.0.59"></script>
-  <script src="app-presentation.js?v=31.0.59"></script>
-  <script src="app.js?v=31.0.59&amp;rev=202610101213"></script>
+  <script src="supabase-config.js?v=31.0.60&amp;rev=202610101427"></script>
+  <script src="identity-security.js?v=31.0.60&amp;rev=202610101427"></script>
+  <script src="ledger-report/stroke-play.js?v=31.0.60"></script>
+  <script src="app-presentation.js?v=31.0.60"></script>
+  <script src="app.js?v=31.0.60&amp;rev=202610101427"></script>
 </body>
 </html>

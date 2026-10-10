@@ -1,5 +1,8 @@
 # Visual and Usability Development Roadmap
 
+**October 10 priority override:** Flamtana v31.0.60 Assigned Team Index → v31.0.61 Two-man Scramble → v31.0.62 Flamtana Special precede all further roadmap work. The event is October 16, 2026. Preferences/Setup Density and other planned work wait until this sequence is addressed. Only .60 is authorized now. See [accepted build plan](FLAMTANA_SPECIAL_BUILD_PLAN.md) for rules, correctness safeguards and manual settlement fallback.
+
+
 Updated October 10, 2026 following the local v31.0.57 product review. This is the
 current sequence for the visual program; it supersedes earlier release numbering
 in the original design-token plan. Roadmap inclusion does not implement features
@@ -73,7 +76,7 @@ the delivery and its acceptance contract.
 - Verified narrow phones, both appearances, enlarged text, keyboard-height saving,
   overflow access and all seven release gates (1,327 tests). Real iPhone acceptance pending.
 
-### 3. Preferences and setup density — NEXT after Play refinement
+### 3. Preferences and setup density — after the Flamtana sequence
 
 - Group Preferences into concise rows; use accessible trailing switches for binary
   choices and segmented controls for genuine alternatives such as Classic/Player.
@@ -122,7 +125,7 @@ the delivery and its acceptance contract.
   actual devices exercising Shared Match offline/reconnect, corrections, pending
   saves and completion parity. Automated simulations do not replace these checks.
 
-Versions after v31.0.59 are unassigned until each release is scoped. Physical-device
+Flamtana has reserved v31.0.60/.61/.62. Later versions remain unassigned until each release is scoped. Physical-device
 acceptance should accompany every applicable release, not wait for the final stage.
 
 ## Guardrails and broader roadmap

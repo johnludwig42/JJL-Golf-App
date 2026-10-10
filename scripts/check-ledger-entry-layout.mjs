@@ -84,6 +84,8 @@ const audit = await page.evaluate(() => {
   });
   return {
     title: document.title,
+    teamScored: globalThis.__DYE_LEDGER_ROUND__?.meta?.teamScored === true,
+    flamtana: { calcuttaRows: document.querySelectorAll('[data-calcutta-ledger] [data-row]').length, evidence: document.querySelectorAll('[data-flamtana-evidence]').length, picks: document.querySelectorAll('[data-flamtana-picks] [data-row]').length, strokeTables: document.querySelectorAll('[data-stroke-standings]').length, chart: !!document.querySelector('[data-entry-line]') },
     pages,
     labels: [...new Set(pages.map(page => page.label))],
     headings: [...document.querySelectorAll('.sechead')].map(node => node.textContent.trim()),
@@ -106,12 +108,12 @@ let failed = false;
 // Scoring-only statistics may share the Leaderboards/Games page (v31.0.49).
 // Keep their actual heading mandatory even when no separate page label exists.
 const hasStatistics = audit.headings.some(heading => /^(?:Player|Entry) statistics/.test(heading));
-if (!hasStatistics) { console.error('Statistics content heading missing.'); failed = true; }
-const expectedLabels = ['Result', 'Round story', 'Leaderboards', 'Games', ...(audit.labels.includes('Statistics') ? ['Statistics'] : []), 'Appendix'];
+if (!audit.teamScored && !hasStatistics) { console.error('Statistics content heading missing.'); failed = true; }
+const expectedLabels = ['Result', ...(!audit.teamScored || audit.labels.includes('Round story') ? ['Round story'] : []), 'Leaderboards', 'Games', ...(audit.labels.includes('Statistics') ? ['Statistics'] : []), 'Appendix'];
 if (JSON.stringify(audit.labels) !== JSON.stringify(expectedLabels)) {
   console.error(`Subject order mismatch: ${audit.labels.join(', ')}`); failed = true;
 }
-if (!audit.headings.some(heading => heading.startsWith('Highlights'))) { console.error('Highlights missing from cover.'); failed = true; }
+if (!audit.teamScored && !audit.headings.some(heading => heading.startsWith('Highlights'))) { console.error('Highlights missing from cover.'); failed = true; }
 if (!audit.headings.some(heading => heading.startsWith('Appendix · Course net')) || !audit.headings.some(heading => /^Appendix · (?:Featured net|Game net|Game gross)/.test(heading))) { console.error('Both scorecard appendices are required.'); failed = true; }
 if (audit.pages.some(pageRow => pageRow.horizontalOverflow)) { console.error('Horizontal overflow detected.'); failed = true; }
 const orphanedStatFragments = audit.pages.flatMap(pageRow => pageRow.statisticFragments.map(fragment => ({ ...fragment, page: pageRow.index }))).filter(fragment => fragment.rows === 1);
@@ -122,6 +124,11 @@ for (const family of ['Archivo', 'Inter', 'IBM Plex Mono']) {
   if (!audit.fonts.some(font => font.includes(family))) { console.error(`${family} did not load.`); failed = true; }
 }
 if (errors.length) { console.error(`Console errors:\n${errors.join('\n')}`); failed = true; }
+if (basename(input).includes('flamtana')) {
+  if (!audit.teamScored || audit.flamtana.calcuttaRows !== 8 || audit.flamtana.evidence !== 5 || audit.flamtana.picks !== 8 || audit.flamtana.strokeTables !== 4 || !audit.flamtana.chart) { console.error('Flamtana evidence, picks or stroke-total tables missing.'); failed = true; }
+  if (!audit.headings.some(heading => heading.startsWith('The Story of the Round'))) { console.error('Flamtana Story missing.'); failed = true; }
+  if (hasStatistics) { console.error('Individual statistics leaked into Flamtana report.'); failed = true; }
+}
 if (basename(input).includes('nine-point')) {
   const uniqueColors = new Set(audit.ninePoint.lines.map(line => line.color));
   const overlappingLabels = audit.ninePoint.labels.some((label, index, labels) => labels.slice(index + 1).some(other => label.top < other.bottom && other.top < label.bottom));

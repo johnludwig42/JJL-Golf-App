@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current development release: **v31.0.61 — Two-man Scramble** on codex/v31.0.61-two-man-scramble. Adds team score entry for four two-player teams, fixed two-device foursomes, pending-pair safeguards and individual-record protections. v31.0.60 is committed and merged in PR #157. See BUILD_NOTES_v31.0.61.md and docs/FLAMTANA_SPECIAL_BUILD_PLAN.md. The Product Owner authorized .61 on October 10, 2026; .62 follows separately, ahead of further roadmap work for the October 16 event.
+Current development release: **v31.0.62 — Flamtana Special** on codex/v31.0.62-flamtana-special, based on merged .61 (PR #158, a8e2fba). The Product Owner authorized .62 with carry-forward constraints: explicit Pending resolution, documented host takeover, independent team report facts, centralized fixed teams, per-foursome progress, and stroke-total wagers. All further roadmap work remains paused. Physical .61 two-device rehearsal is running independently; cloud-row hydration confirms Pending and freeze blocking on both devices. See BUILD_NOTES_v31.0.62.md and docs/FLAMTANA_SPECIAL_BUILD_PLAN.md.
 
 Previous release: **v31.0.59 — Play Screen Refinement**, merged in PR #156. Round rules follows scoring/save guidance; Classic has grouped navigation, readable hole facts, direct Scoreboard access and separate save/backup status. Scoring, saving, records and shared matches were unchanged. See `BUILD_NOTES_v31.0.59.md`. All eight manual iPhone acceptance checks for v31.0.58 passed, as confirmed by the Product Owner. Physical v31.0.59 and four-device Shared Match acceptance remain separate. Preferences/setup density resumes after the Flamtana sequence.
 

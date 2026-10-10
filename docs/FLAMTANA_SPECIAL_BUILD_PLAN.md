@@ -1,7 +1,7 @@
 # Flamtana Special — accepted delivery plan
 
 Approved October 10, 2026 for Friday, October 16, 2026. These three releases take
-priority over all further roadmap work. v31.0.61 is now authorized for
+priority over all further roadmap work. v31.0.62 is now authorized for
 implementation. Preserve correctness in .61; flag any anticipated .62 delay early
 enough to prepare manual settlement.
 

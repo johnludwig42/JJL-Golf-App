@@ -1,21 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import {loadLiveEngine} from '../scripts/live-engine-adapter.js';
 
 const app = fs.readFileSync('app.js', 'utf8');
 
-test('initial Shared Match join uses the secure admission RPC exactly once', () => {
-  const loadStart = app.indexOf('async function loadSharedMatchFromCloud');
-  const loadSource = app.slice(loadStart, loadStart + 2600);
-  assert.ok(loadStart > 0);
-  assert.match(loadSource, /if \(requireRegistration\) cloudId = await authorizeSharedMatchJoin\(cloudId\)/);
-  assert.match(loadSource, /registerSharedJoinDevice\(hydrated, \{ requireRegistration \}\)/);
-
-  const registerStart = app.indexOf('async function registerSharedJoinDevice');
-  const registerSource = app.slice(registerStart, registerStart + 1800);
-  assert.ok(registerStart > 0);
-  assert.match(registerSource, /const registered = requireRegistration \? true : await register\(match\)/);
-  assert.doesNotMatch(registerSource, /const registered = await register\(match\)/);
+test('initial Shared Match join uses the secure admission RPC exactly once', async () => {
+  const engine=loadLiveEngine();let admissions=0,directWrites=0,published=0;
+  await engine.fetchSharedJoinBundle('DYE-123456',{requireRegistration:true,authorize:async code=>{admissions++;return code;},fetchBundle:async()=>({})});
+  await engine.registerSharedJoinDevice({id:'DYE-123456',sharedMatchId:'DYE-123456',storageMode:'shared'}, {requireRegistration:true,register:async()=>{directWrites++;return true;},publish:async()=>{published++;},merge:async()=>{},isHost:()=>false});
+  assert.equal(admissions,1);assert.equal(directWrites,0);assert.equal(published,1);
 });
 
 test('ordinary post-join membership refresh remains available without weakening RLS', () => {

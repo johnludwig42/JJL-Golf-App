@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current development release: **v31.0.63 — Flamtana Report Readability** on codex/v31.0.63-flamtana-report-readability, from merged .62 (PR #159, a42d9bc). Authorized October 10, 2026: condense printed matched card-off steps, preserve every narrowing comparison, reference Featured from Calcutta, and improve scoped team-table spacing. Complete frozen evidence and settlement calculations remain unchanged. Regenerate Flamtana references and compare all 50 stress settlements against .62. Further roadmap work remains paused before the October 16 event. See BUILD_NOTES_v31.0.63.md.
+Current development release: **v31.0.64 — Flamtana Setup and Scoring** on codex/v31.0.64-flamtana-setup-scoring, from merged .63 (PR #160, 684c06a). Authorized: one tee selector per pair (teams may differ), restored par-first team score steppers, accurate remote join failures/diagnostics and refreshed Start readiness. Preserve wager calculations, frozen records and shared authority. Actual remote cloud failure remains subject to a device retry with the new diagnostics. See BUILD_NOTES_v31.0.64.md. Further roadmap work remains paused before October 16.
 
 Previous release: **v31.0.59 — Play Screen Refinement**, merged in PR #156. Round rules follows scoring/save guidance; Classic has grouped navigation, readable hole facts, direct Scoreboard access and separate save/backup status. Scoring, saving, records and shared matches were unchanged. See `BUILD_NOTES_v31.0.59.md`. All eight manual iPhone acceptance checks for v31.0.58 passed, as confirmed by the Product Owner. Physical v31.0.59 and four-device Shared Match acceptance remain separate. Preferences/setup density resumes after the Flamtana sequence.
 

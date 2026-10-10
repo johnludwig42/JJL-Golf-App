@@ -16,7 +16,7 @@ export function startServer() {
       if (!file.toLowerCase().startsWith(root.toLowerCase())) throw new Error('outside root');
       response.writeHead(200, { 'Content-Type': contentTypes[extname(file).toLowerCase()] || 'application/octet-stream' });
       let body=readFileSync(file);
-      if(pathname==='index.html' && parsedUrl.searchParams.get('auditStyle')==='baseline')body=body.toString().replace(/href="style\.css[^"]*"/,'href="tests/fixtures/design/light-style-baseline.css"');
+      if(pathname==='index.html' && parsedUrl.searchParams.get('auditStyle')==='baseline')body=body.toString().replace(/href="style\.css[^"]*"/,'href="tests/fixtures/design/light-style-baseline.css"').replace(/<link[^>]*href="app-print\.css[^>]*>/,'');
       response.end(body);
     } catch {
       if (!response.headersSent) response.writeHead(404);
@@ -56,7 +56,7 @@ export async function openVisualPage(browser,url,scenario,width,baseline=false,d
   const errors=[];page.on('pageerror',error=>errors.push(String(error)));
   await page.goto(url+'index.html'+(baseline?'?auditStyle=baseline':''),{waitUntil:'networkidle0'});
   await page.addStyleTag({content:'*,*::before,*::after{animation:none!important;transition:none!important}'});
-  if(['classic','player','player-expanded','player-stats','quick','overflow'].includes(scenario))await page.click('[data-tab="score"]');
+  if(['classic','player','player-expanded','player-stats','quick','quick-charts','overflow'].includes(scenario))await page.click('[data-tab="score"]');
   if(['player-expanded','player-stats'].includes(scenario) && !await page.$('.player-mode-player-detail'))await page.click('.player-mode-player-select');
   if(scenario==='player-stats')await page.click('[data-player-mode-more-detail]');
   if(scenario==='overflow')await page.click('[data-play-overflow-trigger="classic"]');
@@ -73,7 +73,8 @@ export async function openVisualPage(browser,url,scenario,width,baseline=false,d
     await page.evaluate(()=>[...document.querySelectorAll('summary')].find(node=>node.textContent.trim()==='Technical diagnostics').click());
   }
   if(scenario==='insights')await page.click('[data-tab="insights"]');
-  if(scenario==='quick')await page.click('#quickScoreboardBtn');
+  if(['quick','quick-charts'].includes(scenario))await page.click('#quickScoreboardBtn');
+  if(scenario==='quick-charts')await page.evaluate(()=>document.querySelectorAll('.quick-disclosure').forEach(node=>node.open=true));
   if(scenario==='balance')await page.click('[data-balance-player="p0"]');
   if(print){
     await page.evaluate(()=>document.body.classList.add('printing-scorecard'));

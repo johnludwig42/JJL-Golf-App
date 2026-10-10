@@ -53,7 +53,7 @@ test('Courses owns every course-management control while Library disclosures rem
 test('Library markup has unique IDs and bounded course-management styling', () => {
   const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
   assert.equal(new Set(ids).size, ids.length);
-  assert.match(css, /#libraryCoursesSection>\.library-course-card\{margin-top:14px/);
+  assert.match(css, /#libraryCoursesSection>\.library-course-card\{margin-top:var\(--space-3\)/);
   assert.match(css, /@media \(max-width:700px\)[\s\S]*?\.library-course-actions\{align-items:stretch;justify-content:stretch/);
 });
 
@@ -117,7 +117,7 @@ test('pointer, click, and Enter converge on one selection function and assignmen
 
 test('Round Actions is a major white heading without changing action controls', () => {
   assert.match(html, /<h2 class="setup-round-actions-heading">Round Actions<\/h2>/);
-  assert.match(css, /\.setup-start-round-card \.setup-round-actions-heading\{[^}]*color:#fff[^}]*font-size:clamp\(1\.25rem,2\.5vw,1\.5rem\)[^}]*font-weight:850[^}]*text-align:left/);
+  assert.match(css, /\.setup-start-round-card \.setup-round-actions-heading\{[^}]*color:#fff[^}]*font-size:var\(--type-title\)[^}]*font-weight:var\(--weight-semibold\)[^}]*text-align:left/);
   assert.match(html, /id="matchSubmitBtn"[^>]+type="submit"[^>]+form="matchForm"[^>]*>Start Round<\/button>/);
   assert.match(html, /id="cancelMatchEditBtn"[^>]+type="button"[^>]+class="secondary setup-cancel-btn hidden"[^>]*>Cancel<\/button>/);
   assert.match(app, /const setupActionLabel = matchId \? 'Update Match' : 'Start Round'/);

@@ -1,10 +1,10 @@
 {
   "name": "the-dye-ledger",
-  "version": "31.0.54",
+  "version": "31.0.55",
   "private": true,
   "type": "module",
   "scripts": {
-    "lint": "eslint app.js service-worker.js scripts/**/*.js",
+    "lint": "eslint app.js app-presentation.js service-worker.js scripts/**/*.js",
     "validate": "node scripts/validate-release.js",
     "test": "node --test --test-concurrency=1 tests",
     "test:v30.3.77": "node --test tests/v30.3.77-pwa-round-completion.test.js tests/v30.3.77-calculation-assurance.test.js",

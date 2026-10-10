@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current development release: **v31.0.54 — Stroke Play Ledger Graphic** on `codex/v31.0.54-stroke-play-report`. Stroke reports use leader-gap charts, position strips, lead-fixed/swing analysis and a handicap table. All newly generated net reports use off-low playing allocations, as explicitly requested, even though individual Low Net in-app scoring remains full-course handicap. App scoring, records, persistence, shared matches and accepted snapshots are preserved. See `BUILD_NOTES_v31.0.54.md`. The visual roadmap resumes with typography and iOS text scaling in v31.0.55; bottom navigation remains deferred. PDF and iPhone acceptance remain separate from automated verification.
+Current development release: **v31.0.55 — Type and Spacing Scale** on `codex/v31.0.55-type-spacing-scale`. Screen typography uses shared rem-based roles, minimum readable text, calmer weights/case and fixed logical spacing steps. Touch WebKit uses its system-body Dynamic Type hook; score choices, preferences and actions reflow with larger text. SVG annotation sizes remain readable after viewBox scaling. Fixed print metrics are isolated in `app-print.css`; Ledger Entry is unchanged. Scoring, records, persistence and shared matches are preserved. See `BUILD_NOTES_v31.0.55.md`. Components follow in v31.0.56; bottom navigation remains deferred. Real iPhone Larger Text/keyboard acceptance is separate from browser verification.
 
 ## 2. Development Roles
 

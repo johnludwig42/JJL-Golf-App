@@ -27,7 +27,7 @@ test('player slots expose one keyboard-operable searchable combobox and no paral
 
 test('team labels and handicap preview follow descriptive-left numeric-centered alignment', () => {
   assert.match(app, /player-assignment-slot-heading/);
-  assert.match(css, /\.player-assignment-slot-heading strong\{[^}]*font-size:1rem[^}]*font-weight:800/);
+  assert.match(css, /\.player-assignment-slot-heading strong\{[^}]*font-size:var\(--type-body\)[^}]*font-weight:var\(--weight-semibold\)/);
   assert.match(app, /handicap-preview-description/);
   assert.match(app, /course-handicap-preview/);
   assert.match(app, /featured-game-handicap-preview/);

@@ -38,6 +38,11 @@ The checked-in `tests/fixtures/design/color-token-catalog.json` documents every 
 
 The browser test compares computed styles and screenshots against that baseline with the same application code, synthetic data, viewport and interaction state. It covers the main surfaces, score-entry modes, inputs and overlays. No dark palette or text-size adjustment change ships in the foundation release.
 
+From v31.0.55, screen typography and spacing intentionally change. The frozen
+baseline continues to protect color declarations and computed paints; exact
+paper metrics and screenshot equality are retained through `app-print.css`.
+The separate type-scale tests check minimum text size and enlarged-text reflow.
+
 Print families are intentionally fixed to their light values. Later dark-mode overrides should be screen-scoped, and must not override the `--color-print-*` families. Ledger Entry has its own stylesheet and remains light. Both print-media checks and the complete `npm run check:layout` HTML/PDF/iOS reference gate remain mandatory.
 
 ## Approval

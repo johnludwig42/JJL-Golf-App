@@ -92,6 +92,6 @@ test('Match setup headings use the accepted hierarchy and shared visual treatmen
   for (const heading of ['Preferences for This Round', 'Smart Score Advance']) assert.match(html, new RegExp(`setup-major-heading[^>]*>${heading}`));
   for (const heading of ['Players &amp; Teams', 'Games']) assert.match(html, new RegExp(`setup-section-heading[^>]*>${heading}`));
   assert.match(html, /setup-major-heading[^>]*>Match Templates/);
-  assert.match(css, /\.setup-major-heading\{[^}]*text-align:left[^}]*font-weight:800/);
+  assert.match(css, /\.setup-major-heading\{[^}]*text-align:left[^}]*font-weight:var\(--weight-semibold\)/);
   assert.doesNotMatch(html, /data-setup-destination="advanced" open/);
 });

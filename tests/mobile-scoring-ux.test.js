@@ -112,8 +112,8 @@ test('compact Play player metadata preserves a full-cell tap target without shri
   const css = expandColorTokens(readFileSync(new URL('../style.css', import.meta.url), 'utf8'));
   assert.match(html, /<th>Strokes<\/th>/);
   assert.doesNotMatch(html, /<th>Game Stroke<\/th>/);
-  assert.match(css, /score-player-name\{[\s\S]*min-height:0!important;[\s\S]*height:auto;[\s\S]*line-height:1\.15;/);
-  assert.match(css, /score-player-name\{[\s\S]*max-width:calc\(100% - 12px\);[\s\S]*margin-left:12px;/);
+  assert.match(css, /score-player-name\{[\s\S]*min-height:0!important;[\s\S]*height:auto;[\s\S]*line-height:var\(--leading-heading\);/);
+  assert.match(css, /score-player-name\{[\s\S]*max-width:calc\(100% - 12px\);[\s\S]*margin-left:var\(--space-3\);/);
   assert.match(css, /score-player-name::after\{[\s\S]*position:absolute;[\s\S]*inset:0;/);
   assert.match(css, /score-team-heading th\{[\s\S]*background:#f4f8f5;[\s\S]*box-shadow:inset 3px 0 0/);
   assert.match(css, /gross-score-stepper \.score-input\{[\s\S]*min-height:34px!important/);
@@ -348,7 +348,7 @@ test('Quick Scoreboard reuses the native bounded scorecard scroller and Play Gre
   assert.match(css, /\.quick-classic-scorecard>\.scorecard-wrap,\.quick-score-distribution>\.score-distribution-scroll\{width:calc\(100% - 24px\);max-width:calc\(100% - 24px\);/);
   assert.match(html, new RegExp(`style\\.css\\?v=${currentVersionBareRegexEscaped}`));
   assert.match(app, new RegExp(`cacheName: 'the-dye-ledger-${currentVersionRegexEscaped}'`));
-  assert.match(css, /#greeniesEntryWrap \.greenies-check\{min-height:44px;padding:4px 9px;gap:7px\}/);
+  assert.match(css, /#greeniesEntryWrap \.greenies-check\{min-height:44px;padding:var\(--space-1\) var\(--space-2\);gap:var\(--space-2\)\}/);
   assert.match(css, /#greeniesEntryWrap \.greenies-check input\[type="checkbox"\]\{width:20px;height:20px;min-height:20px;padding:0\}/);
   assert.match(html, /id="greeniesEntryWrap" class="top-gap hidden"/);
   assert.match(app, /class="mini-check greenies-check/);

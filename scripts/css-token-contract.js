@@ -45,6 +45,8 @@ export function isColorTokenDeclaration(declaration) {
 
 export function auditStyleContract(css, exceptions = {}) {
   const root = postcss.parse(css);
+  const designTokens=new Set();
+  root.walkDecls(declaration=>{if(declaration.parent.selector===':root'&&/^--(?:type|space|weight|leading)-/.test(declaration.prop))designTokens.add(declaration.prop);});
   const violations = [];
   const usage = new Map();
   const allowed = new Map((exceptions.pxFontSizes || []).map(entry => [entry.key, entry]));
@@ -52,6 +54,10 @@ export function auditStyleContract(css, exceptions = {}) {
   root.walkDecls(declaration => {
     const key = declarationKey(declaration);
     const location = `${declaration.source.start.line}:${declaration.source.start.column}`;
+    if(/^--(?:type|space|weight|leading)-/.test(declaration.prop)&&declaration.parent.selector!==':root')violations.push(`${location} design token override outside the root layer: ${key}`);
+    for(const match of declaration.value.matchAll(/var\((--(?:type|space|weight|leading)-[a-z\d-]+)/g)){
+      if(!designTokens.has(match[1]))violations.push(`${location} undefined design token ${match[1]}: ${key}`);
+    }
     if (!isColorTokenDeclaration(declaration) && findColorLiterals(declaration.value, declaration.prop).length) {
       const exception = colorAllowed.get(key);
       if (!exception?.reason) violations.push(`${location} color literal outside semantic token declarations: ${key}`);
@@ -61,6 +67,12 @@ export function auditStyleContract(css, exceptions = {}) {
       const exception = allowed.get(key);
       if (!exception?.reason) violations.push(`${location} px font-size without an explicit migration exception: ${key}`);
       else usage.set(`font:${key}`, (usage.get(`font:${key}`) || 0) + 1);
+    }
+    let inPrint=false;
+    for(let parent=declaration.parent;parent;parent=parent.parent){if(parent.type==='atrule'&&parent.name==='media'&&/\bprint\b/.test(parent.params))inPrint=true;}
+    if(!inPrint&&declaration.prop==='font-size'&&!/^(?:inherit|initial|unset|revert)$/.test(declaration.value)){
+      const rootDefault=declaration.parent.selector==='html'&&declaration.value==='100%';
+      if(!rootDefault&&!declaration.value.includes('var(--type-'))violations.push(`${location} screen font-size must use the shared type scale: ${key}`);
     }
   });
   for (const [kind, entries] of [['font', allowed], ['color', colorAllowed]]) {

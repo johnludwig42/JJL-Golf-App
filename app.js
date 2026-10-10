@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.54',
-  versionNumber: '31.0.54',
-  cacheName: 'the-dye-ledger-v31.0.54',
-  buildDate: '2026-10-09T22:54:49.515Z',
-  buildLabel: 'Stroke Play Ledger Graphic'
+  version: 'v31.0.55',
+  versionNumber: '31.0.55',
+  cacheName: 'the-dye-ledger-v31.0.55',
+  buildDate: '2026-10-09T23:26:44.097Z',
+  buildLabel: 'Type and Spacing Scale'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -18870,29 +18870,77 @@ function renderMomentumChart(match, metrics, gameKey, { compact = false, range =
   const sspPointValue = model.baseGameKey === 'sneaky_sandy_poley'
     ? Number(getSneakySandyPoleyConfig(match)?.pointValue || 0)
     : 0;
+  return renderMomentumTypographyView({model,sspPointValue,compact,showPointValues});
+}
+function renderMomentumTypographyView(view) {
+  const {model,sspPointValue,compact,showPointValues}=view;
+  const gameKey=model.gameKey;
   const scale = getMomentumYAxisScale(model.series.map(row => row.value), { compact });
   if (!scale) return '';
-  const width = 520, height = compact ? 150 : 205, left = compact ? 42 : 46, right = 88, top = 24, bottom = 28;
+  const width = 520;
+  let height = compact ? 150 : 205, left = compact ? 42 : 46, right = 88, top = 24, bottom = 28;
+  let annotationEvery = 1, unitY = 12, upperLabelY = top + 5, lowerLabelY = height - bottom;
+  let tickTextOffset = 4, positiveValueOffset = 9, negativeValueOffset = 15, minimumValueY = 12;
+  let adaptiveAnnotations = false;
+  // Screen geometry only: make room for rem-based annotations. The model,
+  // y-axis scale, every plotted point and recorded values stay unchanged.
+  if (typeof window.getComputedStyle === 'function' && document.documentElement && !window.matchMedia?.('print')?.matches) {
+    adaptiveAnnotations = true;
+    const rootSize = parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
+    const renderedWidth = Math.max(220, Math.min(width, (Number(window.innerWidth) || width) - 56));
+    const ratio = renderedWidth / width;
+    const caption = Math.max(11, rootSize * .6875) / ratio;
+    const label = Math.max(11, rootSize * .75) / ratio;
+    left = Math.ceil(caption * 3 + 12);
+    right = 24;
+    top = Math.ceil((caption + label) * 1.35 + 12);
+    bottom = top;
+    height = Math.max(height, top + bottom + Math.ceil(Math.max(2, scale.ticks.length - 1) * caption * 1.45));
+    unitY = caption * 1.1;
+    upperLabelY = top - label * .5;
+    lowerLabelY = height - bottom + label * 1.2;
+    tickTextOffset = caption / 3;
+    positiveValueOffset = label * .55;
+    negativeValueOffset = label * 1.15;
+    minimumValueY = top - 7;
+    const gap = (width - left - right) / Math.max(1, model.series.length - 1);
+    annotationEvery = Math.max(1, Math.ceil(caption * 3.2 / gap));
+  }
   const zero = top + (height - top - bottom) / 2;
   const x = index => model.series.length === 1 ? (left + width - right) / 2 : left + index * (width - left - right) / (model.series.length - 1);
   const y = value => zero - (Number(value) / scale.bound) * ((height - top - bottom) / 2);
   const points = model.series.map((row, index) => `${x(index)},${y(row.value)}`).join(' ');
-  const labels = model.series.map((row, index) => `<text x="${x(index)}" y="${height - 8}" text-anchor="middle">H${row.holeNumber}</text>`).join('');
-  const dots = model.series.map((row, index) => `<circle cx="${x(index)}" cy="${y(row.value)}" r="${compact ? 3 : 4}" class="momentum-chart-dot"/>`).join('');
+  const labeled = index => index === model.series.length - 1 || index % annotationEvery === 0 && (index === 0 || model.series.length - 1 - index >= annotationEvery);
+  const textAnchor = index => adaptiveAnnotations && model.series.length > 1 ? index === 0 ? 'start' : index === model.series.length - 1 ? 'end' : 'middle' : 'middle';
+  const labels = model.series.map((row, index) => labeled(index) ? `<text x="${x(index)}" y="${height - 8}" text-anchor="${textAnchor(index)}">H${row.holeNumber}</text>` : '').join('');
+  const dots = model.series.map((row, index) => `<circle cx="${x(index)}" cy="${y(row.value)}" r="${compact ? 3 : 4}" class="momentum-chart-dot"><title>Hole ${row.holeNumber}: ${row.value}</title></circle>`).join('');
   const valueLabels = (model.baseGameKey === 'nassau' || showPointValues) ? model.series.map((row, index) => {
+    if (!labeled(index)) return '';
     const isSsp = model.baseGameKey === 'sneaky_sandy_poley';
     const label = isSsp ? formatMomentumMoneyValue(row.value * sspPointValue) : row.value === 0 ? 'E' : row.value > 0 ? `+${row.value}` : String(row.value);
-    const labelY = Math.max(12, Math.min(height - bottom - 7, y(row.value) + (row.value > 0 ? -9 : 15)));
-    return `<text x="${x(index)}" y="${labelY}" text-anchor="middle" class="momentum-point-value" data-momentum-value="${row.value}"${isSsp ? ` data-momentum-money="${row.value * sspPointValue}"` : ''}>${label}</text>`;
+    const labelY = Math.max(minimumValueY, Math.min(height - bottom - 7, y(row.value) + (row.value > 0 ? -positiveValueOffset : negativeValueOffset)));
+    const anchor = textAnchor(index);
+    return `<text x="${x(index)}" y="${labelY}" text-anchor="${anchor}" class="momentum-point-value" data-momentum-value="${row.value}"${isSsp ? ` data-momentum-money="${row.value * sspPointValue}"` : ''}>${label}</text>`;
   }).join('') : '';
   const tickMarkup = scale.ticks.map(value => {
     const tickY = y(value);
     const label = value > 0 ? `+${value}` : String(value);
-    return `${value === 0 ? '' : `<line x1="${left}" y1="${tickY}" x2="${width - right + 8}" y2="${tickY}" class="momentum-gridline"/>`}<text x="${left - 7}" y="${tickY + 4}" text-anchor="end" class="momentum-axis-tick" data-momentum-tick="${value}" data-tick-y="${tickY}">${label}</text>`;
+    return `${value === 0 ? '' : `<line x1="${left}" y1="${tickY}" x2="${width - right + 8}" y2="${tickY}" class="momentum-gridline"/>`}<text x="${left - 7}" y="${tickY + tickTextOffset}" text-anchor="end" class="momentum-axis-tick" data-momentum-tick="${value}" data-tick-y="${tickY}">${label}</text>`;
   }).join('');
   const unit = gameKey === 'sneaky_sandy_poley' ? 'points' : 'holes';
   const sspLabelNote = model.baseGameKey === 'sneaky_sandy_poley' ? ` · Labels = cumulative team money at ${formatPositiveCurrency(sspPointValue, 2)}/point` : '';
-  return `<div class="momentum-chart ${compact ? 'momentum-chart--compact' : 'momentum-chart--full'}" data-momentum-game="${escapeHtml(gameKey)}" data-momentum-range="${escapeHtml(model.range)}" data-momentum-perspective="${model.perspective}" data-momentum-y-bound="${scale.bound}" data-momentum-y-step="${scale.step}"><div class="momentum-orientation">Positive = ${escapeHtml(model.upperLabel)} ahead${escapeHtml(sspLabelNote)}</div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(gameKey)} momentum; positive values mean ${escapeHtml(model.upperLabel)} ahead"><line x1="${left}" y1="${top}" x2="${left}" y2="${height - bottom}" class="momentum-y-axis"/>${tickMarkup}<line x1="${left}" y1="${zero}" x2="${width - right + 8}" y2="${zero}" class="momentum-zero-baseline" data-zero-y="${zero}"/><text x="4" y="12" class="momentum-axis-unit">${unit}</text><polyline points="${points}" class="momentum-chart-line"/>${dots}${valueLabels}${labels}<text x="${width - 4}" y="${top + 5}" text-anchor="end" class="momentum-side-label momentum-side-label--upper">${escapeHtml(model.upperLabel)}</text><text x="${width - 4}" y="${height - bottom}" text-anchor="end" class="momentum-side-label momentum-side-label--lower">${escapeHtml(model.lowerLabel)}</text></svg></div>`;
+  return `<div class="momentum-chart ${compact ? 'momentum-chart--compact' : 'momentum-chart--full'}" data-momentum-game="${escapeHtml(gameKey)}" data-momentum-range="${escapeHtml(model.range)}" data-momentum-perspective="${model.perspective}" data-momentum-y-bound="${scale.bound}" data-momentum-y-step="${scale.step}" data-typography-view="${escapeHtml(JSON.stringify(view))}"><div class="momentum-orientation">Positive = ${escapeHtml(model.upperLabel)} ahead${escapeHtml(sspLabelNote)}</div><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(gameKey)} momentum; positive values mean ${escapeHtml(model.upperLabel)} ahead"><line x1="${left}" y1="${top}" x2="${left}" y2="${height - bottom}" class="momentum-y-axis"/>${tickMarkup}<line x1="${left}" y1="${zero}" x2="${width - right + 8}" y2="${zero}" class="momentum-zero-baseline" data-zero-y="${zero}"/><text x="4" y="${unitY}" class="momentum-axis-unit">${unit}</text><polyline points="${points}" class="momentum-chart-line"/>${dots}${valueLabels}${labels}<text x="${width - 4}" y="${upperLabelY}" text-anchor="end" class="momentum-side-label momentum-side-label--upper">${escapeHtml(model.upperLabel)}</text><text x="${width - 4}" y="${lowerLabelY}" text-anchor="end" class="momentum-side-label momentum-side-label--lower">${escapeHtml(model.lowerLabel)}</text></svg></div>`;
+}
+/* exported refreshMomentumTypography */
+function refreshMomentumTypography() {
+  document.querySelectorAll('.momentum-chart[data-typography-view]').forEach(chart=>{
+    try {
+      const view=JSON.parse(chart.dataset.typographyView);
+      const host=document.createElement('div');host.innerHTML=renderMomentumTypographyView(view);
+      const next=host.querySelector('svg'),current=chart.querySelector('svg');
+      if(next&&current)current.replaceWith(next);
+    } catch (error) { console.warn('Chart typography refresh could not complete.',error); }
+  });
 }
 function getMomentumRangeOptions(match, metrics) {
   if (getRequestedHoleCount(match) === 9) return [{ key: 'full', label: getHoleSegmentLabel(match, metrics?.tee) }];

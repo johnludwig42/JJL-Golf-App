@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.59',
-  versionNumber: '31.0.59',
-  cacheName: 'the-dye-ledger-v31.0.59',
-  buildDate: '2026-10-10T12:13:10.142Z',
-  buildLabel: 'Play Screen Refinement'
+  version: 'v31.0.60',
+  versionNumber: '31.0.60',
+  cacheName: 'the-dye-ledger-v31.0.60',
+  buildDate: '2026-10-10T14:27:54.918Z',
+  buildLabel: 'Assigned Team Index'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -32,6 +32,7 @@ const ROUND_RECAP_CONTENT_SPEC_VERSION = '1.0.0';
 // This policy version is consumed while persisted matches are normalized during
 // startup, so it must be initialized before state is loaded below.
 const NASSAU_SCORING_POLICY_VERSION = 1;
+const ASSIGNED_TEAM_INDEX_POLICY_VERSION = 1;
 
 function getAppReleaseNotes() {
   try {
@@ -1960,6 +1961,7 @@ function getScoreAccessState(match) {
   return { mode, role: validRoles.includes(allowedRole) ? allowedRole : 'viewer', team: selectedTeam };
 }
 function canEditPlayerScore(match, teamNo = 1, playerId = '') {
+  if (getAssignedTeamIndexError(match)) return false;
   const access = getScoreAccessState(match);
   if (access.role === 'viewer') return false;
   if (access.mode === 'single_device') return true;
@@ -2401,8 +2403,7 @@ function computeSixesResults(match, metrics, inputConfig = {}) {
 
   const allowance = cfg.basis === 'gross' ? 0 : cfg.handicapAllowancePercent;
   const gameHandicaps = Object.fromEntries(chosenMetrics.map(player => {
-    const raw = Number(player.unroundedCourseHdcp);
-    return [String(player.playerId), cfg.basis === 'gross' ? 0 : Math.round((Number.isFinite(raw) ? raw : 0) * allowance / 100)];
+    return [String(player.playerId), cfg.basis === 'gross' ? 0 : getPlayerGameHandicap(player, allowance)];
   }));
   const lowGameHandicap = Math.min(...Object.values(gameHandicaps));
   result.gameHandicaps = gameHandicaps;
@@ -2676,7 +2677,7 @@ function computeWolfResults(match, metrics, inputConfig = {}) {
   playerIds.forEach(id => { result.totals[id] = 0; result.amounts[id] = 0; });
   if (!metrics || playerIds.length !== 4 || chosenMetrics.length !== 4) return result;
   const allowance = cfg.basis === 'gross' ? 0 : cfg.handicapAllowancePercent;
-  const gameHandicaps = Object.fromEntries(chosenMetrics.map(player => [String(player.playerId), cfg.basis === 'gross' ? 0 : Math.round((Number(player.unroundedCourseHdcp) || 0) * allowance / 100)]));
+  const gameHandicaps = Object.fromEntries(chosenMetrics.map(player => [String(player.playerId), cfg.basis === 'gross' ? 0 : getPlayerGameHandicap(player, allowance)]));
   const lowGameHandicap = Math.min(...Object.values(gameHandicaps));
   result.gameHandicaps = gameHandicaps;
   result.lowGameHandicap = lowGameHandicap;
@@ -2904,7 +2905,7 @@ function getFeaturedCompetitionStrokeNote(match, metrics = null) {
   if (context.mode === 'course') return `Game strokes: ${context.label} · Full Course Handicap`;
   if (context.key === 'nassau') {
     const cfg = context.config || {};
-    return `Game strokes: Nassau · Net · Best ${normalizeCountingBalls(cfg.countingBalls, 1)} · ${normalizeHandicapAllowancePercent(cfg.handicapAllowancePercent, match?.allowance)}% · Off lowest Game HCP`;
+    return `Game strokes: Nassau · Net · Best ${normalizeCountingBalls(cfg.countingBalls, 1)} · ${formatRoundAllowanceLabel(match, normalizeHandicapAllowancePercent(cfg.handicapAllowancePercent, match?.allowance))} · Off lowest Game HCP`;
   }
   return `Game strokes: ${context.label} · Featured Competition settings`;
 }
@@ -5296,7 +5297,7 @@ function formatNassauPolicyLabel(config = {}, match = null) {
   const rosterSizes = getNassauRosterSizes(match);
   const allBalls = rosterSizes.length === 2 && rosterSizes[0] === rosterSizes[1] && normalized.countingBalls === rosterSizes[0] && normalized.countingBalls > 1;
   const basisLabel = normalized.basis === 'gross' ? 'Gross' : normalized.basis === 'both' ? 'Gross & Net' : 'Net';
-  return `${basisLabel} Nassau · Best ${normalized.countingBalls}${allBalls ? ' — All Balls' : ''}${normalized.basis !== 'gross' ? ` · ${normalized.handicapAllowancePercent}%` : ''}`;
+  return `${basisLabel} Nassau · Best ${normalized.countingBalls}${allBalls ? ' — All Balls' : ''}${normalized.basis !== 'gross' ? ` · ${formatRoundAllowanceLabel(match, normalized.handicapAllowancePercent)}` : ''}`;
 }
 function getGameRelativeStrokeAllowance(holeStrokeIndex, playerMetric, metrics, config = {}) {
   if (!playerMetric || !holeStrokeIndex) return 0;
@@ -5305,13 +5306,12 @@ function getGameRelativeStrokeAllowance(holeStrokeIndex, playerMetric, metrics, 
   const eligibleIds = config.key === 'sixes' ? new Set((config.playerIds || []).map(String)) : null;
   const eligiblePlayers = (metrics?.players || []).filter(player => !eligibleIds || eligibleIds.has(String(player.playerId)));
   const values = eligiblePlayers
-    .map(player => Number(player.unroundedCourseHdcp))
-    .filter(Number.isFinite)
-    .map(courseHandicap => Math.round(courseHandicap * allowance / 100));
+    .map(player => getPlayerGameHandicap(player, allowance))
+    .filter(Number.isFinite);
   const lowGameHandicap = values.length ? Math.min(...values) : NaN;
   const playerUnrounded = Number(playerMetric.unroundedCourseHdcp);
   if (!Number.isFinite(lowGameHandicap) || !Number.isFinite(playerUnrounded)) return 0;
-  const playerGameHandicap = Math.round(playerUnrounded * allowance / 100);
+  const playerGameHandicap = getPlayerGameHandicap(playerMetric, allowance);
   const difference = Math.max(0, playerGameHandicap - lowGameHandicap);
   return holeStrokeAllowanceForPlayer(holeStrokeIndex, difference, 0);
 }
@@ -6905,7 +6905,8 @@ function buildRoundRecord(match, metrics) {
   const paymentRows = optimalSettlementRows(ctx.finalTotals || {});
   const playerRecords = (metrics?.players || []).map((playerMetric, index) => ({
     playerId: getRoundRecordPlayerId(match, playerMetric, index), displayName: playerMetric?.player?.name || `Player ${index + 1}`,
-    index: Number.isFinite(Number(playerMetric?.player?.index)) ? Number(playerMetric.player.index) : null,
+    index: Number.isFinite(Number(playerMetric?.handicapIndex)) ? Number(playerMetric.handicapIndex) : null,
+    ...(hasAssignedTeamIndex(match) ? { assignedTeamIndex: playerMetric.assignedTeamIndex, libraryIndex: playerMetric.player?.handicapIndexMissing ? null : finiteHandicapIndex(playerMetric.player?.index), playingHandicap: playerMetric.playHdcp } : {}),
     courseHandicap: Number.isFinite(Number(playerMetric?.courseHdcp ?? playerMetric?.courseHandicap)) ? Number(playerMetric.courseHdcp ?? playerMetric.courseHandicap) : null,
     teeId: match?.players?.[index]?.teeId || match?.teeId || null, teamId: playerMetric?.team ?? match?.players?.[index]?.team ?? null,
     statLines: isPlayerStatTrackingEnabled(match, playerMetric.playerId) ? (computeStatTrackingSummary(match, metrics).find(row => String(row.playerMetric?.playerId) === String(playerMetric.playerId))?.totals || null) : null,
@@ -6943,7 +6944,7 @@ function buildRoundRecord(match, metrics) {
   const crossFoot = Object.values(ctx.finalTotals || {}).reduce((sum, amount) => sum + Number(amount || 0), 0);
   return {
     schemaVersion: ROUND_RECORD_SCHEMA_VERSION,
-    meta: { roundId: String(match?.id || ''), tripId: match?.tripId || null, eventId: match?.eventId || null, ownerUserId: match?.ownerUserId || match?.sharedOwnerUserId || null, createdBy: match?.createdBy || null, deviceId: match?.deviceId || null, hostDeviceId: match?.hostDeviceId || match?.sharedHostDeviceId || null, courseSnapshot: clonePlain(match?.courseSnapshot || metrics?.course || null), teeSnapshot: clonePlain(metrics?.tee || null), date: match?.date || null, holesPlanned: completion.selectedHoleCount, holesCompleted: completion.completedHoleCount, completedHoleNumbers: completion.completedHoles.slice(), status: completion.isIncomplete ? 'provisional' : 'final', endReason: match?.roundEndReason || (completion.isComplete ? 'completed' : null), timing: { valid: !!timing.valid, available: !!timing.available, elapsedMs: timing.valid ? timing.elapsedMs : null, label: timing.valid ? timing.label : null }, handicapConvention: match?.handicapConvention || 'low_man', lowManPlayerId: playerRecords.filter(player => player.courseHandicap != null).sort((a, b) => a.courseHandicap - b.courseHandicap)[0]?.playerId || null },
+    meta: { roundId: String(match?.id || ''), ...(hasAssignedTeamIndex(match) ? { assignedTeamIndexPolicyVersion: match.assignedTeamIndexPolicyVersion } : {}), tripId: match?.tripId || null, eventId: match?.eventId || null, ownerUserId: match?.ownerUserId || match?.sharedOwnerUserId || null, createdBy: match?.createdBy || null, deviceId: match?.deviceId || null, hostDeviceId: match?.hostDeviceId || match?.sharedHostDeviceId || null, courseSnapshot: clonePlain(match?.courseSnapshot || metrics?.course || null), teeSnapshot: clonePlain(metrics?.tee || null), date: match?.date || null, holesPlanned: completion.selectedHoleCount, holesCompleted: completion.completedHoleCount, completedHoleNumbers: completion.completedHoles.slice(), status: completion.isIncomplete ? 'provisional' : 'final', endReason: match?.roundEndReason || (completion.isComplete ? 'completed' : null), timing: { valid: !!timing.valid, available: !!timing.available, elapsedMs: timing.valid ? timing.elapsedMs : null, label: timing.valid ? timing.label : null }, handicapConvention: match?.handicapConvention || 'low_man', lowManPlayerId: playerRecords.filter(player => player.courseHandicap != null).sort((a, b) => a.courseHandicap - b.courseHandicap)[0]?.playerId || null },
     players: playerRecords, teams: teamRecords, holes, games, events, transactions,
     pressTransactions: (ctx.payoutGames || []).filter(game => game.meta?.press).flatMap(game => (game.meta.settlement?.transactions || []).map(row => ({ ...clonePlain(row), rootGameId: game.meta.press.rootGameId, pressDepth: game.meta.press.pressDepth }))),
     settlement: { netPositions: Object.fromEntries(Object.entries(ctx.finalTotals || {}).map(([id, amount]) => [String(id), Number(amount || 0)])), payments: transactions, crossFoot: Number(crossFoot.toFixed(2)) },
@@ -6974,6 +6975,7 @@ function validateFrozenTransactions(record) {
   });
 }
 function canFreezeRoundRecord(match, metrics) {
+  if (getAssignedTeamIndexError(match)) return false;
   if (!match || match.status !== 'complete' || !match.completedAt || (match.storageMode === 'shared' && !isCurrentDeviceMatchHost(match))) return false;
   const completion = getRoundCompletionState(match, metrics);
   return completion.isComplete || areAllGamesFinal(match, metrics);
@@ -7050,8 +7052,8 @@ function buildLedgerEntryReportModel(match, metrics = null) {
   });
   const strokeArray = (playerMetric, field, resolver = null) => holes.map((hole, index) => {
     const score = (hole?.scores || []).find(row => String(row?.playerId) === String(playerMetric.playerId));
-    if (resolver) return Math.max(0, Number(resolver(hole, index, score)) || 0);
-    return Math.max(0, Number(score?.[field]) || 0);
+    const strokes = Number(resolver ? resolver(hole, index, score) : score?.[field]) || 0;
+    return hasAssignedTeamIndex(match) ? strokes : Math.max(0, strokes);
   });
   const courseHandicaps = playerMetrics.map(player => Number(player.courseHdcp)).filter(Number.isFinite);
   const lowCourseHandicap = courseHandicaps.length ? Math.min(...courseHandicaps) : 0;
@@ -7077,9 +7079,9 @@ function buildLedgerEntryReportModel(match, metrics = null) {
       name: recordPlayer.displayName || playerMetric.player?.name || `Player ${index + 1}`,
       side: teamKeys[teamIndex] || teamKeys[0] || 'FIELD',
       tee: playerMetric.tee?.name || playerMetric.tee?.teeName || effectiveMetrics.tee?.name || effectiveMetrics.tee?.teeName || 'Tee',
-      index: Number(playerMetric.player?.index ?? recordPlayer.index) || 0,
+      index: Number(recordPlayer.assignedTeamIndex ?? playerMetric.handicapIndex ?? recordPlayer.index) || 0,
       ch: courseHandicap,
-      ph: featured.reduce((sum, strokes) => sum + strokes, 0),
+      ph: hasAssignedTeamIndex(match) ? playerMetric.playHdcp : featured.reduce((sum, strokes) => sum + strokes, 0),
       postable: Number(recordPlayer.postable ?? playerMetric.postableTotal ?? playerMetric.grossTotal ?? 0),
       gross: completedScoresByPlayer(playerMetric.playerId),
       strokes: { courseNet, featured, offLow },
@@ -7140,7 +7142,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
       });
       return { ...common, type: 'strokeplay', scope: 'team', unit: 'strokes', lowWins: true,
         scoringMode, seriesByHole,
-        allowance: { key: 'featured', label: common.basis === 'gross' ? 'Gross · no handicap strokes' : `${normalizeHandicapAllowancePercent(Number(config.scoringPolicyVersion) >= 1 ? config.handicapAllowancePercent : match.allowance, 100)}% · Off lowest Playing Handicap` },
+        allowance: { key: 'featured', label: common.basis === 'gross' ? 'Gross · no handicap strokes' : `${formatRoundAllowanceLabel(match, normalizeHandicapAllowancePercent(Number(config.scoringPolicyVersion) >= 1 ? config.handicapAllowancePercent : match.allowance, 100))} · Off lowest Playing Handicap` },
         segments: [{ label: 'Round', holes: holeNumbers.slice() }] };
     }
     if (config.key === 'nassau') {
@@ -7154,7 +7156,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
         ...common, type: 'nassau', sides: sideRows, segments,
         basis: policy.basis === 'gross' ? 'gross' : 'net',
         bestN: normalizeCountingBalls(policy.countingBalls, 1),
-        allowance: { key: 'featured', label: `${policy.basis === 'gross' ? 'Gross' : `Best ${normalizeCountingBalls(policy.countingBalls, 1)} · ${policy.handicapAllowancePercent}% off the low`}` },
+        allowance: { key: 'featured', label: `${policy.basis === 'gross' ? 'Gross' : `Best ${normalizeCountingBalls(policy.countingBalls, 1)} · ${formatRoundAllowanceLabel(match, policy.handicapAllowancePercent)} off the low`}` },
         stakePerSegment: Number(policy.stakesOverall ?? policy.stakesFront ?? policy.stake ?? 0) || 0,
       };
     }
@@ -7199,7 +7201,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
         settlementMode: result.mode === 'points' ? 'headToHead' : 'segments',
         totals: { ...result.totals },
         pointsByHole: Object.fromEntries(result.playerIds.map(playerId => [playerId, result.holes.map(hole => hole.completed ? Number(hole.points?.[playerId] || 0) : null)])),
-        allowance: { key: result.basis === 'gross' ? 'courseNet' : 'featured', label: result.basis === 'gross' ? 'Gross' : `${result.handicapAllowancePercent}% Game Net` },
+        allowance: { key: result.basis === 'gross' ? 'courseNet' : 'featured', label: result.basis === 'gross' ? 'Gross' : `${formatRoundAllowanceLabel(match, result.handicapAllowancePercent)} Game Net` },
         stakePerSegment: result.stakePerSegment,
         segments: result.segments.map(segment => ({
           label: segment.label, holes: segment.holeNumbers.slice(), sideA: { ...segment.sideA }, sideB: { ...segment.sideB },
@@ -7217,7 +7219,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
         playerIds: result.playerIds.slice(), basis: result.basis, pointValue: result.pointValue,
         settlementMode: 'headToHead', totals: { ...result.totals }, unresolvedHoles: result.unresolvedHoles.slice(),
         pointsByHole: Object.fromEntries(result.playerIds.map(playerId => [playerId, result.holes.map(hole => hole.resolved ? Number(hole.points?.[playerId] || 0) : null)])),
-        allowance: { key: result.basis === 'gross' ? 'courseNet' : 'featured', label: result.basis === 'gross' ? 'Gross' : `${getWolfConfig(match)?.handicapAllowancePercent || 100}% Game Net` },
+        allowance: { key: result.basis === 'gross' ? 'courseNet' : 'featured', label: result.basis === 'gross' ? 'Gross' : `${formatRoundAllowanceLabel(match, getWolfConfig(match)?.handicapAllowancePercent || 100)} Game Net` },
         holes: result.holes.map(hole => ({ holeNumber: hole.holeNumber, wolfPlayerId: hole.wolfPlayerId, choice: hole.choice, partnerPlayerId: hole.partnerPlayerId, winner: hole.winner, resolved: hole.resolved })),
       };
     }
@@ -7289,9 +7291,9 @@ function buildLedgerEntryReportModel(match, metrics = null) {
     });
     if(knownNet||fixedGross)game.allowance={...game.allowance,key};
     if(game.id==='stroke-net'&&!game.overviewOnly){
-      game.allowance.label=String(match.allowance||100)+'% · Off lowest Playing Handicap · report basis';
+      game.allowance.label=formatRoundAllowanceLabel(match)+' · Off lowest Playing Handicap · report basis';
       game.pointsByHole=Object.fromEntries(players.map(player=>[player.id,player.gross.map((gross,i)=>gross===null?null:gross-player.strokes[key][i]-Number(holes[i]?.par||0))]));
-      players.forEach(player=>{player.strokes.featured=player.strokes[key].slice();player.ph=game.handicaps[player.id];});
+      players.forEach(player=>{player.strokes.featured=player.strokes[key].slice();if(!hasAssignedTeamIndex(match))player.ph=game.handicaps[player.id];});
     }
   });
   const course = effectiveMetrics.course || match.courseSnapshot || {};
@@ -8201,7 +8203,7 @@ function buildRoundRecapPayload(match, metrics) {
     return {
       name: pm.player?.name || 'Player',
       team: getTeamLabel(match, pm.team),
-      index: Number(pm.player?.index),
+      index: Number(pm.handicapIndex),
       tee: pm.tee?.teeName || '',
       courseHandicap: Number(pm.courseHdcp),
       playingHandicap: Number(pm.playHdcp),
@@ -8524,7 +8526,7 @@ function buildExportHeaderPlayers(match, metrics) {
   const players = Array.isArray(metrics?.players) ? metrics.players : [];
   if (!players.length) return '';
   const rows = players.map(p => {
-    const indexValue = Number(p?.player?.index);
+    const indexValue = Number(p?.handicapIndex ?? p?.player?.index);
     const indexText = Number.isFinite(indexValue) ? indexValue.toFixed(1) : '—';
     const teeText = p?.tee?.teeName || '—';
     const courseHdcpText = Number.isFinite(Number(p?.courseHdcp)) ? String(Number(p.courseHdcp)) : '—';
@@ -8694,7 +8696,7 @@ function getLedgerEntryFeaturedBasis(match, metrics) {
     return { label: 'Full Course Handicap', config: context.config };
   }
   const allowance = normalizeHandicapAllowancePercent(context.config.handicapAllowancePercent, match?.allowance);
-  return { label: `${allowance}% off the low`, config: context.config };
+  return { label: `${formatRoundAllowanceLabel(match, allowance)} off the low`, config: context.config };
 }
 
 function buildLedgerEntryRecap(match, metrics, record) {
@@ -10140,6 +10142,7 @@ function normalizeMatch(match) {
     team: Number(mp.team) || 1,
     slot: Number.isFinite(Number(mp.slot)) ? Number(mp.slot) : idx,
     teeId: mp.teeId || match.teeId || '',
+    ...(Object.prototype.hasOwnProperty.call(mp, 'assignedTeamIndex') ? { assignedTeamIndex: finiteHandicapIndex(mp.assignedTeamIndex) } : {}),
     scores: Array.isArray(mp.scores) && mp.scores.length ? mp.scores.map((s, scoreIdx) => ({ holeNumber: scoreIdx + 1, gross: Number(s.gross) || null })) : buildEmptyScores(match.holeCount),
     stats: Array.isArray(mp.stats) && mp.stats.length ? mp.stats.map((s, statIdx) => normalizeHoleStat(s, statIdx)) : buildEmptyStats(match.holeCount),
   }));
@@ -10243,6 +10246,7 @@ function normalizeState() {
     p.formalName = String(p.formalName || p.name || '').trim();
     p.nickname = String(p.nickname || '').trim();
     p.name = p.nickname || p.formalName;
+    if (finiteHandicapIndex(p.index) === null) p.handicapIndexMissing = true;
     p.index = Number(p.index) || 0;
   });
   state.playerRegistry = normalizePlayerRegistry(state.playerRegistry, state.players);
@@ -10278,6 +10282,57 @@ function normalizeState() {
     state.lastOpenedSharedMatchId = active?.sharedMatchId || active?.sharedMatchRef || null;
   }
 }
+// A round-specific assigned index never changes a golfer's library identity/index.
+function finiteHandicapIndex(value) {
+  return value === null || value === undefined || String(value).trim() === '' || !Number.isFinite(Number(value)) ? null : Number(value);
+}
+function hasAssignedTeamIndex(match) {
+  return Number(match?.assignedTeamIndexPolicyVersion || 0) > 0 || (match?.players || []).some(row => Object.prototype.hasOwnProperty.call(row, 'assignedTeamIndex'));
+}
+function getAssignedTeamIndexError(match) {
+  if (!hasAssignedTeamIndex(match)) return '';
+  if (Number(match.assignedTeamIndexPolicyVersion) !== ASSIGNED_TEAM_INDEX_POLICY_VERSION) return 'Update the app to use this assigned team-index rule.';
+  if (Number(match.playersPerTeam) !== 2) return 'Assigned team indexes require two players per team.';
+  const course = match.course || getMatchCourse(match);
+  for (let team = 1; team <= Number(match.teamCount); team++) {
+    const members = (match.players || []).filter(row => Number(row.team) === team);
+    if (members.length !== 2) return 'Assign both players on every team before using team indexes.';
+    const values = members.map(row => finiteHandicapIndex(row.assignedTeamIndex));
+    if (values.some(value => value === null) || values[0] !== values[1]) return 'Enter one valid assigned index for each team.';
+    if (!members[0].teeId || members[0].teeId !== members[1].teeId) return 'Both partners must use the same tee for an assigned team index.';
+    if (course && !course.tees?.some(tee => String(tee.id) === String(members[0].teeId))) return 'Choose a valid tee for each assigned-index team.';
+  }
+  return '';
+}
+function resolveRoundPlayerHandicap(match, participant, tee, player = getPlayer(participant?.playerId)) {
+  const assigned = hasAssignedTeamIndex(match);
+  const index = assigned ? finiteHandicapIndex(participant?.assignedTeamIndex) : (Number(player?.index) || 0);
+  const raw = index === null ? NaN : unroundedCourseHandicap(index, tee.slope, tee.rating, tee.par);
+  return { handicapIndex: index, unroundedCourseHdcp: raw, courseHdcp: Math.round(raw), playHdcp: assigned ? Math.round(raw) : playingHandicap(raw, match.allowance), assignedTeamIndex: assigned ? index : undefined };
+}
+function getPlayerGameHandicap(playerMetric, allowance = 100) {
+  return finiteHandicapIndex(playerMetric?.assignedTeamIndex) !== null ? Number(playerMetric.courseHdcp) : Math.round((Number(playerMetric?.unroundedCourseHdcp) || 0) * allowance / 100);
+}
+function formatRoundAllowanceLabel(match, allowance = match?.allowance ?? 100) {
+  return hasAssignedTeamIndex(match) ? 'Assigned team index · no additional allowance' : allowance + '%';
+}
+function applyAssignedTeamIndexMetadata(match, meta) {
+  if (!Object.prototype.hasOwnProperty.call(meta || {}, 'assignedTeamIndexPolicyVersion')) return false;
+  const before = JSON.stringify([match.assignedTeamIndexPolicyVersion, match.teeId, match.courseSnapshot, (match.players || []).map(row => [row.assignedTeamIndex, row.teeId])]);
+  const version = Number(meta.assignedTeamIndexPolicyVersion || 0);
+  if (version > 0) {
+    match.assignedTeamIndexPolicyVersion = version;
+    (match.players || []).forEach(row => { row.assignedTeamIndex = finiteHandicapIndex(meta.assignedTeamIndexes?.[row.playerId]); });
+    if (meta.assignedTeamTeeIds) (match.players || []).forEach(row => { row.teeId = meta.assignedTeamTeeIds[row.playerId] || row.teeId; });
+    if (meta.assignedTeamCourseSnapshot) match.courseSnapshot = clonePlain(meta.assignedTeamCourseSnapshot);
+    if (meta.assignedTeamReferenceTeeId) match.teeId = meta.assignedTeamReferenceTeeId;
+  } else {
+    delete match.assignedTeamIndexPolicyVersion;
+    (match.players || []).forEach(row => { delete row.assignedTeamIndex; });
+  }
+  return before !== JSON.stringify([match.assignedTeamIndexPolicyVersion, match.teeId, match.courseSnapshot, (match.players || []).map(row => [row.assignedTeamIndex, row.teeId])]);
+}
+
 function unroundedCourseHandicap(index, slope, rating, par) {
   return Number(index) * (Number(slope) / 113) + (Number(rating) - Number(par));
 }
@@ -10410,7 +10465,7 @@ function holeCourseNetStrokeAllowance(holeStrokeIndex, playerHandicap) {
   return upwardStrokes ? -upwardStrokes : 0;
 }
 function computeMatchMetrics(match) {
-  if (!match) return null;
+  if (!match || getAssignedTeamIndexError(match)) return null;
   const course = getMatchCourse(match);
   const tee = getMatchTee(match, match.teeId);
   if (!course || !tee) return null;
@@ -10419,18 +10474,14 @@ function computeMatchMetrics(match) {
   const players = match.players.map(mp => {
     const player = getPlayer(mp.playerId);
     const playerTee = getPlayerTee(match, mp) || tee;
-    const unroundedCourseHdcp = unroundedCourseHandicap(player?.index || 0, playerTee.slope, playerTee.rating, playerTee.par);
-    const courseHdcp = Math.round(unroundedCourseHdcp);
-    const playHdcp = playingHandicapFromInputs(player?.index || 0, playerTee.slope, playerTee.rating, playerTee.par, match.allowance);
+    const handicap = resolveRoundPlayerHandicap(match, mp, playerTee, player);
     return {
       ...mp,
       player,
       team: Number(mp.team) || 1,
       teeId: getPlayerTeeId(match, mp),
       tee: playerTee,
-      courseHdcp,
-      unroundedCourseHdcp,
-      playHdcp,
+      ...handicap,
       scores: (mp.scores || []).slice(0, holeCount),
     };
   }).filter(x => x.player);
@@ -10568,6 +10619,7 @@ function computeMatchMetrics(match) {
 }
 
 function renderSetupHandicapPreview() {
+  renderAssignedTeamIndexSetup();
   const wrap = document.getElementById('setupHandicapPreview');
   const featuredWrap = document.getElementById('setupFeaturedHandicapPreview');
   if (featuredWrap) featuredWrap.innerHTML = '<div class="tiny">Select a course, players, and a Featured Competition to preview its handicap treatment.</div>';
@@ -10606,10 +10658,10 @@ function renderSetupHandicapPreview() {
     const player = getPlayer(sp.playerId);
     const playerTee = getTee(courseId, sp.teeId || teeId) || tee;
     if (!player || !playerTee) return null;
-    const playerIndex = Number(player.index) || 0;
-    const ch = courseHandicap(playerIndex, playerTee.slope, playerTee.rating, playerTee.par);
-    const ph = playingHandicapFromInputs(playerIndex, playerTee.slope, playerTee.rating, playerTee.par, allowance);
-    return { player, playerIndex, team: sp.team, tee: playerTee, courseHdcp: ch, playHdcp: ph };
+    const assignedFields = getSetupAssignedTeamIndexFields(sp.team);
+    const assigned = document.getElementById('assignedTeamIndexEnabled')?.checked;
+    const handicap = resolveRoundPlayerHandicap({ players: assigned ? [{ ...sp, ...assignedFields }] : [], allowance, assignedTeamIndexPolicyVersion: assigned ? ASSIGNED_TEAM_INDEX_POLICY_VERSION : 0 }, { ...sp, ...assignedFields }, playerTee, player);
+    return { player, playerIndex: handicap.handicapIndex, team: sp.team, tee: playerTee, ...handicap };
   }).filter(Boolean);
   if (!enriched.length) {
     wrap.innerHTML = '<div class="tiny">No valid players selected.</div>';
@@ -10628,8 +10680,8 @@ function renderSetupHandicapPreview() {
       return `<div class="handicap-preview-cardline">
         <div class="handicap-preview-meta handicap-preview-row">
           <div class="handicap-preview-description"><strong>${escapeHtml(row.player.name)}</strong><small>${escapeHtml(teamLabel)} · ${escapeHtml(row.tee?.teeName || tee.teeName)}</small></div>
-          <div class="handicap-preview-number"><strong>${Number(row.playerIndex || 0).toFixed(1)}</strong></div>
-          <div class="handicap-preview-number"><strong>${row.courseHdcp}</strong></div>
+          <div class="handicap-preview-number"><strong>${row.playerIndex === null ? '—' : Number(row.playerIndex).toFixed(1)}</strong></div>
+          <div class="handicap-preview-number"><strong>${Number.isFinite(row.courseHdcp) ? row.courseHdcp : '—'}</strong></div>
         </div>
       </div>`;
     }).join('')}</div></div>`;
@@ -10659,17 +10711,18 @@ function renderFeaturedCompetitionHandicapPreview({ course, tee, selected, enric
     wrap.innerHTML = `<div class="tiny"><strong>${escapeHtml(getGameLabel(featured.key))} · Gross</strong><br>Handicap strokes are not used for this competition.</div>`;
     return;
   }
-  const matchContext = { players: selected, allowance };
+  const matchContext = { players: selected, allowance, assignedTeamIndexPolicyVersion: document.getElementById('assignedTeamIndexEnabled')?.checked ? ASSIGNED_TEAM_INDEX_POLICY_VERSION : 0 };
   const config = featured.key === 'nassau' ? normalizeNassauConfig(featured, matchContext) : featured;
   const gameAllowance = normalizeHandicapAllowancePercent(config.handicapAllowancePercent, allowance);
+  if (enriched.some(row => !Number.isFinite(row.courseHdcp))) { wrap.innerHTML = '<div class="tiny">Enter an assigned index for every team to preview competition strokes.</div>'; return; }
   const rows = enriched.map(row => ({
     ...row,
-    gameHdcp: playingHandicapFromInputs(row.playerIndex, row.tee.slope, row.tee.rating, row.tee.par, gameAllowance),
+    gameHdcp: getPlayerGameHandicap(row, gameAllowance),
   }));
   const lowGameHandicap = Math.min(...rows.map(row => row.gameHdcp));
   const policyLabel = featured.key === 'nassau'
     ? formatNassauPolicyLabel(config, matchContext)
-    : `${getGameLabel(featured.key)} · Net · ${gameAllowance}% allowance`;
+    : `${getGameLabel(featured.key)} · Net · ${formatRoundAllowanceLabel(matchContext, gameAllowance)}`;
   const segment = getHoleSegmentLabel({
     holeCount: Number(document.querySelector('#matchForm [name="holeCount"]')?.value || 18),
     nineHoleSegment: document.getElementById('nineHoleSegmentSelect')?.value || 'front',
@@ -11195,7 +11248,7 @@ function getFeaturedMatchNetScorecardOptions(match, metrics = null) {
   const context = getFeaturedCompetitionHandicapContext(match, metrics);
   if (!['course', 'relative'].includes(context.mode) || !context.config) return [];
   const label = context.key === 'nassau'
-    ? `Featured Competition · Net Nassau · Best ${normalizeCountingBalls(context.config.countingBalls, 1)} · ${normalizeHandicapAllowancePercent(context.config.handicapAllowancePercent, match?.allowance)}%`
+    ? `Featured Competition · Net Nassau · Best ${normalizeCountingBalls(context.config.countingBalls, 1)} · ${formatRoundAllowanceLabel(match, normalizeHandicapAllowancePercent(context.config.handicapAllowancePercent, match?.allowance))}`
     : `Featured Competition · ${context.label}`;
   return [{ key: context.key, label, config: context.config }];
 }
@@ -11204,9 +11257,9 @@ function getMatchNetScorecardOptions(match) {
     if (String(config?.basis || '').toLowerCase() !== 'net') return [];
     if (config.key === 'nassau') {
       const normalized = normalizeNassauConfig(config, match);
-      return [{ key: 'nassau', label: `Net Nassau · Best ${normalized.countingBalls} · ${normalized.handicapAllowancePercent}%`, config: normalized }];
+      return [{ key: 'nassau', label: `Net Nassau · Best ${normalized.countingBalls} · ${formatRoundAllowanceLabel(match, normalized.handicapAllowancePercent)}`, config: normalized }];
     }
-    return [{ key: config.key, label: `${getGameLabel(config.key)} · ${normalizeHandicapAllowancePercent(config.handicapAllowancePercent, match?.allowance)}%`, config: { ...config, handicapAllowancePercent: normalizeHandicapAllowancePercent(config.handicapAllowancePercent, match?.allowance), scoringPolicyVersion: Number(config.scoringPolicyVersion || 0) } }];
+    return [{ key: config.key, label: `${getGameLabel(config.key)} · ${formatRoundAllowanceLabel(match, normalizeHandicapAllowancePercent(config.handicapAllowancePercent, match?.allowance))}`, config: { ...config, handicapAllowancePercent: normalizeHandicapAllowancePercent(config.handicapAllowancePercent, match?.allowance), scoringPolicyVersion: Number(config.scoringPolicyVersion || 0) } }];
   });
 }
 function buildClassicScorecardPanel(match, metrics, options = {}) {
@@ -11321,7 +11374,7 @@ function buildClassicScorecard(match, metrics, opts = {}) {
   const teeNote = teeNames.length === 1 ? ` All players: ${teeNames[0]} tee.` : ' Player tees are shown in each row.';
   const partialNote = completion.isIncomplete ? ' Unplayed holes are shown as dashes and excluded from totals.' : '';
   const netDescription = netMode === 'match'
-    ? `Match Net for the Featured Competition: ${matchGameConfig?.key === 'nassau' ? `Net Nassau · Best ${normalizeCountingBalls(matchGameConfig.countingBalls, 1)} · ${normalizeHandicapAllowancePercent(matchGameConfig.handicapAllowancePercent, match.allowance)}% allowance` : (matchGameConfig?.key === 'stroke_net' ? 'Stroke Play · full Course Handicap' : `${getGameLabel(matchGameConfig?.key) || 'selected competition'} · ${normalizeHandicapAllowancePercent(matchGameConfig?.handicapAllowancePercent, match.allowance)}% allowance`)}`
+    ? `Match Net for the Featured Competition: ${matchGameConfig?.key === 'nassau' ? `Net Nassau · Best ${normalizeCountingBalls(matchGameConfig.countingBalls, 1)} · ${formatRoundAllowanceLabel(match, normalizeHandicapAllowancePercent(matchGameConfig.handicapAllowancePercent, match.allowance))}` : (matchGameConfig?.key === 'stroke_net' ? 'Stroke Play · full Course Handicap' : `${getGameLabel(matchGameConfig?.key) || 'selected competition'} · ${formatRoundAllowanceLabel(match, normalizeHandicapAllowancePercent(matchGameConfig?.handicapAllowancePercent, match.allowance))}`)}`
     : 'Course Net using each golfer’s full Course Handicap';
   return `<div class="scorecard-sub tiny">Gross score shown above ${escapeHtml(netDescription)}. Dots indicate ${netMode === 'match' ? 'competition' : 'Course Handicap'} strokes.${escapeHtml(teeNote)}${escapeHtml(partialNote)}</div><div class="scorecard-wrap table-scroll-region" data-scroll-table="classic-scorecard" tabindex="0" role="region" aria-label="Classic scorecard; scroll horizontally to view all holes"><table class="scorecard-table ${hideTeamColumn ? 'scorecard-no-team-col' : ''}"><thead><tr><th class="scorecard-sticky-name">${blankPlayerHeader ? '' : 'Player'}</th>${hideTeamColumn ? '' : '<th class="scorecard-sticky-team">Team</th>'}${holeHeader}${totalColumns}</tr></thead><tbody>${yardageRow}${parRow}${siRow}${playerRows}</tbody></table></div>`;
 }
@@ -14227,9 +14280,9 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
   }));
   const players = match.players.map((mp, idx) => {
     const player = getPlayer(mp.playerId) || { id: mp.playerId, name: `Player ${idx + 1}`, index: 0 };
-    const tee = getTee(match.courseId, mp.teeId || match.teeId);
-    const courseHdcp = tee ? courseHandicap(player.index, tee.slope, tee.rating, tee.par) : 0;
-    const playHdcp = tee ? playingHandicapFromInputs(player.index, tee.slope, tee.rating, tee.par, match.allowance) : 0;
+    const tee = getMatchTee(match, mp.teeId || match.teeId);
+    const handicap = tee ? resolveRoundPlayerHandicap(match, mp, tee, player) : { courseHdcp: 0, playHdcp: 0 };
+    const { courseHdcp, playHdcp } = handicap;
     return {
       id: `${match.sharedMatchId || match.id}:player:${player.id}`,
       match_id: match.sharedMatchId || match.id,
@@ -14244,10 +14297,12 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
       course_handicap: Number(courseHdcp) || 0,
       playing_handicap: Number(playHdcp) || 0,
       handicap_snapshot: {
+        ...(hasAssignedTeamIndex(match) ? { assignedTeamIndex: finiteHandicapIndex(mp.assignedTeamIndex), assignedTeamIndexPolicyVersion: match.assignedTeamIndexPolicyVersion, effectiveIndex: handicap.handicapIndex, allowanceBypassed: true } : {}),
         allowance: normalizeHandicapAllowancePercent(match.allowance, 100),
         assignedDeviceId: getAssignedDeviceForPlayer(match, player.id) || match.sharedHostDeviceId || getSharedDeviceId(),
         assignedParticipantId: getAssignedParticipantForPlayer(match, player.id) || match.sharedHostParticipantId || getCurrentSharedParticipantId(match),
         playerIndex: Number(player.index) || 0,
+        ...(player.handicapIndexMissing ? { libraryIndexMissing: true } : {}),
         tee: tee ? {
           id: tee.id,
           teeName: tee.teeName,
@@ -14271,7 +14326,7 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
     status: match.status || 'active',
     course_id: match.courseId || '',
     reference_tee_id: match.teeId || '',
-    course_snapshot: { ...courseSnapshot, sharedMatchMeta: { tripId: match.tripId || null, eventId: match.eventId || null, scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device'), matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || ''), hostDeviceId: match.sharedHostDeviceId || getSharedDeviceId(), hostParticipantId: match.sharedHostParticipantId || getCurrentSharedParticipantId(match), devices: Array.isArray(match.sharedDevices) ? match.sharedDevices : [], participants: getSharedAssignmentParticipants(match), playerAssignments: match.sharedPlayerAssignments || {}, playerAssignmentState: match.sharedPlayerAssignmentState || {}, memories: getRoundMemories(match), memoriesUpdatedAt: new Date().toISOString(), roundContext: normalizeRoundContext(match.roundContext), roundTiming: match.roundTiming || { startedAt: null, endedAt: null }, holeFirstCompletedAt: match.holeFirstCompletedAt || {}, greeniesWinners: isCurrentDeviceMatchHost(match) ? clonePlain(match.greeniesWinners || {}) : {}, greeniesUpdatedAt: match.greeniesUpdatedAt || null, sspFacts: buildSharedSspFacts(match), pressConfig: normalizePressConfig(match.pressConfig), presses: isCurrentDeviceMatchHost(match) ? clonePlain(match.presses || []) : [], roundRecordSnapshot: isCurrentDeviceMatchHost(match) && isFrozenRoundRecord(match.roundRecordSnapshot) ? clonePlain(match.roundRecordSnapshot) : null, ledgerEntrySnapshot: isCurrentDeviceMatchHost(match) ? clonePlain(getAcceptedLedgerEntrySnapshot(match)) : null } },
+    course_snapshot: { ...courseSnapshot, sharedMatchMeta: { assignedTeamReferenceTeeId: match.teeId || null, assignedTeamIndexPolicyVersion: Number(match.assignedTeamIndexPolicyVersion || 0), assignedTeamIndexes: Object.fromEntries((match.players || []).filter(row => Object.prototype.hasOwnProperty.call(row, 'assignedTeamIndex')).map(row => [row.playerId, row.assignedTeamIndex])), assignedTeamTeeIds: Object.fromEntries((match.players || []).map(row => [row.playerId, row.teeId])), tripId: match.tripId || null, eventId: match.eventId || null, scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device'), matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || ''), hostDeviceId: match.sharedHostDeviceId || getSharedDeviceId(), hostParticipantId: match.sharedHostParticipantId || getCurrentSharedParticipantId(match), devices: Array.isArray(match.sharedDevices) ? match.sharedDevices : [], participants: getSharedAssignmentParticipants(match), playerAssignments: match.sharedPlayerAssignments || {}, playerAssignmentState: match.sharedPlayerAssignmentState || {}, memories: getRoundMemories(match), memoriesUpdatedAt: new Date().toISOString(), roundContext: normalizeRoundContext(match.roundContext), roundTiming: match.roundTiming || { startedAt: null, endedAt: null }, holeFirstCompletedAt: match.holeFirstCompletedAt || {}, greeniesWinners: isCurrentDeviceMatchHost(match) ? clonePlain(match.greeniesWinners || {}) : {}, greeniesUpdatedAt: match.greeniesUpdatedAt || null, sspFacts: buildSharedSspFacts(match), pressConfig: normalizePressConfig(match.pressConfig), presses: isCurrentDeviceMatchHost(match) ? clonePlain(match.presses || []) : [], roundRecordSnapshot: isCurrentDeviceMatchHost(match) && isFrozenRoundRecord(match.roundRecordSnapshot) ? clonePlain(match.roundRecordSnapshot) : null, ledgerEntrySnapshot: isCurrentDeviceMatchHost(match) ? clonePlain(getAcceptedLedgerEntrySnapshot(match)) : null } },
     format: match.format || 'teams',
     allowance: normalizeHandicapAllowancePercent(match.allowance, 100),
     hole_count: getRequestedHoleCount(match),
@@ -14698,7 +14753,7 @@ function ensureImportedPlayers(playerRows = []) {
   playerRows.forEach(row => {
     if (!row?.player_id) return;
     if (getPlayer(row.player_id)) return;
-    state.players.push({ id: row.player_id, name: row.player_name || 'Imported Player', index: Number(row.player_index) || 0 });
+    state.players.push({ id: row.player_id, name: row.player_name || 'Imported Player', index: Number(row.player_index) || 0, ...(row.handicap_snapshot?.libraryIndexMissing || finiteHandicapIndex(row.player_index) === null ? { handicapIndexMissing: true } : {}) });
   });
 }
 function hydrateMatchFromCloudBundle(bundle) {
@@ -14724,6 +14779,7 @@ function hydrateMatchFromCloudBundle(bundle) {
     name: matchRow?.name || 'Round',
     courseId: courseIds.courseId,
     teeId: courseIds.teeId,
+    ...(Number(sharedMeta.assignedTeamIndexPolicyVersion || 0) > 0 ? { assignedTeamIndexPolicyVersion: Number(sharedMeta.assignedTeamIndexPolicyVersion) } : {}),
     format: matchRow?.format || 'teams',
     allowance: normalizeHandicapAllowancePercent(matchRow?.allowance, 100),
     holeCount,
@@ -14777,6 +14833,7 @@ function hydrateMatchFromCloudBundle(bundle) {
       team: Number(row.team_number) || 1,
       slot: Number.isFinite(Number(row.slot)) ? Number(row.slot) : idx,
       teeId: row.tee_id || courseIds.teeId,
+      ...(Number(sharedMeta.assignedTeamIndexPolicyVersion || 0) > 0 ? { assignedTeamIndex: finiteHandicapIndex(sharedMeta.assignedTeamIndexes?.[row.player_id]) } : {}),
       scores: Array.from({ length: holeCount }, (_, scoreIdx) => {
         const holeNumber = scoreIdx + 1;
         const entry = entriesByPlayerHole.get(`${row.id}:${holeNumber}`) || entriesByPlayerHole.get(`${row.player_id}:${holeNumber}`);
@@ -14989,6 +15046,7 @@ async function fetchSharedMatchMetadata(matchId, match = null) {
     memberships: (memberships || []).map(row => ({ id: row.id, user_id: row.user_id, role: row.role, status: row.status, device_label: row.device_label, joined_at: row.joined_at, last_seen_at: row.last_seen_at })),
   };
   return {
+    ...(Object.prototype.hasOwnProperty.call(meta, 'assignedTeamIndexPolicyVersion') ? { assignedTeamIndexPolicyVersion: meta.assignedTeamIndexPolicyVersion, assignedTeamIndexes: meta.assignedTeamIndexes || {}, assignedTeamTeeIds: meta.assignedTeamTeeIds || {}, assignedTeamReferenceTeeId: meta.assignedTeamReferenceTeeId || null, assignedTeamCourseSnapshot: Number(meta.assignedTeamIndexPolicyVersion) > 0 ? Object.fromEntries(Object.entries(matchRow.course_snapshot || {}).filter(([key]) => key !== "sharedMatchMeta")) : null } : {}),
     devices,
     participants,
     playerAssignments,
@@ -15046,6 +15104,7 @@ async function mergeCloudSharedMetadata(match, { includeAssignments = false, inc
     match = currentMatch;
   }
   let changed = mergeSharedDevices(match, meta.devices || []);
+  if (!isCurrentDeviceMatchHost(match)) changed = applyAssignedTeamIndexMetadata(match, meta) || changed;
   if (!isCurrentDeviceMatchHost(match) && meta.status === 'complete' && match.status !== 'complete') {
     match.status = 'complete';
     match.completedAt = meta.completedAt || match.completedAt || new Date().toISOString();
@@ -18620,7 +18679,7 @@ async function switchPlayInputMode(nextMode) {
 function renderCurrentMatch() {
   const match = getActiveMatch();
   const rulesWrap = document.getElementById('playGroupRulesPreview');
-  if (rulesWrap) rulesWrap.innerHTML = match ? buildGroupRulesPreview(match, rulesWrap.querySelector('details')?.open || false) : '';
+  if (rulesWrap) rulesWrap.innerHTML = match ? (getAssignedTeamIndexError(match) ? '<div class="setup-warning">' + escapeHtml(getAssignedTeamIndexError(match)) + '</div>' : '') + buildGroupRulesPreview(match, rulesWrap.querySelector('details')?.open || false) : '';
   const metaEl = document.getElementById('currentMatchMeta');
   const progressEl = document.getElementById('currentMatchProgress');
   const emptyEl = document.getElementById('scoreEntryEmpty');
@@ -20688,6 +20747,8 @@ function captureCurrentSetupDraft() {
     selectedGames,
     featuredCompetition: String(fd.get('featuredCompetition') || 'auto'),
     pressConfig: normalizePressConfig(selectedGames.find(game => getGameEscalationCapability(game.key) === 'PRESS') || getNewMatchDefaultsFromPreferences().pressConfig),
+    assignedTeamIndexEnabled: !!document.getElementById('assignedTeamIndexEnabled')?.checked,
+    assignedTeamIndexDraft: clonePlain(ensureAssignedTeamIndexDraft()),
     players: slotSelections,
     storageMode: shared ? 'shared' : 'local',
     roundContext: {},
@@ -21276,7 +21337,7 @@ function buildGroupRulesPreview(round, open = false) {
     const pairing = (game.matchups || []).map(row => `${name(row.playerAId)} vs ${name(row.playerBId)} · ${row.game} · ${row.basis} · $${Number(row.stake || 0).toFixed(2)}`).join('; ');
     const press = getGameEscalationCapability(game.key) === 'PRESS' ? normalizePressConfig(game) : null;
     const pressText = press ? (press.pressesEnabled ? `Presses: ${press.pressType === 'PROMPT_AT_THRESHOLD' ? `prompt at ${press.autoPressThreshold} down` : 'manual'} · max ${press.maxPressesPerRound} per round · max ${press.maxRePresses} re-presses · inherited stake` : 'Presses off') : contract.escalation;
-    const allowance = contract.basis === 'gross' || contract.basis === 'event' ? 'No handicap strokes' : `${normalizeHandicapAllowancePercent(game.handicapAllowancePercent, round.allowance)}% · ${contract.allowance}`;
+    const allowance = contract.basis === 'gross' || contract.basis === 'event' ? 'No handicap strokes' : `${formatRoundAllowanceLabel(round, normalizeHandicapAllowancePercent(game.handicapAllowancePercent, round.allowance))} · ${hasAssignedTeamIndex(round) ? 'Allocated using the saved team index' : contract.allowance}`;
     const options = [['scoringMode','Team scoring'],['mode','Mode'],['countingBalls','Counting balls'],['finalHolesRule','Final holes'],['allowLoneWolf','Lone Wolf'],['allowBlindWolf','Blind Wolf']].filter(([field]) => game[field] !== undefined).map(([field,label]) => `${label}: ${String(game[field]).replaceAll('_',' ')}`).join(' · ');
     const pointSchedule = game.points && typeof game.points === 'object' ? Object.entries(game.points).map(([key,value]) => `${key.replace(/([A-Z])/g,' $1')}: ${Number(value)}`).join(' · ') : '';
     const pointRate = ['nine_point','wolf'].includes(game.key) || (game.key === 'sixes' && game.mode !== 'segments') ? Number(game.pointValue ?? game.stakePerPoint) : NaN;
@@ -21552,7 +21613,7 @@ function getAuthoritativeMatchSetupDraftState({ fd = null, selectedPlayers = nul
   const smartScoreAdvanceEnabled = formData ? formData.get('smartScoreAdvance') === 'on' : active?.smartScoreAdvanceEnabled !== false;
   const smartScoreAdvancePreset = normalizeSmartScoreAdvancePreset(formData?.get('smartScoreAdvancePreset') || active?.smartScoreAdvancePreset);
   const captureWeatherContext = formData ? formData.get('captureWeatherContext') === 'on' : active?.captureWeatherContext !== false;
-  return { formData, active, teamCount, playersPerTeam, requiredSlotCount, courseId, course, players, games, holeCount, nineHoleSegment, customStartHole, referenceTeeId, applicableTeeIds, tees, courseHolesLoaded, teamNames, featuredCompetition, scoringAccessMode: normalizedMode, sharedMatchEnabled: shared, storageMode: shared ? 'shared' : 'local', allowance, statTrackingEnabled, smartScoreAdvanceEnabled, smartScoreAdvancePreset, captureWeatherContext };
+  return { formData, active, assignedTeamIndexPolicyVersion: formData?.get('assignedTeamIndexEnabled') === 'on' ? ASSIGNED_TEAM_INDEX_POLICY_VERSION : (formData ? 0 : active?.assignedTeamIndexPolicyVersion || 0), teamCount, playersPerTeam, requiredSlotCount, courseId, course, players, games, holeCount, nineHoleSegment, customStartHole, referenceTeeId, applicableTeeIds, tees, courseHolesLoaded, teamNames, featuredCompetition, scoringAccessMode: normalizedMode, sharedMatchEnabled: shared, storageMode: shared ? 'shared' : 'local', allowance, statTrackingEnabled, smartScoreAdvanceEnabled, smartScoreAdvancePreset, captureWeatherContext };
 }
 
 function getPlayerTeeSlotStates({ teamCount = 1, playersPerTeam = 1, requiredSlotCount = null, courseId = '', players = [] } = {}) {
@@ -21855,6 +21916,55 @@ function getCurrentMatchEditorSelections() {
     teeId: Object.prototype.hasOwnProperty.call(row, 'teeId') ? String(row.teeId || '') : String(document.querySelector(`[data-player-tee-slot="${idx}"]`)?.value || ''),
   }));
 }
+function ensureAssignedTeamIndexDraft() {
+  const rows = syncMatchPlayerDraft();
+  const draft = uiState.assignedTeamIndexDraft || {};
+  for (let team = 1; team <= getCurrentSetupTeamCount(); team++) {
+    const members = rows.filter(row => Number(row.team) === team && row.playerId);
+    const roster = members.map(row => String(row.playerId)).sort().join('|');
+    if (!draft[team] || draft[team].roster !== roster) {
+      const indexes = members.map(row => { const player = getPlayer(row.playerId); return player?.handicapIndexMissing ? null : finiteHandicapIndex(player?.index); });
+      const average = indexes.length === 2 && indexes.every(value => value !== null) ? indexes.reduce((sum, value) => sum + value, 0) / 2 : null;
+      draft[team] = { roster, value: average === null ? '' : String(average) };
+    }
+  }
+  uiState.assignedTeamIndexDraft = draft;
+  return draft;
+}
+function getSetupAssignedTeamIndexFields(team) {
+  if (!document.getElementById('assignedTeamIndexEnabled')?.checked) return {};
+  return { assignedTeamIndex: finiteHandicapIndex(ensureAssignedTeamIndexDraft()[team]?.value) };
+}
+function restoreAssignedTeamIndexSetup(match) {
+  const toggle = document.getElementById('assignedTeamIndexEnabled');
+  if (toggle) toggle.checked = !!match?.assignedTeamIndexEnabled || hasAssignedTeamIndex(match);
+  uiState.assignedTeamIndexDraft = clonePlain(match?.assignedTeamIndexDraft || {});
+  if (hasAssignedTeamIndex(match)) {
+    for (let team = 1; team <= Number(match.teamCount || 1); team++) {
+      const members = (match.players || []).filter(row => Number(row.team) === team);
+      uiState.assignedTeamIndexDraft[team] = { roster: members.map(row => String(row.playerId)).sort().join('|'), value: finiteHandicapIndex(members[0]?.assignedTeamIndex) === null ? '' : String(members[0].assignedTeamIndex) };
+    }
+  }
+}
+function renderAssignedTeamIndexSetup() {
+  const wrap = document.getElementById('assignedTeamIndexFields');
+  if (!wrap) return;
+  const enabled = !!document.getElementById('assignedTeamIndexEnabled')?.checked;
+  wrap.classList.toggle('hidden', !enabled);
+  if (!enabled || document.activeElement?.matches('[data-assigned-team-index]')) return;
+  const values = ensureAssignedTeamIndexDraft();
+  const rows = syncMatchPlayerDraft();
+  wrap.innerHTML = Array.from({ length: getCurrentSetupTeamCount() }, (_, i) => {
+    const team = i + 1, members = rows.filter(row => Number(row.team) === team && row.playerId);
+    const name = document.querySelector('[data-team-name="' + team + '"]')?.value || 'Team ' + team;
+    const sameTee = members.length === 2 && !!members[0].teeId && members[0].teeId === members[1].teeId;
+    const index = finiteHandicapIndex(values[team]?.value);
+    const tee = sameTee ? getTee(document.getElementById('matchCourseSelect')?.value, members[0].teeId) : null;
+    const summary = tee && index !== null ? tee.teeName + ' · Final Playing HCP ' + courseHandicap(index, tee.slope, tee.rating, tee.par) : 'Choose both partners, the same tee, and a team index.';
+    return '<label><span>' + escapeHtml(name) + ' assigned team index</span><input type="number" step="any" inputmode="decimal" data-assigned-team-index="' + team + '" aria-label="' + escapeHtml(name) + ' assigned team index" value="' + escapeHtml(values[team]?.value || '') + '"><small class="tiny">' + escapeHtml(summary) + '</small></label>';
+  }).join('');
+}
+
 function getSelectedPlayersFromSetup() {
   const teamCount = Number(document.getElementById('teamCountSelect')?.value || 1);
   const playersPerTeam = Number(document.getElementById('playersPerTeamSelect')?.value || 1);
@@ -21868,6 +21978,7 @@ function getSelectedPlayersFromSetup() {
     return {
       playerId: String(row.playerId || domSlot?.value || ''),
       team,
+      ...getSetupAssignedTeamIndexFields(team),
       slot: idx,
       teeId: String(Object.prototype.hasOwnProperty.call(row, 'teeId') ? (row.teeId || '') : (domTee?.value || '')),
     };
@@ -23190,6 +23301,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
     uiState.referenceTeeManual = false;
     uiState.referenceTeeAutoId = '';
     populateMatchPlayerPicker(uiState.matchPlayerDraft);
+    restoreAssignedTeamIndexSetup(draft);
     renderStatTrackingPlayerSelector(Array.isArray(draft.statTrackingPlayerIds) ? draft.statTrackingPlayerIds : null);
     renderGamesPicker(draft.selectedGames || []);
     renderFeaturedCompetitionSetup(draft.selectedGames || [], draft.featuredCompetition || 'auto');
@@ -23227,6 +23339,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
   syncReferenceTeeUi({ courseId: match.courseId, selections: uiState.matchPlayerDraft, forceAuto: !match.teeId });
   uiState.referenceTeeManual = !!(match.teeId && document.getElementById('matchTeeSelect')?.value === match.teeId);
   populateMatchPlayerPicker(uiState.matchPlayerDraft);
+  restoreAssignedTeamIndexSetup(match);
   renderStatTrackingPlayerSelector(Array.isArray(match.statTrackingPlayerIds) ? match.statTrackingPlayerIds : null);
   renderGamesPicker(match.selectedGames || []);
   renderFeaturedCompetitionSetup(match.selectedGames || [], match.featuredCompetition || 'auto');
@@ -23414,7 +23527,7 @@ function installHandlers() {
     const formalName = String(fd.get('formalName') || '').trim();
     const nickname = String(fd.get('nickname') || '').trim();
     const prior = editingPlayerId ? getPlayer(editingPlayerId) : null;
-    const player = { ...prior, id: editingPlayerId || uid(), formalName, nickname, name: nickname || formalName, index: Number(fd.get('index')) || 0 };
+    const player = { ...prior, id: editingPlayerId || uid(), formalName, nickname, name: nickname || formalName, index: Number(fd.get('index')) || 0, handicapIndexMissing: false };
     if (!player.formalName) return toast('Full golfer name is required.');
     if (editingPlayerId) state.players = state.players.map(p => p.id === editingPlayerId ? player : p); else state.players.push(player);
     loadPlayerEditor(null); persist(); toast(editingPlayerId ? 'Player updated.' : 'Player added.');
@@ -23959,11 +24072,18 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       renderStatTrackingPlayerSelector();
     }
     if (e.target && (e.target.id === 'smartScoreAdvanceInput' || e.target.id === 'smartScoreAdvancePresetSelect')) syncSmartScoreAdvancePresetUi();
-    if (e.target.matches('[data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #featuredCompetitionSelect, #scoreEntryModeSelect, #roundPlayInputModeSelect, #roundStatTrackingModeSelect, #officialScorerNameInput, #sharedMatchEnabled, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-sixes-player], [data-wolf-player], [data-wolf-point], [data-game-config], #enableStatTrackingInput, #smartScoreAdvanceInput, #smartScoreAdvancePresetSelect, #captureWeatherContextInput, [data-stat-track-player]')) {
+    if (e.target.matches('#assignedTeamIndexEnabled, [data-assigned-team-index], [data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #featuredCompetitionSelect, #scoreEntryModeSelect, #roundPlayInputModeSelect, #roundStatTrackingModeSelect, #officialScorerNameInput, #sharedMatchEnabled, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-sixes-player], [data-wolf-player], [data-wolf-point], [data-game-config], #enableStatTrackingInput, #smartScoreAdvanceInput, #smartScoreAdvancePresetSelect, #captureWeatherContextInput, [data-stat-track-player]')) {
       setTimeout(() => { renderSetupHandicapPreview(); renderGamesPicker(collectSelectedGames()); renderFeaturedCompetitionSetup(collectSelectedGames()); renderTodaysMatchSummary(); renderRoundPreferenceSummary(); }, 0);
     }
   });
   document.getElementById('setup').addEventListener('input', e => {
+    if (e.target.matches('[data-assigned-team-index]')) {
+      const values = ensureAssignedTeamIndexDraft();
+      values[Number(e.target.dataset.assignedTeamIndex)].value = e.target.value;
+      renderTodaysMatchSummary();
+      renderRoundReadiness();
+      scheduleSetupDraftSave();
+    }
     if (e.target.matches('[data-team-name], [name="allowance"], #scoreEntryModeSelect, #officialScorerNameInput, [data-team-scorer-label], [data-team-scorer-code], [data-game-config], [data-nine-point-player], [data-sixes-player], [data-wolf-player], [data-wolf-point], #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, #smartScoreAdvancePresetSelect')) {
       renderSetupHandicapPreview();
       renderTodaysMatchSummary();
@@ -24691,6 +24811,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       courseId: String(fd.get('courseId') || ''),
       teeId: String(fd.get('teeId') || syncReferenceTeeUi({ selections: selectedPlayers, forceAuto: !uiState.referenceTeeManual }) || selectedPlayers[0]?.teeId || ''),
       format: 'teams',
+      ...(fd.get('assignedTeamIndexEnabled') === 'on' ? { assignedTeamIndexPolicyVersion: ASSIGNED_TEAM_INDEX_POLICY_VERSION } : {}),
       allowance: normalizeHandicapAllowancePercent(fd.get('allowance'), 100),
       holeCount: Number(fd.get('holeCount')) === 9 ? 9 : 18,
       nineHoleSegment: Number(fd.get('holeCount')) === 9 ? String(fd.get('nineHoleSegment') || 'front') : 'front',
@@ -24760,6 +24881,9 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       roundTiming: existing?.roundTiming || { startedAt: null, endedAt: null },
       holeFirstCompletedAt: existing?.holeFirstCompletedAt || {},
     };
+    match.players.forEach(row => { if (fd.get('assignedTeamIndexEnabled') === 'on') row.assignedTeamIndex = selectedPlayers.find(player => player.playerId === row.playerId)?.assignedTeamIndex; else delete row.assignedTeamIndex; });
+    const assignedIndexError = getAssignedTeamIndexError(match);
+    if (assignedIndexError) return toast(assignedIndexError);
     if (!editingMatchId && pendingNextRoundSessionContext) {
       match.sessionId = pendingNextRoundSessionContext.sessionId;
       match.sessionName = pendingNextRoundSessionContext.sessionName || 'Session';
@@ -25424,6 +25548,8 @@ function getMatchSetupValidationState({ draft = null, fd = null, selectedPlayers
   const { teamCount, playersPerTeam, requiredSlotCount, courseId, course, players, games, holeCount: requestedHoleCount, courseHolesLoaded, scoringAccessMode: normalizedMode, sharedMatchEnabled: isShared } = source;
   const missing = [];
   const warnings = [];
+  const assignedIndexError = getAssignedTeamIndexError(source);
+  if (assignedIndexError) missing.push(assignedIndexError);
   const playerSlotStates = getPlayerTeeSlotStates(source);
   const unassignedSlots = playerSlotStates.filter(slot => !slot.assigned);
   const invalidTeeSlots = playerSlotStates.filter(slot => slot.assigned && !slot.teeValid);
@@ -26118,6 +26244,14 @@ function installDyeLedgerLiveEngineAdapter() {
     normalizeMatch,
     unroundedCourseHandicap,
     courseHandicap,
+    finiteHandicapIndex,
+    hasAssignedTeamIndex,
+    getAssignedTeamIndexError,
+    resolveRoundPlayerHandicap,
+    getPlayerGameHandicap,
+    applyAssignedTeamIndexMetadata,
+    buildCloudMatchPayload,
+    hydrateMatchFromCloudBundle,
     playingHandicap,
     playingHandicapFromInputs,
     computeMatchMetrics,

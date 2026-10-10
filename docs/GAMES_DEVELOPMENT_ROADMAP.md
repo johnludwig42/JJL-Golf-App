@@ -1,5 +1,8 @@
 # Games Development Roadmap
 
+**October 10 priority override:** Flamtana v31.0.60 Assigned Team Index → v31.0.61 Two-man Scramble → v31.0.62 Flamtana Special precede all further roadmap work. The event is October 16, 2026. Preferences/Setup Density and other planned work wait until this sequence is addressed. Only .60 is authorized now. See [accepted build plan](FLAMTANA_SPECIAL_BUILD_PLAN.md) for rules, correctness safeguards and manual settlement fallback.
+
+
 Approved direction: October 3, 2026. Status: planned; release numbers and dates are unassigned.
 
 This program extends the current development roadmap. It does not replace or reorder existing identity, security, course-library, Insights, Amendment Session, or Memory work. Deliver small focused releases through the established release process.
@@ -92,7 +95,7 @@ The baseline already includes multiple games, individual side matches, match tem
 
 ## Input and visual improvement program — NEXT
 
-October 10, 2026 update: follow the [Visual and Usability Development Roadmap](VISUAL_DEVELOPMENT_ROADMAP.md) for the current release sequence and review findings. Foundations and Play/navigation refinements through v31.0.58 are delivered in development. Preferences/setup density is next, followed by Results repetition, overlay navigation and useful Insights before further game expansion. Four-device acceptance remains an immediate parallel priority. Useful Insights is separately scoped functional work, not a presentation-only change; other established product commitments remain tracked.
+October 10, 2026 update: follow the [Visual and Usability Development Roadmap](VISUAL_DEVELOPMENT_ROADMAP.md) for the current release sequence and review findings. Foundations and Play/navigation refinements through v31.0.58 are delivered in development. The accepted Flamtana .60/.61/.62 sequence now takes priority over further roadmap work. Afterward, Preferences/setup density precedes Results repetition, overlay navigation and useful Insights. Four-device acceptance remains an immediate parallel priority. Useful Insights is separately scoped functional work, not a presentation-only change; other established product commitments remain tracked.
 
 Development delivery v31.0.48 covers clearer game descriptions and participant guidance, lighter selection rows, expandable handicap settings with preserved values, and Player Mode custom-score contrast and labeling. Local browser and scoring checks are complete; production acceptance is pending. The remaining visual program and game expansions below stay on the roadmap.
 

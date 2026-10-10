@@ -123,7 +123,7 @@ test('balances open in two taps, show correction changes, preserve focus and mat
     await page.waitForSelector('#score input[data-score-player="p0"]',{visible:true});
     await page.click('#score input[data-score-player="p0"]',{clickCount:3});
     await page.type('#score input[data-score-player="p0"]','8');await page.keyboard.press('Tab');
-    await page.click('#nextHoleBtn');
+    await page.locator('#nextHoleBtn').click();
     await page.waitForFunction(()=>JSON.parse(localStorage.getItem('the-dye-ledger-v20')).matches[0].players[0].scores[0].gross===8);
     await page.click('[data-tab="leaderboard"]');
     await page.click('[data-experience-target="results"]');

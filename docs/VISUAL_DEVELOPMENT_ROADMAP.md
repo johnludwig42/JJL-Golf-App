@@ -1,5 +1,9 @@
 # Visual and Usability Development Roadmap
 
+**Authorized event follow-up:** v31.0.63 Flamtana Report Readability precedes
+further roadmap work. It changes printed evidence and scoped table spacing only;
+the .62 scoring engine, saved evidence and settlement stay unchanged.
+
 **October 10 priority override:** Flamtana v31.0.60 Assigned Team Index → v31.0.61 Two-man Scramble → v31.0.62 Flamtana Special precede all further roadmap work. The event is October 16, 2026. Preferences/Setup Density and other planned work wait until this sequence is addressed. v31.0.62 is now authorized. See [accepted build plan](FLAMTANA_SPECIAL_BUILD_PLAN.md) for rules, correctness safeguards and manual settlement fallback.
 
 

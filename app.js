@@ -19,11 +19,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.62',
-  versionNumber: '31.0.62',
-  cacheName: 'the-dye-ledger-v31.0.62',
-  buildDate: '2026-10-10T17:45:00.584Z',
-  buildLabel: 'Flamtana Special'
+  version: 'v31.0.63',
+  versionNumber: '31.0.63',
+  cacheName: 'the-dye-ledger-v31.0.63',
+  buildDate: '2026-10-10T20:46:53.051Z',
+  buildLabel: 'Flamtana Report Readability'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -10381,7 +10381,7 @@ function buildFlamtanaSetupControls(raw) {
   const cfg = normalizeFlamtanaConfig(raw);
   const players = getSelectedPlayersFromSetup();
   return `<div class="card inset-card game-config-card"><div class="section-label">Flamtana Special</div>
-    <p class="tiny">Four wagers, full team Course Net. Foursome 1 = T1 + T2; Foursome 2 = T3 + T4. Foursome totals sum each hole's lower team net score. All eight Calcutta picks are required before Start. Both devices must use v31.0.62 or newer.</p>
+    <p class="tiny">Four wagers, full team Course Net. Foursome 1 = T1 + T2; Foursome 2 = T3 + T4. Foursome totals sum each hole's lower team net score. All eight Calcutta picks are required before Start. Both devices must use v31.0.63 or newer.</p>
     <div class="grid two compact-grid">${['featured','group','foursome','calcutta'].map(key => `<label><span>${escapeHtml(key[0].toUpperCase() + key.slice(1))} $ per player</span><input type="number" min="0" step="0.01" data-game-config="flamtana_special" data-field="${key}Stake" value="${cfg[key + 'Stake']}"></label>`).join('')}
     <label class="span-2"><span>Tie rule for all three scoring wagers</span><select data-game-config="flamtana_special" data-field="tieMethod">${Object.entries(FLAMTANA_TIE_METHODS).map(([key,label]) => `<option value="${key}" ${cfg.tieMethod === key ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
     <input type="hidden" data-game-config="flamtana_special" data-field="scoringPolicyVersion" value="1">
@@ -10522,7 +10522,7 @@ function computeFlamtanaResults(match, metrics = null, { finalize = match?.statu
 }
 function getScrambleSetupError(match, { assignments = false } = {}) {
   if (!isTeamScoredRound(match)) return '';
-  if (Number(match.teamScoringPolicyVersion) !== 1) return 'Update to v31.0.62 or newer to score this team format.';
+  if (Number(match.teamScoringPolicyVersion) !== 1) return 'Update to v31.0.63 or newer to score this team format.';
   if (Number(match.teamCount) !== 4 || Number(match.playersPerTeam) !== 2 || Number(match.holeCount) !== 18 || (match.players || []).length !== 8 || new Set(match.players.map(p => p.playerId)).size !== 8) return 'Two-man Scramble requires eight golfers, four two-player teams and 18 holes.';
   if (match.storageMode !== 'shared' || normalizeScoringAccessMode(match.scoringAccessMode) !== 'assigned_players') return 'Two-man Scramble requires a Shared Match with assigned-player scoring.';
   if (!hasAssignedTeamIndex(match)) return 'Use assigned team indexes for Two-man Scramble.';

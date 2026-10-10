@@ -17,11 +17,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.60',
-  versionNumber: '31.0.60',
-  cacheName: 'the-dye-ledger-v31.0.60',
-  buildDate: '2026-10-10T14:27:54.918Z',
-  buildLabel: 'Assigned Team Index'
+  version: 'v31.0.61',
+  versionNumber: '31.0.61',
+  cacheName: 'the-dye-ledger-v31.0.61',
+  buildDate: '2026-10-10T15:20:12.979Z',
+  buildLabel: 'Two-man Scramble'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -1915,7 +1915,9 @@ function getSharedMatchReadinessLines(match, participants = getSharedAssignmentP
     if (!joined.length) lines.push('Waiting for joined devices...');
     else lines.push(`${joined.length} joined device${joined.length === 1 ? '' : 's'}.`);
     if (isAssignedPlayersMode(match)) lines.push(`${assigned} of ${total} players assigned.`);
-    if (!isAssignedPlayersMode(match) || assigned >= total) lines.push('Ready to start scoring.');
+    const scrambleError = getScrambleSetupError(match, { assignments: true });
+    if (scrambleError) lines.push(scrambleError);
+    else if (!isAssignedPlayersMode(match) || assigned >= total) lines.push('Ready to start scoring.');
   } else {
     const names = getAssignedPlayerNamesForParticipant(match, getCurrentSharedParticipantId(match));
     lines.push(names.length ? `Ready to score: ${names.join(', ')}.` : 'Joined — waiting for host assignment.');
@@ -1961,7 +1963,7 @@ function getScoreAccessState(match) {
   return { mode, role: validRoles.includes(allowedRole) ? allowedRole : 'viewer', team: selectedTeam };
 }
 function canEditPlayerScore(match, teamNo = 1, playerId = '') {
-  if (getAssignedTeamIndexError(match)) return false;
+  if (getAssignedTeamIndexError(match) || getScrambleSetupError(match, { assignments: true }) || (isTeamScoredRound(match) && !match.roundTiming?.startedAt)) return false;
   const access = getScoreAccessState(match);
   if (access.role === 'viewer') return false;
   if (access.mode === 'single_device') return true;
@@ -2896,6 +2898,7 @@ function getFeaturedCompetitionStrokeAllowance(match, metrics, playerMetric, str
   return getGameRelativeStrokeAllowance(strokeIndex, playerMetric, metrics, context.config || {});
 }
 function getFeaturedCompetitionStrokeNote(match, metrics = null) {
+  if (isTeamScoredRound(match)) return 'Team Course Net · full signed Course Handicap · no additional allowance';
   const context = getFeaturedCompetitionHandicapContext(match, metrics);
   if (context.mode === 'none') {
     if (context.basis === 'varies') return `Featured strokes: ${context.label} calculates strokes independently for each side match; no single game-stroke column applies.`;
@@ -4921,7 +4924,7 @@ function reconcileBunkerInvolvement(stat, { controlEncountered = false, controlV
 }
 
 function isStatTrackingEnabled(match) {
-  return !!match?.statTrackingEnabled;
+  return !isTeamScoredRound(match) && !!match?.statTrackingEnabled;
 }
 function getMatchPlayerIds(match) {
   return Array.isArray(match?.players) ? match.players.map(p => String(p.playerId || '')).filter(Boolean) : [];
@@ -5336,6 +5339,7 @@ function resolveTeamHoleScore(holeResult, teamNo, policy = {}, options = {}) {
   return { status: 'complete', total: countingScores.reduce((sum, score) => sum + score.value, 0), countingScores, eligibleScores, countingBalls, basis };
 }
 function computeBestBallPartnershipStatistics(match, metrics = null) {
+  if (isTeamScoredRound(match)) return null;
   const effectiveMetrics = metrics || computeMatchMetrics(match);
   const selectedGames = getOrderedSelectedGames(match);
   const featuredKey = resolveFeaturedCompetitionKey(match, effectiveMetrics);
@@ -5879,7 +5883,7 @@ function formatRoundClockTime(timestamp) {
   return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(date);
 }
 function ensureRoundTimingStarted(match, timestamp = new Date().toISOString()) {
-  if (!match) return false;
+  if (!match || getScrambleSetupError(match, { assignments: true })) return false;
   match.roundTiming = match.roundTiming && typeof match.roundTiming === 'object' ? match.roundTiming : { startedAt: null, endedAt: null };
   if (match.roundTiming.startedAt) return false;
   match.roundTiming.startedAt = timestamp;
@@ -6096,7 +6100,13 @@ function buildPrintMeta(match, metrics, printView = "summary") {
     <div class="print-round-sub">${escapeHtml(match?.date || todayIso())} · ${escapeHtml(courseName)} · ${escapeHtml(teeName)} · ${holeCount} holes</div>
     <div class="print-round-sub">${metrics ? `${metrics.completed}/${holeCount} holes completed` : 'Scorecard ready to print'}${match?.status === 'complete' ? ' · Final' : ' · Live'} · ${printView === 'scorecard' ? 'Classic scorecard only' : 'Full match summary'}<\/div>`;
 }
+function buildScrambleTeamScorecard(match, metrics) {
+  if (!metrics) return '<div class="tiny">Team scorecard unavailable.</div>';
+  return '<div class="tiny">Two-man Scramble · shared-ball team scores · Course Net · not eligible for individual statistics or handicap posting.</div><div class="player-summary-scroll"><table class="quick-scoreboard-table"><thead><tr><th>Team</th>' + metrics.holeResults.map(h => '<th>H' + h.holeNumber + '</th>').join('') + '<th>Total</th></tr></thead><tbody>' + metrics.teams.map(t => ['gross','net'].map(basis => '<tr><th>' + escapeHtml(getTeamLabel(match,t.team)) + ' ' + (basis === 'gross' ? 'Gross' : 'Net') + '</th>' + metrics.holeResults.map(h => { const score = h.teamScores.find(row => row.team === t.team); return '<td>' + (score?.completed ? score[basis] : score?.inconsistent ? 'Pending' : '—') + '</td>'; }).join('') + '<td>' + (basis === 'gross' ? t.grossTotal : t.netTotal) + '</td></tr>').join('')).join('') + '</tbody></table></div>';
+}
+
 function buildExportPlayerLeaderboard(match, metrics) {
+  if (isTeamScoredRound(match)) return buildScrambleTeamScorecard(match, metrics);
   const completion = getRoundCompletionState(match, metrics);
   const sortedPlayers = (metrics?.players || []).slice().sort((a, b) => a.leaderboardNetDiff - b.leaderboardNetDiff || a.toPar - b.toPar || a.player.name.localeCompare(b.player.name));
   if (!sortedPlayers.length) return '<div class="export-empty">No player leaderboard available.</div>';
@@ -6128,6 +6138,7 @@ function buildExportPlayerLeaderboard(match, metrics) {
 }
 
 function buildScoringByParRows(match, metrics) {
+  if (isTeamScoredRound(match)) return [];
   const players = Array.isArray(metrics?.players) ? metrics.players : [];
   const holes = Array.isArray(metrics?.holeResults) ? metrics.holeResults : [];
   const completion = getRoundCompletionState(match, metrics);
@@ -6627,6 +6638,7 @@ function hasUnresolvedSneakySandyPoleyValidation(match, metrics) {
   });
 }
 function areAllGamesFinal(match, metrics) {
+  if (isTeamScoredRound(match) && (getScrambleSetupError(match) || hasUnresolvedTeamScores(match))) return false;
   const completion = getRoundCompletionState(match, metrics);
   if (hasUnresolvedSneakySandyPoleyValidation(match, metrics)) return false;
   if (isWolfEnabled(match) && !computeWolfResults(match, metrics, getWolfConfig(match) || {}).isFinal) return false;
@@ -6873,7 +6885,7 @@ function buildRoundRecordEvents(match, metrics) {
   }
   (metrics?.holeResults || []).forEach(hole => {
     if (!hole?.completed) return;
-    (hole.playerScores || []).forEach(score => {
+    (isTeamScoredRound(match) ? [] : hole.playerScores || []).forEach(score => {
       const gross = Number(score?.gross);
       const par = Number(hole?.par);
       if (!Number.isFinite(gross) || !Number.isFinite(par)) return;
@@ -6921,10 +6933,10 @@ function buildRoundRecord(match, metrics) {
       };
     })(),
     scoreDistribution: completion.completedHoleCount >= 6 ? (computeScoreDistributionSummary(match, metrics).find(row => String(row.playerMetric?.playerId) === String(playerMetric.playerId))?.totals || null) : null,
-    grossTotal: Number(playerMetric?.grossTotal || 0), netTotal: Number(playerMetric?.leaderboardNetTotal || 0), netToPar: Number(playerMetric?.leaderboardNetDiff || 0), postable: Number(playerMetric?.postableTotal || 0),
+    grossTotal: Number(playerMetric?.grossTotal || 0), netTotal: Number(playerMetric?.leaderboardNetTotal || 0), netToPar: Number(playerMetric?.leaderboardNetDiff || 0), postable: isTeamScoredRound(match) ? null : Number(playerMetric?.postableTotal || 0),
     signatureStat: null
   }));
-  playerRecords.forEach((record, index) => { record.signatureStat = buildPlayerSignatureStat(metrics.players[index], events, completion); });
+  playerRecords.forEach((record, index) => { record.signatureStat = isTeamScoredRound(match) ? null : buildPlayerSignatureStat(metrics.players[index], events, completion); });
   const teamRecords = (metrics?.teams || []).map(teamMetric => ({
     teamId: Number(teamMetric.team), displayName: getTeamLabel(match, teamMetric.team),
     playerIds: (teamMetric.members || []).map(member => String(member.playerId)),
@@ -6944,7 +6956,7 @@ function buildRoundRecord(match, metrics) {
   const crossFoot = Object.values(ctx.finalTotals || {}).reduce((sum, amount) => sum + Number(amount || 0), 0);
   return {
     schemaVersion: ROUND_RECORD_SCHEMA_VERSION,
-    meta: { roundId: String(match?.id || ''), ...(hasAssignedTeamIndex(match) ? { assignedTeamIndexPolicyVersion: match.assignedTeamIndexPolicyVersion } : {}), tripId: match?.tripId || null, eventId: match?.eventId || null, ownerUserId: match?.ownerUserId || match?.sharedOwnerUserId || null, createdBy: match?.createdBy || null, deviceId: match?.deviceId || null, hostDeviceId: match?.hostDeviceId || match?.sharedHostDeviceId || null, courseSnapshot: clonePlain(match?.courseSnapshot || metrics?.course || null), teeSnapshot: clonePlain(metrics?.tee || null), date: match?.date || null, holesPlanned: completion.selectedHoleCount, holesCompleted: completion.completedHoleCount, completedHoleNumbers: completion.completedHoles.slice(), status: completion.isIncomplete ? 'provisional' : 'final', endReason: match?.roundEndReason || (completion.isComplete ? 'completed' : null), timing: { valid: !!timing.valid, available: !!timing.available, elapsedMs: timing.valid ? timing.elapsedMs : null, label: timing.valid ? timing.label : null }, handicapConvention: match?.handicapConvention || 'low_man', lowManPlayerId: playerRecords.filter(player => player.courseHandicap != null).sort((a, b) => a.courseHandicap - b.courseHandicap)[0]?.playerId || null },
+    meta: { ...(isTeamScoredRound(match) ? { teamScored: true, teamScoringPolicyVersion: match.teamScoringPolicyVersion, scoringFormat: 'two_man_scramble', individualStatisticsEligible: false } : {}), roundId: String(match?.id || ''), ...(hasAssignedTeamIndex(match) ? { assignedTeamIndexPolicyVersion: match.assignedTeamIndexPolicyVersion } : {}), tripId: match?.tripId || null, eventId: match?.eventId || null, ownerUserId: match?.ownerUserId || match?.sharedOwnerUserId || null, createdBy: match?.createdBy || null, deviceId: match?.deviceId || null, hostDeviceId: match?.hostDeviceId || match?.sharedHostDeviceId || null, courseSnapshot: clonePlain(match?.courseSnapshot || metrics?.course || null), teeSnapshot: clonePlain(metrics?.tee || null), date: match?.date || null, holesPlanned: completion.selectedHoleCount, holesCompleted: completion.completedHoleCount, completedHoleNumbers: completion.completedHoles.slice(), status: completion.isIncomplete ? 'provisional' : 'final', endReason: match?.roundEndReason || (completion.isComplete ? 'completed' : null), timing: { valid: !!timing.valid, available: !!timing.available, elapsedMs: timing.valid ? timing.elapsedMs : null, label: timing.valid ? timing.label : null }, handicapConvention: match?.handicapConvention || 'low_man', lowManPlayerId: playerRecords.filter(player => player.courseHandicap != null).sort((a, b) => a.courseHandicap - b.courseHandicap)[0]?.playerId || null },
     players: playerRecords, teams: teamRecords, holes, games, events, transactions,
     pressTransactions: (ctx.payoutGames || []).filter(game => game.meta?.press).flatMap(game => (game.meta.settlement?.transactions || []).map(row => ({ ...clonePlain(row), rootGameId: game.meta.press.rootGameId, pressDepth: game.meta.press.pressDepth }))),
     settlement: { netPositions: Object.fromEntries(Object.entries(ctx.finalTotals || {}).map(([id, amount]) => [String(id), Number(amount || 0)])), payments: transactions, crossFoot: Number(crossFoot.toFixed(2)) },
@@ -6975,7 +6987,7 @@ function validateFrozenTransactions(record) {
   });
 }
 function canFreezeRoundRecord(match, metrics) {
-  if (getAssignedTeamIndexError(match)) return false;
+  if (getAssignedTeamIndexError(match) || getScrambleSetupError(match) || hasUnresolvedTeamScores(match)) return false;
   if (!match || match.status !== 'complete' || !match.completedAt || (match.storageMode === 'shared' && !isCurrentDeviceMatchHost(match))) return false;
   const completion = getRoundCompletionState(match, metrics);
   return completion.isComplete || areAllGamesFinal(match, metrics);
@@ -7082,7 +7094,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
       index: Number(recordPlayer.assignedTeamIndex ?? playerMetric.handicapIndex ?? recordPlayer.index) || 0,
       ch: courseHandicap,
       ph: hasAssignedTeamIndex(match) ? playerMetric.playHdcp : featured.reduce((sum, strokes) => sum + strokes, 0),
-      postable: Number(recordPlayer.postable ?? playerMetric.postableTotal ?? playerMetric.grossTotal ?? 0),
+      postable: isTeamScoredRound(match) ? null : Number(recordPlayer.postable ?? playerMetric.postableTotal ?? playerMetric.grossTotal ?? 0),
       gross: completedScoresByPlayer(playerMetric.playerId),
       strokes: { courseNet, featured, offLow },
       statistics: insight ? {
@@ -7330,6 +7342,21 @@ function buildLedgerEntryReportModel(match, metrics = null) {
     memories: (record.notes?.memories || []).map(memory => ({ hole: Number(memory.holeNumber || memory.hole || 0), text: String(memory.text || memory.note || memory.description || '') })).filter(memory => memory.text),
     payments: (record.transactions || []).map(payment => ({ from: String(payment.payerId), to: String(payment.payeeId), amt: Number(payment.amount) || 0 })),
   };
+  if (isTeamScoredRound(match)) {
+    report.meta.teamScored = true;
+    report.meta.scoringFormat = 'two_man_scramble';
+    report.meta.individualStatisticsEligible = false;
+    report.meta.recap = buildLedgerEntryFactsOnlyStory(record, match, effectiveMetrics);
+    report.meta.recapProvenance = 'deterministic-fallback';
+    report.players = teamMetrics.map(t => {
+      const p = players.find(row => row.id === String(t.members[0]?.playerId));
+      const strokes = holes.map((h,i) => holeCourseNetStrokeAllowance((getPlayerHole(match,t.members[0],i,effectiveMetrics.tee)||h).strokeIndex,t.members[0].courseHdcp));
+      return { ...p, id: 'T' + t.team, name: getTeamLabel(match,t.team), memberIds: t.members.map(m => m.playerId), gross: holes.map((h,i) => getScrambleTeamHoleScore(match,t.team,i+1).gross), strokes: { courseNet: strokes, featured: strokes, offLow: strokes }, postable: null, statistics: null };
+    });
+    report.games = [];
+    report.partnership = null;
+    report.payments = [];
+  }
   report.meta.canonicalTurningPoint = resolveLedgerFeaturedTurningPoint(report);
   return report;
 }
@@ -7484,6 +7511,7 @@ function consumePendingLedgerEntryRevision(storage = localStorage) {
 }
 
 function buildLedgerEntryFactsOnlyStory(record, match = null, metrics = null) {
+  if (isTeamScoredRound(match)) return 'This two-man scramble records one shared-ball score per team. ' + (metrics.teams || []).map(t => getTeamLabel(match, t.team) + ': ' + t.grossTotal + ' gross, ' + t.netTotal + ' Course Net across ' + metrics.holeResults.filter(h => h.teamScores.some(s => s.team === t.team && s.completed)).length + ' completed team holes').join('; ') + '. Individual statistics and handicap posting do not apply. No wagers are configured in this release.';
   const story = buildRoundRecordStory(record);
   const reportModel=match&&metrics?buildLedgerEntryReportModel(match,metrics):null;
   const canonicalTurningPoint=reportModel?resolveLedgerFeaturedTurningPoint(reportModel):null;
@@ -7535,6 +7563,7 @@ function buildDeterministicLedgerEntryStory(match, metrics, fallbackReason = 'se
 }
 const STORY_SHARED_CONTENT_RULES = 'Keep Low Gross, Course Net, Featured Net, game results, points, dollars, and settlement distinct. For Nassau, name each component (Front, Back, and Overall) and express its margin in prose as “2 up” for the winning side, “2 down” for the losing side, and “halved” or “all square” for a tie; never use closed-match notation such as “2 & 0” for a Nassau component. Do not invent shots, quotations, emotions, motives, swing mechanics, club choice, causation, or untracked statistics. State provisional scope for incomplete rounds. Weather is a single recorded snapshot; never infer that it helped scoring or shot execution. A paired display name does not establish an individual player or a team scoring format.';
 function buildLedgerEntryStoryPayload(match, metrics) {
+  if (isTeamScoredRound(match)) return buildRoundRecapPayload(match, metrics);
   const payload = buildRoundRecapPayload(match, metrics);
   const partnershipPerformance = computeBestBallPartnershipStatistics(match, metrics);
   const canonicalTurningPoint = resolveLedgerFeaturedTurningPoint(buildLedgerEntryReportModel(match, metrics));
@@ -7583,6 +7612,7 @@ function addVerifiedGreeniesToLedgerStory(match, metrics, recapText) {
   return paragraphs.join('\n\n');
 }
 async function prepareLedgerEntryStory(match, metrics) {
+  if (isTeamScoredRound(match)) return buildDeterministicLedgerEntryStory(match, metrics, 'team-scored-round');
   const offline = navigator.onLine === false;
   const configured = Boolean(getRoundRecapUrl());
   if (offline || !configured) {
@@ -7639,6 +7669,7 @@ async function prepareLedgerEntryStory(match, metrics) {
   }
 }
 function buildRoundRecordResultLine(record) {
+  if (record?.meta?.teamScored) return 'Two-man Scramble · team scorecards · no wagers';
   const positions = Object.entries(record?.settlement?.netPositions || {}).map(([playerId, amount]) => ({ playerId, amount: Number(amount || 0) }));
   const winners = positions.filter(row => row.amount > 0.0001).sort((a, b) => b.amount - a.amount);
   if (!winners.length) return record?.meta?.holesCompleted ? 'All square — no current settlement' : 'No settlement yet';
@@ -8187,6 +8218,7 @@ function getBlockingStoryValidationIssues(validation = {}) {
 }
 
 function buildRoundRecapPayload(match, metrics) {
+  if (isTeamScoredRound(match)) return { schemaVersion: 1, format: 'two_man_scramble', individualStatisticsEligible: false, teams: metrics.teams.map(t => ({ name: getTeamLabel(match, t.team), holes: metrics.holeResults.map(h => h.teamScores.find(s => s.team === t.team) || null) })), instructions: 'Shared-ball team scores only. Do not attribute scores, accolades or postable totals to individual golfers.' };
   const courseName = metrics?.course?.name || getCourse(match?.courseId)?.name || 'Course';
   const teeName = metrics?.tee?.teeName || getTee(match?.courseId, match?.teeId)?.teeName || 'Tee';
   const payoutCtx = getPayoutReportContext(match, metrics);
@@ -8333,6 +8365,19 @@ async function runRoundRecapGeneration(match, { automatic = false, silent = fals
   if (!metrics) {
     notify('Match data is not ready yet.');
     return { ok: false, skipped: true, reason: 'metrics-unavailable' };
+  }
+  if (isTeamScoredRound(match)) {
+    const recap = buildDeterministicLedgerEntryStory(match, metrics, 'team-scored-round').text;
+    match.roundRecapGenerated = recap;
+    if (!String(match.roundRecapFinal || '').trim()) match.roundRecap = recap;
+    match.roundRecapGeneratedAt = new Date().toISOString();
+    match.roundRecapValidationIssues = [];
+    match.roundRecapLastError = null;
+    match.roundRecapStatus = 'Team scorecard Story prepared. Review, edit, or save it.';
+    persist({ skipRender: true });
+    renderLeaderboard();
+    notify('Team scorecard Story prepared.');
+    return { ok: true, recap, blockingIssues: [] };
   }
   const btn = document.getElementById('generateRoundRecapBtn');
   if (btn) {
@@ -10076,7 +10121,7 @@ function computeMatchProgress(match) {
   const lastTouchedHole = Math.max(0, ...players.flatMap(mp => (Array.isArray(mp.scores) ? mp.scores : []).filter(s => s.gross && Number(s.holeNumber) <= limit).map(s => Number(s.holeNumber) || 0)), 0);
   let lastFullyCompletedHole = 0;
   for (let hole = 1; hole <= limit; hole += 1) {
-    const allComplete = players.length > 0 && players.every(mp => Number(mp?.scores?.[hole - 1]?.gross) > 0);
+    const allComplete = isTeamScoredRound(match) ? [1,2,3,4].every(team => getScrambleTeamHoleScore(match, team, hole).complete) : players.length > 0 && players.every(mp => Number(mp?.scores?.[hole - 1]?.gross) > 0);
     if (!allComplete) break;
     lastFullyCompletedHole = hole;
   }
@@ -10128,7 +10173,8 @@ function normalizeMatch(match) {
   match.activeScoreRole = match.activeScoreRole || (match.scoringAccessMode === 'assigned_players' ? 'assigned_player_scorer' : 'official_scorer');
   if (match.scoringAccessMode === 'single_device' && (match.activeScoreRole === 'team_scorer' || match.activeScoreRole === 'assigned_player_scorer')) match.activeScoreRole = 'official_scorer';
   match.activeScoreTeam = Math.min(Math.max(1, Number(match.activeScoreTeam) || 1), Math.max(1, Number(match.teamCount) || 1));
-  match.statTrackingEnabled = !!match.statTrackingEnabled;
+  match.statTrackingEnabled = !isTeamScoredRound(match) && !!match.statTrackingEnabled;
+  if (isTeamScoredRound(match)) { match.playInputMode = 'CLASSIC'; match.statTrackingMode = 'NONE'; }
   match.playInputMode = normalizePlayInputMode(match.playInputMode || getPreferredPlayInputMode());
   match.statTrackingMode = normalizeStatTrackingMode(match.statTrackingMode || (match.statTrackingEnabled ? 'CASUAL' : 'NONE'));
   match.smartScoreAdvanceEnabled = match.smartScoreAdvanceEnabled == null ? DEFAULT_SMART_SCORE_ADVANCE : !!match.smartScoreAdvanceEnabled;
@@ -10283,6 +10329,73 @@ function normalizeState() {
   }
 }
 // A round-specific assigned index never changes a golfer's library identity/index.
+function isTeamScoredRound(match) {
+  return !!match?.teamScoringPolicyVersion || match?.roundRecordSnapshot?.meta?.teamScored === true;
+}
+function getScrambleSetupError(match, { assignments = false } = {}) {
+  if (!isTeamScoredRound(match)) return '';
+  if (Number(match.teamScoringPolicyVersion) !== 1) return 'Update to v31.0.61 or newer to score this team format.';
+  if (Number(match.teamCount) !== 4 || Number(match.playersPerTeam) !== 2 || Number(match.holeCount) !== 18 || (match.players || []).length !== 8 || new Set(match.players.map(p => p.playerId)).size !== 8) return 'Two-man Scramble requires eight golfers, four two-player teams and 18 holes.';
+  if (match.storageMode !== 'shared' || normalizeScoringAccessMode(match.scoringAccessMode) !== 'assigned_players') return 'Two-man Scramble requires a Shared Match with assigned-player scoring.';
+  if (!hasAssignedTeamIndex(match)) return 'Use assigned team indexes for Two-man Scramble.';
+  if ((match.selectedGames || match.games || []).length) return 'Scramble wagers arrive in the Flamtana release. Leave games unselected for this round.';
+  for (let team = 1; team <= 4; team++) {
+    const members = match.players.filter(p => Number(p.team) === team);
+    if (members.length !== 2 || members[0].teeId !== members[1].teeId) return 'Assign two partners using the same tee on each team.';
+  }
+  if (assignments) {
+    const devices = [1, 2].map(group => match.players.filter(p => Math.ceil(Number(p.team) / 2) === group).map(p => getAssignedDeviceForPlayer(match, p.playerId)));
+    if (devices.some(group => group.some(id => !id) || new Set(group).size !== 1) || devices[0][0] === devices[1][0]) return 'Assign T1 + T2 to one device and T3 + T4 to a second device before Start.';
+    if (match.players.some(p => !getSharedParticipantById(match, getAssignedParticipantForPlayer(match, p.playerId)))) return 'Assign all eight golfers to joined devices before Start.';
+  }
+  return getAssignedTeamIndexError(match);
+}
+function getScrambleTeamHoleScore(match, team, position) {
+  const members = (match?.players || []).filter(p => Number(p.team) === Number(team));
+  const values = members.map(p => p.scores?.[position - 1]?.gross ?? null);
+  const valid = value => typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 25;
+  const complete = members.length === 2 && values.every(valid) && values[0] === values[1];
+  return { team: Number(team), position, complete, gross: complete ? values[0] : null, inconsistent: values.some(v => v !== null) && !complete, values };
+}
+function applyTeamGrossScore(match, team, position, raw, { checkAuthority = true } = {}) {
+  if (!isTeamScoredRound(match) || getScrambleSetupError(match, { assignments: true }) || !match.roundTiming?.startedAt || ['complete', 'completed'].includes(match.status) || isFrozenRoundRecord(match.roundRecordSnapshot)) return { valid: false, changedPlayerIds: [] };
+  const members = match.players.filter(p => Number(p.team) === Number(team));
+  const blank = raw === null || String(raw).trim() === '';
+  const gross = blank ? null : Number(raw);
+  if (!Number.isInteger(position) || position < 1 || position > 18 || members.length !== 2 || (!blank && (!Number.isInteger(gross) || gross < 1 || gross > 25)) || members.some(p => !p.scores?.[position - 1]) || (checkAuthority && members.some(p => !canEditPlayerScore(match, p.team, p.playerId)))) return { valid: false, changedPlayerIds: [] };
+  const changedPlayerIds = [];
+  if (checkAuthority && isCurrentDeviceMatchHost(match)) {
+    const owned = getSharedLocallyOwnedPlayerIds(match);
+    members.forEach(p => {
+      if (!owned.has(p.playerId) && (p.scores[position - 1].gross ?? null) !== gross) {
+        match.sharedHostScoreOverrides = match.sharedHostScoreOverrides || {};
+        match.sharedHostScoreOverrides[getSharedPlayerHoleKey(p.playerId, position)] = new Date().toISOString();
+      }
+    });
+  }
+  members.forEach(p => { if ((p.scores[position - 1].gross ?? null) !== gross) { p.scores[position - 1].gross = gross; changedPlayerIds.push(p.playerId); } });
+  return { valid: true, changedPlayerIds };
+}
+function hasUnresolvedTeamScores(match) {
+  return isTeamScoredRound(match) && [1,2,3,4].some(team => Array.from({ length: 18 }, (_, i) => getScrambleTeamHoleScore(match, team, i + 1)).some(hole => hole.inconsistent));
+}
+function buildScrambleScoreGridRows(match, tee, metrics, visiblePlayers, hole) {
+  const teams = [...new Set(visiblePlayers.map(p => Number(p.team)))].sort((a,b) => a-b);
+  const setupError = getScrambleSetupError(match, { assignments: true });
+  return (setupError || !match.roundTiming?.startedAt ? '<tr><td colspan="4"><div class="tiny warning-text">' + escapeHtml(setupError || 'The host must Start Scoring after assigning both foursomes.') + '</div></td></tr>' : '') + teams.map(team => {
+    const members = metrics.players.filter(p => Number(p.team) === team), p = members[0];
+    const score = getScrambleTeamHoleScore(match, team, currentHole);
+    const editable = !setupError && !!match.roundTiming?.startedAt && members.length === 2 && members.every(member => canEditPlayerScore(match, team, member.playerId));
+    const playerHole = getPlayerHole(match, p, currentHole - 1, tee) || hole;
+    const strokes = holeCourseNetStrokeAllowance(playerHole?.strokeIndex, p.courseHdcp);
+    return '<tr><td><strong>' + escapeHtml(getTeamLabel(match, team)) + '</strong><div class="tiny">' + members.map(m => escapeHtml(m.player.name)).join(' / ') + '</div><div class="tiny">Team index ' + Number(p.assignedTeamIndex).toFixed(1) + ' · Playing HCP ' + p.courseHdcp + '</div><div class="tiny">' + (score.inconsistent ? 'Pending / unequal partner scores: ' + score.values.map(v => v ?? '—').join(' / ') : score.complete ? 'Team hole complete' : 'Team score not entered') + '</div></td><td><input class="score-input" type="tel" inputmode="numeric" autocomplete="off" min="1" max="25" aria-label="Gross score for ' + escapeHtml(getTeamLabel(match, team)) + '" data-team-inconsistent="' + (score.inconsistent ? '1' : '0') + '" data-score-team="' + team + '" data-score-player="' + escapeHtml(p.playerId) + '" data-hole-par="' + Number(playerHole?.par || 4) + '" value="' + (score.gross ?? '') + '" ' + (editable ? '' : 'disabled') + '></td><td>' + formatStrokesDisplay(strokes) + '</td><td class="score-net-cell">' + (score.complete ? score.gross - strokes : '—') + '</td></tr>';
+  }).join('') + '<tr><td colspan="4"><div class="tiny">One shared-ball score per team. Team completion is separate from all four teams completing this hole. No individual statistics or postable scores.</div></td></tr>';
+}
+function restoreScrambleSetup(match) {
+  const input = document.getElementById('teamScoringEnabled');
+  if (input) input.checked = isTeamScoredRound(match);
+}
+
 function finiteHandicapIndex(value) {
   return value === null || value === undefined || String(value).trim() === '' || !Number.isFinite(Number(value)) ? null : Number(value);
 }
@@ -10465,7 +10578,7 @@ function holeCourseNetStrokeAllowance(holeStrokeIndex, playerHandicap) {
   return upwardStrokes ? -upwardStrokes : 0;
 }
 function computeMatchMetrics(match) {
-  if (!match || getAssignedTeamIndexError(match)) return null;
+  if (!match || getAssignedTeamIndexError(match) || getScrambleSetupError(match)) return null;
   const course = getMatchCourse(match);
   const tee = getMatchTee(match, match.teeId);
   if (!course || !tee) return null;
@@ -10492,7 +10605,7 @@ function computeMatchMetrics(match) {
   const teamNos = [...new Set(players.map(p => Number(p.team) || 1))].sort((a, b) => a - b);
   const holeResults = scoringHoles.map((hole, idx) => {
     const playerScores = players.map(p => {
-      const gross = Number(p.scores[idx]?.gross) || null;
+      const gross = isTeamScoredRound(match) ? getScrambleTeamHoleScore(match, p.team, idx + 1).gross : (Number(p.scores[idx]?.gross) || null);
       const playerHole = getPlayerHole(match, p, idx, tee) || hole;
       const playerPar = Number(playerHole?.par) || Number(hole?.par) || 4;
       const strokeIndex = Number(playerHole?.strokeIndex) || Number(hole?.strokeIndex);
@@ -10500,7 +10613,7 @@ function computeMatchMetrics(match) {
       const postingStrokes = holePostingStrokeAllowance(strokeIndex, p.courseHdcp);
       const leaderboardStrokes = holeCourseNetStrokeAllowance(strokeIndex, p.courseHdcp);
       const postableLimit = playerPar + 2 + postingStrokes;
-      const postable = gross ? Math.min(gross, postableLimit) : null;
+      const postable = !isTeamScoredRound(match) && gross ? Math.min(gross, postableLimit) : null;
       const net = gross ? gross - strokes : null;
       const leaderboardNet = gross ? gross - leaderboardStrokes : null;
       return { playerId: p.playerId, team: p.team, gross, net, strokes, leaderboardNet, leaderboardStrokes, par: playerPar, strokeIndex, teeId: p.teeId, postingStrokes, postableLimit, postable };
@@ -10515,6 +10628,10 @@ function computeMatchMetrics(match) {
     }
     const teamScores = teamNos.map(teamNo => {
       const teamPlayers = playerScores.filter(s => s.team === teamNo);
+      if (isTeamScoredRound(match)) {
+        const score = getScrambleTeamHoleScore(match, teamNo, idx + 1), first = teamPlayers[0];
+        return { team: teamNo, gross: score.gross, net: score.complete ? first.leaderboardNet : null, completed: score.complete, inconsistent: score.inconsistent };
+      }
       const gross = teamPlayers.reduce((sum, s) => sum + (s.gross || 0), 0);
       const net = teamPlayers.reduce((sum, s) => sum + (s.net || 0), 0);
       return { team: teamNo, gross: teamPlayers.length ? gross : null, net: teamPlayers.length ? net : null };
@@ -10557,7 +10674,7 @@ function computeMatchMetrics(match) {
     return {
       ...p,
       grossTotal,
-      postableTotal,
+      postableTotal: isTeamScoredRound(match) ? null : postableTotal,
       netTotal,
       leaderboardNetTotal,
       totalPar,
@@ -10572,9 +10689,10 @@ function computeMatchMetrics(match) {
   const teams = teamNos.map(teamNo => {
     const members = playersWithTotals.filter(p => p.team === teamNo);
     if (!members.length) return null;
-    const grossTotal = members.reduce((sum, p) => sum + p.grossTotal, 0);
-    const netTotal = members.reduce((sum, p) => sum + p.netTotal, 0);
-    const totalPar = members.reduce((sum, p) => sum + p.totalPar, 0);
+    const teamCard = holeResults.map(h => h.teamScores.find(t => t.team === teamNo)).filter(t => t?.completed);
+    const grossTotal = isTeamScoredRound(match) ? teamCard.reduce((sum, h) => sum + h.gross, 0) : members.reduce((sum, p) => sum + p.grossTotal, 0);
+    const netTotal = isTeamScoredRound(match) ? teamCard.reduce((sum, h) => sum + h.net, 0) : members.reduce((sum, p) => sum + p.netTotal, 0);
+    const totalPar = isTeamScoredRound(match) ? holeResults.filter(h => h.teamScores.some(t => t.team === teamNo && t.completed)).reduce((sum,h) => sum + h.par, 0) : members.reduce((sum, p) => sum + p.totalPar, 0);
     const skins = holeResults.filter(h => h.completed && h.teamSkinWinner === teamNo).length;
     const split = Math.min(9, holeCount);
     const front = holeResults.slice(0, split).reduce((sum, h) => sum + (h.teamWinner === teamNo ? 1 : h.teamWinner && h.teamWinner !== 0 ? -1 : 0), 0);
@@ -11048,6 +11166,7 @@ function formatSideMatchThruStatus(pairing) {
 }
 
 function getPrimaryMatchStatusLine(match, metrics, options = {}) {
+  if (isTeamScoredRound(match)) return `Two-man Scramble · ${metrics?.completed || 0}/18 whole-field holes complete`;
   if (!match || !metrics) return '';
   const statusOptions = getMatchStatusOptions(match);
   if (!statusOptions.length && getFeaturedCompetitionSelection(match) === 'auto') return '';
@@ -11291,6 +11410,7 @@ function buildExportMatchNetScorecards(match, metrics) {
   return [...unique.values()].map(option => `<section class="export-section export-section-classic export-section-match-net"><div class="export-section-head"><h2>Classic Scorecard — Match Net</h2><div class="export-section-sub">Match Net reflects the Featured Competition’s handicap allowance and stroke allocation: ${escapeHtml(option.label)}. Gross appears above Match Net; dots indicate competition strokes.</div></div><div class="fit-stage export-classic-stage" data-fit="width-height" data-fit-min="0.62"><div class="fit-box">${buildClassicScorecard(match, metrics, { readOnly: true, netMode: 'match', matchGameConfig: option.config })}</div></div></section>`).join('');
 }
 function buildClassicScorecard(match, metrics, opts = {}) {
+  if (isTeamScoredRound(match)) return buildScrambleTeamScorecard(match, metrics);
   const tee = metrics?.tee;
   if (!tee) return '<div class="tiny">No scorecard available.</div>';
   const readOnly = !!opts.readOnly;
@@ -11672,6 +11792,7 @@ function describeTrackedStatisticsForStory(fact) {
 }
 
 function computeScoreDistributionSummary(match, metrics) {
+  if (isTeamScoredRound(match)) return [];
   const holeResults = Array.isArray(metrics?.holeResults) ? metrics.holeResults : [];
   if (!holeResults.length) return [];
   return (metrics?.players || []).map(playerMetric => {
@@ -11697,6 +11818,7 @@ function computeScoreDistributionSummary(match, metrics) {
 }
 
 function computePlayerRoundInsights(match, metrics) {
+  if (isTeamScoredRound(match)) return [];
   const holeResults = Array.isArray(metrics?.holeResults) ? metrics.holeResults : [];
   const players = Array.isArray(metrics?.players) ? metrics.players : [];
   const completion = getRoundCompletionState(match, metrics);
@@ -12568,6 +12690,7 @@ function buildQuickGameSummary(match, metrics, record = null) {
   return cards ? `<section class="quick-scoreboard-section quick-game-results"><h4>Game Summary</h4><div class="quick-native-game-list">${cards}</div></section>` : '';
 }
 function buildPlayerSummaryRows(match, metrics, record = null) {
+  if (isTeamScoredRound(match)) return [];
   const frozen = record && isFrozenRoundRecord(record);
   const plannedHoles = frozen ? Number(record.meta?.holesPlanned || 0) : getPlayableHoleCount(match, metrics?.tee);
   const frozenHoleStats = playerId => {
@@ -12594,6 +12717,7 @@ function buildPlayerSummaryTable(rows, accessibleLabel = 'Player Score Summary')
   return `<div class="tiny player-summary-net-note">Individual totals use Course Net based on each player’s full Course Handicap.</div><div class="player-summary-scroll"><table class="quick-scoreboard-table quick-player-table player-summary-table" aria-label="${escapeHtml(accessibleLabel)}"><thead><tr><th>#</th><th>Player</th><th>Gross</th><th>Course Net</th><th>Course Net +/-</th><th aria-label="Postable Score"><span aria-hidden="true">Post.</span><span class="sr-only">Postable Score</span></th></tr></thead><tbody>${rows.map(row => `<tr data-player-id="${escapeHtml(row.playerId)}"><td>${row.rank}</td><td title="${escapeHtml(row.displayName)}">${escapeHtml(row.displayName)}</td><td>${score(row, 'gross')}</td><td>${score(row, 'net')}</td><td>${row.hasTrustedScore ? formatToPar(Number(row.netToPar) || 0) : '—'}</td><td>${score(row, 'postableScore')}</td></tr>`).join('')}</tbody></table></div>`;
 }
 function buildQuickPlayerScoreSummary(match, metrics, record = null) {
+  if (isTeamScoredRound(match)) return '<div class="tiny">Two-man Scramble · scores belong to teams. Individual statistics and handicap posting are unavailable.</div>';
   const rows = buildPlayerSummaryRows(match, metrics, record);
   if (!rows.some(row => row.hasTrustedScore)) return '';
   return `<section class="quick-scoreboard-section quick-player-score-summary"><h4>Player Score Summary</h4>${buildPlayerSummaryTable(rows, 'Player Score Summary')}</section>`;
@@ -14021,6 +14145,13 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
   const bunkerControlValues = new Map();
   const recoveryLiePlayers = new Set();
   document.querySelectorAll('input[data-score-player]').forEach(input => {
+    if (isTeamScoredRound(match)) {
+      if (input.disabled || !input.dataset.scoreTeam || (input.dataset.teamInconsistent === '1' && input.dataset.teamScoreTouched !== '1')) return;
+      const result = applyTeamGrossScore(match, Number(input.dataset.scoreTeam), currentHole, input.value);
+      result.changedPlayerIds.forEach(id => changedScorePlayers.add(id));
+      mutated = mutated || result.changedPlayerIds.length > 0;
+      return;
+    }
     const playerId = input.dataset.scorePlayer;
     const mp = match.players.find(p => p.playerId === playerId);
     if (!mp || !mp.scores?.[currentHole - 1]) return;
@@ -14326,7 +14457,7 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
     status: match.status || 'active',
     course_id: match.courseId || '',
     reference_tee_id: match.teeId || '',
-    course_snapshot: { ...courseSnapshot, sharedMatchMeta: { assignedTeamReferenceTeeId: match.teeId || null, assignedTeamIndexPolicyVersion: Number(match.assignedTeamIndexPolicyVersion || 0), assignedTeamIndexes: Object.fromEntries((match.players || []).filter(row => Object.prototype.hasOwnProperty.call(row, 'assignedTeamIndex')).map(row => [row.playerId, row.assignedTeamIndex])), assignedTeamTeeIds: Object.fromEntries((match.players || []).map(row => [row.playerId, row.teeId])), tripId: match.tripId || null, eventId: match.eventId || null, scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device'), matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || ''), hostDeviceId: match.sharedHostDeviceId || getSharedDeviceId(), hostParticipantId: match.sharedHostParticipantId || getCurrentSharedParticipantId(match), devices: Array.isArray(match.sharedDevices) ? match.sharedDevices : [], participants: getSharedAssignmentParticipants(match), playerAssignments: match.sharedPlayerAssignments || {}, playerAssignmentState: match.sharedPlayerAssignmentState || {}, memories: getRoundMemories(match), memoriesUpdatedAt: new Date().toISOString(), roundContext: normalizeRoundContext(match.roundContext), roundTiming: match.roundTiming || { startedAt: null, endedAt: null }, holeFirstCompletedAt: match.holeFirstCompletedAt || {}, greeniesWinners: isCurrentDeviceMatchHost(match) ? clonePlain(match.greeniesWinners || {}) : {}, greeniesUpdatedAt: match.greeniesUpdatedAt || null, sspFacts: buildSharedSspFacts(match), pressConfig: normalizePressConfig(match.pressConfig), presses: isCurrentDeviceMatchHost(match) ? clonePlain(match.presses || []) : [], roundRecordSnapshot: isCurrentDeviceMatchHost(match) && isFrozenRoundRecord(match.roundRecordSnapshot) ? clonePlain(match.roundRecordSnapshot) : null, ledgerEntrySnapshot: isCurrentDeviceMatchHost(match) ? clonePlain(getAcceptedLedgerEntrySnapshot(match)) : null } },
+    course_snapshot: { ...courseSnapshot, sharedMatchMeta: { teamScoringPolicyVersion: Number(match.teamScoringPolicyVersion || 0), assignedTeamReferenceTeeId: match.teeId || null, assignedTeamIndexPolicyVersion: Number(match.assignedTeamIndexPolicyVersion || 0), assignedTeamIndexes: Object.fromEntries((match.players || []).filter(row => Object.prototype.hasOwnProperty.call(row, 'assignedTeamIndex')).map(row => [row.playerId, row.assignedTeamIndex])), assignedTeamTeeIds: Object.fromEntries((match.players || []).map(row => [row.playerId, row.teeId])), tripId: match.tripId || null, eventId: match.eventId || null, scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device'), matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || ''), hostDeviceId: match.sharedHostDeviceId || getSharedDeviceId(), hostParticipantId: match.sharedHostParticipantId || getCurrentSharedParticipantId(match), devices: Array.isArray(match.sharedDevices) ? match.sharedDevices : [], participants: getSharedAssignmentParticipants(match), playerAssignments: match.sharedPlayerAssignments || {}, playerAssignmentState: match.sharedPlayerAssignmentState || {}, memories: getRoundMemories(match), memoriesUpdatedAt: new Date().toISOString(), roundContext: normalizeRoundContext(match.roundContext), roundTiming: match.roundTiming || { startedAt: null, endedAt: null }, holeFirstCompletedAt: match.holeFirstCompletedAt || {}, greeniesWinners: isCurrentDeviceMatchHost(match) ? clonePlain(match.greeniesWinners || {}) : {}, greeniesUpdatedAt: match.greeniesUpdatedAt || null, sspFacts: buildSharedSspFacts(match), pressConfig: normalizePressConfig(match.pressConfig), presses: isCurrentDeviceMatchHost(match) ? clonePlain(match.presses || []) : [], roundRecordSnapshot: isCurrentDeviceMatchHost(match) && isFrozenRoundRecord(match.roundRecordSnapshot) ? clonePlain(match.roundRecordSnapshot) : null, ledgerEntrySnapshot: isCurrentDeviceMatchHost(match) ? clonePlain(getAcceptedLedgerEntrySnapshot(match)) : null } },
     format: match.format || 'teams',
     allowance: normalizeHandicapAllowancePercent(match.allowance, 100),
     hole_count: getRequestedHoleCount(match),
@@ -14779,6 +14910,7 @@ function hydrateMatchFromCloudBundle(bundle) {
     name: matchRow?.name || 'Round',
     courseId: courseIds.courseId,
     teeId: courseIds.teeId,
+    ...(Number(sharedMeta.teamScoringPolicyVersion || 0) > 0 ? { teamScoringPolicyVersion: Number(sharedMeta.teamScoringPolicyVersion) } : {}),
     ...(Number(sharedMeta.assignedTeamIndexPolicyVersion || 0) > 0 ? { assignedTeamIndexPolicyVersion: Number(sharedMeta.assignedTeamIndexPolicyVersion) } : {}),
     format: matchRow?.format || 'teams',
     allowance: normalizeHandicapAllowancePercent(matchRow?.allowance, 100),
@@ -15046,6 +15178,7 @@ async function fetchSharedMatchMetadata(matchId, match = null) {
     memberships: (memberships || []).map(row => ({ id: row.id, user_id: row.user_id, role: row.role, status: row.status, device_label: row.device_label, joined_at: row.joined_at, last_seen_at: row.last_seen_at })),
   };
   return {
+    ...(Object.prototype.hasOwnProperty.call(meta, 'teamScoringPolicyVersion') ? { teamScoringPolicyVersion: Number(meta.teamScoringPolicyVersion) } : {}),
     ...(Object.prototype.hasOwnProperty.call(meta, 'assignedTeamIndexPolicyVersion') ? { assignedTeamIndexPolicyVersion: meta.assignedTeamIndexPolicyVersion, assignedTeamIndexes: meta.assignedTeamIndexes || {}, assignedTeamTeeIds: meta.assignedTeamTeeIds || {}, assignedTeamReferenceTeeId: meta.assignedTeamReferenceTeeId || null, assignedTeamCourseSnapshot: Number(meta.assignedTeamIndexPolicyVersion) > 0 ? Object.fromEntries(Object.entries(matchRow.course_snapshot || {}).filter(([key]) => key !== "sharedMatchMeta")) : null } : {}),
     devices,
     participants,
@@ -15104,7 +15237,10 @@ async function mergeCloudSharedMetadata(match, { includeAssignments = false, inc
     match = currentMatch;
   }
   let changed = mergeSharedDevices(match, meta.devices || []);
-  if (!isCurrentDeviceMatchHost(match)) changed = applyAssignedTeamIndexMetadata(match, meta) || changed;
+  if (!isCurrentDeviceMatchHost(match)) {
+    changed = applyAssignedTeamIndexMetadata(match, meta) || changed;
+    if (Object.prototype.hasOwnProperty.call(meta, 'teamScoringPolicyVersion') && Number(match.teamScoringPolicyVersion || 0) !== Number(meta.teamScoringPolicyVersion)) { match.teamScoringPolicyVersion = Number(meta.teamScoringPolicyVersion); changed = true; }
+  }
   if (!isCurrentDeviceMatchHost(match) && meta.status === 'complete' && match.status !== 'complete') {
     match.status = 'complete';
     match.completedAt = meta.completedAt || match.completedAt || new Date().toISOString();
@@ -18285,6 +18421,7 @@ function getPreferredPlayInputMode(preferences = getPlayerPreferences()) {
   return normalizePlayInputMode(normalizePlayerPreferences(preferences).scoring.playInputMode);
 }
 function getEffectivePlayInputMode(match = getActiveMatch()) {
+  if (isTeamScoredRound(match)) return 'CLASSIC';
   return normalizePlayInputMode(match?.playInputMode || getPreferredPlayInputMode());
 }
 function renderPlayInputModeSelector(activeMode = getPreferredPlayInputMode()) {
@@ -19082,6 +19219,7 @@ function buildPlayHoleMetaText(hole) {
 }
 
 function buildPlayFeaturedStatusPair(match, metrics, fallbackGameKey = '') {
+  if (match?.teamScoringPolicyVersion || match?.roundRecordSnapshot?.meta?.teamScored) return `<span>Two-man Scramble</span><strong>${metrics?.completed || 0}/18 field holes</strong>`;
   const compactMatchStatus = metrics ? getPrimaryMatchStatusLine(match, metrics) : '';
   if (!compactMatchStatus) return '';
   const statusOptions = getMatchStatusOptions(match);
@@ -19220,8 +19358,10 @@ function renderHoleSelector(match, scoringHoles = [], metrics = null) {
     classicSaveState.textContent = saveState.label;
   }
   const classicModeSelect = document.getElementById('classicRoundScoringModeSelect');
+  if (classicModeSelect) classicModeSelect.disabled = isTeamScoredRound(match);
   if (classicModeSelect) classicModeSelect.innerHTML = Object.values(PLAY_INPUT_MODES).filter(mode => mode.available).map(mode => `<option value="${mode.key}" ${mode.key === PLAY_INPUT_MODES.CLASSIC.key ? 'selected' : ''}>${mode.label.replace(' Mode','')}</option>`).join('');
   const classicStatSelect = document.getElementById('classicRoundStatModeSelect');
+  if (classicStatSelect) classicStatSelect.disabled = isTeamScoredRound(match);
   if (classicStatSelect) classicStatSelect.innerHTML = Object.values(STAT_TRACKING_MODES).map(mode => `<option value="${mode.key}" ${mode.key === normalizeStatTrackingMode(match.statTrackingMode || (match.statTrackingEnabled ? 'CASUAL' : 'NONE')) ? 'selected' : ''}>${mode.label}</option>`).join('');
 }
 
@@ -19523,6 +19663,12 @@ function isJoinedDeviceWaitingForAssignment(match) {
 
 function renderScoreGrid(match, tee, metrics, scoringHoles = null) {
   const body = document.getElementById('scoreGridBody');
+  const headings = document.querySelectorAll('#classicScoreGridWrap thead th');
+  if (headings[0]) headings[0].textContent = isTeamScoredRound(match) ? 'Team' : 'Player';
+  if (headings[2]) {
+    headings[2].textContent = isTeamScoredRound(match) ? 'Str.' : 'Strokes';
+    headings[2].setAttribute('aria-label', 'Strokes');
+  }
   if (!match || !tee || !metrics) {
     body.innerHTML = '';
     return;
@@ -19534,7 +19680,7 @@ function renderScoreGrid(match, tee, metrics, scoringHoles = null) {
     body.innerHTML = `<tr><td colspan="4"><div class="joined-assignment-waiting"><strong>Joined device</strong><div class="tiny top-gap">Waiting for the host to assign players to this device.</div><div class="tiny">Scores are saved on this phone once you are assigned. Checking for assignment...</div><button type="button" class="secondary top-gap" data-check-shared-assignment="1">Check Assignment</button></div></td></tr>`;
     return;
   }
-  body.innerHTML = buildTeamGroupedScoreGridRows(match, tee, metrics, visiblePlayers, hole);
+  body.innerHTML = isTeamScoredRound(match) ? buildScrambleScoreGridRows(match, tee, metrics, visiblePlayers, hole) : buildTeamGroupedScoreGridRows(match, tee, metrics, visiblePlayers, hole);
 }
 
 function syncDeviceScoreAdvanceUi(match = getActiveMatch()) {
@@ -19686,7 +19832,7 @@ function updateLiveNetForScoreInput(inputEl) {
   const scoringHoles = getSelectedScoringHoles(match, courseTee);
   const hole = scoringHoles[currentHole - 1];
   const playerHole = getPlayerHole(match, playerMetric, currentHole - 1, courseTee) || hole;
-  const strokes = holeStrokeAllowanceForPlayer(playerHole?.strokeIndex, playerMetric.playHdcp, metrics.lowPlaying);
+  const strokes = isTeamScoredRound(match) ? holeCourseNetStrokeAllowance(playerHole?.strokeIndex, playerMetric.courseHdcp) : holeStrokeAllowanceForPlayer(playerHole?.strokeIndex, playerMetric.playHdcp, metrics.lowPlaying);
   const raw = String(inputEl.value || '').trim();
   const gross = Number(raw);
   const netCell = inputEl.closest('tr')?.querySelector?.('.score-net-cell');
@@ -19750,6 +19896,7 @@ function handleLiveScoreInputFocus(inputEl) {
 
 function handleLiveScoreInputEvent(inputEl) {
   if (!inputEl || inputEl.disabled) return;
+  if (inputEl.dataset.scoreTeam) inputEl.dataset.teamScoreTouched = '1';
   updateLiveNetForScoreInput(inputEl);
   const match = getActiveMatch();
   if (match) renderPressActions(match, computeMatchMetrics(match));
@@ -19848,7 +19995,7 @@ function schedulePendingScoreAutoAdvance(inputEl) {
   const playerId = inputEl.dataset.scorePlayer;
   if (!playerId) return;
   const session = scoreInputSessionState.get(playerId) || {};
-  const normalizedValue = normalizeCommittedScoreValue(inputEl.value);
+  const normalizedValue = inputEl.dataset.scoreTeam ? String(inputEl.value || '').trim() : normalizeCommittedScoreValue(inputEl.value);
   if (!isGrossScoreValidValue(normalizedValue)) return;
   const generation = ++scoreAutoAdvanceGeneration;
   scoreInputSessionState.set(playerId, { ...session, generation, lastTypedValue: String(inputEl.value || '') });
@@ -19876,7 +20023,7 @@ function commitScoreInput(inputEl, { viaEnter = false, viaAutoAdvance = false, e
   cancelPendingScoreAutoAdvance(playerId);
   const priorState = scoreInputSessionState.get(playerId) || {};
   if (expectedGeneration != null && Number(priorState.generation || 0) !== Number(expectedGeneration)) return false;
-  const normalizedValue = normalizeCommittedScoreValue(inputEl.value);
+  const normalizedValue = inputEl.dataset.scoreTeam ? String(inputEl.value || '').trim() : normalizeCommittedScoreValue(inputEl.value);
   const initialValue = String(priorState.initialValue ?? inputEl.defaultValue ?? '').trim();
   const changed = normalizedValue !== initialValue;
   const hasCommittedValue = normalizedValue !== '';
@@ -20747,6 +20894,7 @@ function captureCurrentSetupDraft() {
     selectedGames,
     featuredCompetition: String(fd.get('featuredCompetition') || 'auto'),
     pressConfig: normalizePressConfig(selectedGames.find(game => getGameEscalationCapability(game.key) === 'PRESS') || getNewMatchDefaultsFromPreferences().pressConfig),
+    teamScoringPolicyVersion: fd.get('teamScoringEnabled') === 'on' ? 1 : 0,
     assignedTeamIndexEnabled: !!document.getElementById('assignedTeamIndexEnabled')?.checked,
     assignedTeamIndexDraft: clonePlain(ensureAssignedTeamIndexDraft()),
     players: slotSelections,
@@ -21613,7 +21761,7 @@ function getAuthoritativeMatchSetupDraftState({ fd = null, selectedPlayers = nul
   const smartScoreAdvanceEnabled = formData ? formData.get('smartScoreAdvance') === 'on' : active?.smartScoreAdvanceEnabled !== false;
   const smartScoreAdvancePreset = normalizeSmartScoreAdvancePreset(formData?.get('smartScoreAdvancePreset') || active?.smartScoreAdvancePreset);
   const captureWeatherContext = formData ? formData.get('captureWeatherContext') === 'on' : active?.captureWeatherContext !== false;
-  return { formData, active, assignedTeamIndexPolicyVersion: formData?.get('assignedTeamIndexEnabled') === 'on' ? ASSIGNED_TEAM_INDEX_POLICY_VERSION : (formData ? 0 : active?.assignedTeamIndexPolicyVersion || 0), teamCount, playersPerTeam, requiredSlotCount, courseId, course, players, games, holeCount, nineHoleSegment, customStartHole, referenceTeeId, applicableTeeIds, tees, courseHolesLoaded, teamNames, featuredCompetition, scoringAccessMode: normalizedMode, sharedMatchEnabled: shared, storageMode: shared ? 'shared' : 'local', allowance, statTrackingEnabled, smartScoreAdvanceEnabled, smartScoreAdvancePreset, captureWeatherContext };
+  return { formData, active, teamScoringPolicyVersion: formData ? (formData.get('teamScoringEnabled') === 'on' ? 1 : 0) : Number(active?.teamScoringPolicyVersion || 0), selectedGames: games, assignedTeamIndexPolicyVersion: formData?.get('assignedTeamIndexEnabled') === 'on' ? ASSIGNED_TEAM_INDEX_POLICY_VERSION : (formData ? 0 : active?.assignedTeamIndexPolicyVersion || 0), teamCount, playersPerTeam, requiredSlotCount, courseId, course, players, games, holeCount, nineHoleSegment, customStartHole, referenceTeeId, applicableTeeIds, tees, courseHolesLoaded, teamNames, featuredCompetition, scoringAccessMode: normalizedMode, sharedMatchEnabled: shared, storageMode: shared ? 'shared' : 'local', allowance, statTrackingEnabled, smartScoreAdvanceEnabled, smartScoreAdvancePreset, captureWeatherContext };
 }
 
 function getPlayerTeeSlotStates({ teamCount = 1, playersPerTeam = 1, requiredSlotCount = null, courseId = '', players = [] } = {}) {
@@ -23302,6 +23450,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
     uiState.referenceTeeAutoId = '';
     populateMatchPlayerPicker(uiState.matchPlayerDraft);
     restoreAssignedTeamIndexSetup(draft);
+    restoreScrambleSetup(draft);
     renderStatTrackingPlayerSelector(Array.isArray(draft.statTrackingPlayerIds) ? draft.statTrackingPlayerIds : null);
     renderGamesPicker(draft.selectedGames || []);
     renderFeaturedCompetitionSetup(draft.selectedGames || [], draft.featuredCompetition || 'auto');
@@ -23340,6 +23489,7 @@ function loadMatchEditor(matchId = null, draftMatch = null) {
   uiState.referenceTeeManual = !!(match.teeId && document.getElementById('matchTeeSelect')?.value === match.teeId);
   populateMatchPlayerPicker(uiState.matchPlayerDraft);
   restoreAssignedTeamIndexSetup(match);
+  restoreScrambleSetup(match);
   renderStatTrackingPlayerSelector(Array.isArray(match.statTrackingPlayerIds) ? match.statTrackingPlayerIds : null);
   renderGamesPicker(match.selectedGames || []);
   renderFeaturedCompetitionSetup(match.selectedGames || [], match.featuredCompetition || 'auto');
@@ -24072,7 +24222,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       renderStatTrackingPlayerSelector();
     }
     if (e.target && (e.target.id === 'smartScoreAdvanceInput' || e.target.id === 'smartScoreAdvancePresetSelect')) syncSmartScoreAdvancePresetUi();
-    if (e.target.matches('#assignedTeamIndexEnabled, [data-assigned-team-index], [data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #featuredCompetitionSelect, #scoreEntryModeSelect, #roundPlayInputModeSelect, #roundStatTrackingModeSelect, #officialScorerNameInput, #sharedMatchEnabled, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-sixes-player], [data-wolf-player], [data-wolf-point], [data-game-config], #enableStatTrackingInput, #smartScoreAdvanceInput, #smartScoreAdvancePresetSelect, #captureWeatherContextInput, [data-stat-track-player]')) {
+    if (e.target.matches('#teamScoringEnabled, #assignedTeamIndexEnabled, [data-assigned-team-index], [data-player-slot], [data-player-tee-slot], [data-team-name], #teamCountSelect, #playersPerTeamSelect, #matchCourseSelect, #matchTeeSelect, #holeCountSelect, #nineHoleSegmentSelect, #customNineHoleStartSelect, [name="allowance"], #featuredCompetitionSelect, #scoreEntryModeSelect, #roundPlayInputModeSelect, #roundStatTrackingModeSelect, #officialScorerNameInput, #sharedMatchEnabled, [data-team-scorer-label], [data-team-scorer-code], [data-side-field], [data-nine-point-player], [data-sixes-player], [data-wolf-player], [data-wolf-point], [data-game-config], #enableStatTrackingInput, #smartScoreAdvanceInput, #smartScoreAdvancePresetSelect, #captureWeatherContextInput, [data-stat-track-player]')) {
       setTimeout(() => { renderSetupHandicapPreview(); renderGamesPicker(collectSelectedGames()); renderFeaturedCompetitionSetup(collectSelectedGames()); renderTodaysMatchSummary(); renderRoundPreferenceSummary(); }, 0);
     }
   });
@@ -24586,6 +24736,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (e.target.closest('[data-start-shared-scoring]')) {
       const match = getActiveMatch();
       if (!match) return;
+      const error = getScrambleSetupError(match, { assignments: true });
+      if (error) return toast(error, 6200);
       if (ensureRoundTimingStarted(match)) {
         persist({ skipRender: true });
         scheduleSharedMatchSync(match, { immediate: true, silent: true });
@@ -24784,6 +24936,11 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       if (sspWarnings.length) return toast(sspWarnings[0]);
     }
     const existing = editingMatchId ? getMatch(editingMatchId) : null;
+    if (existing && (existing.roundTiming?.startedAt || matchHasStarted(existing)) && isTeamScoredRound(existing) !== (fd.get('teamScoringEnabled') === 'on')) return toast('The scoring format is fixed after Start. Create a new match to change it.');
+    if (existing && isTeamScoredRound(existing) && (existing.roundTiming?.startedAt || matchHasStarted(existing))) {
+      const roster = rows => rows.map(p => [String(p.playerId), Number(p.team), p.teeId, finiteHandicapIndex(p.assignedTeamIndex)]).sort((a,b) => a[0].localeCompare(b[0]));
+      if (JSON.stringify(roster(existing.players)) !== JSON.stringify(roster(selectedPlayers))) return toast('Scramble teams, tees and assigned indexes are fixed after Start. Scoring devices can still be reassigned.');
+    }
     const pressEditValidation = validatePressEditContract(existing, selectedGames, { isHost: !existing || isCurrentDeviceMatchHost(existing) });
     if (!pressEditValidation.valid) return toast(pressEditValidation.primaryReason?.message || 'Press settings could not be updated.');
     const validatedSelectedGames = pressEditValidation.proposedGames;
@@ -24811,6 +24968,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       courseId: String(fd.get('courseId') || ''),
       teeId: String(fd.get('teeId') || syncReferenceTeeUi({ selections: selectedPlayers, forceAuto: !uiState.referenceTeeManual }) || selectedPlayers[0]?.teeId || ''),
       format: 'teams',
+      ...(fd.get('teamScoringEnabled') === 'on' ? { teamScoringPolicyVersion: 1, teamScored: true } : {}),
       ...(fd.get('assignedTeamIndexEnabled') === 'on' ? { assignedTeamIndexPolicyVersion: ASSIGNED_TEAM_INDEX_POLICY_VERSION } : {}),
       allowance: normalizeHandicapAllowancePercent(fd.get('allowance'), 100),
       holeCount: Number(fd.get('holeCount')) === 9 ? 9 : 18,
@@ -24882,6 +25040,12 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       holeFirstCompletedAt: existing?.holeFirstCompletedAt || {},
     };
     match.players.forEach(row => { if (fd.get('assignedTeamIndexEnabled') === 'on') row.assignedTeamIndex = selectedPlayers.find(player => player.playerId === row.playerId)?.assignedTeamIndex; else delete row.assignedTeamIndex; });
+    if (isTeamScoredRound(match)) {
+      match.statTrackingEnabled = false;
+      match.statTrackingMode = 'NONE';
+      match.statTrackingPlayerIds = [];
+      match.playInputMode = 'CLASSIC';
+    }
     const assignedIndexError = getAssignedTeamIndexError(match);
     if (assignedIndexError) return toast(assignedIndexError);
     if (!editingMatchId && pendingNextRoundSessionContext) {
@@ -25022,6 +25186,10 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   if (postRoundInlineJoinBtn) postRoundInlineJoinBtn.addEventListener('click', () => startJoinNewMatchSetup());
   function saveCurrentHole({ advance = false, targetHole = null, silent = false } = {}) {
     const match = getActiveMatch(); if (!match) return false;
+    if (isTeamScoredRound(match)) {
+      const invalid = Array.from(document.querySelectorAll('input[data-score-team]')).find(input => !input.disabled && input.value.trim() !== '' && (!Number.isInteger(Number(input.value)) || Number(input.value) < 1 || Number(input.value) > 25));
+      if (invalid) { if (!silent) toast('Enter a whole team gross score from 1 to 25, or clear the score.'); invalid.focus(); return false; }
+    }
     if (getScoreAccessState(match).role === 'viewer') { if (!silent) toast('Viewer mode is read-only.'); return false; }
     const scoringHoles = getSelectedScoringHoles(match, getTee(match.courseId, match.teeId));
     const holeMeta = scoringHoles[currentHole - 1] || null;
@@ -25043,7 +25211,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     try {
       match.playedHoleOrder = Array.isArray(match.playedHoleOrder) ? match.playedHoleOrder : [];
       match.holeFirstCompletedAt = match.holeFirstCompletedAt && typeof match.holeFirstCompletedAt === 'object' ? match.holeFirstCompletedAt : {};
-      const nowCompleteAfterSave = (match.players || []).length > 0 && (match.players || []).every(mp => Number(mp?.scores?.[currentHole - 1]?.gross) > 0);
+      const nowCompleteAfterSave = isTeamScoredRound(match) ? [1,2,3,4].every(team => getScrambleTeamHoleScore(match,team,currentHole).complete) : (match.players || []).length > 0 && (match.players || []).every(mp => Number(mp?.scores?.[currentHole - 1]?.gross) > 0);
       if (nowCompleteAfterSave) {
         if (!match.playedHoleOrder.map(Number).includes(Number(actualHoleNumber))) match.playedHoleOrder.push(Number(actualHoleNumber));
         recordHoleFirstCompletedAt(match, actualHoleNumber);
@@ -25548,6 +25716,8 @@ function getMatchSetupValidationState({ draft = null, fd = null, selectedPlayers
   const { teamCount, playersPerTeam, requiredSlotCount, courseId, course, players, games, holeCount: requestedHoleCount, courseHolesLoaded, scoringAccessMode: normalizedMode, sharedMatchEnabled: isShared } = source;
   const missing = [];
   const warnings = [];
+  const scrambleError = getScrambleSetupError(source);
+  if (scrambleError) missing.push(scrambleError);
   const assignedIndexError = getAssignedTeamIndexError(source);
   if (assignedIndexError) missing.push(assignedIndexError);
   const playerSlotStates = getPlayerTeeSlotStates(source);
@@ -26249,6 +26419,7 @@ function installDyeLedgerLiveEngineAdapter() {
     getAssignedTeamIndexError,
     resolveRoundPlayerHandicap,
     getPlayerGameHandicap,
+    isTeamScoredRound, getScrambleSetupError, getScrambleTeamHoleScore, applyTeamGrossScore, buildScrambleTeamScorecard, canFreezeRoundRecord, applyCurrentHoleDomToMatch, hasUnresolvedTeamScores, buildScrambleScoreGridRows,
     applyAssignedTeamIndexMetadata,
     buildCloudMatchPayload,
     hydrateMatchFromCloudBundle,

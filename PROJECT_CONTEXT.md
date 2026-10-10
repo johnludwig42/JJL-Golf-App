@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current development release: **v31.0.60 — Assigned Team Index** on `codex/v31.0.60-assigned-team-index`. Optional editable two-player team indexes are saved on round participants, bypass both round and game allowances, and preserve library indexes and historical records. No scramble score entry yet. v31.0.59 is merged in PR #156. See `BUILD_NOTES_v31.0.60.md`. The Product Owner approved Flamtana .60 → .61 → .62 ahead of any further roadmap work for October 16, 2026; only .60 is currently authorized. See `docs/FLAMTANA_SPECIAL_BUILD_PLAN.md` for accepted rules, shared-correction safeguards, individual-record protection and manual settlement fallback.
+Current development release: **v31.0.61 — Two-man Scramble** on codex/v31.0.61-two-man-scramble. Adds team score entry for four two-player teams, fixed two-device foursomes, pending-pair safeguards and individual-record protections. v31.0.60 is committed and merged in PR #157. See BUILD_NOTES_v31.0.61.md and docs/FLAMTANA_SPECIAL_BUILD_PLAN.md. The Product Owner authorized .61 on October 10, 2026; .62 follows separately, ahead of further roadmap work for the October 16 event.
 
 Previous release: **v31.0.59 — Play Screen Refinement**, merged in PR #156. Round rules follows scoring/save guidance; Classic has grouped navigation, readable hole facts, direct Scoreboard access and separate save/backup status. Scoring, saving, records and shared matches were unchanged. See `BUILD_NOTES_v31.0.59.md`. All eight manual iPhone acceptance checks for v31.0.58 passed, as confirmed by the Product Owner. Physical v31.0.59 and four-device Shared Match acceptance remain separate. Preferences/setup density resumes after the Flamtana sequence.
 

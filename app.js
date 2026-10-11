@@ -19,11 +19,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.65',
-  versionNumber: '31.0.65',
-  cacheName: 'the-dye-ledger-v31.0.65',
-  buildDate: '2026-10-10T23:43:45.848Z',
-  buildLabel: 'Shared Match Storage Recovery'
+  version: 'v31.0.66',
+  versionNumber: '31.0.66',
+  cacheName: 'the-dye-ledger-v31.0.66',
+  buildDate: '2026-10-11T11:50:33.192Z',
+  buildLabel: 'Flamtana Play and Setup'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -10588,6 +10588,11 @@ function applyTeamGrossScore(match, team, position, raw, { checkAuthority = true
 function hasUnresolvedTeamScores(match) {
   return isTeamScoredRound(match) && SCRAMBLE_TEAM_IDS.some(team => Array.from({ length: 18 }, (_, i) => getScrambleTeamHoleScore(match, team, i + 1)).some(hole => hole.inconsistent));
 }
+function getFlamtanaDisplayStrokes(metrics, player, strokeIndex) {
+  const handicaps = SCRAMBLE_TEAM_IDS.map(team => metrics.players.find(row => Number(row.team) === team)?.courseHdcp);
+  if (!handicaps.every(Number.isFinite)) return null;
+  return holeCourseNetStrokeAllowance(strokeIndex, Math.max(0, player.courseHdcp - Math.min(...handicaps)));
+}
 function buildScrambleScoreGridRows(match, tee, metrics, visiblePlayers, hole) {
   const teams = [...new Set(visiblePlayers.map(p => Number(p.team)))].sort((a,b) => a-b);
   const setupError = getScrambleSetupError(match, { assignments: true });
@@ -10596,9 +10601,10 @@ function buildScrambleScoreGridRows(match, tee, metrics, visiblePlayers, hole) {
     const score = getScrambleTeamHoleScore(match, team, currentHole);
     const editable = !setupError && !!match.roundTiming?.startedAt && members.length === 2 && members.every(member => canEditPlayerScore(match, team, member.playerId));
     const playerHole = getPlayerHole(match, p, currentHole - 1, tee) || hole;
-    const strokes = holeCourseNetStrokeAllowance(playerHole?.strokeIndex, p.courseHdcp);
-    return '<tr><td><strong>' + escapeHtml(getTeamLabel(match, team)) + '</strong><div class="tiny">' + members.map(m => escapeHtml(m.player.name)).join(' / ') + '</div><div class="tiny">Team index ' + Number(p.assignedTeamIndex).toFixed(1) + ' · Playing HCP ' + p.courseHdcp + '</div><div class="tiny">' + (score.inconsistent ? 'Pending / unequal partner scores: ' + score.values.map(v => v ?? '—').join(' / ') + '. Re-enter the team score to resolve, or deliberately clear it.' : score.complete ? 'Team hole complete' : 'Team score not entered') + '</div></td><td><div class="gross-score-stepper team-score-stepper"><button type="button" class="score-step-btn" data-score-step="down" data-score-step-player="' + escapeHtml(p.playerId) + '" aria-label="Decrease team score" ' + (editable ? '' : 'disabled') + '>−</button><input class="score-input" type="tel" inputmode="numeric" autocomplete="off" min="1" max="25" aria-label="Gross score for ' + escapeHtml(getTeamLabel(match, team)) + '" data-team-inconsistent="' + (score.inconsistent ? '1' : '0') + '" data-score-team="' + team + '" data-score-player="' + escapeHtml(p.playerId) + '" data-hole-par="' + Number(playerHole?.par || 4) + '" value="' + (score.gross ?? '') + '" ' + (editable ? '' : 'disabled') + '><button type="button" class="score-step-btn" data-score-step="up" data-score-step-player="' + escapeHtml(p.playerId) + '" aria-label="Increase team score" ' + (editable ? '' : 'disabled') + '>+</button></div></td><td>' + formatStrokesDisplay(strokes) + '</td><td class="score-net-cell">' + (score.complete ? score.gross - strokes : '—') + '</td></tr>';
-  }).join('') + '<tr><td colspan="4"><div class="tiny">One shared-ball score per team. Team completion is separate from all four teams completing this hole. No individual statistics or postable scores. If a scoring device drops out, the host can enter or correct all four teams here. Keep the foursome assignments; check backup and parity before finishing.</div></td></tr>';
+    const courseStrokes = holeCourseNetStrokeAllowance(playerHole?.strokeIndex, p.courseHdcp);
+    const flamtana = !!getFlamtanaConfig(match), strokes = flamtana ? getFlamtanaDisplayStrokes(metrics, p, playerHole?.strokeIndex) : courseStrokes;
+    return '<tr><td><strong>' + escapeHtml(getTeamLabel(match, team)) + '</strong><div class="tiny">' + members.map(m => escapeHtml(m.player.name)).join(' / ') + '</div><div class="tiny">Team index ' + Number(p.assignedTeamIndex).toFixed(1) + ' · Playing HCP ' + p.courseHdcp + '</div><div class="tiny">' + (score.inconsistent ? 'Pending / unequal partner scores: ' + score.values.map(v => v ?? '—').join(' / ') + '. Re-enter the team score to resolve, or deliberately clear it.' : score.complete ? 'Team hole complete' : 'Team score not entered') + '</div></td><td><div class="gross-score-stepper ' + (flamtana ? 'flamtana-score-stepper' : 'team-score-stepper') + '" role="group" aria-label="Team gross score"><button type="button" class="score-step-btn" data-score-step="down" data-score-step-player="' + escapeHtml(p.playerId) + '" aria-label="Decrease team score" ' + (editable ? '' : 'disabled') + '>−</button><input class="score-input" type="tel" inputmode="numeric" autocomplete="off" min="1" max="25" aria-label="Gross score for ' + escapeHtml(getTeamLabel(match, team)) + '" data-team-inconsistent="' + (score.inconsistent ? '1' : '0') + '" data-score-team="' + team + '" data-score-player="' + escapeHtml(p.playerId) + '" data-hole-par="' + Number(playerHole?.par || 4) + '" value="' + (score.gross ?? '') + '" ' + (editable ? '' : 'disabled') + '><button type="button" class="score-step-btn" data-score-step="up" data-score-step-player="' + escapeHtml(p.playerId) + '" aria-label="Increase team score" ' + (editable ? '' : 'disabled') + '>+</button></div></td><td>' + formatStrokesDisplay(strokes) + '</td><td class="score-net-cell">' + (score.complete ? score.gross - courseStrokes : '—') + '</td></tr>';
+  }).join('') + '<tr><td colspan="4"><div class="tiny">' + (getFlamtanaConfig(match) ? 'Off low shows strokes relative to the lowest of all four team handicaps. Course Net and wagers use full team handicaps. ' : '') + 'One shared-ball score per team. Team completion is separate from all four teams completing this hole. No individual statistics or postable scores. If a scoring device drops out, the host can enter or correct all four teams here. Keep the foursome assignments; check backup and parity before finishing.</div></td></tr>';
 }
 function restoreScrambleSetup(match) {
   const input = document.getElementById('teamScoringEnabled');
@@ -11050,38 +11056,39 @@ function renderFeaturedCompetitionHandicapPreview({ course, tee, selected, enric
   const wrap = document.getElementById('setupFeaturedHandicapPreview');
   if (!wrap) return;
   const games = collectSelectedGames();
-  const featuredKey = String(document.getElementById('featuredCompetitionSelect')?.value || '');
-  const featured = games.find(game => game.key === featuredKey) || null;
+  const featuredKey = resolveFeaturedCompetitionKey({ selectedGames: games, featuredCompetition: document.getElementById('featuredCompetitionSelect')?.value || 'auto' });
+  const featured = games.find(game => game.key === featuredKey) || (['stroke_net','stroke_gross'].includes(featuredKey) ? {key: featuredKey, basis: featuredKey === 'stroke_net' ? 'net' : 'gross', courseNetMode: true} : null);
   if (!featured || !featuredKey || featuredKey === 'none' || featuredKey === 'auto') {
     wrap.innerHTML = '<div class="tiny">Choose a Featured Competition to show its handicap basis.</div>';
     return;
   }
-  const basis = String(featured.basis || (featured.key === 'net_skins' ? 'net' : 'gross')).toLowerCase();
+  const basis = String(featured.basis || (['net_skins','flamtana_special'].includes(featured.key) ? 'net' : 'gross')).toLowerCase();
   if (basis === 'gross') {
-    wrap.innerHTML = `<div class="tiny"><strong>${escapeHtml(getGameLabel(featured.key))} · Gross</strong><br>Handicap strokes are not used for this competition.</div>`;
+    wrap.innerHTML = `<div class="tiny"><strong>${escapeHtml(getFeaturedCompetitionDisplayName({ selectedGames: games }, featured.key))} · Gross</strong><br>Handicap strokes are not used for this competition.</div>`;
     return;
   }
   const matchContext = { players: selected, allowance, assignedTeamIndexPolicyVersion: document.getElementById('assignedTeamIndexEnabled')?.checked ? ASSIGNED_TEAM_INDEX_POLICY_VERSION : 0 };
   const config = featured.key === 'nassau' ? normalizeNassauConfig(featured, matchContext) : featured;
   const gameAllowance = normalizeHandicapAllowancePercent(config.handicapAllowancePercent, allowance);
   if (enriched.some(row => !Number.isFinite(row.courseHdcp))) { wrap.innerHTML = '<div class="tiny">Enter an assigned index for every team to preview competition strokes.</div>'; return; }
+  const courseNet = featured.courseNetMode || featured.key === 'flamtana_special';
   const rows = enriched.map(row => ({
     ...row,
-    gameHdcp: getPlayerGameHandicap(row, gameAllowance),
+    gameHdcp: courseNet ? row.courseHdcp : getPlayerGameHandicap(row, gameAllowance),
   }));
-  const lowGameHandicap = Math.min(...rows.map(row => row.gameHdcp));
+  const lowGameHandicap = courseNet ? 0 : Math.min(...rows.map(row => row.gameHdcp));
   const policyLabel = featured.key === 'nassau'
     ? formatNassauPolicyLabel(config, matchContext)
-    : `${getGameLabel(featured.key)} · Net · ${formatRoundAllowanceLabel(matchContext, gameAllowance)}`;
+    : `${getFeaturedCompetitionDisplayName({ selectedGames: games }, featured.key)} · Net · ${courseNet ? 'Full Course Handicap' : formatRoundAllowanceLabel(matchContext, gameAllowance)}`;
   const segment = getHoleSegmentLabel({
     holeCount: Number(document.querySelector('#matchForm [name="holeCount"]')?.value || 18),
     nineHoleSegment: document.getElementById('nineHoleSegmentSelect')?.value || 'front',
     customStartHole: Number(document.getElementById('customNineHoleStartSelect')?.value || 1),
   }, tee);
-  wrap.innerHTML = `<div class="tiny"><strong>${escapeHtml(policyLabel)}</strong><br>${escapeHtml(course.name)} · ${escapeHtml(segment)} · Gets is relative to the lowest Game HCP.</div>
+  wrap.innerHTML = `<div class="tiny"><strong>${escapeHtml(policyLabel)}</strong><br>${escapeHtml(course.name)} · ${escapeHtml(segment)} · ${courseNet ? 'Gets uses full Course Handicap strokes.' : 'Gets is relative to the lowest Game HCP.'}</div>
     <div class="handicap-preview-table featured-game-handicap-preview top-gap">
       <div class="handicap-preview-header" aria-hidden="true"><div class="handicap-preview-description">Player / Tee</div><div class="handicap-preview-number">Index</div><div class="handicap-preview-number">Course HCP</div><div class="handicap-preview-number">Game HCP</div><div class="handicap-preview-number">Gets</div></div>
-      <div class="handicap-preview-grid">${rows.map(row => `<div class="handicap-preview-cardline"><div class="handicap-preview-meta handicap-preview-row"><div class="handicap-preview-description"><strong>${escapeHtml(row.player.name)}</strong><small>${escapeHtml(getTeamLabel({ teamNames }, row.team))} · ${escapeHtml(row.tee?.teeName || tee.teeName)}</small></div><div class="handicap-preview-number"><strong>${Number(row.playerIndex || 0).toFixed(1)}</strong></div><div class="handicap-preview-number"><strong>${row.courseHdcp}</strong></div><div class="handicap-preview-number"><strong>${row.gameHdcp}</strong></div><div class="handicap-preview-number"><strong>${Math.max(0, row.gameHdcp - lowGameHandicap)}</strong></div></div></div>`).join('')}</div>
+      <div class="handicap-preview-grid">${rows.map(row => `<div class="handicap-preview-cardline"><div class="handicap-preview-meta handicap-preview-row"><div class="handicap-preview-description"><strong>${escapeHtml(row.player.name)}</strong><small>${escapeHtml(getTeamLabel({ teamNames }, row.team))} · ${escapeHtml(row.tee?.teeName || tee.teeName)}</small></div><div class="handicap-preview-number"><strong>${Number(row.playerIndex || 0).toFixed(1)}</strong></div><div class="handicap-preview-number"><strong>${row.courseHdcp}</strong></div><div class="handicap-preview-number"><strong>${row.gameHdcp}</strong></div><div class="handicap-preview-number"><strong>${courseNet ? row.gameHdcp : Math.max(0, row.gameHdcp - lowGameHandicap)}</strong></div></div></div>`).join('')}</div>
     </div>`;
 }
 
@@ -11614,6 +11621,7 @@ function getMatchNetScorecardOptions(match) {
   });
 }
 function buildClassicScorecardPanel(match, metrics, options = {}) {
+  if (getFlamtanaConfig(match) && isTeamScoredRound(match)) return buildClassicScorecard(match, metrics, { ...options, readOnly: true });
   const matchOptions = getFeaturedMatchNetScorecardOptions(match, metrics);
   const saved = uiState.classicScorecardViewByMatch[String(match?.id || 'active')] || { mode: 'course', gameKey: matchOptions[0]?.key || '' };
   const selected = matchOptions.find(option => option.key === saved.gameKey) || matchOptions[0] || null;
@@ -11642,7 +11650,18 @@ function buildExportMatchNetScorecards(match, metrics) {
   return [...unique.values()].map(option => `<section class="export-section export-section-classic export-section-match-net"><div class="export-section-head"><h2>Classic Scorecard — Match Net</h2><div class="export-section-sub">Match Net reflects the Featured Competition’s handicap allowance and stroke allocation: ${escapeHtml(option.label)}. Gross appears above Match Net; dots indicate competition strokes.</div></div><div class="fit-stage export-classic-stage" data-fit="width-height" data-fit-min="0.62"><div class="fit-box">${buildClassicScorecard(match, metrics, { readOnly: true, netMode: 'match', matchGameConfig: option.config })}</div></div></section>`).join('');
 }
 function buildClassicScorecard(match, metrics, opts = {}) {
-  if (isTeamScoredRound(match)) return buildScrambleTeamScorecard(match, metrics);
+  if (isTeamScoredRound(match) && !opts.flamtanaTeamView) {
+    if (!metrics) return '<div class="tiny">Team scorecard unavailable.</div>';
+    if (!getFlamtanaConfig(match)) return buildScrambleTeamScorecard(match, metrics);
+    const teams = SCRAMBLE_TEAM_IDS.map(team => {
+      const members = metrics.players.filter(row => Number(row.team) === team), member = members[0];
+      return { playerId: 'team-' + team, team, player: { name: getTeamLabel(match, team) },
+        teeId: member?.teeId, tee: member?.tee, courseHdcp: member?.courseHdcp,
+        teamMembers: members.map(row => row.player.name).join(' / '),
+        scores: metrics.holeResults.map((_, index) => { const score = getScrambleTeamHoleScore(match, team, index + 1); return { gross: score.gross, pending: score.inconsistent }; }) };
+    });
+    return buildClassicScorecard(match, { ...metrics, players: teams }, { ...opts, playerId: '', flamtanaTeamView: true, hideTeamColumn: true, readOnly: true, netMode: 'course' });
+  }
   const tee = metrics?.tee;
   if (!tee) return '<div class="tiny">No scorecard available.</div>';
   const readOnly = !!opts.readOnly;
@@ -11706,11 +11725,13 @@ function buildClassicScorecard(match, metrics, opts = {}) {
       const gross = Number(playerScores[idx]?.gross) || null;
       const playerHole = getPlayerHole(match, p, idx, tee) || hole;
       const strokes = getDisplayedStrokes(p, playerHole);
+      const displayPar = opts.flamtanaTeamView ? (playerHole?.par || hole.par) : hole.par;
       const editAttrs = readOnly ? '' : `data-scorecard-edit="1" data-edit-hole="${idx + 1}" data-edit-player="${p.playerId}" title="Edit ${escapeHtml(p.player.name)} on hole ${hole.holeNumber}"`;
       const editClass = readOnly ? '' : ' editable-scorecard-cell';
-      if (!gross) return `<td class="scorecard-hole-col score-hole-cell${editClass}" ${editAttrs}><div class="score-main">${formatGolfScoreMarkup(null, hole.par, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(null, hole.par, 'net')}${dotMarkup(strokes)}</div></td>`;
+      if (opts.flamtanaTeamView && playerScores[idx]?.pending) return '<td class="scorecard-hole-col score-hole-cell"><div class="score-main">Pending</div></td>';
+      if (!gross) return `<td class="scorecard-hole-col score-hole-cell${editClass}" ${editAttrs}><div class="score-main">${formatGolfScoreMarkup(null, displayPar, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(null, displayPar, 'net')}${dotMarkup(strokes)}</div></td>`;
       const net = gross - strokes;
-      return `<td class="scorecard-hole-col score-hole-cell${editClass}" ${editAttrs}><div class="score-main">${formatGolfScoreMarkup(gross, hole.par, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(net, hole.par, 'net')}${dotMarkup(strokes)}</div></td>`;
+      return `<td class="scorecard-hole-col score-hole-cell${editClass}" ${editAttrs}><div class="score-main">${formatGolfScoreMarkup(gross, displayPar, 'gross')}</div><div class="score-sub">${formatGolfScoreMarkup(net, displayPar, 'net')}${dotMarkup(strokes)}</div></td>`;
     }).join('');
     const frontSummary = summarizePlayerScorecardRange(p, 0, Math.min(9, holeCount));
     const backSummary = back.length ? summarizePlayerScorecardRange(p, 9, holeCount) : { gross: 0, net: 0, scored: 0 };
@@ -11719,16 +11740,16 @@ function buildClassicScorecard(match, metrics, opts = {}) {
       ? `${scorecardSubtotalCell(frontSummary)}${scorecardSubtotalCell(backSummary)}${scorecardSubtotalCell(totalSummary)}`
       : `${scorecardSubtotalCell(frontSummary)}${scorecardSubtotalCell(totalSummary)}`;
     const playerTeeName = p.tee?.teeName || tee?.teeName || 'Tee';
-    return `<tr><td class="scorecard-sticky-name"><strong>${escapeHtml(p.player.name)}</strong><div class="tiny">Tee: ${escapeHtml(playerTeeName)}</div></td>${hideTeamColumn ? '' : `<td class="scorecard-sticky-team">${escapeHtml(getTeamLabel(match,p.team))}</td>`}${cells}${totals}</tr>`;
+    return `<tr><td class="scorecard-sticky-name"><strong>${escapeHtml(p.player.name)}</strong>${opts.flamtanaTeamView ? `<div class="tiny">${escapeHtml(p.teamMembers)}</div>` : ''}<div class="tiny">Tee: ${escapeHtml(playerTeeName)}</div></td>${hideTeamColumn ? '' : `<td class="scorecard-sticky-team">${escapeHtml(getTeamLabel(match,p.team))}</td>`}${cells}${totals}</tr>`;
   }).join('');
   const completion = getRoundCompletionState(match, metrics);
   const teeNames = [...new Set(visiblePlayers.map(p => p.tee?.teeName || tee?.teeName || 'Tee'))];
-  const teeNote = teeNames.length === 1 ? ` All players: ${teeNames[0]} tee.` : ' Player tees are shown in each row.';
+  const teeNote = teeNames.length === 1 ? ` All ${opts.flamtanaTeamView ? 'teams' : 'players'}: ${teeNames[0]} tee.` : ` ${opts.flamtanaTeamView ? 'Team' : 'Player'} tees are shown in each row.`;
   const partialNote = completion.isIncomplete ? ' Unplayed holes are shown as dashes and excluded from totals.' : '';
   const netDescription = netMode === 'match'
     ? `Match Net for the Featured Competition: ${matchGameConfig?.key === 'nassau' ? `Net Nassau · Best ${normalizeCountingBalls(matchGameConfig.countingBalls, 1)} · ${formatRoundAllowanceLabel(match, normalizeHandicapAllowancePercent(matchGameConfig.handicapAllowancePercent, match.allowance))}` : (matchGameConfig?.key === 'stroke_net' ? 'Stroke Play · full Course Handicap' : `${getGameLabel(matchGameConfig?.key) || 'selected competition'} · ${formatRoundAllowanceLabel(match, normalizeHandicapAllowancePercent(matchGameConfig?.handicapAllowancePercent, match.allowance))}`)}`
-    : 'Course Net using each golfer’s full Course Handicap';
-  return `<div class="scorecard-sub tiny">Gross score shown above ${escapeHtml(netDescription)}. Dots indicate ${netMode === 'match' ? 'competition' : 'Course Handicap'} strokes.${escapeHtml(teeNote)}${escapeHtml(partialNote)}</div><div class="scorecard-wrap table-scroll-region" data-scroll-table="classic-scorecard" tabindex="0" role="region" aria-label="Classic scorecard; scroll horizontally to view all holes"><table class="scorecard-table ${hideTeamColumn ? 'scorecard-no-team-col' : ''}"><thead><tr><th class="scorecard-sticky-name">${blankPlayerHeader ? '' : 'Player'}</th>${hideTeamColumn ? '' : '<th class="scorecard-sticky-team">Team</th>'}${holeHeader}${totalColumns}</tr></thead><tbody>${yardageRow}${parRow}${siRow}${playerRows}</tbody></table></div>`;
+    : opts.flamtanaTeamView ? 'Course Net using each team’s full Course Handicap' : 'Course Net using each golfer’s full Course Handicap';
+  return `<div class="scorecard-sub tiny">Gross score shown above ${escapeHtml(netDescription)}. Dots indicate ${netMode === 'match' ? 'competition' : 'Course Handicap'} strokes.${escapeHtml(teeNote)}${escapeHtml(partialNote)}</div><div class="scorecard-wrap table-scroll-region" data-scroll-table="classic-scorecard" tabindex="0" role="region" aria-label="Classic scorecard; scroll horizontally to view all holes"><table ${opts.flamtanaTeamView ? 'data-team-scorecard="flamtana"' : ''} class="scorecard-table ${hideTeamColumn ? 'scorecard-no-team-col' : ''}"><thead><tr><th class="scorecard-sticky-name">${blankPlayerHeader ? '' : opts.flamtanaTeamView ? 'Team' : 'Player'}</th>${hideTeamColumn ? '' : '<th class="scorecard-sticky-team">Team</th>'}${holeHeader}${totalColumns}</tr></thead><tbody>${yardageRow}${parRow}${siRow}${playerRows}</tbody></table></div>`;
 }
 
 
@@ -19953,9 +19974,10 @@ function renderScoreGrid(match, tee, metrics, scoringHoles = null) {
   const body = document.getElementById('scoreGridBody');
   const headings = document.querySelectorAll('#classicScoreGridWrap thead th');
   if (headings[0]) headings[0].textContent = isTeamScoredRound(match) ? 'Team' : 'Player';
+  if (headings[3]) headings[3].textContent = getFlamtanaConfig(match) ? 'Course Net' : 'Net';
   if (headings[2]) {
-    headings[2].textContent = isTeamScoredRound(match) ? 'Str.' : 'Strokes';
-    headings[2].setAttribute('aria-label', 'Strokes');
+    headings[2].textContent = getFlamtanaConfig(match) ? 'Off low' : isTeamScoredRound(match) ? 'Str.' : 'Strokes';
+    headings[2].setAttribute('aria-label', getFlamtanaConfig(match) ? 'Strokes off the lowest of all four teams' : 'Strokes');
   }
   if (!match || !tee || !metrics) {
     body.innerHTML = '';
@@ -21437,7 +21459,7 @@ function populateMatchPlayerPicker(selected = []) {
             <input id="${inputId}" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="${listId}" data-player-combobox-slot="${idx}" data-slot-team="${teamNo}" placeholder="Search saved players" value="${escapeHtml(currentPlayer ? getPlayerLookupLabel(currentPlayer) : '')}" autocomplete="off" ${hasSavedPlayers ? '' : 'disabled'} />
             ${currentPlayer ? `<button type="button" class="player-combobox-clear" data-clear-player-slot="${idx}" aria-label="Clear ${escapeHtml(slotLabel)} assignment">×</button>` : ''}
           </div>
-          <div id="${listId}" class="player-combobox-list hidden" role="listbox" data-player-combobox-list="${idx}"><div class="player-combobox-count tiny" data-player-combobox-count="${idx}">${selectablePlayers.length} of ${selectablePlayers.length} players</div>${selectablePlayers.map((player, optionIndex) => `<button type="button" id="${listId}_option_${optionIndex}" class="player-combobox-option" role="option" aria-selected="${player.id === current ? 'true' : 'false'}" data-player-combobox-option="${idx}" data-player-id="${escapeHtml(player.id)}" data-player-label="${escapeHtml(getPlayerLookupLabel(player).toLowerCase())}"><span>${getPlayerDisplayHtml(player, { wrapperClass: 'player-label-inline', nameClass: 'player-label-name', indexClass: 'player-label-index' })}</span></button>`).join('')}<div class="player-combobox-empty tiny hidden" data-player-combobox-empty="${idx}">No saved players match.</div></div>
+          <div id="${listId}" class="player-combobox-list hidden" role="listbox" data-player-combobox-list="${idx}"><div class="player-combobox-count tiny" data-player-combobox-count="${idx}">${selectablePlayers.length} of ${selectablePlayers.length} players</div>${selectablePlayers.map((player, optionIndex) => `<button type="button" id="${listId}_option_${optionIndex}" class="player-combobox-option" role="option" aria-selected="${player.id === current ? 'true' : 'false'}" data-player-combobox-option="${idx}" data-player-id="${escapeHtml(player.id)}" data-player-label="${escapeHtml(getPlayerLookupLabel(player).toLowerCase())}"><span>${getPlayerDisplayHtml(player, { wrapperClass: 'player-label-inline', nameClass: 'player-label-name', indexClass: 'player-label-index' })}</span></button>`).join('')}<div class="player-combobox-empty tiny hidden" data-player-combobox-empty="${idx}">No saved players match.</div><div class="player-combobox-bottom-space" aria-hidden="true"></div></div>
         </div>
         ${teeSelect}
       </div>
@@ -21489,10 +21511,11 @@ function positionPlayerCombobox(inputEl, list = null) {
   const targetList = list || document.querySelector(`[data-player-combobox-list="${Number(inputEl.dataset.playerComboboxSlot)}"]`);
   if (!targetList) return null;
   const rect = inputEl.getBoundingClientRect();
-  const viewportHeight = Math.max(0, Number(window.innerHeight) || document.documentElement.clientHeight || 0);
+  const viewportTop = Math.max(0, Number(window.visualViewport?.offsetTop) || 0);
+  const viewportHeight = Math.max(0, Number(window.visualViewport?.height) || Number(window.innerHeight) || document.documentElement.clientHeight || 0);
   const gap = 8;
-  const spaceBelow = Math.max(0, viewportHeight - rect.bottom - gap);
-  const spaceAbove = Math.max(0, rect.top - gap);
+  const spaceBelow = Math.max(0, viewportTop + viewportHeight - rect.bottom - gap);
+  const spaceAbove = Math.max(0, rect.top - viewportTop - gap);
   const openAbove = spaceBelow < 132 && spaceAbove > spaceBelow;
   const available = openAbove ? spaceAbove : spaceBelow;
   const maxHeight = Math.max(72, Math.min(240, Math.floor(available)));
@@ -21523,6 +21546,8 @@ function filterPlayerCombobox(inputEl, { open = true } = {}) {
     const option = optionsByPlayerId.get(String(player.id));
     if (option) list.appendChild(option);
   });
+  const bottomSpace = list.querySelector('.player-combobox-bottom-space');
+  if (bottomSpace) list.appendChild(bottomSpace);
   const visible = Array.from(list.querySelectorAll('[data-player-combobox-option]')).filter(option => {
     const show = matchingIds.has(String(option.dataset.playerId));
     option.classList.toggle('hidden', !show);
@@ -24313,6 +24338,8 @@ function installHandlers() {
   });
   window.addEventListener('resize', repositionOpenPlayerComboboxes);
   window.addEventListener('orientationchange', repositionOpenPlayerComboboxes);
+  window.visualViewport?.addEventListener('resize', repositionOpenPlayerComboboxes);
+  window.visualViewport?.addEventListener('scroll', repositionOpenPlayerComboboxes);
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && document.getElementById('balanceExplanationDialog')?.open) return;
     if (e.key === 'Escape' && closePlayOverflowMenus({ restoreFocus: true })) return;
@@ -26729,6 +26756,7 @@ function installDyeLedgerLiveEngineAdapter() {
     getAssignedTeamIndexError,
     resolveRoundPlayerHandicap,
     getPlayerGameHandicap,
+    getFlamtanaDisplayStrokes,
     getMissingScoreEntries, applySharedScrambleSetupMetadata, buildScrambleReportEntries, buildFlamtanaReportGames, buildFlamtanaSetupControls, getScrambleFoursomeProgress, normalizeFlamtanaConfig, getFlamtanaSetupError, resolveFlamtanaStrokeResult, computeFlamtanaResults, getSharedDeviceId, isCurrentDeviceMatchHost, mergeRemoteScoreEntriesIntoMatch, isTeamScoredRound, getScrambleSetupError, getScrambleTeamHoleScore, applyTeamGrossScore, buildScrambleTeamScorecard, canFreezeRoundRecord, applyCurrentHoleDomToMatch, hasUnresolvedTeamScores, buildScrambleScoreGridRows,
     applyAssignedTeamIndexMetadata,
     buildCloudMatchPayload,

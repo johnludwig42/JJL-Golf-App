@@ -90,3 +90,5 @@
   }
   @media (prefers-reduced-motion:reduce){:is(button,.button-link){transition:none}}
 }
+
+.storage-usage-diagnostic { overflow-wrap: anywhere; }

@@ -103,7 +103,7 @@ test('Prairie View match selects hole 7, where John takes the lead for good', ()
   assert.deepEqual(result.cum, [0, 1, 2, 2, 1, 1, 0, -1, -2, -1]);
 });
 
-test('each margin segment resets and uses its winner, or team 1 for a tie, as perspective', () => {
+test('segment perspective helper resets and uses its winner, or team 1 for a tie', () => {
   const margin = {
     per: [
       { win: 1, scored: true }, { win: 0, scored: true }, { win: 1, scored: true },
@@ -117,7 +117,6 @@ test('each margin segment resets and uses its winner, or team 1 for a tie, as pe
   assert.equal(tiedBack.sideIndex, 0);
   assert.equal(tiedBack.tied, true);
   assert.deepEqual(tiedBack.runningMargins, [-1, -1, 0]);
-  assert.match(reportSource, /PERSPECTIVE · NET/);
 });
 
 test('competition labels de-duplicate embedded game names', () => {

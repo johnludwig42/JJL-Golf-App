@@ -149,7 +149,7 @@ console.log(`${audit.pages.length} pages; ${audit.labels.length} ordered subject
 console.log(`Statistics pages: ${audit.pages.filter(row => row.label === 'Statistics').map(row => `${row.index} (${Math.max(0, row.headroom)}px headroom; ${row.statisticFragments.map(fragment => fragment.id).join(', ') || 'heading'})`).join(', ') || 'none'}.`);
 if (!failed) {
   await page.emulateMediaType('print');
-  const pdf = await page.pdf({ path: output, format: 'letter', printBackground: true, preferCSSPageSize: true, margin: { top: 0, right: 0, bottom: 0, left: 0 } });
+  const pdf = await page.pdf({ path: output, format: 'letter', printBackground: true, preferCSSPageSize: true, displayHeaderFooter: false, margin: { top: 0, right: 0, bottom: 0, left: 0 } });
   const physicalPages = (Buffer.from(pdf).toString('latin1').match(/\/Type\s*\/Page\b/g) || []).length;
   if (physicalPages !== audit.pages.length) {
     console.error(`Physical PDF page mismatch: ${physicalPages} sheets for ${audit.pages.length} designed pages${iosPrint ? ' on the iOS print surface' : ''}.`);

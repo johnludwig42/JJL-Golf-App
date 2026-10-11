@@ -19,11 +19,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.66',
-  versionNumber: '31.0.66',
-  cacheName: 'the-dye-ledger-v31.0.66',
-  buildDate: '2026-10-11T11:50:33.192Z',
-  buildLabel: 'Flamtana Play and Setup'
+  version: 'v31.0.67',
+  versionNumber: '31.0.67',
+  cacheName: 'the-dye-ledger-v31.0.67',
+  buildDate: '2026-10-11T12:28:17.381Z',
+  buildLabel: 'Press Report Reconciliation'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -7081,6 +7081,67 @@ function getEffectiveRoundRecord(match, metrics = null) {
   return buildRoundRecord(match, metrics || computeMatchMetrics(match));
 }
 
+function getPressReportAccounting(record, playerIds) {
+  const moneyByPress = {}, includedByRoot = {};
+  const presses = (record.games || []).filter(game => game.type === 'press');
+  for (const press of presses) {
+    const pressId = String(press.config?.pressId || press.gameId), money = Object.fromEntries(playerIds.map(id => [id, 0]));
+    if (!['VOIDED','SUPERSEDED','HALVED'].includes(press.status)) {
+      const seen = new Set();
+      for (const tx of record.pressTransactions || []) {
+        if (String(tx.pressId) !== pressId || !playerIds.includes(String(tx.payerId)) || !playerIds.includes(String(tx.payeeId)) || !Number.isFinite(Number(tx.amount)) || Number(tx.amount) < 0) continue;
+        if (tx.transactionId && seen.has(tx.transactionId)) continue;
+        if (tx.transactionId) seen.add(tx.transactionId);
+        money[String(tx.payerId)] -= Number(tx.amount); money[String(tx.payeeId)] += Number(tx.amount);
+      }
+    }
+    const root = String(press.config?.outcomeGameKey || (String(press.rootGameId).startsWith('nassau_') ? 'nassau' : press.rootGameId || ''));
+    moneyByPress[String(press.gameId)] = money;
+    // Legacy frozen Nassau amounts already include their press transactions.
+    if (root === 'nassau') {
+      includedByRoot[root] = includedByRoot[root] || Object.fromEntries(playerIds.map(id => [id, 0]));
+      playerIds.forEach(id => { includedByRoot[root][id] += money[id]; });
+    }
+  }
+  return { moneyByPress, includedByRoot };
+}
+function getReportFrontMargin(report) {
+  const game=(report.games || []).find(row=>row.type==='nassau'), front=game?.segments?.find(segment=>segment.label==='Front');
+  if(!front||game.sides?.length!==2)return null;
+  let margin=0;
+  for(const hole of front.holes){
+    const index=report.holes.indexOf(hole), totals=game.sides.map(side=>{
+      const members=report.players.filter(player=>side.playerIds.includes(player.id)), values=members.map(player=>{
+        const gross=player.gross?.[index],strokes=player.strokes?.[game.allowance?.key]?.[index];
+        return Number.isFinite(gross)&&gross>0&&Number.isFinite(strokes)?gross-strokes:null;
+      }).filter(Number.isFinite).sort((left,right)=>left-right),count=Math.min(Number(game.bestN)||1,members.length);
+      return count>0&&values.length>=count?values.slice(0,count).reduce((sum,value)=>sum+value,0):null;
+    });
+    if(totals.some(value=>value===null))return null;
+    margin+=totals[0]<totals[1]?1:totals[1]<totals[0]?-1:0;
+  }
+  return margin;
+}
+function auditRecordedStoryFacts(match, metrics, text, { report = null, record = null } = {}) {
+  const issues = [], sentences = String(text || '').split(/(?<=[.!?])\s+/);
+  if ((match.selectedGames || []).some(game => game.key === 'nassau')) {
+    const config = match.selectedGames.find(game => game.key === 'nassau'), diffs = report ? {front:getReportFrontMargin(report)} : computeNassauDiffsForBasis(metrics, config.basis === 'gross' ? 'gross' : 'net', config);
+    if (diffs.front === 0 && sentences.some(sentence => /\b(?:held|maintained|kept|carried)\b[^.!?]{0,80}\b(?:lead|advantage)\b[^.!?]{0,45}\b(?:through|after|at)\s+(?:the\s+)?(?:nine|9|turn)\b/i.test(sentence))) issues.push({code:'FALSE_FRONT_FINISH',message:'The front nine finished all square; no side led at the turn.'});
+  }
+  const presses = (record ? (record.games || []).filter(game=>game.type==='press').map(game=>({...game.config,startingHole:game.holeStart,endingHole:game.holeEnd,status:game.status,result:game.result})) : getPressTree(match).records).filter(press => !['VOIDED','SUPERSEDED'].includes(press.status));
+  const words = {one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10};
+  for (const sentence of sentences) {
+    if (!/\bpress\b/i.test(sentence)) continue;
+    const identified = presses.filter(press => presses.length === 1 || new RegExp('(?:holes?\\s*|H)' + press.startingHole + '\\s*(?:through|to|[-–])\\s*' + press.endingHole,'i').test(sentence));
+    const claim = sentence.match(/\bwon\b[^.!?]{0,60}?\bby\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\b(?!\s*(?:dollars?|bucks|\$))/i);
+    if (identified.length === 1 && claim) {
+      const result = record ? (identified[0].result || {}) : getPressStatus(match, metrics, identified[0]), margin = Number(claim[1]) || words[claim[1].toLowerCase()];
+      if (['FINAL','HALVED'].includes(result.status) && margin !== Math.abs(result.diff)) issues.push({code:'FALSE_PRESS_MARGIN',message:'The press margin must match its recorded hole result.'});
+    }
+  }
+  if ((record?.notes?.weather || report?.meta?.weather || match.roundContext?.weather) && /\b(?:conditions|weather|skies|wind)\b[^.!?]{0,150}\b(?:remained|stayed)\b[^.!?]{0,100}\b(?:throughout|all day|entire round)\b/i.test(String(text || ''))) issues.push({code:'UNVERIFIABLE_WEATHER_DURATION',message:'One weather snapshot cannot establish conditions throughout the round.'});
+  return issues;
+}
 function buildLedgerEntryReportModel(match, metrics = null) {
   const effectiveMetrics = metrics || computeMatchMetrics(match);
   if (!match || !effectiveMetrics?.tee) return null;
@@ -7149,7 +7210,8 @@ function buildLedgerEntryReportModel(match, metrics = null) {
     }
   });
 
-  const gameMoney = gameRecord => Object.fromEntries(players.map(player => [player.id, Number(gameRecord?.amounts?.[player.id]) || 0]));
+  const pressAccounting = getPressReportAccounting(record, players.map(player => player.id));
+  const gameMoney = gameRecord => Object.fromEntries(players.map(player => [player.id, (Number(gameRecord?.amounts?.[player.id]) || 0) - (pressAccounting.includedByRoot[String(gameRecord?.gameId)]?.[player.id] || 0)]));
   const sideRows = teamMetrics.slice(0, 2).map((team, index) => ({
     key: teamKeys[index],
     playerIds: players.filter(player => player.side === teamKeys[index]).map(player => player.id),
@@ -7206,6 +7268,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
         basis: policy.basis === 'gross' ? 'gross' : 'net',
         bestN: normalizeCountingBalls(policy.countingBalls, 1),
         allowance: { key: 'featured', label: `${policy.basis === 'gross' ? 'Gross' : `Best ${normalizeCountingBalls(policy.countingBalls, 1)} · ${formatRoundAllowanceLabel(match, policy.handicapAllowancePercent)} off the low`}` },
+        componentStakes: {Front:Number(policy.stakesFront)||0,Back:Number(policy.stakesBack)||0,Aggregate:Number(policy.stakesOverall)||0},
         stakePerSegment: Number(policy.stakesOverall ?? policy.stakesFront ?? policy.stake ?? 0) || 0,
       };
     }
@@ -7310,14 +7373,16 @@ function buildLedgerEntryReportModel(match, metrics = null) {
     games.push({
       id: String(press.gameId || `press-${index + 1}`), name: `Press · H${start}–H${end}`,
       type: 'matchplay', featured: false, scope: 'team', sides: sideRows,
-      segments: [{ label: `Press H${start}–H${end}`, holes: pressHoles }], bestN: parentNassau.bestN,
-      basis: parentNassau.basis, allowance: clonePlain(parentNassau.allowance), stakePerSegment: Number(press.stake || press.config?.wagerAmount || 0) || 0,
-      unit: 'dollars', money: gameMoney(press), parentGameId: parentNassau.id,
+      segments: [{ label: `Press H${start}–H${end}`, holes: pressHoles }], bestN: Number(press.config?.countingBalls || parentNassau.bestN),
+      basis: press.config?.scoringMode || parentNassau.basis, allowance: clonePlain(parentNassau.allowance), stakePerSegment: Number(press.stake || press.config?.wagerAmount || 0) || 0,
+      unit: 'dollars', money: pressAccounting.moneyByPress[String(press.gameId)] || gameMoney(press), parentGameId: parentNassau.id,
+      pressEvidence: { startingHole:start, endingHole:end, status:press.status, result:clonePlain(press.result), stake:Number(press.stake || press.config?.wagerAmount || 0), depth:Number(press.pressDepth)||1 },
+      reportConfig: { ...clonePlain(press.config || {}), key:'nassau', basis:press.config?.scoringMode || parentNassau.basis },
     });
   });
   // Report metadata only: carry each game's existing allocation independently.
   games.forEach(game=>{
-    const config=selectedGames.find(row=>String(row.key)===String(game.id));
+    const config=game.reportConfig || selectedGames.find(row=>String(row.key)===String(game.id));
     const fixedGross=game.basis==='gross'||['skins','greenies','long_drive','closest_to_pin'].includes(config?.key);
     const knownNet=game.type==='strokeplay'||['nassau','team_match','singles_match','sixes','wolf','nine_point','net_skins'].includes(config?.key);
     const key='game:'+game.id;
@@ -7363,6 +7428,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
       date: record.meta?.date || match.date || new Date().toISOString().slice(0, 10),
       weather: weather || weatherNote ? { note: weatherNote || String(weather?.summary || weather?.description || ''), recordedAt: 'first completed hole' } : null,
       recap: record.notes?.aiRecap || null,
+      storyFactIssues: [],
       recapProvenance: record.notes?.recapProvenance || 'deterministic-fallback',
       primaryMatchStatus: getPrimaryMatchStatusLine(match, effectiveMetrics),
     },
@@ -7402,6 +7468,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
     if (!flamtana?.final) report.payments = [];
   }
   report.meta.canonicalTurningPoint = resolveLedgerFeaturedTurningPoint(report);
+  report.meta.storyFactIssues = auditRecordedStoryFacts(match, effectiveMetrics, report.meta.recap || '', {report,record});
   return report;
 }
 
@@ -7457,6 +7524,37 @@ function resolveLedgerFeaturedTurningPoint(report) {
     tiedMatch: winningSideIndex === null,
     rule: winningSideIndex === null ? 'last-contested-hole' : 'first-permanent-winning-lead',
   };
+}
+
+function prepareAcceptedLedgerReportForDisplay(match, acceptedReport, metrics = null) {
+  const report=clonePlain(acceptedReport),record=match.roundRecordSnapshot;
+  if(!isFrozenRoundRecord(record)||!(report.games || []).some(game=>game.type==='nassau'))return report;
+  const original=clonePlain(report),parent=report.games.find(game=>game.type==='nassau'),root=(record.games || []).find(game=>game.gameId==='nassau');
+  const consistent=report.players.every(player=>JSON.stringify(player.gross)===JSON.stringify((report.holes || []).map(hole=>(record.holes || []).find(row=>row.holeNumber===hole)?.scores?.find(score=>String(score.playerId)===player.id)?.gross ?? null)));
+  if(!consistent){original.meta.presentationCorrectionUnavailable='The accepted scorecard differs from the current frozen round. Original accepted report retained; create a revised entry to apply corrections.';return original;}
+  if(parent&&root){
+    const accounting=getPressReportAccounting(record,report.players.map(player=>player.id)),presses=(record.games || []).filter(game=>game.type==='press'&&(game.config?.outcomeGameKey==='nassau'||String(game.rootGameId).startsWith('nassau_')));
+    if(presses.some(press=>!report.games.some(game=>String(game.id)===String(press.gameId)))){original.meta.presentationCorrectionUnavailable='This accepted report lacks a saved press entry. Original accepted report retained; create a revised entry to apply corrections.';return original;}
+    parent.money=Object.fromEntries(report.players.map(player=>[player.id,Number(root.amounts?.[player.id]||0)-Number(accounting.includedByRoot.nassau?.[player.id]||0)]));
+    parent.componentStakes={Front:Number(root.config?.stakesFront)||0,Back:Number(root.config?.stakesBack)||0,Aggregate:Number(root.config?.stakesOverall)||0};
+    for(const press of presses){
+      const game=report.games.find(row=>String(row.id)===String(press.gameId)),policy=press.config || {};
+      game.money=accounting.moneyByPress[String(press.gameId)];
+      game.pressEvidence={startingHole:press.holeStart,endingHole:press.holeEnd,status:press.status,result:clonePlain(press.result),stake:Number(press.stake || policy.wagerAmount || 0),depth:Number(press.pressDepth)||1};
+      const samePolicy=String(policy.scoringMode||parent.basis)===String(parent.basis)&&Number(policy.countingBalls||parent.bestN)===Number(parent.bestN)&&Number(policy.handicapAllowancePercent??root.config?.handicapAllowancePercent)===Number(root.config?.handicapAllowancePercent)&&Number(policy.scoringPolicyVersion||0)===Number(root.config?.scoringPolicyVersion||0);
+      game.basis=policy.scoringMode || parent.basis;game.bestN=Number(policy.countingBalls || parent.bestN);
+      if(samePolicy){game.allowance=clonePlain(parent.allowance);delete game.pressAllocationUnavailable;}
+      else game.pressAllocationUnavailable=true;
+    }
+    const net=Object.fromEntries(report.players.map(player=>[player.id,0]));
+    for(const payment of report.payments || []){net[payment.from]=(net[payment.from]||0)-Number(payment.amt||0);net[payment.to]=(net[payment.to]||0)+Number(payment.amt||0);}
+    if(report.players.some(player=>Math.abs(report.games.reduce((sum,game)=>sum+Number(game.money?.[player.id]||0),0)-(net[player.id]||0))>0.000001)){
+      original.meta.presentationCorrectionUnavailable='The saved press audit does not reconcile with this accepted payment. Original accepted report retained; create a revised entry to review it.';return original;
+    }
+  }
+  report.meta.storyFactIssues=auditRecordedStoryFacts(match,metrics||computeMatchMetrics(match),report.meta.story||report.meta.recap||'',{report,record});
+  report.meta.presentationRevision=APP_VERSION;
+  return report;
 }
 
 function normalizeAcceptedLedgerEntrySnapshot(snapshot, roundId = '') {
@@ -8129,7 +8227,7 @@ function validateGreeniesNarrativeClaims(match, metrics, recapText) {
 
 function validateRoundRecapContent(match, metrics, recapText) {
   const recap = String(recapText || '').trim();
-  const issues = [];
+  const issues = auditRecordedStoryFacts(match, metrics, recap);
   const trackedFacts = buildTrackedStatisticsStoryFacts(match, metrics);
   if (!trackedFacts.length && /\b(?:solid|strong|excellent|better)\s+ball[ -]striking\b/i.test(recap)) {
     issues.push({ code:'UNVERIFIABLE_BALL_STRIKING', message:'Ball-striking quality cannot be inferred from gross scores without recorded shot statistics.' });
@@ -10025,7 +10123,7 @@ async function openUnifiedExport(match, printView = 'ledger') {
       if (exportWindow) exportWindow.document.body.innerHTML = '<strong>Opening accepted Ledger Entry…</strong><div style="margin-top:8px;color:#5a667a;">Using the Story of the Round and report accepted for this completed round.</div>';
       toast('Opening the accepted Ledger Entry…');
       try {
-        launchLedgerReportModel(clonePlain(acceptedLedgerReport), { sameTabLedger, exportWindow });
+        launchLedgerReportModel(prepareAcceptedLedgerReportForDisplay(match, acceptedLedgerReport, refreshedMetrics), { sameTabLedger, exportWindow });
       } catch  {
         if (exportWindow) exportWindow.close();
         toast('The accepted Ledger Entry could not be opened.');
@@ -26920,6 +27018,7 @@ function installDyeLedgerLiveEngineAdapter() {
     buildFrozenScoresGameSummary,
     buildRoundRecapPayload,
     buildRoundRecapControls,
+    getPressReportAccounting, auditRecordedStoryFacts, prepareAcceptedLedgerReportForDisplay,
     validateRoundRecapContent,
     getAutomaticRoundRecapEligibility,
     getPostRoundWorkflowState,

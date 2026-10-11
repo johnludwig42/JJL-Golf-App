@@ -3,10 +3,10 @@
    or derived from it. Stroke allocation comes from the app's engine, keyed by
    basis; the report never re-derives handicapping.
    ========================================================================== */
-import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getSegmentMarginPerspective, getWinningMarginPerspective } from './logic.js?v=31.0.66';
+import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getWinningMarginPerspective } from './logic.js?v=31.0.67';
 
-import './stroke-play.js?v=31.0.66';
-import { compactFlamtanaEvidence, formatFlamtanaMatchedSteps } from './flamtana-evidence.js?v=31.0.66';
+import './stroke-play.js?v=31.0.67';
+import { compactFlamtanaEvidence, formatFlamtanaMatchedSteps } from './flamtana-evidence.js?v=31.0.67';
 const {buildStrokePlaySummary,roundEntryColors,strokePlayChart,strokePlayStrip,strokePlayCallout,handicapTable,toPar}=globalThis.DYE_LEDGER_STROKE_REPORT;
 
 const packPages = globalThis.packPages;
@@ -711,6 +711,8 @@ if(HAS_STROKE&&!ROUND.meta?.flamtana){
   add('handicaps',()=>h('div',{'data-handicaps':'',html:handicapTable(ROUND,FEAT)}),{splittable:true,minRows:1,keepTogetherWhenFits:true});
 }
 
+if(ROUND.meta.presentationCorrectionUnavailable)add('presentation-note',()=>h('div',{class:'note',text:ROUND.meta.presentationCorrectionUnavailable}),{label:'Report note'});
+
 /* ---- recap: always included, no user toggle ---- */
 add("recaph", ()=>secHead("The Story of the Round",
   "Generated from the authoritative scorecard, competitions, settlement and recorded round context."),
@@ -718,9 +720,9 @@ add("recaph", ()=>secHead("The Story of the Round",
 add("recap", ()=>{
   const w=h("div",{class:"prose"});
   const supplied = String(ROUND.meta.story || ROUND.meta.recap || "").trim();
-  const beats = supplied
-    ? storyParagraphs(supplied)
-    : recapBeats();
+  const needsReview = (ROUND.meta.storyFactIssues || []).length > 0;
+  if (needsReview) w.appendChild(h('div',{'data-row':'',class:'note',text:'Facts-based recap shown. The saved narrative is retained for review because it conflicts with recorded results.'}));
+  const beats = supplied && !needsReview ? storyParagraphs(supplied) : needsReview ? verifiedRecapBeats() : recapBeats();
   beats.forEach(b=>w.appendChild(h("p",{"data-row":"",text:b})));
   return w;
 });   /* not splittable: column-count makes per-row measurement unreliable */
@@ -735,6 +737,35 @@ function storyParagraphs(text){
   const size=Math.ceil(sentences.length/paragraphCount), paragraphs=[];
   for(let i=0;i<sentences.length;i+=size) paragraphs.push(sentences.slice(i,i+size).join(" "));
   return paragraphs;
+}
+
+function nassauPayoutCaption(segment){
+  const label=segment.label==='Aggregate'?'OVERALL':segment.label.toUpperCase(), stake=Number(FEAT.componentStakes[segment.label]||0);
+  const remaining=segment.idx.filter(index=>!MARGIN.per[index]?.scored).length, decided=remaining===0||Math.abs(segment.margin)>remaining;
+  if(!stake)return label+' $0 (NO WAGER)';
+  if(segment.margin===0)return label+(decided?' $0 (TIED)':' PENDING');
+  return label+' '+usd(stake)+' TO '+nameOf(FEAT.sides[segment.margin>0?1:0].key).toUpperCase()+(decided?'':' (PROVISIONAL)');
+}
+function pressVerdict(game){
+  const evidence=game.pressEvidence, result=evidence?.result || {}, status=String(evidence?.status || result.status || 'PENDING');
+  if(['VOIDED','SUPERSEDED','INCOMPLETE','ACTIVE','PENDING'].includes(status))return status.charAt(0)+status.slice(1).toLowerCase();
+  if(status==='HALVED')return 'All square';
+  if(!isNum(result.diff))return 'Saved result unavailable';
+  const margin=Number(result.diff);
+  return margin===0 ? 'All square' : nameOf(game.sides[margin>0?0:1].key)+' '+Math.abs(margin)+' up';
+}
+function verifiedRecapBeats(){
+  if(!MARGIN)return recapBeats();
+  const facts=[];
+  if(MARGIN){
+    const results=[...MARGIN.segments,...(MARGIN.aggregate?[MARGIN.aggregate]:[])].map(segment=>(segment.label==='Aggregate'?'Overall':segment.label)+': '+(segment.margin===0?'all square':nameOf(FEAT.sides[segment.margin>0?1:0].key)+' '+Math.abs(segment.margin)+' up'));
+    facts.push(FEAT.name+' used '+FEAT.allowance.label+'. '+results.join('; ')+'.');
+  }
+  P.forEach(player=>facts.push(player.name+' recorded '+player.tot+' gross and '+player.cnetT+' full Course Net through '+player.nPlayed+' holes.'));
+  ROUND.games.filter(game=>game.pressEvidence).forEach(game=>facts.push(game.name+': '+pressVerdict(game)+'. Stake '+usd(game.pressEvidence.stake)+'.'));
+  if(PAY.length)facts.push('After all recorded games, '+PAY.map(payment=>nameOf(payment.from)+' pays '+nameOf(payment.to)+' '+usd(payment.amt)).join('; ')+'.');
+  else facts.push('No net payment is recorded.');
+  return facts;
 }
 
 function recapBeats(){
@@ -950,7 +981,7 @@ add("dist", ()=>{
    basis and the footnote names the one that paid. */
 if(HAS_SIDES && MARGIN){
   add("teamh", ()=>secHead("Team totals",
-    "Three net bases shown. Only the featured competition settles."),
+    "Three net bases shown. Featured Net determines this competition; presses and side games are separate."),
     {keepWithNext:true, label:"Leaderboards"});
   add("team", ()=>{
     const teamPar = k => sideOf(k).reduce((a,p)=>a+p.parPlayed,0);
@@ -981,7 +1012,7 @@ if(HAS_SIDES && MARGIN){
       if(a===null||b===null) return; if(a<b)d0++; else if(b<a)d1++; });
     const altH2H = d1-d0, aggShown = MARGIN.aggregate?MARGIN.aggregate.margin:MARGIN.total;
     const segCols = MARGIN.segments.map(s=>`<th class="n">${s.label}</th>`).join("");
-    const nCols = 8 + MARGIN.segments.length;
+    const nCols = 9 + MARGIN.segments.length;
     const w=h("div");
     w.innerHTML = `<table class="dense"><colgroup>
       <col style="width:22%">${Array.from({length:nCols-1},()=>`<col style="width:${78/(nCols-1)}%">`).join("")}</colgroup>
@@ -991,9 +1022,9 @@ if(HAS_SIDES && MARGIN){
       ${segCols}<th class="n">Match</th></tr></thead><tbody>${rows}</tbody></table>
       <div class="note" style="padding-top:6px">COURSE NET USES EACH PLAYER'S FULL COURSE HANDICAP. 100% OFF LOW IS AN INFORMATIONAL COMPARISON.
       FEATURED NET, HOLES WON, HALVED AND THE SEGMENT COLUMNS ALL USE THE FEATURED COMPETITION — ${FEAT.allowance.label.toUpperCase()}
-      (${LOWMAN.name.toUpperCase()}, CH ${LOWCH}). THE OTHER TWO NET COLUMNS DO NOT SETTLE THIS GAME AND
-      WILL DISAGREE: ON FULL COURSE HANDICAP THE HEAD-TO-HEAD WOULD READ
-      ${altH2H>0?"+":""}${altH2H}, NOT ${aggShown>0?"+":""}${aggShown}. IT IS NOT THE BASIS THAT PAID.</div>`;
+      (${LOWMAN.name.toUpperCase()}, CH ${LOWCH}). THE OTHER TWO NET COLUMNS DO NOT SETTLE THIS GAME. ${altH2H===aggShown
+        ? 'FULL COURSE HANDICAP PRODUCES THE SAME HEAD-TO-HEAD MARGIN HERE, DESPITE USING DIFFERENT STROKES.'
+        : `ON FULL COURSE HANDICAP THE HEAD-TO-HEAD WOULD READ ${altH2H>0?'+':''}${altH2H}, RATHER THAN ${aggShown>0?'+':''}${aggShown}.`} THE FEATURED BASIS DETERMINES THIS GAME'S PAYMENT.</div>`;
     return w;
   }, {splittable:true, minRows:2});
 }
@@ -1005,10 +1036,11 @@ if(MARGIN){
     {keepWithNext:true, breakBefore:true, label:"Games"});
   add("fdet", ()=>{
     const w=h("div");
-    const segs = MARGIN.segments;
+    const segs = MARGIN.segments, detailSideIndex=MARGIN.total>0?1:0;
     const lbl=t=>`<td style="font-family:Archivo;font-weight:600;font-size:5.6pt;letter-spacing:.1em;color:#6E736C;white-space:nowrap;padding-right:6px">${t}</td>`;
     segs.forEach(s=>{
-      const perspective=getSegmentMarginPerspective(MARGIN,s);
+      const sideIndex=detailSideIndex, sign=sideIndex===1?1:-1;let running=0;
+      const perspective={sideIndex,runningMargins:s.idx.map(i=>{const row=MARGIN.per[i];if(row.scored)running+=row.win===1?1:row.win===0?-1:0;return running*sign;})};
       const perspectiveSide=FEAT.sides[perspective.sideIndex];
       const opposingSide=FEAT.sides[perspective.sideIndex===0?1:0];
       const perspectiveName=SIDES[perspectiveSide.key].name;
@@ -1026,7 +1058,7 @@ if(MARGIN){
       const v=s.margin;
       const res=v===0?"ALL SQUARE":`${SIDES[FEAT.sides[v>0?1:0].key].name.toUpperCase()} ${Math.abs(v)} UP`;
       w.appendChild(h("div",{"data-row":"",html:
-        `<div style="font-family:Archivo;font-weight:600;font-size:6.4pt;letter-spacing:.08em;color:#6E736C;margin-bottom:3px">${s.label.toUpperCase()} · ${perspectiveName.toUpperCase()} PERSPECTIVE · NET ${perspectiveName.toUpperCase()}–${opposingName.toUpperCase()}</div>
+        `<div style="font-family:Archivo;font-weight:600;font-size:6.4pt;letter-spacing:.08em;color:#6E736C;margin-bottom:3px">${s.label.toUpperCase()} · ${perspectiveName.toUpperCase()} PERSPECTIVE · ${String(FEAT.basis||'net').toUpperCase()} ${perspectiveName.toUpperCase()}–${opposingName.toUpperCase()}</div>
          <table style="width:100%;margin-bottom:2px"><tr>${lbl("HOLE")}${heads}</tr>
          <tr>${lbl("RESULT")}${cells}</tr>
          <tr>${lbl("RUNNING")}${runs}</tr></table>
@@ -1040,8 +1072,8 @@ if(MARGIN){
       {name:SIDES[FEAT.sides[1].key].name,total:sum(MARGIN.per.filter(r=>r.scored).map(r=>r.b))},
     ];
     w.appendChild(h("div",{"data-row":"",class:"recon",html:
-      `<span>BEST ${wn(FEAT.bestN||2).toUpperCase()} ${cardBasis} PER SIDE · ${SIDES[SIDEKEYS[0]].name.toUpperCase()}–${SIDES[SIDEKEYS[1]].name.toUpperCase()} UNDER EACH HOLE</span>
-       <span style="color:#14211C;font-weight:600">${MARGIN.aggregate?`AGGREGATE ${MARGIN.aggregate.margin>0?SIDES[FEAT.sides[1].key].name.toUpperCase():SIDES[FEAT.sides[0].key].name.toUpperCase()} ${Math.abs(MARGIN.aggregate.margin)} UP · `:""}${perW?`${wn(bets).toUpperCase()} BETS × ${usd(perW)} = ${usd(bets*perW)} EACH`:"NO WAGER"}</span>`}));
+      `<span>BEST ${wn(FEAT.bestN||2).toUpperCase()} ${cardBasis} PER SIDE · ${nameOf(FEAT.sides[detailSideIndex].key).toUpperCase()}–${nameOf(FEAT.sides[1-detailSideIndex].key).toUpperCase()} UNDER EACH HOLE</span>
+       <span style="color:#14211C;font-weight:600">${MARGIN.aggregate?`AGGREGATE ${MARGIN.aggregate.margin>0?SIDES[FEAT.sides[1].key].name.toUpperCase():SIDES[FEAT.sides[0].key].name.toUpperCase()} ${Math.abs(MARGIN.aggregate.margin)} UP · `:""}${FEAT.componentStakes ? 'PER LOSING PLAYER · '+[...segs,...(MARGIN.aggregate?[MARGIN.aggregate]:[])].map(nassauPayoutCaption).join(' · ') : perW?`${wn(bets).toUpperCase()} BETS AT ${usd(perW)} EACH · CONFIGURED STAKES`:"NO WAGER"}</span>`}));
     w.appendChild(h("div",{"data-row":"",class:"note",style:"padding-top:5px",html:
       `<strong>BEST-BALL CARD TOTAL · BEST ${wn(FEAT.bestN||2).toUpperCase()} ${cardBasis}</strong> · ${cardTotals.map(side=>`${side.name.toUpperCase()} ${side.total}`).join(" · ")} · INFORMATIONAL AGGREGATE; THE ${FEAT.type==="nassau"?"NASSAU":"MATCH"} RESULT IS DETERMINED HOLE BY HOLE.`}));
     return w;
@@ -1117,6 +1149,18 @@ SIDEGAMES.forEach((g,gi)=>{
     {keepWithNext:true, label:"Games"});
   add("sg"+gi, ()=>{
     const w=h("div",{class:"split",...(ROUND.meta?.flamtana?{'data-flamtana-chart':g.id}:{})});
+    if(g.pressEvidence){
+      const evidence=g.pressEvidence, rows=(g.pressAllocationUnavailable?[]:(g.R?.per||[])).filter(row=>row.hole>=evidence.startingHole&&row.hole<=evidence.endingHole);
+      w.className='press-detail';w.setAttribute('data-press-detail',g.id);
+      w.appendChild(h('div',{class:'subhead',text:pressVerdict(g)+' · '+usd(evidence.stake)+' stake'}));
+      if(g.pressAllocationUnavailable)w.appendChild(h('div',{class:'note',text:'Saved result and payment shown. This archived report does not retain the press’s original hole allocation.'}));
+      const table=h('table',{class:'dense'}),head=h('thead',{'data-rowhead':''}),header=h('tr');
+      ['Hole',nameOf(g.sides[0].key)+' '+g.basis,nameOf(g.sides[1].key)+' '+g.basis,'Result'].forEach(label=>header.appendChild(h('th',{text:label})));
+      head.appendChild(header);table.appendChild(head);const body=h('tbody');
+      for(const result of rows){const row=h('tr',{'data-row':''});['H'+result.hole,result.a??'—',result.b??'—',!result.scored?'Pending':result.win===null?'Halved':nameOf(g.sides[result.win].key)].forEach(value=>row.appendChild(h('td',{text:String(value)})));body.appendChild(row);}
+      table.appendChild(body);w.appendChild(table);
+      const amounts=h('div',{class:'note',text:P.map(player=>player.name+': '+acct(g.moneyBy[player.id]||0)).join(' · ')});w.appendChild(amounts);return w;
+    }
     if(g.type==='strokeplay'&&!g.overviewOnly){
       const summary=buildStrokePlaySummary(g,ROUND);w.className='stroke-detail';
       w.innerHTML=strokePlayChart(summary,ROUND)+strokePlayStrip(summary,ROUND,'position')+'<p class="note"></p>';
@@ -1125,7 +1169,7 @@ SIDEGAMES.forEach((g,gi)=>{
     if(g.R && g.R.archetype==="discrete"){
       const rows=g.R.per.map(x=>`<tr data-row><td class="l">H${x.hole}</td>
         <td class="n dim">${qty(C.yds[x.i])}</td>
-        <td class="l">${x.winner?nameCell(S(x.winner)):'<span class="dim">carried</span>'}</td>
+        <td class="l">${x.winner?nameCell(S(x.winner)):`<span class="dim">${x.carried?'Carried':'No award'}</span>`}</td>
         <td class="n pos">${usd(x.value)}</td></tr>`).join("");
       w.appendChild(h("div",{html:
         `<div class="subhead">By hole<span>${usd(g.R.pot)} pot</span></div>
@@ -1331,7 +1375,7 @@ function scorecard(netKey, stkKey, label){
     const handicapLabel=stkKey==='courseNet'
       ? (NH<18?`CH ${p.ch} (18-hole basis) · ${sum(p.strokes.courseNet)} allocated`:`CH ${p.ch}`)
       : `PH ${p.ph} · ${sum(p.strokes.featured)} allocated`;
-    return `<tr data-row><td class="pl"><b${identityColor(p)?` style="color:${identityColor(p)}"`:''}>${p.name}</b><em>${HAS_SIDES?SIDES[p.side].name+" · ":""}${p.tee} · ${handicapLabel}</em></td>
+    return `<tr data-row><td class="pl"><b${identityColor(p)?` style="color:${identityColor(p)}"`:''}>${p.name}</b><em>${HAS_SIDES&&SIDES[p.side].name!==p.name?SIDES[p.side].name+" · ":""}${p.tee} · ${handicapLabel}</em></td>
       ${cells}${NH>9?t([p.out,sum(p[netKey],0,half)])+t([p.inn,sum(p[netKey],half)]):""}
       ${t([p.tot,sum(p[netKey])])}</tr>`;}).join("");
   return `<table class="sc">${cols}<thead data-rowhead><tr><th>Player</th>

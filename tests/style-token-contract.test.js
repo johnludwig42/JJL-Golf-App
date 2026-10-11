@@ -90,5 +90,13 @@ test('color token expansion preserves the frozen color declarations and cascade 
     return result;
   };
   const normalize=items=>items.map(item=>item.replace(/\bwhite\b/g,'#ffffff').replace(/#[\da-f]{3}\b/gi,hex=>'#'+[...hex.slice(1)].map(c=>c+c).join('')).replace(/rgba?\([^)]*\)/g,value=>value.replace(/[\d.]+/g,n=>String(Number(n))).replace(/\s/g,'')));
-  assert.deepEqual(normalize(declarations(expandColorTokens(css))), normalize(declarations(baseline)));
+  const expanded = declarations(expandColorTokens(css));
+  // Approved .66 one-column team scorecard additions reuse existing roles.
+  // Keep the frozen baseline intact and verify both additions exactly.
+  const teamOverrides = [
+    '.scorecard-table[data-team-scorecard="flamtana"] th:nth-child(2),\n.scorecard-table[data-team-scorecard="flamtana"] td:nth-child(2) | box-shadow: none',
+    '.scorecard-table[data-team-scorecard="flamtana"] thead th:nth-child(2) | background: #f4f8f6 !important',
+  ];
+  assert.deepEqual(normalize(expanded.slice(-teamOverrides.length)), normalize(teamOverrides));
+  assert.deepEqual(normalize(expanded.slice(0,-teamOverrides.length)), normalize(declarations(baseline)));
 });

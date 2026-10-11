@@ -19,11 +19,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.64',
-  versionNumber: '31.0.64',
-  cacheName: 'the-dye-ledger-v31.0.64',
-  buildDate: '2026-10-10T22:14:27.651Z',
-  buildLabel: 'Flamtana Setup and Scoring'
+  version: 'v31.0.65',
+  versionNumber: '31.0.65',
+  cacheName: 'the-dye-ledger-v31.0.65',
+  buildDate: '2026-10-10T23:43:45.848Z',
+  buildLabel: 'Shared Match Storage Recovery'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -3834,8 +3834,8 @@ function notifyLocalSaveFailure() {
 function loadState() {
   return loadStateFromStorage(localStorage);
 }
-function persist({ skipRender = false } = {}) {
-  const result = persistStateSnapshot(state, localStorage);
+function persist({ skipRender = false, reclaimCloudCaches = false } = {}) {
+  const result = reclaimCloudCaches ? persistSharedJoinSnapshot(state, localStorage) : persistStateSnapshot(state, localStorage);
   if (!result.ok) {
     localPersistenceDiagnostics.storageAvailable = false;
     localPersistenceDiagnostics.lastFailedLocalSave = result.savedAt;
@@ -14282,9 +14282,44 @@ function rememberSharedMatchId(matchId) {
   if (!matchId) return;
   state.sharedMatchIds = [...new Set([...(state.sharedMatchIds || []), matchId])];
 }
-function cacheCloudMatchBundle(matchId, bundle) {
-  if (!matchId || !bundle) return;
-  localStorage.setItem(`${CLOUD_MATCH_CACHE_PREFIX}${matchId}`, JSON.stringify(bundle));
+function cacheCloudMatchBundle(matchId, bundle, storage = localStorage) {
+  if (!matchId || !bundle) return false;
+  // A redundant cloud recovery copy must not turn a successful read into a
+  // download failure. The authoritative local save is checked separately.
+  try { storage.setItem(`${CLOUD_MATCH_CACHE_PREFIX}${matchId}`, JSON.stringify(bundle)); return true; }
+  catch { return false; }
+}
+function persistSharedJoinSnapshot(snapshot, storage = localStorage) {
+  let result = persistStateSnapshot(snapshot, storage);
+  if (result.ok || result.error?.name !== 'QuotaExceededError') return result;
+  // Reclaim only re-downloadable cloud bundles. Never remove round state,
+  // score outboxes, setup drafts, preferences or finish/publish recovery.
+  try {
+    const keys = [];
+    for (let i = 0; i < storage.length; i++) {
+      const key = storage.key(i);
+      if (key?.startsWith(CLOUD_MATCH_CACHE_PREFIX)) keys.push(key);
+    }
+    for (const key of keys) storage.removeItem(key);
+  } catch { return result; }
+  result = persistStateSnapshot(snapshot, storage);
+  return result;
+}
+function commitSharedJoinedMatch(match, { activate = true, save = persist } = {}) {
+  const previous = JSON.parse(JSON.stringify(state)), previousHole = currentHole;
+  upsertLocalMatch(match);
+  if (activate) {
+    if (match.status === 'complete') { state.activeMatchId = null; state.completedSummaryMatchId = match.id; }
+    else { state.activeMatchId = match.id; state.completedSummaryMatchId = null; }
+    setLastOpenedSharedMatch(match);
+    currentHole = Math.min(getRequestedHoleCount(match), Math.max(1, completedHoles(match) || 1));
+  }
+  if (save({ skipRender: true, reclaimCloudCaches: true })) return match;
+  for (const key of Object.keys(state)) delete state[key];
+  Object.assign(state, previous); currentHole = previousHole;
+  const failure = new Error('The downloaded match could not be saved on this device.');
+  failure.code = 'LOCAL_SAVE_FAILED';
+  throw classifySharedJoinFailure(failure, { phase: 'storage' });
 }
 function readCachedCloudMatchBundle(matchId) {
   try {
@@ -15027,8 +15062,8 @@ async function uploadSharedMatch(match) {
   rememberSharedMatchId(currentMatch.sharedMatchId);
   return currentMatch;
 }
-async function fetchSharedMatchBundle(matchId) {
-  const client = await ensureSupabaseClient();
+async function fetchSharedMatchBundle(matchId, { getClient = ensureSupabaseClient, cache = cacheCloudMatchBundle } = {}) {
+  const client = await getClient();
   if (!client) throw new Error('Supabase is not configured.');
   const [{ data: matchRow, error: matchError }, { data: teams, error: teamsError }, { data: players, error: playersError }, { data: scoreEntries, error: scoresError }, { data: notesRows, error: notesError }, { data: memberships, error: membershipsError }] = await Promise.all([
     client.from('matches').select('*').eq('id', matchId).maybeSingle(),
@@ -15044,7 +15079,7 @@ async function fetchSharedMatchBundle(matchId) {
   if (membershipsError) console.warn('Could not read shared match memberships.', membershipsError);
   if (!matchRow) { const failure = new Error('Shared match not found.'); failure.code = 'SHARED_MATCH_NOT_FOUND'; failure.sharedJoinTable = 'matches'; throw failure; }
   const bundle = { matchRow, teams: teams || [], players: players || [], scoreEntries: scoreEntries || [], notes: notesRows?.[0] || null, memberships: memberships || [] };
-  cacheCloudMatchBundle(matchId, bundle);
+  cache(matchId, bundle);
   return bundle;
 }
 async function fetchSharedMatchBundleWithRetry(matchId, { attempts = 3, delayMs = 350, fetcher = fetchSharedMatchBundle } = {}) {
@@ -15793,7 +15828,9 @@ function classifySharedJoinFailure(error, { phase = 'download', authorized = fal
   const table = ['matches','match_teams','match_players','score_entries','match_notes','match_memberships'].includes(error?.sharedJoinTable) ? error.sharedJoinTable : '';
   const action = phase === 'register' ? 'scorer registration' : 'the match download';
   let kind = phase === 'authorize' ? 'service' : phase === 'register' ? 'registration' : 'download', message = authorized ? 'This device joined, but '+action+' could not finish. Tap Retry Join. If it continues, copy diagnostics from Support.' : 'The Shared Match could not be loaded. Tap Retry Join; if it continues, copy diagnostics from Support.';
-  if (authorized && phase === 'download' && (code === 'SHARED_MATCH_NOT_FOUND' || /^shared match not found\.?$/.test(raw))) {
+  if (phase === 'storage' || error?.name === 'QuotaExceededError' || code === '22') {
+    kind = 'storage'; message = 'This device could not save the Shared Match locally. Keep existing rounds and export a backup before changing stored data. Copy diagnostics from Support.';
+  } else if (authorized && phase === 'download' && (code === 'SHARED_MATCH_NOT_FOUND' || /^shared match not found\.?$/.test(raw))) {
     kind = 'visibility'; message = 'Joining was accepted, but this device could not read the match from cloud. Tap Retry Join; if it continues, copy diagnostics from Support.';
   } else if (code === 'SHARED_MATCH_NOT_FOUND' || (phase === 'authorize' && code === 'P0002') || /^shared match not found\.?$/.test(raw)) {
     kind = 'not_found'; message = 'No active Shared Match was found for this code. Verify the current code on the host and tap Retry Sync there before Retry Join.';
@@ -15843,19 +15880,7 @@ async function loadSharedMatchFromCloud(matchId, { activate = true, silent = fal
       console.warn('Could not register this device with the shared match.', err);
     }
   }
-  upsertLocalMatch(hydrated);
-  if (activate) {
-    if (hydrated.status === 'complete') {
-      state.activeMatchId = null;
-      setCompletedReviewMatch(hydrated);
-    } else {
-      state.activeMatchId = hydrated.id;
-      clearCompletedReviewMatch();
-    }
-    setLastOpenedSharedMatch(hydrated);
-    currentHole = Math.min(getRequestedHoleCount(hydrated), Math.max(1, completedHoles(hydrated) || 1));
-  }
-  persist({ skipRender: true });
+  commitSharedJoinedMatch(hydrated, { activate });
   renderAll();
   if (hydrated.storageMode === 'shared') {
     scheduleSharedMatchSync(hydrated, { immediate: true, silent: true });
@@ -26977,6 +27002,7 @@ function installDyeLedgerLiveEngineAdapter() {
     isCanonicalSharedMatchCode,
     getReusableCanonicalSharedMatchCode,
     isLegacySharedMatchRecord,
+    fetchSharedMatchBundle, cacheCloudMatchBundle, persistSharedJoinSnapshot, commitSharedJoinedMatch,
     classifySharedJoinFailure, getLastSharedJoinDiagnostic, fetchSharedJoinBundle, prepareSharedScoringStart, updateMatchTeamTee, applySmartScoreStep,
     fetchSharedMatchBundleWithRetry,
     registerSharedJoinDevice,

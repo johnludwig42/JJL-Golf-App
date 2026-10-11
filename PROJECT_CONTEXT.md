@@ -28,7 +28,7 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current development release: **v31.0.64 — Flamtana Setup and Scoring** on codex/v31.0.64-flamtana-setup-scoring, from merged .63 (PR #160, 684c06a). Authorized: one tee selector per pair (teams may differ), restored par-first team score steppers, accurate remote join failures/diagnostics and refreshed Start readiness. Preserve wager calculations, frozen records and shared authority. Actual remote cloud failure remains subject to a device retry with the new diagnostics. See BUILD_NOTES_v31.0.64.md. Further roadmap work remains paused before October 16.
+Current development release: **v31.0.65 — Shared Match Storage Recovery** on codex/v31.0.65-shared-storage-recovery, based on committed .64 (adacdfb). Authorized storage-quota fix: optional cloud caches must not masquerade as download failures; joined scorecards require verified local persistence, bounded reclamation of cloud copies and restoration of prior state on failure. Preserve rounds, outboxes, authority, wager calculations and frozen records. See BUILD_NOTES_v31.0.65.md. Physical remote acceptance remains pending; roadmap work remains paused before October 16.
 
 Previous release: **v31.0.59 — Play Screen Refinement**, merged in PR #156. Round rules follows scoring/save guidance; Classic has grouped navigation, readable hole facts, direct Scoreboard access and separate save/backup status. Scoring, saving, records and shared matches were unchanged. See `BUILD_NOTES_v31.0.59.md`. All eight manual iPhone acceptance checks for v31.0.58 passed, as confirmed by the Product Owner. Physical v31.0.59 and four-device Shared Match acceptance remain separate. Preferences/setup density resumes after the Flamtana sequence.
 

@@ -19,11 +19,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.67',
-  versionNumber: '31.0.67',
-  cacheName: 'the-dye-ledger-v31.0.67',
-  buildDate: '2026-10-11T12:28:17.381Z',
-  buildLabel: 'Press Report Reconciliation'
+  version: 'v31.0.68',
+  versionNumber: '31.0.68',
+  cacheName: 'the-dye-ledger-v31.0.68',
+  buildDate: '2026-10-11T15:07:01.000Z',
+  buildLabel: 'Local Storage Footprint'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -408,6 +408,9 @@ function getAppDiagnosticsText() {
     lines.push(getSharedSyncDiagnosticsExportText(activeSharedMatch));
     lines.push('');
   }
+  lines.push('Last Local Save Failure: ' + (localPersistenceDiagnostics.lastFailureMessage || 'None'));
+  lines.push(getStorageUsageText());
+  lines.push(browserStorageEstimate);
   lines.push('Recent App Errors:');
   if (!errors.length) {
     lines.push('None');
@@ -1274,7 +1277,7 @@ function getSharedSyncDiagnosticsSerializedSize(match, events = null) {
   }).length;
 }
 function pruneSharedSyncDiagnostics(match, events = []) {
-  const rows = events.slice(-200);
+  const rows = events.slice(isFrozenRoundRecord(match?.roundRecordSnapshot) && match.sharedLedgerParity?.parityConfirmed === true ? -5 : -200);
   while (rows.length && getSharedSyncDiagnosticsSerializedSize(match, rows) > SHARED_SYNC_DIAGNOSTIC_CHAR_BUDGET) {
     const exceptional = rows.map((row, index) => ({ row, index })).filter(item => ['SYNC_ATTEMPT_PARTIAL', 'SYNC_ATTEMPT_FAILED'].includes(item.row?.reasonCode));
     const protectedIndexes = new Set([
@@ -1689,8 +1692,8 @@ function mergeSharedScoredLedgerIntoMatch(match, remoteLedger = []) {
     if (!Array.isArray(mp.scores)) mp.scores = buildEmptyScores(getRequestedHoleCount(match));
     if (!mp.scores[idx]) mp.scores[idx] = { holeNumber, gross: null };
     const localGross = normalizeSharedLedgerValue(mp.scores[idx].gross);
-    if (!Array.isArray(mp.stats)) mp.stats = buildEmptyStats(getRequestedHoleCount(match));
-    const currentStat = normalizeHoleStat(mp.stats[idx] || {}, idx);
+    materializeMatchStats(match);
+    const currentStat = normalizeHoleStat(mp.stats?.[idx] || {}, idx);
     const localEntry = localGross == null ? null : buildSharedLedgerEntry({
       match,
       playerId,
@@ -1721,7 +1724,8 @@ function mergeSharedScoredLedgerIntoMatch(match, remoteLedger = []) {
         nextStat[field] = remoteValue;
       }
     });
-    if (JSON.stringify(nextStat) !== JSON.stringify(currentStat)) {
+    if ((isStatTrackingEnabled(match) || Array.isArray(mp.stats)) && JSON.stringify(nextStat) !== JSON.stringify(currentStat)) {
+      if (!Array.isArray(mp.stats)) mp.stats = buildEmptyStats(getRequestedHoleCount(match));
       mp.stats[idx] = normalizeHoleStat(nextStat, idx);
       changed = true;
     }
@@ -3669,6 +3673,100 @@ function reconcileInterruptedFinishState(loadedState, marker) {
   return { state: loadedState, status: completedDurably ? 'completed-confirmed' : 'active-rollback' };
 }
 
+
+// Separate, conservative steps reusable by a future archive path. Never visit
+// frozen record contents; unknown fields and non-default values block removal.
+function isDefaultStatsArray(stats, count) {
+  if (!Array.isArray(stats) || stats.length !== count) return false;
+  const defaults = buildEmptyStats(count);
+  return stats.every((row, index) => {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return false;
+    const expected = { ...defaults[index], entryCompleted: false };
+    return Object.keys(defaults[index]).every(key => Object.prototype.hasOwnProperty.call(row, key) && row[key] === expected[key])
+      && Object.keys(row).every(key => Object.prototype.hasOwnProperty.call(expected, key) && row[key] === expected[key]);
+  });
+}
+function compactUnusedMatchStats(match) {
+  if (match?.statTrackingEnabled !== false || !Array.isArray(match.players)) return false;
+  const count = Number(match.holeCount);
+  if (![9, 18].includes(count)) return false;
+  // If any player's stats are ambiguous or contain real data, retain all arrays.
+  if (!match.players.every(player => !Object.prototype.hasOwnProperty.call(player, 'stats') || isDefaultStatsArray(player.stats, count))) return false;
+  let changed = false;
+  match.players.forEach(player => { if (Object.prototype.hasOwnProperty.call(player, 'stats')) { delete player.stats; changed = true; } });
+  return changed;
+}
+function evictFrozenMatchSyncDiagnostics(match, { requireParity = false } = {}) {
+  if (!isFrozenRoundRecord(match?.roundRecordSnapshot)) return false;
+  if (requireParity && match.storageMode === 'shared' && match.sharedLedgerParity?.parityConfirmed !== true) return false;
+  if (!Array.isArray(match.sharedSyncDiagnostics) || match.sharedSyncDiagnostics.length <= 5) return false;
+  // Five recent events plus the existing aggregate retain useful final diagnosis.
+  match.sharedSyncDiagnostics = match.sharedSyncDiagnostics.slice(-5);
+  return true;
+}
+function compactPersistentMatches(snapshot) {
+  let changed = false;
+  (snapshot.matches || []).forEach(match => {
+    changed = compactUnusedMatchStats(match) || changed;
+    changed = evictFrozenMatchSyncDiagnostics(match) || changed;
+  });
+  return changed;
+}
+function getPlayerStatsForStorage(match, player) {
+  if (Array.isArray(player.stats) && player.stats.length) {
+    return { stats: isStatTrackingEnabled(match) ? player.stats.map((row, index) => ({ ...row, ...normalizeHoleStat(row, index) })) : player.stats };
+  }
+  return isStatTrackingEnabled(match) ? { stats: buildEmptyStats(getRequestedHoleCount(match)) } : {};
+}
+function materializeMatchStats(match) {
+  if (!isStatTrackingEnabled(match)) return false;
+  let changed = false;
+  const count = getRequestedHoleCount(match);
+  (match.players || []).forEach(player => {
+    if (!Array.isArray(player.stats) || player.stats.length < count) {
+      const prior = Array.isArray(player.stats) ? player.stats : [];
+      const defaults = buildEmptyStats(count);
+      player.stats = defaults.map((row, index) => prior[index] || row);
+      changed = true;
+    }
+  });
+  return changed;
+}
+function getLocalSaveFailureMessage(errorMessage = localPersistenceDiagnostics.lastFailureMessage) {
+  return errorMessage === 'Local storage quota was exceeded.'
+    ? 'Device storage for The Dye Ledger is full. Remove old saved rounds from Library to make room. Export any round you want to keep before deleting it.'
+    : STORAGE_FAILURE_MESSAGE;
+}
+function getLocalStorageUsage(storage = localStorage, snapshot = state) {
+  try {
+    const keys = [];
+    for (let i = 0; i < storage.length; i++) {
+      const key = storage.key(i), value = storage.getItem(key) || '';
+      keys.push({ key, bytes: 2 * (key.length + value.length) });
+    }
+    const rounds = (snapshot.matches || []).map(match => ({ name: String(match.name || match.id || 'Round'), bytes: 2 * JSON.stringify(match).length }));
+    return { available: true, bytes: keys.reduce((total, row) => total + row.bytes, 0), roundCount: rounds.length, largestKeys: keys.sort((a,b) => b.bytes-a.bytes).slice(0,3), largestRounds: rounds.sort((a,b) => b.bytes-a.bytes).slice(0,3) };
+  } catch { return { available: false, roundCount: (snapshot.matches || []).length }; }
+}
+function getStorageUsageText(usage = getLocalStorageUsage()) {
+  if (!usage.available) return 'Local storage usage unavailable.';
+  return `Local storage: approximately ${usage.bytes.toLocaleString()} bytes (UTF-16 estimate, including keys and backup). Saved rounds: ${usage.roundCount}. Largest keys: ${usage.largestKeys.map(row => `${row.key} ${row.bytes.toLocaleString()} bytes`).join('; ') || 'none'}. Largest rounds: ${usage.largestRounds.map(row => `${row.name} ${row.bytes.toLocaleString()} bytes`).join('; ') || 'none'}.`;
+}
+let browserStorageEstimate = 'Browser origin estimate unavailable; this is separate from the localStorage limit.';
+let storageEstimateRequested = false;
+function refreshBrowserStorageEstimate() {
+  if (storageEstimateRequested || !navigator.storage?.estimate) return;
+  storageEstimateRequested = true;
+  navigator.storage.estimate().then(estimate => {
+    const usage = Number(estimate.usage), quota = Number(estimate.quota);
+    browserStorageEstimate = Number.isFinite(usage) && Number.isFinite(quota)
+      ? `Browser origin storage: approximately ${usage.toLocaleString()} bytes used of ${quota.toLocaleString()} bytes allowed. Includes caches and databases; does not measure localStorage headroom.`
+      : 'Browser origin estimate unavailable; localStorage has a separate limit.';
+    const element = document.getElementById('appBrowserStorageEstimate');
+    if (element) element.textContent = browserStorageEstimate;
+  }).catch(() => {}).finally(() => { storageEstimateRequested = false; });
+}
+
 function loadStateFromStorage(storage = localStorage) {
   const sources = [
     [STORAGE_KEY, 'primary'],
@@ -3701,6 +3799,17 @@ function loadStateFromStorage(storage = localStorage) {
     try { storage.removeItem(FINISH_RECOVERY_STORAGE_KEY); } catch {}
   } else {
     localPersistenceDiagnostics.recoveryStatus = 'none';
+  }
+  if (compactPersistentMatches(loaded)) {
+    const saved = persistStateSnapshot(loaded, storage);
+    localPersistenceDiagnostics.storageAvailable = saved.ok;
+    if (saved.ok) {
+      localPersistenceDiagnostics.lastSuccessfulLocalSave = saved.savedAt;
+      localPersistenceDiagnostics.lastBackupWarning = saved.backupError || '';
+    } else {
+      localPersistenceDiagnostics.lastFailedLocalSave = saved.savedAt;
+      localPersistenceDiagnostics.lastFailureMessage = saved.errorMessage;
+    }
   }
   return loaded;
 }
@@ -3828,7 +3937,7 @@ function notifyLocalSaveFailure() {
   const now = Date.now();
   if (now - lastStorageFailureToastAt < 5000) return;
   lastStorageFailureToastAt = now;
-  toast(STORAGE_FAILURE_MESSAGE, 6200);
+  toast(getLocalSaveFailureMessage(), 9000);
 }
 
 function loadState() {
@@ -7074,6 +7183,7 @@ function freezeRoundRecordIfEligible(match, metrics = null) {
   const frozen = buildFrozenRoundRecord(match, effectiveMetrics);
   if (!validateFrozenTransactions(frozen) && frozen.transactions.length) throw new Error('Frozen RoundRecord contains invalid settlement transactions.');
   match.roundRecordSnapshot = clonePlain(frozen);
+  evictFrozenMatchSyncDiagnostics(match, { requireParity: true });
   return match.roundRecordSnapshot;
 }
 function getEffectiveRoundRecord(match, metrics = null) {
@@ -10339,7 +10449,7 @@ function normalizeMatch(match) {
     teeId: mp.teeId || match.teeId || '',
     ...(Object.prototype.hasOwnProperty.call(mp, 'assignedTeamIndex') ? { assignedTeamIndex: finiteHandicapIndex(mp.assignedTeamIndex) } : {}),
     scores: Array.isArray(mp.scores) && mp.scores.length ? mp.scores.map((s, scoreIdx) => ({ holeNumber: scoreIdx + 1, gross: Number(s.gross) || null })) : buildEmptyScores(match.holeCount),
-    stats: Array.isArray(mp.stats) && mp.stats.length ? mp.stats.map((s, statIdx) => normalizeHoleStat(s, statIdx)) : buildEmptyStats(match.holeCount),
+    ...getPlayerStatsForStorage(match, mp),
   }));
   match.selectedGames = normalizeSelectedGamesOrder(Array.isArray(match.selectedGames) ? match.selectedGames.map(game => {
     if (game?.key === 'sneaky_sandy_poley') return normalizeSneakySandyPoleyConfig(game);
@@ -15355,7 +15465,10 @@ function hydrateMatchFromCloudBundle(bundle) {
         const entry = entriesByPlayerHole.get(`${row.id}:${holeNumber}`) || entriesByPlayerHole.get(`${row.player_id}:${holeNumber}`);
         return { holeNumber, gross: Number(entry?.gross) || null };
       }),
-      stats: Array.from({ length: holeCount }, (_, statIdx) => {
+      ...((matchRow.stat_tracking_enabled && !Number(sharedMeta.teamScoringPolicyVersion)) || Array.from({ length: holeCount }, (_, i) => {
+        const entry = entriesByPlayerHole.get(`${row.id}:${i+1}`) || entriesByPlayerHole.get(`${row.player_id}:${i+1}`);
+        return entry && (entry.fairway || entry.green || entry.up_and_down || entry.sandy || Number(entry.penalty_strokes ?? entry.penaltyStrokes) > 0 || (entry.putts !== null && entry.putts !== undefined && Number(entry.putts) !== 2) || matchRow?.course_snapshot?.statEntryCompletion?.[`${row.player_id}:${i+1}`]);
+      }).some(Boolean) ? { stats: Array.from({ length: holeCount }, (_, statIdx) => {
         const holeNumber = statIdx + 1;
         const entry = entriesByPlayerHole.get(`${row.id}:${holeNumber}`) || entriesByPlayerHole.get(`${row.player_id}:${holeNumber}`) || {};
         return normalizeHoleStat({
@@ -15368,7 +15481,7 @@ function hydrateMatchFromCloudBundle(bundle) {
           sandy: !!entry.sandy,
           entryCompleted: !!matchRow?.course_snapshot?.statEntryCompletion?.[`${row.player_id}:${holeNumber}`],
         }, statIdx);
-      }),
+      }) } : {}),
     })),
     greeniesWinners: extractGreeniesWinnersFromSelectedGames(matchRow?.selected_games || []),
     greeniesSuggestions: extractGreeniesSuggestionsFromSelectedGames(matchRow?.selected_games || []),
@@ -17792,7 +17905,7 @@ function buildNextRoundDraft(prior) {
     slot: Number.isFinite(Number(p.slot)) ? Number(p.slot) : idx,
     teeId: '',
     scores: buildEmptyScores(18),
-    stats: buildEmptyStats(18)
+    ...getPlayerStatsForStorage(prior, {})
   }));
   const draft = createEmptyMatch({
     id: uid(),
@@ -18674,7 +18787,7 @@ function ensurePlayInputState(match) {
       mp.scores = Array.from({ length: holeCount }, (_, i) => existing[i] || { holeNumber: i + 1, gross: null });
       changed = true;
     }
-    if (!Array.isArray(mp.stats) || mp.stats.length < holeCount) {
+    if (isStatTrackingEnabled(match) && (!Array.isArray(mp.stats) || mp.stats.length < holeCount)) {
       const existing = Array.isArray(mp.stats) ? mp.stats : [];
       mp.stats = Array.from({ length: holeCount }, (_, i) => normalizeHoleStat(existing[i] || {}, i));
       changed = true;
@@ -22024,7 +22137,7 @@ function buildDraftFromMatchTemplate(template) {
       ...p,
       slot: Number.isFinite(Number(p.slot)) ? Number(p.slot) : idx,
       scores: buildEmptyScores(Number(template.holeCount) === 9 ? 9 : 18),
-      stats: buildEmptyStats(Number(template.holeCount) === 9 ? 9 : 18)
+      ...(template.statTrackingEnabled && !Number(template.teamScoringPolicyVersion) ? { stats: buildEmptyStats(Number(template.holeCount) === 9 ? 9 : 18) } : {})
     })),
     notes: '',
     roundRecap: '',
@@ -24601,7 +24714,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       const match = getActiveMatch();
       if (!match) return;
       match.statTrackingMode = normalizeStatTrackingMode(e.target.value);
-      match.statTrackingEnabled = match.statTrackingMode !== 'NONE';
+      match.statTrackingEnabled = !isTeamScoredRound(match) && match.statTrackingMode !== 'NONE';
+      materializeMatchStats(match);
       if (match.statTrackingEnabled && !Array.isArray(match.statTrackingPlayerIds)) match.statTrackingPlayerIds = (match.players || []).map(player => String(player.playerId));
       persist();
       restorePlayOverflowTriggerFocus(overflowKind);
@@ -25440,7 +25554,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       reopenedAt: existing?.reopenedAt || null,
       players: selectedPlayers.map(sp => {
         const old = Array.isArray(existing?.players) ? existing.players.find(op => op.playerId === sp.playerId) : null;
-        return old ? { ...old, team: sp.team, slot: sp.slot, teeId: sp.teeId || selectedPlayers[0]?.teeId || '', stats: Array.isArray(old.stats) && old.stats.length ? old.stats : buildEmptyStats(Number(fd.get('holeCount')) === 9 ? 9 : 18) } : { playerId: sp.playerId, team: sp.team, slot: sp.slot, teeId: sp.teeId || selectedPlayers[0]?.teeId || '', scores: buildEmptyScores(Number(fd.get('holeCount')) === 9 ? 9 : 18), stats: buildEmptyStats(Number(fd.get('holeCount')) === 9 ? 9 : 18) };
+        return { ...(old || { playerId: sp.playerId, scores: buildEmptyScores(Number(fd.get('holeCount')) === 9 ? 9 : 18) }), team: sp.team, slot: sp.slot, teeId: sp.teeId || selectedPlayers[0]?.teeId || '' };
       }),
       greeniesWinners: existing?.greeniesWinners || {},
       sneakySandyPoleyInputs: existing?.sneakySandyPoleyInputs || {},
@@ -26259,6 +26373,7 @@ function renderMatchSetupDiagnosticsUi() {
 }
 
 function renderBuildInfoUi() {
+  refreshBrowserStorageEstimate();
   const sw = getServiceWorkerDiagnosticSnapshot();
   renderMatchSetupDiagnosticsUi();
   const diagnosticMatch = getActiveMatch();
@@ -26280,6 +26395,8 @@ function renderBuildInfoUi() {
     appCacheMatchesStatus: 'Checking…',
     appVersionConsistencyStatus: 'Checking…',
     appStorageAvailabilityStatus: localPersistenceDiagnostics.storageAvailable ? 'Available' : 'Unavailable / save failed',
+    appStorageUsage: getStorageUsageText(),
+    appBrowserStorageEstimate: browserStorageEstimate,
     appStorageLoadedFrom: localPersistenceDiagnostics.loadedFrom,
     appFinishRecoveryStatus: localPersistenceDiagnostics.recoveryStatus,
     appLastLocalSave: localPersistenceDiagnostics.lastSuccessfulLocalSave ? formatTimestampET(localPersistenceDiagnostics.lastSuccessfulLocalSave) : 'Not saved this session',
@@ -26778,6 +26895,7 @@ function installDyeLedgerLiveEngineAdapter() {
     reconcileInterruptedFinishState,
     loadStateFromStorage,
     persistStateSnapshot,
+    compactUnusedMatchStats, compactPersistentMatches, evictFrozenMatchSyncDiagnostics, isDefaultStatsArray, materializeMatchStats, getPlayerStatsForStorage, getLocalSaveFailureMessage, getLocalStorageUsage, getStorageUsageText, ensurePlayInputState, buildEmptyStats,
     persistFinishedStateSnapshot,
     writeJsonStorageRecord,
     sanitizeSetupDraft,

@@ -1,0 +1,64 @@
+{
+  "baselineRef": "d5a0363",
+  "currentVersion": "v31.0.68",
+  "unit": "UTF-8 bytes of JSON.stringify; excludes backup copies",
+  "results": [
+    {
+      "kind": "completed shared Flamtana",
+      "before": {
+        "matchBytes": 102872,
+        "statsBytes": 46736,
+        "diagnosticsBytes": 5839,
+        "diagnosticRows": 30
+      },
+      "after": {
+        "matchBytes": 51199,
+        "statsBytes": 0,
+        "diagnosticsBytes": 974,
+        "diagnosticRows": 5
+      },
+      "legacy200Events": {
+        "beforeBytes": 135933,
+        "afterBytes": 51199
+      }
+    },
+    {
+      "kind": "completed shared Flamtana, exhaustive card-off",
+      "before": {
+        "matchBytes": 110600,
+        "statsBytes": 46736,
+        "diagnosticsBytes": 5839,
+        "diagnosticRows": 30
+      },
+      "after": {
+        "matchBytes": 58927,
+        "statsBytes": 0,
+        "diagnosticsBytes": 974,
+        "diagnosticRows": 5
+      },
+      "legacy200Events": {
+        "beforeBytes": 143661,
+        "afterBytes": 58927
+      }
+    },
+    {
+      "kind": "completed tracked individual",
+      "before": {
+        "matchBytes": 69721,
+        "statsBytes": 22504,
+        "diagnosticsBytes": 2,
+        "diagnosticRows": 0
+      },
+      "after": {
+        "matchBytes": 69721,
+        "statsBytes": 22504,
+        "diagnosticsBytes": 2,
+        "diagnosticRows": 0
+      },
+      "legacy200Events": {
+        "beforeBytes": 108619,
+        "afterBytes": 70693
+      }
+    }
+  ]
+}

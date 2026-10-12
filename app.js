@@ -19,11 +19,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.68',
-  versionNumber: '31.0.68',
-  cacheName: 'the-dye-ledger-v31.0.68',
-  buildDate: '2026-10-11T15:07:01.000Z',
-  buildLabel: 'Local Storage Footprint'
+  version: 'v31.0.70',
+  versionNumber: '31.0.70',
+  cacheName: 'the-dye-ledger-v31.0.70',
+  buildDate: '2026-10-11T20:15:24.000Z',
+  buildLabel: 'Flamtana Off-Low and Shared Scoring'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -510,7 +510,7 @@ const GAME_SELECTION_GROUPS = Object.freeze([
 
 const COMPETITION_RULES_CATALOG_VERSION = 1;
 const COMPETITION_RULES_CATALOG = Object.freeze({
-  flamtana_special: Object.freeze({ scoringMethod: 'Featured and group net totals; foursome sums per-hole lower team net scores; Calcutta follows Featured', allowance: 'Full signed saved team Course Handicap, no additional allowance', tieTreatment: 'Saved card-off at finalization; exhausted comparisons split', stakeMeaning: 'Four independently funded per-player wagers; default $20 each', escalation: 'None', finality: 'All four teams complete all 18 holes, equal partner cards and shared parity before freeze' }),
+  flamtana_special: Object.freeze({ scoringMethod: 'Featured and group net totals; foursome sums per-hole lower team net scores; Calcutta follows Featured', allowance: 'New rounds: strokes off the lowest of all four teams; saved legacy rounds retain full Course Handicap', tieTreatment: 'Saved card-off at finalization; exhausted comparisons split', stakeMeaning: 'Four independently funded per-player wagers; default $20 each', escalation: 'None', finality: 'All four teams complete all 18 holes, equal partner cards and shared parity before freeze' }),
   nassau: Object.freeze({ scoringMethod: 'Three independent match-play wagers: front nine, back nine, and overall using the saved Best N policy', allowance: 'Game-specific allowance is applied to each unrounded Course Handicap, then each Game Handicap is rounded before strokes are allocated from the lowest Game Handicap', tieTreatment: 'Each tied component is halved', stakeMeaning: 'Each losing player owes the saved component stake; the collected amount is divided equally among the winning players', escalation: 'Presses use the configured Press contract', finality: 'A component is final when its holes are complete or the result is mathematically decided' }),
   singles_match: Object.freeze({ scoringMethod: 'One-on-one match play by holes won', allowance: 'Round allowance; net match strokes off the lowest Playing Handicap', tieTreatment: 'A tied match is halved', stakeMeaning: 'One match amount or the configured amount per hole', escalation: 'Presses use the configured Press contract', finality: 'Final when all holes are complete or the match is mathematically decided' }),
   individual_match: Object.freeze({ scoringMethod: 'Independent player-versus-player Nassau, match-play, or stroke-play side matches', allowance: 'Each side match uses its saved gross or net basis', tieTreatment: 'Ties are halved unless the saved side-match format states otherwise', stakeMeaning: 'Amount saved for each side match', escalation: 'No implicit escalation', finality: 'Each side match finalizes independently' }),
@@ -1574,6 +1574,25 @@ function extractLocalScoredLedger(match) {
   });
   return entries.sort((a, b) => String(a.playerId).localeCompare(String(b.playerId)) || a.holeNumber - b.holeNumber);
 }
+function resolveRemoteScoreParticipant(match, entry = {}) {
+  const explicit = String(entry.participant_id || entry.participantId || '');
+  if (explicit) return explicit;
+  const participants = getSharedAssignmentParticipants(match);
+  const user = String(entry.updated_by || entry.updatedBy || '');
+  const device = String(entry.device_id || entry.deviceId || '');
+  if (device) {
+    const candidates = participants.filter(row => String(row.deviceId) === device);
+    const attributed = user ? candidates.filter(row => String(row.userId || '') === user) : [];
+    if (attributed.length === 1) return attributed[0].participantId;
+    if (candidates.length === 1) return candidates[0].participantId;
+  }
+  const candidates = user ? participants.filter(row => String(row.userId || '') === user) : [];
+  // An account may represent several scoring devices. Do not falsely attribute
+  // an already server-authorized score row to the first device on that account.
+  // Unknown attribution follows the existing authoritative-cloud-row path;
+  // explicit device/participant, stale-write and host-override gates stay intact.
+  return candidates.length === 1 ? getSharedParticipantByUserId(match, user)?.participantId || '' : '';
+}
 function extractRemoteScoredLedger(match, scoreEntries = []) {
   return (Array.isArray(scoreEntries) ? scoreEntries : []).map(entry => buildSharedLedgerEntry({
     match,
@@ -1590,7 +1609,7 @@ function extractRemoteScoredLedger(match, scoreEntries = []) {
     },
     source: 'remote',
     sourceDevice: entry?.device_id || entry?.deviceId || '',
-    sourceParticipant: entry?.participant_id || entry?.participantId || getSharedParticipantByUserId(match, entry?.updated_by || entry?.updatedBy)?.participantId || '',
+    sourceParticipant: resolveRemoteScoreParticipant(match, entry),
     updatedAt: entry?.updated_at || entry?.updatedAt || '',
   })).filter(Boolean).sort((a, b) => String(a.playerId).localeCompare(String(b.playerId)) || a.holeNumber - b.holeNumber);
 }
@@ -2899,6 +2918,7 @@ function getFeaturedCompetitionHandicapContext(match, metrics = null) {
   if (key === 'stroke_gross') return { key, label, basis: 'gross', mode: 'none', config: { key, basis: 'gross' } };
   const raw = (match.selectedGames || []).find(game => String(game?.key) === String(key)) || null;
   if (!raw) return { key, label, basis: 'none', mode: 'none', config: null };
+  if (key === 'flamtana_special' && usesFlamtanaOffLow(match)) return { key, label, basis: 'net', mode: 'relative', config: normalizeFlamtanaConfig(raw) };
   if (key === 'individual_match') return { key, label, basis: 'varies', mode: 'none', config: raw };
   const implicitNet = ['nassau', 'singles_match', 'team_match', 'net_skins', 'nine_point', 'sixes', 'wolf', 'sneaky_sandy_poley'].includes(key);
   const implicitGross = ['skins', 'greenies', 'long_drive', 'closest_to_pin'].includes(key);
@@ -2911,13 +2931,14 @@ function getFeaturedCompetitionHandicapContext(match, metrics = null) {
   return { key, label, basis: 'net', mode: 'relative', config };
 }
 function getFeaturedCompetitionStrokeAllowance(match, metrics, playerMetric, strokeIndex) {
+  if (usesFlamtanaOffLow(match) && playerMetric && strokeIndex) return holeCourseNetStrokeAllowance(strokeIndex, getFlamtanaStrokeHandicap(match, playerMetric, metrics));
   const context = getFeaturedCompetitionHandicapContext(match, metrics);
   if (!playerMetric || !strokeIndex || context.mode === 'none') return 0;
   if (context.mode === 'course') return holeCourseNetStrokeAllowance(strokeIndex, playerMetric.courseHdcp);
   return getGameRelativeStrokeAllowance(strokeIndex, playerMetric, metrics, context.config || {});
 }
 function getFeaturedCompetitionStrokeNote(match, metrics = null) {
-  if (isTeamScoredRound(match)) return 'Team Course Net · full signed Course Handicap · no additional allowance';
+  if (isTeamScoredRound(match)) return usesFlamtanaOffLow(match) ? 'Team Net · off lowest of all four teams · no additional allowance' : 'Legacy Team Course Net · full signed Course Handicap · no additional allowance';
   const context = getFeaturedCompetitionHandicapContext(match, metrics);
   if (context.mode === 'none') {
     if (context.basis === 'varies') return `Featured strokes: ${context.label} calculates strokes independently for each side match; no single game-stroke column applies.`;
@@ -7571,6 +7592,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
       flamtana.foursomes.forEach(side => { report.sides[side.id] = { name: side.name, color: side.id === 'F1' ? '#254e70' : '#34765f' }; });
       report.meta.flamtana = true;
       report.meta.flamtanaFinal = flamtana.final;
+      report.meta.flamtanaOffLow = flamtana.config.scoringPolicyVersion === 2;
       report.flamtanaPicks = report.settlementPlayers.map(player => ({ playerId: player.id, name: player.name, teamId: 'T' + flamtana.config.picks[player.id] }));
       report.meta.flamtanaEvidence = flamtana.components.map(component => ({ label: component.label, result: component.result }));
     }
@@ -10594,6 +10616,15 @@ function isTeamScoredRound(match) {
 function getScrambleFoursomeProgress(match) {
   return [1, 2].map(group => ({ group, completed: Array.from({ length: 18 }, (_, i) => i + 1).filter(hole => SCRAMBLE_TEAM_IDS.filter(team => Math.ceil(team / 2) === group).every(team => getScrambleTeamHoleScore(match, team, hole).complete)).length }));
 }
+function usesFlamtanaOffLow(match, record = match?.roundRecordSnapshot) {
+  const config = isFrozenRoundRecord(record) ? record.games?.find(game => game.gameId === 'flamtana_special')?.config : getFlamtanaConfig(match);
+  return Number(config?.scoringPolicyVersion || 1) === 2;
+}
+function getFlamtanaStrokeHandicap(match, player, metrics) {
+  if (!usesFlamtanaOffLow(match)) return player.courseHdcp;
+  const values = SCRAMBLE_TEAM_IDS.map(team => metrics.players.find(row => Number(row.team) === team)?.courseHdcp);
+  return values.every(Number.isFinite) ? player.courseHdcp - Math.min(...values) : NaN;
+}
 function getFlamtanaConfig(match) {
   return (match?.selectedGames || []).find(game => game.key === 'flamtana_special') || null;
 }
@@ -10606,16 +10637,19 @@ function applySharedScrambleSetupMetadata(match, meta) {
 }
 function buildFlamtanaSetupControls(raw) {
   const cfg = normalizeFlamtanaConfig(raw);
+  if (!editingMatchId) cfg.scoringPolicyVersion = 2;
   const players = getSelectedPlayersFromSetup();
   return `<div class="card inset-card game-config-card"><div class="section-label">Flamtana Special</div>
-    <p class="tiny">Four wagers, full team Course Net. Foursome 1 = T1 + T2; Foursome 2 = T3 + T4. Foursome totals sum each hole's lower team net score. All eight Calcutta picks are required before Start. Both devices must use v31.0.64 or newer.</p>
+    <p class="tiny">Four wagers, ${cfg.scoringPolicyVersion === 2 ? 'net strokes off the lowest of all four teams' : 'legacy full team Course Net'}. Foursome 1 = T1 + T2; Foursome 2 = T3 + T4. Foursome totals sum each hole's lower team net score. All eight Calcutta picks are required before Start. Both devices must use v31.0.70 or newer for new off-low rounds.</p>
     <div class="grid two compact-grid">${['featured','group','foursome','calcutta'].map(key => `<label><span>${escapeHtml(key[0].toUpperCase() + key.slice(1))} $ per player</span><input type="number" min="0" step="0.01" data-game-config="flamtana_special" data-field="${key}Stake" value="${cfg[key + 'Stake']}"></label>`).join('')}
     <label class="span-2"><span>Tie rule for all three scoring wagers</span><select data-game-config="flamtana_special" data-field="tieMethod">${Object.entries(FLAMTANA_TIE_METHODS).map(([key,label]) => `<option value="${key}" ${cfg.tieMethod === key ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
-    <input type="hidden" data-game-config="flamtana_special" data-field="scoringPolicyVersion" value="1">
+    <input type="hidden" data-game-config="flamtana_special" data-field="scoringPolicyVersion" value="${cfg.scoringPolicyVersion}">
     ${players.map(player => `<label><span>${escapeHtml(getPlayer(player.playerId)?.name || 'Golfer')} backs</span><select data-flamtana-pick="${escapeHtml(player.playerId)}"><option value="">Choose team</option>${SCRAMBLE_TEAM_IDS.map(team => `<option value="${team}" ${Number(cfg.picks[player.playerId]) === team ? 'selected' : ''}>${escapeHtml(document.querySelector('[data-team-name="' + team + '"]')?.value || 'Team ' + team)}</option>`).join('')}</select></label>`).join('')}</div>
     <p class="tiny">Default maximum exposure: $80 per golfer. A tied Calcutta pool is divided by winning team, then by its backers. An unbacked team's share goes to its two partners. Card-off uses the saved net hole scores only at finalization; exhausted comparisons split. Odd cents go in stable ID order.</p></div>`;
 }
 function buildScrambleReportEntries(match, metrics, holes, record = null) {
+  const offLow = usesFlamtanaOffLow(match, record);
+  const low = offLow ? Math.min(...(record?.isFrozen ? record.players.map(row => row.courseHandicap) : metrics.players.map(row => row.courseHdcp))) : 0;
   return SCRAMBLE_TEAM_IDS.map(team => {
     if (record?.isFrozen) {
       const savedTeam = record.teams.find(row => Number(row.teamId) === team);
@@ -10624,20 +10658,22 @@ function buildScrambleReportEntries(match, metrics, holes, record = null) {
       const scores = holes.map(hole => savedTeam.playerIds.map(id => hole.scores.find(score => String(score.playerId) === id)));
       const gross = scores.map(pair => pair.length === 2 && pair.every(score => typeof score?.gross === 'number') && pair[0].gross === pair[1].gross ? pair[0].gross : null);
       const strokes = scores.map(pair => pair.length === 2 && pair[0]?.courseStrokesReceived === pair[1]?.courseStrokesReceived ? Number(pair[0]?.courseStrokesReceived || 0) : 0);
+      const gameStrokes = offLow ? holes.map((hole,i) => holeCourseNetStrokeAllowance(getSelectedScoringHoles(match, record.meta.courseSnapshot?.tees?.find(tee => tee.id === common('teeId')) || metrics.tee)[i]?.strokeIndex || hole.strokeIndex, common('courseHandicap') - low)) : strokes.slice();
       const savedTee = record.meta.teeSnapshot?.id === common('teeId') ? record.meta.teeSnapshot : record.meta.courseSnapshot?.tees?.find(tee => tee.id === common('teeId'));
       return { id: 'T' + team, name: savedTeam.displayName, side: 'T' + team, memberIds: savedTeam.playerIds.slice(),
-        tee: savedTee?.teeName || savedTee?.name || 'Tee', index: common('assignedTeamIndex'), ch: common('courseHandicap'), ph: common('playingHandicap'),
-        gross, strokes: { courseNet: strokes.slice(), featured: strokes.slice(), offLow: strokes.slice() }, postable: null, statistics: null };
+        tee: savedTee?.teeName || savedTee?.name || 'Tee', index: common('assignedTeamIndex'), ch: common('courseHandicap'), ph: offLow ? common('courseHandicap') - low : common('playingHandicap'),
+        gross, strokes: { courseNet: strokes.slice(), featured: gameStrokes.slice(), offLow: gameStrokes.slice() }, postable: null, statistics: null };
     }
     const members = match.players.filter(player => Number(player.team) === team);
     const index = Number(members[0].assignedTeamIndex);
     const tee = (getPlayerTee(match, members[0]) || metrics.tee);
     const handicap = courseHandicap(index, tee.slope, tee.rating, tee.par);
     const strokes = holes.map((hole, i) => holeCourseNetStrokeAllowance((getSelectedScoringHoles(match, tee)[i] || hole).strokeIndex, handicap));
+    const gameStrokes = offLow ? holes.map((hole,i) => holeCourseNetStrokeAllowance((getSelectedScoringHoles(match,tee)[i] || hole).strokeIndex, handicap-low)) : strokes.slice();
     return { id: 'T' + team, name: getTeamLabel(match, team), side: 'T' + team,
-      memberIds: members.map(member => String(member.playerId)), tee: tee.teeName || tee.name || 'Tee', index, ch: handicap, ph: handicap,
+      memberIds: members.map(member => String(member.playerId)), tee: tee.teeName || tee.name || 'Tee', index, ch: handicap, ph: offLow ? handicap - low : handicap,
       gross: holes.map((hole, i) => getScrambleTeamHoleScore(match, team, i + 1).gross),
-      strokes: { courseNet: strokes.slice(), featured: strokes.slice(), offLow: strokes.slice() }, postable: null, statistics: null };
+      strokes: { courseNet: strokes.slice(), featured: gameStrokes.slice(), offLow: gameStrokes.slice() }, postable: null, statistics: null };
   });
 }
 function buildFlamtanaReportGames(result, report) {
@@ -10645,7 +10681,7 @@ function buildFlamtanaReportGames(result, report) {
     const series = component.series || [];
     return { id: 'flamtana_' + component.key, name: component.label, featured: component.key === 'featured',
       type: component.key === 'calcutta' ? 'settlement' : 'strokeplay', scope: 'team', basis: 'net', unit: component.key === 'calcutta' ? 'dollars' : 'strokes', lowWins: true,
-      allowance: { key: 'courseNet', label: 'Full saved team Course Net · no additional allowance' },
+      allowance: { key: result.config.scoringPolicyVersion === 2 ? 'featured' : 'courseNet', label: result.config.scoringPolicyVersion === 2 ? 'Off lowest of all four team handicaps · no additional allowance' : 'Full saved team Course Net · no additional allowance' },
       segments: [{ label: '18 holes', holes: report.holes.slice() }], money: component.amounts,
       sides: series.map(side => ({ key: side.id, playerIds: side.memberIds })),
       seriesByHole: series.map(side => ({ id: side.id, name: side.name, scores: side.scores.slice(), pars: report.card.par.slice(), raw: side.scores.map((score, i) => score === null ? null : score - report.card.par[i]) })),
@@ -10665,7 +10701,7 @@ function buildFlamtanaLiveSummary(match, metrics) {
   return '<div class="game-summary-grid">' + result.components.map(component => '<div class="game-summary-card"><div class="game-summary-title">' + escapeHtml(component.label) + '</div><div class="game-summary-value">' + (component.series ? component.series.map(side => escapeHtml(side.name) + ': ' + side.scores.filter(score => score !== null).reduce((sum, score) => sum + score, 0) + ' net (' + side.scores.filter(score => score !== null).length + '/18)').join(' · ') : 'Eight saved picks · follows Featured') + '</div><div class="game-summary-sub">' + formatMoneyAccounting(component.stake) + ' per golfer · ' + (result.final ? 'Final · ' + component.result.winnerIds.map(id => escapeHtml(id)).join(' / ') : 'Provisional; tie rule applies at finalization') + '</div></div>').join('') + '</div><div class="tiny">Foursome totals sum each hole’s lower team net score. Tie rule: ' + escapeHtml(FLAMTANA_TIE_METHODS[result.config.tieMethod]) + '. Re-enter any Pending team score to resolve it. Host can score all four teams if another device drops out.</div>';
 }
 function normalizeFlamtanaConfig(config = {}) {
-  return { key: 'flamtana_special', scoringPolicyVersion: Number(config.scoringPolicyVersion ?? 1), basis: 'net',
+  return { key: 'flamtana_special', scoringPolicyVersion: Number(config.scoringPolicyVersion ?? (config.key ? 1 : 2)), basis: 'net',
     tieMethod: config.tieMethod || 'split', picks: { ...(config.picks || {}) },
     ...Object.fromEntries(['featured', 'group', 'foursome', 'calcutta'].map(key => [key + 'Stake', Number(config[key + 'Stake'] ?? 20)])) };
 }
@@ -10674,7 +10710,7 @@ function getFlamtanaSetupError(match, { requirePicks = false } = {}) {
   if (!raw) return '';
   const cfg = normalizeFlamtanaConfig(raw);
   if (!isTeamScoredRound(match)) return 'Flamtana Special requires Two-man Scramble, four two-player teams and 18 holes.';
-  if (cfg.scoringPolicyVersion !== 1 || !Object.hasOwn(FLAMTANA_TIE_METHODS, cfg.tieMethod)) return 'Update or choose a supported Flamtana tie rule.';
+  if (![1, 2].includes(cfg.scoringPolicyVersion) || !Object.hasOwn(FLAMTANA_TIE_METHODS, cfg.tieMethod)) return 'Update or choose a supported Flamtana tie rule.';
   if (['featured', 'group', 'foursome', 'calcutta'].some(key => !Number.isFinite(cfg[key + 'Stake']) || cfg[key + 'Stake'] < 0 || Math.abs(Math.round(cfg[key + 'Stake'] * 100) - cfg[key + 'Stake'] * 100) > 1e-7)) return 'Enter nonnegative Flamtana stakes with at most two decimal places.';
   if (requirePicks && (match.players || []).some(player => !SCRAMBLE_TEAM_IDS.includes(Number(cfg.picks[player.playerId])))) return 'Choose one Calcutta team for each of the eight golfers before Start.';
   return '';
@@ -10713,7 +10749,7 @@ function computeFlamtanaResults(match, metrics = null, { finalize = match?.statu
     const scores = Array.from({ length: 18 }, (_, i) => {
       const pair = getScrambleTeamHoleScore(match, team, i + 1);
       const hole = getPlayerHole(match, members[0], i, metrics.tee);
-      return pair.complete ? pair.gross - holeCourseNetStrokeAllowance(hole.strokeIndex, members[0].courseHdcp) : null;
+      return pair.complete ? pair.gross - holeCourseNetStrokeAllowance(hole.strokeIndex, getFlamtanaStrokeHandicap(match, members[0], metrics)) : null;
     });
     return { id: 'T' + team, name: getTeamLabel(match, team), memberIds: members.map(player => player.playerId), scores };
   });
@@ -10809,10 +10845,10 @@ function buildScrambleScoreGridRows(match, tee, metrics, visiblePlayers, hole) {
     const score = getScrambleTeamHoleScore(match, team, currentHole);
     const editable = !setupError && !!match.roundTiming?.startedAt && members.length === 2 && members.every(member => canEditPlayerScore(match, team, member.playerId));
     const playerHole = getPlayerHole(match, p, currentHole - 1, tee) || hole;
-    const courseStrokes = holeCourseNetStrokeAllowance(playerHole?.strokeIndex, p.courseHdcp);
+    const courseStrokes = holeCourseNetStrokeAllowance(playerHole?.strokeIndex, getFlamtanaConfig(match) ? getFlamtanaStrokeHandicap(match, p, metrics) : p.courseHdcp);
     const flamtana = !!getFlamtanaConfig(match), strokes = flamtana ? getFlamtanaDisplayStrokes(metrics, p, playerHole?.strokeIndex) : courseStrokes;
-    return '<tr><td><strong>' + escapeHtml(getTeamLabel(match, team)) + '</strong><div class="tiny">' + members.map(m => escapeHtml(m.player.name)).join(' / ') + '</div><div class="tiny">Team index ' + Number(p.assignedTeamIndex).toFixed(1) + ' · Playing HCP ' + p.courseHdcp + '</div><div class="tiny">' + (score.inconsistent ? 'Pending / unequal partner scores: ' + score.values.map(v => v ?? '—').join(' / ') + '. Re-enter the team score to resolve, or deliberately clear it.' : score.complete ? 'Team hole complete' : 'Team score not entered') + '</div></td><td><div class="gross-score-stepper ' + (flamtana ? 'flamtana-score-stepper' : 'team-score-stepper') + '" role="group" aria-label="Team gross score"><button type="button" class="score-step-btn" data-score-step="down" data-score-step-player="' + escapeHtml(p.playerId) + '" aria-label="Decrease team score" ' + (editable ? '' : 'disabled') + '>−</button><input class="score-input" type="tel" inputmode="numeric" autocomplete="off" min="1" max="25" aria-label="Gross score for ' + escapeHtml(getTeamLabel(match, team)) + '" data-team-inconsistent="' + (score.inconsistent ? '1' : '0') + '" data-score-team="' + team + '" data-score-player="' + escapeHtml(p.playerId) + '" data-hole-par="' + Number(playerHole?.par || 4) + '" value="' + (score.gross ?? '') + '" ' + (editable ? '' : 'disabled') + '><button type="button" class="score-step-btn" data-score-step="up" data-score-step-player="' + escapeHtml(p.playerId) + '" aria-label="Increase team score" ' + (editable ? '' : 'disabled') + '>+</button></div></td><td>' + formatStrokesDisplay(strokes) + '</td><td class="score-net-cell">' + (score.complete ? score.gross - courseStrokes : '—') + '</td></tr>';
-  }).join('') + '<tr><td colspan="4"><div class="tiny">' + (getFlamtanaConfig(match) ? 'Off low shows strokes relative to the lowest of all four team handicaps. Course Net and wagers use full team handicaps. ' : '') + 'One shared-ball score per team. Team completion is separate from all four teams completing this hole. No individual statistics or postable scores. If a scoring device drops out, the host can enter or correct all four teams here. Keep the foursome assignments; check backup and parity before finishing.</div></td></tr>';
+    return '<tr><td><strong>' + escapeHtml(getTeamLabel(match, team)) + '</strong><div class="tiny">' + members.map(m => escapeHtml(m.player.name)).join(' / ') + '</div><div class="tiny">Team index ' + Number(p.assignedTeamIndex).toFixed(1) + (flamtana ? ' · Course HCP ' + p.courseHdcp + ' · Gets ' + Math.max(0, p.courseHdcp - Math.min(...metrics.players.map(row => row.courseHdcp))) : ' · Playing HCP ' + p.courseHdcp) + '</div><div class="tiny">' + (score.inconsistent ? 'Pending / unequal partner scores: ' + score.values.map(v => v ?? '—').join(' / ') + '. Re-enter the team score to resolve, or deliberately clear it.' : score.complete ? 'Team hole complete' : 'Team score not entered') + '</div></td><td><div class="gross-score-stepper ' + (flamtana ? 'flamtana-score-stepper' : 'team-score-stepper') + '" role="group" aria-label="Team gross score"><button type="button" class="score-step-btn" data-score-step="down" data-score-step-player="' + escapeHtml(p.playerId) + '" aria-label="Decrease team score" ' + (editable ? '' : 'disabled') + '>−</button><input class="score-input" type="tel" inputmode="numeric" autocomplete="off" min="1" max="25" aria-label="Gross score for ' + escapeHtml(getTeamLabel(match, team)) + '" data-team-inconsistent="' + (score.inconsistent ? '1' : '0') + '" data-score-team="' + team + '" data-score-player="' + escapeHtml(p.playerId) + '" data-hole-par="' + Number(playerHole?.par || 4) + '" value="' + (score.gross ?? '') + '" ' + (editable ? '' : 'disabled') + '><button type="button" class="score-step-btn" data-score-step="up" data-score-step-player="' + escapeHtml(p.playerId) + '" aria-label="Increase team score" ' + (editable ? '' : 'disabled') + '>+</button></div></td><td>' + formatStrokesDisplay(strokes) + '</td><td class="score-net-cell">' + (score.complete ? score.gross - courseStrokes : '—') + '</td></tr>';
+  }).join('') + '<tr><td colspan="4"><div class="tiny">' + (getFlamtanaConfig(match) ? (usesFlamtanaOffLow(match) ? 'Net scores and all wagers use strokes off the lowest of all four team handicaps. ' : 'Legacy round: Off low shows relative strokes; Course Net and wagers retain full team handicaps. ') : '') + 'One shared-ball score per team. Team completion is separate from all four teams completing this hole. No individual statistics or postable scores. If a scoring device drops out, the host can enter or correct all four teams here. Keep the foursome assignments; check backup and parity before finishing.</div></td></tr>';
 }
 function restoreScrambleSetup(match) {
   const input = document.getElementById('teamScoringEnabled');
@@ -11233,7 +11269,7 @@ function renderSetupHandicapPreview() {
   }
   wrap.innerHTML = `
     <div class="tiny">${escapeHtml(course.name)} · ${escapeHtml(getHoleSegmentLabel({ holeCount: Number(document.querySelector('#matchForm [name="holeCount"]')?.value || 18), nineHoleSegment: document.getElementById('nineHoleSegmentSelect')?.value || 'front', customStartHole: Number(document.getElementById('customNineHoleStartSelect')?.value || 1) }, tee))} · Based on each player's selected tee.</div>
-    <div class="handicap-preview-table course-handicap-preview top-gap">
+    <div class="handicap-preview-table table-scroll-region course-handicap-preview top-gap">
       <div class="handicap-preview-header" aria-hidden="true">
         <div class="handicap-preview-description">Player / Tee</div>
         <div class="handicap-preview-number">Index</div>
@@ -11280,23 +11316,26 @@ function renderFeaturedCompetitionHandicapPreview({ course, tee, selected, enric
   const gameAllowance = normalizeHandicapAllowancePercent(config.handicapAllowancePercent, allowance);
   if (enriched.some(row => !Number.isFinite(row.courseHdcp))) { wrap.innerHTML = '<div class="tiny">Enter an assigned index for every team to preview competition strokes.</div>'; return; }
   const courseNet = featured.courseNetMode || featured.key === 'flamtana_special';
-  const rows = enriched.map(row => ({
+  const flamtana = featured.key === 'flamtana_special';
+  const previewRows = flamtana ? enriched.filter((row,index,all) => all.findIndex(other => other.team === row.team) === index) : enriched;
+  const rows = previewRows.map(row => ({
     ...row,
     gameHdcp: courseNet ? row.courseHdcp : getPlayerGameHandicap(row, gameAllowance),
   }));
-  const lowGameHandicap = courseNet ? 0 : Math.min(...rows.map(row => row.gameHdcp));
+  const lowGameHandicap = courseNet && !flamtana ? 0 : Math.min(...rows.map(row => row.gameHdcp));
+  const offLowGame = flamtana && Number(config.scoringPolicyVersion) === 2;
   const policyLabel = featured.key === 'nassau'
     ? formatNassauPolicyLabel(config, matchContext)
-    : `${getFeaturedCompetitionDisplayName({ selectedGames: games }, featured.key)} · Net · ${courseNet ? 'Full Course Handicap' : formatRoundAllowanceLabel(matchContext, gameAllowance)}`;
+    : `${getFeaturedCompetitionDisplayName({ selectedGames: games }, featured.key)} · Net · ${offLowGame ? 'Off lowest of all four teams' : courseNet ? 'Full Course Handicap' : formatRoundAllowanceLabel(matchContext, gameAllowance)}`;
   const segment = getHoleSegmentLabel({
     holeCount: Number(document.querySelector('#matchForm [name="holeCount"]')?.value || 18),
     nineHoleSegment: document.getElementById('nineHoleSegmentSelect')?.value || 'front',
     customStartHole: Number(document.getElementById('customNineHoleStartSelect')?.value || 1),
   }, tee);
-  wrap.innerHTML = `<div class="tiny"><strong>${escapeHtml(policyLabel)}</strong><br>${escapeHtml(course.name)} · ${escapeHtml(segment)} · ${courseNet ? 'Gets uses full Course Handicap strokes.' : 'Gets is relative to the lowest Game HCP.'}</div>
-    <div class="handicap-preview-table featured-game-handicap-preview top-gap">
-      <div class="handicap-preview-header" aria-hidden="true"><div class="handicap-preview-description">Player / Tee</div><div class="handicap-preview-number">Index</div><div class="handicap-preview-number">Course HCP</div><div class="handicap-preview-number">Game HCP</div><div class="handicap-preview-number">Gets</div></div>
-      <div class="handicap-preview-grid">${rows.map(row => `<div class="handicap-preview-cardline"><div class="handicap-preview-meta handicap-preview-row"><div class="handicap-preview-description"><strong>${escapeHtml(row.player.name)}</strong><small>${escapeHtml(getTeamLabel({ teamNames }, row.team))} · ${escapeHtml(row.tee?.teeName || tee.teeName)}</small></div><div class="handicap-preview-number"><strong>${Number(row.playerIndex || 0).toFixed(1)}</strong></div><div class="handicap-preview-number"><strong>${row.courseHdcp}</strong></div><div class="handicap-preview-number"><strong>${row.gameHdcp}</strong></div><div class="handicap-preview-number"><strong>${courseNet ? row.gameHdcp : Math.max(0, row.gameHdcp - lowGameHandicap)}</strong></div></div></div>`).join('')}</div>
+  wrap.innerHTML = `<div class="tiny"><strong>${escapeHtml(policyLabel)}</strong><br>${escapeHtml(course.name)} · ${escapeHtml(segment)} · ${flamtana ? (offLowGame ? 'Gets and wager net scores use strokes off the lowest of all four teams.' : 'Legacy wagers use full handicaps; Gets shows strokes off the lowest team.') : courseNet ? 'Gets uses full Course Handicap strokes.' : 'Gets is relative to the lowest Game HCP.'}</div>
+    <div class="handicap-preview-table table-scroll-region featured-game-handicap-preview top-gap">
+      <div class="handicap-preview-header" aria-hidden="true"><div class="handicap-preview-description">${flamtana ? 'Team / Tee' : 'Player / Tee'}</div><div class="handicap-preview-number">Index</div><div class="handicap-preview-number">Course HCP</div><div class="handicap-preview-number">Game HCP</div><div class="handicap-preview-number">Gets</div></div>
+      <div class="handicap-preview-grid">${rows.map(row => `<div class="handicap-preview-cardline"><div class="handicap-preview-meta handicap-preview-row"><div class="handicap-preview-description"><strong>${escapeHtml(flamtana ? getTeamLabel({ teamNames }, row.team) : row.player.name)}</strong><small>${escapeHtml(flamtana ? enriched.filter(member => member.team === row.team).map(member => member.player.name).join(' / ') : getTeamLabel({ teamNames }, row.team))} · ${escapeHtml(row.tee?.teeName || tee.teeName)}</small></div><div class="handicap-preview-number"><strong>${Number(row.playerIndex || 0).toFixed(1)}</strong></div><div class="handicap-preview-number"><strong>${row.courseHdcp}</strong></div><div class="handicap-preview-number"><strong>${offLowGame ? row.gameHdcp - lowGameHandicap : row.gameHdcp}</strong></div><div class="handicap-preview-number"><strong>${courseNet && !flamtana ? row.gameHdcp : Math.max(0, row.gameHdcp - lowGameHandicap)}</strong></div></div></div>`).join('')}</div>
     </div>`;
 }
 
@@ -11864,11 +11903,11 @@ function buildClassicScorecard(match, metrics, opts = {}) {
     const teams = SCRAMBLE_TEAM_IDS.map(team => {
       const members = metrics.players.filter(row => Number(row.team) === team), member = members[0];
       return { playerId: 'team-' + team, team, player: { name: getTeamLabel(match, team) },
-        teeId: member?.teeId, tee: member?.tee, courseHdcp: member?.courseHdcp,
+        teeId: member?.teeId, tee: member?.tee, courseHdcp: getFlamtanaStrokeHandicap(match, member, metrics),
         teamMembers: members.map(row => row.player.name).join(' / '),
         scores: metrics.holeResults.map((_, index) => { const score = getScrambleTeamHoleScore(match, team, index + 1); return { gross: score.gross, pending: score.inconsistent }; }) };
     });
-    return buildClassicScorecard(match, { ...metrics, players: teams }, { ...opts, playerId: '', flamtanaTeamView: true, hideTeamColumn: true, readOnly: true, netMode: 'course' });
+    return buildClassicScorecard(match, { ...metrics, players: teams }, { ...opts, playerId: '', flamtanaTeamView: true, hideTeamColumn: true, readOnly: true, netMode: 'course', flamtanaOffLow: usesFlamtanaOffLow(match) });
   }
   const tee = metrics?.tee;
   if (!tee) return '<div class="tiny">No scorecard available.</div>';
@@ -11956,8 +11995,8 @@ function buildClassicScorecard(match, metrics, opts = {}) {
   const partialNote = completion.isIncomplete ? ' Unplayed holes are shown as dashes and excluded from totals.' : '';
   const netDescription = netMode === 'match'
     ? `Match Net for the Featured Competition: ${matchGameConfig?.key === 'nassau' ? `Net Nassau · Best ${normalizeCountingBalls(matchGameConfig.countingBalls, 1)} · ${formatRoundAllowanceLabel(match, normalizeHandicapAllowancePercent(matchGameConfig.handicapAllowancePercent, match.allowance))}` : (matchGameConfig?.key === 'stroke_net' ? 'Stroke Play · full Course Handicap' : `${getGameLabel(matchGameConfig?.key) || 'selected competition'} · ${formatRoundAllowanceLabel(match, normalizeHandicapAllowancePercent(matchGameConfig?.handicapAllowancePercent, match.allowance))}`)}`
-    : opts.flamtanaTeamView ? 'Course Net using each team’s full Course Handicap' : 'Course Net using each golfer’s full Course Handicap';
-  return `<div class="scorecard-sub tiny">Gross score shown above ${escapeHtml(netDescription)}. Dots indicate ${netMode === 'match' ? 'competition' : 'Course Handicap'} strokes.${escapeHtml(teeNote)}${escapeHtml(partialNote)}</div><div class="scorecard-wrap table-scroll-region" data-scroll-table="classic-scorecard" tabindex="0" role="region" aria-label="Classic scorecard; scroll horizontally to view all holes"><table ${opts.flamtanaTeamView ? 'data-team-scorecard="flamtana"' : ''} class="scorecard-table ${hideTeamColumn ? 'scorecard-no-team-col' : ''}"><thead><tr><th class="scorecard-sticky-name">${blankPlayerHeader ? '' : opts.flamtanaTeamView ? 'Team' : 'Player'}</th>${hideTeamColumn ? '' : '<th class="scorecard-sticky-team">Team</th>'}${holeHeader}${totalColumns}</tr></thead><tbody>${yardageRow}${parRow}${siRow}${playerRows}</tbody></table></div>`;
+    : opts.flamtanaTeamView ? (opts.flamtanaOffLow ? 'Net using strokes off the lowest of all four teams' : 'Course Net using each team’s full Course Handicap') : 'Course Net using each golfer’s full Course Handicap';
+  return `<div class="scorecard-sub tiny">Gross score shown above ${escapeHtml(netDescription)}. Dots indicate ${opts.flamtanaOffLow ? 'off-low handicap' : netMode === 'match' ? 'competition' : 'Course Handicap'} strokes.${escapeHtml(teeNote)}${escapeHtml(partialNote)}</div><div class="scorecard-wrap table-scroll-region" data-scroll-table="classic-scorecard" tabindex="0" role="region" aria-label="Classic scorecard; scroll horizontally to view all holes"><table ${opts.flamtanaTeamView ? 'data-team-scorecard="flamtana"' : ''} class="scorecard-table ${hideTeamColumn ? 'scorecard-no-team-col' : ''}"><thead><tr><th class="scorecard-sticky-name">${blankPlayerHeader ? '' : opts.flamtanaTeamView ? 'Team' : 'Player'}</th>${hideTeamColumn ? '' : '<th class="scorecard-sticky-team">Team</th>'}${holeHeader}${totalColumns}</tr></thead><tbody>${yardageRow}${parRow}${siRow}${playerRows}</tbody></table></div>`;
 }
 
 
@@ -13184,6 +13223,56 @@ function buildQuickPlayerScoreSummary(match, metrics, record = null) {
   return `<section class="quick-scoreboard-section quick-player-score-summary"><h4>Player Score Summary</h4>${buildPlayerSummaryTable(rows, 'Player Score Summary')}</section>`;
 }
 
+function buildFlamtanaLeaderboardData(match, metrics = null) {
+  const saved = isFrozenRoundRecord(match?.roundRecordSnapshot) ? match.roundRecordSnapshot.games?.find(game => game.gameId === 'flamtana_special')?.componentResults : null;
+  const result = saved || computeFlamtanaResults(match, metrics);
+  if (!result?.valid) return { valid: false, error: result?.error || 'Complete Flamtana setup to view standings.' };
+  const tables = result.components.filter(component => component.series).map(component => {
+    const holes = Array.from({ length: 18 }, (_, i) => i).filter(i => component.series.every(side => Number.isFinite(side.scores[i])));
+    const rows = component.series.map(side => ({ id: side.id, name: side.name, completed: side.scores.filter(Number.isFinite).length,
+      total: holes.length ? holes.reduce((sum,i) => sum + side.scores[i], 0) : null,
+      winner: result.final && component.result.winnerIds.includes(side.id) }));
+    rows.sort((a,b) => (a.total ?? Infinity) - (b.total ?? Infinity) || a.id.localeCompare(b.id));
+    rows.forEach(row => { row.rank = row.total === null ? null : rows.findIndex(other => other.total === row.total) + 1; });
+    const leaders = holes.length ? rows.filter(row => row.total === rows[0].total).map(row => row.id) : [];
+    return { key: component.key, label: component.label, rows, holes: holes.map(i => i+1), leaders, result: component.result };
+  });
+  const featured = tables.find(table => table.key === 'featured');
+  const leaders = result.final ? result.components[0].result.winnerIds : featured.leaders;
+  const cfg = result.config, pool = Math.round(cfg.calcuttaStake * 100) * match.players.length;
+  let cents = Object.fromEntries(match.players.map(player => [player.playerId, -Math.round(cfg.calcuttaStake * 100)]));
+  const shares = [];
+  if (result.final) {
+    const component = result.components.find(row => row.key === 'calcutta');
+    cents = Object.fromEntries(Object.entries(component.amounts).map(([id,value]) => [id,Math.round(value*100)]));
+    shares.push(...component.result.shares);
+  } else leaders.slice().sort().forEach((id,index) => {
+    const team = result.teams.find(row => row.id === id);
+    const backers = match.players.filter(player => Number(cfg.picks[player.playerId]) === Number(id.slice(1))).map(player => player.playerId);
+    const recipients = backers.length ? backers : team.memberIds;
+    const share = Math.floor(pool / leaders.length) + (index < pool % leaders.length ? 1 : 0);
+    distributeFlamtanaCents(cents,recipients,share);
+    shares.push({teamId:id,unbacked:!backers.length,recipients,grossPoolShare:share/100});
+  });
+  const calcutta = match.players.map(player => ({id:player.playerId,name:getPlayer(player.playerId)?.name || player.playerId,
+    pick:'T'+cfg.picks[player.playerId],amount:leaders.length ? cents[player.playerId]/100 : null}));
+  calcutta.sort((a,b) => (b.amount ?? -Infinity) - (a.amount ?? -Infinity) || a.id.localeCompare(b.id));
+  return {valid:true,final:result.final,offLow:result.config.scoringPolicyVersion===2,tables,calcutta,shares,pool:pool/100,leaders};
+}
+function buildFlamtanaLeaderboards(match, metrics) {
+  const data = buildFlamtanaLeaderboardData(match,metrics);
+  if (!data.valid) return '<section class="quick-scoreboard-section"><h4>Flamtana leaderboards</h4><p>'+escapeHtml(data.error)+'</p></section>';
+  const number = value => value === null ? '—' : value;
+  const cards = data.tables.map(table => `<section class="quick-scoreboard-section flamtana-leaderboard" data-flamtana-leaderboard="${table.key}">
+    <h4>${escapeHtml(table.label)}</h4><p class="tiny">${table.holes.length ? 'Net comparison on '+table.holes.length+' common completed holes: '+table.holes.join(', ') : 'Waiting for a common completed hole. Pending pairs are excluded.'}${data.final ? ' · Final'+(table.result.evidence.length>1?' · Card-Off':'') : ' · Live, not final'}</p>
+    <div class="player-summary-scroll"><table class="quick-scoreboard-table"><thead><tr><th>Place</th><th>${table.key==='foursome'?'Foursome':'Team'}</th><th>Net</th><th>Scored</th></tr></thead><tbody>${table.rows.map(row=>`<tr><td>${number(row.rank)}</td><td>${escapeHtml(row.name)}${row.winner?' · Winner':''}</td><td>${number(row.total)}</td><td>${row.completed}/18</td></tr>`).join('')}</tbody></table></div>
+    ${table.key==='foursome'?'<p class="tiny">Each hole uses the lower net of its two teams, then sums those hole values.</p>':''}</section>`).join('');
+  return `<section class="quick-scoreboard-section"><h4>Flamtana standings</h4><p class="tiny">${data.offLow?'Net uses strokes off the lowest of all four teams.':'Legacy round: net uses full team handicaps.'} Each contest compares the same completed holes across its sides.</p></section>${cards}
+    <section class="quick-scoreboard-section flamtana-leaderboard" data-flamtana-leaderboard="calcutta"><h4>Calcutta</h4><p class="tiny">Pool ${formatMoneyAccounting(data.pool)} · ${data.final?'Final saved payouts':'Projected net if the current Featured leaders win; card-off and payments await finalization.'}</p>
+    <div class="player-summary-scroll"><table class="quick-scoreboard-table"><thead><tr><th>Golfer</th><th>Backs</th><th>${data.final?'Final net':'Projected net'}</th></tr></thead><tbody>${data.calcutta.map(row=>`<tr><td>${escapeHtml(row.name)}</td><td>${escapeHtml(getTeamLabel(match,Number(row.pick.slice(1))))}</td><td>${row.amount===null?'Pending':formatFinalNetSettlementMoney(row.amount)}</td></tr>`).join('')}</tbody></table></div>
+    ${data.shares.filter(share=>share.unbacked).map(share=>'<p class="tiny">'+escapeHtml(getTeamLabel(match,Number(share.teamId.slice(1))))+' is unbacked; its share goes to its two partners.</p>').join('')}</section>`;
+}
+
 function buildQuickScoreboardView(match, metrics, preferences = getPlayerPreferences()) {
   if (!match || !metrics) return '<div class="player-detail-empty">Scoreboard is unavailable.</div>';
   const quickPreferences = normalizePlayerPreferences(preferences).quickScoreboard;
@@ -13206,7 +13295,7 @@ function buildQuickScoreboardView(match, metrics, preferences = getPlayerPrefere
       <div class="quick-scoreboard-facts">
         <div>${gameSummaryHtml || gameStatusRows}${!gameSummaryHtml ? `<section class="quick-scoreboard-section"><h4>Game Contributions</h4>${gameMoneyHtml}${sspMoneyHtml}</section>` : ''}</div>
       </div>
-      ${buildQuickPlayerScoreSummary(match, metrics, record)}
+      ${getFlamtanaConfig(match) ? buildFlamtanaLeaderboards(match, metrics) : buildQuickPlayerScoreSummary(match, metrics, record)}
       ${buildQuickScoreDistribution(match, metrics, record, quickPreferences.scoreDistributionExpanded)}
       <details class="quick-scoreboard-section quick-disclosure quick-classic-scorecard"${quickPreferences.classicScorecardExpanded ? ' open' : ''}><summary>Classic Scorecard</summary>${buildClassicScorecardPanel(match, metrics, { readOnly: true })}</details>
       ${buildQuickScoreboardMomentumCharts(match, metrics, quickPreferences.momentumExpanded)}
@@ -14643,6 +14732,11 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
   document.querySelectorAll('input[data-score-player]').forEach(input => {
     if (isTeamScoredRound(match)) {
       if (input.disabled || !input.dataset.scoreTeam || (input.dataset.teamInconsistent === '1' && input.dataset.teamScoreTouched !== '1')) return;
+      if (isCurrentDeviceMatchHost(match) && input.dataset.teamScoreTouched !== '1') {
+        const owned = getSharedLocallyOwnedPlayerIds(match);
+        const partners = match.players.filter(player => Number(player.team) === Number(input.dataset.scoreTeam));
+        if (partners.some(player => !owned.has(player.playerId))) return;
+      }
       const result = applyTeamGrossScore(match, Number(input.dataset.scoreTeam), currentHole, input.value);
       result.changedPlayerIds.forEach(id => changedScorePlayers.add(id));
       mutated = mutated || result.changedPlayerIds.length > 0;
@@ -20185,7 +20279,7 @@ function renderScoreGrid(match, tee, metrics, scoringHoles = null) {
   const body = document.getElementById('scoreGridBody');
   const headings = document.querySelectorAll('#classicScoreGridWrap thead th');
   if (headings[0]) headings[0].textContent = isTeamScoredRound(match) ? 'Team' : 'Player';
-  if (headings[3]) headings[3].textContent = getFlamtanaConfig(match) ? 'Course Net' : 'Net';
+  if (headings[3]) headings[3].textContent = getFlamtanaConfig(match) ? (usesFlamtanaOffLow(match) ? 'Net off low' : 'Course Net') : 'Net';
   if (headings[2]) {
     headings[2].textContent = getFlamtanaConfig(match) ? 'Off low' : isTeamScoredRound(match) ? 'Str.' : 'Strokes';
     headings[2].setAttribute('aria-label', getFlamtanaConfig(match) ? 'Strokes off the lowest of all four teams' : 'Strokes');
@@ -22475,6 +22569,8 @@ function applySavedPressDefaultsToCurrentSetup() {
 function getSetupDestinationForReadinessItem(item = {}) {
   const text = `${item.label || ''} ${item.warning || ''}`;
   if (/course|holes loaded|match date/i.test(text)) return 'course';
+  if (/shared|assignment|device|assigned-player/i.test(text)) return 'scoring';
+  if (/game|featured|9-point|sixes|wolf|nassau|sneaky|stat|calcutta|pick/i.test(text)) return 'games';
   if (/player|tee|team|handicap|allowance/i.test(text)) return 'players';
   if (/game|featured|9-point|sneaky|stat/i.test(text)) return 'games';
   if (/shared|scor|assignment|device/i.test(text)) return 'scoring';
@@ -22518,6 +22614,15 @@ function renderSetupDestinationStatuses(readinessState = null) {
     const el = document.querySelector(`[data-setup-status="${key}"]`);
     if (!el) return;
     el.textContent = label;
+    const reasons = warnings.filter(item => getSetupDestinationForReadinessItem(item) === key).map(item => item.warning || item.label);
+    let detail = el.parentElement.querySelector('[data-setup-reason]');
+    if (!detail) {
+      detail = document.createElement('small');
+      detail.dataset.setupReason = key;
+      el.parentElement.firstElementChild.appendChild(detail);
+    }
+    detail.textContent = [...new Set(reasons)].join(' ');
+    detail.classList.toggle('hidden', reasons.length === 0);
     el.classList.toggle('attention', counts[key] > 0);
     el.classList.toggle('ready', counts[key] === 0 && !['Not started', 'Optional', 'Defaults'].includes(label));
   });
@@ -25456,6 +25561,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const uniqueIds = new Set(selectedPlayers.map(p => p.playerId));
     if (selectedPlayers.length !== uniqueIds.size) return toast('Each player can only be selected once.');
     const selectedGames = collectSelectedGames();
+    if (!editingMatchId) selectedGames.forEach(game => { if (game.key === 'flamtana_special') game.scoringPolicyVersion = 2; });
     const scoringAccessMode = normalizeScoringAccessMode(fd.get('scoreEntryMode') || 'single_device');
     const scoreEntryMode = getLegacyScoreEntryMode(scoringAccessMode);
     const sharedMatchEnabled = (scoringAccessMode === 'assigned_players' || fd.get('sharedMatchEnabled') === 'on') && hasSupabaseConfig();
@@ -25746,6 +25852,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (match.storageMode === 'shared' && isAssignedPlayersMode(match) && isCurrentDeviceMatchHost(match)) {
       const owned = getSharedLocallyOwnedPlayerIds(match);
       getActivePlayEntryContainer()?.querySelectorAll('input[data-score-player]').forEach(input => {
+        if (isTeamScoredRound(match) && input.dataset.teamScoreTouched !== '1') return;
         const playerId = input.dataset.scorePlayer;
         if (!playerId || owned.has(playerId)) return;
         const mp = (match.players || []).find(row => row.playerId === playerId);
@@ -26895,6 +27002,8 @@ function installDyeLedgerLiveEngineAdapter() {
     reconcileInterruptedFinishState,
     loadStateFromStorage,
     persistStateSnapshot,
+    buildFlamtanaLeaderboardData, buildFlamtanaLeaderboards,
+    resolveRemoteScoreParticipant, usesFlamtanaOffLow, getFlamtanaStrokeHandicap,
     compactUnusedMatchStats, compactPersistentMatches, evictFrozenMatchSyncDiagnostics, isDefaultStatsArray, materializeMatchStats, getPlayerStatsForStorage, getLocalSaveFailureMessage, getLocalStorageUsage, getStorageUsageText, ensurePlayInputState, buildEmptyStats,
     persistFinishedStateSnapshot,
     writeJsonStorageRecord,

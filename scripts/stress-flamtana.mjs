@@ -8,6 +8,9 @@ import {chrome,startServer} from '../tests/support/design-browser.js';
 
 const directory=process.env.FLAMTANA_STRESS_OUTPUT || 'tmp/report-qa/v62/stress';
 const baselineDirectory=process.env.FLAMTANA_STRESS_BASELINE || '';
+const policyVersion=Number(process.env.FLAMTANA_STRESS_POLICY_VERSION || 1);
+assert.ok([1,2].includes(policyVersion));
+if(policyVersion===2&&baselineDirectory)throw new Error('The newly authorized off-low rules require their independent oracle, not legacy settlement equality.');
 fs.mkdirSync(directory,{recursive:true});
 let randomState=620050;
 const random=()=>{randomState=(Math.imul(randomState,1664525)+1013904223)>>>0;return randomState/4294967296;};
@@ -39,7 +42,7 @@ try{
   data.match.players.forEach(player=>player.assignedTeamIndex=handicaps[player.team-1]);
   const picks=Object.fromEntries(data.match.players.map((player,i)=>[player.playerId,kind===2?4:kind===3?1:kind===1?player.team:kind===8?[1,1,1,2,2,3,4,4][i]:1+Math.floor(random()*4)]));
   const stake=kind===7?0:kind===8?19.99:kind===9?12.34:20;
-  const cfg={key:'flamtana_special',scoringPolicyVersion:1,tieMethod:methods[run%4],featuredStake:stake,groupStake:kind===9?13.37:stake,foursomeStake:kind===9?1.01:stake,calcuttaStake:stake,picks};
+  const cfg={key:'flamtana_special',scoringPolicyVersion:policyVersion,tieMethod:methods[run%4],featuredStake:stake,groupStake:kind===9?13.37:stake,foursomeStake:kind===9?1.01:stake,calcuttaStake:stake,picks};
   data.match.selectedGames=[cfg];
   const match=engine.seedState({players:data.players,courses:[data.course],matches:[data.match]}).matches[0];
   const gross=Array.from({length:4},(_,team)=>Array.from({length:18},(_,hole)=>{
@@ -50,7 +53,8 @@ try{
    if(kind===5)return team<2?(hole%2===team?3:6):5;
    return 3+Math.floor(random()*5);
   }));
-  const net=gross.map((scores,team)=>scores.map((score,hole)=>score-oracleStrokes(handicaps[team],hole+1)));
+  const playing=policyVersion===2?handicaps.map(value=>value-Math.min(...handicaps)):handicaps;
+  const net=gross.map((scores,team)=>scores.map((score,hole)=>score-oracleStrokes(playing[team],hole+1)));
   const groups=[['p0','p1'],['p2','p3'],['p4','p5'],['p6','p7']];
   const foursome=[net[0].map((score,i)=>Math.min(score,net[1][i])),net[2].map((score,i)=>Math.min(score,net[3][i]))];
   // Actual validated team-write controller; groups deliberately score in different orders.
@@ -105,7 +109,7 @@ try{
   const physical=(Buffer.from(pdf).toString('latin1').match(/\/Type\s*\/Page\b/g)||[]).length;assert.equal(physical,audit.pages.length);
   if(run===0||kind===4||kind===9)await page.screenshot({path:directory+'/'+name+'.png',fullPage:false});
   results.push({run:run+1,kind,tieMethod:cfg.tieMethod,ios:!!(run%2),pages:physical,pdfBytes:pdf.length,engineMs:Math.round(engineMs),reportMs:Math.round(performance.now()-renderStart),pass:true});await page.close();
-  fs.writeFileSync(directory+'/results.json',JSON.stringify({seed:620050,runs:results},null,2));console.log('PASS '+name+' '+cfg.tieMethod+' '+physical+' pages');
+  fs.writeFileSync(directory+'/results.json',JSON.stringify({seed:620050,policyVersion,runs:results},null,2));console.log('PASS '+name+' '+cfg.tieMethod+' '+physical+' pages');
  }
  console.log('COMPLETE '+results.length+'/50 passed');
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

@@ -92,3 +92,25 @@
 }
 
 .storage-usage-diagnostic { overflow-wrap: anywhere; }
+
+
+/* The same widths, gaps and padding align labels with every row. */
+.handicap-preview-table { overflow-x: auto; }
+.handicap-preview-table .handicap-preview-grid { grid-template-columns: minmax(0, 1fr); }
+.handicap-preview-table .handicap-preview-header,
+.handicap-preview-table .handicap-preview-cardline { min-width: 20rem; width: 100%; box-sizing: border-box; }
+.featured-game-handicap-preview .handicap-preview-header,
+.featured-game-handicap-preview .handicap-preview-cardline { min-width: 26rem; }
+.handicap-preview-table .handicap-preview-header,
+.handicap-preview-table .handicap-preview-meta,
+#setup .persistent-preview-card .handicap-preview-table .handicap-preview-meta {
+  column-gap: var(--space-1);
+  padding-left: var(--space-2);
+  padding-right: var(--space-2);
+}
+.handicap-preview-table .handicap-preview-cardline { border: 0; padding: 0; }
+.handicap-preview-table .handicap-preview-meta { padding-top: var(--space-2); padding-bottom: var(--space-2); }
+.flamtana-leaderboard th, .flamtana-leaderboard td { overflow-wrap: anywhere; }
+.setup-destination-status { white-space: normal; overflow-wrap: anywhere; max-width: 50%; flex-shrink: 0; }
+.setup-hub-heading { flex-wrap: wrap; }
+.setup-destination-card [data-setup-reason] { overflow-wrap: anywhere; }

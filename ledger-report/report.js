@@ -3,10 +3,10 @@
    or derived from it. Stroke allocation comes from the app's engine, keyed by
    basis; the report never re-derives handicapping.
    ========================================================================== */
-import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getWinningMarginPerspective } from './logic.js?v=31.0.68';
+import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getWinningMarginPerspective } from './logic.js?v=31.0.70';
 
-import './stroke-play.js?v=31.0.68';
-import { compactFlamtanaEvidence, formatFlamtanaMatchedSteps } from './flamtana-evidence.js?v=31.0.68';
+import './stroke-play.js?v=31.0.70';
+import { compactFlamtanaEvidence, formatFlamtanaMatchedSteps } from './flamtana-evidence.js?v=31.0.70';
 const {buildStrokePlaySummary,roundEntryColors,strokePlayChart,strokePlayStrip,strokePlayCallout,handicapTable,toPar}=globalThis.DYE_LEDGER_STROKE_REPORT;
 
 const packPages = globalThis.packPages;
@@ -604,12 +604,12 @@ if(FR && FR.turning && !STROKE) add("turning", ()=>{
 
 /* Saved Flamtana evidence; no result is inferred from chart margins. */
 if(ROUND.meta?.flamtana) {
-  add('flamtana-handicaps-head',()=>secHead('Team handicaps','Saved assigned team index → Course Handicap → final Playing Handicap.'),{keepWithNext:true});
+  add('flamtana-handicaps-head',()=>secHead('Team handicaps',ROUND.meta.flamtanaOffLow ? 'Saved team index → Course Handicap → strokes off the lowest of all four teams.' : 'Saved assigned team index → Course Handicap → final Playing Handicap.'),{keepWithNext:true});
   add('flamtana-handicaps',()=>{
     const wrapper=h('div',{'data-flamtana-handicaps':''}),table=h('table',{class:'handicap-table'}),head=h('thead'),heading=h('tr'),body=h('tbody');
-    ['Team','Tee','Assigned index','Saved CH','Final PH'].forEach(text=>heading.appendChild(h('th',{text})));head.appendChild(heading);table.appendChild(head);
+    ['Team','Tee','Assigned index','Saved CH',ROUND.meta.flamtanaOffLow?'Gets off low':'Final PH'].forEach(text=>heading.appendChild(h('th',{text})));head.appendChild(heading);table.appendChild(head);
     P.forEach(team=>{const row=h('tr',{'data-row':''});[team.name,team.tee,isNum(team.index)?team.index.toFixed(1):'—',team.ch,team.ph].forEach(value=>row.appendChild(h('td',{text:String(value)})));body.appendChild(row);});
-    table.appendChild(body);wrapper.appendChild(table);wrapper.appendChild(h('p',{class:'scnote',text:'Course Handicap = round(assigned team index × slope / 113 + rating − par). The saved Course Handicap is the final Playing Handicap: full signed strokes, no further allowance. Featured and Group compare team net totals. Foursome sums each hole’s lower team net score; it has no separate handicap. These saved values are displayed without recalculation.'}));return wrapper;
+    table.appendChild(body);wrapper.appendChild(table);wrapper.appendChild(h('p',{class:'scnote',text:ROUND.meta.flamtanaOffLow ? 'Course Handicap uses the saved team index and tee. Gets = team Course Handicap minus the lowest Course Handicap of all four teams, with no further allowance. Featured and Group use net hole scores after these strokes. Foursome sums each hole’s lower team net score. Full Course Net elsewhere is informational. These are saved values.' : 'Course Handicap = round(assigned team index × slope / 113 + rating − par). The saved Course Handicap is the final Playing Handicap: full signed strokes, no further allowance. Featured and Group compare team net totals. Foursome sums each hole’s lower team net score; it has no separate handicap. These saved values are displayed without recalculation.'}));return wrapper;
   },{keepTogetherWhenFits:true});
   add('flamtana-evidence-head',()=>secHead('Flamtana results and tie evidence', ROUND.meta.flamtanaFinal ? 'Final saved results · stroke totals, never holes won.' : 'Provisional · card-off and payments await finalization.'),{keepWithNext:true});
   (ROUND.meta.flamtanaEvidence || []).forEach((component,index)=>add('flamtana-evidence-'+index,()=>{
@@ -1145,7 +1145,7 @@ if(NINEPOINT?.R?.series.some(series=>series.raw.some(isNum))){
 SIDEGAMES.forEach((g,gi)=>{
   add("sg"+gi+"h", ()=>{const heading=secHead(g.name,
     g.R&&g.R.archetype==="discrete"&&g.R.stake
-      ? `Par 3s · ${usd(g.R.stake)} per player per hole` : ROUND.meta?.flamtana?(g.id==='flamtana_foursome'?'Foursome net totals · per-hole team minima':'Team net totals · full saved Course Net'):'');if(ROUND.meta?.flamtana)heading.classList.add('flamtana-game-heading');return heading;},
+      ? `Par 3s · ${usd(g.R.stake)} per player per hole` : ROUND.meta?.flamtana?(g.id==='flamtana_foursome'?'Foursome net totals · per-hole team minima':(ROUND.meta.flamtanaOffLow ? 'Team net totals · off lowest of all four teams' : 'Team net totals · full saved Course Net')):'');if(ROUND.meta?.flamtana)heading.classList.add('flamtana-game-heading');return heading;},
     {keepWithNext:true, label:"Games"});
   add("sg"+gi, ()=>{
     const w=h("div",{class:"split",...(ROUND.meta?.flamtana?{'data-flamtana-chart':g.id}:{})});

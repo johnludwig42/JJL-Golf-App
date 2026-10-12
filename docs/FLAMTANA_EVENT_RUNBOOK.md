@@ -1,12 +1,13 @@
 # Flamtana Special — Friday, October 16, 2026
 
-**Use the tested v31.0.68 application on both phones.** The v31.0.69 work is
-verification and this runbook; it does not install a different scoring engine.
+**Install v31.0.70 on both phones for a newly created off-low match.** Existing
+unfinished matches retain their original full-handicap wager rule; start a fresh
+match to use the new rule. Existing frozen results stay unchanged.
 Keep a paper team scorecard and the eight Calcutta picks with the host.
 
 ## 1. Before anyone tees off
 
-1. On both phones, open **More → App Support** and confirm v31.0.68. Install any
+1. On both phones, open **More → App Support** and confirm v31.0.70. Install any
    available update before creating the event match. Confirm existing saved rounds
    are still in Library. Check **Technical diagnostics** for storage usage.
 2. On the host, choose **Match → Create a Match**. Select the course and 18 holes.
@@ -14,7 +15,8 @@ Keep a paper team scorecard and the eight Calcutta picks with the host.
    Match and assigned-player scoring. Use only Flamtana Special for the wagers.
 3. Select all eight distinct golfers and team names. Choose **one tee per team**;
    both partners share that tee, while different teams may choose different tees.
-   Deliberately check/enter each assigned team index and its resulting Playing HCP.
+   Deliberately check/enter each assigned team index, resulting Course HCP and Gets.
+   For a new match, Gets is that team's Course HCP minus the lowest of all four.
 4. In **Games & Stat Tracking**, check the per-person Featured, Group, Foursome
    and Calcutta stakes and the tie method. Defaults are $20 each: $80 exposure per
    golfer. Enter **all eight Calcutta picks**, including anyone backing their own
@@ -39,9 +41,13 @@ Keep a paper team scorecard and the eight Calcutta picks with the host.
   check the local-save/backup guidance before changing holes.
 - The two foursomes may score different holes. Check the hole selector on each
   phone. Whole-field progress advances only when all four teams complete a hole.
-- Play's **Off low** strokes are relative to the lowest of all four teams.
-  **Course Net and every Flamtana wager use full team handicaps.** Do not use
-  Off low to calculate wager totals manually.
+- In a **new .70 match**, Play's **Off low** strokes and **Net off low** scores use
+  the lowest Course HCP of all four teams. Every Flamtana wager uses those net hole
+  scores. Older existing matches keep full Course Net for wagers and say Legacy.
+  Check the round's displayed basis before calculating manually.
+- Play → **Scoreboard** shows Featured, both Groups, Foursome and Calcutta.
+  Each contest compares common completed holes; Scored shows each side's own
+  progress. Calcutta is a labelled projection until finalization.
 - Keep the paper card current and synchronize when connection permits.
 
 ## 3. If a team says Pending
@@ -90,8 +96,9 @@ do not reset its website data or reinstall it to troubleshoot a connection.
    wagers, both Group results, card-off evidence, Calcutta and payment instructions.
    Generate/review/accept the Story of the Round if desired, then print or save PDF
    using the report's controls. Keep the PDF and paper card.
-5. Check combined net positions sum to **$0**. The report's **Course Net** values
-   are the wager basis. A card-off resolves a tied stroke-total wager; it is not
+5. Check combined net positions sum to **$0**. For a new .70 round, the report's
+   **Featured/Game net** uses off-low strokes; full Course Net elsewhere is
+   informational. Legacy rounds use full Course Net. A card-off resolves a tied stroke-total wager; it is not
    a hole-by-hole match-play result.
 
 ## 7. Manual settlement if the app cannot settle
@@ -99,13 +106,16 @@ do not reset its website data or reinstall it to troubleshoot a connection.
 Keep the app's local round and paper scores. Record manual calculations and
 payments separately; an unfinished app report remains provisional.
 
-**Prepare the card.** Write each team's gross and full Course Net for holes 1–18,
-the four net totals, the stakes, tie method and eight picks. Use the full saved
-team Playing HCP and that team's tee stroke indexes. There is no extra allowance.
-For a nonnegative HCP, give `floor(HCP/18)` shots on every hole, plus one on stroke
-indexes 1 through `HCP mod 18`. For a negative/plus HCP, give shots back on the
-highest stroke indexes first. Net is gross minus shots received (plus shots given
-back). Use the printed/saved net hole values whenever available.
+**Prepare the card.** Write each team's gross and wager net for holes 1–18, the
+four net totals, stakes, tie method, saved handicap basis and eight picks.
+For a new .70 match, subtract the lowest of all four saved Course HCPs from each
+team's Course HCP to get its Game HCP. For example 3/6/9/12 becomes 0/3/6/9.
+Use Game HCP on that team's tee stroke indexes, with no extra allowance:
+`floor(Game HCP/18)` shots on every hole, plus one on indexes 1 through
+`Game HCP mod 18`. Net is gross minus those shots.
+For a legacy match, use its full saved HCP; a negative/plus HCP gives shots back
+on the highest stroke indexes first. Use the printed/saved wager net values
+whenever available. Do not convert an existing round's rules mid-event.
 
 | Wager | Comparison | Pool and recipients |
 | --- | --- | --- |

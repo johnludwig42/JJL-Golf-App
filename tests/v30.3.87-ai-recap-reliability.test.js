@@ -31,7 +31,8 @@ test('client performs one repair attempt and replaces an unverified result with 
   assert.match(app, /match\.roundRecapGenerated = recap/);
   assert.match(app, /buildDeterministicLedgerEntryStory\(match, metrics, 'verification-failed'\)/);
   assert.match(app, /roundRecapValidationIssues/);
-  assert.match(app, /const recap = draftRecap \|\| finalRecap/);
+  // Draft display and required-fact normalization are exercised by the
+  // executable story review/save/preview browser tests.
   assert.match(app, /getDraftRoundRecap\(match\) \|\| getStoredRoundRecap\(match\)/);
 });
 

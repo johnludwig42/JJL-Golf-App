@@ -1,6 +1,6 @@
 # Flamtana Special — Friday, October 16, 2026
 
-**Install v31.0.72 on both phones before the event.** New matches use off-low
+**Install v31.0.73 on both phones before the event.** New matches use off-low
 strokes; .72 adds AI Story/report and remote-completion fixes. Existing
 unfinished matches retain their original full-handicap wager rule; start a fresh
 match to use the new rule. Existing frozen results stay unchanged.
@@ -8,9 +8,14 @@ Keep a paper team scorecard and the eight Calcutta picks with the host.
 
 ## 1. Before anyone tees off
 
-1. On both phones, open **More → App Support** and confirm v31.0.72. Install any
+1. On both phones, open **More → App Support** and confirm v31.0.73. Install any
    available update before creating the event match. Confirm existing saved rounds
    are still in Library. Check **Technical diagnostics** for storage usage.
+   Check **More → Account & Security**: the host must be signed into the account
+   that creates the round. If Play/Scores asks you to sign in, use its Account &
+   Security button, then return to the saved round and tap **Sync Now**. Do not
+   recreate the round or clear app data. Other access-denied messages may need
+   account/assignment checks; they do not necessarily mean you are signed out.
 2. On the host, choose **Match → Create a Match**. Select the course and 18 holes.
    Select **Flamtana Special / Two-man Scramble**, four teams of two, a Shared
    Match and assigned-player scoring. Use only Flamtana Special for the wagers.

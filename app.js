@@ -19,11 +19,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.72',
-  versionNumber: '31.0.72',
-  cacheName: 'the-dye-ledger-v31.0.72',
-  buildDate: '2026-10-12T23:34:49.490Z',
-  buildLabel: 'Flamtana Story and Round Finish'
+  version: 'v31.0.73',
+  versionNumber: '31.0.73',
+  cacheName: 'the-dye-ledger-v31.0.73',
+  buildDate: '2026-10-13T01:52:38.483Z',
+  buildLabel: 'Shared Match Sign-In Recovery'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -1691,6 +1691,7 @@ function summarizeLedgerParity(comparison = null, { checkedAt = new Date().toISO
 }
 function recordSharedLedgerParity(match, comparison = null, options = {}) {
   if (!match || match.storageMode !== 'shared') return null;
+  if (match.sharedAccountRecovery) { setSharedAccountRecovery(match,match.sharedAccountRecovery,match.lastSharedSyncErrorCode || 'ACCESS_REQUIRED'); return match.sharedLedgerParity; }
   match.sharedLedgerParity = summarizeLedgerParity(comparison, options);
   match.lastSharedParityCheckAt = match.sharedLedgerParity.checkedAt;
   return match.sharedLedgerParity;
@@ -1878,7 +1879,56 @@ function formatSharedLastSync(match) {
 function formatSharedStatusTimestamp(ts) {
   return ts ? formatTimestampET(ts, { includeDate: false }) : 'Not yet';
 }
+function getSharedAccountRecovery(err) {
+  const code = String(err?.code || err?.status || '').toLowerCase();
+  if (['shared_sign_in_required','401','pgrst301','pgrst302','bad_jwt','jwt_expired','session_not_found','refresh_token_not_found'].includes(code) || err?.name === 'AuthSessionMissingError') return { kind: 'sign-in', message: 'Sign in to resume shared syncing. Use the same account that created this round on the host. Your scores remain saved on this device.' };
+  if (code === '42501' || code === '403') return { kind: 'permission', message: 'Shared-match access was denied. Check your signed-in account and match access. Your scores remain saved on this device.' };
+  return null;
+}
+function requireSharedHostAccount(match, user) {
+  if (!isCurrentDeviceMatchHost(match)) return;
+  const durable = !!user?.id && user.is_anonymous !== true && user.app_metadata?.provider !== 'anonymous';
+  if (durable) { delete match.sharedAccountRecovery; sharedOutboxPermanentFailureMatches.delete(String(match.sharedMatchId || match.id || '')); return; }
+  const error = new Error('Sign in with the account that created this Shared Match.');
+  error.code = 'SHARED_SIGN_IN_REQUIRED';
+  throw error;
+}
+function setSharedAccountRecovery(match, recovery, code) {
+  match.sharedAccountRecovery = recovery;
+  match.sharedLedgerParity = { ...(match.sharedLedgerParity || {}), status: 'access-blocked', parityConfirmed: false,
+    missingLocal: [], missingRemote: [], conflicts: [], warning: recovery.message, checkErrorCode: code };
+}
+async function openSharedAccountRecovery() {
+  if (hasUnsavedVisibleScoreInputs()) { toast('Save the current hole entry before opening Account & Security.'); return false; }
+  if (!persist({ skipRender: true })) return false;
+  activateTab('settings');
+  openExperienceDestination('settings','account');
+  toast('Sign in, then return to Play and tap Sync Now. Your round stays saved.');
+  return true;
+}
+function renderSharedAccountRecovery({ focus = false } = {}) {
+  if (DYE_LEDGER_ADAPTER_MODE) return;
+  for (const [id, match] of [['score',getActiveMatch()],['leaderboard',getReviewOrActiveMatch()]]) {
+    const root = document.getElementById(id); if (!root) continue;
+    const noticeId = 'sharedAccountRecovery-' + id;
+    let notice = document.getElementById(noticeId);
+    const recovery = match?.sharedAccountRecovery;
+    if (!recovery) { notice?.classList.add('hidden'); continue; }
+    if (!notice) { notice = document.createElement('div'); notice.id = noticeId; notice.className = 'setup-warning'; notice.setAttribute('role','alert'); root.prepend(notice); }
+    notice.classList.remove('hidden');
+    notice.innerHTML = '<strong>'+ (recovery.kind === 'sign-in' ? 'Sign in to sync this round' : 'Check your account and shared-match access') + '</strong><p>'+escapeHtml(recovery.message)+'</p><div class="actions"><button type="button" data-open-shared-account>'+ (recovery.kind === 'sign-in' ? 'Sign in · Account & Security' : 'Check Account & Security') + '</button><button type="button" class="secondary" data-retry-account-sync>Sync Now</button></div><div class="tiny">For the host, use the account that created this round. After signing in, return here and tap Sync Now. If access is still denied, copy Support diagnostics.</div>';
+    notice.querySelector('[data-open-shared-account]').addEventListener('click',openSharedAccountRecovery);
+    notice.querySelector('[data-retry-account-sync]').addEventListener('click',async () => {
+      if (hasUnsavedVisibleScoreInputs()) { toast('Save the current hole entry before syncing.'); return; }
+      await flushSharedMatchSync(match.id,{silent:false});
+      renderSharedAccountRecovery({focus:!!getMatch(match.id)?.sharedAccountRecovery});
+    });
+    if (focus && getActivePanelId() === id) { notice.scrollIntoView({ block: 'start', behavior: 'smooth' }); notice.querySelector('button').focus({ preventScroll: true }); }
+  }
+}
 function getSharedFriendlyError(err) {
+  const recovery = getSharedAccountRecovery(err);
+  if (recovery) return recovery.message;
   const raw = String(err?.message || err?.details || err || '').trim();
   if (!raw) return 'Cloud sync is unavailable right now.';
   if (/network|fetch|failed|offline|unavailable|timeout/i.test(raw)) return 'Cloud sync is unavailable right now.';
@@ -1896,6 +1946,8 @@ function recordSharedCloudFailure(match, err, { explicit = false, phase = 'sync'
   const message = getSharedFriendlyError(err);
   match.lastSharedSyncError = message;
   match.lastSharedSyncErrorCode = code;
+  const recovery = getSharedAccountRecovery(err);
+  if (recovery) { setSharedAccountRecovery(match,recovery,code); renderSharedAccountRecovery({focus:explicit}); }
   recordSharedSyncDiagnostic(match, 'CLOUD_SYNC_FAILED', { phase, code, message });
   if (explicit) {
     const safeError = new Error(`${message} Error code: ${code}.`);
@@ -5247,7 +5299,7 @@ function buildRoundEndReviewHtml(match, mode, completion = getRoundDataCompletio
   const provisional = !completion.scoresComplete || !allGamesFinal;
   const authority = getRoundFinalizationAuthority(match);
   return `<div class="round-end-review-status ${provisional ? 'provisional' : 'final'}"><strong>${provisional ? 'Provisional result' : 'Final result ready'}</strong><span>${escapeHtml(authority.label)}</span></div>
-    <dl class="round-end-review-facts"><div><dt>Progress</dt><dd>${escapeHtml(completion.scoreCompletion?.label || `${completedHoles(match)} holes completed`)}</dd></div><div><dt>Settlement</dt><dd>${provisional ? 'May remain provisional' : 'Ready to save'}</dd></div></dl>
+    <dl class="round-end-review-facts"><div><dt>Progress</dt><dd>${escapeHtml(completion.scoreCompletion?.label || `${completedHoles(match)} holes completed`)}</dd></div><div><dt>Settlement</dt><dd>${match.sharedAccountRecovery ? 'Check account before completing' : provisional ? 'May remain provisional' : 'Ready to save'}</dd></div></dl>
     ${scoreRows.length ? `<section><h4>${isTeamScoredRound(match) ? 'Pending or missing team scores' : 'Missing scores'}</h4><ul>${scorePreview}${scoreRows.length > 8 ? `<li>${scoreRows.length - 8} more</li>` : ''}</ul></section>` : '<p class="round-end-review-ok">✓ All required scores are entered.</p>'}
     ${stats ? `<p><strong>Enabled statistics:</strong> ${escapeHtml(stats.label)}. Untouched entries will be excluded from summaries.</p>` : '<p class="round-end-review-ok">✓ Enabled statistics are recorded.</p>'}
     ${games.length ? `<p><strong>Needs review:</strong> ${escapeHtml(games.map(item => item.label).join('; '))}.</p>` : '<p class="round-end-review-ok">✓ Required game facts are resolved.</p>'}`;
@@ -13585,6 +13637,7 @@ function buildFrozenScoresGameSummary(record) {
 
 function renderLeaderboard() {
   const match = getReviewOrActiveMatch();
+  renderSharedAccountRecovery();
   const empty = document.getElementById('leaderboardEmpty');
   const wrap = document.getElementById('leaderboardWrap');
   const completedSummaryBanner = document.getElementById('completedSummarySessionBanner');
@@ -15306,7 +15359,7 @@ function getSharedMatchesWithPendingScoreOperations(matches = state.matches, sto
 function isPermanentSharedScoreDeliveryError(error) {
   const code = String(error?.code || error?.status || '').toUpperCase();
   const message = String(error?.message || error?.details || '').toLowerCase();
-  return ['401', '403', '42501', 'PGRST301'].includes(code)
+  return ['401', '403', '42501', 'PGRST301', 'SHARED_SIGN_IN_REQUIRED'].includes(code)
     || /not authorized|permission denied|membership|assignment|not assigned|row-level security/.test(message);
 }
 async function drainPendingSharedScoreOperationsForMatch(matchOrId, { storage = localStorage } = {}) {
@@ -15319,6 +15372,7 @@ async function drainPendingSharedScoreOperationsForMatch(matchOrId, { storage = 
     const client = await ensureSupabaseClient();
     if (!client) throw new Error('Supabase is not configured.');
     match = getCanonicalSharedMatch(matchOrId) || match;
+    if (isCurrentDeviceMatchHost(match)) requireSharedHostAccount(match,await getSupabaseUser());
     if (!isCurrentDeviceMatchHost(match)) {
       await mergeCloudSharedMetadata(match, { includeAssignments: true, includeMemories: false });
       if (match.remoteCompletionPending || match.status === 'complete') {
@@ -15383,6 +15437,7 @@ async function uploadSharedMatch(match) {
   const client = await ensureSupabaseClient();
   if (!client) throw new Error('Supabase is not configured.');
   const user = await getSupabaseUser();
+  requireSharedHostAccount(match,user);
   ensureSharedParticipantRegistered(match, isCurrentDeviceMatchHost(match) ? 'Host Device' : getPreferredSharedDeviceName('Joined Device'));
   migrateSharedPlayerAssignmentsToParticipants(match);
   const payload = buildCloudMatchPayload(match, user?.id || null);
@@ -15870,6 +15925,7 @@ async function ensureSharedRealtimeSubscription(match = getActiveMatch()) {
 }
 async function reconcileSharedMatchBeforeSummary(match, { silent = true } = {}) {
   if (!match || match.storageMode !== 'shared') return { parityConfirmed: true, status: 'not-shared' };
+  if (match.sharedAccountRecovery) { renderSharedAccountRecovery({focus:!silent}); return match.sharedLedgerParity; }
   const checkedAt = new Date().toISOString();
   match.sharedLedgerParity = summarizeLedgerParity(compareScoredLedgers(extractLocalScoredLedger(match), []), {
     checkedAt,
@@ -15898,6 +15954,13 @@ async function reconcileSharedMatchBeforeSummary(match, { silent = true } = {}) 
     return parity;
   } catch (err) {
     console.warn('Shared summary reconciliation failed.', err);
+    const recovery = getSharedAccountRecovery(err);
+    if (recovery) {
+      recordSharedCloudFailure(match,err,{explicit:!silent,phase:'summary-reconciliation'});
+      persist({skipRender:true});
+      if (!silent) toast(recovery.message);
+      return match.sharedLedgerParity;
+    }
     const parity = recordSharedLedgerParity(match, compareScoredLedgers(extractLocalScoredLedger(match), []), {
       checkedAt: new Date().toISOString(),
       warning: 'Shared Match reconciliation was not confirmed before this summary was generated.',
@@ -16482,6 +16545,8 @@ async function flushSharedMatchSync(matchId, { silent = true } = {}) {
       match = getCanonicalSharedMatch(matchId) || match;
       setLastOpenedSharedMatch(match);
       if (!failure) {
+        delete match.sharedAccountRecovery;
+        renderSharedAccountRecovery();
         match.lastSharedSyncError = '';
         match.lastSharedSyncErrorCode = '';
       } else {
@@ -16529,7 +16594,7 @@ async function flushSharedMatchSync(matchId, { silent = true } = {}) {
         parityStatus: match.sharedLedgerParity?.status || 'not-checked',
       });
       persist({ skipRender: true });
-      if (!silent) toast('Cloud sync failed. Changes are still stored locally on this device.');
+      if (!silent) toast(match.sharedAccountRecovery?.message || 'Cloud sync failed. Changes are still stored locally on this device.');
     }
   })();
   sharedMatchSyncInflight.set(matchId, task);
@@ -18916,6 +18981,12 @@ async function handleRoundEndPrimary() {
       applyCurrentHoleDomToMatch(match);
       persist({ skipRender: true });
       await flushSharedMatchSync(match.id, { silent: true });
+      if (match.sharedAccountRecovery) {
+        finishConfirmArmed = false;
+        renderSharedAccountRecovery({focus:true});
+        toast(match.sharedAccountRecovery.message);
+        return;
+      }
       const parity = await reconcileSharedMatchBeforeSummary(match, { silent: true });
       renderAll();
       if (!parity?.parityConfirmed) {
@@ -19626,6 +19697,7 @@ async function switchPlayInputMode(nextMode) {
 }
 
 function renderCurrentMatch() {
+  renderSharedAccountRecovery();
   const match = getActiveMatch();
   const rulesWrap = document.getElementById('playGroupRulesPreview');
   if (rulesWrap) rulesWrap.innerHTML = match ? (match.remoteCompletionPending ? '<div class="setup-warning" role="alert">'+escapeHtml(getRemoteCompletionWarning(match))+'</div>' : '') + (getAssignedTeamIndexError(match) ? '<div class="setup-warning">' + escapeHtml(getAssignedTeamIndexError(match)) + '</div>' : '') + buildGroupRulesPreview(match, rulesWrap.querySelector('details')?.open || false) : '';
@@ -25652,6 +25724,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       if (retrySync) {
         recordSharedSyncDiagnostic(match, 'RECONNECT', { reason: 'manual-retry' });
         await flushSharedMatchSync(match.id, { silent: false });
+        if (match.sharedAccountRecovery) { renderSharedAccountRecovery({focus:true}); return; }
       }
       await upsertSharedMembershipForCurrentDevice(match).catch(err => console.warn('Could not update joined-device membership.', err));
       await publishCurrentSharedDeviceToCloudMetadata(match).catch(err => console.warn('Could not publish joined-device metadata.', err));
@@ -27203,6 +27276,11 @@ function installDyeLedgerLiveEngineAdapter() {
     loadStateFromStorage,
     persistStateSnapshot,
     buildFlamtanaLeaderboardData,
+    getSharedAccountRecovery,
+    getSharedFriendlyError,
+    recordSharedLedgerParity,
+    requireSharedHostAccount,
+    recordSharedCloudFailure,
     buildFlamtanaProjectedSettlement,
     finishRemoteSharedRoundIfReady, buildFlamtanaLeaderboards,
     resolveRemoteScoreParticipant, usesFlamtanaOffLow, getFlamtanaStrokeHandicap,

@@ -1,13 +1,14 @@
 # Flamtana Special — Friday, October 16, 2026
 
-**Install v31.0.70 on both phones for a newly created off-low match.** Existing
+**Install v31.0.72 on both phones before the event.** New matches use off-low
+strokes; .72 adds AI Story/report and remote-completion fixes. Existing
 unfinished matches retain their original full-handicap wager rule; start a fresh
 match to use the new rule. Existing frozen results stay unchanged.
 Keep a paper team scorecard and the eight Calcutta picks with the host.
 
 ## 1. Before anyone tees off
 
-1. On both phones, open **More → App Support** and confirm v31.0.70. Install any
+1. On both phones, open **More → App Support** and confirm v31.0.72. Install any
    available update before creating the event match. Confirm existing saved rounds
    are still in Library. Check **Technical diagnostics** for storage usage.
 2. On the host, choose **Match → Create a Match**. Select the course and 18 holes.
@@ -92,11 +93,21 @@ do not reset its website data or reinstall it to troubleshoot a connection.
    completed status and the final wager results in the Ledger Entry. Support's
    **Frozen RoundRecord** line currently checks only an active round and can say
    **No** after finishing; do not reopen or alter the round just to change that line.
-4. Open the **Ledger Entry Report** for the completed round. Review the four
+4. With .72 on both phones, the remote saves the host's frozen record in Library
+   and returns to **Match → Create or Join** when it receives completion. If it
+   shows unconfirmed scores, captured unsaved entries or a local-save failure,
+   keep it open and ask the host to check those scores. Do not clear its storage
+   or force pending scores into the frozen result.
+5. On the host, **Review Story** can generate an AI draft from verified team and
+   wager facts when online. Use **Regenerate Story** for an earlier facts-only
+   draft. Review it, then **Save Story & Preview Ledger**. Offline/service failure
+   uses a facts-only draft with Memories and weather. A local-save or report-opening
+   problem leaves the story screen available and explains how to retry.
+   Open the **Ledger Entry Report** for the completed round. Review the four
    wagers, both Group results, card-off evidence, Calcutta and payment instructions.
    Generate/review/accept the Story of the Round if desired, then print or save PDF
    using the report's controls. Keep the PDF and paper card.
-5. Check combined net positions sum to **$0**. For a new .70 round, the report's
+6. Check combined net positions sum to **$0**. For a new .70 round, the report's
    **Featured/Game net** uses off-low strokes; full Course Net elsewhere is
    informational. Legacy rounds use full Course Net. A card-off resolves a tied stroke-total wager; it is not
    a hole-by-hole match-play result.

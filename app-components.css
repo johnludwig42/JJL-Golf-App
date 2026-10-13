@@ -114,3 +114,10 @@
 .setup-destination-status { white-space: normal; overflow-wrap: anywhere; max-width: 50%; flex-shrink: 0; }
 .setup-hub-heading { flex-wrap: wrap; }
 .setup-destination-card [data-setup-reason] { overflow-wrap: anywhere; }
+.flamtana-projection-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
+.flamtana-projection-scroll .quick-scoreboard-table { min-width: 42rem; table-layout: auto; }
+.flamtana-projection-scroll .quick-scoreboard-table th,
+.flamtana-projection-scroll .quick-scoreboard-table td { overflow: visible; text-overflow: clip; }
+.flamtana-projection-scroll .quick-scoreboard-table th:first-child,
+.flamtana-projection-scroll .quick-scoreboard-table td:first-child { position: sticky; left: 0; z-index: 1; min-width: 8rem; max-width: 12rem; white-space: normal; background: var(--color-surface-card); }
+.flamtana-projection-scroll .quick-scoreboard-table th:first-child { background: var(--color-surface-inset-card); }

@@ -19,11 +19,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.71',
-  versionNumber: '31.0.71',
-  cacheName: 'the-dye-ledger-v31.0.71',
-  buildDate: '2026-10-12T01:37:44.532Z',
-  buildLabel: 'Flamtana Play Readability'
+  version: 'v31.0.72',
+  versionNumber: '31.0.72',
+  cacheName: 'the-dye-ledger-v31.0.72',
+  buildDate: '2026-10-12T23:34:49.490Z',
+  buildLabel: 'Flamtana Story and Round Finish'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -7830,8 +7830,11 @@ function getLedgerEntryStoryFallbackReason(error, { offline = false, configured 
 }
 function buildDeterministicLedgerEntryStory(match, metrics, fallbackReason = 'service-unavailable') {
   const record = getEffectiveRoundRecord(match, metrics) || buildRoundRecord(match, metrics);
+  const flamtana = record?.games?.find(game => game.gameId === 'flamtana_special')?.componentResults;
+  const ahead = flamtana?.final ? (record.players || []).filter(player => flamtana.components.reduce((sum,component) => sum + Math.round((component.amounts[player.playerId] || 0)*100),0) > 0).map(player => player.displayName) : [];
+  const facts = buildLedgerEntryFactsOnlyStory(record, match, metrics);
   return {
-    text: buildLedgerEntryFactsOnlyStory(record, match, metrics),
+    text: ensureRoundRecapRequiredFacts(match, facts + (ahead.length ? '\n\nThe combined net settlement leaves ' + ahead.join(' and ') + ' ahead.' : '')),
     provenance: 'deterministic-fallback',
     fallbackReason,
   };
@@ -7887,7 +7890,7 @@ function addVerifiedGreeniesToLedgerStory(match, metrics, recapText) {
   return paragraphs.join('\n\n');
 }
 async function prepareLedgerEntryStory(match, metrics) {
-  if (isTeamScoredRound(match)) return buildDeterministicLedgerEntryStory(match, metrics, 'team-scored-round');
+  if (isTeamScoredRound(match) && !getFlamtanaConfig(match)) return buildDeterministicLedgerEntryStory(match, metrics, 'team-scored-round');
   const offline = navigator.onLine === false;
   const configured = Boolean(getRoundRecapUrl());
   if (offline || !configured) {
@@ -8140,7 +8143,8 @@ function buildRoundRecapControls(match) {
   if (!match) return '';
   const finalRecap = getFinalRoundRecap(match);
   const draftRecap = getDraftRoundRecap(match);
-  const recap = draftRecap || finalRecap;
+  const rawRecap = draftRecap || finalRecap;
+  const recap = rawRecap ? ensureRoundRecapRequiredFacts(match, rawRecap) : '';
   const hasNewDraft = !!draftRecap && draftRecap !== finalRecap;
   const online = navigator.onLine !== false;
   const configured = !!getRoundRecapUrl();
@@ -8360,6 +8364,7 @@ function validateGreeniesNarrativeClaims(match, metrics, recapText) {
 function validateRoundRecapContent(match, metrics, recapText) {
   const recap = String(recapText || '').trim();
   const issues = auditRecordedStoryFacts(match, metrics, recap);
+  if (getFlamtanaConfig(match)) issues.push(...validateFlamtanaStoryClaims(match, metrics, recap));
   const trackedFacts = buildTrackedStatisticsStoryFacts(match, metrics);
   if (!trackedFacts.length && /\b(?:solid|strong|excellent|better)\s+ball[ -]striking\b/i.test(recap)) {
     issues.push({ code:'UNVERIFIABLE_BALL_STRIKING', message:'Ball-striking quality cannot be inferred from gross scores without recorded shot statistics.' });
@@ -8492,13 +8497,58 @@ function getBlockingStoryValidationIssues(validation = {}) {
   );
 }
 
+function validateFlamtanaStoryClaims(match, metrics, text) {
+  const result = match.roundRecordSnapshot?.games?.find(game => game.gameId === 'flamtana_special')?.componentResults || computeFlamtanaResults(match, metrics);
+  if (!result?.valid) return [{ code: 'FALSE_FLAMTANA_SETUP', message: 'Flamtana team facts are unavailable.' }];
+  const issues = [], escape = value => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (/\b\d+\s*(?:&\s*\d+|(?:up|down)\b)/i.test(text)) issues.push({ code: 'FALSE_FLAMTANA_MATCH_PLAY', message: 'Flamtana wagers compare stroke totals, not holes-up match-play results.' });
+  for (const side of [...result.teams, ...result.foursomes]) {
+    const sum = side.scores.filter(Number.isFinite).reduce((total,value) => total + value,0);
+    const claims = [...text.matchAll(new RegExp(escape(side.name) + '\\s+(?:finished\\s+(?:at|with)\\s+|posted\\s+|totalled\\s+|totaled\\s+)?(-?\\d{1,3})\\s+net\\b','gi'))];
+    if (claims.some(claim => Number(claim[1]) !== sum)) issues.push({ code: 'FALSE_FLAMTANA_NET_TOTAL', message: `${side.name}'s saved team/foursome net total is ${sum}.` });
+  }
+  const sentences = String(text).split(/(?<=[.!?])\s+/);
+  for (const component of result.components.filter(row => row.series)) {
+    const label = component.label;
+    const labels = component.key === 'group1' ? [label,'Group 1','first Group'] : component.key === 'group2' ? [label,'Group 2','second Group'] : [label];
+    for (const side of component.key === 'foursome' ? result.foursomes : result.teams) {
+      const claimedWin = new RegExp(escape(side.name) + '\\s+(?:won|wins|took)\\s+(?:the\\s+)?(?:' + labels.map(escape).join('|') + ')','i');
+      if (sentences.some(sentence => claimedWin.test(sentence)) && (!result.final || !component.result.winnerIds.includes(side.id))) issues.push({ code: 'FALSE_FLAMTANA_WINNER', message: `${label} must use its saved final winner or be described as provisional.` });
+    }
+  }
+  const report = buildLedgerEntryReportModel(match,metrics);
+  let narrative = String(text);
+  for (const memory of getRoundMemories(match)) if (String(memory.text || '').trim()) narrative = narrative.replaceAll(memory.text,'');
+  for (const player of report?.settlementPlayers || []) {
+    if (new RegExp(escape(player.name) + '\\s+(?:shot|scored|posted)\\s+-?\\d+\\b','i').test(narrative)) issues.push({ code: 'FALSE_FLAMTANA_INDIVIDUAL_SCORE', message: 'Shared-ball scores cannot be attributed to an individual golfer.' });
+  }
+  if (/\b\d+\s+(?:putts?|fairways?|greens? in regulation|GIR)\b/i.test(narrative)) issues.push({ code: 'UNVERIFIABLE_FLAMTANA_STATISTIC', message: 'Flamtana has no individual tracked statistics.' });
+  return issues;
+}
+
 function buildRoundRecapPayload(match, metrics) {
   if (isTeamScoredRound(match)) {
+    const report = buildLedgerEntryReportModel(match, metrics);
     const flamtana = match.roundRecordSnapshot?.games?.find(game => game.gameId === 'flamtana_special')?.componentResults || (getFlamtanaConfig(match) ? computeFlamtanaResults(match, metrics) : null);
-    return { schemaVersion: 1, format: flamtana ? 'flamtana_special' : 'two_man_scramble', individualStatisticsEligible: false,
-      teams: flamtana?.valid ? clonePlain(flamtana.teams) : metrics.teams.map(t => ({ name: getTeamLabel(match, t.team), holes: metrics.holeResults.map(h => h.teamScores.find(s => s.team === t.team) || null) })),
-      ...(flamtana?.valid ? { foursomes: clonePlain(flamtana.foursomes), wagers: clonePlain(flamtana.components), picks: clonePlain(flamtana.config.picks), tieMethod: flamtana.config.tieMethod, final: flamtana.final } : {}),
-      instructions: 'Shared-ball team scores only. Name the four Flamtana wagers when present: Featured, Group, Foursome and Calcutta. Scoring wagers compare net stroke totals; Foursome sums per-hole minima. Use only saved results and finalization evidence; provisional results are not settled. Do not attribute scores, accolades or postable totals to individual golfers.' };
+    const teams = flamtana?.valid ? flamtana.teams.map(team => {
+      const row = report?.players.find(player => player.id === team.id);
+      return { ...clonePlain(team), tee: row?.tee || '', gross: row?.gross || [],
+        members: team.memberIds.map(id => ({ id, name: report?.settlementPlayers?.find(player => player.id === id)?.name || getPlayer(id)?.name || id })) };
+    }) : metrics.teams.map(t => ({ name: getTeamLabel(match, t.team), holes: metrics.holeResults.map(h => h.teamScores.find(row => row.team === t.team) || null) }));
+    const players = teams.flatMap(team => (team.members || []).map(member => ({ name: member.name, team: team.name, tee: team.tee, statsTracked: false })));
+    const memories = getRoundMemories(match).map(memory => ({ holeNumber: memory.holeNumber, text: memory.text }));
+    const weather = normalizeRoundWeatherSnapshot(match.roundContext?.weather);
+    const storyWeather = weather ? Object.fromEntries(Object.entries(weather).filter(([key]) => !['latitudeApprox','longitudeApprox'].includes(key))) : null;
+    const instructions = 'Write a natural 3–5 paragraph Story of the Round, opening with the Featured result and explaining the competition through supplied hole scores and recorded Memories. Shared-ball scores belong to teams, never individual golfers. Featured and both Group contests compare net stroke totals; Foursome sums each hole’s lower team net. Calcutta follows Featured, including unbacked-team recipients. Card-Off is used only where saved final evidence says it occurred. State the saved handicap basis. Do not invent shots, quotes, motives, emotions, coaching, individual statistics, handicap posting or match-play margins. Provisional results are not settled. Use authoritativeFacts only for scores, winners and money.';
+    const facts = { format: flamtana ? 'flamtana_special' : 'two_man_scramble', individualStatisticsEligible: false, teams,
+      ...(flamtana?.valid ? { foursomes: clonePlain(flamtana.foursomes), wagers: clonePlain(flamtana.components), picks: clonePlain(flamtana.config.picks), tieMethod: flamtana.config.tieMethod, final: flamtana.final,
+        handicapBasis: flamtana.config.scoringPolicyVersion === 2 ? 'Net strokes off the lowest of all four team Course Handicaps' : 'Legacy full team Course Net' } : {}),
+      memories, weather: storyWeather,
+      settlement: report?.settlementPlayers?.map(player => ({ name: player.name, net: flamtana?.final ? flamtana.components.reduce((sum,component) => sum + (component.amounts[player.id] || 0),0) : null })) || [] };
+    return { app: 'The Dye Ledger', schemaVersion: 1, recapContentSpecVersion: ROUND_RECAP_CONTENT_SPEC_VERSION,
+      reportPurpose: 'ledger-story', course: report?.meta.course || metrics.course?.name, date: match.date,
+      players, ...facts, authoritativeFacts: facts, instructions, recapInstructions: instructions,
+      roundNotes: String(match.roundRecapNotes || ''), memories };
   }
   const courseName = metrics?.course?.name || getCourse(match?.courseId)?.name || 'Course';
   const teeName = metrics?.tee?.teeName || getTee(match?.courseId, match?.teeId)?.teeName || 'Tee';
@@ -8647,8 +8697,8 @@ async function runRoundRecapGeneration(match, { automatic = false, silent = fals
     notify('Match data is not ready yet.');
     return { ok: false, skipped: true, reason: 'metrics-unavailable' };
   }
-  if (isTeamScoredRound(match)) {
-    const recap = buildDeterministicLedgerEntryStory(match, metrics, 'team-scored-round').text;
+  if (isTeamScoredRound(match) && !getFlamtanaConfig(match)) {
+    const recap = ensureRoundRecapRequiredFacts(match, buildDeterministicLedgerEntryStory(match, metrics, 'team-scored-round').text);
     match.roundRecapGenerated = recap;
     if (!String(match.roundRecapFinal || '').trim()) match.roundRecap = recap;
     match.roundRecapGeneratedAt = new Date().toISOString();
@@ -8670,10 +8720,14 @@ async function runRoundRecapGeneration(match, { automatic = false, silent = fals
   renderRoundMemoriesPanel(match);
   renderRoundRecapControlPanel(match);
   const requestRecap = async (repair = null) => {
+    const controller = getFlamtanaConfig(match) ? new window.AbortController() : null;
+    const timeoutId = controller ? window.setTimeout(() => controller.abort(), 45000) : null;
+    try {
     const response = await fetch(url, {
       method: 'POST',
       headers: getRoundRecapHeaders(),
       body: JSON.stringify({ match: buildRoundRecapPayload(match, metrics), ...(repair ? { repair } : {}) }),
+      ...(controller ? { signal: controller.signal } : {}),
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok || data?.success === false) {
@@ -8682,7 +8736,10 @@ async function runRoundRecapGeneration(match, { automatic = false, silent = fals
       failure.code = data?.code || '';
       throw failure;
     }
-    return ensureRoundRecapRequiredFacts(match, String(data?.recap || data?.text || '').trim());
+    const text = String(data?.recap || data?.text || '').trim();
+    if (!text) throw new Error('Story generation returned no text.');
+    return ensureRoundRecapRequiredFacts(match, text);
+    } finally { if (timeoutId !== null) window.clearTimeout(timeoutId); }
   };
   try {
     if (navigator.onLine === false) throw new Error('Story generation is offline.');
@@ -8785,21 +8842,25 @@ function scheduleAutomaticRoundRecap(match) {
   return true;
 }
 
-function acceptRoundRecapForActiveMatch() {
+async function acceptRoundRecapForActiveMatch() {
+  if (document.getElementById('acceptRoundRecapBtn')?.dataset.saving === '1') return false;
   const match = getReviewOrActiveMatch();
   if (!match) return;
   const editBox = document.getElementById('roundRecapEditBox');
-  const text = String(editBox?.value || getDraftRoundRecap(match) || getStoredRoundRecap(match) || '').trim();
+  const rawText = String(editBox ? editBox.value : getDraftRoundRecap(match) || getStoredRoundRecap(match) || '').trim();
+  const text = !editBox && rawText ? ensureRoundRecapRequiredFacts(match, rawText) : rawText;
   if (!text) return toast('No Story text to save.');
   const metrics = computeMatchMetrics(match);
   const validation = validateRoundRecapContent(match, metrics, text);
   const blockingIssues = getBlockingStoryValidationIssues(validation);
   if (blockingIssues.length) {
     match.roundRecapStatus = `Cannot save Story: ${blockingIssues.map(issue => issue.message).join(' ')}`;
+    match.roundRecapValidationIssues = blockingIssues.map(issue => ({ code: issue.code, message: issue.message }));
     persist({ skipRender: true });
     renderLeaderboard();
     return toast('The Story needs review before it can be saved.');
   }
+  const priorStory = { roundRecapFinal: match.roundRecapFinal, roundRecap: match.roundRecap };
   match.roundRecapFinal = text;
   match.roundRecap = text;
   match.roundRecapStatus = 'Story saved for the Ledger Entry.';
@@ -8808,12 +8869,27 @@ function acceptRoundRecapForActiveMatch() {
   uiState.roundRecapEditing = false;
   const continueToLedger = match.status === 'complete' && !(match.storageMode === 'shared' && !isCurrentDeviceMatchHost(match));
   if (continueToLedger) uiState.pendingLedgerOpenMatchId = match.id;
-  persist({ skipRender: true });
+  if (!persist({ skipRender: true })) {
+    Object.assign(match, priorStory);
+    match.roundRecapStatus = 'Story could not be saved locally. Keep this screen open, free storage and try Save again.';
+    const status = document.querySelector('.round-recap-control-card .section-label + .tiny');
+    if (status) { status.textContent = match.roundRecapStatus; status.setAttribute('role','alert'); }
+    toast(match.roundRecapStatus);
+    return false;
+  }
   renderLeaderboard();
   toast('Story saved.');
   if (String(uiState.pendingLedgerOpenMatchId || '') === String(match.id || '')) {
-    uiState.pendingLedgerOpenMatchId = null;
-    openUnifiedExport(match, 'ledger');
+    const button = document.getElementById('acceptRoundRecapBtn');
+    if (button) { button.dataset.saving = '1'; button.disabled = true; button.textContent = 'Opening Ledger preview…'; }
+    try {
+      if (await openUnifiedExport(match, 'ledger')) uiState.pendingLedgerOpenMatchId = null;
+    } catch (error) {
+      recordAppError(error, 'Save Story and Preview Ledger');
+      toast('Story saved, but the Ledger preview could not open. Keep this screen open and tap Save Story & Preview Ledger to retry.');
+    } finally {
+      if (button) { delete button.dataset.saving; button.disabled = false; button.textContent = match.status === 'complete' ? 'Save Story & Preview Ledger' : 'Save Story'; }
+    }
   }
 }
 function clearRoundRecapForActiveMatch() {
@@ -10247,7 +10323,13 @@ async function openUnifiedExport(match, printView = 'ledger') {
     exportWindow.document.close();
   }
   if (match.storageMode === 'shared' && printView !== 'scorecard' && !acceptedLedgerReport) {
-    await reconcileSharedMatchBeforeSummary(match, { silent: false });
+    try { await reconcileSharedMatchBeforeSummary(match, { silent: false }); }
+    catch (error) {
+      if (exportWindow) exportWindow.close();
+      toast('Story saved, but shared scores could not be checked. Tap Preview Ledger to retry.');
+      recordAppError(error, 'Ledger preview reconciliation');
+      return false;
+    }
   }
   const refreshedMetrics = computeMatchMetrics(match) || metrics;
   if (printView === 'ledger') {
@@ -10256,6 +10338,7 @@ async function openUnifiedExport(match, printView = 'ledger') {
       toast('Opening the accepted Ledger Entry…');
       try {
         launchLedgerReportModel(prepareAcceptedLedgerReportForDisplay(match, acceptedLedgerReport, refreshedMetrics), { sameTabLedger, exportWindow });
+        return true;
       } catch  {
         if (exportWindow) exportWindow.close();
         toast('The accepted Ledger Entry could not be opened.');
@@ -10276,9 +10359,10 @@ async function openUnifiedExport(match, printView = 'ledger') {
     reportModel.meta.storyApprovalRequired = !savedStory;
     try {
       launchLedgerReportModel(reportModel, { sameTabLedger, exportWindow, autoPrint: false });
+      return true;
     } catch  {
       if (exportWindow) exportWindow.close();
-      toast('Ledger Entry could not be opened.');
+      toast('Story saved, but Ledger Entry could not be opened. Keep this screen open and tap Preview Ledger to retry; check available storage.');
     }
     return;
   }
@@ -13109,7 +13193,35 @@ function openBalanceExplanation(playerId, matchId, trigger = null) {
   if (!dialog.open) {balanceExplanationReturnFocus=trigger;dialog.showModal();}
 }
 
+function buildFlamtanaProjectedSettlement(match, metrics = null) {
+  const data = buildFlamtanaLeaderboardData(match, metrics);
+  if (!data.valid) return { valid: false, error: data.error };
+  const result = isFrozenRoundRecord(match.roundRecordSnapshot) ? match.roundRecordSnapshot.games.find(game => game.gameId === 'flamtana_special').componentResults : computeFlamtanaResults(match, metrics);
+  const components = result.components.filter(component => component.series).map(component => {
+    const table = data.tables.find(row => row.key === component.key);
+    if (!result.final && !table.leaders.length) return { key: component.key, label: component.label, participantIds: component.series.flatMap(side => side.memberIds), amounts: null };
+    if (result.final) return { key: component.key, label: component.label, amounts: component.amounts };
+    const ids = component.series.flatMap(side => side.memberIds), cents = Object.fromEntries(ids.map(id => [id, -Math.round(component.stake * 100)]));
+    distributeFlamtanaCents(cents,component.series.filter(side => table.leaders.includes(side.id)).flatMap(side => side.memberIds),Math.round(component.stake * 100) * ids.length);
+    return { key: component.key, label: component.label, amounts: Object.fromEntries(Object.entries(cents).map(([id,value]) => [id,value/100])) };
+  });
+  components.push({ key: 'calcutta', label: 'Calcutta', amounts: data.leaders.length ? Object.fromEntries(data.calcutta.map(row => [row.id,row.amount])) : null });
+  const rows = match.players.map(player => {
+    const values = components.map(component => component.amounts === null ? (component.participantIds && !component.participantIds.includes(player.playerId) ? 0 : null) : (component.amounts[player.playerId] || 0));
+    return { id: player.playerId, name: getPlayer(player.playerId)?.name || player.playerId, values,
+      total: values.includes(null) ? null : values.reduce((sum,value) => sum + Math.round(value*100),0)/100 };
+  });
+  return { valid: true, final: data.final, components, rows };
+}
+function buildFlamtanaProjectedSettlementView(match, metrics) {
+  const data = buildFlamtanaProjectedSettlement(match,metrics);
+  if (!data.valid) return '<section class="quick-scoreboard-section"><h4>Projected settlement</h4><p>'+escapeHtml(data.error)+'</p></section>';
+  const keys = ['featured','group1','group2','foursome','calcutta'];
+  const value = amount => amount === null ? 'Pending' : formatFinalNetSettlementMoney(amount);
+  return '<section class="quick-scoreboard-section quick-settlement-hero" data-settlement-state="'+(data.final?'final':'projected')+'"><h4>'+(data.final?'Final Settlement':'Projected settlement if current standings hold')+'</h4><p class="tiny">'+(data.final?'Saved final amounts.':'Each contest compares its common completed holes. Current ties project a split; Card-Off awaits finalization. Pending contests have no projected total. These are not payments due.')+'</p><p class="tiny">Scroll across for each wager. Golfer names stay visible.</p><div class="player-summary-scroll flamtana-projection-scroll" tabindex="0" role="region" aria-label="Flamtana projected settlement by wager"><table class="quick-scoreboard-table"><thead><tr><th>Golfer</th><th>Combined net</th><th>Featured</th><th>Group 1</th><th>Group 2</th><th>Foursome</th><th>Calcutta</th></tr></thead><tbody>'+data.rows.map(row => '<tr><td>'+escapeHtml(row.name)+'</td><td><strong>'+value(row.total)+'</strong></td>'+keys.map((key,i) => '<td>'+value(row.values[i])+'</td>').join('')+'</tr>').join('')+'</tbody></table></div></section>';
+}
 function buildQuickSettlementHero(match, metrics, payout = getPayoutReportContext(match, metrics), record = null) {
+  if (getFlamtanaConfig(match) && !isFrozenRoundRecord(record)) return buildFlamtanaProjectedSettlementView(match,metrics);
   const frozen = record && isFrozenRoundRecord(record);
   const final = !!match && match.status === 'complete' && (!getRoundCompletionState(match, metrics).isIncomplete || areAllGamesFinal(match, metrics));
   const payments = frozen ? (record.transactions || []).map(row => ({ from: row.payerId, to: row.payeeId, amount: row.amount })) : optimalSettlementRows(payout.finalTotals || {});
@@ -13184,7 +13296,7 @@ function buildQuickGameSummary(match, metrics, record = null) {
       return `<div class="quick-nassau-press" style="--press-depth:${Math.min(3, Number(press.pressDepth || 1))}"><div><strong>${Number(press.pressDepth || 1) > 1 ? 'Press on ' : ''}Press ${index + 1}</strong><small>Holes ${press.startingHole || press.holeStart}–${press.endingHole || press.holeEnd}</small></div><div class="quick-nassau-values"><strong>${escapeHtml(result.diff ? `${getTeamLabel(match, result.diff > 0 ? 1 : 2)} +${Math.abs(result.diff)}` : result.status === 'HALVED' ? 'Halved' : 'All square')}</strong><span>${formatCompactCurrency(impact, { signed: impact > 0 })}</span></div></div>`;
     }).join('');
     const sspDetail = sspLedger?.settlement?.valid && !sspLedger.settlement.tied ? `<small>${escapeHtml(sspLedger.settlement.payerLabel || '')} · ${escapeHtml(sspLedger.settlement.payeeLabel || '')}</small>` : '';
-    return `<div class="quick-game-parent quick-native-game" data-game-summary-key="${escapeHtml(cfg.key)}"><div class="quick-native-game-row"><div><strong>${escapeHtml(cfg.key === 'sneaky_sandy_poley' ? 'SSP' : getGameLabel(cfg.key))}</strong><small>${escapeHtml(status)}</small>${sspDetail}</div><div class="quick-nassau-values"><span>${formatCompactCurrency(contribution, { signed: contribution > 0 })}</span></div></div>${children}</div>`;
+    return `<div class="quick-game-parent quick-native-game" data-game-summary-key="${escapeHtml(cfg.key)}"><div class="quick-native-game-row"><div><strong>${escapeHtml(cfg.key === 'sneaky_sandy_poley' ? 'SSP' : getGameLabel(cfg.key))}</strong><small>${escapeHtml(status)}</small>${sspDetail}</div><div class="quick-nassau-values"><span>${cfg.key === 'flamtana_special' && !frozen ? 'Not settled' : formatCompactCurrency(contribution, { signed: contribution > 0 })}</span></div></div>${children}</div>`;
   }).filter(Boolean).join('');
   if (nassau) return cards ? nassau.replace('</section>', `<div class="quick-native-game-list">${cards}</div></section>`) : nassau;
   return cards ? `<section class="quick-scoreboard-section quick-game-results"><h4>Game Summary</h4><div class="quick-native-game-list">${cards}</div></section>` : '';
@@ -14721,6 +14833,7 @@ function extractGreeniesSuggestionsFromSelectedGames(selectedGames) {
   return suggestions && typeof suggestions === 'object' ? { ...suggestions } : {};
 }
 function applyCurrentHoleDomToMatch(match, options = {}) {
+  if (match?.remoteCompletionPending) return false;
   if (!match) return false;
   const scoringHoles = getSelectedScoringHoles(match, getTee(match.courseId, match.teeId));
   const holeMeta = scoringHoles[currentHole - 1] || null;
@@ -15148,6 +15261,7 @@ function buildPendingSharedScoreOperations(match, scoreEntries = [], storage = l
   }).filter(Boolean);
 }
 async function submitPendingSharedScoreOperations(client, match, scoreEntries = [], { storage = localStorage } = {}) {
+  if (match.remoteCompletionPending) throw new Error('HOST_COMPLETED_WITH_LOCAL_SCORES: preserve this phone’s scores for host review.');
   const operations = buildPendingSharedScoreOperations(match, scoreEntries, storage);
   if (!operations.length) return { submitted: 0, acknowledged: 0, fallback: false };
   const outbox = readSharedScoreOutbox(storage);
@@ -15199,11 +15313,20 @@ async function drainPendingSharedScoreOperationsForMatch(matchOrId, { storage = 
   let match = getCanonicalSharedMatch(matchOrId);
   if (!match || match.storageMode !== 'shared' || !match.sharedMatchId) return { ok: true, skipped: true, pending: 0 };
   const pendingBefore = getSharedScoreOutboxOperations(match, storage).length;
+  if (match.remoteCompletionPending) return { ok: false, skipped: true, pending: pendingBefore, permanent: true };
   if (!pendingBefore) return { ok: true, skipped: true, pending: 0 };
   try {
     const client = await ensureSupabaseClient();
     if (!client) throw new Error('Supabase is not configured.');
     match = getCanonicalSharedMatch(matchOrId) || match;
+    if (!isCurrentDeviceMatchHost(match)) {
+      await mergeCloudSharedMetadata(match, { includeAssignments: true, includeMemories: false });
+      if (match.remoteCompletionPending || match.status === 'complete') {
+        finishRemoteSharedRoundIfReady(match);
+        persist({ skipRender: true });
+        return { ok: false, skipped: true, pendingBefore, pending: getSharedScoreOutboxOperations(match, storage).length, permanent: true };
+      }
+    }
     const payload = buildCloudMatchPayload(match);
     const result = await submitPendingSharedScoreOperations(client, match, payload.scoreEntries, { storage });
     match = getCanonicalSharedMatch(matchOrId) || match;
@@ -15227,6 +15350,7 @@ async function drainPendingSharedScoreOutboxes({ matches = state.matches, storag
   }
   const task = (async () => {
     const candidates = getSharedMatchesWithPendingScoreOperations(matches, storage)
+      .filter(match => !match.remoteCompletionPending)
       .filter(match => !sharedOutboxPermanentFailureMatches.has(String(match.sharedMatchId || match.id || '')))
       .slice(0, Math.max(1, Number(matchLimit) || 1));
     const results = [];
@@ -15244,7 +15368,7 @@ async function drainPendingSharedScoreOutboxes({ matches = state.matches, storag
     return await task;
   } finally {
     sharedOutboxDrainInflight = null;
-    const retryableRemain = getSharedMatchesWithPendingScoreOperations(matches, storage).some(match => !sharedOutboxPermanentFailureMatches.has(String(match.sharedMatchId || match.id || '')));
+    const retryableRemain = getSharedMatchesWithPendingScoreOperations(matches, storage).some(match => !match.remoteCompletionPending && !sharedOutboxPermanentFailureMatches.has(String(match.sharedMatchId || match.id || '')));
     if (scheduleContinuation && (sharedOutboxDrainRequested || retryableRemain)) {
       sharedOutboxDrainRequested = false;
       if (!sharedOutboxDrainContinuationTimer) sharedOutboxDrainContinuationTimer = window.setTimeout(() => {
@@ -15255,6 +15379,7 @@ async function drainPendingSharedScoreOutboxes({ matches = state.matches, storag
   }
 }
 async function uploadSharedMatch(match) {
+  if (match.remoteCompletionPending) throw new Error('The host completed this round. Local scores are preserved for review.');
   const client = await ensureSupabaseClient();
   if (!client) throw new Error('Supabase is not configured.');
   const user = await getSupabaseUser();
@@ -15640,6 +15765,72 @@ async function pullSharedScoreEntries(match, { silent = true, render = true, str
     return strictResult ? { ok: false, changed: false, error: err } : false;
   }
 }
+function getRemoteCompletionWarning(match) {
+  const pending = match?.remoteCompletionPending;
+  if (!pending) return '';
+  const captured = (pending.unsavedEntries || []).map(entry => {
+    const player = match.players?.find(row => row.playerId === entry.playerId);
+    return `${getTeamLabel(match, player?.team)} · hole ${entry.holeNumber}: ${entry.value === '' ? 'clear score' : entry.value}`;
+  });
+  const conflicts = [...new Set((pending.localScoreConflicts || []).map(entry => {
+    const player = match.players?.find(row => row.playerId === entry.playerId);
+    const name = isTeamScoredRound(match) ? getTeamLabel(match,player?.team) : getPlayer(entry.playerId)?.name || entry.playerId;
+    return `${name} · hole ${entry.holeNumber}: this phone ${entry.gross}, frozen result ${entry.frozenGross}`;
+  }))];
+  return 'The host completed this round. ' + (pending.reason || 'Checking this phone’s saved scores before returning to Match.') + (captured.length ? ' Captured unsaved entries: ' + captured.join('; ') + '.' : '') + (conflicts.length ? ' Score differences: ' + conflicts.join('; ') + '.' : '');
+}
+function finishRemoteSharedRoundIfReady(match) {
+  const pending = match?.remoteCompletionPending;
+  if (!pending || isCurrentDeviceMatchHost(match) || String(state.activeMatchId || '') !== String(match.id)) return false;
+  const owned = getSharedLocallyOwnedPlayerIds(match);
+  const frozenScores = new Map((pending.roundRecordSnapshot?.holes || []).flatMap(hole => (hole.scores || []).map(score => [getSharedPlayerHoleKey(score.playerId,hole.holeNumber),score.gross])));
+  const conflicts = extractLocalScoredLedger(match).filter(score => owned.has(score.playerId) && frozenScores.has(getSharedPlayerHoleKey(score.playerId,score.holeNumber)) && Number(score.gross) !== Number(frozenScores.get(getSharedPlayerHoleKey(score.playerId,score.holeNumber)))).map(score => ({ playerId: score.playerId, holeNumber: score.holeNumber, gross: score.gross, frozenGross: frozenScores.get(getSharedPlayerHoleKey(score.playerId,score.holeNumber)) }));
+  pending.localScoreConflicts = conflicts;
+  const reason = getSharedScoreOutboxOperations(match).length ? 'This phone still has unconfirmed scores. Keep it open and ask the host to check them before leaving this round.'
+    : hasUnsavedVisibleScoreInputs() || pending.unsavedEntries?.length ? 'This phone has an unsaved entry. Keep it open and ask the host to check the score before leaving this round.'
+    : conflicts.length ? 'This phone’s saved scores differ from the host’s frozen result. Keep this round open and ask the host to review the differences.'
+    : !isFrozenRoundRecord(pending.roundRecordSnapshot) ? 'Waiting for the host’s frozen round record. Keep this round open and tap Sync Now.' : '';
+  if (reason) {
+    pending.reason = reason;
+    if (hasUnsavedVisibleScoreInputs()) {
+      const entries = Array.from(getActivePlayEntryContainer()?.querySelectorAll('input[data-score-player]') || []).filter(input => {
+        const player = match.players?.find(row => row.playerId === input.dataset.scorePlayer);
+        const saved = player?.scores?.[Math.max(0,currentHole-1)]?.gross;
+        return String(input.value || '').trim() !== (saved === null || saved === undefined ? '' : String(saved));
+      }).map(input => ({ playerId: input.dataset.scorePlayer, holeNumber: currentHole, value: input.value }));
+      const combined = new Map([...(pending.unsavedEntries || []), ...entries].map(entry => [`${entry.playerId}:${entry.holeNumber}`,entry]));
+      pending.unsavedEntries = [...combined.values()];
+    }
+    persist({ skipRender: true });
+    const wrap = document.getElementById('playGroupRulesPreview');
+    if (wrap) {
+      let warning = wrap.querySelector('[data-remote-completion-warning]');
+      if (!warning) { warning = document.createElement('div'); warning.className = 'setup-warning'; warning.dataset.remoteCompletionWarning = '1'; warning.setAttribute('role','alert'); wrap.prepend(warning); }
+      warning.textContent = getRemoteCompletionWarning(match);
+    }
+    return false;
+  }
+  const prior = { status: match.status, completedAt: match.completedAt, roundRecordSnapshot: match.roundRecordSnapshot, ledgerEntrySnapshot: match.ledgerEntrySnapshot,
+    activeMatchId: state.activeMatchId, completedSummaryMatchId: state.completedSummaryMatchId, lastOpenedSharedMatchId: state.lastOpenedSharedMatchId };
+  match.status = 'complete'; match.completedAt = pending.completedAt;
+  match.roundRecordSnapshot = pending.roundRecordSnapshot; match.ledgerEntrySnapshot = pending.ledgerEntrySnapshot;
+  delete match.remoteCompletionPending;
+  state.activeMatchId = null; state.completedSummaryMatchId = null; state.lastOpenedSharedMatchId = null;
+  if (!persist({ skipRender: true })) {
+    Object.assign(match, { status: prior.status, completedAt: prior.completedAt, roundRecordSnapshot: prior.roundRecordSnapshot, ledgerEntrySnapshot: prior.ledgerEntrySnapshot });
+    Object.assign(state, { activeMatchId: prior.activeMatchId, completedSummaryMatchId: prior.completedSummaryMatchId, lastOpenedSharedMatchId: prior.lastOpenedSharedMatchId });
+    match.remoteCompletionPending = { ...pending, reason: 'The completed round could not be saved locally. Keep this screen open, free storage and tap Sync Now.' };
+    return false;
+  }
+  clearScheduledSharedMatchSync(match.id);
+  closeQuickScoreboardView(); hidePostRoundActions();
+  clearSetupDraft();
+  editingMatchId = null; setupWorkflowMode = 'landing'; currentHole = 1;
+  scoreInputSessionState.clear(); pendingScoreCommitFocus = null;
+  resetMatchSetupFormDomToBlank(); renderAll(); activateTab('setup'); renderMatchSetupState();
+  toast('The host completed this round. It is saved in Library. Create or join your next match.');
+  return true;
+}
 async function refreshActiveSharedScores({ silent = true, render = true } = {}) {
   const match = getActiveMatch();
   if (!match || match.storageMode !== 'shared') return false;
@@ -15651,7 +15842,8 @@ async function refreshActiveSharedScores({ silent = true, render = true } = {}) 
     console.warn('Shared metadata refresh failed.', err);
   }
   if (metadataChanged) persist({ skipRender: true });
-  if (render && (scoresChanged || metadataChanged)) renderAll();
+  if (finishRemoteSharedRoundIfReady(match)) return true;
+  if (render && (scoresChanged || metadataChanged) && !hasUnsavedVisibleScoreInputs()) renderAll();
   return scoresChanged || metadataChanged;
 }
 async function ensureSharedRealtimeSubscription(match = getActiveMatch()) {
@@ -15770,6 +15962,10 @@ async function fetchSharedMatchMetadata(matchId, match = null) {
   };
   return {
     ...(Number(meta.teamScoringPolicyVersion) > 0 ? { ...(Object.hasOwn(meta, 'flamtanaConfig') ? { flamtanaConfig: meta.flamtanaConfig } : {}), roundTiming: meta.roundTiming || null } : {}),
+    status: String(matchRow?.status || ''),
+    completedAt: matchRow?.completed_at || null,
+    roundRecordSnapshot: isFrozenRoundRecord(meta.roundRecordSnapshot) ? clonePlain(meta.roundRecordSnapshot) : null,
+    ledgerEntrySnapshot: meta.ledgerEntrySnapshot ? clonePlain(meta.ledgerEntrySnapshot) : null,
     ...(Object.prototype.hasOwnProperty.call(meta, 'teamScoringPolicyVersion') ? { teamScoringPolicyVersion: Number(meta.teamScoringPolicyVersion) } : {}),
     ...(Object.prototype.hasOwnProperty.call(meta, 'assignedTeamIndexPolicyVersion') ? { assignedTeamIndexPolicyVersion: meta.assignedTeamIndexPolicyVersion, assignedTeamIndexes: meta.assignedTeamIndexes || {}, assignedTeamTeeIds: meta.assignedTeamTeeIds || {}, assignedTeamReferenceTeeId: meta.assignedTeamReferenceTeeId || null, assignedTeamCourseSnapshot: Number(meta.assignedTeamIndexPolicyVersion) > 0 ? Object.fromEntries(Object.entries(matchRow.course_snapshot || {}).filter(([key]) => key !== "sharedMatchMeta")) : null } : {}),
     devices,
@@ -15835,12 +16031,8 @@ async function mergeCloudSharedMetadata(match, { includeAssignments = false, inc
   }
   changed = applySharedScrambleSetupMetadata(match, meta) || changed;
   if (!isCurrentDeviceMatchHost(match) && meta.status === 'complete' && match.status !== 'complete') {
-    match.status = 'complete';
-    match.completedAt = meta.completedAt || match.completedAt || new Date().toISOString();
-    if (meta.roundRecordSnapshot) match.roundRecordSnapshot = meta.roundRecordSnapshot;
-    if (meta.ledgerEntrySnapshot) match.ledgerEntrySnapshot = meta.ledgerEntrySnapshot;
-    if (String(state.activeMatchId || '') === String(match.id || '')) state.activeMatchId = null;
-    setCompletedReviewMatch(match);
+    match.remoteCompletionPending = { ...match.remoteCompletionPending, completedAt: meta.completedAt || new Date().toISOString(),
+      roundRecordSnapshot: meta.roundRecordSnapshot || null, ledgerEntrySnapshot: meta.ledgerEntrySnapshot || null };
     changed = true;
   }
   const beforeParticipants = JSON.stringify(getSharedAssignmentParticipants(match));
@@ -16009,12 +16201,13 @@ async function refreshActiveSharedParticipants({ silent = true } = {}) {
     } else {
       await mergeCloudSharedMetadata(match, { includeAssignments: false, includeMemories: true });
     }
-    const changed = beforeParticipants !== JSON.stringify(getSharedAssignmentParticipants(match))
+    if (finishRemoteSharedRoundIfReady(match)) return true;
+    const changed = !!match.remoteCompletionPending || beforeParticipants !== JSON.stringify(getSharedAssignmentParticipants(match))
       || beforeAssignments !== JSON.stringify(match.sharedPlayerAssignments || {})
       || beforeMemories !== JSON.stringify(getRoundMemories(match));
     if (changed) {
       persist({ skipRender: true });
-      renderAll();
+      if (!hasUnsavedVisibleScoreInputs()) renderAll();
       if (!silent) toast(isCurrentDeviceMatchHost(match) ? 'Shared participants updated.' : 'Shared assignments updated.');
     }
     return changed;
@@ -16264,6 +16457,11 @@ async function flushSharedMatchSync(matchId, { silent = true } = {}) {
         return mergeCloudSharedMetadata(match, { includeAssignments: !isCurrentDeviceMatchHost(match), includeMemories: true });
       });
       if (!phase.ok) throw phase.error;
+      if (match.remoteCompletionPending) {
+        finishRemoteSharedRoundIfReady(match);
+        if (match.remoteCompletionPending) { persist({ skipRender: true }); toast(match.remoteCompletionPending.reason || 'The host completed this round. Check local scores before leaving.'); }
+        return;
+      }
       phase = await runPhase('upload', async () => {
         match = getCanonicalSharedMatch(matchId) || match;
         return uploadSharedMatch(match);
@@ -16303,6 +16501,7 @@ async function flushSharedMatchSync(matchId, { silent = true } = {}) {
         parityStatus: match.sharedLedgerParity?.status || 'not-checked',
       });
       persist({ skipRender: true });
+      if (finishRemoteSharedRoundIfReady(match)) return;
       if (!silent) {
         const parity = match.sharedLedgerParity;
         const pendingEntries = getSharedPendingEntryCount(match);
@@ -19429,7 +19628,7 @@ async function switchPlayInputMode(nextMode) {
 function renderCurrentMatch() {
   const match = getActiveMatch();
   const rulesWrap = document.getElementById('playGroupRulesPreview');
-  if (rulesWrap) rulesWrap.innerHTML = match ? (getAssignedTeamIndexError(match) ? '<div class="setup-warning">' + escapeHtml(getAssignedTeamIndexError(match)) + '</div>' : '') + buildGroupRulesPreview(match, rulesWrap.querySelector('details')?.open || false) : '';
+  if (rulesWrap) rulesWrap.innerHTML = match ? (match.remoteCompletionPending ? '<div class="setup-warning" role="alert">'+escapeHtml(getRemoteCompletionWarning(match))+'</div>' : '') + (getAssignedTeamIndexError(match) ? '<div class="setup-warning">' + escapeHtml(getAssignedTeamIndexError(match)) + '</div>' : '') + buildGroupRulesPreview(match, rulesWrap.querySelector('details')?.open || false) : '';
   const metaEl = document.getElementById('currentMatchMeta');
   const progressEl = document.getElementById('currentMatchProgress');
   const emptyEl = document.getElementById('scoreEntryEmpty');
@@ -25839,6 +26038,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   if (postRoundInlineJoinBtn) postRoundInlineJoinBtn.addEventListener('click', () => startJoinNewMatchSetup());
   function saveCurrentHole({ advance = false, targetHole = null, silent = false } = {}) {
     const match = getActiveMatch(); if (!match) return false;
+    if (match.remoteCompletionPending) { if (!silent) toast(match.remoteCompletionPending.reason || 'The host completed this round. Keep local scores for host review.'); return false; }
     if (isTeamScoredRound(match)) {
       const invalid = Array.from(document.querySelectorAll('input[data-score-team]')).find(input => !input.disabled && input.value.trim() !== '' && (!Number.isInteger(Number(input.value)) || Number(input.value) < 1 || Number(input.value) > 25));
       if (invalid) { if (!silent) toast('Enter a whole team gross score from 1 to 25, or clear the score.'); invalid.focus(); return false; }
@@ -27002,7 +27202,9 @@ function installDyeLedgerLiveEngineAdapter() {
     reconcileInterruptedFinishState,
     loadStateFromStorage,
     persistStateSnapshot,
-    buildFlamtanaLeaderboardData, buildFlamtanaLeaderboards,
+    buildFlamtanaLeaderboardData,
+    buildFlamtanaProjectedSettlement,
+    finishRemoteSharedRoundIfReady, buildFlamtanaLeaderboards,
     resolveRemoteScoreParticipant, usesFlamtanaOffLow, getFlamtanaStrokeHandicap,
     compactUnusedMatchStats, compactPersistentMatches, evictFrozenMatchSyncDiagnostics, isDefaultStatsArray, materializeMatchStats, getPlayerStatsForStorage, getLocalSaveFailureMessage, getLocalStorageUsage, getStorageUsageText, ensurePlayInputState, buildEmptyStats,
     persistFinishedStateSnapshot,
@@ -27247,6 +27449,7 @@ function installDyeLedgerLiveEngineAdapter() {
     buildRoundRecapControls,
     getPressReportAccounting, auditRecordedStoryFacts, prepareAcceptedLedgerReportForDisplay,
     validateRoundRecapContent,
+    getBlockingStoryValidationIssues,
     getAutomaticRoundRecapEligibility,
     getPostRoundWorkflowState,
     isPostRoundStoryReviewDisabled,

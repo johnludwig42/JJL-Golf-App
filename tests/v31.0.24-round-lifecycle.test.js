@@ -54,10 +54,8 @@ test('Memory sheet clears fixed chrome and joined completion is visibly host-con
   assert.match(app, /show\(joinedCompletionMessage, hasMatch && !isComplete && activeRound && !authority\.allowed\)/);
 });
 
-test('joined cloud completion transitions from live play into completed review', () => {
-  assert.match(app, /select\('id,status,completed_at,course_snapshot,updated_at'\)/);
-  assert.match(app, /meta\.status === 'complete'[\s\S]{0,500}state\.activeMatchId = null;[\s\S]{0,180}setCompletedReviewMatch\(match\)/);
-});
+// Remote completion now returns safely to Match, rather than completed review.
+// Executable coverage lives in the Flamtana round-finish browser tests.
 
 test('completed discard is quiet, guarded, and local-only for Shared Match', () => {
   assert.match(html, /id="postRoundInlineDiscardBtn"[^>]*quiet-action/);

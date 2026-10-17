@@ -28,7 +28,9 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current development release: **v31.0.75 — Flamtana Hole Tees** on codex/v31.0.75-flamtana-hole-tees, from committed .74 (e828bfe). Flamtana Play team rows show each hole's specific source tee from the round snapshot rather than the overall combo setting. Display only; scoring, settlement, saving and course snapshots are unchanged. See BUILD_NOTES_v31.0.75.md.
+Current development release: **v31.0.76 — Shared Round Ledger Recovery** on codex/v31.0.76-frozen-ledger-preview, from committed .75 (49f826f). John's current host has 24 local scored entries absent remotely despite an empty queue. Add explicit host review/resend through the durable paired-write path; preserve scores and generated Story, then use existing parity-gated completion. All-host takeover after Start no longer triggers the two-device setup warning; fresh starts retain the original requirement. Matching completed frozen reports open without another cloud wait. Host-only game removal under Play → Round rules uses existing policy-3 enabled flags; removed games contribute no buy-ins/payouts, remaining settlement rules and scores stay unchanged. No storage schema, identity/SQL or frozen-record changes. See BUILD_NOTES_v31.0.76.md.
+
+Previous development release:  **v31.0.75 — Flamtana Hole Tees** on codex/v31.0.75-flamtana-hole-tees, from committed .74 (e828bfe). Flamtana Play team rows show each hole's specific source tee from the round snapshot rather than the overall combo setting. Display only; scoring, settlement, saving and course snapshots are unchanged. See BUILD_NOTES_v31.0.75.md.
 
 Previous development release:  **v31.0.74 — Flamtana Event Options** on codex/v31.0.74-flamtana-event-options, from committed .73 (931b79a). John approved five independent competition choices, The Big Game naming, first/second pool percentages and split ties. New rounds use policy 3; older rounds and frozen history retain their original rules. Calcutta's existing rules remain, with a $120 default pool. Both phones need the update. See BUILD_NOTES_v31.0.74.md.
 

@@ -19,11 +19,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.75',
-  versionNumber: '31.0.75',
-  cacheName: 'the-dye-ledger-v31.0.75',
-  buildDate: '2026-10-17T13:52:53.000Z',
-  buildLabel: 'Flamtana Hole Tees'
+  version: 'v31.0.76',
+  versionNumber: '31.0.76',
+  cacheName: 'the-dye-ledger-v31.0.76',
+  buildDate: '2026-10-17T22:09:36.000Z',
+  buildLabel: 'Shared Round Ledger Recovery'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -1480,7 +1480,7 @@ function stampSharedScoreWrite(match, playerId, holeNumber, options = {}) {
     source: String(options.source || 'local'),
   };
   match.sharedScoreWriteState[getSharedPlayerHoleKey(playerId, holeNumber)] = row;
-  if (row.source !== 'remote') queueSharedScoreOperation(match, playerId, holeNumber, row);
+  if (row.source !== 'remote') queueSharedScoreOperation(match, playerId, holeNumber, row, options.storage || localStorage);
   return row;
 }
 function sharedTimestampMs(value) {
@@ -1912,6 +1912,98 @@ async function openSharedAccountRecovery() {
   toast('Sign in, then return to Play and tap Sync Now. Your round stays saved.');
   return true;
 }
+function buildMissingFlamtanaScoreRecoveryPlan(match, cloudRows = []) {
+  const fail = message => ({ ok: false, message, units: [], missingCount: 0 });
+  if (!match || match.storageMode !== 'shared' || !getFlamtanaConfig(match) || !isCurrentDeviceMatchHost(match)) return fail('Only the host can recover this Flamtana round.');
+  if (match.status === 'complete' || isFrozenRoundRecord(match.roundRecordSnapshot) || match.remoteCompletionPending) return fail('This round is finalized. Use its saved Ledger Entry.');
+  const setupError = getScrambleSetupError(match, { assignments: true });
+  if (setupError || !match.roundTiming?.startedAt) return fail(setupError || 'Start Scoring first.');
+  const comparison = compareScoredLedgers(extractLocalScoredLedger(match), extractRemoteScoredLedger(match, cloudRows));
+  const units = [], seen = new Set();
+  for (const entry of comparison.missingRemote) {
+    const player = match.players.find(row => row.playerId === entry.playerId), team = Number(player?.team), hole = Number(entry.holeNumber), key = team + ':' + hole;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const pair = getScrambleTeamHoleScore(match, team, hole), members = match.players.filter(row => Number(row.team) === team);
+    if (!pair.complete || !Number.isInteger(pair.gross) || pair.gross < 1 || pair.gross > 25 || members.length !== 2 || members.some(row => !canEditPlayerScore(match, team, row.playerId))) return fail('Resolve Pending partner scores before recovery.');
+    for (const member of members) {
+      const rows = cloudRows.filter(row => String(row.player_id) === String(member.playerId) && Number(row.hole_number) === hole);
+      if (rows.some(row => row.entry_status !== 'active' || (normalizeSharedLedgerValue(row.gross) !== null && normalizeSharedLedgerValue(row.gross) !== pair.gross))) return fail('A cloud score changed or was withdrawn. Review that team and hole before recovery.');
+    }
+    units.push({ team, hole, gross: pair.gross, playerIds: members.map(row => row.playerId).sort() });
+  }
+  units.sort((a,b) => a.team-b.team || a.hole-b.hole);
+  return { ok: true, units, missingCount: comparison.missingRemote.length, signature: stableJson(units), comparison };
+}
+function queueMissingFlamtanaScoreRecovery(match, plan, { storage = localStorage, save = () => persist({skipRender:true}) } = {}) {
+  if (!plan?.ok || !plan.units?.length || !getFlamtanaConfig(match) || !isTeamScoredRound(match) || !isCurrentDeviceMatchHost(match) || match.status === 'complete' || isFrozenRoundRecord(match.roundRecordSnapshot)) return {ok:false,message:'Review the missing scores first.'};
+  if (getSharedScoreOutboxOperations(match,storage).length) return {ok:false,message:'Some scores are already queued. Sync them before recovery.'};
+  const originalOutbox = readSharedScoreOutbox(storage);
+  if (originalOutbox.operations.length + plan.units.length*2 > 1000) return {ok:false,message:'Sync other queued rounds before recovering these scores.'};
+  const stagedValues = new Map([[SHARED_SCORE_OUTBOX_STORAGE_KEY,JSON.stringify(originalOutbox)]]);
+  const stagedStorage = {getItem:key=>stagedValues.get(key) ?? null,setItem:(key,value)=>stagedValues.set(key,value)};
+  const staged = clonePlain(match);
+  for (const unit of plan.units) {
+    const pair = getScrambleTeamHoleScore(match,unit.team,unit.hole), members=match.players.filter(row=>Number(row.team)===unit.team);
+    if (!pair.complete || pair.gross !== unit.gross || stableJson(members.map(row=>row.playerId).sort()) !== stableJson(unit.playerIds) || members.some(row=>!canEditPlayerScore(match,unit.team,row.playerId))) return {ok:false,message:'A local score changed. Review the missing scores again.'};
+    for (const id of unit.playerIds) {
+      staged.sharedHostScoreOverrides = staged.sharedHostScoreOverrides || {};
+      staged.sharedHostScoreOverrides[getSharedPlayerHoleKey(id,unit.hole)] = new Date().toISOString();
+      stampSharedScoreWrite(staged,id,unit.hole,{storage:stagedStorage});
+    }
+  }
+  const prior={sharedScoreWriteState:match.sharedScoreWriteState,sharedHostScoreOverrides:match.sharedHostScoreOverrides};
+  match.sharedScoreWriteState=staged.sharedScoreWriteState;match.sharedHostScoreOverrides=staged.sharedHostScoreOverrides;
+  if (!save()) {Object.assign(match,prior);return {ok:false,message:STORAGE_FAILURE_MESSAGE};}
+  const written=writeSharedScoreOutbox(readSharedScoreOutbox(stagedStorage),storage);
+  if (!written.ok) {Object.assign(match,prior);save();return {ok:false,message:STORAGE_FAILURE_MESSAGE};}
+  return {ok:true,queued:plan.units.length*2};
+}
+async function awaitSharedRecovery(task, timeoutMs = 20000) {
+  let timer;
+  try { return await Promise.race([task,new Promise((_,reject)=>{timer=window.setTimeout(()=>reject(new Error('Cloud response is taking too long. Your scores and any queued recovery remain saved. Try again when connected.')),timeoutMs);})]); }
+  finally {window.clearTimeout(timer);}
+}
+async function fetchMissingFlamtanaScoreRecoveryPlan(match) {
+  const client=await ensureSupabaseClient();if(!client) throw new Error('Cloud connection is unavailable.');
+  const {data,error}=await awaitSharedRecovery(client.from('score_entries').select('*').eq('match_id',match.sharedMatchId).order('hole_number'));
+  if(error)throw error;
+  const current=getCanonicalSharedMatch(match)||match;
+  const plan=buildMissingFlamtanaScoreRecoveryPlan(current,data||[]);
+  if(plan.ok) {recordSharedLedgerParity(current,plan.comparison);persist({skipRender:true});}
+  return plan;
+}
+function renderSharedScoreRecovery() {
+  if(DYE_LEDGER_ADAPTER_MODE)return;
+  for(const [id,match] of [['score',getActiveMatch()],['leaderboard',getReviewOrActiveMatch()]]) {
+    const root=document.getElementById(id);if(!root)continue;
+    let notice=root.querySelector('[data-shared-score-recovery]');
+    if(!match || match.status==='complete' || isFrozenRoundRecord(match.roundRecordSnapshot) || !getFlamtanaConfig(match) || !isCurrentDeviceMatchHost(match) || match.sharedAccountRecovery || !match.sharedLedgerParity?.missingRemote?.length) {notice?.remove();continue;}
+    if(!notice){notice=document.createElement('div');notice.className='card setup-warning';notice.dataset.sharedScoreRecovery='1';notice.setAttribute('role','status');root.prepend(notice);}
+    const review=uiState.sharedScoreRecoveryReview?.matchId===match.id?uiState.sharedScoreRecoveryReview:null;
+    notice.innerHTML='<strong>Recover missing cloud scores</strong><p>'+Number(match.sharedLedgerParity.missingRemote.length)+' scores saved on this phone are not confirmed in the cloud. Review and resend them without entering them again. Both partners are included in each team write.</p>'+(review?'<ul>'+review.plan.units.map(unit=>'<li>'+escapeHtml(getTeamLabel(match,unit.team))+' · Hole '+unit.hole+': '+unit.gross+'</li>').join('')+'</ul>':'')+'<button type="button" data-review-missing-scores>'+ (review?'Resend reviewed scores':'Review missing scores')+'</button>';
+    notice.querySelector('button').addEventListener('click',async event=>{
+      if(hasUnsavedVisibleScoreInputs()){toast('Save the current hole entry before recovery.');return;}
+      const button=event.currentTarget;button.disabled=true;button.textContent='Checking saved scores…';
+      try {
+        const current=getCanonicalSharedMatch(match)||match,plan=await fetchMissingFlamtanaScoreRecoveryPlan(current);
+        if(!plan.ok)throw new Error(plan.message);
+        if(!plan.units.length){uiState.sharedScoreRecoveryReview=null;renderAll();toast('No cloud scores are missing now.');return;}
+        if(!review || review.plan.signature!==plan.signature){uiState.sharedScoreRecoveryReview={matchId:current.id,plan};renderSharedScoreRecovery();toast(review?'Scores changed. Review the updated list before resending.':'Review the team scores, then tap Resend reviewed scores.');return;}
+        const queued=queueMissingFlamtanaScoreRecovery(current,plan);
+        if(!queued.ok)throw new Error(queued.message);
+        uiState.sharedScoreRecoveryReview=null;
+        const delivery=await awaitSharedRecovery(drainPendingSharedScoreOperationsForMatch(current));
+        if(!delivery.ok)throw delivery.error || new Error('Recovery remains queued. Tap Sync Now to retry.');
+        const pulled=await awaitSharedRecovery(pullSharedScoreEntries(current,{silent:true,render:false,strictResult:true}));
+        if(!pulled.ok)throw pulled.error || new Error('Scores were sent. Sync again to confirm them.');
+        if(current.sharedLedgerParity?.parityConfirmed && !getSharedScoreOutboxOperations(current).length) current.cloudSyncState='cloud-synced';
+        persist({skipRender:true});renderAll();toast(current.sharedLedgerParity?.parityConfirmed?'All scores confirmed. Complete Round, then save your existing Story and preview the Ledger.':'Recovery sent. Review the remaining sync differences.');
+      }catch(error){if(getSharedAccountRecovery(error))recordSharedCloudFailure(match,error,{explicit:true,phase:'score-recovery'});toast(error.message || 'Recovery could not finish. Scores remain saved.');renderSharedScoreRecovery();}
+      finally{if(button.isConnected){button.disabled=false;button.textContent=review?'Resend reviewed scores':'Review missing scores';}}
+    });
+  }
+}
 function renderSharedAccountRecovery({ focus = false } = {}) {
   if (DYE_LEDGER_ADAPTER_MODE) return;
   for (const [id, match] of [['score',getActiveMatch()],['leaderboard',getReviewOrActiveMatch()]]) {
@@ -2012,7 +2104,7 @@ function getSharedMatchReadinessLines(match, participants = getSharedAssignmentP
       lines.push('Foursome ' + group + ' (T' + (group * 2 - 1) + ' + T' + (group * 2) + '): ' + (owner ? owner.deviceName || owner.name || 'Assigned device' : 'Assign all four golfers to the same device.'));
     });
     if (scrambleError) lines.push(scrambleError);
-    else if (!isAssignedPlayersMode(match) || assigned >= total) lines.push('Ready to start scoring.');
+    else if (!isAssignedPlayersMode(match) || assigned >= total) lines.push(match.roundTiming?.startedAt ? 'Round in progress. Assignments ready for scoring.' : 'Ready to start scoring.');
   } else {
     const names = getAssignedPlayerNamesForParticipant(match, getCurrentSharedParticipantId(match));
     lines.push(names.length ? `Ready to score: ${names.join(', ')}.` : 'Joined — waiting for host assignment.');
@@ -10371,6 +10463,11 @@ async function openUnifiedExport(match, printView = 'ledger') {
   }
   const sameTabLedger = printView === 'ledger' && shouldUseSameTabLedgerReport();
   const acceptedLedgerReport = printView === 'ledger' ? getAcceptedLedgerEntrySnapshot(match)?.report || null : null;
+  // A finalized RoundRecord is the report's authority; another cloud pull must
+  // not block its saved Story or replace its score/settlement evidence.
+  const frozenLedgerReport = printView === 'ledger' && match.status === 'complete'
+    && isFrozenRoundRecord(match.roundRecordSnapshot)
+    && String(match.roundRecordSnapshot.meta.roundId) === String(match.id);
   const exportWindow = sameTabLedger ? null : window.open('', '_blank');
   if (!sameTabLedger && !exportWindow) {
     toast('Please allow pop-ups to share this round.');
@@ -10381,7 +10478,7 @@ async function openUnifiedExport(match, printView = 'ledger') {
     exportWindow.document.write('<!doctype html><html><head><meta charset="utf-8"><title>Preparing Export</title></head><body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:24px;"><strong>Reconciling shared scores...</strong><div style="margin-top:8px;color:#5a667a;">Pulling latest shared scores before creating the report.</div></body></html>');
     exportWindow.document.close();
   }
-  if (match.storageMode === 'shared' && printView !== 'scorecard' && !acceptedLedgerReport) {
+  if (match.storageMode === 'shared' && printView !== 'scorecard' && !acceptedLedgerReport && !frozenLedgerReport) {
     try { await reconcileSharedMatchBeforeSummary(match, { silent: false }); }
     catch (error) {
       if (exportWindow) exportWindow.close();
@@ -10778,6 +10875,24 @@ function applySharedScrambleSetupMetadata(match, meta) {
   if (meta.roundTiming?.startedAt) match.roundTiming = clonePlain(meta.roundTiming);
   return before !== stableJson([match.selectedGames, match.roundTiming]);
 }
+const FLAMTANA_COMPETITION_LABELS = {featured:'The Big Game',group1:'T1 versus T2',group2:'T3 versus T4',foursome:'Foursome versus foursome',calcutta:'Calcutta'};
+function removeFlamtanaCompetition(match, key, {save = () => persist({skipRender:true})} = {}) {
+  const raw = getFlamtanaConfig(match);
+  if (!raw || Number(raw.scoringPolicyVersion) < 3 || !match.roundTiming?.startedAt || !isCurrentDeviceMatchHost(match) || match.status === 'complete' || isFrozenRoundRecord(match.roundRecordSnapshot) || match.remoteCompletionPending) return {ok:false,message:'Only the host can remove games from an unfinished event-options round.'};
+  const config = normalizeFlamtanaConfig(raw), keys = Object.keys(FLAMTANA_COMPETITION_LABELS);
+  if (!keys.includes(key) || config[key+'Enabled'] === false) return {ok:false,message:'That game is not active.'};
+  if (keys.filter(id=>config[id+'Enabled']).length <= 1) return {ok:false,message:'Keep at least one competition in this round.'};
+  const previous = match.selectedGames;
+  match.selectedGames = previous.map(game=>game.key==='flamtana_special'?{...config,[key+'Enabled']:false}:game);
+  if (!save()) {match.selectedGames=previous;return {ok:false,message:STORAGE_FAILURE_MESSAGE};}
+  return {ok:true};
+}
+function buildFlamtanaGameRemovalControls(match) {
+  const config = getFlamtanaConfig(match);
+  if (!config || Number(config.scoringPolicyVersion)<3 || !match.roundTiming?.startedAt || !isCurrentDeviceMatchHost(match) || match.status==='complete' || isFrozenRoundRecord(match.roundRecordSnapshot) || match.remoteCompletionPending) return '';
+  const enabled=Object.keys(FLAMTANA_COMPETITION_LABELS).filter(key=>config[key+'Enabled']!==false);
+  return '<details class="top-gap"><summary>Manage games (host)</summary><p class="tiny">Remove a competition and its buy-ins and payouts from this round. Scores and the other games stay saved. Removed games cannot be added back after Start. Keep at least one game. Review your saved Story for references to removed games.</p><div class="actions wrap">'+enabled.map(key=>'<button type="button" class="secondary" data-remove-flamtana-game="'+key+'" '+(enabled.length<=1?'disabled':'')+'>Remove '+escapeHtml(FLAMTANA_COMPETITION_LABELS[key])+'</button>').join('')+'</div></details>';
+}
 function buildFlamtanaSetupControls(raw) {
   let cfg = normalizeFlamtanaConfig(raw);
   if (!editingMatchId) { cfg.scoringPolicyVersion = 3; if (raw.calcuttaStake === undefined || raw.calcuttaStake === null) cfg.calcuttaStake = 15; cfg = normalizeFlamtanaConfig(cfg); }
@@ -10793,7 +10908,7 @@ function buildFlamtanaSetupControls(raw) {
     ${modern?`<label><span>First place %</span><input type="number" min="0" max="100" step="0.01" data-game-config="flamtana_special" data-field="firstPlacePercent" value="${cfg.firstPlacePercent}"></label><label><span>Second place %</span><input type="number" min="0" max="100" step="0.01" data-game-config="flamtana_special" data-field="secondPlacePercent" value="${cfg.secondPlacePercent}"></label><p class="tiny span-2" role="status">${splitValid?'The Big Game pool '+formatMoneyAccounting(pool/100)+' → first '+cfg.firstPlacePercent+'% ('+formatMoneyAccounting(first/100)+'), second '+cfg.secondPlacePercent+'% ('+formatMoneyAccounting((pool-first)/100)+'). Total 100%.':'First and second place must total 100%.'} Tied first splits the entire pool; tied second splits the second-place allocation. No card-off. Calcutta retains its own existing winner/backer rules.</p>`:`<label class="span-2"><span>Tie rule</span><select data-game-config="flamtana_special" data-field="tieMethod">${Object.entries(FLAMTANA_TIE_METHODS).map(([key,label])=>`<option value="${key}" ${cfg.tieMethod===key?'selected':''}>${label}</option>`).join('')}</select></label>`}
     <input type="hidden" data-game-config="flamtana_special" data-field="scoringPolicyVersion" value="${cfg.scoringPolicyVersion}">
     ${cfg.calcuttaEnabled!==false?players.map(player=>`<label><span>${escapeHtml(getPlayer(player.playerId)?.name||'Golfer')} backs</span><select data-flamtana-pick="${escapeHtml(player.playerId)}"><option value="">Choose team</option>${SCRAMBLE_TEAM_IDS.map(team=>`<option value="${team}" ${Number(cfg.picks[player.playerId])===team?'selected':''}>${escapeHtml(document.querySelector('[data-team-name="'+team+'"]')?.value||'Team '+team)}</option>`).join('')}</select></label>`).join(''):''}</div>
-    <p class="tiny">Only selected competitions contribute to settlement. Choices and stakes are fixed at Start. An unbacked winning team's Calcutta share goes to its partners. Odd cents go in stable ID order.</p></div>`;
+    <p class="tiny">Only selected competitions contribute to settlement. Stakes are fixed at Start. The host can remove selected competitions during an unfinished round under Play → Round rules → Manage games. An unbacked winning team's Calcutta share goes to its partners. Odd cents go in stable ID order.</p></div>`;
 }
 function buildScrambleReportEntries(match, metrics, holes, record = null) {
   const offLow = usesFlamtanaOffLow(match, record);
@@ -10967,7 +11082,8 @@ function getScrambleSetupError(match, { assignments = false } = {}) {
   }
   if (assignments) {
     const devices = [1, 2].map(group => match.players.filter(p => Math.ceil(Number(p.team) / 2) === group).map(p => getAssignedDeviceForPlayer(match, p.playerId)));
-    if (devices.some(group => group.some(id => !id) || new Set(group).size !== 1) || devices[0][0] === devices[1][0]) return 'Assign T1 + T2 to one device and T3 + T4 to a second device before Start.';
+    const hostTakeover = !!match.roundTiming?.startedAt && !!match.sharedHostDeviceId && devices.every(group => group.every(id => id === match.sharedHostDeviceId));
+    if (!hostTakeover && (devices.some(group => group.some(id => !id) || new Set(group).size !== 1) || devices[0][0] === devices[1][0])) return 'Assign T1 + T2 to one device and T3 + T4 to a second device before Start.';
     if (match.players.some(p => !getSharedParticipantById(match, getAssignedParticipantForPlayer(match, p.playerId)))) return 'Assign all eight golfers to joined devices before Start.';
   }
   return getAssignedTeamIndexError(match);
@@ -13677,6 +13793,7 @@ function buildFrozenScoresGameSummary(record) {
 function renderLeaderboard() {
   const match = getReviewOrActiveMatch();
   renderSharedAccountRecovery();
+  renderSharedScoreRecovery();
   const empty = document.getElementById('leaderboardEmpty');
   const wrap = document.getElementById('leaderboardWrap');
   const completedSummaryBanner = document.getElementById('completedSummarySessionBanner');
@@ -16586,6 +16703,7 @@ async function flushSharedMatchSync(matchId, { silent = true } = {}) {
       if (!failure) {
         delete match.sharedAccountRecovery;
         renderSharedAccountRecovery();
+        renderSharedScoreRecovery();
         match.lastSharedSyncError = '';
         match.lastSharedSyncErrorCode = '';
       } else {
@@ -19737,6 +19855,7 @@ async function switchPlayInputMode(nextMode) {
 
 function renderCurrentMatch() {
   renderSharedAccountRecovery();
+  renderSharedScoreRecovery();
   const match = getActiveMatch();
   const rulesWrap = document.getElementById('playGroupRulesPreview');
   if (rulesWrap) rulesWrap.innerHTML = match ? (match.remoteCompletionPending ? '<div class="setup-warning" role="alert">'+escapeHtml(getRemoteCompletionWarning(match))+'</div>' : '') + (getAssignedTeamIndexError(match) ? '<div class="setup-warning">' + escapeHtml(getAssignedTeamIndexError(match)) + '</div>' : '') + buildGroupRulesPreview(match, rulesWrap.querySelector('details')?.open || false) : '';
@@ -22432,7 +22551,7 @@ function buildGroupRulesPreview(round, open = false) {
     const pointExample = Number.isFinite(pointRate) ? `A 5-point head-to-head difference at $${pointRate.toFixed(2)} per point is $${(5*pointRate).toFixed(2)}.` : '';
     return `<div class="group-rules-game"><strong>${escapeHtml(getGameLabel(game.key))} · ${escapeHtml(contract.basis)}</strong><div>${escapeHtml(pairing || participants)}</div><div>${escapeHtml(stakes || 'No stake specified')}${options ? ` · ${escapeHtml(options)}` : ''}</div><div>${escapeHtml(allowance)}</div><div>${escapeHtml(contract.tieTreatment)} · ${escapeHtml(pressText)}</div>${pointSchedule ? `<div>${escapeHtml(pointSchedule)}</div>` : ''}${pointExample ? `<div>${escapeHtml(pointExample)}</div>` : ''}</div>`;
   }).join('');
-  return `<details class="group-rules-preview" ${open ? 'open' : ''}><summary>Round rules · ${games.length} selected game${games.length === 1 ? '' : 's'}</summary><div class="group-rules-body"><div>${escapeHtml(roster || 'Choose golfers in Players.')}</div><div>${round?.storageMode === 'shared' ? 'Shared round · scorer assignments belong to this round.' : 'Local scoring on this device.'}</div>${rows || '<div>No selected games. Review the Featured Competition in Games.</div>'}${getFlamtanaConfig(round) ? `<div>${usesFlamtanaOffLow(round) ? 'Net scores and all wagers use strokes off the lowest of all four team handicaps.' : 'Legacy round: Off low shows relative strokes; Course Net and wagers retain full team handicaps.'}</div>${Number(getFlamtanaConfig(round).scoringPolicyVersion)>=3 ? '<div>'+escapeHtml(computeFlamtanaResults(round)?.components?.filter(component=>component.enabled!==false).map(component=>component.label+' '+formatMoneyAccounting(component.stake)+'/golfer').join(' · ') || '')+'</div><div>The Big Game: first '+Number(getFlamtanaConfig(round).firstPlacePercent)+'%, second '+Number(getFlamtanaConfig(round).secondPlacePercent)+'%. Tied first splits the entire pool; tied second splits second-place money. All ties split without card-off. Calcutta retains its winner/backer rules.</div>' : ''}` : ''}<div class="tiny">These are this round’s saved settings. Templates edited later do not change this round. Rules catalog v${COMPETITION_RULES_CATALOG_VERSION}.</div></div></details>`;
+  return `<details class="group-rules-preview" ${open ? 'open' : ''}><summary>Round rules · ${games.length} selected game${games.length === 1 ? '' : 's'}</summary><div class="group-rules-body"><div>${escapeHtml(roster || 'Choose golfers in Players.')}</div><div>${round?.storageMode === 'shared' ? 'Shared round · scorer assignments belong to this round.' : 'Local scoring on this device.'}</div>${rows || '<div>No selected games. Review the Featured Competition in Games.</div>'}${getFlamtanaConfig(round) ? `<div>${usesFlamtanaOffLow(round) ? 'Net scores and all wagers use strokes off the lowest of all four team handicaps.' : 'Legacy round: Off low shows relative strokes; Course Net and wagers retain full team handicaps.'}</div>${Number(getFlamtanaConfig(round).scoringPolicyVersion)>=3 ? '<div>'+escapeHtml(computeFlamtanaResults(round)?.components?.filter(component=>component.enabled!==false).map(component=>component.label+' '+formatMoneyAccounting(component.stake)+'/golfer').join(' · ') || '')+'</div><div>The Big Game: first '+Number(getFlamtanaConfig(round).firstPlacePercent)+'%, second '+Number(getFlamtanaConfig(round).secondPlacePercent)+'%. Tied first splits the entire pool; tied second splits second-place money. All ties split without card-off. Calcutta retains its winner/backer rules.</div>' : ''}` : ''}${buildFlamtanaGameRemovalControls(round)}<div class="tiny">These are this round’s saved settings. Templates edited later do not change this round. Rules catalog v${COMPETITION_RULES_CATALOG_VERSION}.</div></div></details>`;
 }
 
 function renderSetupGroupRulesPreview() {
@@ -23933,7 +24052,7 @@ function renderSetupSharedAdminPanel() {
         <button type="button" class="secondary" data-share-shared-code="${escapeHtml(code)}" ${canShareCode ? '' : 'disabled'}>Share Code</button>
         <button type="button" class="secondary" id="setupSyncSharedMatchNowBtn">Retry Sync</button>
         ${isHost && isAssignedPlayersMode(match) ? '<button type="button" class="secondary" data-focus-shared-assignments="1">Manage Assignments</button>' : ''}
-        ${isHost ? '<button type="button" data-start-shared-scoring="1">Start Scoring</button>' : ''}
+        ${isHost ? `<button type="button" data-start-shared-scoring="1">${match.roundTiming?.startedAt ? 'Continue Scoring' : 'Start Scoring'}</button>` : ''}
       </div>
     </div>
     <details class="top-gap shared-match-details" open>
@@ -24525,6 +24644,18 @@ function installHandlers() {
     if (button) openBalanceExplanation(button.dataset.balancePlayer,button.dataset.balanceMatch,button);
   });
   const balanceDialog = document.getElementById('balanceExplanationDialog');
+  document.addEventListener('click', event => {
+    const button=event.target.closest('[data-remove-flamtana-game]');
+    if(!button)return;
+    const match=getActiveMatch(),key=button.dataset.removeFlamtanaGame,config=getFlamtanaConfig(match);
+    if(!config || !Object.hasOwn(FLAMTANA_COMPETITION_LABELS,key))return;
+    if(hasUnsavedVisibleScoreInputs())return toast('Save the current hole before changing games.');
+    const stake=Number(config[(key.startsWith('group')?'group':key)+'Stake']),count=key.startsWith('group')?4:8;
+    if(!window.confirm('Remove '+FLAMTANA_COMPETITION_LABELS[key]+' from this round?\n\nRemove its '+formatMoneyAccounting(stake)+' per golfer buy-in ('+formatMoneyAccounting(Math.round(stake*100)*count/100)+' pool) and all its payouts. Scores, the other games and your Story stay saved. Review the Story for references to this game. You cannot add this game back after Start.'))return;
+    const result=removeFlamtanaCompetition(match,key);
+    if(!result.ok)return toast(result.message);
+    scheduleSharedMatchSync(match,{immediate:true,silent:true});renderAll();toast('Game removed from settlement. Scores and Story preserved.');
+  });
   document.getElementById('balanceExplanationCloseBtn')?.addEventListener('click',()=>balanceDialog.close());
   balanceDialog?.addEventListener('click',event=>{if(event.target===balanceDialog)balanceDialog.close();});
   balanceDialog?.addEventListener('close',()=>{
@@ -27401,7 +27532,7 @@ function installDyeLedgerLiveEngineAdapter() {
     resolveRoundPlayerHandicap,
     getPlayerGameHandicap,
     getFlamtanaDisplayStrokes,
-    getMissingScoreEntries, applySharedScrambleSetupMetadata, buildScrambleReportEntries, buildFlamtanaReportGames, buildFlamtanaSetupControls, getScrambleFoursomeProgress, normalizeFlamtanaConfig, getFlamtanaSetupError, resolveFlamtanaStrokeResult, computeFlamtanaResults, getSharedDeviceId, isCurrentDeviceMatchHost, mergeRemoteScoreEntriesIntoMatch, isTeamScoredRound, getScrambleSetupError, getScrambleTeamHoleScore, applyTeamGrossScore, buildScrambleTeamScorecard, canFreezeRoundRecord, applyCurrentHoleDomToMatch, hasUnresolvedTeamScores, buildScrambleScoreGridRows,
+    removeFlamtanaCompetition, buildFlamtanaGameRemovalControls, buildMissingFlamtanaScoreRecoveryPlan, queueMissingFlamtanaScoreRecovery, getMissingScoreEntries, applySharedScrambleSetupMetadata, buildScrambleReportEntries, buildFlamtanaReportGames, buildFlamtanaSetupControls, getScrambleFoursomeProgress, normalizeFlamtanaConfig, getFlamtanaSetupError, resolveFlamtanaStrokeResult, computeFlamtanaResults, getSharedDeviceId, isCurrentDeviceMatchHost, mergeRemoteScoreEntriesIntoMatch, isTeamScoredRound, getScrambleSetupError, getScrambleTeamHoleScore, applyTeamGrossScore, buildScrambleTeamScorecard, canFreezeRoundRecord, applyCurrentHoleDomToMatch, hasUnresolvedTeamScores, buildScrambleScoreGridRows,
     applyAssignedTeamIndexMetadata,
     buildCloudMatchPayload,
     hydrateMatchFromCloudBundle,

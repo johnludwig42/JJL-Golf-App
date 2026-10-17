@@ -22,7 +22,8 @@ test('Flamtana setup picks and stakes survive draft reload with comfortable cont
   const draft=await page.evaluate(()=>localStorage.getItem('the-dye-ledger-v20:setup-draft'));
   await page.evaluateOnNewDocument(value=>localStorage.setItem('the-dye-ledger-v20:setup-draft',value),draft);
   await page.reload({waitUntil:'load'});await page.click('[data-open-setup-destination="games"]');
-  assert.equal(await page.$eval('[data-game-config="flamtana_special"][data-field="tieMethod"]',node=>node.value),'back9');
+  assert.equal(await page.$eval('[data-game-config="flamtana_special"][data-field="scoringPolicyVersion"]',node=>node.value),'3');
+  assert.equal(await page.$('[data-game-config="flamtana_special"][data-field="tieMethod"]'),null);
   assert.equal(await page.$eval('[data-game-config="flamtana_special"][data-field="featuredStake"]',node=>node.value),'25');
   assert.deepEqual(await page.$$eval('[data-flamtana-pick]',nodes=>nodes.map(node=>node.value)),['1','1','2','2','3','3','4','4']);
   for(const width of [320,375,430]){await page.setViewport({width,height:812});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);}

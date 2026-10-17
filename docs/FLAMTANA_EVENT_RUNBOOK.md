@@ -1,14 +1,14 @@
 # Flamtana Special — Friday, October 16, 2026
 
-**Install v31.0.73 on both phones before the event.** New matches use off-low
+**Install v31.0.74 on both phones before the event.** New matches use off-low
 strokes; .72 adds AI Story/report and remote-completion fixes. Existing
-unfinished matches retain their original full-handicap wager rule; start a fresh
-match to use the new rule. Existing frozen results stay unchanged.
+unfinished matches retain their saved wager rules; start a fresh match to use
+competition choices and first/second prizes. Existing frozen results stay unchanged.
 Keep a paper team scorecard and the eight Calcutta picks with the host.
 
 ## 1. Before anyone tees off
 
-1. On both phones, open **More → App Support** and confirm v31.0.73. Install any
+1. On both phones, open **More → App Support** and confirm v31.0.74. Install any
    available update before creating the event match. Confirm existing saved rounds
    are still in Library. Check **Technical diagnostics** for storage usage.
    Check **More → Account & Security**: the host must be signed into the account
@@ -23,10 +23,14 @@ Keep a paper team scorecard and the eight Calcutta picks with the host.
    both partners share that tee, while different teams may choose different tees.
    Deliberately check/enter each assigned team index, resulting Course HCP and Gets.
    For a new match, Gets is that team's Course HCP minus the lowest of all four.
-4. In **Games & Stat Tracking**, check the per-person Featured, Group, Foursome
-   and Calcutta stakes and the tie method. Defaults are $20 each: $80 exposure per
-   golfer. Enter **all eight Calcutta picks**, including anyone backing their own
-   team. Write the stakes, tie method and picks on the paper card.
+4. In **Games & Stat Tracking**, choose the competitions: The Big Game, T1 versus
+   T2, T3 versus T4, foursome versus foursome and Calcutta. Check stakes and The Big
+   Game first/second percentages (must total 100%) and the dollar preview. Default
+   Calcutta is $15/person ($120). Enter eight picks if Calcutta is selected. Write
+   choices, stakes, percentages and picks on paper. These lock at Start. Tied first
+   splits that game's entire pool; tied second splits second-place money. No
+   card-off on new rounds. Calcutta retains its independent winning-team/backer
+   shares and unbacked-partner fallback.
 5. Create the shared round with **Start Round**. This creates the match; it is
    separate from **Start Scoring**. Give the displayed match code to the other phone.
 6. On the other phone, choose **Match → Join a Match**, enter a clear device name
@@ -133,6 +137,19 @@ For a legacy match, use its full saved HCP; a negative/plus HCP gives shots back
 on the highest stroke indexes first. Use the printed/saved wager net values
 whenever available. Do not convert an existing round's rules mid-event.
 
+### New event-options rounds
+
+For a new policy-3 round, settle only selected contests. In The Big Game, debit
+all eight golfers their buy-in, then pay the winning team's partners the first
+percentage of the pool and the second team's partners the remainder. Tied first
+splits the whole pool among the tied teams, with no second prize. Tied second
+splits second-place money. Group and foursome winners split their respective
+pools; tied winners split. Calcutta does not use first/second percentages: divide
+its pool equally by winning team, then among each team's backers; an unbacked
+team's share goes to its two partners. Allocate odd cents in stable ID order.
+
+### Legacy rounds only: original four wagers
+
 | Wager | Comparison | Pool and recipients |
 | --- | --- | --- |
 | Featured | Lowest 18-hole team net total among T1–T4 | Eight Featured stakes; winning team's two partners, or all partners of tied winning teams |
@@ -146,7 +163,7 @@ whenever available. Do not convert an existing round's rules mid-event.
 values. The lower sum wins. **Do not take the lower of two team totals.** For team
 hole scores 3/6 followed by 6/3, the foursome scores 3 + 3 = 6, not 9.
 
-**Resolve ties using the chosen rule, among the remaining tied candidates only:**
+**Legacy policy-1/2 rounds only: resolve ties using their saved rule. New policy-3 rounds use the event-options rules above.**
 
 - **Split:** divide immediately.
 - **Hole 18 backwards:** compare net Hole 18, then 17, continuing backwards until

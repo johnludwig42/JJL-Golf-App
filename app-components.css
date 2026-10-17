@@ -121,3 +121,15 @@
 .flamtana-projection-scroll .quick-scoreboard-table th:first-child,
 .flamtana-projection-scroll .quick-scoreboard-table td:first-child { position: sticky; left: 0; z-index: 1; min-width: 8rem; max-width: 12rem; white-space: normal; background: var(--color-surface-card); }
 .flamtana-projection-scroll .quick-scoreboard-table th:first-child { background: var(--color-surface-inset-card); }
+.game-config-card .flamtana-competition-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 44px;
+  cursor: pointer;
+}
+.game-config-card .flamtana-competition-choice input {
+  flex: 0 0 auto;
+  width: 1.25rem;
+  height: 1.25rem;
+}

@@ -3,10 +3,10 @@
    or derived from it. Stroke allocation comes from the app's engine, keyed by
    basis; the report never re-derives handicapping.
    ========================================================================== */
-import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getWinningMarginPerspective } from './logic.js?v=31.0.73';
+import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getWinningMarginPerspective } from './logic.js?v=31.0.74';
 
-import './stroke-play.js?v=31.0.73';
-import { compactFlamtanaEvidence, formatFlamtanaMatchedSteps } from './flamtana-evidence.js?v=31.0.73';
+import './stroke-play.js?v=31.0.74';
+import { compactFlamtanaEvidence, formatFlamtanaMatchedSteps } from './flamtana-evidence.js?v=31.0.74';
 const {buildStrokePlaySummary,roundEntryColors,strokePlayChart,strokePlayStrip,strokePlayCallout,handicapTable,toPar}=globalThis.DYE_LEDGER_STROKE_REPORT;
 
 const packPages = globalThis.packPages;
@@ -204,7 +204,7 @@ if(HAS_MONEY && PAY.length){
     console.error(`SETTLEMENT MISMATCH ${p.name}: games ${moneyOf(p.id)} vs payments ${chk[p.id]}`); });
 }
 
-const FR = FEAT && FEAT.R;
+const FR = FEAT && !(ROUND.meta.flamtanaEventOptions && FEAT.type==='settlement') && FEAT.R;
 const STROKE=buildStrokePlaySummary(FEAT,ROUND);
 const HAS_STROKE=ROUND.games.some(game=>game.type==='strokeplay'&&!game.overviewOnly);
 
@@ -263,7 +263,7 @@ const add = (id, build, opts={}) => BLOCKS.push({id,build,...opts});
 add("hero", ()=>{
   const w = h("div",{style:"padding-bottom:2px"});
   const label = FEAT ? headerCompetitionLabel(FEAT.name, FEAT.allowance.label) : "No featured competition";
-  w.appendChild(h("div",{class:"eyebrow",text:(FEAT?.overviewOnly ? "Scoring overview · " : "Featured Competition · ")+label}));
+  w.appendChild(h("div",{class:"eyebrow",text:(FEAT?.overviewOnly ? "Scoring overview · " : (ROUND.meta.flamtanaEventOptions?"Selected competition · ":"Featured Competition · "))+label}));
   let head;
   if(["ninepoint","sixes","wolf"].includes(FEAT?.type)&&ROUND.meta.primaryMatchStatus){
     head=ROUND.meta.primaryMatchStatus;
@@ -289,7 +289,7 @@ add("hero", ()=>{
   }
   if(ROUND.meta?.flamtanaFinal && FEAT?.finalization?.final) {
     const cardOff=(FEAT.finalization.evidence||[]).length>1;
-    w.appendChild(h('h1',{text:(cardOff?'Card-Off result — ':'Featured result — ')+FEAT.finalization.winnerIds.map(nameOf).join(' and ')+(FEAT.finalization.winnerIds.length>1?' (split)':' wins')}));
+    w.appendChild(h('h1',{text:(cardOff?'Card-Off result — ':ROUND.meta.flamtanaEventOptions?FEAT.name+' result — ':'Featured result — ')+FEAT.finalization.winnerIds.map(nameOf).join(' and ')+(FEAT.finalization.winnerIds.length>1?' (split)':' wins')}));
     w.appendChild(h('p',{class:'deck',text:head+' · Saved '+(cardOff?'Card-Off':'final result')+' evidence below.'}));
   } else w.appendChild(h("h1",{html:head}));
   w.appendChild(h("p",{class:"deck",text:deckText()}));
@@ -331,7 +331,7 @@ function deckText(){
       parts.push("No wagers recorded on this round.");
       SIDEGAMES.map(sideGameDeckResult).filter(Boolean).forEach(result=>parts.push(result));
     }
-  } else parts.push(ROUND.meta?.teamScored ? "Two-man Scramble. One shared-ball card per team; no wagers or individual handicap posting." : "No featured competition on this round. Scoring and awards below.");
+  } else parts.push(ROUND.meta?.flamtanaEventOptions ? "Flamtana Special selected competitions: "+ROUND.games.map(game=>game.name).join(", ")+". One shared-ball card per team; no individual handicap posting." : ROUND.meta?.teamScored ? "Two-man Scramble. One shared-ball card per team; no wagers or individual handicap posting." : "No featured competition on this round. Scoring and awards below.");
   return parts.join(" ");
 }
 function sideGameDeckResult(game){
@@ -401,7 +401,7 @@ if(HAS_SIDES) add("strip", ()=>{
 });
 
 /* ---- featured competition chart ---- */
-if(FR) add("charth", ()=>{ const perspective=getWinningMarginPerspective(MARGIN||{}); const side=FEAT.sides?.[perspective.sideIndex]; return secHead(FEAT.overviewOnly?"Scoring overview by hole":"Featured Competition by hole",
+if(FR) add("charth", ()=>{ const perspective=getWinningMarginPerspective(MARGIN||{}); const side=FEAT.sides?.[perspective.sideIndex]; return secHead(FEAT.overviewOnly?"Scoring overview by hole":FEAT.name==="The Big Game"?"The Big Game by hole":"Featured Competition by hole",
   `${headerCompetitionLabel(FEAT.name, FEAT.allowance.label)}${MARGIN&&side?` · Winning Side perspective: ${SIDES[side.key].name}`:""}`); }, {keepWithNext:true, label:"Result"});
 if(FR) add("chart", ()=>{ const w=h("div"); w.innerHTML=STROKE?strokePlayChart(STROKE,ROUND):chartSVG(); return w; });
 if(STROKE){
@@ -604,20 +604,21 @@ if(FR && FR.turning && !STROKE) add("turning", ()=>{
 
 /* Saved Flamtana evidence; no result is inferred from chart margins. */
 if(ROUND.meta?.flamtana) {
-  add('flamtana-handicaps-head',()=>secHead('Team handicaps',ROUND.meta.flamtanaOffLow ? 'Saved team index → Course Handicap → strokes off the lowest of all four teams.' : 'Saved assigned team index → Course Handicap → final Playing Handicap.'),{keepWithNext:true});
+  add('flamtana-handicaps-head',()=>secHead('Team handicaps',ROUND.meta.flamtanaOffLow ? 'Saved team index → Course Handicap → strokes off the lowest of all four teams.' : 'Saved assigned team index → Course Handicap → final Playing Handicap.'),{keepWithNext:true,breakBefore:!!ROUND.meta.flamtanaEventOptions && HAS_STROKE});
   add('flamtana-handicaps',()=>{
     const wrapper=h('div',{'data-flamtana-handicaps':''}),table=h('table',{class:'handicap-table'}),head=h('thead'),heading=h('tr'),body=h('tbody');
     ['Team','Tee','Assigned index','Saved CH',ROUND.meta.flamtanaOffLow?'Gets off low':'Final PH'].forEach(text=>heading.appendChild(h('th',{text})));head.appendChild(heading);table.appendChild(head);
     P.forEach(team=>{const row=h('tr',{'data-row':''});[team.name,team.tee,isNum(team.index)?team.index.toFixed(1):'—',team.ch,team.ph].forEach(value=>row.appendChild(h('td',{text:String(value)})));body.appendChild(row);});
-    table.appendChild(body);wrapper.appendChild(table);wrapper.appendChild(h('p',{class:'scnote',text:ROUND.meta.flamtanaOffLow ? 'Course Handicap uses the saved team index and tee. Gets = team Course Handicap minus the lowest Course Handicap of all four teams, with no further allowance. Featured and Group use net hole scores after these strokes. Foursome sums each hole’s lower team net score. Full Course Net elsewhere is informational. These are saved values.' : 'Course Handicap = round(assigned team index × slope / 113 + rating − par). The saved Course Handicap is the final Playing Handicap: full signed strokes, no further allowance. Featured and Group compare team net totals. Foursome sums each hole’s lower team net score; it has no separate handicap. These saved values are displayed without recalculation.'}));return wrapper;
+    table.appendChild(body);wrapper.appendChild(table);wrapper.appendChild(h('p',{class:'scnote',text:ROUND.meta.flamtanaEventOptions ? 'Gets = team Course Handicap minus the lowest of all four teams. The Big Game and selected group contests use these net strokes. Foursome totals sum each hole’s lower team net. Saved values are shown without recalculation.' : ROUND.meta.flamtanaOffLow ? 'Course Handicap uses the saved team index and tee. Gets = team Course Handicap minus the lowest Course Handicap of all four teams, with no further allowance. Featured and Group use net hole scores after these strokes. Foursome sums each hole’s lower team net score. Full Course Net elsewhere is informational. These are saved values.' : 'Course Handicap = round(assigned team index × slope / 113 + rating − par). The saved Course Handicap is the final Playing Handicap: full signed strokes, no further allowance. Featured and Group compare team net totals. Foursome sums each hole’s lower team net score; it has no separate handicap. These saved values are displayed without recalculation.'}));return wrapper;
   },{keepTogetherWhenFits:true});
-  add('flamtana-evidence-head',()=>secHead('Flamtana results and tie evidence', ROUND.meta.flamtanaFinal ? 'Final saved results · stroke totals, never holes won.' : 'Provisional · card-off and payments await finalization.'),{keepWithNext:true});
+  add('flamtana-evidence-head',()=>secHead('Flamtana results and tie evidence', ROUND.meta.flamtanaFinal ? 'Final saved results · stroke totals, never holes won.' : (ROUND.meta.flamtanaEventOptions?'Provisional · ties split; payments await finalization.':'Provisional · card-off and payments await finalization.')),{keepWithNext:true});
   (ROUND.meta.flamtanaEvidence || []).forEach((component,index)=>add('flamtana-evidence-'+index,()=>{
-    const w=h('div',{class:'flamtana-result-block','data-flamtana-evidence':component.label,...(component.label==='Featured'?{id:'flamtana-featured-evidence'}:{})});
+    const w=h('div',{class:'flamtana-result-block','data-flamtana-evidence':component.label,...(['Featured','The Big Game'].includes(component.label)?{id:'flamtana-featured-evidence'}:{})});
     w.appendChild(h('div',{class:'subhead',text:component.label}));
     if(component.label!=='Calcutta') w.appendChild(h('p',{'data-flamtana-result':'',text:component.result.final ? ((component.result.evidence||[]).length>1?'Card-Off result: ':component.result.split?'Split result: ':'Lowest net total: ')+component.result.winnerIds.map(nameOf).join(' / ')+(component.result.split?' · split':'') : 'Provisional'}));
     if(component.label==='Calcutta'){
-      w.appendChild(h('p',{'data-flamtana-featured-reference':'',text:'Follows the Featured result; see Featured evidence above.'}));
+      if(ROUND.meta.flamtanaEventOptions && !ROUND.games.some(game=>game.id==='flamtana_featured')) compactFlamtanaEvidence(component.result.evidence||[]).forEach(block=>w.appendChild(h('p',{text:block.kind==='matched'?formatFlamtanaMatchedSteps(block.labels):block.step.label+': '+block.step.totals.map(row=>nameOf(row.id)+' '+row.total).join(' / ')})));
+      w.appendChild(h('p',{'data-flamtana-featured-reference':'',text:ROUND.meta.flamtanaEventOptions?(ROUND.games.some(game=>game.id==='flamtana_featured')?'Follows The Big Game winning teams; see its evidence above.':'Calcutta follows the lowest-net teams shown here; The Big Game buy-in is not selected.'):'Follows the Featured result; see Featured evidence above.'}));
       const game=ROUND.games.find(game=>game.id==='flamtana_calcutta');
       const pool=component.result.final ? (component.result.shares||[]).reduce((total,share)=>total+share.grossPoolShare,0) : (Number(game?.stake)||0)*(ROUND.flamtanaPicks||[]).length;
       w.appendChild(h('p',{text:(component.result.final?'Pool total: ':'Configured pool: ')+usd(pool)}));
@@ -631,12 +632,13 @@ if(ROUND.meta?.flamtana) {
       });
       if(component.result.final && component.result.split && component.result.tieMethod!=='split') w.appendChild(h('p',{'data-flamtana-exhausted':'',text:'Card-off comparisons exhausted; the component split between '+component.result.winnerIds.map(nameOf).join(' / ')+'.'}));
     }
+    (component.result.prizes||[]).forEach(prize=>w.appendChild(h('p',{'data-flamtana-prize':prize.place,text:(prize.place===1?'First':'Second')+' place: '+prize.percent+'% · '+usd(prize.pool)+' to '+prize.teamIds.map(nameOf).join(' / ')})));
     (component.result.shares||[]).forEach(share=>w.appendChild(h('p',{text:nameOf(share.teamId)+' pool share '+usd(share.grossPoolShare)+' to '+share.recipients.map(nameOf).join(' / ')+(share.unbacked?' (unbacked; partners paid)':'')})));
     return w;
   }));
   const calcutta=ROUND.games.find(game=>game.id==='flamtana_calcutta');
   if(calcutta){
-    add('flamtana-calcutta-head',()=>secHead('Calcutta results','Saved backing choices and net positions · follows Featured.'),{keepWithNext:true});
+    add('flamtana-calcutta-head',()=>secHead('Calcutta results',ROUND.meta.flamtanaEventOptions?'Saved backing choices and net positions · lowest-net winning teams.':'Saved backing choices and net positions · follows Featured.'),{keepWithNext:true});
     add('flamtana-calcutta-ledger',()=>buildCalcuttaLedger(calcutta),{splittable:true,minRows:2,keepTogetherWhenFits:true});
   }
 }
@@ -645,7 +647,7 @@ function buildCalcuttaLedger(game){
   const wrapper=h('div',{'data-flamtana-picks':''}),table=h('table',{class:'dense','data-calcutta-ledger':''}),head=h('thead'),heading=h('tr',{'data-rowhead':''}),body=h('tbody');
   ['Golfer','Backed team','Net result'].forEach(text=>heading.appendChild(h('th',{text})));head.appendChild(heading);table.appendChild(head);
   MONEY_PLAYERS.forEach(player=>{const row=h('tr',{'data-row':''}),pick=ROUND.flamtanaPicks.find(saved=>saved.playerId===player.id);row.appendChild(h('td',{text:player.name}));row.appendChild(h('td',{text:'Backs '+nameOf(pick?.teamId)}));row.appendChild(h('td',{class:'n',text:acct(game.moneyBy[player.id]||0)}));body.appendChild(row);});
-  table.appendChild(body);wrapper.appendChild(table);wrapper.appendChild(h('p',{class:'note',text:game.finalization?.final?'Final Calcutta net positions. Pool shares and unbacked recipients are recorded above.':'Provisional Calcutta; payments await the final Featured result.'}));return wrapper;
+  table.appendChild(body);wrapper.appendChild(table);wrapper.appendChild(h('p',{class:'note',text:game.finalization?.final?'Final Calcutta net positions. Pool shares and unbacked recipients are recorded above.':(ROUND.meta.flamtanaEventOptions?'Provisional Calcutta; payments await the final lowest-net team results.':'Provisional Calcutta; payments await the final Featured result.')}));return wrapper;
 }
 
 /* ---- settlement ---- */
@@ -1469,7 +1471,7 @@ function layout(){
     return m;
   };
 
-  const {pages,overflows}=packPages(BLOCKS, flowH-18, measure);  /* conservative browser-rounding gutter */
+  const {pages,overflows}=packPages(BLOCKS, flowH-(ROUND.meta.flamtanaEventOptions?36:18), measure);  /* conservative browser-rounding gutter */
 
   /* Masthead subtitle: the section in effect where the page starts, carried
      forward so a continuation page keeps the right label. */

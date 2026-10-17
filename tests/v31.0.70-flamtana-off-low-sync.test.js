@@ -55,7 +55,7 @@ test('existing policy retains full Course Net, and frozen legacy evidence surviv
  const reloaded=engine.seedState(plain({players:data.players,courses:[data.course],matches:[finished]})).matches[0];
  assert.equal(engine.usesFlamtanaOffLow(reloaded),false);engine.buildLedgerEntryReportModel(reloaded);assert.equal(JSON.stringify(reloaded.roundRecordSnapshot),before);
  assert.equal(engine.normalizeFlamtanaConfig({key:'flamtana_special'}).scoringPolicyVersion,1);
- assert.equal(engine.normalizeFlamtanaConfig().scoringPolicyVersion,2);
+ assert.equal(engine.normalizeFlamtanaConfig().scoringPolicyVersion,3);
 });
 test('lowest team is determined from Course HCP on its own tee, rather than lowest assigned index',()=>{
  const {engine,data,match}=fixture();

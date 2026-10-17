@@ -19,11 +19,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.73',
-  versionNumber: '31.0.73',
-  cacheName: 'the-dye-ledger-v31.0.73',
-  buildDate: '2026-10-13T01:52:38.483Z',
-  buildLabel: 'Shared Match Sign-In Recovery'
+  version: 'v31.0.74',
+  versionNumber: '31.0.74',
+  cacheName: 'the-dye-ledger-v31.0.74',
+  buildDate: '2026-10-17T14:00:00.000Z',
+  buildLabel: 'Flamtana Event Options'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -544,6 +544,12 @@ function getCompetitionRulesContract(gameKey, config = {}) {
     contract.finality = carryoverMode === 'carry'
       ? 'Final when all holes are complete; an unresolved carry after the final hole expires with no winner'
       : 'Final when all holes are complete';
+  }
+  if (gameKey === 'flamtana_special' && Number(config.scoringPolicyVersion) >= 3) {
+    contract.scoringMethod = 'The Big Game and selected group contests compare net totals; foursome sums each hole’s lower team net; Calcutta follows the lowest-net teams';
+    contract.allowance = 'Strokes off the lowest of all four team Course Handicaps; no further allowance';
+    contract.tieTreatment = 'No card-off. Tied first splits the whole game pool; tied second splits second-place money';
+    contract.stakeMeaning = 'Only selected competitions are funded. The Big Game pays the saved first/second percentages. Calcutta retains its winning-team/backer shares';
   }
   if (gameKey === 'sixes') {
     const mode = config.mode === 'segments' ? 'segments' : 'points';
@@ -7049,8 +7055,8 @@ function buildExecutiveDriverRows(match, metrics, ctx = getPayoutReportContext(m
     let stakes = '';
     if (cfg.key === 'flamtana_special') {
       const flamtana = computeFlamtanaResults(match, metrics);
-      result = flamtana?.final ? 'Four wagers finalized from saved stroke totals and Calcutta picks' : 'Provisional; all 18 team holes and finalization required';
-      stakes = flamtana?.valid ? ['featured', 'group', 'foursome', 'calcutta'].map(key => key + ' ' + formatMoneyAccounting(flamtana.config[key + 'Stake']) + '/player').join(' · ') : (flamtana?.error || 'Setup incomplete');
+      result = flamtana?.final ? 'Selected wagers finalized from saved stroke totals and Calcutta picks' : 'Provisional; all 18 team holes and finalization required';
+      stakes = flamtana?.valid ? flamtana.components.filter(component=>component.enabled!==false).map(component=>component.label+' '+formatMoneyAccounting(component.stake)+'/player').join(' · ') : (flamtana?.error || 'Setup incomplete');
     } else if (cfg.key === 'sneaky_sandy_poley') {
       const ledger = buildSneakySandyPoleyLedger(match, { metrics });
       const leader = ledger?.finalLeader || {};
@@ -7644,9 +7650,10 @@ function buildLedgerEntryReportModel(match, metrics = null) {
       flamtana.foursomes.forEach(side => { report.sides[side.id] = { name: side.name, color: side.id === 'F1' ? '#254e70' : '#34765f' }; });
       report.meta.flamtana = true;
       report.meta.flamtanaFinal = flamtana.final;
-      report.meta.flamtanaOffLow = flamtana.config.scoringPolicyVersion === 2;
+      report.meta.flamtanaOffLow = flamtana.config.scoringPolicyVersion >= 2;
+      if (flamtana.config.scoringPolicyVersion>=3) report.meta.flamtanaEventOptions = true;
       report.flamtanaPicks = report.settlementPlayers.map(player => ({ playerId: player.id, name: player.name, teamId: 'T' + flamtana.config.picks[player.id] }));
-      report.meta.flamtanaEvidence = flamtana.components.map(component => ({ label: component.label, result: component.result }));
+      report.meta.flamtanaEvidence = flamtana.components.filter(component => component.enabled !== false).map(component => ({ label: component.label, result: component.result }));
     }
     report.partnership = null;
     if (!flamtana?.final) report.payments = [];
@@ -8591,10 +8598,10 @@ function buildRoundRecapPayload(match, metrics) {
     const memories = getRoundMemories(match).map(memory => ({ holeNumber: memory.holeNumber, text: memory.text }));
     const weather = normalizeRoundWeatherSnapshot(match.roundContext?.weather);
     const storyWeather = weather ? Object.fromEntries(Object.entries(weather).filter(([key]) => !['latitudeApprox','longitudeApprox'].includes(key))) : null;
-    const instructions = 'Write a natural 3–5 paragraph Story of the Round, opening with the Featured result and explaining the competition through supplied hole scores and recorded Memories. Shared-ball scores belong to teams, never individual golfers. Featured and both Group contests compare net stroke totals; Foursome sums each hole’s lower team net. Calcutta follows Featured, including unbacked-team recipients. Card-Off is used only where saved final evidence says it occurred. State the saved handicap basis. Do not invent shots, quotes, motives, emotions, coaching, individual statistics, handicap posting or match-play margins. Provisional results are not settled. Use authoritativeFacts only for scores, winners and money.';
+    const instructions = 'Write a natural 3–5 paragraph Story of the Round, opening with the main enabled competition result and explaining the competition through supplied hole scores and recorded Memories. Shared-ball scores belong to teams, never individual golfers. The Big Game (formerly Featured) and enabled Group contests compare net stroke totals; Foursome sums each hole’s lower team net. Calcutta follows the lowest-net teams, including unbacked-team recipients. Describe only enabled wagers and saved first/second prizes. Card-Off is used only where saved final evidence says it occurred. State the saved handicap basis. Do not invent shots, quotes, motives, emotions, coaching, individual statistics, handicap posting or match-play margins. Provisional results are not settled. Use authoritativeFacts only for scores, winners and money.';
     const facts = { format: flamtana ? 'flamtana_special' : 'two_man_scramble', individualStatisticsEligible: false, teams,
-      ...(flamtana?.valid ? { foursomes: clonePlain(flamtana.foursomes), wagers: clonePlain(flamtana.components), picks: clonePlain(flamtana.config.picks), tieMethod: flamtana.config.tieMethod, final: flamtana.final,
-        handicapBasis: flamtana.config.scoringPolicyVersion === 2 ? 'Net strokes off the lowest of all four team Course Handicaps' : 'Legacy full team Course Net' } : {}),
+      ...(flamtana?.valid ? { foursomes: clonePlain(flamtana.foursomes), wagers: clonePlain(flamtana.components.filter(component=>component.enabled!==false)), picks: clonePlain(flamtana.config.picks), tieMethod: flamtana.config.tieMethod, final: flamtana.final,
+        handicapBasis: flamtana.config.scoringPolicyVersion >= 2 ? 'Net strokes off the lowest of all four team Course Handicaps' : 'Legacy full team Course Net' } : {}),
       memories, weather: storyWeather,
       settlement: report?.settlementPlayers?.map(player => ({ name: player.name, net: flamtana?.final ? flamtana.components.reduce((sum,component) => sum + (component.amounts[player.id] || 0),0) : null })) || [] };
     return { app: 'The Dye Ledger', schemaVersion: 1, recapContentSpecVersion: ROUND_RECAP_CONTENT_SPEC_VERSION,
@@ -10754,7 +10761,7 @@ function getScrambleFoursomeProgress(match) {
 }
 function usesFlamtanaOffLow(match, record = match?.roundRecordSnapshot) {
   const config = isFrozenRoundRecord(record) ? record.games?.find(game => game.gameId === 'flamtana_special')?.config : getFlamtanaConfig(match);
-  return Number(config?.scoringPolicyVersion || 1) === 2;
+  return Number(config?.scoringPolicyVersion || 1) >= 2;
 }
 function getFlamtanaStrokeHandicap(match, player, metrics) {
   if (!usesFlamtanaOffLow(match)) return player.courseHdcp;
@@ -10772,16 +10779,21 @@ function applySharedScrambleSetupMetadata(match, meta) {
   return before !== stableJson([match.selectedGames, match.roundTiming]);
 }
 function buildFlamtanaSetupControls(raw) {
-  const cfg = normalizeFlamtanaConfig(raw);
-  if (!editingMatchId) cfg.scoringPolicyVersion = 2;
+  let cfg = normalizeFlamtanaConfig(raw);
+  if (!editingMatchId) { cfg.scoringPolicyVersion = 3; if (raw.calcuttaStake === undefined || raw.calcuttaStake === null) cfg.calcuttaStake = 15; cfg = normalizeFlamtanaConfig(cfg); }
   const players = getSelectedPlayersFromSetup();
+  const modern = cfg.scoringPolicyVersion >= 3;
+  const labels = {featured:'The Big Game',group1:'T1 versus T2',group2:'T3 versus T4',foursome:'Foursome versus foursome',calcutta:'Calcutta'};
+  const pool = Math.round(cfg.featuredStake*100)*8, first = Math.round(pool*Math.round(cfg.firstPlacePercent*100)/10000);
+  const splitValid = Number.isFinite(first) && cfg.firstPlacePercent >= 0 && cfg.secondPlacePercent >= 0 && cfg.firstPlacePercent+cfg.secondPlacePercent===100;
   return `<div class="card inset-card game-config-card"><div class="section-label">Flamtana Special</div>
-    <p class="tiny">Four wagers, ${cfg.scoringPolicyVersion === 2 ? 'net strokes off the lowest of all four teams' : 'legacy full team Course Net'}. Foursome 1 = T1 + T2; Foursome 2 = T3 + T4. Foursome totals sum each hole's lower team net score. All eight Calcutta picks are required before Start. Both devices must use v31.0.70 or newer for new off-low rounds.</p>
-    <div class="grid two compact-grid">${['featured','group','foursome','calcutta'].map(key => `<label><span>${escapeHtml(key[0].toUpperCase() + key.slice(1))} $ per player</span><input type="number" min="0" step="0.01" data-game-config="flamtana_special" data-field="${key}Stake" value="${cfg[key + 'Stake']}"></label>`).join('')}
-    <label class="span-2"><span>Tie rule for all three scoring wagers</span><select data-game-config="flamtana_special" data-field="tieMethod">${Object.entries(FLAMTANA_TIE_METHODS).map(([key,label]) => `<option value="${key}" ${cfg.tieMethod === key ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
+    <p class="tiny">Net strokes off the lowest of all four teams. Foursome 1 = T1 + T2; Foursome 2 = T3 + T4. Foursome totals sum each hole's lower team net score. ${modern?'Both devices must use the current event-options update.':''}</p>
+    ${modern?`<fieldset><legend>Competitions to score</legend>${Object.entries(labels).map(([key,label])=>`<label class="flamtana-competition-choice"><input type="checkbox" data-game-config="flamtana_special" data-field="${key}Enabled" ${cfg[key+'Enabled']?'checked':''}><span>${label}</span></label>`).join('')}</fieldset>`:''}
+    <div class="grid two compact-grid">${['featured','group','foursome','calcutta'].map(key => `<label><span>${key==='featured'?'The Big Game':key==='group'?'Each group match':key==='foursome'?'Foursome':'Calcutta'} $ per player</span><input type="number" min="0" step="0.01" data-game-config="flamtana_special" data-field="${key}Stake" value="${cfg[key+'Stake']}"></label>`).join('')}
+    ${modern?`<label><span>First place %</span><input type="number" min="0" max="100" step="0.01" data-game-config="flamtana_special" data-field="firstPlacePercent" value="${cfg.firstPlacePercent}"></label><label><span>Second place %</span><input type="number" min="0" max="100" step="0.01" data-game-config="flamtana_special" data-field="secondPlacePercent" value="${cfg.secondPlacePercent}"></label><p class="tiny span-2" role="status">${splitValid?'The Big Game pool '+formatMoneyAccounting(pool/100)+' → first '+cfg.firstPlacePercent+'% ('+formatMoneyAccounting(first/100)+'), second '+cfg.secondPlacePercent+'% ('+formatMoneyAccounting((pool-first)/100)+'). Total 100%.':'First and second place must total 100%.'} Tied first splits the entire pool; tied second splits the second-place allocation. No card-off. Calcutta retains its own existing winner/backer rules.</p>`:`<label class="span-2"><span>Tie rule</span><select data-game-config="flamtana_special" data-field="tieMethod">${Object.entries(FLAMTANA_TIE_METHODS).map(([key,label])=>`<option value="${key}" ${cfg.tieMethod===key?'selected':''}>${label}</option>`).join('')}</select></label>`}
     <input type="hidden" data-game-config="flamtana_special" data-field="scoringPolicyVersion" value="${cfg.scoringPolicyVersion}">
-    ${players.map(player => `<label><span>${escapeHtml(getPlayer(player.playerId)?.name || 'Golfer')} backs</span><select data-flamtana-pick="${escapeHtml(player.playerId)}"><option value="">Choose team</option>${SCRAMBLE_TEAM_IDS.map(team => `<option value="${team}" ${Number(cfg.picks[player.playerId]) === team ? 'selected' : ''}>${escapeHtml(document.querySelector('[data-team-name="' + team + '"]')?.value || 'Team ' + team)}</option>`).join('')}</select></label>`).join('')}</div>
-    <p class="tiny">Default maximum exposure: $80 per golfer. A tied Calcutta pool is divided by winning team, then by its backers. An unbacked team's share goes to its two partners. Card-off uses the saved net hole scores only at finalization; exhausted comparisons split. Odd cents go in stable ID order.</p></div>`;
+    ${cfg.calcuttaEnabled!==false?players.map(player=>`<label><span>${escapeHtml(getPlayer(player.playerId)?.name||'Golfer')} backs</span><select data-flamtana-pick="${escapeHtml(player.playerId)}"><option value="">Choose team</option>${SCRAMBLE_TEAM_IDS.map(team=>`<option value="${team}" ${Number(cfg.picks[player.playerId])===team?'selected':''}>${escapeHtml(document.querySelector('[data-team-name="'+team+'"]')?.value||'Team '+team)}</option>`).join('')}</select></label>`).join(''):''}</div>
+    <p class="tiny">Only selected competitions contribute to settlement. Choices and stakes are fixed at Start. An unbacked winning team's Calcutta share goes to its partners. Odd cents go in stable ID order.</p></div>`;
 }
 function buildScrambleReportEntries(match, metrics, holes, record = null) {
   const offLow = usesFlamtanaOffLow(match, record);
@@ -10813,11 +10825,12 @@ function buildScrambleReportEntries(match, metrics, holes, record = null) {
   });
 }
 function buildFlamtanaReportGames(result, report) {
-  return result.components.map(component => {
+  const featuredKey = result.components.find(component => component.enabled !== false && component.series)?.key;
+  return result.components.filter(component => component.enabled !== false).map(component => {
     const series = component.series || [];
-    return { id: 'flamtana_' + component.key, name: component.label, featured: component.key === 'featured',
+    return { id: 'flamtana_' + component.key, name: component.label, featured: component.key === featuredKey,
       type: component.key === 'calcutta' ? 'settlement' : 'strokeplay', scope: 'team', basis: 'net', unit: component.key === 'calcutta' ? 'dollars' : 'strokes', lowWins: true,
-      allowance: { key: result.config.scoringPolicyVersion === 2 ? 'featured' : 'courseNet', label: result.config.scoringPolicyVersion === 2 ? 'Off lowest of all four team handicaps · no additional allowance' : 'Full saved team Course Net · no additional allowance' },
+      allowance: { key: result.config.scoringPolicyVersion >= 2 ? 'featured' : 'courseNet', label: result.config.scoringPolicyVersion >= 2 ? 'Off lowest of all four team handicaps · no additional allowance' : 'Full saved team Course Net · no additional allowance' },
       segments: [{ label: '18 holes', holes: report.holes.slice() }], money: component.amounts,
       sides: series.map(side => ({ key: side.id, playerIds: side.memberIds })),
       seriesByHole: series.map(side => ({ id: side.id, name: side.name, scores: side.scores.slice(), pars: report.card.par.slice(), raw: side.scores.map((score, i) => score === null ? null : score - report.card.par[i]) })),
@@ -10827,28 +10840,34 @@ function buildFlamtanaReportGames(result, report) {
 function buildFlamtanaFactsStory(match, metrics, record = null) {
   const result = record?.games?.find(game => game.gameId === 'flamtana_special')?.componentResults || computeFlamtanaResults(match, metrics);
   if (!result?.valid) return 'Flamtana Special is awaiting valid team setup and eight Calcutta picks. No settlement is final.';
-  const scoring = result.components.filter(component => component.series).map(component => component.label + ': ' + component.series.map(side => side.name + ' ' + (side.scores.some(score => score === null) ? 'incomplete' : side.scores.reduce((sum, score) => sum + score, 0) + ' net')).join(', ') + (result.final ? '; winner' + (component.result.winnerIds.length > 1 ? 's ' : ' ') + component.result.winnerIds.map(id => component.series.find(side => side.id === id).name).join(' and ') : '; provisional'));
+  const scoring = result.components.filter(component => component.series && component.enabled !== false).map(component => component.label + ': ' + component.series.map(side => side.name + ' ' + (side.scores.some(score => score === null) ? 'incomplete' : side.scores.reduce((sum, score) => sum + score, 0) + ' net')).join(', ') + (result.final ? '; winner' + (component.result.winnerIds.length > 1 ? 's ' : ' ') + component.result.winnerIds.map(id => component.series.find(side => side.id === id).name).join(' and ') : '; provisional'));
   const calcutta = result.components.find(component => component.key === 'calcutta');
-  return 'Flamtana Special has four wagers: Featured, Group, Foursome and Calcutta. ' + scoring.join('. ') + '. Calcutta ' + (result.final ? 'follows the final Featured winner; ' + calcutta.result.shares.map(share => share.teamId + ' pool share $' + share.grossPoolShare.toFixed(2) + (share.unbacked ? ' goes to its two partners (unbacked)' : ' goes to its ' + share.backers.length + ' backers')).join('; ') : 'is pending finalization') + '. ' + (result.final ? 'Saved tie rule: ' + FLAMTANA_TIE_METHODS[result.config.tieMethod] + '. Each component settles to zero.' : 'No payments are final until all team scores, partner equality and Shared Match parity are complete.') + ' Individual statistics, accolades and handicap posting do not apply.';
+  return (result.config.scoringPolicyVersion>=3?'Flamtana Special selected competitions. ':'Flamtana Special has four wagers: Featured, Group, Foursome and Calcutta. ') + scoring.join('. ') + result.components.filter(component=>component.enabled!==false && component.result.prizes).map(component=>' '+component.label+' prizes: '+component.result.prizes.map(prize=>(prize.place===1?'first':'second')+' '+prize.percent+'% ($'+prize.pool.toFixed(2)+') to '+prize.teamIds.map(id=>result.teams.find(team=>team.id===id)?.name || id).join(' and ')).join('; ')+'.').join('') + (calcutta?.enabled===false ? '' : '. Calcutta ' + (result.final ? (result.config.scoringPolicyVersion>=3?'follows The Big Game winner; ':'follows the final Featured winner; ') + (calcutta?.result.shares || []).map(share => share.teamId + ' pool share $' + share.grossPoolShare.toFixed(2) + (share.unbacked ? ' goes to its two partners (unbacked)' : ' goes to its ' + share.backers.length + ' backers')).join('; ') : 'is pending finalization')) + '. ' + (result.final ? 'Saved tie rule: ' + (result.config.scoringPolicyVersion>=3?'Ties split; no card-off':FLAMTANA_TIE_METHODS[result.config.tieMethod]) + '. Each component settles to zero.' : 'No payments are final until all team scores, partner equality and Shared Match parity are complete.') + ' Individual statistics, accolades and handicap posting do not apply.';
 }
 function buildFlamtanaLiveSummary(match, metrics) {
   const result = computeFlamtanaResults(match, metrics);
   if (!result?.valid) return '<div class="tiny warning-text">' + escapeHtml(result?.error || 'Flamtana setup is incomplete.') + '</div>';
-  return '<div class="game-summary-grid">' + result.components.map(component => '<div class="game-summary-card"><div class="game-summary-title">' + escapeHtml(component.label) + '</div><div class="game-summary-value">' + (component.series ? component.series.map(side => escapeHtml(side.name) + ': ' + side.scores.filter(score => score !== null).reduce((sum, score) => sum + score, 0) + ' net (' + side.scores.filter(score => score !== null).length + '/18)').join(' · ') : 'Eight saved picks · follows Featured') + '</div><div class="game-summary-sub">' + formatMoneyAccounting(component.stake) + ' per golfer · ' + (result.final ? 'Final · ' + component.result.winnerIds.map(id => escapeHtml(id)).join(' / ') : 'Provisional; tie rule applies at finalization') + '</div></div>').join('') + '</div><div class="tiny">Foursome totals sum each hole’s lower team net score. Tie rule: ' + escapeHtml(FLAMTANA_TIE_METHODS[result.config.tieMethod]) + '. Re-enter any Pending team score to resolve it. Host can score all four teams if another device drops out.</div>';
+  return '<div class="game-summary-grid">' + result.components.filter(component => component.enabled !== false).map(component => '<div class="game-summary-card"><div class="game-summary-title">' + escapeHtml(component.label) + '</div><div class="game-summary-value">' + (component.series ? component.series.map(side => escapeHtml(side.name) + ': ' + side.scores.filter(score => score !== null).reduce((sum, score) => sum + score, 0) + ' net (' + side.scores.filter(score => score !== null).length + '/18)').join(' · ') : 'Eight saved picks · follows The Big Game leaders') + '</div><div class="game-summary-sub">' + formatMoneyAccounting(component.stake) + ' per golfer · ' + (result.final ? 'Final · ' + component.result.winnerIds.map(id => escapeHtml(id)).join(' / ') : 'Provisional; tie rule applies at finalization') + '</div></div>').join('') + '</div><div class="tiny">Foursome totals sum each hole’s lower team net score. Tie rule: ' + escapeHtml(result.config.scoringPolicyVersion>=3?'Ties split; no card-off':FLAMTANA_TIE_METHODS[result.config.tieMethod]) + '. Re-enter any Pending team score to resolve it. Host can score all four teams if another device drops out.</div>';
 }
 function normalizeFlamtanaConfig(config = {}) {
-  return { key: 'flamtana_special', scoringPolicyVersion: Number(config.scoringPolicyVersion ?? (config.key ? 1 : 2)), basis: 'net',
-    tieMethod: config.tieMethod || 'split', picks: { ...(config.picks || {}) },
-    ...Object.fromEntries(['featured', 'group', 'foursome', 'calcutta'].map(key => [key + 'Stake', Number(config[key + 'Stake'] ?? 20)])) };
+  return { key: 'flamtana_special', scoringPolicyVersion: Number(config.scoringPolicyVersion ?? (config.key ? 1 : 3)), basis: 'net',
+    ...(Number(config.scoringPolicyVersion ?? (config.key ? 1 : 3)) >= 3 ? {
+      ...Object.fromEntries(['featured','group1','group2','foursome','calcutta'].map(key => [key+'Enabled', config[key+'Enabled'] !== false && config[key+'Enabled'] !== 'false'])),
+      firstPlacePercent: Number(config.firstPlacePercent ?? 70), secondPlacePercent: Number(config.secondPlacePercent ?? 30)
+    } : {}),
+    tieMethod: Number(config.scoringPolicyVersion ?? (config.key ? 1 : 3)) >= 3 ? 'split' : config.tieMethod || 'split', picks: { ...(config.picks || {}) },
+    ...Object.fromEntries(['featured', 'group', 'foursome', 'calcutta'].map(key => [key + 'Stake', Number(config[key + 'Stake'] ?? (key === 'calcutta' && Number(config.scoringPolicyVersion ?? (config.key ? 1 : 3)) >= 3 ? 15 : 20))])) };
 }
 function getFlamtanaSetupError(match, { requirePicks = false } = {}) {
   const raw = getFlamtanaConfig(match);
   if (!raw) return '';
   const cfg = normalizeFlamtanaConfig(raw);
   if (!isTeamScoredRound(match)) return 'Flamtana Special requires Two-man Scramble, four two-player teams and 18 holes.';
-  if (![1, 2].includes(cfg.scoringPolicyVersion) || !Object.hasOwn(FLAMTANA_TIE_METHODS, cfg.tieMethod)) return 'Update or choose a supported Flamtana tie rule.';
+  if (![1, 2, 3].includes(cfg.scoringPolicyVersion) || !Object.hasOwn(FLAMTANA_TIE_METHODS, cfg.tieMethod)) return 'Update or choose a supported Flamtana tie rule.';
   if (['featured', 'group', 'foursome', 'calcutta'].some(key => !Number.isFinite(cfg[key + 'Stake']) || cfg[key + 'Stake'] < 0 || Math.abs(Math.round(cfg[key + 'Stake'] * 100) - cfg[key + 'Stake'] * 100) > 1e-7)) return 'Enter nonnegative Flamtana stakes with at most two decimal places.';
-  if (requirePicks && (match.players || []).some(player => !SCRAMBLE_TEAM_IDS.includes(Number(cfg.picks[player.playerId])))) return 'Choose one Calcutta team for each of the eight golfers before Start.';
+  if (cfg.scoringPolicyVersion >= 3 && !['featured','group1','group2','foursome','calcutta'].some(key => cfg[key+'Enabled'])) return 'Choose at least one Flamtana game competition.';
+  if (cfg.scoringPolicyVersion >= 3 && (!Number.isFinite(cfg.firstPlacePercent) || !Number.isFinite(cfg.secondPlacePercent) || cfg.firstPlacePercent < 0 || cfg.secondPlacePercent < 0 || cfg.firstPlacePercent > 100 || cfg.secondPlacePercent > 100 || Math.abs(cfg.firstPlacePercent + cfg.secondPlacePercent - 100) > 1e-7 || [cfg.firstPlacePercent,cfg.secondPlacePercent].some(value => Math.abs(value*100-Math.round(value*100))>1e-7))) return 'The Big Game first and second place percentages must total 100%, with at most two decimal places.';
+  if (requirePicks && cfg.calcuttaEnabled !== false && (match.players || []).some(player => !SCRAMBLE_TEAM_IDS.includes(Number(cfg.picks[player.playerId])))) return 'Choose one Calcutta team for each of the eight golfers before Start.';
   return '';
 }
 function resolveFlamtanaStrokeResult(series, method, finalize) {
@@ -10871,6 +10890,19 @@ function resolveFlamtanaStrokeResult(series, method, finalize) {
 function distributeFlamtanaCents(amounts, recipients, cents) {
   const ids = [...recipients].sort();
   ids.forEach((id, i) => { amounts[id] = (amounts[id] || 0) + Math.floor(cents / ids.length) + (i < cents % ids.length ? 1 : 0); });
+}
+function awardFlamtanaPool(amounts, series, winnerIds, pool, config = null, evidence = null) {
+  const pay = (ids, cents) => distributeFlamtanaCents(amounts, series.filter(side => ids.includes(side.id)).flatMap(side => side.memberIds), cents);
+  if (!config || config.scoringPolicyVersion < 3 || winnerIds.length !== 1) {
+    pay(winnerIds, pool);
+    if (evidence && config?.scoringPolicyVersion >= 3) evidence.prizes = [{ place: 1, teamIds: winnerIds.slice(), percent: 100, pool: pool/100 }];
+    return;
+  }
+  const totals = series.filter(side => !winnerIds.includes(side.id)).map(side => ({id:side.id,total:side.scores.reduce((sum,value) => sum+value,0)}));
+  const secondIds = totals.filter(row => row.total === Math.min(...totals.map(row => row.total))).map(row => row.id);
+  const first = Math.round(pool * Math.round(config.firstPlacePercent * 100) / 10000), second = pool-first;
+  pay(winnerIds, first); pay(secondIds, second);
+  if (evidence) evidence.prizes = [{place:1,teamIds:winnerIds.slice(),percent:config.firstPlacePercent,pool:first/100},{place:2,teamIds:secondIds,percent:config.secondPlacePercent,pool:second/100}];
 }
 function computeFlamtanaResults(match, metrics = null, { finalize = match?.status === 'complete' && !!match?.completedAt } = {}) {
   const raw = getFlamtanaConfig(match);
@@ -10895,18 +10927,19 @@ function computeFlamtanaResults(match, metrics = null, { finalize = match?.statu
   });
   const ready = !hasUnresolvedTeamScores(match) && teams.every(team => team.scores.every(score => score !== null));
   const settle = !!finalize && ready;
-  const components = [['featured', 'Featured', teams, config.featuredStake], ['group1', 'Group · T1 versus T2', teams.slice(0,2), config.groupStake], ['group2', 'Group · T3 versus T4', teams.slice(2), config.groupStake], ['foursome', 'Foursome', foursomes, config.foursomeStake]].map(([key, label, series, stake]) => {
-    const result = resolveFlamtanaStrokeResult(series, config.tieMethod, settle);
+  const components = [['featured', config.scoringPolicyVersion >= 3 ? 'The Big Game' : 'Featured', teams, config.featuredStake], ['group1', 'Group · T1 versus T2', teams.slice(0,2), config.groupStake], ['group2', 'Group · T3 versus T4', teams.slice(2), config.groupStake], ['foursome', 'Foursome', foursomes, config.foursomeStake]].map(([key, label, series, stake]) => {
+    const result = resolveFlamtanaStrokeResult(series, config.scoringPolicyVersion >= 3 ? 'split' : config.tieMethod, settle);
+    const enabled = config[key+'Enabled'] !== false;
     const participants = series.flatMap(side => side.memberIds), amounts = Object.fromEntries(participants.map(id => [id, 0]));
-    if (settle) {
+    if (settle && enabled) {
       participants.forEach(id => amounts[id] = -Math.round(stake * 100));
-      distributeFlamtanaCents(amounts, series.filter(side => result.winnerIds.includes(side.id)).flatMap(side => side.memberIds), Math.round(stake * 100) * participants.length);
+      awardFlamtanaPool(amounts, series, result.winnerIds, Math.round(stake * 100) * participants.length, key === 'featured' ? config : null, result);
     }
-    return { key, label, series, stake, result, amounts: Object.fromEntries(Object.entries(amounts).map(([id, cents]) => [id, cents / 100])) };
+    return { key, label, series, stake, result, ...(config.scoringPolicyVersion >= 3 ? { enabled } : {}), amounts: Object.fromEntries(Object.entries(amounts).map(([id, cents]) => [id, cents / 100])) };
   });
-  const featured = components[0].result, cents = Object.fromEntries(match.players.map(player => [player.playerId, settle ? -Math.round(config.calcuttaStake * 100) : 0]));
+  const featured = components[0].result, cents = Object.fromEntries(match.players.map(player => [player.playerId, settle && config.calcuttaEnabled !== false ? -Math.round(config.calcuttaStake * 100) : 0]));
   const shares = [];
-  if (settle) {
+  if (settle && config.calcuttaEnabled !== false) {
     const pool = Math.round(config.calcuttaStake * 100) * 8;
     featured.winnerIds.slice().sort().forEach((id, i) => {
       const team = teams.find(row => row.id === id), backers = match.players.filter(player => Number(config.picks[player.playerId]) === Number(id.slice(1))).map(player => player.playerId);
@@ -10916,7 +10949,7 @@ function computeFlamtanaResults(match, metrics = null, { finalize = match?.statu
       shares.push({ teamId: id, backers, recipients, unbacked: !backers.length, grossPoolShare: share / 100 });
     });
   }
-  components.push({ key: 'calcutta', label: 'Calcutta', stake: config.calcuttaStake, result: { ...featured, shares }, amounts: Object.fromEntries(Object.entries(cents).map(([id, value]) => [id, value / 100])) });
+  components.push({ key: 'calcutta', label: 'Calcutta', ...(config.scoringPolicyVersion >= 3 ? {enabled: config.calcuttaEnabled !== false} : {}), stake: config.calcuttaStake, result: { ...featured, ...(config.scoringPolicyVersion>=3 ? {prizes:undefined} : {}), shares }, amounts: Object.fromEntries(Object.entries(cents).map(([id, value]) => [id, value / 100])) });
   return { valid: true, config, teams, foursomes, ready, final: settle, components };
 }
 function getScrambleSetupError(match, { assignments = false } = {}) {
@@ -11459,7 +11492,7 @@ function renderFeaturedCompetitionHandicapPreview({ course, tee, selected, enric
     gameHdcp: courseNet ? row.courseHdcp : getPlayerGameHandicap(row, gameAllowance),
   }));
   const lowGameHandicap = courseNet && !flamtana ? 0 : Math.min(...rows.map(row => row.gameHdcp));
-  const offLowGame = flamtana && Number(config.scoringPolicyVersion) === 2;
+  const offLowGame = flamtana && Number(config.scoringPolicyVersion) >= 2;
   const policyLabel = featured.key === 'nassau'
     ? formatNassauPolicyLabel(config, matchContext)
     : `${getFeaturedCompetitionDisplayName({ selectedGames: games }, featured.key)} · Net · ${offLowGame ? 'Off lowest of all four teams' : courseNet ? 'Full Course Handicap' : formatRoundAllowanceLabel(matchContext, gameAllowance)}`;
@@ -13249,15 +13282,15 @@ function buildFlamtanaProjectedSettlement(match, metrics = null) {
   const data = buildFlamtanaLeaderboardData(match, metrics);
   if (!data.valid) return { valid: false, error: data.error };
   const result = isFrozenRoundRecord(match.roundRecordSnapshot) ? match.roundRecordSnapshot.games.find(game => game.gameId === 'flamtana_special').componentResults : computeFlamtanaResults(match, metrics);
-  const components = result.components.filter(component => component.series).map(component => {
+  const components = result.components.filter(component => component.series && component.enabled !== false).map(component => {
     const table = data.tables.find(row => row.key === component.key);
     if (!result.final && !table.leaders.length) return { key: component.key, label: component.label, participantIds: component.series.flatMap(side => side.memberIds), amounts: null };
     if (result.final) return { key: component.key, label: component.label, amounts: component.amounts };
     const ids = component.series.flatMap(side => side.memberIds), cents = Object.fromEntries(ids.map(id => [id, -Math.round(component.stake * 100)]));
-    distributeFlamtanaCents(cents,component.series.filter(side => table.leaders.includes(side.id)).flatMap(side => side.memberIds),Math.round(component.stake * 100) * ids.length);
+    awardFlamtanaPool(cents,component.series.map(side=>({...side,scores:table.holes.map(hole=>side.scores[hole-1])})),table.leaders,Math.round(component.stake * 100) * ids.length,component.key==='featured'?result.config:null);
     return { key: component.key, label: component.label, amounts: Object.fromEntries(Object.entries(cents).map(([id,value]) => [id,value/100])) };
   });
-  components.push({ key: 'calcutta', label: 'Calcutta', amounts: data.leaders.length ? Object.fromEntries(data.calcutta.map(row => [row.id,row.amount])) : null });
+  if (data.calcuttaEnabled) components.push({ key: 'calcutta', label: 'Calcutta', amounts: data.leaders.length ? Object.fromEntries(data.calcutta.map(row => [row.id,row.amount])) : null });
   const rows = match.players.map(player => {
     const values = components.map(component => component.amounts === null ? (component.participantIds && !component.participantIds.includes(player.playerId) ? 0 : null) : (component.amounts[player.playerId] || 0));
     return { id: player.playerId, name: getPlayer(player.playerId)?.name || player.playerId, values,
@@ -13268,9 +13301,9 @@ function buildFlamtanaProjectedSettlement(match, metrics = null) {
 function buildFlamtanaProjectedSettlementView(match, metrics) {
   const data = buildFlamtanaProjectedSettlement(match,metrics);
   if (!data.valid) return '<section class="quick-scoreboard-section"><h4>Projected settlement</h4><p>'+escapeHtml(data.error)+'</p></section>';
-  const keys = ['featured','group1','group2','foursome','calcutta'];
+  const keys = data.components.map(component=>component.key);
   const value = amount => amount === null ? 'Pending' : formatFinalNetSettlementMoney(amount);
-  return '<section class="quick-scoreboard-section quick-settlement-hero" data-settlement-state="'+(data.final?'final':'projected')+'"><h4>'+(data.final?'Final Settlement':'Projected settlement if current standings hold')+'</h4><p class="tiny">'+(data.final?'Saved final amounts.':'Each contest compares its common completed holes. Current ties project a split; Card-Off awaits finalization. Pending contests have no projected total. These are not payments due.')+'</p><p class="tiny">Scroll across for each wager. Golfer names stay visible.</p><div class="player-summary-scroll flamtana-projection-scroll" tabindex="0" role="region" aria-label="Flamtana projected settlement by wager"><table class="quick-scoreboard-table"><thead><tr><th>Golfer</th><th>Combined net</th><th>Featured</th><th>Group 1</th><th>Group 2</th><th>Foursome</th><th>Calcutta</th></tr></thead><tbody>'+data.rows.map(row => '<tr><td>'+escapeHtml(row.name)+'</td><td><strong>'+value(row.total)+'</strong></td>'+keys.map((key,i) => '<td>'+value(row.values[i])+'</td>').join('')+'</tr>').join('')+'</tbody></table></div></section>';
+  return '<section class="quick-scoreboard-section quick-settlement-hero" data-settlement-state="'+(data.final?'final':'projected')+'"><h4>'+(data.final?'Final Settlement':'Projected settlement if current standings hold')+'</h4><p class="tiny">'+(data.final?'Saved final amounts.':'Each contest compares its common completed holes. Current ties project a split; final prizes use the saved round rules. Pending contests have no projected total. These are not payments due.')+'</p><p class="tiny">Scroll across for each wager. Golfer names stay visible.</p><div class="player-summary-scroll flamtana-projection-scroll" tabindex="0" role="region" aria-label="Flamtana projected settlement by wager"><table class="quick-scoreboard-table"><thead><tr><th>Golfer</th><th>Combined net</th>'+data.components.map(component=>'<th>'+escapeHtml(component.key==='group1'?'Group 1':component.key==='group2'?'Group 2':component.label)+'</th>').join('')+'</tr></thead><tbody>'+data.rows.map(row => '<tr><td>'+escapeHtml(row.name)+'</td><td><strong>'+value(row.total)+'</strong></td>'+keys.map((key,i) => '<td>'+value(row.values[i])+'</td>').join('')+'</tr>').join('')+'</tbody></table></div></section>';
 }
 function buildQuickSettlementHero(match, metrics, payout = getPayoutReportContext(match, metrics), record = null) {
   if (getFlamtanaConfig(match) && !isFrozenRoundRecord(record)) return buildFlamtanaProjectedSettlementView(match,metrics);
@@ -13391,7 +13424,7 @@ function buildFlamtanaLeaderboardData(match, metrics = null) {
   const saved = isFrozenRoundRecord(match?.roundRecordSnapshot) ? match.roundRecordSnapshot.games?.find(game => game.gameId === 'flamtana_special')?.componentResults : null;
   const result = saved || computeFlamtanaResults(match, metrics);
   if (!result?.valid) return { valid: false, error: result?.error || 'Complete Flamtana setup to view standings.' };
-  const tables = result.components.filter(component => component.series).map(component => {
+  const tables = result.components.filter(component => component.series && component.enabled !== false).map(component => {
     const holes = Array.from({ length: 18 }, (_, i) => i).filter(i => component.series.every(side => Number.isFinite(side.scores[i])));
     const rows = component.series.map(side => ({ id: side.id, name: side.name, completed: side.scores.filter(Number.isFinite).length,
       total: holes.length ? holes.reduce((sum,i) => sum + side.scores[i], 0) : null,
@@ -13402,11 +13435,15 @@ function buildFlamtanaLeaderboardData(match, metrics = null) {
     return { key: component.key, label: component.label, rows, holes: holes.map(i => i+1), leaders, result: component.result };
   });
   const featured = tables.find(table => table.key === 'featured');
-  const leaders = result.final ? result.components[0].result.winnerIds : featured.leaders;
+  const underlying = result.components.find(component => component.key === 'featured');
+  const common = Array.from({length:18},(_,i)=>i).filter(i=>underlying.series.every(side=>Number.isFinite(side.scores[i])));
+  const totals = underlying.series.map(side=>({id:side.id,total:common.reduce((sum,i)=>sum+side.scores[i],0)}));
+  const leaders = result.final ? underlying.result.winnerIds : featured?.leaders || (common.length ? totals.filter(row=>row.total===Math.min(...totals.map(row=>row.total))).map(row=>row.id) : []);
   const cfg = result.config, pool = Math.round(cfg.calcuttaStake * 100) * match.players.length;
   let cents = Object.fromEntries(match.players.map(player => [player.playerId, -Math.round(cfg.calcuttaStake * 100)]));
   const shares = [];
-  if (result.final) {
+  if (cfg.calcuttaEnabled === false) cents = Object.fromEntries(match.players.map(player=>[player.playerId,0]));
+  else if (result.final) {
     const component = result.components.find(row => row.key === 'calcutta');
     cents = Object.fromEntries(Object.entries(component.amounts).map(([id,value]) => [id,Math.round(value*100)]));
     shares.push(...component.result.shares);
@@ -13421,7 +13458,7 @@ function buildFlamtanaLeaderboardData(match, metrics = null) {
   const calcutta = match.players.map(player => ({id:player.playerId,name:getPlayer(player.playerId)?.name || player.playerId,
     pick:'T'+cfg.picks[player.playerId],amount:leaders.length ? cents[player.playerId]/100 : null}));
   calcutta.sort((a,b) => (b.amount ?? -Infinity) - (a.amount ?? -Infinity) || a.id.localeCompare(b.id));
-  return {valid:true,final:result.final,offLow:result.config.scoringPolicyVersion===2,tables,calcutta,shares,pool:pool/100,leaders};
+  return {valid:true,final:result.final,offLow:result.config.scoringPolicyVersion>=2,tables,calcutta,shares,pool:pool/100,leaders,calcuttaEnabled:cfg.calcuttaEnabled !== false};
 }
 function buildFlamtanaLeaderboards(match, metrics) {
   const data = buildFlamtanaLeaderboardData(match,metrics);
@@ -13432,9 +13469,9 @@ function buildFlamtanaLeaderboards(match, metrics) {
     <div class="player-summary-scroll"><table class="quick-scoreboard-table"><thead><tr><th>Place</th><th>${table.key==='foursome'?'Foursome':'Team'}</th><th>Net</th><th>Scored</th></tr></thead><tbody>${table.rows.map(row=>`<tr><td>${number(row.rank)}</td><td>${escapeHtml(row.name)}${row.winner?' · Winner':''}</td><td>${number(row.total)}</td><td>${row.completed}/18</td></tr>`).join('')}</tbody></table></div>
     ${table.key==='foursome'?'<p class="tiny">Each hole uses the lower net of its two teams, then sums those hole values.</p>':''}</section>`).join('');
   return `<section class="quick-scoreboard-section"><h4>Flamtana standings</h4><p class="tiny">${data.offLow?'Net uses strokes off the lowest of all four teams.':'Legacy round: net uses full team handicaps.'} Each contest compares the same completed holes across its sides.</p></section>${cards}
-    <section class="quick-scoreboard-section flamtana-leaderboard" data-flamtana-leaderboard="calcutta"><h4>Calcutta</h4><p class="tiny">Pool ${formatMoneyAccounting(data.pool)} · ${data.final?'Final saved payouts':'Projected net if the current Featured leaders win; card-off and payments await finalization.'}</p>
+    ${data.calcuttaEnabled ? `<section class="quick-scoreboard-section flamtana-leaderboard" data-flamtana-leaderboard="calcutta"><h4>Calcutta</h4><p class="tiny">Pool ${formatMoneyAccounting(data.pool)} · ${data.final?'Final saved payouts':'Projected net if current Big Game leaders win; payments await finalization.'}</p>
     <div class="player-summary-scroll"><table class="quick-scoreboard-table"><thead><tr><th>Golfer</th><th>Backs</th><th>${data.final?'Final net':'Projected net'}</th></tr></thead><tbody>${data.calcutta.map(row=>`<tr><td>${escapeHtml(row.name)}</td><td>${escapeHtml(getTeamLabel(match,Number(row.pick.slice(1))))}</td><td>${row.amount===null?'Pending':formatFinalNetSettlementMoney(row.amount)}</td></tr>`).join('')}</tbody></table></div>
-    ${data.shares.filter(share=>share.unbacked).map(share=>'<p class="tiny">'+escapeHtml(getTeamLabel(match,Number(share.teamId.slice(1))))+' is unbacked; its share goes to its two partners.</p>').join('')}</section>`;
+    ${data.shares.filter(share=>share.unbacked).map(share=>'<p class="tiny">'+escapeHtml(getTeamLabel(match,Number(share.teamId.slice(1))))+' is unbacked; its share goes to its two partners.</p>').join('')}</section>` : ''}`;
 }
 
 function buildQuickScoreboardView(match, metrics, preferences = getPlayerPreferences()) {
@@ -19769,7 +19806,7 @@ function getConciseTeamName(match, teamNo, metrics, maxLen = 12) {
 function getCompactGameStatus(match, metrics, gameKey, cfg = null) {
   if (!match || !metrics || !gameKey) return '';
   const config = cfg || (match.selectedGames || []).find(g => g.key === gameKey) || {};
-  if (gameKey === 'flamtana_special') return 'Four stroke-total/pool wagers · ' + (computeFlamtanaResults(match, metrics)?.final ? 'final' : 'provisional');
+  if (gameKey === 'flamtana_special') return 'Selected stroke-total/pool wagers · ' + (computeFlamtanaResults(match, metrics)?.final ? 'final' : 'provisional');
   if (gameKey === 'nassau' && (metrics.teams || []).length === 2) {
     const basis = String(config.basis || 'net').toLowerCase() === 'gross' ? 'gross' : 'net';
     const diffs = computeNassauDiffsForBasis(metrics, basis, config);
@@ -21157,7 +21194,7 @@ function computeLivePayoutGames(match, metrics) {
   selected.forEach(cfg => {
     if (cfg.key === 'flamtana_special') {
       const result = computeFlamtanaResults(match, metrics);
-      (result?.components || []).forEach(component => pushGame('flamtana_' + component.key, component.label, component.amounts, 'team', null, cfg.key, { component, final: result.final }));
+      (result?.components || []).filter(component=>component.enabled!==false).forEach(component => pushGame('flamtana_' + component.key, component.label, component.amounts, 'team', null, cfg.key, { component, final: result.final }));
       return;
     }
     if (cfg.key === 'sneaky_sandy_poley') {
@@ -22393,7 +22430,7 @@ function buildGroupRulesPreview(round, open = false) {
     const pointExample = Number.isFinite(pointRate) ? `A 5-point head-to-head difference at $${pointRate.toFixed(2)} per point is $${(5*pointRate).toFixed(2)}.` : '';
     return `<div class="group-rules-game"><strong>${escapeHtml(getGameLabel(game.key))} · ${escapeHtml(contract.basis)}</strong><div>${escapeHtml(pairing || participants)}</div><div>${escapeHtml(stakes || 'No stake specified')}${options ? ` · ${escapeHtml(options)}` : ''}</div><div>${escapeHtml(allowance)}</div><div>${escapeHtml(contract.tieTreatment)} · ${escapeHtml(pressText)}</div>${pointSchedule ? `<div>${escapeHtml(pointSchedule)}</div>` : ''}${pointExample ? `<div>${escapeHtml(pointExample)}</div>` : ''}</div>`;
   }).join('');
-  return `<details class="group-rules-preview" ${open ? 'open' : ''}><summary>Round rules · ${games.length} selected game${games.length === 1 ? '' : 's'}</summary><div class="group-rules-body"><div>${escapeHtml(roster || 'Choose golfers in Players.')}</div><div>${round?.storageMode === 'shared' ? 'Shared round · scorer assignments belong to this round.' : 'Local scoring on this device.'}</div>${rows || '<div>No selected games. Review the Featured Competition in Games.</div>'}${getFlamtanaConfig(round) ? `<div>${usesFlamtanaOffLow(round) ? 'Net scores and all wagers use strokes off the lowest of all four team handicaps.' : 'Legacy round: Off low shows relative strokes; Course Net and wagers retain full team handicaps.'}</div>` : ''}<div class="tiny">These are this round’s saved settings. Templates edited later do not change this round. Rules catalog v${COMPETITION_RULES_CATALOG_VERSION}.</div></div></details>`;
+  return `<details class="group-rules-preview" ${open ? 'open' : ''}><summary>Round rules · ${games.length} selected game${games.length === 1 ? '' : 's'}</summary><div class="group-rules-body"><div>${escapeHtml(roster || 'Choose golfers in Players.')}</div><div>${round?.storageMode === 'shared' ? 'Shared round · scorer assignments belong to this round.' : 'Local scoring on this device.'}</div>${rows || '<div>No selected games. Review the Featured Competition in Games.</div>'}${getFlamtanaConfig(round) ? `<div>${usesFlamtanaOffLow(round) ? 'Net scores and all wagers use strokes off the lowest of all four team handicaps.' : 'Legacy round: Off low shows relative strokes; Course Net and wagers retain full team handicaps.'}</div>${Number(getFlamtanaConfig(round).scoringPolicyVersion)>=3 ? '<div>'+escapeHtml(computeFlamtanaResults(round)?.components?.filter(component=>component.enabled!==false).map(component=>component.label+' '+formatMoneyAccounting(component.stake)+'/golfer').join(' · ') || '')+'</div><div>The Big Game: first '+Number(getFlamtanaConfig(round).firstPlacePercent)+'%, second '+Number(getFlamtanaConfig(round).secondPlacePercent)+'%. Tied first splits the entire pool; tied second splits second-place money. All ties split without card-off. Calcutta retains its winner/backer rules.</div>' : ''}` : ''}<div class="tiny">These are this round’s saved settings. Templates edited later do not change this round. Rules catalog v${COMPETITION_RULES_CATALOG_VERSION}.</div></div></details>`;
 }
 
 function renderSetupGroupRulesPreview() {
@@ -25833,7 +25870,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     const uniqueIds = new Set(selectedPlayers.map(p => p.playerId));
     if (selectedPlayers.length !== uniqueIds.size) return toast('Each player can only be selected once.');
     const selectedGames = collectSelectedGames();
-    if (!editingMatchId) selectedGames.forEach(game => { if (game.key === 'flamtana_special') game.scoringPolicyVersion = 2; });
+    if (!editingMatchId) selectedGames.forEach(game => { if (game.key === 'flamtana_special') game.scoringPolicyVersion = 3; });
     const scoringAccessMode = normalizeScoringAccessMode(fd.get('scoreEntryMode') || 'single_device');
     const scoreEntryMode = getLegacyScoreEntryMode(scoringAccessMode);
     const sharedMatchEnabled = (scoringAccessMode === 'assigned_players' || fd.get('sharedMatchEnabled') === 'on') && hasSupabaseConfig();

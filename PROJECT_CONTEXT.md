@@ -28,7 +28,9 @@ Guiding principles:
 - Preserve user data.
 - Prefer additive changes.
 
-Current development release: **v31.0.74 — Flamtana Event Options** on codex/v31.0.74-flamtana-event-options, from committed .73 (931b79a). John approved five independent competition choices, The Big Game naming, first/second pool percentages and split ties. New rounds use policy 3; older rounds and frozen history retain their original rules. Calcutta's existing rules remain, with a $120 default pool. Both phones need the update. See BUILD_NOTES_v31.0.74.md.
+Current development release: **v31.0.75 — Flamtana Hole Tees** on codex/v31.0.75-flamtana-hole-tees, from committed .74 (e828bfe). Flamtana Play team rows show each hole's specific source tee from the round snapshot rather than the overall combo setting. Display only; scoring, settlement, saving and course snapshots are unchanged. See BUILD_NOTES_v31.0.75.md.
+
+Previous development release:  **v31.0.74 — Flamtana Event Options** on codex/v31.0.74-flamtana-event-options, from committed .73 (931b79a). John approved five independent competition choices, The Big Game naming, first/second pool percentages and split ties. New rounds use policy 3; older rounds and frozen history retain their original rules. Calcutta's existing rules remain, with a $120 default pool. Both phones need the update. See BUILD_NOTES_v31.0.74.md.
 
 Previous development release:  **v31.0.73 — Shared Match Sign-In Recovery** on codex/v31.0.73-shared-sign-in-recovery, from committed .72 (cd145a1). John requested actionable sign-in guidance after confirming reauthentication resolved the finish loop. The host gets a clear Account & Security path, local scores/outbox are retained, access-denied errors are distinguished, and confirmation stays unknown until access returns. Uses existing server account/owner rules; no identity, SQL, scoring or frozen-record changes. See BUILD_NOTES_v31.0.73.md. Other event-freeze restrictions remain.
 

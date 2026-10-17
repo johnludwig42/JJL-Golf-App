@@ -19,11 +19,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.74',
-  versionNumber: '31.0.74',
-  cacheName: 'the-dye-ledger-v31.0.74',
-  buildDate: '2026-10-17T14:00:00.000Z',
-  buildLabel: 'Flamtana Event Options'
+  version: 'v31.0.75',
+  versionNumber: '31.0.75',
+  cacheName: 'the-dye-ledger-v31.0.75',
+  buildDate: '2026-10-17T13:52:53.000Z',
+  buildLabel: 'Flamtana Hole Tees'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -11016,7 +11016,9 @@ function buildScrambleScoreGridRows(match, tee, metrics, visiblePlayers, hole) {
     const playerHole = getPlayerHole(match, p, currentHole - 1, tee) || hole;
     const courseStrokes = holeCourseNetStrokeAllowance(playerHole?.strokeIndex, getFlamtanaConfig(match) ? getFlamtanaStrokeHandicap(match, p, metrics) : p.courseHdcp);
     const flamtana = !!getFlamtanaConfig(match), strokes = flamtana ? getFlamtanaDisplayStrokes(metrics, p, playerHole?.strokeIndex) : courseStrokes;
-    return '<tr><td><strong>' + escapeHtml(getTeamLabel(match, team)) + '</strong><div class="tiny">' + members.map(m => escapeHtml(m.player.name)).join(' / ') + '</div><div class="tiny">' + (flamtana ? escapeHtml(getPlayerTee(match, p)?.teeName || 'Tee not selected') + ' tees · Gets ' + Math.max(0, p.courseHdcp - Math.min(...metrics.players.map(row => row.courseHdcp))) : 'Team index ' + Number(p.assignedTeamIndex).toFixed(1) + ' · Playing HCP ' + p.courseHdcp) + '</div><div class="tiny">' + (score.inconsistent ? 'Pending / unequal partner scores: ' + score.values.map(v => v ?? '—').join(' / ') + '. Re-enter the team score to resolve, or deliberately clear it.' : score.complete ? 'Team hole complete' : 'Team score not entered') + '</div></td><td><div class="gross-score-stepper ' + (flamtana ? 'flamtana-score-stepper' : 'team-score-stepper') + '" role="group" aria-label="Team gross score"><button type="button" class="score-step-btn" data-score-step="down" data-score-step-player="' + escapeHtml(p.playerId) + '" aria-label="Decrease team score" ' + (editable ? '' : 'disabled') + '>−</button><input class="score-input" type="tel" inputmode="numeric" autocomplete="off" min="1" max="25" aria-label="Gross score for ' + escapeHtml(getTeamLabel(match, team)) + '" data-team-inconsistent="' + (score.inconsistent ? '1' : '0') + '" data-score-team="' + team + '" data-score-player="' + escapeHtml(p.playerId) + '" data-hole-par="' + Number(playerHole?.par || 4) + '" value="' + (score.gross ?? '') + '" ' + (editable ? '' : 'disabled') + '><button type="button" class="score-step-btn" data-score-step="up" data-score-step-player="' + escapeHtml(p.playerId) + '" aria-label="Increase team score" ' + (editable ? '' : 'disabled') + '>+</button></div></td><td>' + formatStrokesDisplay(strokes) + '</td><td class="score-net-cell">' + (score.complete ? score.gross - courseStrokes : '—') + '</td></tr>';
+    const holeTeeName = flamtana ? getHoleTeeNameForDisplay(match.courseId, getPlayerTee(match, p), currentHole - 1, getMatchCourse(match)) : '';
+    const holeTeeLabel = holeTeeName ? holeTeeName + ' tees' : 'Hole tee not recorded';
+    return '<tr><td><strong>' + escapeHtml(getTeamLabel(match, team)) + '</strong><div class="tiny">' + members.map(m => escapeHtml(m.player.name)).join(' / ') + '</div><div class="tiny">' + (flamtana ? escapeHtml(holeTeeLabel) + ' · Gets ' + Math.max(0, p.courseHdcp - Math.min(...metrics.players.map(row => row.courseHdcp))) : 'Team index ' + Number(p.assignedTeamIndex).toFixed(1) + ' · Playing HCP ' + p.courseHdcp) + '</div><div class="tiny">' + (score.inconsistent ? 'Pending / unequal partner scores: ' + score.values.map(v => v ?? '—').join(' / ') + '. Re-enter the team score to resolve, or deliberately clear it.' : score.complete ? 'Team hole complete' : 'Team score not entered') + '</div></td><td><div class="gross-score-stepper ' + (flamtana ? 'flamtana-score-stepper' : 'team-score-stepper') + '" role="group" aria-label="Team gross score"><button type="button" class="score-step-btn" data-score-step="down" data-score-step-player="' + escapeHtml(p.playerId) + '" aria-label="Decrease team score" ' + (editable ? '' : 'disabled') + '>−</button><input class="score-input" type="tel" inputmode="numeric" autocomplete="off" min="1" max="25" aria-label="Gross score for ' + escapeHtml(getTeamLabel(match, team)) + '" data-team-inconsistent="' + (score.inconsistent ? '1' : '0') + '" data-score-team="' + team + '" data-score-player="' + escapeHtml(p.playerId) + '" data-hole-par="' + Number(playerHole?.par || 4) + '" value="' + (score.gross ?? '') + '" ' + (editable ? '' : 'disabled') + '><button type="button" class="score-step-btn" data-score-step="up" data-score-step-player="' + escapeHtml(p.playerId) + '" aria-label="Increase team score" ' + (editable ? '' : 'disabled') + '>+</button></div></td><td>' + formatStrokesDisplay(strokes) + '</td><td class="score-net-cell">' + (score.complete ? score.gross - courseStrokes : '—') + '</td></tr>';
   }).join('') + '<tr><td colspan="4"><div class="tiny">One shared-ball score per team. Team completion is separate from all four teams completing this hole. No individual statistics or postable scores. If a scoring device drops out, the host can enter or correct all four teams here. Keep the foursome assignments; check backup and parity before finishing.</div></td></tr>';
 }
 function restoreScrambleSetup(match) {

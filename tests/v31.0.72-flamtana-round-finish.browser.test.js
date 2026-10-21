@@ -29,6 +29,7 @@ async function preserveOnNavigation(page){
 async function cloudClient(page,cloud){
  await page.evaluate(cloud=>{
   const scores=getActiveMatch().players.flatMap(p=>p.scores.map(s=>({player_id:p.playerId,hole_number:s.holeNumber,gross:s.gross,updated_by:'same-account',entry_status:'active'})));
+  Object.defineProperty(navigator,'onLine',{value:true,configurable:true}); // The visual fixture defaults offline; this test explicitly exercises cloud requests.
   hasSupabaseConfig=()=>true;
   ensureSupabaseClient=async()=>({from(table){const q={select(){return q;},eq(){return q;},order(){return q;},maybeSingle(){q.single=true;return q;},then(resolve){return Promise.resolve({data:table==='matches'?cloud.matchRow:table==='score_entries'?scores:[],error:null}).then(resolve);}};return q;}});
   scheduleSharedMatchSync=()=>{};

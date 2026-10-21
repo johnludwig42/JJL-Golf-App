@@ -13,12 +13,16 @@ function fixture(){
 }
 async function connect(page,cloud,user){
  await page.evaluate(({cloud,user})=>{
+  Object.defineProperty(navigator,'onLine',{value:true,configurable:true}); // The visual fixture defaults offline; this test explicitly exercises cloud requests.
+  // This older fixture models manual Sync Now; .77 covers foreground polling/presence.
+  resumeSharedForeground=async()=>false;
   window.sessionUser=user;window.writeCalls=[];hasSupabaseConfig=()=>true;getSupabaseUser=async()=>sessionUser;scheduleSharedMatchSync=()=>{};
   const scores=getActiveMatch().players.flatMap(p=>p.scores.map(s=>({player_id:p.playerId,hole_number:s.holeNumber,gross:s.gross,updated_by:'owner',entry_status:'active'})));
   ensureSupabaseClient=async()=>({
    rpc:async(name)=>{writeCalls.push(name);return sessionUser.id==='owner'?{data:cloud.matchRow.id,error:null}:{data:null,error:{code:'42501',message:'Shared Match Owner authorization required'}};},
    from(table){const q={select(){return q;},eq(){return q;},order(){return q;},limit(){return q;},maybeSingle(){return q;},upsert(payload){writeCalls.push(table);q.write=true;return q;},then(resolve){return Promise.resolve({data:q.write?null:table==='matches'?cloud.matchRow:table==='score_entries'?scores:[],error:null}).then(resolve);}};return q;}
   });
+  sharedSessionChanged('INITIAL_SESSION',{user});
  },{cloud,user});
 }
 test('logged-out host gets an actionable sign-in prompt instead of the finish/sync loop; signing in restores sync and completion',{skip:!chrome,timeout:60000},async()=>{
@@ -34,8 +38,8 @@ test('logged-out host gets an actionable sign-in prompt instead of the finish/sy
   for(const [width,size]of [[320,16],[375,16],[430,16],[375,32]]){await page.setViewport({width,height:812});await page.addStyleTag({content:`html{font-size:${size}px!important}`});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);assert.ok(await page.$$eval('#sharedAccountRecovery-score button',nodes=>nodes.every(n=>n.getBoundingClientRect().height>=44)));}
   await page.setViewport({width:375,height:812});await page.addStyleTag({content:'html{font-size:16px!important}'});await page.$eval('#sharedAccountRecovery-score [data-open-shared-account]',n=>n.scrollIntoView({block:'center'}));await page.click('#sharedAccountRecovery-score [data-open-shared-account]');
   assert.equal(await page.evaluate(()=>getActivePanelId()),'settings');assert.equal(await page.$eval('#settings',n=>n.dataset.activeDestination),'account');assert.equal(await page.evaluate(()=>state.activeMatchId),'r');
-  await page.evaluate(()=>sessionUser={id:'owner',is_anonymous:false});await page.click('[data-tab="score"]');await page.$eval('#sharedAccountRecovery-score [data-retry-account-sync]',n=>n.scrollIntoView({block:'center'}));await page.click('#sharedAccountRecovery-score [data-retry-account-sync]');
-  await page.waitForFunction(()=>!getActiveMatch().sharedAccountRecovery&&getActiveMatch().sharedLedgerParity.parityConfirmed);
+  await page.evaluate(()=>{sessionUser={id:'owner',is_anonymous:false};sharedSessionChanged('SIGNED_IN',{user:sessionUser});});await page.click('[data-tab="score"]');await page.$eval('#sharedAccountRecovery-score [data-retry-account-sync]',n=>n.scrollIntoView({block:'center'}));await page.click('#sharedAccountRecovery-score [data-retry-account-sync]');
+  await page.waitForFunction(()=>!getActiveMatch().sharedAccountRecovery&&getActiveMatch().sharedLedgerParity.parityConfirmed,{timeout:10000});
   assert.equal(await page.evaluate(()=>JSON.stringify(getActiveMatch().players.map(p=>p.scores))),before);
   await page.evaluate(()=>showRoundEndPrompt(getActiveMatch(),'complete'));await page.click('#roundEndPrimaryBtn');await page.waitForFunction(()=>state.matches[0].status==='complete');assert.equal(await page.evaluate(()=>state.matches[0].roundRecordSnapshot.isFrozen),true);
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

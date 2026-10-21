@@ -1,0 +1,3254 @@
+{
+  "tables": [
+    {
+      "owner": "postgres",
+      "relacl": [
+        "postgres=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "nspname": "public",
+      "relname": "course_library_roles",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "owner": "postgres",
+      "relacl": [
+        "postgres=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "nspname": "public",
+      "relname": "team_access_codes",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "owner": "postgres",
+      "relacl": [
+        "postgres=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres",
+        "authenticated=arw/postgres"
+      ],
+      "nspname": "public",
+      "relname": "matches",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "owner": "postgres",
+      "relacl": [
+        "postgres=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres",
+        "authenticated=arw/postgres"
+      ],
+      "nspname": "public",
+      "relname": "match_memberships",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "owner": "supabase_auth_admin",
+      "relacl": [
+        "supabase_auth_admin=arwdDxtm/supabase_auth_admin",
+        "dashboard_user=arwdDxtm/supabase_auth_admin",
+        "postgres=ar*wdDxtm/supabase_auth_admin"
+      ],
+      "nspname": "auth",
+      "relname": "users",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "owner": "postgres",
+      "relacl": [
+        "postgres=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres",
+        "authenticated=arwd/postgres"
+      ],
+      "nspname": "public",
+      "relname": "match_teams",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "owner": "postgres",
+      "relacl": [
+        "postgres=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres",
+        "authenticated=arwd/postgres"
+      ],
+      "nspname": "public",
+      "relname": "match_players",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "owner": "postgres",
+      "relacl": [
+        "postgres=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres",
+        "authenticated=arwd/postgres"
+      ],
+      "nspname": "public",
+      "relname": "score_entries",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "owner": "postgres",
+      "relacl": [
+        "postgres=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres",
+        "authenticated=arwd/postgres"
+      ],
+      "nspname": "public",
+      "relname": "match_notes",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "owner": "postgres",
+      "relacl": [
+        "postgres=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres",
+        "authenticated=ar/postgres"
+      ],
+      "nspname": "public",
+      "relname": "audit_log",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "owner": "postgres",
+      "relacl": [
+        "postgres=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres",
+        "anon=r/postgres",
+        "authenticated=arwd/postgres"
+      ],
+      "nspname": "public",
+      "relname": "courses",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "owner": "postgres",
+      "relacl": [
+        "postgres=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres",
+        "anon=r/postgres",
+        "authenticated=arwd/postgres"
+      ],
+      "nspname": "public",
+      "relname": "course_holes",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "owner": "postgres",
+      "relacl": [
+        "postgres=arwdDxtm/postgres",
+        "authenticated=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "nspname": "public",
+      "relname": "accounts",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "owner": "postgres",
+      "relacl": [
+        "postgres=arwdDxtm/postgres",
+        "authenticated=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "nspname": "public",
+      "relname": "golfer_identities",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "owner": "postgres",
+      "relacl": [
+        "postgres=arwdDxtm/postgres",
+        "authenticated=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "nspname": "public",
+      "relname": "personal_golfer_library",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "owner": "postgres",
+      "relacl": [
+        "postgres=arwdDxtm/postgres",
+        "authenticated=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "nspname": "public",
+      "relname": "devices",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "owner": "postgres",
+      "relacl": [
+        "postgres=arwdDxtm/postgres",
+        "authenticated=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres"
+      ],
+      "nspname": "public",
+      "relname": "account_providers",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "owner": "postgres",
+      "relacl": [
+        "postgres=arwdDxtm/postgres",
+        "service_role=arwdDxtm/postgres",
+        "anon=r/postgres",
+        "authenticated=arwd/postgres"
+      ],
+      "nspname": "public",
+      "relname": "course_tees",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "owner": "supabase_realtime_admin",
+      "relacl": [
+        "supabase_realtime_admin=arwdDxtm/supabase_realtime_admin",
+        "postgres=a*r*wdDxtm/supabase_realtime_admin",
+        "dashboard_user=arwdDxtm/supabase_realtime_admin",
+        "anon=arw/supabase_realtime_admin",
+        "authenticated=arw/supabase_realtime_admin",
+        "service_role=arw/supabase_realtime_admin"
+      ],
+      "nspname": "realtime",
+      "relname": "messages",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    }
+  ],
+  "columns": [
+    {
+      "type": "bool",
+      "scale": null,
+      "table": "matches",
+      "column": "locked_after_start",
+      "schema": "public",
+      "default": "false",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "bool",
+      "scale": null,
+      "table": "course_library_roles",
+      "column": "can_create_drafts",
+      "schema": "public",
+      "default": "true",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "bool",
+      "scale": null,
+      "table": "course_library_roles",
+      "column": "is_maintainer",
+      "schema": "public",
+      "default": "false",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "course_library_roles",
+      "column": "created_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "numeric",
+      "scale": null,
+      "table": "match_players",
+      "column": "course_handicap",
+      "schema": "public",
+      "default": "0",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "numeric",
+      "scale": null,
+      "table": "match_players",
+      "column": "playing_handicap",
+      "schema": "public",
+      "default": "0",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "jsonb",
+      "scale": null,
+      "table": "match_players",
+      "column": "handicap_snapshot",
+      "schema": "public",
+      "default": "'{}'::jsonb",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "match_players",
+      "column": "created_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "score_entries",
+      "column": "team_number",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "score_entries",
+      "column": "hole_number",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "score_entries",
+      "column": "gross",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "score_entries",
+      "column": "putts",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "bool",
+      "scale": null,
+      "table": "score_entries",
+      "column": "fairway",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "bool",
+      "scale": null,
+      "table": "score_entries",
+      "column": "green",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "bool",
+      "scale": null,
+      "table": "score_entries",
+      "column": "up_and_down",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "bool",
+      "scale": null,
+      "table": "score_entries",
+      "column": "sandy",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "score_entries",
+      "column": "updated_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "score_entries",
+      "column": "updated_by",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "match_notes",
+      "column": "updated_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "match_notes",
+      "column": "updated_by",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "int8",
+      "scale": 0,
+      "table": "audit_log",
+      "column": "id",
+      "schema": "public",
+      "default": "nextval('audit_log_id_seq'::regclass)",
+      "nullable": "NO",
+      "precision": 64,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "audit_log",
+      "column": "actor_user_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "audit_log",
+      "column": "hole_number",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "jsonb",
+      "scale": null,
+      "table": "audit_log",
+      "column": "old_value",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "jsonb",
+      "scale": null,
+      "table": "audit_log",
+      "column": "new_value",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "jsonb",
+      "scale": null,
+      "table": "audit_log",
+      "column": "context",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "audit_log",
+      "column": "created_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "courses",
+      "column": "id",
+      "schema": "public",
+      "default": "gen_random_uuid()",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "courses",
+      "column": "hole_count",
+      "schema": "public",
+      "default": "18",
+      "nullable": "YES",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "courses",
+      "column": "par_total",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "courses",
+      "column": "created_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "courses",
+      "column": "updated_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "courses",
+      "column": "owner_user_id",
+      "schema": "public",
+      "default": "auth.uid()",
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "courses",
+      "column": "approved_by",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "courses",
+      "column": "approved_at",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "course_holes",
+      "column": "id",
+      "schema": "public",
+      "default": "gen_random_uuid()",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "course_holes",
+      "column": "course_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "course_holes",
+      "column": "hole_number",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "course_holes",
+      "column": "par",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "course_holes",
+      "column": "handicap_index",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "course_holes",
+      "column": "yards",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "course_holes",
+      "column": "created_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "course_holes",
+      "column": "updated_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "course_holes",
+      "column": "tee_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "course_holes",
+      "column": "yardage",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "accounts",
+      "column": "account_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "accounts",
+      "column": "created_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "accounts",
+      "column": "updated_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "golfer_identities",
+      "column": "golfer_identity_id",
+      "schema": "public",
+      "default": "gen_random_uuid()",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "golfer_identities",
+      "column": "claimed_by_account_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "jsonb",
+      "scale": null,
+      "table": "golfer_identities",
+      "column": "profile",
+      "schema": "public",
+      "default": "'{}'::jsonb",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "golfer_identities",
+      "column": "created_by_account_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "golfer_identities",
+      "column": "created_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "personal_golfer_library",
+      "column": "account_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "personal_golfer_library",
+      "column": "golfer_identity_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "jsonb",
+      "scale": null,
+      "table": "personal_golfer_library",
+      "column": "preferences",
+      "schema": "public",
+      "default": "'{}'::jsonb",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "personal_golfer_library",
+      "column": "created_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "devices",
+      "column": "device_id",
+      "schema": "public",
+      "default": "gen_random_uuid()",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "devices",
+      "column": "account_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "devices",
+      "column": "created_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "devices",
+      "column": "last_seen_at",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "account_providers",
+      "column": "account_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "account_providers",
+      "column": "verified_at",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "course_tees",
+      "column": "id",
+      "schema": "public",
+      "default": "gen_random_uuid()",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "course_tees",
+      "column": "course_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "numeric",
+      "scale": null,
+      "table": "course_tees",
+      "column": "rating",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "course_tees",
+      "column": "slope",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "course_tees",
+      "column": "total_yards",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "course_tees",
+      "column": "created_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "course_tees",
+      "column": "updated_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "team_access_codes",
+      "column": "team_number",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "team_access_codes",
+      "column": "created_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "team_access_codes",
+      "column": "created_by",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "team_access_codes",
+      "column": "expires_at",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "team_access_codes",
+      "column": "claimed_at",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "team_access_codes",
+      "column": "claimed_by_user_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "matches",
+      "column": "created_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "matches",
+      "column": "updated_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "matches",
+      "column": "created_by",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "date",
+      "scale": null,
+      "table": "matches",
+      "column": "match_date",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "jsonb",
+      "scale": null,
+      "table": "matches",
+      "column": "course_snapshot",
+      "schema": "public",
+      "default": "'{}'::jsonb",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "numeric",
+      "scale": null,
+      "table": "matches",
+      "column": "allowance",
+      "schema": "public",
+      "default": "100",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "matches",
+      "column": "hole_count",
+      "schema": "public",
+      "default": "18",
+      "nullable": "NO",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "matches",
+      "column": "custom_start_hole",
+      "schema": "public",
+      "default": "1",
+      "nullable": "NO",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "matches",
+      "column": "team_count",
+      "schema": "public",
+      "default": "1",
+      "nullable": "NO",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "matches",
+      "column": "players_per_team",
+      "schema": "public",
+      "default": "1",
+      "nullable": "NO",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "bool",
+      "scale": null,
+      "table": "matches",
+      "column": "stat_tracking_enabled",
+      "schema": "public",
+      "default": "false",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "jsonb",
+      "scale": null,
+      "table": "matches",
+      "column": "selected_games",
+      "schema": "public",
+      "default": "'[]'::jsonb",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "matches",
+      "column": "momentum_perspective",
+      "schema": "public",
+      "default": "1",
+      "nullable": "NO",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "course_library_roles",
+      "column": "user_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "matches",
+      "column": "setup_locked_at",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "matches",
+      "column": "completed_at",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "matches",
+      "column": "last_touched_hole",
+      "schema": "public",
+      "default": "0",
+      "nullable": "NO",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "matches",
+      "column": "last_fully_completed_hole",
+      "schema": "public",
+      "default": "0",
+      "nullable": "NO",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "uuid",
+      "scale": null,
+      "table": "match_memberships",
+      "column": "user_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "match_memberships",
+      "column": "team_number",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "match_memberships",
+      "column": "joined_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "match_memberships",
+      "column": "last_seen_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "match_teams",
+      "column": "team_number",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "timestamptz",
+      "scale": null,
+      "table": "match_teams",
+      "column": "created_at",
+      "schema": "public",
+      "default": "now()",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "match_players",
+      "column": "team_number",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "int4",
+      "scale": 0,
+      "table": "match_players",
+      "column": "slot",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": 32,
+      "max_length": null
+    },
+    {
+      "type": "numeric",
+      "scale": null,
+      "table": "match_players",
+      "column": "player_index",
+      "schema": "public",
+      "default": "0",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "team_access_codes",
+      "column": "id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "team_access_codes",
+      "column": "match_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "team_access_codes",
+      "column": "team_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "match_players",
+      "column": "tee_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "team_access_codes",
+      "column": "role",
+      "schema": "public",
+      "default": "'team_scorer'::text",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "team_access_codes",
+      "column": "code_hash",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "team_access_codes",
+      "column": "code_last4",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "team_access_codes",
+      "column": "status",
+      "schema": "public",
+      "default": "'active'::text",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "match_players",
+      "column": "tee_name",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "audit_log",
+      "column": "actor_team_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "courses",
+      "column": "publication_status",
+      "schema": "public",
+      "default": "'draft'::text",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "audit_log",
+      "column": "field_name",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "golfer_identities",
+      "column": "phone",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "team_access_codes",
+      "column": "claimed_device_label",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "team_access_codes",
+      "column": "claimed_session_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "matches",
+      "column": "id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "score_entries",
+      "column": "id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "score_entries",
+      "column": "match_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "score_entries",
+      "column": "match_player_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "matches",
+      "column": "name",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "score_entries",
+      "column": "player_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "matches",
+      "column": "status",
+      "schema": "public",
+      "default": "'active'::text",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "matches",
+      "column": "course_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "matches",
+      "column": "reference_tee_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "score_entries",
+      "column": "team_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "matches",
+      "column": "format",
+      "schema": "public",
+      "default": "'teams'::text",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "golfer_identities",
+      "column": "ghin",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "account_providers",
+      "column": "provider_subject_hash",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "matches",
+      "column": "nine_hole_segment",
+      "schema": "public",
+      "default": "'front'::text",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "course_tees",
+      "column": "gender",
+      "schema": "public",
+      "default": "'M'::text",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "course_tees",
+      "column": "tee_name",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "courses",
+      "column": "name",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "matches",
+      "column": "scoring_access_mode",
+      "schema": "public",
+      "default": "'team_codes'::text",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "courses",
+      "column": "city",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "courses",
+      "column": "state",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "matches",
+      "column": "match_status_game",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "matches",
+      "column": "momentum_game",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "courses",
+      "column": "country",
+      "schema": "public",
+      "default": "'USA'::text",
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "account_providers",
+      "column": "provider",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "golfer_identities",
+      "column": "claim_status",
+      "schema": "public",
+      "default": "'unclaimed'::text",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "score_entries",
+      "column": "entry_status",
+      "schema": "public",
+      "default": "'active'::text",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "match_notes",
+      "column": "match_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "match_notes",
+      "column": "body",
+      "schema": "public",
+      "default": "''::text",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "match_memberships",
+      "column": "id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "match_memberships",
+      "column": "match_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "courses",
+      "column": "source",
+      "schema": "public",
+      "default": "'user'::text",
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "match_memberships",
+      "column": "role",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "match_memberships",
+      "column": "team_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "devices",
+      "column": "label",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "match_memberships",
+      "column": "status",
+      "schema": "public",
+      "default": "'active'::text",
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "golfer_identities",
+      "column": "display_name",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "audit_log",
+      "column": "match_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "match_memberships",
+      "column": "device_label",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "match_teams",
+      "column": "id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "match_teams",
+      "column": "match_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "audit_log",
+      "column": "entity_type",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "match_teams",
+      "column": "team_name",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "audit_log",
+      "column": "entity_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "match_players",
+      "column": "id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "match_players",
+      "column": "match_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "match_players",
+      "column": "player_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "match_players",
+      "column": "team_id",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "audit_log",
+      "column": "action",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "golfer_identities",
+      "column": "email",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "match_players",
+      "column": "player_name",
+      "schema": "public",
+      "default": null,
+      "nullable": "NO",
+      "precision": null,
+      "max_length": null
+    },
+    {
+      "type": "text",
+      "scale": null,
+      "table": "audit_log",
+      "column": "actor_role",
+      "schema": "public",
+      "default": null,
+      "nullable": "YES",
+      "precision": null,
+      "max_length": null
+    }
+  ],
+  "indexes": [
+    {
+      "indexdef": "CREATE UNIQUE INDEX course_library_roles_pkey ON public.course_library_roles USING btree (user_id)",
+      "indexname": "course_library_roles_pkey",
+      "tablename": "course_library_roles",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX team_access_codes_pkey ON public.team_access_codes USING btree (id)",
+      "indexname": "team_access_codes_pkey",
+      "tablename": "team_access_codes",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX matches_pkey ON public.matches USING btree (id)",
+      "indexname": "matches_pkey",
+      "tablename": "matches",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX match_memberships_pkey ON public.match_memberships USING btree (id)",
+      "indexname": "match_memberships_pkey",
+      "tablename": "match_memberships",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_match_memberships_match_id ON public.match_memberships USING btree (match_id)",
+      "indexname": "idx_match_memberships_match_id",
+      "tablename": "match_memberships",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX match_teams_pkey ON public.match_teams USING btree (id)",
+      "indexname": "match_teams_pkey",
+      "tablename": "match_teams",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX match_teams_match_id_team_number_key ON public.match_teams USING btree (match_id, team_number)",
+      "indexname": "match_teams_match_id_team_number_key",
+      "tablename": "match_teams",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_match_teams_match_id ON public.match_teams USING btree (match_id)",
+      "indexname": "idx_match_teams_match_id",
+      "tablename": "match_teams",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX match_players_pkey ON public.match_players USING btree (id)",
+      "indexname": "match_players_pkey",
+      "tablename": "match_players",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX match_players_match_id_player_id_key ON public.match_players USING btree (match_id, player_id)",
+      "indexname": "match_players_match_id_player_id_key",
+      "tablename": "match_players",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_match_players_match_id ON public.match_players USING btree (match_id)",
+      "indexname": "idx_match_players_match_id",
+      "tablename": "match_players",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX score_entries_pkey ON public.score_entries USING btree (id)",
+      "indexname": "score_entries_pkey",
+      "tablename": "score_entries",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX score_entries_match_id_match_player_id_hole_number_key ON public.score_entries USING btree (match_id, match_player_id, hole_number)",
+      "indexname": "score_entries_match_id_match_player_id_hole_number_key",
+      "tablename": "score_entries",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_score_entries_match_id ON public.score_entries USING btree (match_id)",
+      "indexname": "idx_score_entries_match_id",
+      "tablename": "score_entries",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX match_notes_pkey ON public.match_notes USING btree (match_id)",
+      "indexname": "match_notes_pkey",
+      "tablename": "match_notes",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX audit_log_pkey ON public.audit_log USING btree (id)",
+      "indexname": "audit_log_pkey",
+      "tablename": "audit_log",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE INDEX idx_audit_log_match_id ON public.audit_log USING btree (match_id)",
+      "indexname": "idx_audit_log_match_id",
+      "tablename": "audit_log",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX courses_name_unique_idx ON public.courses USING btree (lower(name))",
+      "indexname": "courses_name_unique_idx",
+      "tablename": "courses",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX courses_pkey ON public.courses USING btree (id)",
+      "indexname": "courses_pkey",
+      "tablename": "courses",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX course_holes_course_tee_hole_unique_idx ON public.course_holes USING btree (course_id, tee_id, hole_number)",
+      "indexname": "course_holes_course_tee_hole_unique_idx",
+      "tablename": "course_holes",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX course_holes_pkey ON public.course_holes USING btree (id)",
+      "indexname": "course_holes_pkey",
+      "tablename": "course_holes",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX course_holes_tee_id_hole_number_key ON public.course_holes USING btree (tee_id, hole_number)",
+      "indexname": "course_holes_tee_id_hole_number_key",
+      "tablename": "course_holes",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX accounts_pkey ON public.accounts USING btree (account_id)",
+      "indexname": "accounts_pkey",
+      "tablename": "accounts",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX golfer_identities_pkey ON public.golfer_identities USING btree (golfer_identity_id)",
+      "indexname": "golfer_identities_pkey",
+      "tablename": "golfer_identities",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX golfer_identities_claimed_by_account_id_key ON public.golfer_identities USING btree (claimed_by_account_id)",
+      "indexname": "golfer_identities_claimed_by_account_id_key",
+      "tablename": "golfer_identities",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX personal_golfer_library_pkey ON public.personal_golfer_library USING btree (account_id, golfer_identity_id)",
+      "indexname": "personal_golfer_library_pkey",
+      "tablename": "personal_golfer_library",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX devices_pkey ON public.devices USING btree (device_id)",
+      "indexname": "devices_pkey",
+      "tablename": "devices",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX account_providers_pkey ON public.account_providers USING btree (provider, provider_subject_hash)",
+      "indexname": "account_providers_pkey",
+      "tablename": "account_providers",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX account_providers_account_id_provider_key ON public.account_providers USING btree (account_id, provider)",
+      "indexname": "account_providers_account_id_provider_key",
+      "tablename": "account_providers",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX course_tees_pkey ON public.course_tees USING btree (id)",
+      "indexname": "course_tees_pkey",
+      "tablename": "course_tees",
+      "schemaname": "public",
+      "tablespace": null
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX course_tees_course_name_gender_key ON public.course_tees USING btree (course_id, lower(btrim(tee_name)), gender)",
+      "indexname": "course_tees_course_name_gender_key",
+      "tablename": "course_tees",
+      "schemaname": "public",
+      "tablespace": null
+    }
+  ],
+  "policies": [
+    {
+      "cmd": "SELECT",
+      "qual": "((publication_status = 'approved'::text) OR (owner_user_id = auth.uid()))",
+      "roles": [
+        "anon",
+        "authenticated"
+      ],
+      "tablename": "courses",
+      "permissive": "PERMISSIVE",
+      "policyname": "courses_public_read",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "courses",
+      "permissive": "PERMISSIVE",
+      "policyname": "courses_authorized_insert",
+      "schemaname": "public",
+      "with_check": "(course_library_can_write() AND (owner_user_id = auth.uid()) AND (publication_status = 'draft'::text))"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(course_library_is_maintainer() OR (course_library_can_write() AND (owner_user_id = auth.uid()) AND (publication_status = 'draft'::text)))",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "courses",
+      "permissive": "PERMISSIVE",
+      "policyname": "courses_authorized_update",
+      "schemaname": "public",
+      "with_check": "(course_library_is_maintainer() OR (course_library_can_write() AND (owner_user_id = auth.uid()) AND (publication_status = 'draft'::text)))"
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "matches",
+      "permissive": "PERMISSIVE",
+      "policyname": "matches_owner_insert",
+      "schemaname": "public",
+      "with_check": "(created_by = auth.uid())"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "shared_match_is_member(id)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "matches",
+      "permissive": "PERMISSIVE",
+      "policyname": "matches_member_update",
+      "schemaname": "public",
+      "with_check": "shared_match_is_member(id)"
+    },
+    {
+      "cmd": "DELETE",
+      "qual": "(course_library_is_maintainer() OR (course_library_can_write() AND (owner_user_id = auth.uid()) AND (publication_status = 'draft'::text)))",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "courses",
+      "permissive": "PERMISSIVE",
+      "policyname": "courses_authorized_delete",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM courses c\n  WHERE (c.id = course_tees.course_id)))",
+      "roles": [
+        "anon",
+        "authenticated"
+      ],
+      "tablename": "course_tees",
+      "permissive": "PERMISSIVE",
+      "policyname": "course_tees_public_read",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(EXISTS ( SELECT 1\n   FROM courses c\n  WHERE ((c.id = course_tees.course_id) AND (course_library_is_maintainer() OR (course_library_can_write() AND (c.owner_user_id = auth.uid()) AND (c.publication_status = 'draft'::text))))))",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "course_tees",
+      "permissive": "PERMISSIVE",
+      "policyname": "course_tees_authorized_write",
+      "schemaname": "public",
+      "with_check": "(EXISTS ( SELECT 1\n   FROM courses c\n  WHERE ((c.id = course_tees.course_id) AND (course_library_is_maintainer() OR (course_library_can_write() AND (c.owner_user_id = auth.uid()) AND (c.publication_status = 'draft'::text))))))"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "((EXISTS ( SELECT 1\n   FROM courses c\n  WHERE (c.id = course_holes.course_id))) AND (EXISTS ( SELECT 1\n   FROM course_tees t\n  WHERE ((t.id = course_holes.tee_id) AND (t.course_id = course_holes.course_id)))))",
+      "roles": [
+        "anon",
+        "authenticated"
+      ],
+      "tablename": "course_holes",
+      "permissive": "PERMISSIVE",
+      "policyname": "course_holes_public_read",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(EXISTS ( SELECT 1\n   FROM courses c\n  WHERE ((c.id = course_holes.course_id) AND (course_library_is_maintainer() OR (course_library_can_write() AND (c.owner_user_id = auth.uid()) AND (c.publication_status = 'draft'::text))))))",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "course_holes",
+      "permissive": "PERMISSIVE",
+      "policyname": "course_holes_authorized_write",
+      "schemaname": "public",
+      "with_check": "((EXISTS ( SELECT 1\n   FROM courses c\n  WHERE ((c.id = course_holes.course_id) AND (course_library_is_maintainer() OR (course_library_can_write() AND (c.owner_user_id = auth.uid()) AND (c.publication_status = 'draft'::text)))))) AND (EXISTS ( SELECT 1\n   FROM course_tees t\n  WHERE ((t.id = course_holes.tee_id) AND (t.course_id = course_holes.course_id)))))"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "shared_match_is_member(id)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "matches",
+      "permissive": "PERMISSIVE",
+      "policyname": "matches_member_select",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "shared_match_is_member(match_id)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "match_memberships",
+      "permissive": "PERMISSIVE",
+      "policyname": "memberships_member_select",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "match_memberships",
+      "permissive": "PERMISSIVE",
+      "policyname": "memberships_owner_insert",
+      "schemaname": "public",
+      "with_check": "((user_id = auth.uid()) AND shared_match_is_organizer(match_id))"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "((user_id = auth.uid()) OR shared_match_is_organizer(match_id))",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "match_memberships",
+      "permissive": "PERMISSIVE",
+      "policyname": "memberships_self_update",
+      "schemaname": "public",
+      "with_check": "((user_id = auth.uid()) OR shared_match_is_organizer(match_id))"
+    },
+    {
+      "cmd": "ALL",
+      "qual": "shared_match_is_member(match_id)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "match_teams",
+      "permissive": "PERMISSIVE",
+      "policyname": "teams_member_all",
+      "schemaname": "public",
+      "with_check": "shared_match_is_member(match_id)"
+    },
+    {
+      "cmd": "ALL",
+      "qual": "shared_match_is_member(match_id)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "match_players",
+      "permissive": "PERMISSIVE",
+      "policyname": "players_member_all",
+      "schemaname": "public",
+      "with_check": "shared_match_is_member(match_id)"
+    },
+    {
+      "cmd": "ALL",
+      "qual": "shared_match_is_member(match_id)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "score_entries",
+      "permissive": "PERMISSIVE",
+      "policyname": "scores_member_all",
+      "schemaname": "public",
+      "with_check": "(shared_match_is_member(match_id) AND (COALESCE(updated_by, auth.uid()) = auth.uid()))"
+    },
+    {
+      "cmd": "ALL",
+      "qual": "shared_match_is_member(match_id)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "match_notes",
+      "permissive": "PERMISSIVE",
+      "policyname": "notes_member_all",
+      "schemaname": "public",
+      "with_check": "(shared_match_is_member(match_id) AND (COALESCE(updated_by, auth.uid()) = auth.uid()))"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "shared_match_is_member(match_id)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "audit_log",
+      "permissive": "PERMISSIVE",
+      "policyname": "audit_member_select",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "audit_log",
+      "permissive": "PERMISSIVE",
+      "policyname": "audit_member_insert",
+      "schemaname": "public",
+      "with_check": "(shared_match_is_member(match_id) AND (actor_user_id = auth.uid()))"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(account_id = auth.uid())",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "accounts",
+      "permissive": "PERMISSIVE",
+      "policyname": "accounts_self_select",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "accounts",
+      "permissive": "PERMISSIVE",
+      "policyname": "accounts_self_insert",
+      "schemaname": "public",
+      "with_check": "(account_id = auth.uid())"
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(account_id = auth.uid())",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "accounts",
+      "permissive": "PERMISSIVE",
+      "policyname": "accounts_self_update",
+      "schemaname": "public",
+      "with_check": "(account_id = auth.uid())"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "((claimed_by_account_id = auth.uid()) OR (EXISTS ( SELECT 1\n   FROM personal_golfer_library l\n  WHERE ((l.account_id = auth.uid()) AND (l.golfer_identity_id = golfer_identities.golfer_identity_id)))))",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "golfer_identities",
+      "permissive": "PERMISSIVE",
+      "policyname": "golfer_library_visible",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "INSERT",
+      "qual": null,
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "golfer_identities",
+      "permissive": "PERMISSIVE",
+      "policyname": "golfer_unclaimed_insert",
+      "schemaname": "public",
+      "with_check": "((claim_status = 'unclaimed'::text) AND (claimed_by_account_id IS NULL) AND (created_by_account_id = auth.uid()))"
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(account_id = auth.uid())",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "personal_golfer_library",
+      "permissive": "PERMISSIVE",
+      "policyname": "personal_library_owner_all",
+      "schemaname": "public",
+      "with_check": "(account_id = auth.uid())"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(account_id = auth.uid())",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "account_providers",
+      "permissive": "PERMISSIVE",
+      "policyname": "account_providers_owner_select",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "ALL",
+      "qual": "(account_id = auth.uid())",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "devices",
+      "permissive": "PERMISSIVE",
+      "policyname": "devices_owner_all",
+      "schemaname": "public",
+      "with_check": "(account_id = auth.uid())"
+    }
+  ],
+  "triggers": [
+    {
+      "name": "stamp_shared_match_owner_before_insert",
+      "table": "matches",
+      "schema": "public",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER stamp_shared_match_owner_before_insert BEFORE INSERT ON matches FOR EACH ROW EXECUTE FUNCTION stamp_shared_match_owner()"
+    },
+    {
+      "name": "provision_durable_account_after_auth_user",
+      "table": "users",
+      "schema": "auth",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER provision_durable_account_after_auth_user AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION provision_durable_account()"
+    }
+  ],
+  "functions": [
+    {
+      "owner": "postgres",
+      "result": "courses",
+      "nspname": "public",
+      "proname": "revise_approved_course",
+      "arguments": "p_course_id text",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.revise_approved_course(p_course_id text)\n RETURNS courses\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\r\ndeclare\r\n  result public.courses;\r\nbegin\r\n  if auth.uid() is null or not public.course_library_is_maintainer()\r\n     or not public.course_library_can_write() then\r\n    raise exception 'Course maintainer authorization required' using errcode = '42501';\r\n  end if;\r\n  -- Existing atomic publishing only accepts an Account's own user draft.\r\n  -- Prior approval attribution remains available until reapproval.\r\n  update public.courses\r\n  set publication_status = 'draft', owner_user_id = auth.uid(),\r\n      source = 'user', updated_at = now()\r\n  where id::text = nullif(btrim(p_course_id), '')\r\n    and publication_status = 'approved'\r\n  returning * into result;\r\n  if result.id is null then\r\n    raise exception 'Approved course not found; refresh the Course Library';\r\n  end if;\r\n  return result;\r\nend $function$\n",
+      "privileges": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "security_definer": true
+    },
+    {
+      "owner": "postgres",
+      "result": "jsonb",
+      "nspname": "public",
+      "proname": "publish_course_draft_atomic",
+      "arguments": "p_course jsonb",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.publish_course_draft_atomic(p_course jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\r\ndeclare\r\n  v_user_id uuid := auth.uid();\r\n  v_course_id text := nullif(btrim(p_course->>'cloud_course_id'), '');\r\n  v_course_row public.courses%rowtype;\r\n  v_tee jsonb;\r\n  v_tee_id text;\r\n  v_tee_ids text[] := array[]::text[];\r\n  v_hole jsonb;\r\n  v_hole_count integer;\r\n  v_tee_results jsonb := '[]'::jsonb;\r\n  v_gender text;\r\n  v_expected_tee_count integer;\r\nbegin\r\n  if v_user_id is null or not public.course_library_can_write() then\r\n    raise exception 'Course Library draft publishing is not authorized';\r\n  end if;\r\n  if nullif(btrim(p_course->>'name'), '') is null then\r\n    raise exception 'Course name is required';\r\n  end if;\r\n  if jsonb_typeof(p_course->'tees') <> 'array' or jsonb_array_length(p_course->'tees') = 0 then\r\n    raise exception 'At least one complete tee is required';\r\n  end if;\r\n  v_expected_tee_count := jsonb_array_length(p_course->'tees');\r\n  if exists (\r\n    select 1\r\n    from jsonb_array_elements(p_course->'tees') as payload_tees(tee)\r\n    group by lower(btrim(tee->>'tee_name')),\r\n      case when upper(btrim(coalesce(tee->>'gender', 'M'))) = 'F' then 'F' else 'M' end\r\n    having count(*) > 1\r\n  ) then\r\n    raise exception 'The course contains duplicate tee name and gender identities';\r\n  end if;\r\n\r\n  if v_course_id is not null then\r\n    select * into v_course_row from public.courses where id::text = v_course_id for update;\r\n    if not found then raise exception 'The selected cloud course draft no longer exists'; end if;\r\n    if v_course_row.owner_user_id is distinct from v_user_id or v_course_row.publication_status <> 'draft' then\r\n      raise exception 'Only the owning Account may update its draft course';\r\n    end if;\r\n    update public.courses set\r\n      name = btrim(p_course->>'name'),\r\n      city = nullif(btrim(p_course->>'city'), ''),\r\n      state = nullif(btrim(p_course->>'state'), ''),\r\n      country = coalesce(nullif(btrim(p_course->>'country'), ''), country),\r\n      updated_at = now()\r\n    where id::text = v_course_id\r\n    returning * into v_course_row;\r\n  else\r\n    insert into public.courses(name, city, state, country, owner_user_id, publication_status, updated_at)\r\n    values (\r\n      btrim(p_course->>'name'), nullif(btrim(p_course->>'city'), ''), nullif(btrim(p_course->>'state'), ''),\r\n      coalesce(nullif(btrim(p_course->>'country'), ''), 'United States of America'), v_user_id, 'draft', now()\r\n    ) returning * into v_course_row;\r\n    v_course_id := v_course_row.id::text;\r\n  end if;\r\n\r\n  for v_tee in select value from jsonb_array_elements(p_course->'tees')\r\n  loop\r\n    if nullif(btrim(v_tee->>'tee_name'), '') is null then raise exception 'Every tee requires a name'; end if;\r\n    v_gender := case when upper(btrim(coalesce(v_tee->>'gender', 'M'))) = 'F' then 'F' else 'M' end;\r\n    if jsonb_typeof(v_tee->'holes') <> 'array' then raise exception '% tee has no hole data', v_tee->>'tee_name'; end if;\r\n    v_hole_count := jsonb_array_length(v_tee->'holes');\r\n    if v_hole_count not in (9, 18) then raise exception '% tee must contain exactly 9 or 18 holes; found %', v_tee->>'tee_name', v_hole_count; end if;\r\n    if (select count(distinct (value->>'hole_number')::integer) from jsonb_array_elements(v_tee->'holes')) <> v_hole_count then\r\n      raise exception '% tee contains duplicate hole numbers', v_tee->>'tee_name';\r\n    end if;\r\n\r\n    v_tee_id := nullif(btrim(v_tee->>'cloud_tee_id'), '');\r\n    if v_tee_id is not null and not exists (\r\n      select 1 from public.course_tees\r\n      where id::text = v_tee_id\r\n        and course_id::text = v_course_id\r\n        and lower(btrim(tee_name)) = lower(btrim(v_tee->>'tee_name'))\r\n        and gender = v_gender\r\n    ) then v_tee_id := null; end if;\r\n    if v_tee_id is null then\r\n      select id::text into v_tee_id from public.course_tees\r\n      where course_id::text = v_course_id\r\n        and lower(btrim(tee_name)) = lower(btrim(v_tee->>'tee_name'))\r\n        and gender = v_gender\r\n      limit 1 for update;\r\n    end if;\r\n    if v_tee_id is null then\r\n      insert into public.course_tees(course_id, tee_name, gender, rating, slope, total_yards, updated_at)\r\n      values (v_course_row.id, btrim(v_tee->>'tee_name'),\r\n        v_gender,\r\n        nullif(v_tee->>'rating', '')::numeric, nullif(v_tee->>'slope', '')::integer,\r\n        nullif(v_tee->>'total_yards', '')::integer, now())\r\n      returning id::text into v_tee_id;\r\n    else\r\n      update public.course_tees set\r\n        tee_name = btrim(v_tee->>'tee_name'),\r\n        gender = v_gender,\r\n        rating = nullif(v_tee->>'rating', '')::numeric, slope = nullif(v_tee->>'slope', '')::integer,\r\n        total_yards = nullif(v_tee->>'total_yards', '')::integer, updated_at = now()\r\n      where id::text = v_tee_id;\r\n    end if;\r\n    v_tee_ids := array_append(v_tee_ids, v_tee_id);\r\n\r\n    for v_hole in select value from jsonb_array_elements(v_tee->'holes')\r\n    loop\r\n      insert into public.course_holes(course_id, tee_id, hole_number, par, handicap_index, yardage, updated_at)\r\n      values (v_course_row.id, (select id from public.course_tees where id::text = v_tee_id),\r\n        (v_hole->>'hole_number')::integer, nullif(v_hole->>'par', '')::integer,\r\n        nullif(v_hole->>'handicap_index', '')::integer, nullif(v_hole->>'yardage', '')::integer, now())\r\n      on conflict (tee_id, hole_number) do update set\r\n        course_id = excluded.course_id, par = excluded.par, handicap_index = excluded.handicap_index,\r\n        yardage = excluded.yardage, updated_at = excluded.updated_at;\r\n    end loop;\r\n    delete from public.course_holes\r\n    where tee_id::text = v_tee_id\r\n      and hole_number not in (select (value->>'hole_number')::integer from jsonb_array_elements(v_tee->'holes'));\r\n    v_tee_results := v_tee_results || jsonb_build_array(jsonb_build_object(\r\n      'tee_id', v_tee_id, 'tee_name', v_tee->>'tee_name', 'gender', v_gender, 'hole_count', v_hole_count\r\n    ));\r\n  end loop;\r\n\r\n  delete from public.course_tees where course_id::text = v_course_id and not (id::text = any(v_tee_ids));\r\n  if cardinality(v_tee_ids) <> v_expected_tee_count\r\n    or (select count(distinct tee_id) from unnest(v_tee_ids) as ids(tee_id)) <> v_expected_tee_count\r\n    or (select count(*) from public.course_tees where course_id::text = v_course_id) <> v_expected_tee_count\r\n  then\r\n    raise exception 'Cloud tee verification failed: expected % distinct tees', v_expected_tee_count;\r\n  end if;\r\n  if exists (\r\n    select 1\r\n    from public.course_tees tee\r\n    where tee.course_id::text = v_course_id\r\n      and (select count(*) from public.course_holes hole where hole.tee_id = tee.id) not in (9, 18)\r\n  ) then\r\n    raise exception 'Cloud hole verification failed: every tee must retain 9 or 18 holes';\r\n  end if;\r\n  return jsonb_build_object('course_id', v_course_id, 'owner_user_id', v_user_id, 'tees', v_tee_results);\r\nend;\r\n$function$\n",
+      "privileges": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "security_definer": true
+    },
+    {
+      "owner": "postgres",
+      "result": "text",
+      "nspname": "public",
+      "proname": "publish_shared_match_owner",
+      "arguments": "p_match jsonb, p_device_id text, p_device_label text",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.publish_shared_match_owner(p_match jsonb, p_device_id text, p_device_label text DEFAULT NULL::text)\n RETURNS text\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\r\ndeclare\r\n  v_user uuid := auth.uid();\r\n  v_match public.matches;\r\n  v_existing_owner uuid;\r\n  v_code text := upper(trim(coalesce(p_match ->> 'id', '')));\r\n  v_device text := left(trim(coalesce(p_device_id, '')), 100);\r\nbegin\r\n  if v_user is null then\r\n    raise exception 'Authentication session required' using errcode = '42501';\r\n  end if;\r\n  if not exists (\r\n    select 1 from auth.users u where u.id = v_user\r\n      and coalesce(u.is_anonymous, false) = false\r\n      and coalesce(u.raw_app_meta_data ->> 'provider', '') <> 'anonymous'\r\n  ) then\r\n    raise exception 'A durable authenticated Account is required' using errcode = '42501';\r\n  end if;\r\n  if v_code !~ '^DYE-[1-9][0-9]{5}$' and v_code !~ '^[A-Z0-9]{12}$' then\r\n    raise exception 'Invalid Shared Match code' using errcode = '22023';\r\n  end if;\r\n  if v_device = '' then\r\n    raise exception 'Device attribution required' using errcode = '22023';\r\n  end if;\r\n  select m.created_by into v_existing_owner from public.matches m where m.id = v_code;\r\n  if found and v_existing_owner is distinct from v_user then\r\n    raise exception 'Shared Match Owner authorization required' using errcode = '42501';\r\n  end if;\r\n  v_match := jsonb_populate_record(null::public.matches, p_match);\r\n  v_match.id := v_code;\r\n  v_match.created_by := v_user;\r\n  insert into public.matches select (v_match).*\r\n  on conflict (id) do nothing;\r\n  insert into public.match_memberships(\r\n    id, match_id, user_id, role, status, joined_at, last_seen_at, device_label\r\n  ) values (\r\n    v_code || ':member:' || v_user::text || ':' || v_device,\r\n    v_code, v_user, 'organizer', 'active', now(), now(),\r\n    left(p_device_label, 500)\r\n  ) on conflict (id) do update set\r\n    status = 'active', last_seen_at = now(), device_label = excluded.device_label;\r\n  return v_code;\r\nend $function$\n",
+      "privileges": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "security_definer": true
+    },
+    {
+      "owner": "postgres",
+      "result": "courses",
+      "nspname": "public",
+      "proname": "publish_course",
+      "arguments": "p_course_id text",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.publish_course(p_course_id text)\n RETURNS courses\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\r\ndeclare\r\n  result public.courses;\r\n  v_course_id text := nullif(btrim(p_course_id), '');\r\nbegin\r\n  if not public.course_library_is_maintainer() then\r\n    raise exception 'Course maintainer authorization required' using errcode = '42501';\r\n  end if;\r\n  if v_course_id is null then\r\n    raise exception 'Course id is required';\r\n  end if;\r\n\r\n  select * into result\r\n  from public.courses\r\n  where id::text = v_course_id\r\n    and publication_status = 'draft'\r\n  for update;\r\n  if not found then\r\n    raise exception 'Draft course not found';\r\n  end if;\r\n\r\n  if not exists (select 1 from public.course_tees tee where tee.course_id::text = v_course_id) then\r\n    raise exception 'Course approval failed: at least one tee is required';\r\n  end if;\r\n  if exists (\r\n    select 1\r\n    from public.course_tees tee\r\n    left join public.course_holes hole on hole.tee_id = tee.id\r\n    where tee.course_id::text = v_course_id\r\n    group by tee.id, tee.tee_name\r\n    having count(hole.id) not in (9, 18)\r\n  ) then\r\n    raise exception 'Course approval failed: every tee must contain exactly 9 or 18 holes';\r\n  end if;\r\n  if exists (\r\n    select 1\r\n    from public.course_tees tee\r\n    where tee.course_id::text = v_course_id\r\n    group by lower(btrim(tee.tee_name)), tee.gender\r\n    having count(*) > 1\r\n  ) then\r\n    raise exception 'Course approval failed: duplicate tee name and gender identities exist';\r\n  end if;\r\n\r\n  update public.courses\r\n  set publication_status = 'approved',\r\n      source = 'maintainer',\r\n      approved_by = auth.uid(),\r\n      approved_at = now(),\r\n      updated_at = now()\r\n  where id::text = v_course_id\r\n    and publication_status = 'draft'\r\n  returning * into result;\r\n  if result.id is null then\r\n    raise exception 'Draft course not found';\r\n  end if;\r\n  return result;\r\nend $function$\n",
+      "privileges": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "security_definer": true
+    },
+    {
+      "owner": "postgres",
+      "result": "boolean",
+      "nspname": "public",
+      "proname": "course_library_can_write",
+      "arguments": "",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.course_library_can_write()\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select auth.uid() is not null\n    and coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false) = false\n    and exists (select 1 from public.course_library_roles r\n      where r.user_id = auth.uid() and (r.can_create_drafts or r.is_maintainer));\n$function$\n",
+      "privileges": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "security_definer": true
+    },
+    {
+      "owner": "postgres",
+      "result": "boolean",
+      "nspname": "public",
+      "proname": "course_library_is_maintainer",
+      "arguments": "",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.course_library_is_maintainer()\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select auth.uid() is not null\n    and coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false) = false\n    and exists (select 1 from public.course_library_roles r\n      where r.user_id = auth.uid() and r.is_maintainer);\n$function$\n",
+      "privileges": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "security_definer": true
+    },
+    {
+      "owner": "postgres",
+      "result": "trigger",
+      "nspname": "public",
+      "proname": "stamp_shared_match_owner",
+      "arguments": "",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.stamp_shared_match_owner()\n RETURNS trigger\n LANGUAGE plpgsql\n SET search_path TO ''\nAS $function$\nbegin\n  if new.created_by is null then new.created_by := auth.uid(); end if;\n  return new;\nend $function$\n",
+      "privileges": "{postgres=X/postgres,service_role=X/postgres}",
+      "security_definer": false
+    },
+    {
+      "owner": "postgres",
+      "result": "boolean",
+      "nspname": "public",
+      "proname": "shared_match_is_member",
+      "arguments": "p_match_id text",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.shared_match_is_member(p_match_id text)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select auth.uid() is not null and (\n    exists (select 1 from public.matches m where m.id = p_match_id and m.created_by = auth.uid())\n    or exists (select 1 from public.match_memberships mm\n      where mm.match_id = p_match_id and mm.user_id = auth.uid() and mm.status = 'active')\n  );\n$function$\n",
+      "privileges": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "security_definer": true
+    },
+    {
+      "owner": "postgres",
+      "result": "text",
+      "nspname": "public",
+      "proname": "join_shared_match",
+      "arguments": "p_match_code text, p_device_id text, p_device_label text",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.join_shared_match(p_match_code text, p_device_id text, p_device_label text DEFAULT NULL::text)\n RETURNS text\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\ndeclare v_code text := upper(trim(coalesce(p_match_code,''))); v_user uuid := auth.uid();\nbegin\n  if v_user is null then raise exception 'Authentication session required' using errcode='42501'; end if;\n  if v_code !~ '^DYE-[1-9][0-9]{5}$' and v_code !~ '^[A-Z0-9]{12}$' then\n    raise exception 'Invalid Shared Match code' using errcode='22023';\n  end if;\n  if not exists (select 1 from public.matches where id=v_code and status='active') then\n    raise exception 'Shared Match not found' using errcode='P0002';\n  end if;\n  if nullif(trim(coalesce(p_device_id,'')),'') is null then\n    raise exception 'Device attribution required' using errcode='22023';\n  end if;\n  insert into public.match_memberships(id,match_id,user_id,role,status,joined_at,last_seen_at,device_label)\n  values (v_code||':member:'||v_user::text||':'||left(trim(p_device_id),100), v_code, v_user, 'team_scorer', 'active', now(), now(), left(p_device_label,500))\n  on conflict (id) do update set status='active', last_seen_at=now(), device_label=excluded.device_label;\n  return v_code;\nend $function$\n",
+      "privileges": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "security_definer": true
+    },
+    {
+      "owner": "postgres",
+      "result": "boolean",
+      "nspname": "public",
+      "proname": "shared_match_is_organizer",
+      "arguments": "p_match_id text",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.shared_match_is_organizer(p_match_id text)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select auth.uid() is not null and (\n    exists (select 1 from public.matches m where m.id = p_match_id and m.created_by = auth.uid())\n    or exists (select 1 from public.match_memberships mm\n      where mm.match_id = p_match_id and mm.user_id = auth.uid()\n        and mm.status = 'active' and mm.role = 'organizer')\n  );\n$function$\n",
+      "privileges": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "security_definer": true
+    },
+    {
+      "owner": "postgres",
+      "result": "trigger",
+      "nspname": "public",
+      "proname": "provision_durable_account",
+      "arguments": "",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.provision_durable_account()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\r\nbegin\r\n  if coalesce(new.is_anonymous, false) = false\r\n     and coalesce(new.raw_app_meta_data ->> 'provider', '') <> 'anonymous' then\r\n    insert into public.accounts(account_id) values (new.id)\r\n    on conflict (account_id) do nothing;\r\n  end if;\r\n  return new;\r\nend $function$\n",
+      "privileges": "{postgres=X/postgres,service_role=X/postgres}",
+      "security_definer": true
+    },
+    {
+      "owner": "postgres",
+      "result": "golfer_identities",
+      "nspname": "public",
+      "proname": "create_my_claimed_golfer_identity",
+      "arguments": "p_display_name text, p_nickname text",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "definition": "CREATE OR REPLACE FUNCTION public.create_my_claimed_golfer_identity(p_display_name text, p_nickname text DEFAULT NULL::text)\n RETURNS golfer_identities\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO ''\nAS $function$\r\ndeclare\r\n  v_account_id uuid := auth.uid();\r\n  v_display_name text := regexp_replace(trim(coalesce(p_display_name, '')), '\\s+', ' ', 'g');\r\n  v_nickname text := nullif(regexp_replace(trim(coalesce(p_nickname, '')), '\\s+', ' ', 'g'), '');\r\n  v_identity public.golfer_identities;\r\nbegin\r\n  if v_account_id is null then\r\n    raise exception 'A durable authenticated Account is required.' using errcode = '42501';\r\n  end if;\r\n  if char_length(v_display_name) < 2 or char_length(v_display_name) > 120 then\r\n    raise exception 'Full name must contain between 2 and 120 characters.' using errcode = '22023';\r\n  end if;\r\n  if char_length(coalesce(v_nickname, '')) > 80 then\r\n    raise exception 'Nickname must contain 80 characters or fewer.' using errcode = '22023';\r\n  end if;\r\n  insert into public.accounts(account_id)\r\n  select u.id from auth.users u\r\n  where u.id = v_account_id\r\n    and coalesce(u.is_anonymous, false) = false\r\n    and coalesce(u.raw_app_meta_data ->> 'provider', '') <> 'anonymous'\r\n  on conflict (account_id) do nothing;\r\n  if not exists (select 1 from public.accounts a where a.account_id = v_account_id) then\r\n    raise exception 'A durable authenticated Account is required.' using errcode = '42501';\r\n  end if;\r\n  select g.* into v_identity from public.golfer_identities g\r\n  where g.claimed_by_account_id = v_account_id;\r\n  if v_identity.golfer_identity_id is null then\r\n    insert into public.golfer_identities(\r\n      claim_status, claimed_by_account_id, display_name, profile, created_by_account_id\r\n    ) values (\r\n      'claimed', v_account_id, v_display_name,\r\n      jsonb_strip_nulls(jsonb_build_object('nickname', v_nickname)), v_account_id\r\n    ) returning * into v_identity;\r\n  end if;\r\n  insert into public.personal_golfer_library(account_id, golfer_identity_id)\r\n  values (v_account_id, v_identity.golfer_identity_id)\r\n  on conflict (account_id, golfer_identity_id) do nothing;\r\n  return v_identity;\r\nexception when unique_violation then\r\n  select g.* into v_identity from public.golfer_identities g\r\n  where g.claimed_by_account_id = v_account_id;\r\n  if v_identity.golfer_identity_id is null then raise; end if;\r\n  insert into public.personal_golfer_library(account_id, golfer_identity_id)\r\n  values (v_account_id, v_identity.golfer_identity_id)\r\n  on conflict (account_id, golfer_identity_id) do nothing;\r\n  return v_identity;\r\nend $function$\n",
+      "privileges": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "security_definer": true
+    },
+    {
+      "owner": "postgres",
+      "result": "bytea",
+      "nspname": "extensions",
+      "proname": "digest",
+      "arguments": "bytea, text",
+      "proconfig": null,
+      "definition": null,
+      "privileges": "{=X/postgres,postgres=X*/postgres,dashboard_user=X/postgres}",
+      "security_definer": false
+    },
+    {
+      "owner": "postgres",
+      "result": "bytea",
+      "nspname": "extensions",
+      "proname": "digest",
+      "arguments": "text, text",
+      "proconfig": null,
+      "definition": null,
+      "privileges": "{=X/postgres,postgres=X*/postgres,dashboard_user=X/postgres}",
+      "security_definer": false
+    },
+    {
+      "owner": "supabase_realtime_admin",
+      "result": "void",
+      "nspname": "realtime",
+      "proname": "broadcast_changes",
+      "arguments": "topic_name text, event_name text, operation text, table_name text, table_schema text, new record, old record, level text",
+      "proconfig": null,
+      "definition": null,
+      "privileges": "{=X/supabase_realtime_admin,supabase_realtime_admin=X/supabase_realtime_admin,postgres=X/supabase_realtime_admin,dashboard_user=X/supabase_realtime_admin}",
+      "security_definer": false
+    }
+  ],
+  "extensions": [
+    {
+      "name": "pgcrypto",
+      "schema": "extensions",
+      "version": "1.3"
+    }
+  ],
+  "captured_at": "2026-10-21T00:21:50.534227+00:00",
+  "constraints": [
+    {
+      "name": "course_library_roles_pkey",
+      "table": "course_library_roles",
+      "schema": "public",
+      "definition": "PRIMARY KEY (user_id)"
+    },
+    {
+      "name": "course_library_roles_user_id_fkey",
+      "table": "course_library_roles",
+      "schema": "public",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "team_access_codes_match_id_fkey",
+      "table": "team_access_codes",
+      "schema": "public",
+      "definition": "FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "team_access_codes_pkey",
+      "table": "team_access_codes",
+      "schema": "public",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "team_access_codes_role_check",
+      "table": "team_access_codes",
+      "schema": "public",
+      "definition": "CHECK (role = ANY (ARRAY['team_scorer'::text, 'viewer'::text]))"
+    },
+    {
+      "name": "team_access_codes_status_check",
+      "table": "team_access_codes",
+      "schema": "public",
+      "definition": "CHECK (status = ANY (ARRAY['active'::text, 'revoked'::text, 'expired'::text, 'claimed'::text]))"
+    },
+    {
+      "name": "team_access_codes_team_id_fkey",
+      "table": "team_access_codes",
+      "schema": "public",
+      "definition": "FOREIGN KEY (team_id) REFERENCES match_teams(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "matches_hole_count_check",
+      "table": "matches",
+      "schema": "public",
+      "definition": "CHECK (hole_count = ANY (ARRAY[9, 18]))"
+    },
+    {
+      "name": "matches_pkey",
+      "table": "matches",
+      "schema": "public",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "matches_scoring_access_mode_check",
+      "table": "matches",
+      "schema": "public",
+      "definition": "CHECK (scoring_access_mode = ANY (ARRAY['single_device'::text, 'team_codes'::text, 'open_edit'::text]))"
+    },
+    {
+      "name": "matches_status_check",
+      "table": "matches",
+      "schema": "public",
+      "definition": "CHECK (status = ANY (ARRAY['active'::text, 'complete'::text]))"
+    },
+    {
+      "name": "match_memberships_match_id_fkey",
+      "table": "match_memberships",
+      "schema": "public",
+      "definition": "FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "match_memberships_pkey",
+      "table": "match_memberships",
+      "schema": "public",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "match_memberships_role_check",
+      "table": "match_memberships",
+      "schema": "public",
+      "definition": "CHECK (role = ANY (ARRAY['organizer'::text, 'team_scorer'::text, 'viewer'::text]))"
+    },
+    {
+      "name": "match_memberships_status_check",
+      "table": "match_memberships",
+      "schema": "public",
+      "definition": "CHECK (status = ANY (ARRAY['active'::text, 'revoked'::text]))"
+    },
+    {
+      "name": "users_email_change_confirm_status_check",
+      "table": "users",
+      "schema": "auth",
+      "definition": "CHECK (email_change_confirm_status >= 0 AND email_change_confirm_status <= 2)"
+    },
+    {
+      "name": "users_phone_key",
+      "table": "users",
+      "schema": "auth",
+      "definition": "UNIQUE (phone)"
+    },
+    {
+      "name": "users_pkey",
+      "table": "users",
+      "schema": "auth",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "match_teams_match_id_fkey",
+      "table": "match_teams",
+      "schema": "public",
+      "definition": "FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "match_teams_match_id_team_number_key",
+      "table": "match_teams",
+      "schema": "public",
+      "definition": "UNIQUE (match_id, team_number)"
+    },
+    {
+      "name": "match_teams_pkey",
+      "table": "match_teams",
+      "schema": "public",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "match_players_match_id_fkey",
+      "table": "match_players",
+      "schema": "public",
+      "definition": "FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "match_players_match_id_player_id_key",
+      "table": "match_players",
+      "schema": "public",
+      "definition": "UNIQUE (match_id, player_id)"
+    },
+    {
+      "name": "match_players_pkey",
+      "table": "match_players",
+      "schema": "public",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "match_players_team_id_fkey",
+      "table": "match_players",
+      "schema": "public",
+      "definition": "FOREIGN KEY (team_id) REFERENCES match_teams(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "score_entries_match_id_fkey",
+      "table": "score_entries",
+      "schema": "public",
+      "definition": "FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "score_entries_match_id_match_player_id_hole_number_key",
+      "table": "score_entries",
+      "schema": "public",
+      "definition": "UNIQUE (match_id, match_player_id, hole_number)"
+    },
+    {
+      "name": "score_entries_match_player_id_fkey",
+      "table": "score_entries",
+      "schema": "public",
+      "definition": "FOREIGN KEY (match_player_id) REFERENCES match_players(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "score_entries_pkey",
+      "table": "score_entries",
+      "schema": "public",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "score_entries_team_id_fkey",
+      "table": "score_entries",
+      "schema": "public",
+      "definition": "FOREIGN KEY (team_id) REFERENCES match_teams(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "match_notes_match_id_fkey",
+      "table": "match_notes",
+      "schema": "public",
+      "definition": "FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "match_notes_pkey",
+      "table": "match_notes",
+      "schema": "public",
+      "definition": "PRIMARY KEY (match_id)"
+    },
+    {
+      "name": "audit_log_match_id_fkey",
+      "table": "audit_log",
+      "schema": "public",
+      "definition": "FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "audit_log_pkey",
+      "table": "audit_log",
+      "schema": "public",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "courses_approved_by_fkey",
+      "table": "courses",
+      "schema": "public",
+      "definition": "FOREIGN KEY (approved_by) REFERENCES auth.users(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "courses_owner_user_id_fkey",
+      "table": "courses",
+      "schema": "public",
+      "definition": "FOREIGN KEY (owner_user_id) REFERENCES auth.users(id) ON DELETE SET NULL"
+    },
+    {
+      "name": "courses_pkey",
+      "table": "courses",
+      "schema": "public",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "courses_publication_status_check",
+      "table": "courses",
+      "schema": "public",
+      "definition": "CHECK (publication_status = ANY (ARRAY['draft'::text, 'approved'::text, 'rejected'::text, 'archived'::text]))"
+    },
+    {
+      "name": "course_holes_course_id_fkey",
+      "table": "course_holes",
+      "schema": "public",
+      "definition": "FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "course_holes_pkey",
+      "table": "course_holes",
+      "schema": "public",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "course_holes_tee_id_fkey",
+      "table": "course_holes",
+      "schema": "public",
+      "definition": "FOREIGN KEY (tee_id) REFERENCES course_tees(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "course_holes_tee_id_hole_number_key",
+      "table": "course_holes",
+      "schema": "public",
+      "definition": "UNIQUE (tee_id, hole_number)"
+    },
+    {
+      "name": "accounts_account_id_fkey",
+      "table": "accounts",
+      "schema": "public",
+      "definition": "FOREIGN KEY (account_id) REFERENCES auth.users(id) ON DELETE RESTRICT"
+    },
+    {
+      "name": "accounts_pkey",
+      "table": "accounts",
+      "schema": "public",
+      "definition": "PRIMARY KEY (account_id)"
+    },
+    {
+      "name": "golfer_identities_check",
+      "table": "golfer_identities",
+      "schema": "public",
+      "definition": "CHECK ((claim_status = 'claimed'::text) = (claimed_by_account_id IS NOT NULL))"
+    },
+    {
+      "name": "golfer_identities_claim_status_check",
+      "table": "golfer_identities",
+      "schema": "public",
+      "definition": "CHECK (claim_status = ANY (ARRAY['claimed'::text, 'unclaimed'::text]))"
+    },
+    {
+      "name": "golfer_identities_claimed_by_account_id_fkey",
+      "table": "golfer_identities",
+      "schema": "public",
+      "definition": "FOREIGN KEY (claimed_by_account_id) REFERENCES accounts(account_id) ON DELETE RESTRICT"
+    },
+    {
+      "name": "golfer_identities_claimed_by_account_id_key",
+      "table": "golfer_identities",
+      "schema": "public",
+      "definition": "UNIQUE (claimed_by_account_id)"
+    },
+    {
+      "name": "golfer_identities_created_by_account_id_fkey",
+      "table": "golfer_identities",
+      "schema": "public",
+      "definition": "FOREIGN KEY (created_by_account_id) REFERENCES accounts(account_id) ON DELETE RESTRICT"
+    },
+    {
+      "name": "golfer_identities_pkey",
+      "table": "golfer_identities",
+      "schema": "public",
+      "definition": "PRIMARY KEY (golfer_identity_id)"
+    },
+    {
+      "name": "personal_golfer_library_account_id_fkey",
+      "table": "personal_golfer_library",
+      "schema": "public",
+      "definition": "FOREIGN KEY (account_id) REFERENCES accounts(account_id) ON DELETE CASCADE"
+    },
+    {
+      "name": "personal_golfer_library_golfer_identity_id_fkey",
+      "table": "personal_golfer_library",
+      "schema": "public",
+      "definition": "FOREIGN KEY (golfer_identity_id) REFERENCES golfer_identities(golfer_identity_id) ON DELETE RESTRICT"
+    },
+    {
+      "name": "personal_golfer_library_pkey",
+      "table": "personal_golfer_library",
+      "schema": "public",
+      "definition": "PRIMARY KEY (account_id, golfer_identity_id)"
+    },
+    {
+      "name": "devices_account_id_fkey",
+      "table": "devices",
+      "schema": "public",
+      "definition": "FOREIGN KEY (account_id) REFERENCES accounts(account_id) ON DELETE SET NULL"
+    },
+    {
+      "name": "devices_pkey",
+      "table": "devices",
+      "schema": "public",
+      "definition": "PRIMARY KEY (device_id)"
+    },
+    {
+      "name": "account_providers_account_id_fkey",
+      "table": "account_providers",
+      "schema": "public",
+      "definition": "FOREIGN KEY (account_id) REFERENCES accounts(account_id) ON DELETE CASCADE"
+    },
+    {
+      "name": "account_providers_account_id_provider_key",
+      "table": "account_providers",
+      "schema": "public",
+      "definition": "UNIQUE (account_id, provider)"
+    },
+    {
+      "name": "account_providers_pkey",
+      "table": "account_providers",
+      "schema": "public",
+      "definition": "PRIMARY KEY (provider, provider_subject_hash)"
+    },
+    {
+      "name": "course_tees_course_id_fkey",
+      "table": "course_tees",
+      "schema": "public",
+      "definition": "FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE"
+    },
+    {
+      "name": "course_tees_gender_check",
+      "table": "course_tees",
+      "schema": "public",
+      "definition": "CHECK (gender = ANY (ARRAY['M'::text, 'F'::text]))"
+    },
+    {
+      "name": "course_tees_pkey",
+      "table": "course_tees",
+      "schema": "public",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "messages_payload_exclusive",
+      "table": "messages",
+      "schema": "realtime",
+      "definition": "CHECK (payload IS NULL OR binary_payload IS NULL) NOT VALID"
+    },
+    {
+      "name": "messages_pkey",
+      "table": "messages",
+      "schema": "realtime",
+      "definition": "PRIMARY KEY (id, inserted_at)"
+    }
+  ],
+  "audit_version": "v31.0.77/all-13/read-only",
+  "migration_history": "<table xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">\n\n<row>\n  <version>202608070001</version>\n</row>\n\n</table>\n"
+}

@@ -80,8 +80,9 @@ function createBrowserShim() {
   return sandbox;
 }
 
-export function loadLiveEngine(appPath = DEFAULT_APP_PATH) {
+export function loadLiveEngine(appPath = DEFAULT_APP_PATH, {storageEntries = []} = {}) {
   const sandbox = createBrowserShim();
+  for(const [key,value] of storageEntries)sandbox.localStorage.setItem(key,value);
   vm.createContext(sandbox);
   vm.runInContext(fs.readFileSync(new URL('../ledger-report/stroke-play.js',import.meta.url),'utf8'),sandbox);
   vm.runInContext(fs.readFileSync(appPath, 'utf8'), sandbox, { filename: appPath });

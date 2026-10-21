@@ -12,7 +12,8 @@ test('sign-in errors, access denial and network failures have distinct recovery 
  const {e}=seed();
  for(const code of ['SHARED_SIGN_IN_REQUIRED','PGRST301','401','session_not_found'])assert.equal(e.getSharedAccountRecovery({code}).kind,'sign-in');
  assert.equal(e.getSharedAccountRecovery({code:'42501'}).kind,'permission');assert.equal(e.getSharedAccountRecovery({status:403}).kind,'permission');
- assert.equal(e.isPermanentSharedScoreDeliveryError({code:'SHARED_SIGN_IN_REQUIRED'}),true);
+ // Authentication failure must never permanently suppress queued score delivery.
+ assert.equal(e.isPermanentSharedScoreDeliveryError({code:'SHARED_SIGN_IN_REQUIRED'}),false);
  assert.equal(e.getSharedAccountRecovery({status:503,message:'Failed to fetch'}),null);assert.match(e.getSharedFriendlyError({message:'Failed to fetch'}),/unavailable/);
 });
 test('access failures invalidate cloud confirmation without inventing 144 missing rows or touching local scores',()=>{

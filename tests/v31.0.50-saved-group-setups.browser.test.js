@@ -154,7 +154,10 @@ test('landing selector loads legacy templates and missing golfers/courses stay v
     const template=groupTemplate(fixture,1);template.courseId='gone';template.players[0].playerId='gone';
     await page.evaluate(template=>{localStorage.setItem('dyeLedger.matchTemplates.v1',JSON.stringify([template]));localStorage.removeItem('the-dye-ledger-v20:setup-draft');},template);
     await page.reload({waitUntil:'load'});
+    // load fires before asynchronous setup rendering has made the landing controls visible.
+    await page.waitForSelector('#savedGroupSetupLandingSelect',{visible:true});
     await page.select('#savedGroupSetupLandingSelect',template.id);
+    await page.waitForSelector('[data-load-group-setup="savedGroupSetupLandingSelect"]',{visible:true});
     await page.click('[data-load-group-setup="savedGroupSetupLandingSelect"]');
     assert.match(await page.$eval('#groupSetupNotice',node=>node.textContent),/no longer in your library/);
     assert.equal(await page.$eval('#matchCourseSelect',node=>node.value),'');

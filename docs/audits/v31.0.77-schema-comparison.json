@@ -1,0 +1,318 @@
+{
+  "capturedAt": "2026-10-21T00:21:50.534227+00:00",
+  "csvSha256": "56a74814d043b005fa254e0e7db52ad158e1715916461ec8e968beee992e311e",
+  "classificationBasis": "Observable cumulative schema effects, not proof of historical script execution or least-privilege certification. Extra identity-table grants are reported separately.",
+  "classifications": {
+    "202607160001": "Partially applied",
+    "202607220001": "Applied",
+    "202607220002": "Absent",
+    "202607220003": "Applied",
+    "202608060001": "Applied",
+    "202608070001": "Applied",
+    "202608090001": "Applied",
+    "202608100001": "Absent",
+    "202608210001": "Applied",
+    "202608210002": "Applied",
+    "202609020001": "Applied",
+    "202609020002": "Applied",
+    "202610040001": "Applied"
+  },
+  "functionComparisons": [
+    {
+      "function": "revise_approved_course",
+      "source": "202610040001_v31_0_47_course_revision.sql",
+      "normalizedBodySha256": "ea0d9bf49f5638d8ba9e661db2a2dd90251b08d6bff67f75e366cb457fc18c29",
+      "bodyMatches": true,
+      "securityDefinerMatches": true,
+      "emptySearchPath": true,
+      "privileges": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "function": "publish_course_draft_atomic",
+      "source": "202609020001_v31_0_27_course_tee_gender_identity.sql",
+      "normalizedBodySha256": "406d392350b176f98c02fe6a2c4f1bad19debf7c34c35a9d0565b92670cbd411",
+      "bodyMatches": true,
+      "securityDefinerMatches": true,
+      "emptySearchPath": true,
+      "privileges": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "function": "publish_shared_match_owner",
+      "source": "202608090001_v30_3_96_identity_shared_publish_remediation.sql",
+      "normalizedBodySha256": "89d4adb95ff109f8dd31c7e185825c06e9b0e5b51f4e2b6f2c063e3209ade6c7",
+      "bodyMatches": true,
+      "securityDefinerMatches": true,
+      "emptySearchPath": true,
+      "privileges": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "function": "publish_course",
+      "source": "202609020002_v31_0_29_course_approval_reliability.sql",
+      "normalizedBodySha256": "c9a0713dc0f7fcde1becad267fa6ca7fb55ddf1fda4501f0c147fd846dd05fdf",
+      "bodyMatches": true,
+      "securityDefinerMatches": true,
+      "emptySearchPath": true,
+      "privileges": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "function": "course_library_can_write",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "normalizedBodySha256": "edce2fe806d9846a34ea1421137aa985aed5f240eea5d036c350d84154367718",
+      "bodyMatches": true,
+      "securityDefinerMatches": true,
+      "emptySearchPath": true,
+      "privileges": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "function": "course_library_is_maintainer",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "normalizedBodySha256": "e56cc4d6d3ec2613bdc4333b1ca0a6a7038f2aaca60e9e94cc5e83bb4ed2e875",
+      "bodyMatches": true,
+      "securityDefinerMatches": true,
+      "emptySearchPath": true,
+      "privileges": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "function": "stamp_shared_match_owner",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "normalizedBodySha256": "9877ef7619aab0c680cdb7d77e714d29e1702d4f3f8ceb1e3c8e74dad5948754",
+      "bodyMatches": true,
+      "securityDefinerMatches": true,
+      "emptySearchPath": true,
+      "privileges": "{postgres=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "function": "shared_match_is_member",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "normalizedBodySha256": "7f8224091c10d034e3adc3692d5290e378c202f1e902987958896158bdb9f267",
+      "bodyMatches": true,
+      "securityDefinerMatches": true,
+      "emptySearchPath": true,
+      "privileges": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "function": "join_shared_match",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "normalizedBodySha256": "9ad85680f13411278c58e6958a8e5c1b123141e608c5d0118119d5e0dd6c1782",
+      "bodyMatches": true,
+      "securityDefinerMatches": true,
+      "emptySearchPath": true,
+      "privileges": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "function": "shared_match_is_organizer",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "normalizedBodySha256": "47184b3e614d21795f6e09b961ca9f49e25c3cba4104001d4066f14d83f0dfc9",
+      "bodyMatches": true,
+      "securityDefinerMatches": true,
+      "emptySearchPath": true,
+      "privileges": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "function": "provision_durable_account",
+      "source": "202608090001_v30_3_96_identity_shared_publish_remediation.sql",
+      "normalizedBodySha256": "5f29538190302f093aec636574ea766d524b28e9b99b19180f48bcdfd8def40d",
+      "bodyMatches": true,
+      "securityDefinerMatches": true,
+      "emptySearchPath": true,
+      "privileges": "{postgres=X/postgres,service_role=X/postgres}"
+    },
+    {
+      "function": "create_my_claimed_golfer_identity",
+      "source": "202608090001_v30_3_96_identity_shared_publish_remediation.sql",
+      "normalizedBodySha256": "d41ff73e2834fd21a9bb0c058edb8e3f75a10be1e34aec1e438008545fcf3d6d",
+      "bodyMatches": true,
+      "securityDefinerMatches": true,
+      "emptySearchPath": true,
+      "privileges": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}"
+    }
+  ],
+  "policyComparisons": [
+    {
+      "table": "courses",
+      "policy": "courses_public_read",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "courses",
+      "policy": "courses_authorized_insert",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "courses",
+      "policy": "courses_authorized_update",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "matches",
+      "policy": "matches_owner_insert",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "matches",
+      "policy": "matches_member_update",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "courses",
+      "policy": "courses_authorized_delete",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "course_tees",
+      "policy": "course_tees_public_read",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "course_tees",
+      "policy": "course_tees_authorized_write",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "course_holes",
+      "policy": "course_holes_public_read",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "course_holes",
+      "policy": "course_holes_authorized_write",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "matches",
+      "policy": "matches_member_select",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "match_memberships",
+      "policy": "memberships_member_select",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "match_memberships",
+      "policy": "memberships_owner_insert",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "match_memberships",
+      "policy": "memberships_self_update",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "match_teams",
+      "policy": "teams_member_all",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "match_players",
+      "policy": "players_member_all",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "score_entries",
+      "policy": "scores_member_all",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "match_notes",
+      "policy": "notes_member_all",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "audit_log",
+      "policy": "audit_member_select",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "audit_log",
+      "policy": "audit_member_insert",
+      "source": "202608070001_v30_3_93_production_security_activation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "accounts",
+      "policy": "accounts_self_select",
+      "source": "202608090001_v30_3_96_identity_shared_publish_remediation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "accounts",
+      "policy": "accounts_self_insert",
+      "source": "202608090001_v30_3_96_identity_shared_publish_remediation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "accounts",
+      "policy": "accounts_self_update",
+      "source": "202608090001_v30_3_96_identity_shared_publish_remediation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "golfer_identities",
+      "policy": "golfer_library_visible",
+      "source": "202608090001_v30_3_96_identity_shared_publish_remediation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "golfer_identities",
+      "policy": "golfer_unclaimed_insert",
+      "source": "202608090001_v30_3_96_identity_shared_publish_remediation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "personal_golfer_library",
+      "policy": "personal_library_owner_all",
+      "source": "202608090001_v30_3_96_identity_shared_publish_remediation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "account_providers",
+      "policy": "account_providers_owner_select",
+      "source": "202608090001_v30_3_96_identity_shared_publish_remediation.sql",
+      "expressionsCommandAndRolesMatch": true
+    },
+    {
+      "table": "devices",
+      "policy": "devices_owner_all",
+      "source": "202608090001_v30_3_96_identity_shared_publish_remediation.sql",
+      "expressionsCommandAndRolesMatch": true
+    }
+  ],
+  "absentTables": [
+    "authoritative_rounds",
+    "round_access",
+    "round_participations",
+    "scoring_assignments",
+    "round_record_versions",
+    "amendment_sessions",
+    "security_audit_log",
+    "shared_score_operations"
+  ],
+  "extension": [
+    {
+      "name": "pgcrypto",
+      "schema": "extensions",
+      "version": "1.3"
+    }
+  ],
+  "migrationHistory": "<table xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">\n\n<row>\n  <version>202608070001</version>\n</row>\n\n</table>\n"
+}

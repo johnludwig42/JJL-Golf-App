@@ -138,5 +138,9 @@ test('technical diagnostics expose every completion reason code without golfer-f
   const codes = ['ASSIGNMENT_REJECTED', 'ASSIGNMENT_REPLACED', 'OFFLINE_SCORE_RETAINED', 'STALE_SCORE_IGNORED', 'DUPLICATE_SCORE_IGNORED', 'DUPLICATE_PRESS_IGNORED', 'DUPLICATE_SSP_IGNORED', 'RECONNECT', 'AUTHORITATIVE_OVERWRITE', 'JOINED_OVERWRITE_PREVENTED'];
   codes.forEach((code, index) => engine.recordSharedSyncDiagnostic(match, code, { playerId: `p${index}` }, `2026-07-15T13:${String(index).padStart(2, '0')}:00Z`));
   assert.deepEqual(JSON.parse(JSON.stringify(match.sharedSyncDiagnostics.map(row => row.reasonCode))), codes);
-  assert.doesNotMatch(appSource.match(/function getSharedSyncStatus[\s\S]*?function formatSharedLastSync/)?.[0] || '', /payload|transport|replication|reconciliation/i);
+  // Check golfer-visible strings, not source identifiers used by diagnostics.
+  for(const options of [{},{sharedScoreDeliveryTransport:{kind:'direct'}},{cloudSyncState:'pending-sync'}]){
+    const status=engine.getSharedSyncStatus({...match,...options});
+    assert.doesNotMatch(status.label+' '+status.detail,/payload|transport|replication|reconciliation/i);
+  }
 });

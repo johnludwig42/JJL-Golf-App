@@ -51,14 +51,17 @@ test('all pending matches drain independently regardless of active identity', as
   assert.equal(result.remaining, 0);
 });
 
-test('permanent delivery failures are distinguished from transient failures', () => {
+test('authorization failures require intervention but never permanently abandon delivery', () => {
   const engine = loadLiveEngine();
-  assert.equal(engine.isPermanentSharedScoreDeliveryError({ status: 403 }), true);
-  assert.equal(engine.isPermanentSharedScoreDeliveryError({ code: '42501', message: 'permission denied' }), true);
+  assert.equal(engine.isPermanentSharedScoreDeliveryError({ status: 403 }), false);
+  assert.equal(engine.isPermanentSharedScoreDeliveryError({ code: '42501', message: 'permission denied' }), false);
+  assert.equal(engine.sharedDeliveryCategory({code:'42501'}),'needs-action');
   assert.equal(engine.isPermanentSharedScoreDeliveryError({ status: 503, message: 'network unavailable' }), false);
 });
 
-test('a permanent rejection is surfaced once and not retried on later drain passes', async () => {
+test('a rejected match retries after durable backoff rather than being poisoned for the session', async () => {
+  // The former test enforced session-long abandonment, including expired tokens.
+  // Retain the queue, bound retries, and reconsider delivery when it becomes due.
   const engine = loadLiveEngine();
   const storage = memoryStorage();
   const match = shared('permanent');
@@ -66,11 +69,14 @@ test('a permanent rejection is surfaced once and not retried on later drain pass
   let attempts = 0;
   const options = { matches: [match], storage, cloudAvailable: true, scheduleContinuation: false, delivery: async () => {
     attempts += 1;
-    return { ok: false, permanent: true, pending: 1 };
+    return { ok: false, pending: 1, error:{code:'42501',message:'Permission denied'} };
   } };
   await engine.drainPendingSharedScoreOutboxes(options);
   await engine.drainPendingSharedScoreOutboxes(options);
   assert.equal(attempts, 1);
+  engine.saveSharedDeliveryRetry(match,{nextRetryAt:null},storage);
+  await engine.drainPendingSharedScoreOutboxes(options);
+  assert.equal(attempts,2);
   assert.equal(engine.getSharedScoreOutboxOperations(match, storage).length, 1);
 });
 

@@ -104,25 +104,26 @@ test('remote receives host completion through score refresh, archives the frozen
 test('host completion never discards remote queued scores, unsaved fields or recovery after local save failure',{skip:!chrome,timeout:60000},async()=>{
  const server=await startServer(),browser=await puppeteer.launch({executablePath:chrome,headless:true,args:['--no-sandbox','--disable-gpu']});
  try{
-  for(const mode of ['outbox','resume','conflict','unsaved','storage']){
+  for(const mode of ['outbox','resume','conflict','unsaved','storage','outbox-unsaved']){
    const seeded=fixture(true),page=await openVisualPage(browser,`http://127.0.0.1:${server.address().port}/`,'classic',375,false,false,false,seeded);
    await page.select('#currentHoleSelect','1');
    if(mode==='conflict')await page.evaluate(()=>{getActiveMatch().players.filter(p=>['p4','p5'].includes(p.playerId)).forEach(p=>p.scores[0].gross=7);persist({skipRender:true});renderCurrentMatch();});
    await cloudClient(page,seeded.cloud);
-   if(['outbox','resume'].includes(mode))await page.evaluate(()=>stampSharedScoreWrite(getActiveMatch(),'p4',1));
+   if(['outbox','resume','outbox-unsaved'].includes(mode))await page.evaluate(()=>stampSharedScoreWrite(getActiveMatch(),'p4',1));
    if(mode==='resume'){
     await page.evaluate(()=>Object.defineProperty(navigator,'onLine',{value:true,configurable:true}));
     const delivery=await page.evaluate(()=>drainPendingSharedScoreOperationsForMatch(getActiveMatch()));
-    assert.equal(delivery.skipped,true);assert.equal(delivery.pending,1);assert.equal(delivery.permanent,true);
+    // Closed delivery now drains only after durable preservation, not permanent retry suppression.
+    assert.equal(delivery.ok,true);assert.equal(delivery.pending,0);assert.equal(delivery.outcome,'complete-with-exceptions');
    }
-   if(mode==='unsaved')await page.$eval('[data-score-team="3"]',n=>{n.value='7';});
+   if(['unsaved','outbox-unsaved'].includes(mode))await page.$eval('[data-score-team="3"]',n=>{n.value='7';});
    if(mode==='storage')await page.evaluate(()=>{Storage.prototype.setItem=function(){throw new DOMException('Full','QuotaExceededError');};});
    await page.evaluate(()=>refreshActiveSharedScores());
    assert.equal(await page.evaluate(()=>state.activeMatchId),'r',mode);
    const pending=await page.evaluate(()=>getActiveMatch().remoteCompletionPending);assert.ok(pending,mode);
    if(mode==='conflict'){assert.match(pending.reason,/saved scores differ/);assert.equal(pending.localScoreConflicts.length,2);assert.equal(pending.localScoreConflicts[0].gross,7);assert.equal(pending.localScoreConflicts[0].frozenGross,5);}
-   if(['outbox','resume'].includes(mode))assert.equal(await page.evaluate(()=>getSharedScoreOutboxOperations(getActiveMatch()).length),1);
-   if(mode==='unsaved'){
+   if(['outbox','resume','outbox-unsaved'].includes(mode)){assert.equal(await page.evaluate(()=>getSharedScoreOutboxOperations(getActiveMatch()).length),0);assert.equal(await page.evaluate(()=>getSharedScoresPreservedForHostReview(getActiveMatch()).length),1);assert.match(pending.reason,mode==='outbox-unsaved'?/unsaved entry/:/complete with exceptions/);}
+   if(['unsaved','outbox-unsaved'].includes(mode)){
     assert.equal(await page.$eval('[data-score-team="3"]',n=>n.value),'7');assert.ok(pending.unsavedEntries?.some(row=>row.playerId==='p4'&&row.value==='7'),JSON.stringify({reason:pending.reason,unsaved:pending.unsavedEntries}));
     await preserveOnNavigation(page);await page.reload({waitUntil:'load'});await page.click('[data-tab="score"]');await cloudClient(page,seeded.cloud);await page.evaluate(()=>refreshActiveSharedScores());
     assert.equal(await page.evaluate(()=>state.activeMatchId),'r');assert.ok(await page.evaluate(()=>getActiveMatch().remoteCompletionPending.unsavedEntries.some(row=>row.value==='7')));

@@ -4,6 +4,8 @@
 **Status:** Living Document  
 **Purpose:** Single starting context for Codex, ChatGPT, and future developers.
 
+Review-only completion extension: owner approved common RPC/direct P7701 closure protection, identical-value no-ops, durable client preservation under remoteCompletionPending and mandatory client-before-server rollout. See supabase/proposals/shared-score-rpc-v31.0.77/README.md. Client changes are supplied as a tested review patch, not a new released build; production SQL remains unapproved.
+
 ## 1. Project Identity
 
 The Dye Ledger is an iPhone-first, offline-first Progressive Web App for golf scoring, wagering, statistics, AI-generated storytelling, and long-term golf memories.
@@ -27,6 +29,8 @@ Guiding principles:
 - Keep scoring fast, simple, and reliable.
 - Preserve user data.
 - Prefer additive changes.
+
+Current review work: **Shared score RPC proposal** on codex/shared-score-rpc-rollout-review, from committed v31.0.77 (91eac02), clean start. Review-only SQL is under supabase/proposals/shared-score-rpc-v31.0.77/, outside migration discovery. Corrected digest/record calls and non-destructive rollback/restore were rehearsed in disposable local PostgreSQL; Supabase staging/API/cache acceptance is still pending. The old RPC's completed-write gap now has an owner-approved review-only common guard, monotonic closure latch and tested client patch; no production SQL or new client release was applied. See the proposal README and docs/architecture/CONSTITUTIONAL_REVIEW_SHARED_RPC_PROPOSAL.md.
 
 Current development release: **v31.0.77 — Shared Match Delivery Reliability** on codex/v31.0.77-shared-match-delivery, from committed .76 (1c6968e). Revised Phase 1 preserves direct uploads while making their weaker guarantees visible; durable non-terminal retry, session readiness, honest per-device status and non-truncating outbox retention are server-independent. RPC batching/immutable payloads are retained as a separately tested repository contract, not claimed deployed. Production catalog audit is complete: 10 cumulative migration effects present, 1 partial (.75A), 2 absent (July RoundRecord security and August score reliability). RPC deployment remains blocked by confirmed digest/broadcast compatibility defects; existing broad score RLS and identity-table over-grants are documented for separate review. No production changes or Phase 2 work. See BUILD_NOTES_v31.0.77.md and docs/DEPLOYED_SCHEMA_AUDIT_v31.0.77.md.
 

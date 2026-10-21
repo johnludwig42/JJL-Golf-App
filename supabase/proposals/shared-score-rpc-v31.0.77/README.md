@@ -4,6 +4,12 @@ Baseline: committed v31.0.77, `91eac02`. Branch: `codex/shared-score-rpc-rollout
 Nothing has been run against production. SQL lives outside `supabase/migrations`.
 **Do not run the historical RPC migration or paste this proposal into production.**
 
+Client promotion: the approved patch is implemented in **v31.0.78** on
+`codex/v31.0.78-closed-round-score-preservation`. The patch and local rehearsal
+report below remain historical review evidence against 91eac02. See
+`BUILD_NOTES_v31.0.78.md` for actual release-gate results. No server execution
+is approved by client preparation, commit or publication.
+
 ## Owner-approved scope
 
 The compatibility corrections qualify `extensions.digest` and adapt the notification

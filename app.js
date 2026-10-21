@@ -19,11 +19,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.77',
-  versionNumber: '31.0.77',
-  cacheName: 'the-dye-ledger-v31.0.77',
-  buildDate: '2026-10-20T23:02:37.000Z',
-  buildLabel: 'Shared Match Delivery Reliability'
+  version: 'v31.0.78',
+  versionNumber: '31.0.78',
+  cacheName: 'the-dye-ledger-v31.0.78',
+  buildDate: '2026-10-21T02:09:47.249Z',
+  buildLabel: 'Closed-Round Score Preservation'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -1395,6 +1395,8 @@ function getSanitizedSharedSyncDiagnostics(match) {
     participantId: getCurrentSharedParticipantId(match),
     syncState: String(match.cloudSyncState || ''),
     pendingScoreCount: getSharedScoreOutboxOperations(match).length,
+    preservedForHostReviewCount: getSharedScoresPreservedForHostReview(match).length,
+    deliveryOutcome: match.sharedDeliveryOutcome || null,
     deliveryRetry: getSharedDeliveryRetrySummary(match),
     deliveryReport: getLocalSharedDeliveryReport(match),
     scoreTransport: match.sharedScoreDeliveryTransport || null,
@@ -1451,25 +1453,25 @@ function normalizeSharedDeliveryReport(raw) {
   if(raw.v===1){
     const iso=value=>Number.isFinite(value)&&value>0&&Number.isFinite(new Date(value).getTime())?new Date(value).toISOString():null;
     raw={reportedAt:iso(raw.t),pendingHoles:raw.h,pendingWrites:raw.n,acknowledgedAt:iso(raw.a),parity:raw.p===1?'confirmed':'not-confirmed',
-      parityCheckedAt:iso(raw.c),retry:['ready','temporary','sign-in','needs-action'][raw.r],nextRetryAt:iso(raw.d),transport:['unknown','rpc','direct'][raw.m]};
+      parityCheckedAt:iso(raw.c),retry:['ready','temporary','sign-in','needs-action'][raw.r],nextRetryAt:iso(raw.d),transport:['unknown','rpc','direct'][raw.m],preservedCount:raw.e};
   }
   const time=value=>Number.isFinite(Date.parse(value))?String(value):null;
   return {reportedAt:time(raw.reportedAt),pendingHoles:Number.isInteger(raw.pendingHoles)&&raw.pendingHoles>=0?raw.pendingHoles:null,
     pendingWrites:Number.isInteger(raw.pendingWrites)&&raw.pendingWrites>=0?raw.pendingWrites:null,
     acknowledgedAt:time(raw.acknowledgedAt),parity:raw.parity==='confirmed'?'confirmed':'not-confirmed',parityCheckedAt:time(raw.parityCheckedAt),
     retry:['ready','temporary','sign-in','needs-action'].includes(raw.retry)?raw.retry:'unknown',nextRetryAt:time(raw.nextRetryAt),
-    transport:['rpc','direct'].includes(raw.transport)?raw.transport:'unknown'};
+    transport:['rpc','direct'].includes(raw.transport)?raw.transport:'unknown',preservedCount:Math.max(0,Number(raw.preservedCount)||0)};
 }
 function encodeSharedDeliveryReport(report) {
   const epoch=value=>Number.isFinite(Date.parse(value))?Date.parse(value):null;
   return {v:1,t:epoch(report.reportedAt),h:report.pendingHoles,n:report.pendingWrites,a:epoch(report.acknowledgedAt),p:report.parity==='confirmed'?1:0,
-    c:epoch(report.parityCheckedAt),r:['ready','temporary','sign-in','needs-action'].indexOf(report.retry),d:epoch(report.nextRetryAt),m:['unknown','rpc','direct'].indexOf(report.transport)};
+    c:epoch(report.parityCheckedAt),r:['ready','temporary','sign-in','needs-action'].indexOf(report.retry),d:epoch(report.nextRetryAt),m:['unknown','rpc','direct'].indexOf(report.transport),e:report.preservedCount || 0};
 }
 function getLocalSharedDeliveryReport(match,{storage=localStorage,now=Date.now()}={}) {
   const operations=getSharedScoreOutboxOperations(match,storage),retry=getSharedDeliveryRetry(match,storage);
   return normalizeSharedDeliveryReport({reportedAt:new Date(now).toISOString(),pendingHoles:new Set(operations.map(row=>row.holeNumber)).size,pendingWrites:operations.length,
-    acknowledgedAt:retry.lastProgressAt,parity:!operations.length && match.sharedLedgerParity?.parityConfirmed?'confirmed':'not-confirmed',parityCheckedAt:match.sharedLedgerParity?.checkedAt,
-    retry:retry.category || 'ready',nextRetryAt:retry.nextRetryAt,transport:match.sharedScoreDeliveryTransport?.kind});
+    acknowledgedAt:retry.lastProgressAt,parity:!operations.length && !getSharedScoresPreservedForHostReview(match,storage).length && match.sharedLedgerParity?.parityConfirmed?'confirmed':'not-confirmed',parityCheckedAt:match.sharedLedgerParity?.checkedAt,
+    retry:retry.category || 'ready',nextRetryAt:retry.nextRetryAt,transport:match.sharedScoreDeliveryTransport?.kind,preservedCount:getSharedScoresPreservedForHostReview(match,storage).length});
 }
 function buildSharedDeviceDeliveryStatus(match,participant,{now=Date.now(),storage=localStorage}={}) {
   const local=String(participant.deviceId)===getSharedDeviceId(),report=local?getLocalSharedDeliveryReport(match,{now,storage}):normalizeSharedDeliveryReport(participant.deliveryReport);
@@ -1484,6 +1486,7 @@ function buildSharedDeviceDeliveryStatus(match,participant,{now=Date.now(),stora
     '<br>Score acknowledgement: '+(report?.acknowledgedAt?escapeHtml(formatTimestampET(report.acknowledgedAt)):'not confirmed')+
     '<br>Card parity: '+(fresh && report?.parity==='confirmed'?'confirmed at '+escapeHtml(formatTimestampET(report.parityCheckedAt || report.reportedAt)):'not currently confirmed')+
     '<br>Retry: '+label+(report?.nextRetryAt && (local||fresh)?' · '+escapeHtml(formatTimestampET(report.nextRetryAt)):'')+
+    (report?.preservedCount && (local||fresh)?'<br>Delivery complete with exceptions: '+report.preservedCount+' scores preserved on that device for host review.':'')+
     '<br>Delivery: '+(report?.transport==='direct'?'Direct upload · no operation receipts':report?.transport==='rpc'?'Operation receipts':'Unknown')+'</div>';
 }
 function readSharedDeliveryRetries(storage = localStorage) {
@@ -1621,6 +1624,7 @@ function readSharedScoreOutbox(storage = localStorage) {
   }
   return {
     schemaVersion: SHARED_SCORE_OUTBOX_SCHEMA_VERSION,
+    preservedForHostReview: Array.isArray(result.value.preservedForHostReview) ? result.value.preservedForHostReview : [],
     operations: (Array.isArray(result.value.operations) ? result.value.operations : []).filter(row =>
       row && typeof row === 'object' && row.operationId && row.matchId && row.playerId && Number(row.holeNumber) > 0
     ),
@@ -1630,7 +1634,36 @@ function writeSharedScoreOutbox(outbox, storage = localStorage) {
   return writeJsonStorageRecord(storage, SHARED_SCORE_OUTBOX_STORAGE_KEY, {
     schemaVersion: SHARED_SCORE_OUTBOX_SCHEMA_VERSION,
     operations: Array.isArray(outbox?.operations) ? outbox.operations : [],
+    preservedForHostReview: outbox?.preservedForHostReview || readSharedScoreOutbox(storage).preservedForHostReview || [],
   });
+}
+// Closed-round rejection is an outcome, not a retry category. Move pending
+// operations to review records in one durable write; failed storage retains them.
+function getSharedScoresPreservedForHostReview(match, storage = localStorage) {
+  const matchId=String(match?.sharedMatchId || match?.id || '');
+  return (readSharedScoreOutbox(storage).preservedForHostReview || []).filter(row=>String(row.matchId)===matchId);
+}
+function preserveClosedSharedScoreOperations(match, storage = localStorage) {
+  const operations=getSharedScoreOutboxOperations(match,storage),outbox=readSharedScoreOutbox(storage);
+  const preservedAt=new Date().toISOString(),ids=new Set(operations.map(op=>op.operationId));
+  const reviews=new Map((outbox.preservedForHostReview || []).map(row=>[row.operationId,row]));
+  for(const operation of operations)reviews.set(operation.operationId,{
+    ...clonePlain(operation),localScoreEntry:clonePlain(buildSharedQueuedScoreEntry(match,operation.playerId,operation.holeNumber,operation.queuedAt)),
+    preservedAt,reasonCode:'HOST_COMPLETED_WITH_LOCAL_SCORES',serverCode:'P7701'
+  });
+  outbox.preservedForHostReview=[...reviews.values()];
+  outbox.operations=outbox.operations.filter(op=>!ids.has(op.operationId));
+  if(!writeSharedScoreOutbox(outbox,storage).ok)throw Object.assign(new Error(STORAGE_FAILURE_MESSAGE),{code:'LOCAL_SAVE_FAILED'});
+  delete match.sharedScoreQueueRecovery;delete match.sharedDeliveryStorageFailure;
+  const preserved=getSharedScoresPreservedForHostReview(match,storage);
+  if(!preserved.length)return {submitted:0,acknowledged:0,acknowledgedIds:[],preserved:0,outcome:'complete'};
+  Object.assign(match.remoteCompletionPending ||= {},{reasonCode:'HOST_COMPLETED_WITH_LOCAL_SCORES',
+    reason:'Delivery complete with exceptions. Scores are preserved on this device for host review; they did not change the completed result.'});
+  match.sharedDeliveryOutcome='complete-with-exceptions';
+  if(match.sharedLedgerParity)match.sharedLedgerParity={...match.sharedLedgerParity,status:'not-confirmed',parityConfirmed:false};
+  match.lastSharedSyncError='';match.lastSharedSyncErrorCode='';
+  recordSharedSyncDiagnostic(match,'HOST_COMPLETED_WITH_LOCAL_SCORES',{count:operations.length});
+  return {submitted:0,acknowledged:0,acknowledgedIds:[],preserved:preserved.length,outcome:'complete-with-exceptions'};
 }
 function createSharedScoreOperationId() {
   try { if (crypto?.randomUUID) return crypto.randomUUID(); } catch {}
@@ -2051,6 +2084,11 @@ function getSharedOnlineLabel() {
   return navigator.onLine === false ? 'Offline' : 'Online';
 }
 function getSharedSyncStatus(match) {
+  const preserved=getSharedScoresPreservedForHostReview(match);
+  if(preserved.length && !getSharedScoreOutboxOperations(match).length)return {
+    label:'Complete with exceptions',state:'complete-with-exceptions',tone:'warning',pending:0,
+    detail:`${preserved.length} score entries are preserved on this device for host review. They did not change the completed result.`
+  };
   const status=getSharedSyncStatusBase(match);
   if(match?.sharedMetadataFallback)return {...status,label:'Needs Attention',state:'needs-attention',tone:'attention',detail:status.detail+' Shared settings could not be checked; this phone used its local settings.'};
   if(match?.sharedScoreDeliveryTransport?.kind!=='direct')return status;
@@ -2377,6 +2415,7 @@ function getScoreAccessState(match) {
   const allowedRole = mode === 'single_device' && role === 'team_scorer' ? 'official_scorer' : role;
   const teamCount = Math.max(1, Number(match?.teamCount) || 1);
   const selectedTeam = Math.min(teamCount, Math.max(1, Number(match?.activeScoreTeam) || 1));
+  if(match?.remoteCompletionPending || getSharedScoresPreservedForHostReview(match).length)return {mode,role:'viewer',team:selectedTeam};
   const validRoles = ['event_admin','official_scorer','assigned_player_scorer','team_scorer','viewer'];
   return { mode, role: validRoles.includes(allowedRole) ? allowedRole : 'viewer', team: selectedTeam };
 }
@@ -15279,7 +15318,7 @@ function extractGreeniesSuggestionsFromSelectedGames(selectedGames) {
   return suggestions && typeof suggestions === 'object' ? { ...suggestions } : {};
 }
 function applyCurrentHoleDomToMatch(match, options = {}) {
-  if (match?.remoteCompletionPending) return false;
+  if (match?.remoteCompletionPending || getSharedScoresPreservedForHostReview(match).length) return false;
   if (!match) return false;
   const scoringHoles = getSelectedScoringHoles(match, getTee(match.courseId, match.teeId));
   const holeMeta = scoringHoles[currentHole - 1] || null;
@@ -15752,10 +15791,11 @@ function recordSharedScoreTransport(match,kind,reason='') {
 }
 async function submitPendingSharedScoreOperations(client, match, scoreEntries = [], { storage = localStorage, batchLimit = SHARED_SCORE_RPC_BATCH_LIMIT } = {}) {
   return runSharedDelivery(match,async()=>{
-    if(match.remoteCompletionPending)throw new Error('HOST_COMPLETED_WITH_LOCAL_SCORES: preserve this phone’s scores for host review.');
+    if(match.remoteCompletionPending || getSharedScoresPreservedForHostReview(match,storage).length)return preserveClosedSharedScoreOperations(match,storage);
     if(!getSharedScoreOutboxOperations(match,storage).length)return {submitted:0,acknowledged:0,acknowledgedIds:[],fallback:false};
     await ensureSharedSessionReady({client});
     let acknowledged=0,submitted=0,refreshed=false;const acknowledgedIds=[];
+    const closed=current=>({...preserveClosedSharedScoreOperations(current,storage),submitted,acknowledged,acknowledgedIds});
     const request=async make=>{
       let response=await sharedDeliveryRequest(make());
       if(response.error && ['401','PGRST301','PGRST303'].includes(String(response.error.code || response.error.status).toUpperCase()) && !refreshed){
@@ -15781,6 +15821,7 @@ async function submitPendingSharedScoreOperations(client, match, scoreEntries = 
       if(!writeSharedScoreOutbox(outbox,storage).ok)throw Object.assign(new Error(STORAGE_FAILURE_MESSAGE),{code:'LOCAL_SAVE_FAILED'});
       delete current.sharedScoreQueueRecovery;delete current.sharedDeliveryStorageFailure;
       const response=await request(()=>client.from('score_entries').upsert(operations.map(op=>byKey.get(op.key)),{onConflict:'id'}));
+      if(response.error?.code==='P7701')return closed(current);
       if(response.error)throw response.error;
       // A successful table response is not an operation receipt or card parity.
       acknowledged+=acknowledgeSharedScoreOperations(current,ids,storage);acknowledgedIds.push(...ids);submitted+=ids.length;
@@ -15807,6 +15848,7 @@ async function submitPendingSharedScoreOperations(client, match, scoreEntries = 
       if(!writeSharedScoreOutbox(outbox,storage).ok)throw Object.assign(new Error(STORAGE_FAILURE_MESSAGE),{code:'LOCAL_SAVE_FAILED'});
       const response=await request(()=>client.rpc('submit_shared_score_operations',{p_match_id:String(match.sharedMatchId || match.id),p_device_id:getSharedDeviceId(),p_operations:batch}));
       if(isMissingSharedScoreRpc(response.error))return direct();
+      if(response.error?.code==='P7701')return closed(current);
       if(response.error)throw response.error;
       const receipts=Array.isArray(response.data)?response.data:(response.data?.receipts || []);
       const accepted=[...new Set(receipts.map(row=>row.operation_id || row.operationId).filter(id=>ids.has(id)))];
@@ -15836,7 +15878,7 @@ async function drainPendingSharedScoreOperationsForMatch(matchOrId, { storage = 
   if (!match || match.storageMode !== 'shared' || !match.sharedMatchId) return { ok: true, skipped: true, pending: 0 };
   const pendingBefore = getSharedScoreOutboxOperations(match, storage).length;
   if(!canAttemptSharedDelivery(match,{storage}))return {ok:false,skipped:true,pending:pendingBefore,backoff:true};
-  if (match.remoteCompletionPending) return { ok: false, skipped: true, pending: pendingBefore, permanent: true };
+  if (match.remoteCompletionPending || getSharedScoresPreservedForHostReview(match,storage).length) return {ok:true,pending:0,...preserveClosedSharedScoreOperations(match,storage)};
   if (!pendingBefore) return { ok: true, skipped: true, pending: 0 };
   try {
     const client = await ensureSharedSessionReady();
@@ -15845,9 +15887,10 @@ async function drainPendingSharedScoreOperationsForMatch(matchOrId, { storage = 
     if (!isCurrentDeviceMatchHost(match)) {
       await mergeCloudSharedMetadata(match, { includeAssignments: true, includeMemories: false });
       if (match.remoteCompletionPending || match.status === 'complete') {
+        const result=preserveClosedSharedScoreOperations(match,storage);
         finishRemoteSharedRoundIfReady(match);
         persist({ skipRender: true });
-        return { ok: false, skipped: true, pendingBefore, pending: getSharedScoreOutboxOperations(match, storage).length, permanent: true };
+        return { ok: true, skipped: false, pendingBefore, pending: 0, ...result };
       }
     }
     const payload = buildCloudMatchPayload(match);
@@ -15875,7 +15918,6 @@ async function drainPendingSharedScoreOutboxes({ matches = state.matches, storag
   }
   const task = (async () => {
     const candidates = getSharedMatchesWithPendingScoreOperations(matches, storage)
-      .filter(match => !match.remoteCompletionPending)
       .filter(match => canAttemptSharedDelivery(match,{storage}))
       .slice(0, Math.max(1, Number(matchLimit) || 1));
     const results = await Promise.all(candidates.map(async match => {
@@ -15892,7 +15934,7 @@ async function drainPendingSharedScoreOutboxes({ matches = state.matches, storag
     return await task;
   } finally {
     sharedOutboxDrainInflight = null;
-    const retryable=getSharedMatchesWithPendingScoreOperations(matches, storage).filter(match=>!match.remoteCompletionPending);
+    const retryable=getSharedMatchesWithPendingScoreOperations(matches, storage);
     if (scheduleContinuation && (sharedOutboxDrainRequested || retryable.length)) {
       sharedOutboxDrainRequested = false;
       const delay=retryable.some(match=>canAttemptSharedDelivery(match,{storage}))?100:Math.max(100,Math.min(SHARED_SCORE_REFRESH_MS,...retryable.map(match=>Math.max(0,Date.parse(getSharedDeliveryRetry(match,storage).nextRetryAt)-Date.now()) || SHARED_SCORE_REFRESH_MS)));
@@ -15906,7 +15948,7 @@ async function drainPendingSharedScoreOutboxes({ matches = state.matches, storag
 async function uploadSharedMatch(match) {
   if(!canAttemptSharedDelivery(match))throw Object.assign(new Error('Scores remain queued until the next retry.'),{code:'SHARED_BACKOFF'});
   await ensureSharedSessionReady();
-  if (match.remoteCompletionPending) throw new Error('The host completed this round. Local scores are preserved for review.');
+  if (match.remoteCompletionPending || getSharedScoresPreservedForHostReview(match).length) return preserveClosedSharedScoreOperations(match);
   const client = await ensureSharedSessionReady();
   if (!client) throw new Error('Supabase is not configured.');
   const user = await getSupabaseUser({allowAnonymous:false});
@@ -16010,13 +16052,18 @@ async function uploadSharedMatch(match) {
   if (writePlan.scores && payload.scoreEntries.length) {
     const pending = getSharedScoreOutboxOperations(match);
     if (pending.length) {
-      await submitPendingSharedScoreOperations(client, match, payload.scoreEntries);
+      const delivery=await submitPendingSharedScoreOperations(client, match, payload.scoreEntries);
+      if(delivery.outcome==='complete-with-exceptions')return delivery;
       (getCanonicalSharedMatch(match) || match).sharedScoreOutboxInitialized = true;
     } else if (!match.sharedScoreOutboxInitialized) {
       // Seed a pre-v31 Shared Match once. Every later save uses only the changed
       // rows retained in the durable device outbox until acknowledged.
       recordSharedScoreTransport(match,'direct','INITIAL_SEED');
       response = await sharedDeliveryRequest(client.from('score_entries').upsert(payload.scoreEntries, { onConflict: 'id' }));
+      if(response.error?.code==='P7701') {
+        for(const entry of payload.scoreEntries)queueSharedScoreOperation(match,entry.player_id,entry.hole_number,{scoreEntry:entry});
+        return preserveClosedSharedScoreOperations(match);
+      }
       if (response.error) throw response.error;
       (getCanonicalSharedMatch(match) || match).sharedScoreOutboxInitialized = true;
     }
@@ -16314,12 +16361,17 @@ function getRemoteCompletionWarning(match) {
 function finishRemoteSharedRoundIfReady(match) {
   const pending = match?.remoteCompletionPending;
   if (!pending || isCurrentDeviceMatchHost(match) || String(state.activeMatchId || '') !== String(match.id)) return false;
+  if(getSharedScoreOutboxOperations(match).length) {
+    try { preserveClosedSharedScoreOperations(match); }
+    catch { pending.reason='The host completed this round, but review scores could not be saved. Free storage and retry; the delivery queue is retained.'; return false; }
+  }
   const owned = getSharedLocallyOwnedPlayerIds(match);
   const frozenScores = new Map((pending.roundRecordSnapshot?.holes || []).flatMap(hole => (hole.scores || []).map(score => [getSharedPlayerHoleKey(score.playerId,hole.holeNumber),score.gross])));
   const conflicts = extractLocalScoredLedger(match).filter(score => owned.has(score.playerId) && frozenScores.has(getSharedPlayerHoleKey(score.playerId,score.holeNumber)) && Number(score.gross) !== Number(frozenScores.get(getSharedPlayerHoleKey(score.playerId,score.holeNumber)))).map(score => ({ playerId: score.playerId, holeNumber: score.holeNumber, gross: score.gross, frozenGross: frozenScores.get(getSharedPlayerHoleKey(score.playerId,score.holeNumber)) }));
   pending.localScoreConflicts = conflicts;
   const reason = getSharedScoreOutboxOperations(match).length ? 'This phone still has unconfirmed scores. Keep it open and ask the host to check them before leaving this round.'
     : hasUnsavedVisibleScoreInputs() || pending.unsavedEntries?.length ? 'This phone has an unsaved entry. Keep it open and ask the host to check the score before leaving this round.'
+    : getSharedScoresPreservedForHostReview(match).length ? 'Delivery complete with exceptions. Scores are preserved on this device for host review; they did not change the completed result.'
     : conflicts.length ? 'This phone’s saved scores differ from the host’s frozen result. Keep this round open and ask the host to review the differences.'
     : !isFrozenRoundRecord(pending.roundRecordSnapshot) ? 'Waiting for the host’s frozen round record. Keep this round open and tap Sync Now.' : '';
   if (reason) {
@@ -28135,6 +28187,8 @@ function installDyeLedgerLiveEngineAdapter() {
     readSharedScoreOutbox,
     writeSharedScoreOutbox,
     getSharedScoreOutboxOperations,
+    getSharedScoresPreservedForHostReview,
+    preserveClosedSharedScoreOperations,
     queueSharedScoreOperation,
     acknowledgeSharedScoreOperations,
     buildPendingSharedScoreOperations,

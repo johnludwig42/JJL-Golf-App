@@ -1,0 +1,32 @@
+{
+  "baselineCommit": "91eac02",
+  "postgres": "18.4 disposable localhost cluster, stopped after rehearsal",
+  "productionExecuted": false,
+  "contractAssertions": 51,
+  "rollbackRestoreAssertions": 17,
+  "refusalChecks": 4,
+  "concurrencyChecks": 3,
+  "sqlChecksTotal": 75,
+  "closedCode": "P7701",
+  "outcome": "HOST_COMPLETED_WITH_LOCAL_SCORES / complete-with-exceptions",
+  "restoreRpcMatchesInstall": true,
+  "supabaseStagingRun": false,
+  "clientPatchAppliedToRelease": false,
+  "focusedClientBrowserAssertions": 41,
+  "directUploadAssertionsIncluded": 13,
+  "files": {
+    "install-review.sql": "c47a514901a7a86066c04a98b04445ec7a6abe33b6835a61225cec73b569a4dc",
+    "restore-review.sql": "4f2aaa3783f7d8f1d47f2f2bae00f2f5069ed86f6c86e3e8f82cca9dd1e363c3",
+    "rollback-review.sql": "4faa44bada2e5629c3ebeb45d2e8d467d20843a59c54419be6c57ce7e5e4a638",
+    "client-completion-review.patch": "7e4f11266687992bbb4b234ea36250e482f5673b67ab29487a585eae0ee33d31"
+  },
+  "fullRegression": {
+    "tests": 1486,
+    "passed": 1486,
+    "failed": 0,
+    "skipped": 0,
+    "elapsedMs": 597415.31,
+    "note": "run began before final refinements; final focused run 41/41 covers the finalized patch"
+  },
+  "focusedElapsedMs": 32420.4938
+}

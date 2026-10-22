@@ -133,3 +133,19 @@
   width: 1.25rem;
   height: 1.25rem;
 }
+
+/* Preserved scores are reviewed on their holding device, separately from Play. */
+.preserved-review-dialog{width:min(46rem,calc(100vw - 2rem));max-height:85dvh;overflow:auto;border:1px solid var(--border);border-radius:16px;padding:1rem;background:var(--color-surface-card);color:var(--color-content-primary)}
+.preserved-review-dialog::backdrop{background:var(--color-overlay-balance-explanation-dialog)}
+.preserved-review-dialog button,.preserved-review-dialog input[type=number]{min-height:44px}
+.preserved-review-dialog input[type=checkbox]{width:24px;height:24px;vertical-align:middle;margin:.65rem}
+.preserved-review-dialog label{display:block;overflow-wrap:anywhere}
+.preserved-review-dialog textarea{display:block;width:100%;box-sizing:border-box}
+.preserved-review-row{min-width:0;margin:1rem 0;border-radius:10px}
+.preserved-review-dialog p,.preserved-review-dialog pre{overflow-wrap:anywhere;white-space:pre-wrap}
+#preservedScorePressure{margin:1rem}
+
+#preservedScorePressure[hidden]{display:none}
+
+.preserved-review-row legend{max-width:100%;overflow-wrap:anywhere}
+.preserved-review-row legend label{min-height:44px}

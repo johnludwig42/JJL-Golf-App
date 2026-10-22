@@ -72,7 +72,7 @@ const installBlock = worker.match(/self\.addEventListener\('install'[\s\S]*?\n\}
 requireCondition(!installBlock.includes('skipWaiting'), 'service worker install must not force activation');
 requireCondition(/SKIP_WAITING[\s\S]*skipWaiting/.test(worker), 'service worker must support explicit waiting-worker activation');
 
-for (const file of ['app.js', 'service-worker.js']) {
+for (const file of ['app.js', 'preserved-score-review.js', 'service-worker.js']) {
   const check = spawnSync(process.execPath, ['--check', resolve(root, file)], { encoding: 'utf8' });
   if (check.status !== 0) failures.push(`${file} syntax check failed: ${String(check.stderr || check.stdout).trim()}`);
 }

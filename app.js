@@ -19,11 +19,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.78',
-  versionNumber: '31.0.78',
-  cacheName: 'the-dye-ledger-v31.0.78',
-  buildDate: '2026-10-21T02:09:47.249Z',
-  buildLabel: 'Closed-Round Score Preservation'
+  version: 'v31.0.79',
+  versionNumber: '31.0.79',
+  cacheName: 'the-dye-ledger-v31.0.79',
+  buildDate: '2026-10-21T13:41:40.251Z',
+  buildLabel: 'Preserved Score Resolution'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -1397,6 +1397,7 @@ function getSanitizedSharedSyncDiagnostics(match) {
     pendingScoreCount: getSharedScoreOutboxOperations(match).length,
     preservedForHostReviewCount: getSharedScoresPreservedForHostReview(match).length,
     deliveryOutcome: match.sharedDeliveryOutcome || null,
+    publishedRecordParity: match.sharedPublishedRecordParity || null,
     deliveryRetry: getSharedDeliveryRetrySummary(match),
     deliveryReport: getLocalSharedDeliveryReport(match),
     scoreTransport: match.sharedScoreDeliveryTransport || null,
@@ -1453,24 +1454,24 @@ function normalizeSharedDeliveryReport(raw) {
   if(raw.v===1){
     const iso=value=>Number.isFinite(value)&&value>0&&Number.isFinite(new Date(value).getTime())?new Date(value).toISOString():null;
     raw={reportedAt:iso(raw.t),pendingHoles:raw.h,pendingWrites:raw.n,acknowledgedAt:iso(raw.a),parity:raw.p===1?'confirmed':'not-confirmed',
-      parityCheckedAt:iso(raw.c),retry:['ready','temporary','sign-in','needs-action'][raw.r],nextRetryAt:iso(raw.d),transport:['unknown','rpc','direct'][raw.m],preservedCount:raw.e};
+      parityCheckedAt:iso(raw.c),retry:['ready','temporary','sign-in','needs-action'][raw.r],nextRetryAt:iso(raw.d),transport:['unknown','rpc','direct'][raw.m],preservedCount:raw.e,parityBasis:raw.b===1?'frozen-record':'live-scores'};
   }
   const time=value=>Number.isFinite(Date.parse(value))?String(value):null;
   return {reportedAt:time(raw.reportedAt),pendingHoles:Number.isInteger(raw.pendingHoles)&&raw.pendingHoles>=0?raw.pendingHoles:null,
     pendingWrites:Number.isInteger(raw.pendingWrites)&&raw.pendingWrites>=0?raw.pendingWrites:null,
     acknowledgedAt:time(raw.acknowledgedAt),parity:raw.parity==='confirmed'?'confirmed':'not-confirmed',parityCheckedAt:time(raw.parityCheckedAt),
     retry:['ready','temporary','sign-in','needs-action'].includes(raw.retry)?raw.retry:'unknown',nextRetryAt:time(raw.nextRetryAt),
-    transport:['rpc','direct'].includes(raw.transport)?raw.transport:'unknown',preservedCount:Math.max(0,Number(raw.preservedCount)||0)};
+    transport:['rpc','direct'].includes(raw.transport)?raw.transport:'unknown',preservedCount:Math.max(0,Number(raw.preservedCount)||0),parityBasis:raw.parityBasis==='frozen-record'?'frozen-record':'live-scores'};
 }
 function encodeSharedDeliveryReport(report) {
   const epoch=value=>Number.isFinite(Date.parse(value))?Date.parse(value):null;
   return {v:1,t:epoch(report.reportedAt),h:report.pendingHoles,n:report.pendingWrites,a:epoch(report.acknowledgedAt),p:report.parity==='confirmed'?1:0,
-    c:epoch(report.parityCheckedAt),r:['ready','temporary','sign-in','needs-action'].indexOf(report.retry),d:epoch(report.nextRetryAt),m:['unknown','rpc','direct'].indexOf(report.transport),e:report.preservedCount || 0};
+    c:epoch(report.parityCheckedAt),r:['ready','temporary','sign-in','needs-action'].indexOf(report.retry),d:epoch(report.nextRetryAt),m:['unknown','rpc','direct'].indexOf(report.transport),e:report.preservedCount || 0,b:report.parityBasis==='frozen-record'?1:0};
 }
 function getLocalSharedDeliveryReport(match,{storage=localStorage,now=Date.now()}={}) {
   const operations=getSharedScoreOutboxOperations(match,storage),retry=getSharedDeliveryRetry(match,storage);
   return normalizeSharedDeliveryReport({reportedAt:new Date(now).toISOString(),pendingHoles:new Set(operations.map(row=>row.holeNumber)).size,pendingWrites:operations.length,
-    acknowledgedAt:retry.lastProgressAt,parity:!operations.length && !getSharedScoresPreservedForHostReview(match,storage).length && match.sharedLedgerParity?.parityConfirmed?'confirmed':'not-confirmed',parityCheckedAt:match.sharedLedgerParity?.checkedAt,
+    acknowledgedAt:retry.lastProgressAt,parity:!operations.length && !getSharedScoresPreservedForHostReview(match,storage).length && (match.sharedScoreResolution?isPreservedPublishedParityConfirmed(match):match.sharedLedgerParity?.parityConfirmed)?'confirmed':'not-confirmed',parityCheckedAt:match.sharedScoreResolution?match.sharedPublishedRecordParity?.checkedAt:match.sharedLedgerParity?.checkedAt,parityBasis:match.sharedScoreResolution?'frozen-record':'live-scores',
     retry:retry.category || 'ready',nextRetryAt:retry.nextRetryAt,transport:match.sharedScoreDeliveryTransport?.kind,preservedCount:getSharedScoresPreservedForHostReview(match,storage).length});
 }
 function buildSharedDeviceDeliveryStatus(match,participant,{now=Date.now(),storage=localStorage}={}) {
@@ -1484,7 +1485,7 @@ function buildSharedDeviceDeliveryStatus(match,participant,{now=Date.now(),stora
   return '<div class="tiny top-gap">Contact: '+(contact?escapeHtml(formatTimestampET(contact))+(Number.isFinite(age)&&age>=0?' ('+Math.floor(age/60000)+' min ago)':''):'not confirmed')+(!fresh&&!local?' · Out of contact / current state unknown':'')+
     '<br>'+(local?'Pending holes: ':'Last reported pending holes: ')+(pending===null?'unknown':pending)+
     '<br>Score acknowledgement: '+(report?.acknowledgedAt?escapeHtml(formatTimestampET(report.acknowledgedAt)):'not confirmed')+
-    '<br>Card parity: '+(fresh && report?.parity==='confirmed'?'confirmed at '+escapeHtml(formatTimestampET(report.parityCheckedAt || report.reportedAt)):'not currently confirmed')+
+    '<br>'+(report?.parityBasis==='frozen-record'?'Frozen record parity: ':'Card parity: ')+(fresh && report?.parity==='confirmed'?'confirmed at '+escapeHtml(formatTimestampET(report.parityCheckedAt || report.reportedAt)):'not currently confirmed')+
     '<br>Retry: '+label+(report?.nextRetryAt && (local||fresh)?' · '+escapeHtml(formatTimestampET(report.nextRetryAt)):'')+
     (report?.preservedCount && (local||fresh)?'<br>Delivery complete with exceptions: '+report.preservedCount+' scores preserved on that device for host review.':'')+
     '<br>Delivery: '+(report?.transport==='direct'?'Direct upload · no operation receipts':report?.transport==='rpc'?'Operation receipts':'Unknown')+'</div>';
@@ -1631,11 +1632,13 @@ function readSharedScoreOutbox(storage = localStorage) {
   };
 }
 function writeSharedScoreOutbox(outbox, storage = localStorage) {
-  return writeJsonStorageRecord(storage, SHARED_SCORE_OUTBOX_STORAGE_KEY, {
+  const result = writeJsonStorageRecord(storage, SHARED_SCORE_OUTBOX_STORAGE_KEY, {
     schemaVersion: SHARED_SCORE_OUTBOX_SCHEMA_VERSION,
     operations: Array.isArray(outbox?.operations) ? outbox.operations : [],
     preservedForHostReview: outbox?.preservedForHostReview || readSharedScoreOutbox(storage).preservedForHostReview || [],
   });
+  if(!DYE_LEDGER_ADAPTER_MODE && storage===localStorage)renderPreservedScorePressure();
+  return result;
 }
 // Closed-round rejection is an outcome, not a retry category. Move pending
 // operations to review records in one durable write; failed storage retains them.
@@ -1664,6 +1667,164 @@ function preserveClosedSharedScoreOperations(match, storage = localStorage) {
   match.lastSharedSyncError='';match.lastSharedSyncErrorCode='';
   recordSharedSyncDiagnostic(match,'HOST_COMPLETED_WITH_LOCAL_SCORES',{count:operations.length});
   return {submitted:0,acknowledged:0,acknowledgedIds:[],preserved:preserved.length,outcome:'complete-with-exceptions'};
+}
+let preservedReviewAuditStore;
+const preservedReviewInflight = new Map();
+const resolvedReviewRecordCache = new Map();
+let preservedReviewView = null;
+function savePreservedReviewReference(match) {
+  if(getCanonicalSharedMatch(match)!==match)return false;
+  return persist({skipRender:true});
+}
+function getPreservedReviewStore() { return preservedReviewAuditStore ||= window.DyeLedgerPreservedReview.auditStore(); }
+function getPreservedReviewRecord(match) {
+  const record = match?.roundRecordSnapshot || match?.remoteCompletionPending?.roundRecordSnapshot;
+  return isFrozenRoundRecord(record) ? record : null;
+}
+function getPreservedReviewGroups(match, storage = localStorage) {
+  return window.DyeLedgerPreservedReview.groups(match,getSharedScoresPreservedForHostReview(match,storage),getPreservedReviewRecord(match),isTeamScoredRound(match));
+}
+function reviewMatchKey(match) { return String(match.sharedMatchId || match.id); }
+function isResolvedPreservedKey(match,key) {
+  const record=getPreservedReviewRecord(match),cached=resolvedReviewRecordCache.get(reviewMatchKey(match));
+  return !!cached?.auditVerified && !!record && cached?.text===window.DyeLedgerPreservedReview.canonical(record) && (match.sharedScoreResolution?.keys || []).includes(key);
+}
+async function recoverPreservedScoreResolutions(match,{storage=localStorage,audit=getPreservedReviewStore(),save=()=>savePreservedReviewReference(match),checkpoint=async()=>{}}={}) {
+  const api=window.DyeLedgerPreservedReview,record=getPreservedReviewRecord(match),recordText=api.canonical(record),baseHash=record?await api.hash(record):null;
+  const receipts=(await audit.list(reviewMatchKey(match))).sort((a,b)=>a.decidedAt.localeCompare(b.decidedAt)||a.id.localeCompare(b.id));let cleared=0;
+  for(const receipt of receipts){
+    if(receipt.baseHash && baseHash && receipt.baseHash!==baseHash)continue;
+    if(receipt.phase==='complete' && receipt.rows.every(row=>row.players.every(id=>(match.sharedScoreResolution?.keys || []).includes(getSharedPlayerHoleKey(id,row.hole)))))continue;
+    let outbox=readSharedScoreOutbox(storage);
+    const sources=receipt.rows.flatMap(row=>row.sources),byId=new Map(sources.map(source=>[source.id,source])),validated=new Map();
+    for(const op of outbox.preservedForHostReview || [])if(byId.has(op.operationId)){if(await api.hash(op)!==byId.get(op.operationId).fingerprint)throw new Error('Preserved evidence changed. Review the current values again; nothing was cleared.');validated.set(op.operationId,api.canonical(op));}
+    const prior=match.sharedScoreResolution;
+    const keys=[...new Set([...(prior?.keys || []),...receipt.rows.flatMap(row=>row.players.map(id=>getSharedPlayerHoleKey(id,row.hole)))])];
+    match.sharedScoreResolution={receiptId:receipt.id,keys,resolvedAt:receipt.decidedAt};
+    if(!save()){match.sharedScoreResolution=prior;throw new Error('Could not save the local resolution reference. Scores remain preserved.');}
+    await checkpoint('before-cleanup');
+    // Hashing and IndexedDB yield to other matches. Re-read immediately before
+    // cleanup and compare synchronously so their new writes are never overwritten.
+    outbox=readSharedScoreOutbox(storage);
+    for(const op of outbox.preservedForHostReview || [])if(byId.has(op.operationId) && validated.get(op.operationId)!==api.canonical(op))throw new Error('Preserved evidence changed during cleanup. Review it again; nothing was cleared.');
+    if(api.canonical(getPreservedReviewRecord(match))!==recordText || !save())throw new Error('The round reference changed during review. Reopen review to finish cleanup; evidence is retained.');
+    const before=(outbox.preservedForHostReview || []).length;
+    outbox.preservedForHostReview=(outbox.preservedForHostReview || []).filter(op=>!byId.has(op.operationId));
+    if(!writeSharedScoreOutbox(outbox,storage).ok)throw new Error('Could not clear the resolved delivery copies. The audit is saved; reopen review to finish cleanup.');
+    cleared+=before-outbox.preservedForHostReview.length;
+    await checkpoint('after-cleanup');
+    if(receipt.phase!=='complete')await audit.put({...receipt,phase:'complete'});
+  }
+  if(record)resolvedReviewRecordCache.set(reviewMatchKey(match),{text:api.canonical(record),hash:baseHash,auditVerified:receipts.some(receipt=>receipt.id===match.sharedScoreResolution?.receiptId && (!receipt.baseHash || receipt.baseHash===baseHash))});
+  if(match.sharedScoreResolution && !getSharedScoresPreservedForHostReview(match,storage).length){
+    match.sharedDeliveryOutcome='resolved';
+    if(match.remoteCompletionPending)match.remoteCompletionPending.reason='Exceptions resolved on this device. Checking the frozen record; scores and settlement have not changed.';
+    save();
+  }
+  return {cleared,receipts};
+}
+async function resolvePreservedScoreGroups(match,groupIds,{decision,reason,choices={},actor,expectedIds=null,storage=localStorage,audit=getPreservedReviewStore(),save=()=>savePreservedReviewReference(match),checkpoint=async()=>{}}={}) {
+  const key=reviewMatchKey(match);
+  if(preservedReviewInflight.has(key))throw new Error('A review decision is already saving.');
+  const task=(async()=>{
+    const recovered=await recoverPreservedScoreResolutions(match,{storage,audit,save,checkpoint});
+    const groups=getPreservedReviewGroups(match,storage),selected=groups.filter(group=>groupIds.includes(group.id));
+    if(!selected.length){const prior=recovered.receipts.find(receipt=>receipt.decision===decision && receipt.reason===String(reason || '').trim() && JSON.stringify(receipt.rows.map(row=>row.groupId).sort())===JSON.stringify(groupIds.slice().sort()));if(prior)return prior;}
+    if(selected.length!==groupIds.length)throw new Error('The selected rows changed. Reopen review before deciding.');
+    if(expectedIds && selected.some(group=>JSON.stringify(group.operations.map(op=>op.operationId).sort())!==JSON.stringify((expectedIds[group.id] || []).slice().sort())))throw new Error('New evidence arrived. Review the selection again.');
+    const receipt=await window.DyeLedgerPreservedReview.prepare({matchId:key,selected,decision,reason,choices,record:getPreservedReviewRecord(match),statsEnabled:!!match.statTrackingEnabled,sourceLabels:Object.fromEntries((match.sharedDevices || []).map(device=>[device.id,device.deviceName || device.name || device.id])),
+      actor:actor || {deviceId:getSharedDeviceId(),participantId:getCurrentSharedParticipantId(match),hostDevice:isCurrentDeviceMatchHost(match),authority:'device-local review; physical reviewer not authenticated'}});
+    await audit.put(receipt);
+    await checkpoint('after-receipt');
+    await recoverPreservedScoreResolutions(match,{storage,audit,save,checkpoint});
+    return receipt;
+  })();
+  preservedReviewInflight.set(key,task);
+  try{return await task;}finally{preservedReviewInflight.delete(key);}
+}
+async function verifyPreservedPublishedParity(match,remoteRecord,{storage=localStorage}={}) {
+  const api=window.DyeLedgerPreservedReview,local=getPreservedReviewRecord(match);
+  const localHash=local?await api.hash(local):null,remoteHash=isFrozenRoundRecord(remoteRecord)?await api.hash(remoteRecord):null;
+  const cached=resolvedReviewRecordCache.get(reviewMatchKey(match));
+  const confirmed=!!cached?.auditVerified && cached.text===api.canonical(local) && !!localHash && localHash===remoteHash && !getSharedScoresPreservedForHostReview(match,storage).length && !getSharedScoreOutboxOperations(match,storage).length;
+  match.sharedPublishedRecordParity={status:confirmed?'confirmed':'not-confirmed',confirmed,localHash,remoteHash,checkedAt:new Date().toISOString()};
+  if(local)resolvedReviewRecordCache.set(reviewMatchKey(match),{text:api.canonical(local),hash:localHash,auditVerified:!!cached?.auditVerified && cached.text===api.canonical(local)});
+  return match.sharedPublishedRecordParity;
+}
+async function recheckPreservedPublishedParity(match) {
+  if(!match.sharedScoreResolution)return null;
+  try {
+    await recoverPreservedScoreResolutions(match);
+    const meta=await fetchSharedMatchMetadata(match.sharedMatchId,match);
+    const parity=await verifyPreservedPublishedParity(match,meta.status==='complete'?meta.roundRecordSnapshot:null);
+    persist({skipRender:true});return parity;
+  }catch(error){
+    match.sharedPublishedRecordParity={status:'not-confirmed',confirmed:false,checkedAt:new Date().toISOString(),warning:getSharedFriendlyError(error)};
+    persist({skipRender:true});return match.sharedPublishedRecordParity;
+  }
+}
+function isPreservedPublishedParityConfirmed(match) {
+  const cached=resolvedReviewRecordCache.get(reviewMatchKey(match));
+  return !!match.sharedPublishedRecordParity?.confirmed && !!cached?.auditVerified && cached.text===window.DyeLedgerPreservedReview.canonical(getPreservedReviewRecord(match));
+}
+function preservedReviewButton(match) {
+  const count=getSharedScoresPreservedForHostReview(match).length;
+  return count || match.sharedScoreResolution ? '<button type="button" class="secondary" data-preserved-review="'+escapeHtml(String(match.id))+'">'+(count?'Scores awaiting review ('+count+')':'Score review history')+'</button>':'';
+}
+function renderPreservedScorePressure() {
+  const notice=document.getElementById('preservedScorePressure');if(!notice || !window.DyeLedgerPreservedReview)return;
+  try{
+    const pressure=window.DyeLedgerPreservedReview.pressure(localStorage,readSharedScoreOutbox());notice.hidden=!pressure.warning;notice.classList.toggle('setup-warning',pressure.warning);
+    const matches=state.matches.filter(match=>getSharedScoresPreservedForHostReview(match).length);
+    notice.innerHTML=pressure.warning?'<strong>Saved score storage is growing</strong><p>'+pressure.pending+' pending writes; '+pressure.review+' scores awaiting review. Delivery/review: about '+Math.ceil(pressure.deliveryBytes/1024)+' KiB. Total localStorage including backups: about '+Math.ceil(pressure.totalBytes/1024)+' KiB (UTF-16 estimate, not quota headroom). Saving remains available; no records are discarded.</p>'+matches.map(preservedReviewButton).join('')+'<button type="button" class="secondary" data-pressure-rounds>Review saved rounds</button>'+(matches.length?'':'<p>Reconnect and retry delivery when convenient. Existing audit history stays separate.</p>'):'';
+  }catch{notice.hidden=false;notice.classList.add('setup-warning');notice.textContent='Storage usage could not be measured. Saving remains available; use Support diagnostics if a save fails.';}
+}
+function formatPreservedScoreValue(entry,stats=false) {
+  if(!entry)return 'Not captured';
+  const score=entry.gross===null?'Cleared / not recorded':String(entry.gross ?? 'Not recorded');
+  return 'Score '+score+(stats?' · Putts '+(entry.putts ?? 'unknown')+' · Fairway '+(entry.fairway?'Yes':'No')+' · Green '+(entry.green?'Yes':'No')+' · Up and down '+(entry.up_and_down?'Yes':'No')+' · Sandy '+(entry.sandy?'Yes':'No'):'');
+}
+async function openPreservedScoreReview(matchId) {
+  const match=state.matches.find(row=>String(row.id)===String(matchId));if(!match)return;
+  const dialog=document.getElementById('preservedScoreReviewDialog');if(!dialog)return;
+  if(!dialog.open)dialog.showModal();
+  document.getElementById('preservedScoreReviewStatus').textContent='Loading local review…';
+  try{
+    const {receipts}=await recoverPreservedScoreResolutions(match);
+    const groups=getPreservedReviewGroups(match);preservedReviewView={match,groups,receipts};
+    const playerName=id=>getPreservedReviewRecord(match)?.players?.find(p=>String(p.playerId)===String(id))?.displayName || getPlayer(id)?.name || id;
+    document.getElementById('preservedScoreReviewRows').innerHTML=groups.map(group=>{
+      const title=isTeamScoredRound(match)?getTeamLabel(match,group.team):playerName(group.playerIds[0]);
+      return '<fieldset class="preserved-review-row"><legend><label><input type="checkbox" data-review-group="'+escapeHtml(group.id)+'"> '+escapeHtml(title)+' · hole '+group.hole+'</label></legend>'+group.operations.map(op=>{
+        const device=match.sharedDevices?.find(d=>String(d.id)===String(op.deviceId));
+        return '<p>'+escapeHtml(playerName(op.playerId))+' · queued '+escapeHtml(formatTimestampET(op.queuedAt))+' · source '+escapeHtml(device?.deviceName || device?.name || op.deviceId || 'Unknown device')+'</p><p>Captured: '+escapeHtml(formatPreservedScoreValue(op.scoreEntry,match.statTrackingEnabled))+'<br>Later local: '+escapeHtml(formatPreservedScoreValue(op.localScoreEntry,match.statTrackingEnabled))+'</p>';
+      }).join('')+'<p>Frozen: '+escapeHtml(group.frozen.map(row=>playerName(row.playerId)+': '+(row.gross ?? 'not known')).join(' / '))+'</p>'+(group.mismatch?'<label>Consistent review value (does not change the result)<input type="number" min="1" max="25" step="1" data-review-choice="'+escapeHtml(group.id)+'"></label>':'')+'</fieldset>';
+    }).join('') || '<p>No unresolved preserved scores remain on this device.</p>';
+    document.getElementById('preservedScoreReviewHistory').innerHTML=receipts.slice().reverse().map(receipt=>'<details><summary>'+escapeHtml(receipt.decision==='discard'?'Discard':'Already reflected')+' · '+escapeHtml(formatTimestampET(receipt.decidedAt))+' · '+receipt.rows.length+' rows'+(receipt.phase==='complete'?' · Cleared':' · Cleanup pending')+'</summary><p>'+escapeHtml(receipt.reason)+'</p><p>Actor device: '+escapeHtml(receipt.actor.deviceId)+'; '+escapeHtml(receipt.actor.authority)+'</p>'+receipt.rows.map(row=>'<p><strong>Hole '+row.hole+' · reviewed value '+escapeHtml(String(row.reviewValue))+'</strong><br>Frozen: '+escapeHtml(row.final.map(value=>playerName(value.playerId)+': '+(value.gross ?? 'unknown')).join(' / '))+'</p>'+row.sources.map(source=>'<p>'+escapeHtml(playerName(source.playerId))+' · '+escapeHtml(receipt.origins?.[source.origin]?.deviceLabel || source.deviceLabel || source.deviceId || 'Unknown device')+' · queued '+escapeHtml(formatTimestampET(source.queuedAt))+'<br>Captured: '+escapeHtml(formatPreservedScoreValue(source.proposed,match.statTrackingEnabled))+'<br>Later local: '+escapeHtml(formatPreservedScoreValue(source.localEqualsCaptured?source.proposed:source.local,match.statTrackingEnabled))+'</p>').join('')).join('')+'</details>').join('') || '<p>No local decisions recorded yet.</p>';
+    document.getElementById('preservedScoreReviewReason').value='';document.getElementById('preservedScoreReviewAttest').checked=false;
+    const auditUsage=await getPreservedReviewStore().usage();
+    document.getElementById('preservedScoreReviewStatus').textContent='Select the exact rows. This round: '+receipts.length+' audit receipts, about '+(JSON.stringify(receipts).length*2)+' serialized bytes. Device audit: '+auditUsage.receipts+' receipts, about '+auditUsage.bytes+' serialized bytes (UTF-16 estimates; IndexedDB overhead is additional).'+(auditUsage.bytes>=1024*1024?' Audit history exceeds the 1 MiB soft budget; export a separate copy. No history is pruned.':'')+(match.sharedScoreResolution && !receipts.length?' The referenced local audit is unavailable; verification remains unconfirmed.':'');
+    renderMatches();renderPreservedScorePressure();
+  }catch(error){document.getElementById('preservedScoreReviewStatus').textContent=error.message;}
+}
+async function submitPreservedScoreReview(decision) {
+  const view=preservedReviewView;if(!view)return;
+  const status=document.getElementById('preservedScoreReviewStatus'),buttons=[...document.querySelectorAll('[data-resolve-preserved]')];
+  try{
+    if(!document.getElementById('preservedScoreReviewAttest').checked)throw new Error('Confirm that you have reviewed this selection with the host. This is a local attestation, not authenticated host approval.');
+    const ids=[...document.querySelectorAll('[data-review-group]:checked')].map(input=>input.dataset.reviewGroup);
+    const selected=view.groups.filter(group=>ids.includes(group.id));
+    if(!selected.length)throw new Error('Select the exact rows to resolve.');
+    const labels=selected.map(group=>(isTeamScoredRound(view.match)?getTeamLabel(view.match,group.team):group.playerIds.join(', '))+' · hole '+group.hole);
+    if(!window.confirm((decision==='discard'?'Discard':'Mark Already reflected')+' these rows?\n\n'+labels.join('\n')+'\n\nThe frozen result and settlement will not change.'))return;
+    buttons.forEach(button=>button.disabled=true);
+    const choices=Object.fromEntries([...document.querySelectorAll('[data-review-choice]')].map(input=>[input.dataset.reviewChoice,input.value]));
+    await resolvePreservedScoreGroups(view.match,ids,{decision,reason:document.getElementById('preservedScoreReviewReason').value,choices,expectedIds:Object.fromEntries(view.groups.map(group=>[group.id,group.operations.map(op=>op.operationId)]))});
+    await recheckPreservedPublishedParity(view.match);
+    await openPreservedScoreReview(view.match.id);
+    status.textContent='Decision saved in this device’s audit. Frozen scores and settlement are unchanged. '+(view.match.sharedPublishedRecordParity?.confirmed?'Published frozen record verified.':'Published record verification is not confirmed; reconnect and check again.');
+  }catch(error){status.textContent=error.message;}
+  finally{buttons.forEach(button=>button.disabled=false);}
 }
 function createSharedScoreOperationId() {
   try { if (crypto?.randomUUID) return crypto.randomUUID(); } catch {}
@@ -2084,6 +2245,10 @@ function getSharedOnlineLabel() {
   return navigator.onLine === false ? 'Offline' : 'Online';
 }
 function getSharedSyncStatus(match) {
+  if(match?.sharedScoreResolution && !getSharedScoresPreservedForHostReview(match).length && !getSharedScoreOutboxOperations(match).length)return {
+    label:isPreservedPublishedParityConfirmed(match)?'Frozen record verified':'Review resolved · verification pending',state:isPreservedPublishedParityConfirmed(match)?'published-verified':'published-unconfirmed',tone:isPreservedPublishedParityConfirmed(match)?'good':'warning',pending:0,
+    detail:'Local exceptions were resolved without changing scores or settlement. Published frozen-record verification is separate from live score delivery.'
+  };
   const preserved=getSharedScoresPreservedForHostReview(match);
   if(preserved.length && !getSharedScoreOutboxOperations(match).length)return {
     label:'Complete with exceptions',state:'complete-with-exceptions',tone:'warning',pending:0,
@@ -4399,6 +4564,7 @@ function persist({ skipRender = false, reclaimCloudCaches = false } = {}) {
   localPersistenceDiagnostics.lastFailureMessage = '';
   localPersistenceDiagnostics.lastBackupWarning = result.backupError || '';
   if (!skipRender) renderAll();
+  else if(!DYE_LEDGER_ADAPTER_MODE)renderPreservedScorePressure();
   return true;
 }
 function buildDefaultHoles(count = 18) {
@@ -16367,7 +16533,7 @@ function finishRemoteSharedRoundIfReady(match) {
   }
   const owned = getSharedLocallyOwnedPlayerIds(match);
   const frozenScores = new Map((pending.roundRecordSnapshot?.holes || []).flatMap(hole => (hole.scores || []).map(score => [getSharedPlayerHoleKey(score.playerId,hole.holeNumber),score.gross])));
-  const conflicts = extractLocalScoredLedger(match).filter(score => owned.has(score.playerId) && frozenScores.has(getSharedPlayerHoleKey(score.playerId,score.holeNumber)) && Number(score.gross) !== Number(frozenScores.get(getSharedPlayerHoleKey(score.playerId,score.holeNumber)))).map(score => ({ playerId: score.playerId, holeNumber: score.holeNumber, gross: score.gross, frozenGross: frozenScores.get(getSharedPlayerHoleKey(score.playerId,score.holeNumber)) }));
+  const conflicts = extractLocalScoredLedger(match).filter(score => owned.has(score.playerId) && !isResolvedPreservedKey(match,getSharedPlayerHoleKey(score.playerId,score.holeNumber)) && frozenScores.has(getSharedPlayerHoleKey(score.playerId,score.holeNumber)) && Number(score.gross) !== Number(frozenScores.get(getSharedPlayerHoleKey(score.playerId,score.holeNumber)))).map(score => ({ playerId: score.playerId, holeNumber: score.holeNumber, gross: score.gross, frozenGross: frozenScores.get(getSharedPlayerHoleKey(score.playerId,score.holeNumber)) }));
   pending.localScoreConflicts = conflicts;
   const reason = getSharedScoreOutboxOperations(match).length ? 'This phone still has unconfirmed scores. Keep it open and ask the host to check them before leaving this round.'
     : hasUnsavedVisibleScoreInputs() || pending.unsavedEntries?.length ? 'This phone has an unsaved entry. Keep it open and ask the host to check the score before leaving this round.'
@@ -16390,7 +16556,7 @@ function finishRemoteSharedRoundIfReady(match) {
     if (wrap) {
       let warning = wrap.querySelector('[data-remote-completion-warning]');
       if (!warning) { warning = document.createElement('div'); warning.className = 'setup-warning'; warning.dataset.remoteCompletionWarning = '1'; warning.setAttribute('role','alert'); wrap.prepend(warning); }
-      warning.textContent = getRemoteCompletionWarning(match);
+      warning.innerHTML = escapeHtml(getRemoteCompletionWarning(match))+preservedReviewButton(match);
     }
     return false;
   }
@@ -16625,6 +16791,7 @@ async function mergeCloudSharedMetadata(match, { includeAssignments = false, inc
     if (Object.prototype.hasOwnProperty.call(meta, 'teamScoringPolicyVersion') && Number(match.teamScoringPolicyVersion || 0) !== Number(meta.teamScoringPolicyVersion)) { match.teamScoringPolicyVersion = Number(meta.teamScoringPolicyVersion); changed = true; }
   }
   changed = applySharedScrambleSetupMetadata(match, meta) || changed;
+  if(match.sharedScoreResolution){await verifyPreservedPublishedParity(match,meta.status==='complete'?meta.roundRecordSnapshot:null);changed=true;}
   if (!isCurrentDeviceMatchHost(match) && meta.status === 'complete' && match.status !== 'complete') {
     match.remoteCompletionPending = { ...match.remoteCompletionPending, completedAt: meta.completedAt || new Date().toISOString(),
       roundRecordSnapshot: meta.roundRecordSnapshot || null, ledgerEntrySnapshot: meta.ledgerEntrySnapshot || null };
@@ -17958,6 +18125,7 @@ function renderRecentAppErrorsDiagnostics() {
 
 
 function renderAll() {
+  renderPreservedScorePressure();
   updateAppChromeOffset();
   renderPlayers();
   renderCourses();
@@ -18631,7 +18799,7 @@ function renderMatches() {
     const resultLabel = hasGames
       ? buildRoundRecordResultLine(getEffectiveRoundRecord(match, metrics))
       : (match.status === 'complete' ? 'Round complete · No games selected' : 'No games selected');
-    const canReopen = match.status === 'complete' && (match.storageMode !== 'shared' || isCurrentDeviceMatchHost(match));
+    const canReopen = !getSharedScoresPreservedForHostReview(match).length && !match.sharedScoreResolution && match.status === 'complete' && (match.storageMode !== 'shared' || isCurrentDeviceMatchHost(match));
     const continueLabel = state.activeMatchId === match.id ? 'Continue Loaded Round' : (match.storageMode === 'shared' ? 'Continue / Refresh' : 'Continue');
     return `
       <div class="item compact-item library-item-card round-library-card" data-round-status="${match.status === 'complete' ? 'complete' : 'unfinished'}">
@@ -18653,6 +18821,7 @@ function renderMatches() {
             ${match.status === 'complete'
               ? `<button data-view-match="${match.id}">View</button>${canReopen ? `<button class="secondary" data-reopen-match="${match.id}">Reopen</button>` : ''}`
               : `<button data-load-match="${match.id}">${continueLabel}</button>`}
+            ${preservedReviewButton(match)}
             <button class="secondary" data-share-match="${match.id}">Scorecard PDF</button>
             ${match.storageMode === 'shared' ? `<button class="secondary" data-refresh-shared-match="${match.sharedMatchId || match.id}">Cloud Refresh</button>` : ''}
             <button class="secondary danger-lite" data-delete-match="${match.id}">Delete</button>
@@ -20229,7 +20398,7 @@ function renderCurrentMatch() {
   renderSharedScoreRecovery();
   const match = getActiveMatch();
   const rulesWrap = document.getElementById('playGroupRulesPreview');
-  if (rulesWrap) rulesWrap.innerHTML = match ? (match.remoteCompletionPending ? '<div class="setup-warning" role="alert">'+escapeHtml(getRemoteCompletionWarning(match))+'</div>' : '') + (getAssignedTeamIndexError(match) ? '<div class="setup-warning">' + escapeHtml(getAssignedTeamIndexError(match)) + '</div>' : '') + buildGroupRulesPreview(match, rulesWrap.querySelector('details')?.open || false) : '';
+  if (rulesWrap) rulesWrap.innerHTML = match ? (match.remoteCompletionPending ? '<div class="setup-warning" role="alert">'+escapeHtml(getRemoteCompletionWarning(match))+preservedReviewButton(match)+'</div>' : '') + (getAssignedTeamIndexError(match) ? '<div class="setup-warning">' + escapeHtml(getAssignedTeamIndexError(match)) + '</div>' : '') + buildGroupRulesPreview(match, rulesWrap.querySelector('details')?.open || false) : '';
   const metaEl = document.getElementById('currentMatchMeta');
   const progressEl = document.getElementById('currentMatchProgress');
   const emptyEl = document.getElementById('scoreEntryEmpty');
@@ -25012,6 +25181,27 @@ function applySmartPuttsAdjustmentFromCheckbox(checkbox) {
 }
 
 function installHandlers() {
+  document.addEventListener('click',event=>{
+    if(event.target.closest?.('[data-pressure-rounds]')){activateTab('courses');openExperienceDestination('courses','rounds');return;}
+    const review=event.target.closest?.('[data-preserved-review]');
+    if(review){void openPreservedScoreReview(review.dataset.preservedReview);return;}
+    const resolve=event.target.closest?.('[data-resolve-preserved]');
+    if(resolve)void submitPreservedScoreReview(resolve.dataset.resolvePreserved);
+  });
+  document.getElementById('selectAllPreservedScoreReview')?.addEventListener('click',()=>{const boxes=[...document.querySelectorAll('[data-review-group]')];const checked=!boxes.every(box=>box.checked);boxes.forEach(box=>box.checked=checked);});
+  document.getElementById('closePreservedScoreReview')?.addEventListener('click',()=>document.getElementById('preservedScoreReviewDialog').close());
+  document.getElementById('recheckPreservedScoreParity')?.addEventListener('click',async()=>{
+    if(!preservedReviewView)return;await recheckPreservedPublishedParity(preservedReviewView.match);
+    document.getElementById('preservedScoreReviewStatus').textContent=preservedReviewView.match.sharedPublishedRecordParity?.confirmed?'Published frozen record verified. Live-score parity is separate.':'Frozen record verification is not confirmed. Reconnect or sign in and check again.';
+  });
+  document.getElementById('exportPreservedScoreAudit')?.addEventListener('click',async()=>{
+    try{
+      if(!preservedReviewView)return;const receipts=await getPreservedReviewStore().list(reviewMatchKey(preservedReviewView.match));
+      const url=URL.createObjectURL(new Blob([JSON.stringify({schemaVersion:1,deviceLocal:true,receipts},null,2)],{type:'application/json'}));
+      const link=document.createElement('a');link.href=url;link.download='dye-ledger-local-score-review.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }catch(error){document.getElementById('preservedScoreReviewStatus').textContent=error.message;}
+  });
+
   document.addEventListener('click', event => {
     const button = event.target.closest('[data-balance-player]');
     if (button) openBalanceExplanation(button.dataset.balancePlayer,button.dataset.balanceMatch,button);
@@ -26747,6 +26937,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
     if (selectedId) {
       const target = getMatch(selectedId);
       if (!target) return;
+      if(reopenId && (getSharedScoresPreservedForHostReview(target).length || target.sharedScoreResolution)){toast('This closed round has local review history. View the frozen result or its score review; it cannot be reopened through this workflow.');return;}
       if (target?.storageMode === 'shared') setLastOpenedSharedMatch(target);
       currentHole = Math.min(getRequestedHoleCount(target), Math.max(1, Number(target?.currentHole) || completedHoles(target) || 1));
       if (viewId) {
@@ -28189,6 +28380,13 @@ function installDyeLedgerLiveEngineAdapter() {
     getSharedScoreOutboxOperations,
     getSharedScoresPreservedForHostReview,
     preserveClosedSharedScoreOperations,
+    getPreservedReviewGroups,
+    resolvePreservedScoreGroups,
+    recoverPreservedScoreResolutions,
+    verifyPreservedPublishedParity,
+    getPreservedReviewRecord,
+    isResolvedPreservedKey,
+    renderPreservedScorePressure,
     queueSharedScoreOperation,
     acknowledgeSharedScoreOperations,
     buildPendingSharedScoreOperations,
@@ -28320,6 +28518,7 @@ if (!DYE_LEDGER_ADAPTER_MODE) {
   if (hasSupabaseConfig()) {
     window.setTimeout(() => refreshCourseLibraryFromCloud({ silent: true, force: true }), 250);
   }
+  for(const match of state.matches)if(getSharedScoresPreservedForHostReview(match).length || match.sharedScoreResolution)void recoverPreservedScoreResolutions(match).then(()=>{renderMatches();renderPreservedScorePressure();}).catch(()=>{});
   resumeActiveSharedMatchOnStartup();
 }
 

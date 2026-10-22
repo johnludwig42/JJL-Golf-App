@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
+import { webcrypto } from 'node:crypto';
+import { TextEncoder } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { cloneJson, normalizeRound, roundMoney, validateRound } from './simulation-engine.js';
 
@@ -40,7 +42,7 @@ const UNSUPPORTED_LIVE_AREAS = [
 ];
 
 function createBrowserShim() {
-  const sandbox = { console, setTimeout, clearTimeout, Math, Date, Intl, URL, URLSearchParams };
+  const sandbox = { console, setTimeout, clearTimeout, Math, Date, Intl, URL, URLSearchParams, crypto:webcrypto, TextEncoder };
   const localStorageValues = new Map();
   sandbox.window = sandbox;
   sandbox.self = sandbox;
@@ -84,6 +86,7 @@ export function loadLiveEngine(appPath = DEFAULT_APP_PATH, {storageEntries = []}
   const sandbox = createBrowserShim();
   for(const [key,value] of storageEntries)sandbox.localStorage.setItem(key,value);
   vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(new URL('../preserved-score-review.js',import.meta.url),'utf8'),sandbox);
   vm.runInContext(fs.readFileSync(new URL('../ledger-report/stroke-play.js',import.meta.url),'utf8'),sandbox);
   vm.runInContext(fs.readFileSync(appPath, 'utf8'), sandbox, { filename: appPath });
   if (!sandbox.__DYE_LEDGER_LIVE_ENGINE__) {

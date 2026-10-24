@@ -4,6 +4,12 @@
 **Status:** Living Document  
 **Purpose:** Single starting context for Codex, ChatGPT, and future developers.
 
+October 24 staging verification preparation: current client remains v31.0.80
+(2519e0e). Separate staging project confirmed as darbakmabpbkikisadop. See
+supabase/proposals/shared-score-rpc-v31.0.77/staging/README.md for catalog-first
+verification and guarded API preflight. No server SQL executed; production approval
+remains separate. Real-service verification is pending staging catalog evidence.
+
 Review-only completion extension: owner approved common RPC/direct P7701 closure protection, identical-value no-ops, durable client preservation under remoteCompletionPending and mandatory client-before-server rollout. See supabase/proposals/shared-score-rpc-v31.0.77/README.md. The reviewed client patch is now implemented for v31.0.78 release preparation; production SQL remains unapproved.
 
 ## 1. Project Identity

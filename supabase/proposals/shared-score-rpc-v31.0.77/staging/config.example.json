@@ -1,0 +1,6 @@
+{
+  "environment": "staging",
+  "projectRef": "REPLACE_WITH_SEPARATE_STAGING_REFERENCE",
+  "url": "https://REPLACE_WITH_SEPARATE_STAGING_REFERENCE.supabase.co",
+  "phase": "baseline"
+}

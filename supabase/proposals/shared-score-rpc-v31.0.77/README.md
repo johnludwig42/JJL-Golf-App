@@ -4,6 +4,10 @@ Baseline: committed v31.0.77, `91eac02`. Branch: `codex/shared-score-rpc-rollout
 Nothing has been run against production. SQL lives outside `supabase/migrations`.
 **Do not run the historical RPC migration or paste this proposal into production.**
 
+October 24 follow-up: [staging verification package](staging/README.md) targets the
+owner-confirmed separate project against current v31.0.80. Its guarded preflight
+and service matrix do not constitute production execution or readiness approval.
+
 Client promotion: the approved patch is implemented in **v31.0.78** on
 `codex/v31.0.78-closed-round-score-preservation`. The patch and local rehearsal
 report below remain historical review evidence against 91eac02. See

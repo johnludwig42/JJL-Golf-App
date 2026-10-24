@@ -1,5 +1,7 @@
 -- v31.0.77: READ-ONLY audit of all 13 repository migrations.
--- Project: ueallqqmdyzwdlmoyxfo. No golfer/account rows or credentials are selected.
+-- Original production audit: ueallqqmdyzwdlmoyxfo; also reusable on staging.
+-- Confirm the intended project in Dashboard first. This SELECT does not choose it.
+-- No golfer/account rows or credentials are selected.
 -- One result row: download/export CSV and share the full result for comparison.
 with relations as (
  select c.oid,n.nspname,c.relname,c.relrowsecurity,c.relforcerowsecurity,c.relacl,pg_get_userbyid(c.relowner) as owner

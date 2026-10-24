@@ -19,11 +19,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.79',
-  versionNumber: '31.0.79',
-  cacheName: 'the-dye-ledger-v31.0.79',
-  buildDate: '2026-10-21T13:41:40.251Z',
-  buildLabel: 'Preserved Score Resolution'
+  version: 'v31.0.80',
+  versionNumber: '31.0.80',
+  cacheName: 'the-dye-ledger-v31.0.80',
+  buildDate: '2026-10-24T12:46:48.102Z',
+  buildLabel: 'Team Names and Keyboard Persistence'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -9496,6 +9496,7 @@ function clearRoundRecapForActiveMatch() {
 function renderRoundRecapControlPanel(match = getReviewOrActiveMatch()) {
   const panel = document.getElementById('roundRecapControls');
   if (!panel) return;
+  if(deferFocusedContainerRender(panel))return;
   panel.innerHTML = match ? buildRoundRecapControls(match) : '';
 }
 
@@ -12082,12 +12083,11 @@ function computeTeamGameDiffs(match, metrics, gameKey) {
   return { front, back, overall };
 }
 
-function formatTeamGameStatus(match, metrics, diff) {
+function formatTeamGameStatus(match, metrics, diff, { compactNames = false } = {}) {
   if (!metrics || metrics.teams?.length !== 2) return '—';
   if (!Number.isFinite(diff) || diff === 0) return 'AS';
-  return diff > 0
-    ? `${describeTeamLabel(match, 1, metrics)} ${Math.abs(diff)} up`
-    : `${describeTeamLabel(match, 2, metrics)} ${Math.abs(diff)} up`;
+  const team = diff > 0 ? 1 : 2;
+  return `${compactNames ? getTeamDisplayName(match, team) : describeTeamLabel(match, team, metrics)} ${Math.abs(diff)} up`;
 }
 function formatMatchStatusMarkup(statusText, opts = {}) {
   const raw = String(statusText || '—').trim();
@@ -12491,14 +12491,14 @@ function buildFeaturedMatchStatus(match, metrics, gameKey) {
       ? 'No scores yet'
       : stroke.tie
         ? `Tied at ${stroke.leader.total}`
-        : `${describeTeamLabel(match, stroke.leader.team, metrics)} by ${stroke.margin} stroke${stroke.margin === 1 ? '' : 's'}`;
+        : `${getTeamDisplayName(match, stroke.leader.team)} by ${stroke.margin} stroke${stroke.margin === 1 ? '' : 's'}`;
     items.push({ label: 'Result', value: resultText });
     return `<div class="match-status-head"><strong>${escapeHtml(title)}</strong><div class="match-status-meta">${courseLine}</div></div><div class="match-status-grid">${items.map(item => `<div class="match-status-tile"><div class="tiny">${escapeHtml(item.label)}</div><div class="match-status-value">${escapeHtml(item.value)}</div></div>`).join('')}</div>`;
   }
   if (['nassau', 'team_match'].includes(gameKey) && metrics.teams.length === 2) {
     const diffs = computeTeamGameDiffs(match, metrics, gameKey);
     const holeCount = getPlayableHoleCount(match, metrics.tee);
-    const overallTeam = formatTeamGameStatus(match, metrics, diffs.overall);
+    const overallTeam = formatTeamGameStatus(match, metrics, diffs.overall, { compactNames: true });
     let items;
     if (holeCount <= 9) {
       items = [
@@ -12507,8 +12507,8 @@ function buildFeaturedMatchStatus(match, metrics, gameKey) {
         { label: 'Overall', value: overallTeam },
       ];
     } else {
-      const frontStatus = formatTeamGameStatus(match, metrics, diffs.front);
-      const backStatus = formatTeamGameStatus(match, metrics, diffs.back);
+      const frontStatus = formatTeamGameStatus(match, metrics, diffs.front, { compactNames: true });
+      const backStatus = formatTeamGameStatus(match, metrics, diffs.back, { compactNames: true });
       items = [
         { label: 'Front 9', value: frontStatus },
         { label: 'Back 9', value: backStatus },
@@ -15811,7 +15811,7 @@ function buildCloudMatchPayload(match, organizerUserId = null) {
     status: match.status || 'active',
     course_id: match.courseId || '',
     reference_tee_id: match.teeId || '',
-    course_snapshot: { ...courseSnapshot, sharedMatchMeta: { flamtanaConfig: getFlamtanaConfig(match) ? clonePlain(getFlamtanaConfig(match)) : null, teamScoringPolicyVersion: Number(match.teamScoringPolicyVersion || 0), assignedTeamReferenceTeeId: match.teeId || null, assignedTeamIndexPolicyVersion: Number(match.assignedTeamIndexPolicyVersion || 0), assignedTeamIndexes: Object.fromEntries((match.players || []).filter(row => Object.prototype.hasOwnProperty.call(row, 'assignedTeamIndex')).map(row => [row.playerId, row.assignedTeamIndex])), assignedTeamTeeIds: Object.fromEntries((match.players || []).map(row => [row.playerId, row.teeId])), tripId: match.tripId || null, eventId: match.eventId || null, scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device'), matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || ''), hostDeviceId: match.sharedHostDeviceId || getSharedDeviceId(), hostParticipantId: match.sharedHostParticipantId || getCurrentSharedParticipantId(match), devices: Array.isArray(match.sharedDevices) ? match.sharedDevices : [], participants: getSharedAssignmentParticipants(match), playerAssignments: match.sharedPlayerAssignments || {}, playerAssignmentState: match.sharedPlayerAssignmentState || {}, memories: getRoundMemories(match), memoriesUpdatedAt: new Date().toISOString(), roundContext: normalizeRoundContext(match.roundContext), roundTiming: match.roundTiming || { startedAt: null, endedAt: null }, holeFirstCompletedAt: match.holeFirstCompletedAt || {}, greeniesWinners: isCurrentDeviceMatchHost(match) ? clonePlain(match.greeniesWinners || {}) : {}, greeniesUpdatedAt: match.greeniesUpdatedAt || null, sspFacts: buildSharedSspFacts(match), pressConfig: normalizePressConfig(match.pressConfig), presses: isCurrentDeviceMatchHost(match) ? clonePlain(match.presses || []) : [], roundRecordSnapshot: isCurrentDeviceMatchHost(match) && isFrozenRoundRecord(match.roundRecordSnapshot) ? clonePlain(match.roundRecordSnapshot) : null, ledgerEntrySnapshot: isCurrentDeviceMatchHost(match) ? clonePlain(getAcceptedLedgerEntrySnapshot(match)) : null } },
+    course_snapshot: { ...courseSnapshot, sharedMatchMeta: { teamNames: Array.from({length: Number(match.teamCount) || 1}, (_,i)=>getTeamName(match,i+1)), flamtanaConfig: getFlamtanaConfig(match) ? clonePlain(getFlamtanaConfig(match)) : null, teamScoringPolicyVersion: Number(match.teamScoringPolicyVersion || 0), assignedTeamReferenceTeeId: match.teeId || null, assignedTeamIndexPolicyVersion: Number(match.assignedTeamIndexPolicyVersion || 0), assignedTeamIndexes: Object.fromEntries((match.players || []).filter(row => Object.prototype.hasOwnProperty.call(row, 'assignedTeamIndex')).map(row => [row.playerId, row.assignedTeamIndex])), assignedTeamTeeIds: Object.fromEntries((match.players || []).map(row => [row.playerId, row.teeId])), tripId: match.tripId || null, eventId: match.eventId || null, scoringAccessMode: normalizeScoringAccessMode(match.scoringAccessMode || match.scoreEntryMode || 'single_device'), matchCode: normalizeMatchCode(match.sharedMatchCode || match.sharedMatchRef || match.sharedMatchId || ''), hostDeviceId: match.sharedHostDeviceId || getSharedDeviceId(), hostParticipantId: match.sharedHostParticipantId || getCurrentSharedParticipantId(match), devices: Array.isArray(match.sharedDevices) ? match.sharedDevices : [], participants: getSharedAssignmentParticipants(match), playerAssignments: match.sharedPlayerAssignments || {}, playerAssignmentState: match.sharedPlayerAssignmentState || {}, memories: getRoundMemories(match), memoriesUpdatedAt: new Date().toISOString(), roundContext: normalizeRoundContext(match.roundContext), roundTiming: match.roundTiming || { startedAt: null, endedAt: null }, holeFirstCompletedAt: match.holeFirstCompletedAt || {}, greeniesWinners: isCurrentDeviceMatchHost(match) ? clonePlain(match.greeniesWinners || {}) : {}, greeniesUpdatedAt: match.greeniesUpdatedAt || null, sspFacts: buildSharedSspFacts(match), pressConfig: normalizePressConfig(match.pressConfig), presses: isCurrentDeviceMatchHost(match) ? clonePlain(match.presses || []) : [], roundRecordSnapshot: isCurrentDeviceMatchHost(match) && isFrozenRoundRecord(match.roundRecordSnapshot) ? clonePlain(match.roundRecordSnapshot) : null, ledgerEntrySnapshot: isCurrentDeviceMatchHost(match) ? clonePlain(getAcceptedLedgerEntrySnapshot(match)) : null } },
     format: match.format || 'teams',
     allowance: normalizeHandicapAllowancePercent(match.allowance, 100),
     hole_count: getRequestedHoleCount(match),
@@ -16350,7 +16350,9 @@ function hydrateMatchFromCloudBundle(bundle) {
   const sharedMeta = matchRow?.course_snapshot?.sharedMatchMeta || {};
   const courseIds = ensureImportedCourseFromSnapshot(matchRow || {});
   ensureImportedPlayers(players);
-  const teamNames = teams.length ? teams.sort((a, b) => Number(a.team_number) - Number(b.team_number)).map(t => t.team_name || `Team ${t.team_number}`) : [];
+  const teamNames = Array.isArray(sharedMeta.teamNames) && sharedMeta.teamNames.length === Number(matchRow?.team_count) && sharedMeta.teamNames.every(name=>typeof name==='string')
+    ? sharedMeta.teamNames.map(name=>name.trim().slice(0,25))
+    : (teams.length ? teams.slice().sort((a, b) => Number(a.team_number) - Number(b.team_number)).map(t => t.team_name || `Team ${t.team_number}`) : []);
   const entriesByPlayerHole = new Map();
   (scoreEntries || []).forEach(entry => {
     entriesByPlayerHole.set(`${entry.match_player_id || entry.player_id}:${entry.hole_number}`, entry);
@@ -16492,7 +16494,7 @@ async function pullSharedScoreEntries(match, { silent = true, render = true, str
       currentMatch.lastSharedScorePullAt = currentMatch.lastCloudSyncAt;
       currentMatch.lastSharedSyncError = '';
       persist({ skipRender: true });
-      if (render) renderAll();
+      if (render) renderAll({background:true});
       if (!silent) toast('Shared scores updated.');
     } else {
       currentMatch.lastSharedScorePullAt = new Date().toISOString();
@@ -16527,6 +16529,7 @@ function getRemoteCompletionWarning(match) {
 function finishRemoteSharedRoundIfReady(match) {
   const pending = match?.remoteCompletionPending;
   if (!pending || isCurrentDeviceMatchHost(match) || String(state.activeMatchId || '') !== String(match.id)) return false;
+  if(isKeyboardEditable(document.activeElement) && !document.activeElement.matches('[data-score-player]')){deferredEditingRender=true;return false;}
   if(getSharedScoreOutboxOperations(match).length) {
     try { preserveClosedSharedScoreOperations(match); }
     catch { pending.reason='The host completed this round, but review scores could not be saved. Free storage and retry; the delivery queue is retained.'; return false; }
@@ -16596,7 +16599,7 @@ async function refreshActiveSharedScores({ silent = true, render = true } = {}) 
   }
   if (metadataChanged) persist({ skipRender: true });
   if (finishRemoteSharedRoundIfReady(match)) return true;
-  if (render && (scoresChanged || metadataChanged) && !hasUnsavedVisibleScoreInputs()) renderAll();
+  if (render && (scoresChanged || metadataChanged)) renderAll({background:true});
   return scoresChanged || metadataChanged;
 }
 async function ensureSharedRealtimeSubscription(match = getActiveMatch()) {
@@ -16698,6 +16701,7 @@ async function fetchSharedMatchMetadata(matchId, match = null) {
   if (matchError) throw matchError;
   if (membershipsError) console.warn('Could not refresh shared participants.', membershipsError);
   const meta = matchRow?.course_snapshot?.sharedMatchMeta || {};
+  const teamNameMetadata = Array.isArray(meta.teamNames) && meta.teamNames.every(name=>typeof name==='string') ? {teamNames:meta.teamNames.map(name=>name.trim().slice(0,25))} : {};
   const devices = normalizeSharedDeviceList([
     ...(Array.isArray(meta.devices) ? meta.devices : []),
     ...((memberships || []).map(row => getSharedMembershipDeviceRecord(row, match)).filter(Boolean)),
@@ -16711,6 +16715,7 @@ async function fetchSharedMatchMetadata(matchId, match = null) {
   latestSharedAssignmentMetadataSnapshot = {
     matchId,
     fetchedAt: new Date().toISOString(),
+    ...teamNameMetadata,
     devices,
     participants,
     playerAssignments,
@@ -16722,6 +16727,7 @@ async function fetchSharedMatchMetadata(matchId, match = null) {
     memberships: (memberships || []).map(row => ({ id: row.id, user_id: row.user_id, role: row.role, status: row.status, device_label: row.device_label, joined_at: row.joined_at, last_seen_at: row.last_seen_at })),
   };
   return {
+    ...teamNameMetadata,
     ...(Number(meta.teamScoringPolicyVersion) > 0 ? { ...(Object.hasOwn(meta, 'flamtanaConfig') ? { flamtanaConfig: meta.flamtanaConfig } : {}), roundTiming: meta.roundTiming || null } : {}),
     status: String(matchRow?.status || ''),
     completedAt: matchRow?.completed_at || null,
@@ -16786,6 +16792,9 @@ async function mergeCloudSharedMetadata(match, { includeAssignments = false, inc
     match = currentMatch;
   }
   let changed = mergeSharedDevices(match, meta.devices || []);
+  if (!isCurrentDeviceMatchHost(match) && match.status !== 'complete' && !isFrozenRoundRecord(match.roundRecordSnapshot) && !match.remoteCompletionPending && meta.status !== 'complete' && Array.isArray(meta.teamNames) && meta.teamNames.length === Number(match.teamCount)) {
+    if (JSON.stringify(match.teamNames || []) !== JSON.stringify(meta.teamNames)) { match.teamNames = meta.teamNames.slice(); changed = true; }
+  }
   if (!isCurrentDeviceMatchHost(match)) {
     changed = applyAssignedTeamIndexMetadata(match, meta) || changed;
     if (Object.prototype.hasOwnProperty.call(meta, 'teamScoringPolicyVersion') && Number(match.teamScoringPolicyVersion || 0) !== Number(meta.teamScoringPolicyVersion)) { match.teamScoringPolicyVersion = Number(meta.teamScoringPolicyVersion); changed = true; }
@@ -16960,18 +16969,19 @@ async function refreshActiveSharedParticipants({ silent = true } = {}) {
     const beforeAssignments = JSON.stringify(match.sharedPlayerAssignments || {});
     const beforeMemories = JSON.stringify(getRoundMemories(match));
     await sharedDeliveryRequest(refreshSharedDevicesForAssignment(match));
+    const beforeTeamNames = JSON.stringify(match.teamNames || []);
     if (!isCurrentDeviceMatchHost(match)) {
       await mergeCloudSharedMetadata(match, { includeAssignments: true, includeMemories: true });
     } else {
       await mergeCloudSharedMetadata(match, { includeAssignments: false, includeMemories: true });
     }
     if (finishRemoteSharedRoundIfReady(match)) return true;
-    const changed = !!match.remoteCompletionPending || beforeParticipants !== JSON.stringify(getSharedAssignmentParticipants(match))
+    const changed = !!match.remoteCompletionPending || beforeTeamNames !== JSON.stringify(match.teamNames || []) || beforeParticipants !== JSON.stringify(getSharedAssignmentParticipants(match))
       || beforeAssignments !== JSON.stringify(match.sharedPlayerAssignments || {})
       || beforeMemories !== JSON.stringify(getRoundMemories(match));
     if (changed) {
       persist({ skipRender: true });
-      if (!hasUnsavedVisibleScoreInputs()) renderAll();
+      renderAll({background:true});
       if (!silent) toast(isCurrentDeviceMatchHost(match) ? 'Shared participants updated.' : 'Shared assignments updated.');
     }
     return changed;
@@ -17059,7 +17069,7 @@ function startSharedConnectionFastRefresh({ reason = 'shared-connection', durati
     try {
       await refreshActiveSharedParticipants({ silent: true });
       await refreshActiveSharedScores({ silent: true, render: false });
-      renderAll();
+      renderAll({background:true});
     } catch (err) {
       console.warn('Shared connection fast refresh failed.', err);
     }
@@ -18124,7 +18134,50 @@ function renderRecentAppErrorsDiagnostics() {
 }
 
 
-function renderAll() {
+let deferredEditingRender = false;
+let editingRenderTimer = null;
+let editingPointerActive = false;
+let editingCompositionActive = false;
+const editedTextControls = new Set();
+function isKeyboardEditable(element) {
+  return !!element && !element.disabled && !element.readOnly && (element.isContentEditable || element.matches?.('textarea,input:not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]):not([type=reset]):not([type=file]):not([type=range]):not([type=color]):not([type=hidden])'));
+}
+function editingControlSelector(element) {
+  if(element.id)return '#'+CSS.escape(element.id);
+  const attrs=[...element.attributes].filter(attr=>attr.name.startsWith('data-') && attr.name!=='data-dirty');
+  const scope=element.closest('form[id],dialog[id],.panel[id]');
+  const suffix=attrs.map(attr=>'['+CSS.escape(attr.name)+'="'+CSS.escape(attr.value)+'"]').join('') || (element.name?'[name="'+CSS.escape(element.name)+'"]':'');
+  return suffix?(scope?'#'+CSS.escape(scope.id)+' ':'')+element.tagName.toLowerCase()+suffix:null;
+}
+function captureEditedTextDrafts() {
+  const drafts=[];
+  for(const element of editedTextControls){
+    if(!element.isConnected){editedTextControls.delete(element);continue;}
+    if(element.matches('[data-score-player],input[type=password]'))continue;
+    const selector=editingControlSelector(element);
+    if(selector && document.querySelectorAll(selector).length===1)drafts.push({selector,value:element.isContentEditable?element.textContent:element.value,editable:element.isContentEditable});
+  }
+  return drafts;
+}
+function scheduleDeferredEditingRender() {
+  if(editingRenderTimer)clearTimeout(editingRenderTimer);
+  editingRenderTimer=setTimeout(()=>{
+    editingRenderTimer=null;
+    if(!deferredEditingRender || editingPointerActive || editingCompositionActive || isKeyboardEditable(document.activeElement) || hasUnsavedVisibleScoreInputs())return;
+    // The triggering click/submit has finished. Capture its remaining drafts, not
+    // values from before a Save, Cancel, navigation or form reset.
+    const drafts=captureEditedTextDrafts();
+    renderAll();
+    for(const draft of drafts){const element=document.querySelector(draft.selector);if(element && !element.disabled){if(draft.editable)element.textContent=draft.value;else element.value=draft.value;editedTextControls.add(element);}}
+  },0);
+}
+function deferFocusedContainerRender(container) {
+  if(container?.contains(document.activeElement) && isKeyboardEditable(document.activeElement)){deferredEditingRender=true;return true;}
+  return false;
+}
+function renderAll({ force = false, background = false } = {}) {
+  if(!force && (isKeyboardEditable(document.activeElement) || editingCompositionActive || (background && hasUnsavedVisibleScoreInputs()))){deferredEditingRender=true;return;}
+  deferredEditingRender=false;
   renderPreservedScorePressure();
   updateAppChromeOffset();
   renderPlayers();
@@ -18316,6 +18369,7 @@ function renderRoundMemoriesPanel(match = getReviewOrActiveMatch()) {
   const panel = document.getElementById('roundMemoriesPanel');
   const count = document.getElementById('roundMemoriesCount');
   if (!panel) return;
+  if(deferFocusedContainerRender(panel))return;
   const memories = getRoundMemories(match);
   if (count) count.textContent = String(memories.length || 0);
   panel.innerHTML = match ? buildMemoriesDisplay(match) : '<div class="tiny">Create or load a match to see memories.</div>';
@@ -22318,6 +22372,11 @@ function syncScoreboardPrintControls(printView = null) {
 function renderTeamNameInputs(teamCount = Number(document.getElementById('teamCountSelect')?.value || 1), teamNames = []) {
   const wrap = document.getElementById('teamNamesGrid');
   if (!wrap) return;
+  const inputs = [...wrap.querySelectorAll('[data-team-name]')];
+  if (inputs.length === teamCount && inputs.every((input,index)=>Number(input.dataset.teamName)===index+1)) {
+    inputs.forEach((input,index)=>{if(input!==document.activeElement){const value=String(teamNames[index] || '').slice(0,25);input.value=value;input.defaultValue=value;}});
+    return;
+  }
   wrap.innerHTML = Array.from({ length: teamCount }, (_, idx) => `
     <label>
       <span>Team ${idx + 1} name</span>
@@ -23965,6 +24024,7 @@ function renderGamesPicker(existing = []) {
   const picker = document.getElementById('gamesPicker');
   const configsWrap = document.getElementById('gameConfigs');
   if (!picker || !configsWrap) return;
+  if(deferFocusedContainerRender(configsWrap))return;
   const expanded = Object.fromEntries(Array.from(configsWrap.querySelectorAll('[data-game-advanced]')).map(details => [details.dataset.gameAdvanced, details.open]));
   const normalizedExisting = normalizeSelectedGamesOrder(existing || []);
   const selectedKeys = normalizedExisting.map(g => g.key);
@@ -25181,6 +25241,18 @@ function applySmartPuttsAdjustmentFromCheckbox(checkbox) {
 }
 
 function installHandlers() {
+  document.addEventListener('input',event=>{if(isKeyboardEditable(event.target))editedTextControls.add(event.target);},true);
+  document.addEventListener('compositionstart',()=>{editingCompositionActive=true;},true);
+  document.addEventListener('compositionend',()=>{editingCompositionActive=false;scheduleDeferredEditingRender();},true);
+  document.addEventListener('focusout',scheduleDeferredEditingRender,true);
+  document.addEventListener('pointerdown',()=>{editingPointerActive=true;},true);
+  const finishEditingPointer=()=>{editingPointerActive=false;scheduleDeferredEditingRender();};
+  document.addEventListener('pointerup',finishEditingPointer,true);
+  document.addEventListener('pointercancel',finishEditingPointer,true);
+  const resetInterruptedEditingGesture=()=>{editingPointerActive=false;editingCompositionActive=false;scheduleDeferredEditingRender();};
+  window.addEventListener('blur',resetInterruptedEditingGesture);
+  window.addEventListener('focus',scheduleDeferredEditingRender);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')resetInterruptedEditingGesture();});
   document.addEventListener('click',event=>{
     if(event.target.closest?.('[data-pressure-rounds]')){activateTab('courses');openExperienceDestination('courses','rounds');return;}
     const review=event.target.closest?.('[data-preserved-review]');
@@ -26912,7 +26984,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
       currentHole = nextHoleInSequence || savedPosition;
     }
     match.currentHole = currentHole;
-    if (!persist()) return false;
+    if (!persist({skipRender:true})) return false;
+    renderAll({force:true});
     if (shouldCaptureWeatherAfterFirstSavedHole(match)) scheduleWeatherCaptureForMatch(match.id);
     if (currentHole !== savedPosition) scrollToActiveHoleScoringTop();
     scheduleSharedMatchSync(match, { immediate: true, silent: true });

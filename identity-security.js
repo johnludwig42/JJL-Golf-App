@@ -241,6 +241,7 @@
     let profileAccountId = '';
     let profileRequest = 0;
     let resendTimer = null;
+    let renderedAccountView = '';
     const loadProfile = async user => {
       const accountId = String(user?.id || '');
       if (!accountId || profileAccountId === accountId) return;
@@ -266,6 +267,11 @@
       if (resendTimer) { clearTimeout(resendTimer); resendTimer = null; }
       view = { ...view, ...state };
       const user = view.session?.user;
+      // Token/contact refreshes do not change this form. Keep its native inputs,
+      // draft values and caret; real account, OTP or profile transitions still render.
+      const accountView = JSON.stringify([gate.enabled, user?.id || '', user?.email || '', !!view.profileLoading, view.profile || null, view.profileError || '', view.pendingEmail || '', view.resendAvailableAt || 0]);
+      if(accountView === renderedAccountView){if(!user && view.pendingEmail)scheduleResendCountdown();return;}
+      renderedAccountView = accountView;
       const resendSecondsRemaining = Math.max(0, Math.ceil((Number(view.resendAvailableAt) - Date.now()) / 1000));
       root.innerHTML = !gate.enabled
         ? `<h2>Account &amp; Security</h2><div class="strong">Account sign-in unavailable</div><div class="tiny top-gap">${escapeText(gate.reason)} Local scoring remains available.</div>`

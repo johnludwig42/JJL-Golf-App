@@ -1,5 +1,34 @@
 # Staging preparation results — October 24, 2026
 
+October 25 full-round direct-upload UI rehearsal (supersedes one-hole limit below):
+host scored T1/T2 and remote scored T3/T4 through all 18 holes. Synthetic gross
+scores were 4/5/6/7 every hole: totals 72/90/108/126, off-low game nets
+72/84/96/108. Both origins reloaded after nine holes; the saved round, assignments,
+acknowledgement/parity indicators and zero pending counts recovered. This is reload
+recovery, not a controlled offline/lost-ack test. Full-card sync reached 18/18 and
+host completion succeeded. Remote automatically returned to Create/Join Match.
+
+Story service was unavailable; the documented facts-only fallback generated and
+saved. Save Story & Preview Ledger opened a seven-page report. Big Game pool
+$160 paid $112/$48; Calcutta pool $160 went to T1's two backers. Per-player net
+settlement was +136/+136/-16/-16/-40/-40/-80/-80, summing to zero; seven payments
+totaled $272. These independently match the synthetic fixture's five components.
+This is not a byte comparison against the historical v31.0.62 stress baseline.
+
+BLOCKER FOUND, NOT FIXED: report acceptance is disabled with "Complete round to
+accept" despite successful round completion and saved Story. buildLedgerEntryReportModel
+constructs report.meta without status; the preview path adds Story fields but not
+status. ledger-report/report.js requires meta.status === 'final' to enable
+Accept & Finalize. The report renders final Flamtana results but cannot be accepted.
+Recommend carrying the authoritative RoundRecord status into report metadata,
+with behavioral coverage for completed and provisional rounds, then repeating this
+acceptance step. No runtime fix authorized/applied during this verification.
+
+Remaining gates: controlled interrupted delivery/lost acknowledgements, auth failure
+recovery, outsider/guest authority, RPC installation/Realtime/cache lag/closure races,
+rollback/restore and physical two-phone acceptance. Staging-only test data changed;
+production untouched. The baseline is not ready to declare fully verified.
+
 October 25 signed-in direct-upload baseline: second loopback instance signed in
 to the same staging account, joined the synthetic round, and downloaded course,
 all eight golfers and four team names. Host assignment of G5–G8 propagated to the

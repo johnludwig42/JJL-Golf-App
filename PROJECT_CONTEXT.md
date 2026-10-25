@@ -4,6 +4,12 @@
 **Status:** Living Document  
 **Purpose:** Single starting context for Codex, ChatGPT, and future developers.
 
+October 25 full-round staging finding: direct-upload scoring completed 18/18 across
+two origins; nine-hole reload recovery and automatic remote exit passed. Saved
+facts-only Story opened a seven-page Ledger with independently reconciled settlement.
+Acceptance is blocked: report.meta omits status while report UI requires 'final'.
+No runtime fix applied; see staging/RESULTS.md for evidence and remaining gates.
+
 October 25 staging delivery progress: same-account host/remote loopback instances
 successfully joined, synchronized foursome assignments and delivered first-hole
 team scores both ways using direct upload. Both Quick Scoreboards agree on team

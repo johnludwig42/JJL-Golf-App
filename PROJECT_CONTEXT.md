@@ -4,6 +4,13 @@
 **Status:** Living Document  
 **Purpose:** Single starting context for Codex, ChatGPT, and future developers.
 
+October 25 staging delivery progress: same-account host/remote loopback instances
+successfully joined, synchronized foursome assignments and delivered first-hole
+team scores both ways using direct upload. Both Quick Scoreboards agree on team
+net totals 4/4/5/6 and foursome totals 4/5. See staging/RESULTS.md for boundaries:
+failure recovery, full-round finalization, RPC/rollback and physical-phone tests
+remain unverified. Production unchanged.
+
 October 24 staging verification preparation: current client remains v31.0.80
 (2519e0e). Separate staging project confirmed as darbakmabpbkikisadop. See
 supabase/proposals/shared-score-rpc-v31.0.77/staging/README.md for catalog-first
@@ -46,6 +53,13 @@ Preview helper login initially used the wrong Auth storage key; main Account UI
 remained signed out. Corrected helper now derives the app's exported key; isolated
 mocked handoff/reload checks pass. User must re-enter staging credentials once;
 actual signed-in scoring tests have not yet run. Production Auth code unchanged.
+User now confirmed staging signed-in identity. Synthetic course/eight players and
+four teams prepared through actual UI; Shared Match host publication succeeded
+with Direct upload and empty-card parity confirmed. The active test is Staging
+Sync Test. Second local preview on port 5088 is open for same-account remote login;
+its private credentials are user-entered. Pending: remote join, Calcutta picks,
+foursome assignments and score delivery. These are local browser instances, not
+physical phone acceptance; RPC remains absent.
 
 Review-only completion extension: owner approved common RPC/direct P7701 closure protection, identical-value no-ops, durable client preservation under remoteCompletionPending and mandatory client-before-server rollout. See supabase/proposals/shared-score-rpc-v31.0.77/README.md. The reviewed client patch is now implemented for v31.0.78 release preparation; production SQL remains unapproved.
 

@@ -4,6 +4,13 @@
 **Status:** Living Document  
 **Purpose:** Single starting context for Codex, ChatGPT, and future developers.
 
+October 25 approved v31.0.81 fix: Ledger report metadata now carries the effective
+RoundRecord status. Final/provisional regression checks pass. The existing saved
+staging host round reopened with its saved Story and unchanged printed report,
+accepted successfully, and retained Ledger finalized after app reload. No scores
+re-entered, no runtime settlement change, no production SQL. Full gate results:
+see BUILD_NOTES_v31.0.81.md. Earlier acceptance-blocked notes are superseded.
+
 October 25 full-round staging finding: direct-upload scoring completed 18/18 across
 two origins; nine-hole reload recovery and automatic remote exit passed. Saved
 facts-only Story opened a seven-page Ledger with independently reconciled settlement.

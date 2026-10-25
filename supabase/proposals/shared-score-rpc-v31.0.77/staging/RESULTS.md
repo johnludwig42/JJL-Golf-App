@@ -1,5 +1,23 @@
 # Staging preparation results — October 24, 2026
 
+October 25 approved acceptance correction, v31.0.81: buildLedgerEntryReportModel
+now carries the authoritative effective RoundRecord meta.status. Three new tests
+verify final/provisional behavior, unchanged source evidence, and actual report
+acceptance. Existing staging host round reopened from Library with its saved
+Story; Accept & Finalize succeeded. UI displayed Accepted and frozen, and host
+still displayed Ledger finalized / Accepted and ready after reload. Printed #doc
+text matched the old report exactly; seven pages, unchanged scores and settlement.
+No scores or Story re-entered. Prior acceptance blocker is resolved locally.
+Final .81 suite: 1,536/1,536 passed (633.8 seconds, no skips/failures), lint
+zero errors/88 existing warnings, validate and seven layout references passed,
+legacy Flamtana stress 50/50, simulation comparison 77/77 exact, simulation
+tests 4/4. Full gate caveats and unchanged-reference policy are in .81 build notes.
+
+Additional observation during Library review: two completed entries have the same
+test name and shared code; only the host copy contains the saved Story. This was
+visible before acceptance and has not been diagnosed or changed. Keep it separate
+from this one-line adapter fix. Remaining delivery/RPC/two-phone gates below stand.
+
 October 25 full-round direct-upload UI rehearsal (supersedes one-hole limit below):
 host scored T1/T2 and remote scored T3/T4 through all 18 holes. Synthetic gross
 scores were 4/5/6/7 every hole: totals 72/90/108/126, off-low game nets

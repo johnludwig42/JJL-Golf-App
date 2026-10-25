@@ -19,11 +19,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.80',
-  versionNumber: '31.0.80',
-  cacheName: 'the-dye-ledger-v31.0.80',
-  buildDate: '2026-10-24T12:46:48.102Z',
-  buildLabel: 'Team Names and Keyboard Persistence'
+  version: 'v31.0.81',
+  versionNumber: '31.0.81',
+  cacheName: 'the-dye-ledger-v31.0.81',
+  buildDate: '2026-10-25T19:37:18.455Z',
+  buildLabel: 'Ledger Acceptance Status'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -8139,6 +8139,7 @@ function buildLedgerEntryReportModel(match, metrics = null) {
       roundId: String(match?.id || ''),
       appVersion: APP_VERSION,
       rulesVersion: ROUND_RECORD_SCHEMA_VERSION,
+      status: record.meta?.status,
       acceptanceStatus: 'draft',
       course: course.name || course.courseName || match.courseName || 'Golf Course',
       layout: tee.name || tee.teeName || match.layoutName || 'Round',

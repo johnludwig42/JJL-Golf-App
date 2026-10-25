@@ -1,5 +1,29 @@
 # Staging preparation results — October 24, 2026
 
+Preview handoff correction: after the user reported successful helper login, the
+main Account UI still showed Signed out. The helper used the SDK default session
+key instead of the app's custom key. It now derives ACCOUNT_AUTH_STORAGE_KEY from
+the unchanged identity module. An isolated, mocked browser test verifies login
+handoff into main Account UI and persistence across reload, zero production calls.
+Real-user re-login/confirmation remains required before any signed-in scoring test.
+
+October 25 local preview: separate loopback staging copy and password sign-in
+page prepared, with production-target refusal, 41/41 asset checks, five private-path
+404 checks and temporary-browser rendering/mocked-auth checks passing. Production
+runtime files unchanged; no real Auth write made. User sign-in is now the next
+step. See LOCAL_PREVIEW.md for URL, restart command and verification boundaries.
+
+October 25 live anonymous API preflight: staging Auth health returned 200;
+zero-row matches access without a user session returned 401/42501 (expected
+anonymous denial); empty RPC validation returned 404/PGRST202 (RPC still absent).
+Auth public settings show email enabled, confirmation required, guest sign-in
+disabled. Sanitized evidence: docs/audits/v31.0.80-staging-api-preflight.json.
+No scores, users or emails were created/sent. This verifies API reachability and
+anonymous denial only, not signed-in delivery, authority, retries or parity.
+User supplied staging Users screenshot; listed example.test accounts cannot
+receive email sign-in codes. A reachable email account for normal app sign-in
+is the next setup dependency; no private password/session token is requested.
+
 October 25 query (18): the supplied post-alignment provider_settings export now
 matches production across schema owner/permissions, all six default ACL entries,
 automatic-RLS helper definition/owner/grants and enabled ensure_rls trigger.

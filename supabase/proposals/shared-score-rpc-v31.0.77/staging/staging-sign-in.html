@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Staging sign-in — The Dye Ledger</title>
+<style>body{font:18px system-ui;background:#f3f5f1;color:#17382d;margin:0;padding:24px}main{max-width:440px;margin:32px auto}label{display:block;margin:20px 0 6px}input,button{box-sizing:border-box;width:100%;font:inherit;padding:14px;border:1px solid #77877b;border-radius:8px}button{margin-top:24px;background:#285c40;color:white}#feedback{margin-top:20px;overflow-wrap:anywhere}</style></head>
+<body><main><h1>Staging test sign-in</h1><p>This signs into Dye Ledger Staging only. Use the email and password you chose for the staging account.</p>
+<form id="login"><label for="email">Staging email</label><input id="email" type="email" autocomplete="username" required>
+<label for="password">Staging password</label><input id="password" type="password" autocomplete="current-password" required>
+<button id="submit" type="submit">Sign in and open staging app</button></form>
+<p id="feedback" role="status"></p><p>Your password goes directly to staging Auth. This local page does not save or log it.</p></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="supabase-config.js"></script>
+<script src="identity-security.js"></script>
+<script>
+'use strict';
+const settings=window.__DYE_SUPABASE_CONFIG__;
+const feedback=document.getElementById('feedback');
+const allowed=settings?.url==='https://darbakmabpbkikisadop.supabase.co' && settings?.accountAuth?.expectedProjectRef==='darbakmabpbkikisadop' && settings?.accountAuth?.environment==='staging';
+const accountStorageKey=window.DyeLedgerIdentitySecurity?.ACCOUNT_AUTH_STORAGE_KEY;
+const client=allowed && accountStorageKey && window.supabase?.createClient(settings.url,settings.anonKey,{auth:{storageKey:accountStorageKey,persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+document.getElementById('submit').disabled=!client;
+if(!client)feedback.textContent='Staging configuration is unavailable. Stop and check the preview setup.';
+document.getElementById('login').addEventListener('submit',async event=>{
+ event.preventDefault();if(!client)return;
+ const button=document.getElementById('submit');button.disabled=true;feedback.textContent='Signing into staging…';
+ try{
+  const result=await client.auth.signInWithPassword({email:document.getElementById('email').value.trim(),password:document.getElementById('password').value});
+  if(result.error)throw result.error;
+  if(!result.data.session || result.data.user?.is_anonymous)throw new Error('A confirmed staging account is required.');
+  location.assign('index.html');
+ }catch(error){feedback.textContent=error?.message || 'Staging sign-in failed.';button.disabled=false;}
+ finally{document.getElementById('password').value='';}
+});
+</script></body></html>

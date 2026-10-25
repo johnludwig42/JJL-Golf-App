@@ -1,0 +1,43 @@
+{
+  "testedAt": "2026-10-25T16:48:58.978Z",
+  "target": {
+    "environment": "staging",
+    "projectRef": "darbakmabpbkikisadop",
+    "url": "https://darbakmabpbkikisadop.supabase.co",
+    "phase": "baseline"
+  },
+  "role": "anonymous",
+  "checks": [
+    {
+      "id": "auth-health",
+      "httpStatus": 200,
+      "code": ""
+    },
+    {
+      "id": "table-read-no-rows",
+      "httpStatus": 401,
+      "code": "42501"
+    },
+    {
+      "id": "rpc-empty-batch",
+      "httpStatus": 404,
+      "code": "PGRST202"
+    }
+  ],
+  "preflightPassed": true,
+  "rpcObservation": "rpc-not-in-schema-cache",
+  "scope": "API reachability only; no score writes, DDL, cache reload or production readiness verified",
+  "authSettings": {
+    "projectRef": "darbakmabpbkikisadop",
+    "httpStatus": 200,
+    "externalEmail": true,
+    "externalAnonymousUsers": false,
+    "disableSignup": false,
+    "mailerAutoconfirm": false
+  },
+  "productionReady": false,
+  "signedInUserTestsRun": false,
+  "scoreWritesPerformed": false,
+  "emailsSent": false,
+  "accountsCreated": false
+}

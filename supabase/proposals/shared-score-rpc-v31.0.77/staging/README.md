@@ -8,6 +8,20 @@ Production `ueallqqmdyzwdlmoyxfo` is explicitly refused by the API preflight.
 ## Current result
 
 See [local preparation results](RESULTS.md) for actual counts and unverified gates.
+The supplied catalog shows an empty application schema; see the
+[baseline review and next steps](BASELINE_REVIEW.md) before any installation.
+The October 25 schema export is now reviewed; see the
+[locally rehearsed baseline installation package](BASELINE_PACKAGE.md).
+The supplied post-install query (16) now confirms application baseline parity.
+Do not reinstall the baseline. Compare provider settings next; RPC installation
+and real Auth/RLS/Realtime verification remain pending.
+Supplied settings now confirm matching schema/default ACLs, with automatic RLS
+present only in production. See [staging alignment review](AUTO_RLS_REVIEW.md) for
+the prepared, locally tested addition before the RPC rehearsal.
+Post-alignment query (18) confirms these settings now match production. No further
+baseline or settings installs are needed. The next input is the staging publishable
+API key for isolated real-service testing; no password, secret key or service-role
+credential should be supplied in chat. RPC installation follows baseline testing.
 
 **NOT READY for production.** No staging SQL has been applied and no real-service
 delivery, authentication, Realtime or rollback test has been executed by this package.

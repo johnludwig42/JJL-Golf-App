@@ -1,0 +1,83 @@
+{
+  "capturedAt": "2026-10-24T22:11:46.77385+00:00",
+  "expectedProjectRef": "darbakmabpbkikisadop",
+  "projectAttribution": "Owner-supplied export in response to staging audit request; catalog does not embed project reference.",
+  "csvSha256": "6c3d645e83e06eeb79b728672509c5274f3a43c192a21120b86fed9816fb6baa",
+  "productionBaseline": "docs/audits/v31.0.77-deployed-schema.json",
+  "productionBaselineCapturedAt": "2026-10-21T00:21:50.534227+00:00",
+  "counts": {
+    "tables": {
+      "staging": 2,
+      "production": 19
+    },
+    "columns": {
+      "staging": 0,
+      "production": 169
+    },
+    "functions": {
+      "staging": 3,
+      "production": 15
+    },
+    "policies": {
+      "staging": 0,
+      "production": 28
+    },
+    "constraints": {
+      "staging": 5,
+      "production": 63
+    },
+    "indexes": {
+      "staging": 0,
+      "production": 31
+    },
+    "triggers": {
+      "staging": 0,
+      "production": 2
+    }
+  },
+  "applicationTables": {
+    "staging": [],
+    "production": [
+      "account_providers",
+      "accounts",
+      "audit_log",
+      "course_holes",
+      "course_library_roles",
+      "course_tees",
+      "courses",
+      "devices",
+      "golfer_identities",
+      "match_memberships",
+      "match_notes",
+      "match_players",
+      "match_teams",
+      "matches",
+      "personal_golfer_library",
+      "score_entries",
+      "team_access_codes"
+    ]
+  },
+  "migrationApplicationEffects": {
+    "202607160001_v30_3_75a_course_library_security.sql": "Absent: no public application tables, columns, policies, indexes, triggers or audited functions",
+    "202607220001_v30_3_75_identity_foundation.sql": "Absent: no public application tables, columns, policies, indexes, triggers or audited functions",
+    "202607220002_v30_3_75_round_record_security.sql": "Absent: no public application tables, columns, policies, indexes, triggers or audited functions",
+    "202607220003_v30_3_75_catalog_and_shared_target.sql": "Absent: no public application tables, columns, policies, indexes, triggers or audited functions",
+    "202608060001_v30_3_92_beta_account_activation.sql": "Absent: no public application tables, columns, policies, indexes, triggers or audited functions",
+    "202608070001_v30_3_93_production_security_activation.sql": "Absent: no public application tables, columns, policies, indexes, triggers or audited functions",
+    "202608090001_v30_3_96_identity_shared_publish_remediation.sql": "Absent: no public application tables, columns, policies, indexes, triggers or audited functions",
+    "202608100001_v31_0_01_shared_match_reliability.sql": "Absent: no public application tables, columns, policies, indexes, triggers or audited functions",
+    "202608210001_v31_0_05_course_hole_upsert_key.sql": "Absent: no public application tables, columns, policies, indexes, triggers or audited functions",
+    "202608210002_v31_0_05_atomic_course_draft_publish.sql": "Absent: no public application tables, columns, policies, indexes, triggers or audited functions",
+    "202609020001_v31_0_27_course_tee_gender_identity.sql": "Absent: no public application tables, columns, policies, indexes, triggers or audited functions",
+    "202609020002_v31_0_29_course_approval_reliability.sql": "Absent: no public application tables, columns, policies, indexes, triggers or audited functions",
+    "202610040001_v31_0_47_course_revision.sql": "Absent: no public application tables, columns, policies, indexes, triggers or audited functions"
+  },
+  "prerequisites": {
+    "extensions.digest(text,text)": true,
+    "realtime.broadcast_changes(text,text,text,text,text,record,record,text)": true,
+    "pgcrypto": "1.3 in extensions on both exports"
+  },
+  "readyForRpcInstall": false,
+  "sqlApplied": false,
+  "nextGate": "Reviewed schema-only production application baseline in staging, followed by repeat catalog comparison"
+}

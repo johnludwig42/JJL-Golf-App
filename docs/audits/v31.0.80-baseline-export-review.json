@@ -1,0 +1,193 @@
+{
+  "sourceFile": "production-public-schema.sql",
+  "sourceSha256": "fe9f0ab2825feb1bda658bf35e8e44eaedb01cb4f00843950dc9362139bb7f73",
+  "sourceDatabaseVersion": "17.6",
+  "exporterVersion": "18.4",
+  "applicationTables": 17,
+  "applicationColumns": 169,
+  "applicationPolicies": 28,
+  "functionBodyComparisons": [
+    {
+      "name": "revise_approved_course",
+      "bodyMatches": true
+    },
+    {
+      "name": "publish_course_draft_atomic",
+      "bodyMatches": true
+    },
+    {
+      "name": "publish_shared_match_owner",
+      "bodyMatches": true
+    },
+    {
+      "name": "publish_course",
+      "bodyMatches": true
+    },
+    {
+      "name": "course_library_can_write",
+      "bodyMatches": true
+    },
+    {
+      "name": "course_library_is_maintainer",
+      "bodyMatches": true
+    },
+    {
+      "name": "stamp_shared_match_owner",
+      "bodyMatches": true
+    },
+    {
+      "name": "shared_match_is_member",
+      "bodyMatches": true
+    },
+    {
+      "name": "join_shared_match",
+      "bodyMatches": true
+    },
+    {
+      "name": "shared_match_is_organizer",
+      "bodyMatches": true
+    },
+    {
+      "name": "provision_durable_account",
+      "bodyMatches": true
+    },
+    {
+      "name": "create_my_claimed_golfer_identity",
+      "bodyMatches": true
+    }
+  ],
+  "excludedDumpSections": [
+    {
+      "name": "public",
+      "type": "SCHEMA",
+      "schema": "-"
+    },
+    {
+      "name": "SCHEMA public",
+      "type": "COMMENT",
+      "schema": "-"
+    },
+    {
+      "name": "rls_auto_enable()",
+      "type": "FUNCTION",
+      "schema": "public"
+    },
+    {
+      "name": "SCHEMA public",
+      "type": "ACL",
+      "schema": "-"
+    },
+    {
+      "name": "DEFAULT PRIVILEGES FOR SEQUENCES",
+      "type": "DEFAULT ACL",
+      "schema": "public"
+    },
+    {
+      "name": "DEFAULT PRIVILEGES FOR SEQUENCES",
+      "type": "DEFAULT ACL",
+      "schema": "public"
+    },
+    {
+      "name": "DEFAULT PRIVILEGES FOR FUNCTIONS",
+      "type": "DEFAULT ACL",
+      "schema": "public"
+    },
+    {
+      "name": "DEFAULT PRIVILEGES FOR FUNCTIONS",
+      "type": "DEFAULT ACL",
+      "schema": "public"
+    },
+    {
+      "name": "DEFAULT PRIVILEGES FOR TABLES",
+      "type": "DEFAULT ACL",
+      "schema": "public"
+    },
+    {
+      "name": "DEFAULT PRIVILEGES FOR TABLES",
+      "type": "DEFAULT ACL",
+      "schema": "public"
+    }
+  ],
+  "installerSha256": "60e1d12383100da62db1bbba0c3e8b1d9457f58a30488f07386e721063ac21f2",
+  "sqlExecutedOnSupabase": false,
+  "realServiceVerified": false,
+  "localRehearsal": {
+    "database": "dye_staging_baseline_review_20261025",
+    "server": "PostgreSQL 18.4 with synthetic Auth prerequisites",
+    "checks": {
+      "columns": {
+        "expected": 169,
+        "actual": 169,
+        "differences": []
+      },
+      "policies": {
+        "expected": 28,
+        "actual": 28,
+        "differences": []
+      },
+      "indexes": {
+        "expected": 31,
+        "actual": 31,
+        "differences": []
+      },
+      "tables": {
+        "expected": 17,
+        "actual": 17,
+        "differences": []
+      }
+    },
+    "functions": {
+      "compared": 12,
+      "securitySignatureGrantDifferences": [],
+      "normalizedBodyMatches": 12
+    },
+    "constraints": {
+      "compared": 58,
+      "differences": [],
+      "note": "PG18 NOT NULL catalog entries excluded; column nullability compared independently."
+    },
+    "refusalWithoutAuthorization": true,
+    "refusalExistingObjects": true,
+    "broadDefaultGrantsNormalized": true,
+    "providerHelperPreserved": true,
+    "accountProvisioningSmokePassed": true,
+    "serverStopped": true,
+    "wrapperSyntaxPassed": true,
+    "realServiceVerified": false,
+    "providerHelperEvidenceNote": "Original smoke checked body/comment only; corrected two-state rehearsal also checks role grants."
+  },
+  "providerAclCorrection": {
+    "reason": "Provider function definition excluded but three GRANT statements were retained; staging function absent.",
+    "previousInstallerSha256": "7b63a13a705459716449f50ca1d3df3e2ff831d4e07c0f262d57a58bb9982bb4",
+    "originalFailureReproduced": true,
+    "failedTransactionApplicationTables": 0,
+    "correctedRehearsals": [
+      {
+        "providerHelper": "absent",
+        "catalogCounts": {
+          "columns": 169,
+          "policies": 28,
+          "indexes": 31,
+          "tables": 17
+        },
+        "applicationMetadataAndTableAclMatches": true,
+        "smokeAssertionsPassed": true
+      },
+      {
+        "providerHelper": "present_v2",
+        "catalogCounts": {
+          "columns": 169,
+          "policies": 28,
+          "indexes": 31,
+          "tables": 17
+        },
+        "applicationMetadataAndTableAclMatches": true,
+        "smokeAssertionsPassed": true
+      }
+    ],
+    "providerDefinitionAndGrantsPreservedWhenPresent": true,
+    "providerFunctionNotIntroducedWhenAbsent": true,
+    "sqlExecutedOnSupabaseByAssistant": false,
+    "userReportedPreviousStagingAttempt": "Failed before COMMIT; actual staging re-audit still pending."
+  }
+}

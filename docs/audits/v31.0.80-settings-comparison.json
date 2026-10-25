@@ -1,0 +1,47 @@
+{
+  "productionCapturedAt": "2026-10-25T12:10:56.338585+00:00",
+  "stagingCapturedAt": "2026-10-25T12:12:30.446446+00:00",
+  "sourceSha256": {
+    "production": "f4d700302db00452b48eaa0e35217312db500ad828d6f60d9d8b10e751fc77f7",
+    "staging": "215370490d9de0ec80673b152e2bfb013e6b83819dd505f5cf6f9ea7b440cd2e"
+  },
+  "projectAttribution": "Owner-supplied labeled exports; result does not independently embed project reference.",
+  "schemaOwnerAndPermissionsMatch": true,
+  "defaultPrivilegeEntriesMatched": 6,
+  "difference": "Production has rls_auto_enable() and enabled ensure_rls DDL trigger; staging has neither.",
+  "productionReady": false,
+  "nextStep": "Review-only staging reproduction of the existing automatic-RLS behavior; no production change.",
+  "preparedInstallerSha256": "06f483078deba3fe85cdbec2d10a80d13aab534f2e24b10ea4c5d1a562e4f4b2",
+  "localRehearsal": {
+    "helperDefinitionMatchesAfterLineEndingNormalization": true,
+    "helperOwnerAndGrantsMatchProduction": true,
+    "eventTriggerMatchesProduction": true,
+    "createTableEnablesRls": true,
+    "createTableAsEnablesRls": true,
+    "selectIntoEnablesRls": true,
+    "probeTablesRolledBack": true,
+    "applicationTableCountUnchanged": 17,
+    "unauthorizedInstallRefused": true,
+    "existingObjectsRefused": true,
+    "wrapperSyntaxPassed": true,
+    "serverStopped": true,
+    "supabaseExecutionByAssistant": false
+  },
+  "postAlignment": {
+    "sourceCsv": "Supabase Snippet Untitled query (18).csv",
+    "csvSha256": "d88c5d766fed4bef0b18e568fe81a85375b727d08929fe180ef7d3cd45e7f0b6",
+    "capturedAt": "2026-10-25T16:42:49.683414+00:00",
+    "expectedProjectRef": "darbakmabpbkikisadop",
+    "projectAttribution": "Owner-supplied staging export; catalog does not independently embed project ID.",
+    "publicSchemaMatches": true,
+    "defaultPrivilegeEntriesMatched": 6,
+    "helperOwnerDefinitionAndGrantsMatch": true,
+    "definitionNormalization": "Windows line endings only",
+    "eventTriggerMatches": true,
+    "settingsAlignmentVerified": true,
+    "rpcInstalled": false,
+    "realServiceVerified": false,
+    "productionReady": false,
+    "nextGate": "Real staging API/Auth/direct-upload baseline before reviewed RPC installation."
+  }
+}

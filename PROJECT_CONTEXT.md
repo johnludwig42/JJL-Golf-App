@@ -8,7 +8,30 @@ October 24 staging verification preparation: current client remains v31.0.80
 (2519e0e). Separate staging project confirmed as darbakmabpbkikisadop. See
 supabase/proposals/shared-score-rpc-v31.0.77/staging/README.md for catalog-first
 verification and guarded API preflight. No server SQL executed; production approval
-remains separate. Real-service verification is pending staging catalog evidence.
+remains separate. The October 24 staging catalog is now retained and compared:
+no public application objects are present. A reviewed schema-only deployed
+application baseline is required before RPC testing; see staging/BASELINE_REVIEW.md.
+October 25: production public-schema export received; guarded staging baseline
+package prepared and locally rehearsed with exact application catalog/ACL matches.
+See staging/BASELINE_PACKAGE.md. No Supabase SQL executed; provider-setting
+comparison and post-install staging audit precede the RPC upgrade.
+First user staging attempt failed before COMMIT on residual provider-function
+GRANTs. Those are removed; local absent/present-helper tests verify rollback and
+provider ACL preservation. Corrected staging retry and its catalog audit remain
+pending; no successful remote baseline installation has been confirmed.
+Superseding update: October 25 query (16) confirms the corrected staging baseline
+installed successfully and matches all audited application metadata and grants.
+Evidence: docs/audits/v31.0.80-staging-installed-comparison.json. Do not reinstall.
+Provider-settings comparison in both projects is next; RPC remains absent and
+real-client delivery/service verification is pending. Production was not changed.
+Supplied provider settings match schema/default permissions; production alone has
+the automatic-RLS function/event trigger. A staging-only exact-copy package is
+prepared and locally tested; see staging/AUTO_RLS_REVIEW.md. No assistant remote
+execution. Staging alignment and verification precede the RPC rehearsal.
+Query (18) now confirms staging automatic-RLS and schema/default settings match
+production. No more baseline/settings installs. Next: real staging API/Auth/direct
+delivery baseline; staging publishable key is not yet configured. RPC remains
+uninstalled and production execution remains separately gated.
 
 Review-only completion extension: owner approved common RPC/direct P7701 closure protection, identical-value no-ops, durable client preservation under remoteCompletionPending and mandatory client-before-server rollout. See supabase/proposals/shared-score-rpc-v31.0.77/README.md. The reviewed client patch is now implemented for v31.0.78 release preparation; production SQL remains unapproved.
 

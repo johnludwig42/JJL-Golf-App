@@ -1,0 +1,112 @@
+{
+  "tables": [
+    {
+      "owner": "supabase_auth_admin",
+      "relacl": [
+        "supabase_auth_admin=arwdDxtm/supabase_auth_admin",
+        "dashboard_user=arwdDxtm/supabase_auth_admin",
+        "postgres=ar*wdDxtm/supabase_auth_admin"
+      ],
+      "nspname": "auth",
+      "relname": "users",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "owner": "supabase_realtime_admin",
+      "relacl": [
+        "supabase_realtime_admin=arwdDxtm/supabase_realtime_admin",
+        "postgres=a*r*wdDxtm/supabase_realtime_admin",
+        "dashboard_user=arwdDxtm/supabase_realtime_admin",
+        "anon=arw/supabase_realtime_admin",
+        "authenticated=arw/supabase_realtime_admin",
+        "service_role=arw/supabase_realtime_admin"
+      ],
+      "nspname": "realtime",
+      "relname": "messages",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    }
+  ],
+  "columns": [],
+  "indexes": [],
+  "policies": [],
+  "triggers": [],
+  "functions": [
+    {
+      "owner": "postgres",
+      "result": "bytea",
+      "nspname": "extensions",
+      "proname": "digest",
+      "arguments": "text, text",
+      "proconfig": null,
+      "definition": null,
+      "privileges": "{=X/postgres,postgres=X*/postgres,dashboard_user=X/postgres}",
+      "security_definer": false
+    },
+    {
+      "owner": "postgres",
+      "result": "bytea",
+      "nspname": "extensions",
+      "proname": "digest",
+      "arguments": "bytea, text",
+      "proconfig": null,
+      "definition": null,
+      "privileges": "{=X/postgres,postgres=X*/postgres,dashboard_user=X/postgres}",
+      "security_definer": false
+    },
+    {
+      "owner": "supabase_realtime_admin",
+      "result": "void",
+      "nspname": "realtime",
+      "proname": "broadcast_changes",
+      "arguments": "topic_name text, event_name text, operation text, table_name text, table_schema text, new record, old record, level text",
+      "proconfig": null,
+      "definition": null,
+      "privileges": "{=X/supabase_realtime_admin,supabase_realtime_admin=X/supabase_realtime_admin,postgres=X/supabase_realtime_admin,dashboard_user=X/supabase_realtime_admin}",
+      "security_definer": false
+    }
+  ],
+  "extensions": [
+    {
+      "name": "pgcrypto",
+      "schema": "extensions",
+      "version": "1.3"
+    }
+  ],
+  "captured_at": "2026-10-24T22:11:46.77385+00:00",
+  "constraints": [
+    {
+      "name": "users_pkey",
+      "table": "users",
+      "schema": "auth",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "name": "users_email_change_confirm_status_check",
+      "table": "users",
+      "schema": "auth",
+      "definition": "CHECK (email_change_confirm_status >= 0 AND email_change_confirm_status <= 2)"
+    },
+    {
+      "name": "users_phone_key",
+      "table": "users",
+      "schema": "auth",
+      "definition": "UNIQUE (phone)"
+    },
+    {
+      "name": "messages_pkey",
+      "table": "messages",
+      "schema": "realtime",
+      "definition": "PRIMARY KEY (id, inserted_at)"
+    },
+    {
+      "name": "messages_payload_exclusive",
+      "table": "messages",
+      "schema": "realtime",
+      "definition": "CHECK (payload IS NULL OR binary_payload IS NULL) NOT VALID"
+    }
+  ],
+  "audit_version": "v31.0.77/all-13/read-only",
+  "migration_history": "No migration ledger table"
+}

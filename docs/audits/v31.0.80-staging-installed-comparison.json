@@ -1,0 +1,43 @@
+{
+  "capturedAt": "2026-10-25T11:53:43.856463+00:00",
+  "expectedProjectRef": "darbakmabpbkikisadop",
+  "projectAttribution": "Owner-supplied post-install staging audit; catalog does not independently embed project ID.",
+  "sourceCsv": "Supabase Snippet Untitled query (16).csv",
+  "csvSha256": "7ada73eebf06ae30214bee5e6d5937a3da1b42e063093a345c852b6b3e94e08b",
+  "comparisonBaseline": "docs/audits/v31.0.77-deployed-schema.json",
+  "applicationComparisons": {
+    "columns": {
+      "matched": 169,
+      "differences": []
+    },
+    "policies": {
+      "matched": 28,
+      "differences": []
+    },
+    "indexes": {
+      "matched": 31,
+      "differences": []
+    },
+    "constraints": {
+      "matched": 58,
+      "differences": []
+    },
+    "tables": {
+      "matched": 17,
+      "differences": []
+    },
+    "functions": {
+      "matched": 12,
+      "differences": []
+    },
+    "applicationTriggers": {
+      "matched": 2,
+      "differences": []
+    }
+  },
+  "baselineCatalogVerified": true,
+  "scoreRpcInstalled": false,
+  "realServiceVerified": false,
+  "productionReady": false,
+  "nextGate": "Compare provider settings in both projects, then baseline real-client delivery and reviewed staging RPC rehearsal."
+}

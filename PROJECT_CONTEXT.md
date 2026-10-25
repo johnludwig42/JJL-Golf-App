@@ -32,6 +32,20 @@ Query (18) now confirms staging automatic-RLS and schema/default settings match
 production. No more baseline/settings installs. Next: real staging API/Auth/direct
 delivery baseline; staging publishable key is not yet configured. RPC remains
 uninstalled and production execution remains separately gated.
+Live staging anonymous API preflight now passes Auth reachability, expected
+anonymous match-table denial and missing-RPC observation. Evidence:
+docs/audits/v31.0.80-staging-api-preflight.json. Email sign-in enabled/confirmation
+required; guest sign-in disabled. Existing staged example.test users cannot receive
+email codes; ordinary signed-in testing is pending a reachable test email/account.
+User has created a staging account. Isolated local preview prepared at
+http://127.0.0.1:5087/staging-sign-in.html, using preview-only password login and
+unchanged runtime app sources. See staging/LOCAL_PREVIEW.md. Launcher:
+scripts/start-staging-preview.ps1. Local isolation/asset/browser-mock checks pass;
+actual user sign-in and score delivery remain pending. No emails were sent.
+Preview helper login initially used the wrong Auth storage key; main Account UI
+remained signed out. Corrected helper now derives the app's exported key; isolated
+mocked handoff/reload checks pass. User must re-enter staging credentials once;
+actual signed-in scoring tests have not yet run. Production Auth code unchanged.
 
 Review-only completion extension: owner approved common RPC/direct P7701 closure protection, identical-value no-ops, durable client preservation under remoteCompletionPending and mandatory client-before-server rollout. See supabase/proposals/shared-score-rpc-v31.0.77/README.md. The reviewed client patch is now implemented for v31.0.78 release preparation; production SQL remains unapproved.
 

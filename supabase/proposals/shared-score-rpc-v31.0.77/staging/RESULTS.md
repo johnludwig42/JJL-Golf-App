@@ -1,5 +1,40 @@
 # Staging preparation results — October 24, 2026
 
+October 25 query (18): the supplied post-alignment provider_settings export now
+matches production across schema owner/permissions, all six default ACL entries,
+automatic-RLS helper definition/owner/grants and enabled ensure_rls trigger.
+Only Windows line endings and ACL ordering are normalized. Evidence:
+docs/audits/v31.0.80-staging-aligned-settings.json and the postAlignment section in
+docs/audits/v31.0.80-settings-comparison.json. No further baseline/settings installer
+run is needed. Next is real staging API/Auth/direct-upload baseline verification;
+the staging publishable key is not configured yet. RPC and production remain
+unchanged; service delivery/Realtime/rollback/two-phone gates are not verified.
+
+October 25 settings comparison: schema owner/permissions and all six default ACLs
+match. Production alone has rls_auto_enable()/ensure_rls. A staging-only alignment
+package is prepared and locally tested (three DDL paths, refusal guards, exact
+helper/trigger metadata). See AUTO_RLS_REVIEW.md and
+docs/audits/v31.0.80-settings-comparison.json. Actual staging alignment is pending.
+
+October 25 post-install verification: John supplied query (16), captured
+2026-10-25 11:53:43 UTC. The staging application catalog matches the captured
+production baseline with zero differences across 17 tables/ACLs/RLS settings,
+169 columns, 58 application constraints, 31 indexes, 28 policies, 12 functions
+(bodies/security/signatures/grants) and both application triggers. Evidence:
+docs/audits/v31.0.80-staging-installed-schema.json and
+docs/audits/v31.0.80-staging-installed-comparison.json. Baseline installation is
+confirmed by this supplied catalog. RPC remains absent as intended. Provider
+settings comparison, real service delivery and all later RPC gates remain pending.
+This supersedes the pending-baseline statements in historical preparation notes.
+
+October 25: production schema export reviewed; staging baseline installer prepared
+and rehearsed locally. See BASELINE_PACKAGE.md and
+docs/audits/v31.0.80-baseline-export-review.json for exact comparison counts.
+The user's first staging installation attempt failed before COMMIT on residual
+provider-function GRANT statements. These are corrected and locally tested with
+the helper absent/present, including rollback and ACL preservation. No successful
+Supabase installation or real-service verification has been confirmed.
+
 Client baseline: v31.0.80 / `2519e0e`.
 Branch: `codex/shared-match-staging-verification`.
 Owner-confirmed staging: `darbakmabpbkikisadop`.
@@ -30,10 +65,11 @@ configuration is ignored too. No credentials are stored in the package or report
 
 No Supabase service probe, staging installation, real Auth/RLS/Realtime delivery,
 completion race, rollback/restore or physical two-phone rehearsal has run.
-The staging project has been identified, but its current catalog has not yet been
-provided. First obtain its read-only all-13 audit export, compare the baseline,
-and resolve any differences before installation. Fresh production catalog evidence
-also remains required for the eventual rollout comparison.
+The supplied staging catalog has now been compared: all 13 migrations' audited
+application effects are absent; there are no public application tables. See
+BASELINE_REVIEW.md and docs/audits/v31.0.80-staging-comparison.json. A reviewed
+schema-only application baseline is required before installation. Fresh production
+catalog evidence also remains required for the eventual rollout comparison.
 
 Layout references, stress50 and simulation gates were not rerun for this tooling
 and documentation package; no runtime scoring/rendering or release identity changed.

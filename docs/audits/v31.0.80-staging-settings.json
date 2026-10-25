@@ -1,0 +1,41 @@
+{
+  "captured_at": "2026-10-25T12:12:30.446446+00:00",
+  "public_schema": {
+    "owner": "pg_database_owner",
+    "privileges": "{pg_database_owner=UC/pg_database_owner,=U/pg_database_owner,postgres=U/pg_database_owner,anon=U/pg_database_owner,authenticated=U/pg_database_owner,service_role=U/pg_database_owner}"
+  },
+  "rls_auto_enable": null,
+  "public_event_triggers": [],
+  "public_default_privileges": [
+    {
+      "role": "supabase_admin",
+      "privileges": "{postgres=rwU/supabase_admin,anon=rwU/supabase_admin,authenticated=rwU/supabase_admin,service_role=rwU/supabase_admin}",
+      "object_type": "S"
+    },
+    {
+      "role": "supabase_admin",
+      "privileges": "{postgres=X/supabase_admin,anon=X/supabase_admin,authenticated=X/supabase_admin,service_role=X/supabase_admin}",
+      "object_type": "f"
+    },
+    {
+      "role": "supabase_admin",
+      "privileges": "{postgres=arwdDxtm/supabase_admin,anon=arwdDxtm/supabase_admin,authenticated=arwdDxtm/supabase_admin,service_role=arwdDxtm/supabase_admin}",
+      "object_type": "r"
+    },
+    {
+      "role": "postgres",
+      "privileges": "{postgres=rwU/postgres,anon=rwU/postgres,authenticated=rwU/postgres,service_role=rwU/postgres}",
+      "object_type": "S"
+    },
+    {
+      "role": "postgres",
+      "privileges": "{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "object_type": "f"
+    },
+    {
+      "role": "postgres",
+      "privileges": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "object_type": "r"
+    }
+  ]
+}

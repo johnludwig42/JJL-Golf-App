@@ -1,5 +1,33 @@
 # Staging preparation results — October 24, 2026
 
+October 25 signed-in direct-upload baseline: second loopback instance signed in
+to the same staging account, joined the synthetic round, and downloaded course,
+all eight golfers and four team names. Host assignment of G5–G8 propagated to the
+remote instance; G1–G4 remained assigned to host. Balanced Calcutta picks were
+saved and Start Scoring succeeded. Host entered teams 1/2 and remote entered
+teams 3/4. After synchronization, both Quick Scoreboards showed one common hole:
+team net totals 4/4/5/6 (gross 4/5/6/7), group 1 tied, group 2 led by team 3,
+and foursome totals 4/5. Direct-upload disclosure remained visible. This proves
+one-hole bidirectional UI delivery on the deployed staging baseline; it does not
+prove operation receipts, failure recovery, 18-hole completion, RPC or rollback.
+No production changes. Two separate local origins are not two physical phones.
+Earlier pending sign-in/join/assignment/pick notes below are superseded.
+
+October 25 live staging UI progress: user confirmed durable sign-in and completed
+the Staging Host identity. Created a local synthetic 18-hole Staging Test Course /
+Test White tee (72.0/113, 7,200 yards), eight Test Golfer records with indexes
+4/8/10/14/16/20/22/26, and four paired teams with assigned indexes 6/12/18/24.
+Course, Players and Games all showed Ready. Owner publication of Staging Sync Test
+then succeeded in the actual staging app: Shared Match host panel showed Direct
+upload and confirmed parity on the initially empty card. This is an initial
+publication/refresh result, not a score-delivery or finalization result.
+
+A second loopback preview on port 5088 provides separate origin storage/device
+identity for same-account remote-scorer testing. User sign-in there is pending.
+Calcutta picks, remote join, foursome assignments, scores, retries, settlement and
+RPC/rollback remain pending. This is two local browser instances, not physical
+two-phone acceptance. No production data/round was imported or changed.
+
 Preview handoff correction: after the user reported successful helper login, the
 main Account UI still showed Signed out. The helper used the SDK default session
 key instead of the app's custom key. It now derives ACCOUNT_AUTH_STORAGE_KEY from

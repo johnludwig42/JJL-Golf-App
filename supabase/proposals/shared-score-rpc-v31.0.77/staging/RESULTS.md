@@ -1,5 +1,53 @@
 # Staging preparation results — October 24, 2026
 
+October 26 staging publication correction applied and audited; DYE-119214 completed
+18/18 through host/remote UI with operation receipts, zero pending and confirmed
+parity. Remote exited on host completion; seven-page Ledger accepted after saving
+verified facts-only Story. Settlement matches earlier direct-upload baseline.
+See docs/audits/v31.0.81-staging-rpc-live-rehearsal.md for evidence and remaining
+gates. AI Story unavailable; private Realtime, failure/authority/batch/closure
+matrices and hosted rollback/restore remain unverified. Production unchanged.
+This supersedes the earlier publication-blocked/pending-application notes below.
+
+October 25 owner approved the publication correction; prior audit notes need not
+be committed before proceeding. Prepared staging-only publication-fix-review.sql
+and runner PublicationFix action. Fresh local PostgreSQL 18.4 reproduction confirms
+23502 names shared_revision; corrected real publication body passes 90 combined
+SQL assertions, including nonempty receipt/score preservation, active/completed
+republish and all existing delivery/closure/rollback cases. Three SQL refusal
+checks pass; local server stopped. Runner/preflight 22/22 pass; lint zero errors,
+88 existing warnings; validate passes. No runtime app change or full-suite repeat.
+See PUBLICATION_FIX.md. The correction has NOT yet run on staging; operator local
+database password is the next step. Production untouched and unapproved.
+
+October 25 operator installation confirmed by four supplied before/after CSVs:
+all five function bodies match reviewed SQL; receipt RLS/grants, both new match
+columns, three enabled triggers and private-topic policy are present. Existing
+audited definitions/privileges unchanged. Anonymous API returned 401/42501 rather
+than PGRST202. These are structural/visibility checks only.
+
+LIVE BLOCKER: fresh synthetic Staging RPC Rehearsal (DYE-119214) cannot publish;
+23502 on initial publication and three coordinated retries. Existing owner RPC
+populates null::matches then inserts the whole composite; newly added NOT NULL
+shared_revision is absent from client JSON and explicitly null, bypassing default.
+Prior local fixtures did not exercise this compatibility path. No score receipts
+or authenticated delivery result. Proposed narrow publication correction awaits
+review; no SQL fix applied. RPC rollback alone retains the incompatible columns.
+See docs/audits/v31.0.81-staging-rpc-install-review.md and comparison JSON.
+Baseline accepted round intact; new round retained locally with no scores entered.
+Production untouched; no production rollout ready.
+
+October 25 staging RPC rehearsal authorized. Prepared run-rpc-review.ps1 and
+RPC_REHEARSAL.md: fixed staging project/username, TLS, unchanged reviewed SQL
+fingerprints, one explicit Install/Rollback/Restore phase, structural checks and
+metadata-only before/after CSV evidence. Tested preparation of all three phases,
+production/invalid-host/invalid-action refusal and altered-SQL refusal. New runner
+tests 7/7 plus existing preflight tests 14/14 = 21/21 passed, no skips. Windows
+PowerShell parser passed. Preparation made no database connection. Real install
+and service verification still await the operator's local password entry; no
+staging or production SQL executed by this step. App remains committed v31.0.81;
+no full application suite repeated for this tooling-only addition (last 1,536/1,536).
+
 October 25 approved acceptance correction, v31.0.81: buildLedgerEntryReportModel
 now carries the authoritative effective RoundRecord meta.status. Three new tests
 verify final/provisional behavior, unchanged source evidence, and actual report

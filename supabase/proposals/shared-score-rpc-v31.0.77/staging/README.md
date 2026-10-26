@@ -1,5 +1,18 @@
 # Shared Match staging verification
 
+Current blocker after operator installation: new-match publication fails 23502
+because the existing owner RPC's whole-record insert supplies null for the added
+required shared_revision column. Installation is structurally verified; do not
+rerun Install. See docs/audits/v31.0.81-staging-rpc-install-review.md. No fix has
+been applied to hosted staging. The owner-approved narrow correction passed local verification; follow [PUBLICATION_FIX.md](PUBLICATION_FIX.md). Production remains unapproved.
+
+October 25 current next step: owner approved the staging RPC rehearsal after
+v31.0.81. Baseline/settings installation and a direct-upload full round are
+confirmed; follow [RPC_REHEARSAL.md](RPC_REHEARSAL.md) using the staging-only
+one-phase runner. Do not repeat earlier baseline setup. RPC execution still awaits
+the operator's local database-password entry. Older preparation notes below are
+historical; RESULTS.md records the current evidence and open production gates.
+
 Prepared October 24, 2026 against v31.0.80, commit `2519e0e`.
 This package changes no application behavior, SQL proposal or production service.
 The owner identified staging as `darbakmabpbkikisadop.supabase.co`.

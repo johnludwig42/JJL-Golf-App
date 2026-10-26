@@ -1,8 +1,38 @@
 # The Dye Ledger — PROJECT_CONTEXT.md
 
+October 26 staging publication correction applied and audited; DYE-119214 completed
+18/18 through host/remote UI with operation receipts, zero pending and confirmed
+parity. Remote exited on host completion; seven-page Ledger accepted after saving
+verified facts-only Story. Settlement matches earlier direct-upload baseline.
+See docs/audits/v31.0.81-staging-rpc-live-rehearsal.md for evidence and remaining
+gates. AI Story unavailable; private Realtime, failure/authority/batch/closure
+matrices and hosted rollback/restore remain unverified. Production unchanged.
+This supersedes the earlier publication-blocked/pending-application notes below.
+
 **Version:** 1.0  
 **Status:** Living Document  
 **Purpose:** Single starting context for Codex, ChatGPT, and future developers.
+
+October 25 publication correction approved and prepared, not yet applied to staging.
+See proposal staging/PUBLICATION_FIX.md and runner -Action PublicationFix. Actual
+old publication body reproduces shared_revision 23502; local combined SQL checks
+90/90 and refusal checks 3/3 pass, runner/preflight 22/22 pass. Existing active and
+closed records, nonempty receipts, scores, ACLs and delivery functions preserved.
+No prerequisite commit needed. No app-runtime change; production unapproved.
+
+October 25 staging RPC installed by operator and structurally verified from CSVs.
+Live fresh-round publication now fails 23502: existing publish_shared_match_owner
+inserts a whole matches composite, explicitly nulling newly required shared_revision
+instead of using its default. Earlier local fixtures missed this compatibility path.
+No correction applied; review docs/audits/v31.0.81-staging-rpc-install-review.md
+before continuing. RPC rollback alone retains the added columns. Production
+unchanged, baseline accepted round preserved, new synthetic test round local only.
+
+October 25 staging RPC rehearsal authorized after v31.0.81 commit abe5799.
+Staging-only one-phase runner and RPC_REHEARSAL.md prepared under the reviewed
+proposal's staging folder. Preparation/refusal tests 21/21 pass; no database
+connection or SQL execution yet. Operator must enter the staging database password
+locally. Production remains separately unapproved. App/runtime unchanged.
 
 October 25 approved v31.0.81 fix: Ledger report metadata now carries the effective
 RoundRecord status. Final/provisional regression checks pass. The existing saved

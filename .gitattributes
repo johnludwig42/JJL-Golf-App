@@ -1,0 +1,2 @@
+# Keep this fingerprinted staging correction byte-stable across Windows checkouts.
+supabase/proposals/shared-score-rpc-v31.0.77/publication-fix-review.sql text eol=lf

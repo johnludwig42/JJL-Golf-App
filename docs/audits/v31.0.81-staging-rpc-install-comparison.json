@@ -1,0 +1,188 @@
+{
+  "kind": "staging-rpc-install-audit",
+  "projectRef": "darbakmabpbkikisadop",
+  "before": "2026-10-25T16:10:43.32699-04:00",
+  "after": "2026-10-25T16:10:44.758569-04:00",
+  "serverVersion": "17.6",
+  "inputs": {
+    "before-schema.csv": "d34d0ab63bbd2e9ea39e28349ee3ecf25dbb88f28ca66958e1db6064d12247f8",
+    "before-preflight.csv": "9a62c96c9475c9dba2a31cca0bb252c0d3151b6c41f774e4d46df491c290751f",
+    "after-schema.csv": "26f5895ff8fc7ca8f0d804faa106e22ea793cd3d4f709614b344e630313b3032",
+    "after-preflight.csv": "736a83f61456aa7eae263d8fae9f1ee78ca0f0839922e0000032b365b55f07c6"
+  },
+  "delta": {
+    "tables": {
+      "before": 19,
+      "after": 20,
+      "added": [
+        "public.shared_score_operations"
+      ],
+      "removed": [],
+      "changed": []
+    },
+    "columns": {
+      "before": 169,
+      "after": 182,
+      "added": [
+        "public.shared_score_operations.client_revision",
+        "public.shared_score_operations.match_revision",
+        "public.shared_score_operations.operation_id",
+        "public.matches.shared_revision",
+        "public.matches.shared_scores_closed",
+        "public.shared_score_operations.actor_user_id",
+        "public.shared_score_operations.queued_at",
+        "public.shared_score_operations.accepted_at",
+        "public.shared_score_operations.match_id",
+        "public.shared_score_operations.score_entry_id",
+        "public.shared_score_operations.device_id",
+        "public.shared_score_operations.participant_id",
+        "public.shared_score_operations.payload_hash"
+      ],
+      "removed": [],
+      "changed": []
+    },
+    "indexes": {
+      "before": 31,
+      "after": 33,
+      "added": [
+        "public.shared_score_operations.shared_score_operations_pkey",
+        "public.shared_score_operations.shared_score_operations_match_revision_idx"
+      ],
+      "removed": [],
+      "changed": []
+    },
+    "policies": {
+      "before": 28,
+      "after": 30,
+      "added": [
+        "public.shared_score_operations.shared_score_operations_member_select",
+        "realtime.messages.dye_shared_match_broadcast_select"
+      ],
+      "removed": [],
+      "changed": []
+    },
+    "triggers": {
+      "before": 2,
+      "after": 5,
+      "added": [
+        "public.matches.latch_shared_scores_closed_before_write",
+        "public.score_entries.protect_completed_shared_scores_before_write",
+        "public.score_entries.broadcast_shared_score_change_after_write"
+      ],
+      "removed": [],
+      "changed": []
+    },
+    "functions": {
+      "before": 15,
+      "after": 17,
+      "added": [
+        "public.submit_shared_score_operations(p_match_id text, p_device_id text, p_operations jsonb)",
+        "public.broadcast_shared_score_change()"
+      ],
+      "removed": [],
+      "changed": []
+    },
+    "constraints": {
+      "before": 63,
+      "after": 69,
+      "added": [
+        "public.shared_score_operations.shared_score_operations_client_revision_check",
+        "public.shared_score_operations.shared_score_operations_match_revision_check",
+        "public.shared_score_operations.shared_score_operations_pkey",
+        "public.shared_score_operations.shared_score_operations_match_id_fkey",
+        "public.shared_score_operations.shared_score_operations_score_entry_id_fkey",
+        "public.shared_score_operations.shared_score_operations_actor_user_id_fkey"
+      ],
+      "removed": [],
+      "changed": []
+    }
+  },
+  "functions": [
+    {
+      "name": "broadcast_shared_score_change",
+      "bodyMatchesReviewedSource": true,
+      "owner": "postgres",
+      "privileges": "{postgres=X/postgres,service_role=X/postgres}",
+      "arguments": ""
+    },
+    {
+      "name": "latch_shared_scores_closed",
+      "bodyMatchesReviewedSource": true,
+      "owner": "postgres",
+      "privileges": "{postgres=X/postgres,service_role=X/postgres}",
+      "arguments": ""
+    },
+    {
+      "name": "protect_completed_shared_scores",
+      "bodyMatchesReviewedSource": true,
+      "owner": "postgres",
+      "privileges": "{postgres=X/postgres,service_role=X/postgres}",
+      "arguments": ""
+    },
+    {
+      "name": "shared_score_same_value",
+      "bodyMatchesReviewedSource": true,
+      "owner": "postgres",
+      "privileges": "{postgres=X/postgres,service_role=X/postgres}",
+      "arguments": "a score_entries, b score_entries"
+    },
+    {
+      "name": "submit_shared_score_operations",
+      "bodyMatchesReviewedSource": true,
+      "owner": "postgres",
+      "privileges": "{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+      "arguments": "p_match_id text, p_device_id text, p_operations jsonb"
+    }
+  ],
+  "prerequisites": {
+    "digest": "digest(text,text)",
+    "broadcast": "realtime.broadcast_changes(text,text,text,text,text,record,record,text)"
+  },
+  "triggers": [
+    {
+      "name": "broadcast_shared_score_change_after_write",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER broadcast_shared_score_change_after_write AFTER INSERT OR UPDATE ON score_entries FOR EACH ROW EXECUTE FUNCTION broadcast_shared_score_change()"
+    },
+    {
+      "name": "latch_shared_scores_closed_before_write",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER latch_shared_scores_closed_before_write BEFORE INSERT OR UPDATE ON matches FOR EACH ROW EXECUTE FUNCTION latch_shared_scores_closed()"
+    },
+    {
+      "name": "protect_completed_shared_scores_before_write",
+      "enabled": "O",
+      "definition": "CREATE TRIGGER protect_completed_shared_scores_before_write BEFORE INSERT OR DELETE OR UPDATE ON score_entries FOR EACH ROW EXECUTE FUNCTION protect_completed_shared_scores()"
+    }
+  ],
+  "realtimePolicies": [
+    {
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM match_memberships mm\n  WHERE ((mm.match_id = replace(realtime.topic(), 'shared-match:'::text, ''::text)) AND (mm.user_id = auth.uid()) AND (mm.status = 'active'::text))))",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "messages",
+      "permissive": "PERMISSIVE",
+      "policyname": "dye_shared_match_broadcast_select",
+      "schemaname": "realtime",
+      "with_check": null
+    }
+  ],
+  "operationTable": {
+    "owner": "postgres",
+    "relacl": [
+      "postgres=arwdDxtm/postgres",
+      "service_role=arwdDxtm/postgres",
+      "authenticated=r/postgres"
+    ],
+    "nspname": "public",
+    "relname": "shared_score_operations",
+    "relrowsecurity": true,
+    "relforcerowsecurity": false
+  },
+  "beforeRpc": null,
+  "afterRpc": "submit_shared_score_operations(text,text,jsonb)",
+  "serviceVerification": "NOT_RUN",
+  "productionExecuted": false
+}

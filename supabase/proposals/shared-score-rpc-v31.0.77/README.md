@@ -123,9 +123,13 @@ and the observed Realtime RECORD interface. It is not a Supabase service test.
 SQL fixtures abort outside database dye_rpc_review at 127.0.0.1:55477. The local
 server is stopped after rehearsal; test data/logs remain under ignored tmp/.
 
-## Supabase staging gate — NOT RUN
+## Supabase staging gate — IN PROGRESS, NOT READY
 
-A separate test project is required; none is configured here.
+Staging is configured as darbakmabpbkikisadop. Baseline/settings parity and a
+direct-upload round are recorded in staging/RESULTS.md. Owner approved proceeding
+with the staging RPC rehearsal; use staging/RPC_REHEARSAL.md and its guarded
+one-phase runner. RPC/service/rollback/two-phone gates remain open. The earlier
+local SQL checks are not substituted for actual Supabase behavior.
 
 1. Real host/joined/guest/outsider sessions, including two devices using the same
    account. Local SQL uses distinct synthetic host/scorer accounts.

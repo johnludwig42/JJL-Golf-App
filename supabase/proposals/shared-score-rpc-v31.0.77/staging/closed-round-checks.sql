@@ -1,7 +1,12 @@
 -- STAGING ONLY: synthetic DYE-119214. No changes commit; stop on any failure.
 -- Exercises authenticated SQL roles, not HTTP token validation or Realtime.
 \set ON_ERROR_STOP on
+\if :{?direct_only}
+\else
+\set direct_only false
+\endif
 begin;
+set local dye.staging_direct_checks = :'direct_only';
 set local statement_timeout = '30s';
 set local lock_timeout = '5s';
 create temporary table closure_check_results(test text, result text) on commit drop;
@@ -17,6 +22,10 @@ declare
     'direct late statistics change','direct delete'];
 begin
   if current_user <> 'postgres' then raise exception 'Expected operator postgres'; end if;
+  if current_setting('dye.staging_direct_checks')::boolean
+    and to_regprocedure('public.submit_shared_score_operations(text,text,jsonb)') is not null then
+    raise exception 'Expected staging RPC absent for rolled-back direct checks';
+  end if;
   select to_jsonb(m) into before_match from public.matches m where id=code;
   if before_match is null or before_match->>'status'<>'complete'
     or before_match->>'shared_scores_closed'<>'true' then
@@ -32,7 +41,7 @@ begin
   select jsonb_agg(to_jsonb(s) order by s.id) into before_scores from public.score_entries s where match_id=code;
   select jsonb_agg(to_jsonb(r) order by r.operation_id) into before_receipts from public.shared_score_operations r where match_id=code;
   payload:=to_jsonb(score);
-  for i in 1..10 loop
+  for i in (case when current_setting('dye.staging_direct_checks')::boolean then 7 else 1 end)..10 loop
     op:=jsonb_build_object('operation_id',gen_random_uuid(),'client_revision',1,'score_entry',payload);
     expected:=case when i in(1,7) then 'OK' when i in(2,8,9,10) then 'P7701'
       when i=6 then '22023' else '42501' end;

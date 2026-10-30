@@ -1,5 +1,15 @@
 # The Dye Ledger — PROJECT_CONTEXT.md
 
+October 29 staging RPC Restore executed and structurally verified on v31.0.82;
+both real browser tabs resumed Operation receipts. DYE-682947 hole-2 takeover/
+remote correction reached host, but two T4 cells needed the existing reviewed
+resend flow before both cards confirmed parity (pending 0). Cause unestablished;
+retain evidence, investigate and do not claim uninterrupted reliability. Original
+accepted DYE-119214 unchanged by agent. Next operator run combines restored full
+closure checks, known-payload replay and frozen-round audit. See latest section
+of docs/audits/v31.0.81-staging-rpc-live-rehearsal.md. Production untouched.
+This supersedes older 'staging remains rolled back' status below.
+
 October 29 approved v31.0.82 Host Takeover Handoff implemented. Active takeover
 flags retire only on canonical cloud reconciliation with no pending partner writes,
 readable queue and equal authorized non-stale server pair; history retained. Frozen

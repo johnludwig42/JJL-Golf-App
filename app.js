@@ -19,11 +19,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.82',
-  versionNumber: '31.0.82',
-  cacheName: 'the-dye-ledger-v31.0.82',
-  buildDate: '2026-10-30T00:44:00.000Z',
-  buildLabel: 'Shared Host Takeover Handoff'
+  version: 'v31.0.83',
+  versionNumber: '31.0.83',
+  cacheName: 'the-dye-ledger-v31.0.83',
+  buildDate: '2026-10-30T01:58:00.000Z',
+  buildLabel: 'Shared Score Snapshot Reliability'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -1441,7 +1441,8 @@ function buildSharedQueuedScoreEntry(match, playerId, holeNumber, updatedAt) {
   if (!player) return null; // Legacy callers are upgraded durably before their first send.
   const id = String(match.sharedMatchId || match.id), team = Number(player.team) || 1;
   const stat = normalizeHoleStat(player.stats?.[holeNumber - 1] || {}, holeNumber - 1);
-  const gross = Number(player.scores?.[holeNumber - 1]?.gross);
+  const savedGross = player.scores?.[holeNumber - 1]?.gross;
+  const gross = savedGross === null || savedGross === undefined || savedGross === '' ? NaN : Number(savedGross);
   return {id: `${id}:player:${playerId}:hole:${holeNumber}`, match_id:id, match_player_id:`${id}:player:${playerId}`,
     player_id:playerId, team_id:`${id}:team:${team}`, team_number:team, hole_number:Number(holeNumber),
     gross:Number.isFinite(gross)?Math.round(gross):null, putts:Number.isFinite(Number(stat.putts))?Math.max(0,Math.round(Number(stat.putts))):null,
@@ -1856,7 +1857,9 @@ function queueSharedScoreOperation(match, playerId, holeNumber, options = {}, st
     lastAttemptAt: null,
     actorUserId:options.actorUserId || sharedCredentialFingerprint?.split(':')[0] || null,
   };
-  if(options.scoreEntry || match.sharedScoreDeliveryTransport?.kind!=='direct')operation.scoreEntry = clonePlain(options.scoreEntry || buildSharedQueuedScoreEntry(match, playerId, holeNumber, operation.queuedAt));
+  // Transport may change while delivery awaits Auth or probes the RPC. Capture
+  // intent now even on direct upload; that path still sends current saved rows.
+  operation.scoreEntry = clonePlain(options.scoreEntry || buildSharedQueuedScoreEntry(match, playerId, holeNumber, operation.queuedAt));
   if(match.sharedLedgerParity)match.sharedLedgerParity={...match.sharedLedgerParity,status:'not-confirmed',parityConfirmed:false};
   outbox.operations = outbox.operations.filter(row => !(String(row.matchId) === matchId && row.key === key));
   outbox.operations.push(operation);
@@ -15960,7 +15963,7 @@ function buildSharedScoreBatches(match, operations, limit) {
   }
   if(batch.length)batches.push(batch);return batches;
 }
-async function prepareSharedScorePayloads(client,match,scoreEntries,storage) {
+async function prepareSharedScorePayloads(client,match,storage) {
   const rows=getSharedScoreOutboxOperations(match,storage);
   const session=client.auth?.getSession?await sharedDeliveryRequest(client.auth.getSession()):null;
   if(session?.error)throw session.error;
@@ -15974,15 +15977,18 @@ async function prepareSharedScorePayloads(client,match,scoreEntries,storage) {
     const accepted=(response.data || []).filter(row=>ids.includes(row.operation_id) && row.device_id===getSharedDeviceId() && row.actor_user_id===userId).map(row=>row.operation_id);
     acknowledgeSharedScoreOperations(match,accepted,storage);
   }
-  const outbox=readSharedScoreOutbox(storage),current=getSharedScoreOutboxOperations(match,storage);
-  const byKey=new Map(scoreEntries.map(row=>[getSharedPlayerHoleKey(row.player_id,row.hole_number),row]));
+  // Re-read after awaited receipt/session checks: a golfer may have saved another
+  // score since the caller built its upload snapshot. Only snapshotless legacy
+  // operations are upgraded; already captured/attempted payloads stay immutable.
+  const currentMatch=getCanonicalSharedMatch(match) || match;
+  const outbox=readSharedScoreOutbox(storage),current=getSharedScoreOutboxOperations(currentMatch,storage);
   for(const operation of current){
     if(operation.actorUserId && userId!==operation.actorUserId)throw Object.assign(new Error('Use the same account that entered these queued scores.'),{code:'SHARED_SIGN_IN_REQUIRED'});
     if(userId)operation.actorUserId=userId;
     if(operation.deviceId && operation.deviceId!==getSharedDeviceId())throw Object.assign(new Error('These scores belong to another originating device. Ask the host to review them.'),{code:'SHARED_ASSIGNMENT_REQUIRED'});
-    if(!shouldUploadSharedPlayerHoleEntry(match,operation.playerId,operation.holeNumber))throw Object.assign(new Error('Scoring assignments changed. Ask the host to review these queued scores.'),{code:'SHARED_ASSIGNMENT_REQUIRED'});
+    if(!shouldUploadSharedPlayerHoleEntry(currentMatch,operation.playerId,operation.holeNumber))throw Object.assign(new Error('Scoring assignments changed. Ask the host to review these queued scores.'),{code:'SHARED_ASSIGNMENT_REQUIRED'});
     if(!operation.scoreEntry){
-      const entry=byKey.get(operation.key);
+      const entry=buildSharedQueuedScoreEntry(currentMatch,operation.playerId,operation.holeNumber,operation.queuedAt);
       if(!entry)throw Object.assign(new Error('A queued player is missing. Ask the host to review the saved scores.'),{code:'SHARED_ASSIGNMENT_REQUIRED'});
       operation.scoreEntry=clonePlain(entry);
     }
@@ -15990,6 +15996,7 @@ async function prepareSharedScorePayloads(client,match,scoreEntries,storage) {
   const keys=new Set(current.map(row=>row.key)),matchId=String(match.sharedMatchId || match.id);
   outbox.operations=outbox.operations.filter(row=>String(row.matchId)!==matchId || !keys.has(row.key));outbox.operations.push(...current);
   if(!writeSharedScoreOutbox(outbox,storage).ok)throw Object.assign(new Error(STORAGE_FAILURE_MESSAGE),{code:'LOCAL_SAVE_FAILED'});
+  delete currentMatch.sharedScoreQueueRecovery;delete currentMatch.sharedDeliveryStorageFailure;
   delete match.sharedScoreQueueRecovery;delete match.sharedDeliveryStorageFailure;
 }
 function recordSharedScoreTransport(match,kind,reason='') {
@@ -16044,7 +16051,7 @@ async function submitPendingSharedScoreOperations(client, match, scoreEntries = 
     const expectedEmptyValidation=String(probe.error?.code)==='22023' && /batch.*1.*operations/i.test(probe.error?.message || '');
     if(probe.error && !expectedEmptyValidation)throw probe.error;
     recordSharedScoreTransport(match,'rpc');
-    await prepareSharedScorePayloads(client,match,scoreEntries,storage);
+    await prepareSharedScorePayloads(client,match,storage);
     const operations=buildPendingSharedScoreOperations(match,scoreEntries,storage);
     const advertised=Number((probe.error?.message || '').match(/through\s+(\d+)/i)?.[1]);
     const limit=Number.isInteger(advertised)&&advertised>0?Math.min(batchLimit,advertised):batchLimit;

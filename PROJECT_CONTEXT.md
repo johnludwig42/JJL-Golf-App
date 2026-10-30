@@ -1,5 +1,22 @@
 # The Dye Ledger — PROJECT_CONTEXT.md
 
+October 29 approved v31.0.83 Shared Score Snapshot Reliability implemented on the
+existing staging-verification branch, from clean a06bd02. A controlled live-engine
+reproduction proved direct→RPC transition could acknowledge stale zero-score rows
+for a newly entered 7/7 partner pair. This matches, but does not establish the cause
+of, the earlier T4 gap. Every new queue operation now captures intent; legacy entries
+upgrade from current canonical saved facts after receipt/session checks, while
+existing captured retries remain immutable. Direct uploads still use current rows.
+13 focused tests pass; final delivery/handoff rerun 47/47. Full suite 1564/1564,
+stress 50/50, seven layout checks, validation and simulations pass; lint zero errors
+and 88 existing warnings. Explicit release sanity flags only the current staging
+branch name. See BUILD_NOTES_v31.0.83.md for results and limits.
+Both retained staging tabs updated normally, kept DYE-682947 and its first two holes,
+then saved hole 3 (gross 4/5/6/7) through their assigned scorers: operation receipts,
+zero pending, both cards confirmed parity, scores survived reload. Accepted prior
+Ledger still retained. No SQL, production deployment or settlement-engine change.
+Previously missing cloud scores still use reviewed resend; no silent repair added.
+
 October 29 staging RPC Restore executed and structurally verified on v31.0.82;
 both real browser tabs resumed Operation receipts. DYE-682947 hole-2 takeover/
 remote correction reached host, but two T4 cells needed the existing reviewed

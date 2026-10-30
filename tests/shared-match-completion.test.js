@@ -66,7 +66,9 @@ test('score authority selects the newest valid assigned-scorer write and ignores
   const duplicate = { ...local, updatedAt: '2026-07-15T10:06:00Z' };
   assert.equal(engine.resolveSharedScoreWrite(match, local, duplicate).reasonCode, 'DUPLICATE_SCORE_IGNORED');
   assert.equal(engine.resolveSharedScoreWrite(match, local, { ...local, gross: 4, updatedAt: '2026-07-15T10:04:00Z' }).reasonCode, 'STALE_SCORE_IGNORED');
-  assert.equal(engine.resolveSharedScoreWrite(match, local, { ...local, gross: 4, sourceParticipant: 'host-participant', updatedAt: '2026-07-15T10:07:00Z' }).reasonCode, 'JOINED_OVERWRITE_PREVENTED');
+  // Assigned-device reconciliation: the host is authorized across assignments; an unrelated participant is not.
+  assert.equal(engine.resolveSharedScoreWrite(match, local, { ...local, gross: 4, sourceParticipant: 'host-participant', updatedAt: '2026-07-15T10:07:00Z' }).action, 'accept-remote');
+  assert.equal(engine.resolveSharedScoreWrite(match, local, { ...local, gross: 4, sourceParticipant: 'unrelated-participant', updatedAt: '2026-07-15T10:07:00Z' }).reasonCode, 'JOINED_OVERWRITE_PREVENTED');
   assert.equal(engine.resolveSharedScoreWrite(match, local, { ...local, gross: 4, updatedAt: '2026-07-15T10:07:00Z' }).action, 'accept-remote');
 });
 

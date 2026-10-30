@@ -23,7 +23,9 @@ test('server-authorized rows from two devices on one account hydrate on host wit
 test('explicit wrong participant is still rejected and explicit device resolves shared-account actor correctly',()=>{
  const {engine,match}=fixture();
  assert.equal(engine.resolveRemoteScoreParticipant(match,{device_id:'cart2',updated_by:'same-account'}),'jp');
- const wrong={player_id:'p4',hole_number:1,gross:4,participant_id:'hp',updated_by:'same-account'};
+ // The host is legitimately authorized under the host-authority contract; retain wrong-source
+ // coverage using a participant who is neither the host nor the assigned scorer.
+ const wrong={player_id:'p4',hole_number:1,gross:4,participant_id:'stranger',updated_by:'same-account'};
  engine.mergeRemoteScoreEntriesIntoMatch(match,[wrong]);assert.equal(match.players[4].scores[0].gross,null);
  engine.mergeRemoteScoreEntriesIntoMatch(match,[{...wrong,participant_id:'jp'}]);assert.equal(match.players[4].scores[0].gross,4);
 });

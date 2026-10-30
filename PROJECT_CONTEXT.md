@@ -1,5 +1,38 @@
 # The Dye Ledger — PROJECT_CONTEXT.md
 
+October 30 v31.0.84 Assigned Device Reconciliation implements the approved client
+fix for both canonical ownership and explicit host-authority gates. Pending cells,
+paired writes, newer local intent, unreadable queue protection and frozen records
+remain protected. Acceptance also reproduced/fixed untouched old DOM scores being
+requeued on navigation; fresh input markers cover team and individual forms.
+Actual retained DYE-682947 direct-table acceptance queued/drained 72 host takeover
+writes; both assigned devices confirmed parity, remote navigation did not replay
+old scores. Round completed, remote returned to Match, facts-only Story saved and
+seven-page Ledger accepted/frozen. AI service unavailable; not an AI-service pass.
+Physical two-phone acceptance NOT_RUN: owner confirmed no accessible staging URL.
+No SQL/production execution; broader matrix paused pending termination-rule review.
+See docs/audits/v31.0.84-assigned-device-reconciliation.md and BUILD_NOTES_v31.0.84.md.
+This supersedes the earlier unfixed-blocker status below; historical evidence kept.
+Final full suite 1,595/1,595, stress50/50, lint0 errors/88 warnings, validate,
+simulation comparison77/77 and simulation tests4/4 pass. Targeted release sanity
+flags the current staging branch name; no branch renamed and no commit created.
+
+October 30 controlled staging verification on committed v31.0.83 / 733723c found
+a new blocker: host takeover cloud scores do not reconcile on the assigned remote
+device even with no pending writes. T3/T4 remain old; T1/T2 update. Reproduced after
+removing test instrumentation/reloading and in both transport models. The guard
+unconditionally excludes locally assigned players before timestamp/authority
+resolution. No runtime fix approved/applied. See docs/audits/v31.0.83-controlled-staging-delivery.md
+for the concrete proposed reconciliation fix and stop-at-failure gate.
+Actual hosted PASS: four lost-ack immutable receipt replays, reload/backoff queue
+retention, assignment-denial/recovery, real 401→one refresh→same-payload retry,
+member private match-ID-only notifications, anonymous denial, 72 writes in paired
+64+8 batches. 144/576, failed-refresh/outsider/closure-race/phone gates remain open.
+Guarded optional preview fault panel and 36 passing tooling tests prepared; no app
+version, SQL or production changes. All faults cancelled, original assignments
+restored, plain app tabs retained with the divergent synthetic round for retest.
+Normal preview rebuilt without injection. Accepted prior round/report unchanged.
+
 October 29 approved v31.0.83 Shared Score Snapshot Reliability implemented on the
 existing staging-verification branch, from clean a06bd02. A controlled live-engine
 reproduction proved direct→RPC transition could acknowledge stale zero-score rows

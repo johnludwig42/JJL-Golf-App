@@ -99,6 +99,16 @@ sequence; an already-installed RPC requires its own comparison, not overwriting.
 No API preflight result marks any delivery gate passed. Saved results omit raw
 responses, returned account rows, request headers and credentials.
 
+## Current controlled verification status — October 30
+
+Staging RPC is restored. Controlled actual-service checks passed for lost-response
+receipts, reload/backoff, assignment denial/recovery, 401 recovery, private member
+notifications, anonymous denial and 72-operation paired batches. A host-to-assigned-
+remote reconciliation defect blocks further matrix execution. Do not reinstall,
+roll back or apply a database change to address it. See the [current report](../../../../docs/audits/v31.0.83-controlled-staging-delivery.md)
+and optional [fault-review tooling](DELIVERY_FAULT_REVIEW.md). Earlier prerequisite
+and phase descriptions below are historical; they do not authorize repeating DDL.
+
 ## 3. Execute and record the staging matrix
 
 After the catalogs agree and prerequisites are reviewed, execute the existing
@@ -156,3 +166,11 @@ Production execution remains a distinct owner decision after real-service eviden
 
 Official references: [isolated Supabase environments](https://supabase.com/docs/guides/deployment/managing-environments),
 [PostgREST errors including PGRST202](https://supabase.com/docs/guides/api/rest/postgrest-error-codes).
+# Current client reconciliation status
+
+v31.0.84 fixes the assigned-device merge blocker and passes retained real
+direct-table acceptance (72 queued writes; both cards confirmed parity), followed
+by completion, remote exit, saved facts-only Story and accepted Ledger. No database
+change. See [audit and proposed termination rule](../../../../docs/audits/v31.0.84-assigned-device-reconciliation.md).
+Physical two-phone gate remains NOT_RUN; there is no phone-accessible staging URL.
+Historical findings below remain evidence, not the current client blocker status.

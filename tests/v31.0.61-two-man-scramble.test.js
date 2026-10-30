@@ -59,6 +59,7 @@ test('paired outbox operations survive offline recovery, retry once and reject s
  let calls=0;await engine.drainPendingSharedScoreOutboxes({storage,cloudAvailable:true,scheduleContinuation:false,delivery:async current=>{calls++;const ids=engine.getSharedScoreOutboxOperations(current,storage).map(row=>row.operationId);engine.acknowledgeSharedScoreOperations(current,ids,storage);return {ok:true,skipped:false,pending:0};}});
  assert.equal(calls,1);assert.equal(engine.getSharedScoreOutboxOperations(match,storage).length,0);
  match.players.forEach(p=>match.sharedPlayerAssignments[p.playerId]=Number(p.team)<=2?'jp':'hp');assert.equal(engine.getScrambleSetupError(match,{assignments:true}),'');
- const decision=engine.resolveSharedScoreWrite(match,{playerId:'p0',holeNumber:1,gross:5,sourceParticipant:'jp',updatedAt:'2026-10-10T15:00:00Z'},{playerId:'p0',holeNumber:1,gross:4,sourceParticipant:'hp',updatedAt:'2026-10-10T16:00:00Z'});
+ // Assigned-device reconciliation authorizes the host, so test an actually stale host write here.
+ const decision=engine.resolveSharedScoreWrite(match,{playerId:'p0',holeNumber:1,gross:5,sourceParticipant:'jp',updatedAt:'2026-10-10T15:00:00Z'},{playerId:'p0',holeNumber:1,gross:4,sourceParticipant:'hp',updatedAt:'2026-10-10T14:00:00Z'});
  assert.equal(decision.action,'retain-local');
 });

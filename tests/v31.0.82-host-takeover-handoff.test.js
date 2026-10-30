@@ -48,7 +48,9 @@ test('partial acknowledgement, missing partner and inconsistent pair never relea
 });
 test('stale, unauthorized and storage-failed reconciliation retains protection',()=>{
  const {e,m,rows,ack}=fixture();ack();e.mergeRemoteScoreEntriesIntoMatch(m,rows(8,-60000));
- e.mergeRemoteScoreEntriesIntoMatch(m,rows().map(r=>({...r,participant_id:'hp'})));
+ // Assigned-device reconciliation deliberately authorizes the actual host; use an unrelated participant
+ // to retain this test's unauthorized-source coverage.
+ e.mergeRemoteScoreEntriesIntoMatch(m,rows().map(r=>({...r,participant_id:'stranger'})));
  m.sharedDeliveryStorageFailure=true;e.mergeRemoteScoreEntriesIntoMatch(m,rows());
  assert.equal(Object.keys(m.sharedHostScoreOverrides).length,2);assert.equal(m.players[4].scores[0].gross,6);
 });

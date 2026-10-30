@@ -19,11 +19,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.83',
-  versionNumber: '31.0.83',
-  cacheName: 'the-dye-ledger-v31.0.83',
-  buildDate: '2026-10-30T01:58:00.000Z',
-  buildLabel: 'Shared Score Snapshot Reliability'
+  version: 'v31.0.84',
+  versionNumber: '31.0.84',
+  cacheName: 'the-dye-ledger-v31.0.84',
+  buildDate: '2026-10-30T10:30:00.000Z',
+  buildLabel: 'Assigned Device Reconciliation'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -1910,7 +1910,10 @@ function resolveSharedScoreWrite(match, localEntry, remoteEntry) {
   const localMeta = getSharedScoreWriteMeta(match, playerId, holeNumber) || {};
   const localParticipant = String(localMeta.participantId || localEntry?.sourceParticipant || '');
   const remoteParticipant = String(remoteEntry?.sourceParticipant || '');
-  if (remoteParticipant && authorizedParticipantId && remoteParticipant !== authorizedParticipantId) {
+  const hostParticipantId = String(match?.sharedHostParticipantId || getSharedParticipantByDeviceId(match,match?.sharedHostDeviceId)?.participantId || '');
+  const hostAuthorized = !!remoteParticipant && remoteParticipant === hostParticipantId
+    && (!remoteEntry?.sourceDevice || !match?.sharedHostDeviceId || String(remoteEntry.sourceDevice) === String(match.sharedHostDeviceId));
+  if (remoteParticipant && authorizedParticipantId && remoteParticipant !== authorizedParticipantId && !hostAuthorized) {
     return { action: 'retain-local', reasonCode: 'JOINED_OVERWRITE_PREVENTED', authorizedParticipantId, localParticipant, remoteParticipant };
   }
   const localMs = sharedTimestampMs(localMeta.updatedAt || localEntry?.updatedAt);
@@ -2159,16 +2162,55 @@ function retireReconciledHostOverrides(match, remoteLedger) {
   }
   return retired;
 }
+function getSharedScoreReconciliationProtection(match) {
+  const pending = new Set();
+  if (!match || match.storageMode !== 'shared' || !isAssignedPlayersMode(match)) return { unavailable:false,pending };
+  const record = readJsonStorageRecord(localStorage,SHARED_SCORE_OUTBOX_STORAGE_KEY);
+  const unavailable = !!match.sharedDeliveryStorageFailure || !record.ok
+    || (!record.missing && (!record.value || !Array.isArray(record.value.operations)));
+  for (const operation of getSharedScoreOutboxOperations(match)) {
+    pending.add(getSharedPlayerHoleKey(operation.playerId,operation.holeNumber));
+    if (!isTeamScoredRound(match)) continue;
+    const player = match.players.find(row=>String(row.playerId)===String(operation.playerId));
+    for (const partner of match.players.filter(row=>Number(row.team)===Number(player?.team))) {
+      pending.add(getSharedPlayerHoleKey(partner.playerId,operation.holeNumber));
+    }
+  }
+  return { unavailable,pending };
+}
+function getAssignedSharedPairMergeBlocks(match,remoteLedger) {
+  const blocked = new Set();
+  if (!isAssignedPlayersMode(match) || !isTeamScoredRound(match)) return blocked;
+  const owned = getSharedLocallyOwnedPlayerIds(match);
+  const local = new Map(extractLocalScoredLedger(match).map(row=>[row.key,row]));
+  const incoming = new Map(remoteLedger.map(row=>[row.key,row]));
+  const checked = new Set();
+  for (const entry of remoteLedger) {
+    if (!owned.has(entry.playerId) || checked.has(entry.key)) continue;
+    const player = match.players.find(row=>String(row.playerId)===entry.playerId);
+    const keys = match.players.filter(row=>Number(row.team)===Number(player?.team)).map(row=>getSharedPlayerHoleKey(row.playerId,entry.holeNumber));
+    keys.forEach(key=>checked.add(key));
+    // Preflight the whole assigned pair before either partner changes. Unequal
+    // canonical scores may still propagate as Pending, but never half a write.
+    if (keys.length!==2 || keys.some(key=>!incoming.has(key) || resolveSharedScoreWrite(match,local.get(key),incoming.get(key)).action==='retain-local')) {
+      keys.forEach(key=>blocked.add(key));
+    }
+  }
+  return blocked;
+}
 function mergeSharedScoredLedgerIntoMatch(match, remoteLedger = []) {
   if (!match || !Array.isArray(remoteLedger)) return { changed: false, conflicts: [] };
+  if (isFrozenRoundRecord(match.roundRecordSnapshot)) return { changed:false,conflicts:[] };
   let changed = retireReconciledHostOverrides(match,remoteLedger) > 0;
   const conflicts = [];
+  const protection = getSharedScoreReconciliationProtection(match);
+  const blockedPairs = getAssignedSharedPairMergeBlocks(match,remoteLedger);
   const byPlayerId = new Map((match.players || []).map(mp => [String(mp.playerId), mp]));
   remoteLedger.forEach(remote => {
     const playerId = String(remote?.playerId || '').trim();
     const holeNumber = Number(remote?.holeNumber || 0);
     if (!playerId || !holeNumber) return;
-    if (!shouldAcceptRemoteSharedPlayerHoleEntry(match, playerId, holeNumber)) return;
+    if (blockedPairs.has(remote.key) || !shouldAcceptRemoteSharedPlayerHoleEntry(match, playerId, holeNumber,protection)) return;
     const mp = byPlayerId.get(playerId);
     if (!mp) return;
     const idx = holeNumber - 1;
@@ -2240,14 +2282,13 @@ function shouldUploadSharedPlayerHoleEntry(match, playerId, holeNumber) {
   if (isCurrentDeviceMatchHost(match)) return getSharedHostOverrideKeys(match).has(getSharedPlayerHoleKey(playerId, holeNumber));
   return false;
 }
-function shouldAcceptRemoteSharedPlayerEntry(match, playerId) {
+function shouldAcceptRemoteSharedPlayerEntry(match, playerId, holeNumber, protection=getSharedScoreReconciliationProtection(match)) {
   if (!match || match.storageMode !== 'shared') return true;
   if (!isAssignedPlayersMode(match)) return true;
-  const owned = getSharedLocallyOwnedPlayerIds(match);
-  return !owned.has(playerId);
+  return !protection.unavailable && !protection.pending.has(getSharedPlayerHoleKey(playerId,holeNumber));
 }
-function shouldAcceptRemoteSharedPlayerHoleEntry(match, playerId, holeNumber) {
-  if (!shouldAcceptRemoteSharedPlayerEntry(match, playerId)) return false;
+function shouldAcceptRemoteSharedPlayerHoleEntry(match, playerId, holeNumber, protection) {
+  if (!shouldAcceptRemoteSharedPlayerEntry(match, playerId,holeNumber,protection)) return false;
   if (isCurrentDeviceMatchHost(match) && getSharedHostOverrideKeys(match).has(getSharedPlayerHoleKey(playerId, holeNumber))) return false;
   return true;
 }
@@ -11616,7 +11657,7 @@ function buildScrambleScoreGridRows(match, tee, metrics, visiblePlayers, hole) {
     const flamtana = !!getFlamtanaConfig(match), strokes = flamtana ? getFlamtanaDisplayStrokes(metrics, p, playerHole?.strokeIndex) : courseStrokes;
     const holeTeeName = flamtana ? getHoleTeeNameForDisplay(match.courseId, getPlayerTee(match, p), currentHole - 1, getMatchCourse(match)) : '';
     const holeTeeLabel = holeTeeName ? holeTeeName + ' tees' : 'Hole tee not recorded';
-    return '<tr><td><strong>' + escapeHtml(getTeamLabel(match, team)) + '</strong><div class="tiny">' + members.map(m => escapeHtml(m.player.name)).join(' / ') + '</div><div class="tiny">' + (flamtana ? escapeHtml(holeTeeLabel) + ' · Gets ' + Math.max(0, p.courseHdcp - Math.min(...metrics.players.map(row => row.courseHdcp))) : 'Team index ' + Number(p.assignedTeamIndex).toFixed(1) + ' · Playing HCP ' + p.courseHdcp) + '</div><div class="tiny">' + (score.inconsistent ? 'Pending / unequal partner scores: ' + score.values.map(v => v ?? '—').join(' / ') + '. Re-enter the team score to resolve, or deliberately clear it.' : score.complete ? 'Team hole complete' : 'Team score not entered') + '</div></td><td><div class="gross-score-stepper ' + (flamtana ? 'flamtana-score-stepper' : 'team-score-stepper') + '" role="group" aria-label="Team gross score"><button type="button" class="score-step-btn" data-score-step="down" data-score-step-player="' + escapeHtml(p.playerId) + '" aria-label="Decrease team score" ' + (editable ? '' : 'disabled') + '>−</button><input class="score-input" type="tel" inputmode="numeric" autocomplete="off" min="1" max="25" aria-label="Gross score for ' + escapeHtml(getTeamLabel(match, team)) + '" data-team-inconsistent="' + (score.inconsistent ? '1' : '0') + '" data-score-team="' + team + '" data-score-player="' + escapeHtml(p.playerId) + '" data-hole-par="' + Number(playerHole?.par || 4) + '" value="' + (score.gross ?? '') + '" ' + (editable ? '' : 'disabled') + '><button type="button" class="score-step-btn" data-score-step="up" data-score-step-player="' + escapeHtml(p.playerId) + '" aria-label="Increase team score" ' + (editable ? '' : 'disabled') + '>+</button></div></td><td>' + formatStrokesDisplay(strokes) + '</td><td class="score-net-cell">' + (score.complete ? score.gross - courseStrokes : '—') + '</td></tr>';
+    return '<tr><td><strong>' + escapeHtml(getTeamLabel(match, team)) + '</strong><div class="tiny">' + members.map(m => escapeHtml(m.player.name)).join(' / ') + '</div><div class="tiny">' + (flamtana ? escapeHtml(holeTeeLabel) + ' · Gets ' + Math.max(0, p.courseHdcp - Math.min(...metrics.players.map(row => row.courseHdcp))) : 'Team index ' + Number(p.assignedTeamIndex).toFixed(1) + ' · Playing HCP ' + p.courseHdcp) + '</div><div class="tiny">' + (score.inconsistent ? 'Pending / unequal partner scores: ' + score.values.map(v => v ?? '—').join(' / ') + '. Re-enter the team score to resolve, or deliberately clear it.' : score.complete ? 'Team hole complete' : 'Team score not entered') + '</div></td><td><div class="gross-score-stepper ' + (flamtana ? 'flamtana-score-stepper' : 'team-score-stepper') + '" role="group" aria-label="Team gross score"><button type="button" class="score-step-btn" data-score-step="down" data-score-step-player="' + escapeHtml(p.playerId) + '" aria-label="Decrease team score" ' + (editable ? '' : 'disabled') + '>−</button><input class="score-input" data-score-touched="0" type="tel" inputmode="numeric" autocomplete="off" min="1" max="25" aria-label="Gross score for ' + escapeHtml(getTeamLabel(match, team)) + '" data-team-inconsistent="' + (score.inconsistent ? '1' : '0') + '" data-score-team="' + team + '" data-score-player="' + escapeHtml(p.playerId) + '" data-hole-par="' + Number(playerHole?.par || 4) + '" value="' + (score.gross ?? '') + '" ' + (editable ? '' : 'disabled') + '><button type="button" class="score-step-btn" data-score-step="up" data-score-step-player="' + escapeHtml(p.playerId) + '" aria-label="Increase team score" ' + (editable ? '' : 'disabled') + '>+</button></div></td><td>' + formatStrokesDisplay(strokes) + '</td><td class="score-net-cell">' + (score.complete ? score.gross - courseStrokes : '—') + '</td></tr>';
   }).join('') + '<tr><td colspan="4"><div class="tiny">One shared-ball score per team. Team completion is separate from all four teams completing this hole. No individual statistics or postable scores. If a scoring device drops out, the host can enter or correct all four teams here. Keep the foursome assignments; check backup and parity before finishing.</div></td></tr>';
 }
 function restoreScrambleSetup(match) {
@@ -15539,6 +15580,10 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
   const bunkerControlValues = new Map();
   const recoveryLiePlayers = new Set();
   document.querySelectorAll('input[data-score-player]').forEach(input => {
+    if (input.disabled) return;
+    // A deferred render can still display a previously saved value after a
+    // canonical pull. Only a fresh input event creates new assigned-device intent.
+    if (match.storageMode === 'shared' && isAssignedPlayersMode(match) && input.dataset.scoreTouched === '0') return;
     if (isTeamScoredRound(match)) {
       if (input.disabled || !input.dataset.scoreTeam || (input.dataset.teamInconsistent === '1' && input.dataset.teamScoreTouched !== '1')) return;
       if (isCurrentDeviceMatchHost(match) && input.dataset.teamScoreTouched !== '1') {
@@ -15549,6 +15594,8 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
       const result = applyTeamGrossScore(match, Number(input.dataset.scoreTeam), currentHole, input.value);
       result.changedPlayerIds.forEach(id => changedScorePlayers.add(id));
       mutated = mutated || result.changedPlayerIds.length > 0;
+      input.dataset.scoreTouched = '0';
+      input.dataset.teamScoreTouched = '0';
       return;
     }
     const playerId = input.dataset.scorePlayer;
@@ -15561,6 +15608,7 @@ function applyCurrentHoleDomToMatch(match, options = {}) {
       changedScorePlayers.add(playerId);
       mutated = true;
     }
+    input.dataset.scoreTouched = '0';
   });
   if (isStatTrackingEnabled(match)) {
     document.querySelectorAll('input[data-stat-player][data-stat-key], select[data-stat-player][data-stat-key]').forEach(input => {
@@ -20420,7 +20468,7 @@ function renderPlayerModeStatEntry(match, hole, metrics) {
   const detailedReadback = buildPlayerModeDetailedReadback({ derived, stat, recovery, approachLabels });
   wrap.innerHTML = `<div class="player-mode-player-detail player-mode-stat-card" data-player-stat-mode="${tracksStats ? mode.active : 'NONE'}">
     <div class="player-mode-expanded-meta"><span>${Number.isFinite(net) ? `Net ${net}` : 'Score not entered'}${strokes > 0 ? ` · ${strokes} match stroke${strokes === 1 ? '' : 's'}` : ''}</span><span class="player-mode-stat-badge">${tracksStats ? mode.active.charAt(0) + mode.active.slice(1).toLowerCase() : 'Score only'}</span></div>
-    <div class="player-mode-stat-section"><span class="player-mode-stat-label">Gross Score</span><div class="player-mode-score-choices player-mode-detail-score" role="group" aria-label="Gross score for ${escapeHtml(selected.player?.name || 'Player')}">${scoreChoices.map(value => `<button type="button" data-player-score-value="${value}" data-player-score-player="${escapeHtml(selected.playerId)}" class="${Number(gross) === value ? 'is-active' : ''}" ${canEdit ? '' : 'disabled'}><b>${value}</b><small>${escapeHtml(getPlayerModeScoreLabel(value, par))}</small></button>`).join('')}<label class="player-mode-more-score ${otherScoreSelected ? 'is-active' : ''}"><span>${otherScoreSelected ? escapeHtml(String(gross)) : 'Other'}</span><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" min="1" max="25" aria-label="Other gross score for ${escapeHtml(selected.player?.name || 'Player')}" data-score-player="${escapeHtml(selected.playerId)}" data-score-locked="${canEdit ? '0' : '1'}" data-hole-par="${par}" value="${gross || ''}" ${canEdit ? '' : 'disabled'} /></label></div></div>
+    <div class="player-mode-stat-section"><span class="player-mode-stat-label">Gross Score</span><div class="player-mode-score-choices player-mode-detail-score" role="group" aria-label="Gross score for ${escapeHtml(selected.player?.name || 'Player')}">${scoreChoices.map(value => `<button type="button" data-player-score-value="${value}" data-player-score-player="${escapeHtml(selected.playerId)}" class="${Number(gross) === value ? 'is-active' : ''}" ${canEdit ? '' : 'disabled'}><b>${value}</b><small>${escapeHtml(getPlayerModeScoreLabel(value, par))}</small></button>`).join('')}<label class="player-mode-more-score ${otherScoreSelected ? 'is-active' : ''}"><span>${otherScoreSelected ? escapeHtml(String(gross)) : 'Other'}</span><input class="score-input" data-score-touched="0" type="tel" inputmode="numeric" pattern="[0-9]*" min="1" max="25" aria-label="Other gross score for ${escapeHtml(selected.player?.name || 'Player')}" data-score-player="${escapeHtml(selected.playerId)}" data-score-locked="${canEdit ? '0' : '1'}" data-hole-par="${par}" value="${gross || ''}" ${canEdit ? '' : 'disabled'} /></label></div></div>
     ${tracksStats ? `<div class="player-mode-stat-section"><span class="player-mode-stat-label">Putts</span><div class="player-mode-stat-options player-mode-six-options">${[0,1,2,3,4].map(value => choice('putts', value, value, stat.puttsSource !== 'default' && stat.putts === value)).join('')}<label class="player-mode-more-stat"><span>Other</span><input class="stat-putts-input" type="tel" inputmode="numeric" min="0" max="9" data-stat-player="${escapeHtml(selected.playerId)}" data-stat-key="putts" data-putts-source="${escapeHtml(stat.puttsSource)}" value="${stat.puttsSource === 'default' ? '' : stat.putts}" ${canEdit ? '' : 'disabled'} /></label></div></div>
     <div class="player-mode-core-actions"><div class="player-mode-readback player-mode-core-readback" aria-live="polite">${escapeHtml(coreReadback)}</div><button type="button" class="secondary player-mode-more-detail-toggle" data-player-mode-more-detail data-incomplete="${detailIncomplete}" aria-label="${detailOpen ? 'Hide detail' : `More detail${detailIncomplete ? ', incomplete' : ''}`}" aria-expanded="${detailOpen}" aria-controls="playerModeMoreDetail-${escapeHtml(selected.playerId)}"><span>${detailOpen ? 'Hide detail' : 'More detail'}${!detailOpen && detailIncomplete ? '<b aria-hidden="true">•</b>' : ''}</span></button></div>
     <div id="playerModeMoreDetail-${escapeHtml(selected.playerId)}" class="player-mode-more-detail" ${detailOpen ? '' : 'hidden'}>
@@ -21429,7 +21477,7 @@ function buildTeamGroupedScoreGridRows(match, tee, metrics, visiblePlayers = [],
     return `
       <tr class="${canEdit ? '' : 'score-row-readonly'}">
         <td><button type="button" class="player-detail-trigger score-player-name" data-player-detail="${escapeHtml(p.playerId)}" title="${escapeHtml(p.player.name)}">${escapeHtml(p.player.name)}</button><div class="tiny score-player-tee">${escapeHtml(getPlayerHoleTeeInfo(match, p, currentHole - 1, tee).label)}${canEdit ? '' : ' · locked'}</div>${strokeDistribution ? `<div class="tiny score-player-stroke-distribution">${escapeHtml(strokeDistribution.label)}</div>` : ''}</td>
-        <td><div class="gross-score-stepper" role="group" aria-label="Gross score for ${escapeHtml(p.player.name)}"><button type="button" class="score-step-btn" data-score-step="down" data-score-step-player="${escapeHtml(p.playerId)}" ${canEdit ? '' : 'disabled'}>−</button><input class="score-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="next" autocomplete="off" min="1" max="15" data-score-player="${p.playerId}" data-score-locked="${canEdit ? '0' : '1'}" title="${canEdit ? 'Enter score' : 'You can only score your assigned players.'}" data-hole-par="${Number(playerHole?.par || hole?.par || 4) || 4}" placeholder="—" value="${gross}" ${canEdit ? '' : 'disabled'} /><button type="button" class="score-step-btn" data-score-step="up" data-score-step-player="${escapeHtml(p.playerId)}" ${canEdit ? '' : 'disabled'}>+</button></div></td>
+        <td><div class="gross-score-stepper" role="group" aria-label="Gross score for ${escapeHtml(p.player.name)}"><button type="button" class="score-step-btn" data-score-step="down" data-score-step-player="${escapeHtml(p.playerId)}" ${canEdit ? '' : 'disabled'}>−</button><input class="score-input" data-score-touched="0" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="next" autocomplete="off" min="1" max="15" data-score-player="${p.playerId}" data-score-locked="${canEdit ? '0' : '1'}" title="${canEdit ? 'Enter score' : 'You can only score your assigned players.'}" data-hole-par="${Number(playerHole?.par || hole?.par || 4) || 4}" placeholder="—" value="${gross}" ${canEdit ? '' : 'disabled'} /><button type="button" class="score-step-btn" data-score-step="up" data-score-step-player="${escapeHtml(p.playerId)}" ${canEdit ? '' : 'disabled'}>+</button></div></td>
         <td class="score-strokes-cell">${formatStrokesDisplay(strokes)}</td>
         <td class="score-net-cell">${net === '' ? '—' : net}</td>
       </tr>
@@ -21502,6 +21550,7 @@ function applySmartScoreStep(inputEl, direction) {
     if (!Number.isFinite(current)) return false;
     next = Math.max(1, Math.round(current + (direction >= 0 ? 1 : -1)));
   }
+  inputEl.dataset.scoreTouched = '1';
   if (inputEl.dataset.scoreTeam) { next = Math.min(25, next); inputEl.dataset.teamScoreTouched = '1'; }
   inputEl.value = String(next);
   updateLiveNetForScoreInput(inputEl);
@@ -21584,6 +21633,7 @@ function handleLiveScoreInputFocus(inputEl) {
 
 function handleLiveScoreInputEvent(inputEl) {
   if (!inputEl || inputEl.disabled) return;
+  inputEl.dataset.scoreTouched = '1';
   if (inputEl.dataset.scoreTeam) inputEl.dataset.teamScoreTouched = '1';
   updateLiveNetForScoreInput(inputEl);
   const match = getActiveMatch();

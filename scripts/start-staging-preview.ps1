@@ -19,6 +19,12 @@ $previewFiles = @($previewTrackedFiles | Where-Object {
     ($_ -match '^ledger-report/[^.].*\.(html|js|css|woff2|svg|png)$') -or
     ($_ -match $previewBrandingPattern)
 })
+# A review build may not be committed yet; include only its five known immutable icons.
+foreach ($icon in @('app-icon-192','app-icon-512','apple-touch-icon','favicon-32','favicon-16')) {
+    $asset = "branding/$icon-v$previewVersion.png"
+    if (!(Test-Path -LiteralPath (Join-Path $previewRoot $asset))) { throw 'Current release branding is missing.' }
+    if ($asset -notin $previewFiles) { $previewFiles += $asset }
+}
 $previewAllowed = @($previewFiles) + @('staging-sign-in.html')
 foreach ($previewExisting in Get-ChildItem -LiteralPath $previewOutput -Recurse -File) {
     $previewRelative = $previewExisting.FullName.Substring($previewOutput.Length + 1).Replace('\','/')

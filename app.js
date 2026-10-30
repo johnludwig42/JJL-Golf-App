@@ -19,11 +19,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.81',
-  versionNumber: '31.0.81',
-  cacheName: 'the-dye-ledger-v31.0.81',
-  buildDate: '2026-10-25T19:37:18.455Z',
-  buildLabel: 'Ledger Acceptance Status'
+  version: 'v31.0.82',
+  versionNumber: '31.0.82',
+  cacheName: 'the-dye-ledger-v31.0.82',
+  buildDate: '2026-10-30T00:44:00.000Z',
+  buildLabel: 'Shared Host Takeover Handoff'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -2115,9 +2115,50 @@ function recordSharedLedgerParity(match, comparison = null, options = {}) {
   match.lastSharedParityCheckAt = match.sharedLedgerParity.checkedAt;
   return match.sharedLedgerParity;
 }
+function retireReconciledHostOverrides(match, remoteLedger) {
+  if (!isCurrentDeviceMatchHost(match) || ['complete','completed'].includes(match.status) || isFrozenRoundRecord(match.roundRecordSnapshot) || match.sharedDeliveryStorageFailure) return 0;
+  const overrides = getSharedHostOverrideKeys(match);
+  if (!overrides.size) return 0;
+  const queueRecord = readJsonStorageRecord(localStorage,SHARED_SCORE_OUTBOX_STORAGE_KEY);
+  if (!queueRecord.ok || (!queueRecord.missing && (!queueRecord.value || !Array.isArray(queueRecord.value.operations)))) return 0;
+  const pending = new Set(getSharedScoreOutboxOperations(match).map(row => row.key));
+  const local = new Map(extractLocalScoredLedger(match).map(row => [row.key,row]));
+  const remote = new Map(remoteLedger.map(row => [row.key,row]));
+  const checked = new Set();
+  let retired = 0;
+  for (const key of overrides) {
+    const entry = local.get(key);
+    if (!entry || checked.has(key)) continue;
+    const player = match.players.find(row => String(row.playerId) === entry.playerId);
+    const members = isTeamScoredRound(match) ? match.players.filter(row => Number(row.team) === Number(player?.team)) : [player];
+    const keys = members.filter(Boolean).map(row => getSharedPlayerHoleKey(row.playerId,entry.holeNumber));
+    keys.forEach(value => checked.add(value));
+    if (!keys.length || keys.some(value => pending.has(value))) continue;
+    // Both partners must reconcile together. A late acknowledgement cannot release
+    // a newer queued edit, and a partial/unequal server pair is not a hand-back.
+    if (isTeamScoredRound(match) && (keys.length !== 2 || new Set(keys.map(value => remote.get(value)?.gross)).size !== 1)) continue;
+    const verified = keys.every(value => {
+      const before = local.get(value), incoming = remote.get(value);
+      if (!before || !incoming) return false;
+      const written = Math.max(sharedTimestampMs(getSharedScoreWriteMeta(match,before.playerId,before.holeNumber)?.updatedAt),sharedTimestampMs(match.sharedHostScoreOverrides?.[value]));
+      if (!written || sharedTimestampMs(incoming.updatedAt) < written) return false;
+      const decision = resolveSharedScoreWrite(match,before,incoming);
+      return decision.action === 'duplicate' || decision.action === 'accept-remote';
+    });
+    if (!verified) continue;
+    for (const value of keys.filter(value => overrides.has(value))) {
+      match.sharedHostScoreOverrideHistory ||= {};
+      const history = match.sharedHostScoreOverrideHistory[value];
+      match.sharedHostScoreOverrideHistory[value] = [...(Array.isArray(history) ? history : history ? [history] : []),{ overrideAt:match.sharedHostScoreOverrides[value],retiredAt:new Date().toISOString(),serverUpdatedAt:remote.get(value).updatedAt }];
+      delete match.sharedHostScoreOverrides[value];
+      retired++;
+    }
+  }
+  return retired;
+}
 function mergeSharedScoredLedgerIntoMatch(match, remoteLedger = []) {
   if (!match || !Array.isArray(remoteLedger)) return { changed: false, conflicts: [] };
-  let changed = false;
+  let changed = retireReconciledHostOverrides(match,remoteLedger) > 0;
   const conflicts = [];
   const byPlayerId = new Map((match.players || []).map(mp => [String(mp.playerId), mp]));
   remoteLedger.forEach(remote => {

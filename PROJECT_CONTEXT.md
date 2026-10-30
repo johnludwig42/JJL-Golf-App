@@ -1,5 +1,17 @@
 # The Dye Ledger — PROJECT_CONTEXT.md
 
+October 29 approved v31.0.82 Host Takeover Handoff implemented. Active takeover
+flags retire only on canonical cloud reconciliation with no pending partner writes,
+readable queue and equal authorized non-stale server pair; history retained. Frozen
+rounds excluded. Retained staging DYE-682947 recovered host T3 6→8, zero conflicts,
+confirmed parity, no score re-entry, persists after reload. Full suite 1551/1551,
+stress 50/50, layout/validate/lint/simulations pass. Targeted release sanity still
+flags current codex branch instead of release/v31.0.82; branch unchanged.
+See BUILD_NOTES_v31.0.82.md for exact counts/limits. Production unchanged;
+staging RPC remains rolled back and Restore/service/phone gates remain pending.
+User's prior uncommitted staging scripts and audit notes preserved. Do not run old
+historical-payload reconstruction test; use known-payload-replay-checks.sql.
+
 October 26 staging publication correction applied and audited; DYE-119214 completed
 18/18 through host/remote UI with operation receipts, zero pending and confirmed
 parity. Remote exited on host completion; seven-page Ledger accepted after saving

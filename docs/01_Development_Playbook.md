@@ -65,6 +65,7 @@ Publishing branches
 Viewing local diffs
 
 Actions follow [workflow §16](03_CODEX_WORKFLOW.md#16-actions-requiring-product-owner-approval).
+
 GitHub
 
 Used for:

@@ -5,6 +5,9 @@ Status: Draft | Approved by John on <date> | Closed
 - Release/version: <version, or none — docs only>.
 - Branch: <name>.
 - Starting revision: <full SHA>.
+- Evidence folder: <explicit absolute shared evidence root; required, never inferred
+  from an agent environment variable>. Confirm both agents can read this folder;
+  per-package evidence is stored in its WP-<id> subfolder.
 - Constitutional Review: <link, or not required: reason>.
 
 ## Objective

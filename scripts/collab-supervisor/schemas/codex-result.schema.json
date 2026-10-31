@@ -1,0 +1,10 @@
+{
+  "type": "object", "additionalProperties": false,
+  "required": ["status", "summary", "criteria", "disputes"],
+  "properties": {
+    "status": {"type": "string", "enum": ["implemented", "needs_owner", "blocked"]},
+    "summary": {"type": "string"},
+    "criteria": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["id", "result"], "properties": {"id": {"type": "string"}, "result": {"type": "string", "enum": ["PASS", "FAIL", "NOT_RUN"]}}}},
+    "disputes": {"type": "array", "items": {"type": "string"}}
+  }
+}

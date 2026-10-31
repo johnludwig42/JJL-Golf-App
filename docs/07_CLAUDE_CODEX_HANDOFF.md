@@ -163,3 +163,23 @@ it with the documented action and continue. Unexpected Pending is a finding and
 fails clean acceptance. Re-entry may continue evidence collection but does not
 erase the finding. Only John can accept the remaining risk; record it as
 **FAIL — residual risk accepted by John on <date>**, never as PASS.
+
+## 6. Supervised runs
+
+[Collaboration supervisor](../scripts/collab-supervisor/README.md) contains the
+WP-AUTO-01 Phase A fake-only implementation and verification procedure. This does
+not enable overnight work. Operational commands work only with hash-pinned fake
+fixtures and marked disposable OS Temp repositories/evidence. All real agent,
+version and auth calls remain disabled pending separate Phase B and Phase C approval.
+
+Use the explicit absolute evidence folder named in the work package. Retain each
+round's diff, manifest, untracked-file copies, checks, before/after status and
+independent review. A fake test proves only its stated simulated condition.
+Report manual cases as PASS, FAIL or NOT_RUN; Phase B-dependent protections stay
+UNVERIFIED until their probes run and Claude reviews the evidence.
+
+READY means ready for independent review and John's decision. It grants no
+commit, push, merge, deployment, database or spending authority and does not
+change [workflow §16](03_CODEX_WORKFLOW.md#16-actions-requiring-product-owner-approval).
+Do not bypass a failed isolation/evidence gate or reset a stale lock/budget to
+continue. Preserve partial evidence and report the stopped state.

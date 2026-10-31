@@ -15,8 +15,13 @@ Both phones must show v31.0.84. Use clearly named synthetic golfers/rounds.
    agree and neither phone replays an untouched old field when changing holes.
 5. Complete 18 holes across both phones, including another lock/wake/reconnect.
    On both Match panels require zero pending holes, Ready retry and Confirmed
-   card parity. Verify gross scores and wager totals agree. Resolve any Pending
-   pair by deliberately re-entering its team score; do not silently choose a value.
+   card parity. Verify gross scores and wager totals agree. Before resolving a
+   Pending pair, record the round code, hole, team, both partners' values on each
+   device, pending counts, time and a screenshot. Deliberately re-entering the team
+   score through Play is allowed. Expected Pending must have been deliberately
+   created by a test step. Unexpected Pending is a finding and fails clean acceptance;
+   re-entry may only continue evidence collection. Follow the
+   [Pending rule](07_CLAUDE_CODEX_HANDOFF.md#5-evidence-and-pending-rules).
 6. Host completes the round. Confirm remote exits to Match → Create/Join without
    dropping unsent facts. Review/save Story, open Ledger, check results and Accept
    & Finalize. Confirm accepted/frozen status survives reload. Previously completed
@@ -26,5 +31,9 @@ Both phones must show v31.0.84. Use clearly named synthetic golfers/rounds.
    AI service failure/facts-only fallback honestly. Never send passwords/tokens.
 
 Any lost score, unexpected overwrite, unequal partner resolution, changed frozen
-record or inability to confirm required parity fails acceptance. Preserve evidence
-and stop; do not delete the round or re-enter scores just to make the test green.
+record or inability to confirm required parity fails acceptance. Unexpected Pending
+also fails clean acceptance. Preserve the finding even if the documented re-entry
+is used to continue collecting evidence. Only John can accept the remaining risk,
+recorded as "FAIL — residual risk accepted by John on <date>", never as PASS.
+For other failures, preserve evidence and stop. Do not delete the round or re-enter
+scores to hide a failure; follow the [evidence rule](07_CLAUDE_CODEX_HANDOFF.md#5-evidence-and-pending-rules).

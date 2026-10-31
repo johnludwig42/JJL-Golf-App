@@ -27,18 +27,20 @@ Feature prioritization
 UX decisions
 Release approval
 Production acceptance
-ChatGPT
+Remaining-risk decisions
+Claude
 
 Acts as:
 
-Product Manager
-Architect
-UX Advisor
-QA Reviewer
-Documentation Author
-Release Planner
+Work Package Planner
+Implementation Plan Reviewer
+Independent Implementation and Evidence Reviewer
 
-ChatGPT does not modify production code.
+Claude edits implementation files only when the approved package assigns that work.
+
+ChatGPT
+
+Optional adviser with no planning, review or approval gate.
 
 Codex
 
@@ -48,6 +50,7 @@ Software Engineer
 Repository Inspector
 Implementation Planner
 Code Author
+Tester
 Self Reviewer
 
 Codex produces implementation plans before editing code and performs a self-review before any release is committed.
@@ -60,6 +63,8 @@ Reviewing code changes
 Creating commits
 Publishing branches
 Viewing local diffs
+
+Actions follow [workflow §16](03_CODEX_WORKFLOW.md#16-actions-requiring-product-owner-approval).
 GitHub
 
 Used for:
@@ -69,6 +74,10 @@ Code history
 Merge approval
 GitHub Actions
 Production deployment
+
+GitHub tooling does not grant approval authority. Roles and handoffs follow
+[the shared protocol](07_CLAUDE_CODEX_HANDOFF.md).
+
 Standard Development Lifecycle
 
 Every release follows the same sequence.

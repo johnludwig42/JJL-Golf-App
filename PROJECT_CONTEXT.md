@@ -83,7 +83,7 @@ This supersedes the earlier publication-blocked/pending-application notes below.
 
 **Version:** 1.0  
 **Status:** Living Document  
-**Purpose:** Single starting context for Codex, ChatGPT, and future developers.
+**Purpose:** Single starting context for Claude, Codex, and future developers; ChatGPT may be an optional adviser.
 
 October 25 publication correction approved and prepared, not yet applied to staging.
 See proposal staging/PUBLICATION_FIX.md and runner -Action PublicationFix. Actual
@@ -230,28 +230,31 @@ Previous release: **v31.0.59 — Play Screen Refinement**, merged in PR #156. Ro
 
 ## 2. Development Roles
 
-**Product Owner**
-- Sets product direction.
-- Approves scope.
-- Tests and accepts releases.
+**John — Product Owner**
+- Sets product direction and approves work packages and scope.
+- Makes owner decisions under [workflow §16](docs/03_CODEX_WORKFLOW.md#16-actions-requiring-product-owner-approval).
+- Tests and accepts releases and explicitly accepts remaining risk.
 
-**ChatGPT**
-- Product manager, architect, UX advisor, QA reviewer, release planner, documentation author.
+**Claude — Planner and Independent Reviewer**
+- Drafts work packages and acceptance criteria.
+- Reviews Codex's implementation plans, implementations and evidence independently.
+- Reports findings and escalates scope or permission changes.
 
-**Codex**
-- Software engineer.
-- Inspects repo.
-- Produces plans.
-- Edits code after approval.
-- Self-reviews.
-- Runs checks.
-- Reports risks, assumptions, and manual tests.
+**Codex — Implementer and Tester**
+- Inspects the repository and produces implementation plans.
+- Implements approved scope, tests and self-reviews.
+- Reports risks, assumptions, evidence and manual acceptance limits.
+
+**ChatGPT — Optional Adviser**
+- May provide advice; owns no planning, review or approval gate.
 
 **GitHub Desktop**
-- Local Git review, commits, branches, push/pull/fetch.
+- Tool for local Git review, commits, branches and push/pull/fetch, subject to workflow §16.
 
 **GitHub.com**
-- Pull Requests, merges, Actions, Pages deployment.
+- Tool for pull requests, merges, Actions and Pages deployment, subject to workflow §16.
+
+See [the shared handoff protocol](docs/07_CLAUDE_CODEX_HANDOFF.md).
 
 ## 3. Branching Rules
 
@@ -278,7 +281,7 @@ Rules:
 
 ## 4. Standard Release Process
 
-1. Discuss feature/bug with ChatGPT.
+1. Discuss feature/bug with Claude.
 2. Assign scope and version.
 3. Switch GitHub Desktop to `main`.
 4. Fetch and pull latest `main`.
@@ -286,11 +289,11 @@ Rules:
 6. Open new Codex chat.
 7. Confirm repo path, branch, key files, docs.
 8. Ask Codex for implementation plan before edits.
-9. Review plan with ChatGPT.
+9. Review plan with Claude.
 10. Approve implementation.
 11. Codex implements.
 12. Codex checks and self-reviews.
-13. Review summary with ChatGPT.
+13. Review summary with Claude.
 14. Review diffs in GitHub Desktop.
 15. Commit.
 16. Push branch.
@@ -322,18 +325,7 @@ After implementation, Codex must provide:
 - manual test checklist
 - git status/diff summary
 
-Codex must not, without explicit approval:
-- merge PRs
-- push to `main`
-- delete branches
-- change Supabase schema
-- expose API keys
-- add paid API dependencies
-- break localStorage compatibility
-- broadly refactor unrelated code
-- redesign workflows
-- suppress legitimate errors
-- delete/mutate user data destructively
+Follow [Actions Requiring Product Owner Approval](docs/03_CODEX_WORKFLOW.md#16-actions-requiring-product-owner-approval).
 
 ## 6. Product Guardrails
 
@@ -601,25 +593,26 @@ Do not edit files yet.
 After confirming, wait for the release-specific planning prompt.
 ```
 
-## 16. Starter Prompt for ChatGPT
+## 16. Starter Prompt for Claude
 
 ```text
 We are continuing development of The Dye Ledger.
 
-Current workflow:
-ChatGPT for product/architecture/review; Codex for implementation; GitHub Desktop for commits; GitHub.com for PR/merge/deploy.
+John is product owner. Claude plans and independently reviews; Codex implements,
+tests and self-reviews. ChatGPT may be an optional adviser with no workflow gate.
 
-Production baseline when PROJECT_CONTEXT.md was created: v30.3.42.
+Read PROJECT_CONTEXT.md, docs/03_CODEX_WORKFLOW.md,
+docs/07_CLAUDE_CODEX_HANDOFF.md, the Constitution where relevant and the newest
+BUILD_NOTES_v*.md. Obtain the version from package.json and inspect Git for the
+current branch, revision and working-tree changes. Use the dated status entries
+and approved work package for priorities and limits; do not infer a new priority
+from historical release notes.
 
-Near-term roadmap:
-Course Library Stabilization, lifecycle-based navigation and interchangeable Play input modes with four-mode Stat Capture, Trip Mode, beta hardening, then broader competition and Event Edition work. Preserve the current Play experience as Classic Mode and introduce the redesigned current-hole-first experience as Player Mode. Both—and any future input modes—must use one authoritative Play controller and Round data contract so presentation choices never duplicate or change scoring, handicap, competition, settlement, synchronization, derived-statistic, or reporting logic. The Play input-mode preference remains separate from None, Casual, Enhanced, and Grind Stat Capture.
+Plan and review only the owner-approved scope. Follow workflow §16 for approvals
+and the handoff protocol for exact review fingerprints, findings and evidence.
 
-Course Library Stabilization is the immediate priority before further Stat Capture or score-entry work: prevent approved catalog rewrites; batch tee/hole writes; add bounded progress, timeout, retry, and recovery states; distinguish Local, Draft Uploaded, Approved, and Needs Attention; add a protected maintainer approval action; refresh only the affected course; verify the complete two-device create/upload/approve/anonymous-download/edit workflow; and audit the 19 catalog courses reported as updated during the August 2026 live upload test. Do not silently merge, delete, or rewrite production catalog records during remediation.
-
-Product philosophy:
-iPhone-first, offline-first, local-first, effortless scoring, competition, player improvement, memories/storytelling, Maximize Return on Effort, Remember for the Golfer.
-
-Help me plan and review the next release.
+Preserve the iPhone-first, offline-first, local-first product and its historical
+facts. Report any constitutional conflict before implementation.
 ```
 
 ## 17. Closing Principle

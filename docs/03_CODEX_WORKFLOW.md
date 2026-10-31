@@ -2,7 +2,7 @@
 
 Version: 1.0  
 Status: Living Document  
-Owner: Product Owner / ChatGPT / Codex
+Owner: John (Product Owner); Claude (Planner/Independent Reviewer); Codex (Implementer/Tester)
 
 ## Constitutional Authority
 
@@ -185,7 +185,12 @@ The plan should include:
 
 Plans must be specific to the requested release. Codex should avoid speculative architecture, broad rewrites, and unrelated cleanup.
 
-When the release workflow requires a planning phase, Codex must wait for Product Owner approval before editing application code.
+Within an owner-approved work package, Claude reviews Codex's implementation
+plan before implementation. Codex may implement after Claude reports "Plan
+accepted", subject to any stated conditions and the package's approval boundaries.
+Scope or permission changes return to John. An accepted plan does not itself grant
+an approval required by [§16](#16-actions-requiring-product-owner-approval).
+See [the handoff protocol](07_CLAUDE_CODEX_HANDOFF.md).
 
 ## 8. Scope Discipline
 
@@ -391,13 +396,17 @@ For release work, Definition of Done also includes:
 - current release docs are scoped to the current release
 - deployment and manual validation checklist is ready for Product Owner review
 
-## 16. Things Codex Must Never Do Without Explicit Approval
+## 16. Actions Requiring Product Owner Approval
 
-Codex must never do the following without explicit Product Owner approval:
+Claude and Codex must obtain explicit approval from John, the Product Owner, for the following actions:
 
 - commit changes
 - push branches
 - merge pull requests
+- deploy or publish any site, in production or staging
+- expose a local server to other devices, including binding to all interfaces or a LAN address, tunnels or port forwarding
+- execute SQL or change databases or schemas in any environment
+- incur new spending, including paid services, plans, API dependencies or usage
 - delete branches
 - develop directly on `main`
 - reset, checkout, or discard user changes
@@ -419,7 +428,20 @@ Codex must never do the following without explicit Product Owner approval:
 - make match creation depend on optional context capture
 - store precise location history or create user-tracking behavior
 
-If a user request seems to require one of these actions, Codex must call it out and wait for approval.
+An approved work package may authorize a specific commit, push, merge or
+deployment only when it names the exact action, branch or target, and when it may
+occur. General package approval is insufficient. If that authorization is absent,
+either agent calls out the action and waits for John's approval.
+
+Database actions and new spending always require John's separate explicit approval
+naming the exact action. A work package cannot pre-authorize them.
+
+Pre-authorized checks within an approved package are described in
+[the handoff protocol](07_CLAUDE_CODEX_HANDOFF.md#2-checks-within-an-approved-package).
+A preview bound only to 127.0.0.1 or localhost is distinct from exposing it to
+another device. External staging, production and AI/Story service calls require
+explicit authorization unless the package specifically names those calls; this
+does not waive the separate approval for database actions or spending.
 
 ## 17. Standard Prompts to Use When Beginning a Release
 

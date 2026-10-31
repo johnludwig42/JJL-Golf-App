@@ -48,14 +48,28 @@ writer at a time; review runs against a quiescent tree.
 
 Do not pipe native Git diff output into a hash or write it with `Out-File`:
 PowerShell can re-encode it. Git writes the retained diff itself. Set the package
-ID, full baseline SHA and review round, then run from the repository root:
+ID, full baseline SHA, review round and the explicit absolute evidence root named
+in the work package, then run from the repository root. Sandboxed agents may see a
+different `%TEMP%`; use the named folder and confirm the other agent can read it.
+For WP-DOC-01 the agreed evidence root is
+`C:\Users\johnl\AppData\Local\Temp\dye-ledger`; package evidence goes in its
+`WP-DOC-01` subfolder. Do not infer the root from an environment variable.
 
 ```powershell
 $ErrorActionPreference = 'Stop'
 $workPackage = 'WP-DOC-01'
 $round = 1
 $base = '<full starting SHA>'
-$evidenceDir = Join-Path $env:TEMP ('dye-ledger\' + $workPackage)
+$evidenceRoot = '' # Required: copy the absolute evidence root from the work package.
+if ([string]::IsNullOrWhiteSpace($evidenceRoot) -or $evidenceRoot -match '[<>]') {
+    throw 'Set evidenceRoot to the explicit absolute folder named in the work package.'
+}
+$rootIsAbsolute = ($evidenceRoot -match '^[A-Za-z]:[\\/]') -or
+    ($evidenceRoot -match '^\\\\[^\\/]+[\\/][^\\/]+(?:[\\/]|$)')
+if (-not $rootIsAbsolute) {
+    throw 'Evidence root must be an absolute Windows folder, not a relative or drive-relative path.'
+}
+$evidenceDir = Join-Path $evidenceRoot $workPackage
 New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
 $diffPath = Join-Path $evidenceDir ('r{0}.diff' -f $round)
 $manifestPath = Join-Path $evidenceDir ('r{0}-manifest.txt' -f $round)

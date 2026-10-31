@@ -290,7 +290,7 @@ Rules:
 7. Confirm repo path, branch, key files, docs.
 8. Ask Codex for implementation plan before edits.
 9. Review plan with Claude.
-10. Approve implementation.
+10. Claude accepts the plan (John has approved the work package).
 11. Codex implements.
 12. Codex checks and self-reviews.
 13. Review summary with Claude.

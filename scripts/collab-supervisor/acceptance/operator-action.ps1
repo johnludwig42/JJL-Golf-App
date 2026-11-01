@@ -56,9 +56,15 @@ try{
     if([DateTime]::UtcNow -ge $deadline){throw 'Agent did not become ready in owned console'}
     $ready=Get-Content -LiteralPath $spec.ready -Raw | ConvertFrom-Json
     if($data.action -eq 'console_close'){
-        if(-not [DyeJobs.Process]::Member([int]$ready.launcher,$owner.Job.ToInt64())){throw 'Launcher is not in test-owned conhost job'}
         $signalAt=[DateTime]::UtcNow
-        [DyeJobs.Process]::CloseOwnedClassicConsole($owner.Pid,$owner.Created,[int]$ready.launcher,[long]$ready.launcherCreated,[long]$ready.consoleWindow)
+        $closeTrace=New-Object DyeJobs.Process+ConsoleCloseTrace
+        try{
+            [DyeJobs.Process]::CloseOwnedClassicConsole($owner.Pid,$owner.Created,[int]$ready.launcher,[long]$ready.launcherCreated,[long]$ready.consoleWindow,$owner.Job.ToInt64(),$closeTrace)
+        }catch{
+            Write-JobRecord ($launch+'.close-refused.json') @{outcome='refused';reason=$_.Exception.Message;trace=$closeTrace;at=[DateTime]::UtcNow.ToString('o')}
+            throw
+        }
+        Write-JobRecord ($launch+'.close-posted.json') @{outcome='posted_not_yet_delivered';trace=$closeTrace;hostPid=$owner.Pid;hostCreated=$owner.Created.ToString();launcherPid=$ready.launcher;launcherCreated=$ready.launcherCreated;window=$ready.consoleWindow;at=[DateTime]::UtcNow.ToString('o')}
         $deadline=$signalAt.AddSeconds(8)
         do{
             $launcherInfo=[DyeJobs.Process]::Inspect([int]$ready.launcher)
@@ -66,7 +72,13 @@ try{
             $launcherAlive=$launcherInfo.Alive -and $launcherInfo.Created -eq [long]$ready.launcherCreated
             if($launcherAlive){Start-Sleep -Milliseconds 20}
         }while($launcherAlive -and [DateTime]::UtcNow -lt $deadline)
-        if(-not (Test-Path -LiteralPath ($launch+'.console-event.json'))){throw 'close not delivered'}
+        if(-not (Test-Path -LiteralPath ($launch+'.console-event.json'))){
+            Write-JobRecord ($launch+'.close-refused.json') @{outcome='refused';reason='close not delivered';trace=$closeTrace;at=[DateTime]::UtcNow.ToString('o')}
+            throw 'close not delivered'
+        }
+        $closeEvent=Get-Content -LiteralPath ($launch+'.console-event.json') -Raw | ConvertFrom-Json
+        if($closeEvent.kind -ne 2){throw 'Expected CTRL_CLOSE handler entry'}
+        Write-JobRecord ($launch+'.close-delivered.json') @{outcome='delivered';handlerEntry=$closeEvent;at=[DateTime]::UtcNow.ToString('o')}
         if($launcherAlive){throw 'Console close did not terminate launcher within 8 s'}
     }else{
         if([int]$ready.launcher -ne $owner.Pid -or [long]$ready.launcherCreated -ne $owner.Created){throw 'Owned console PID mismatch'}

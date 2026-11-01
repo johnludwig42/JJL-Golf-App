@@ -45,6 +45,11 @@ export async function runOperatorCase(name){
     const eventPath=prepared.launchSpec+'.console-event.json';
     assert.ok(existsSync(eventPath),'close not delivered');
     const event=readJson(eventPath);assert.equal(event.kind,2);assert.ok(Date.parse(event.at));
+    const posted=readJson(prepared.launchSpec+'.close-posted.json');
+    assert.equal(posted.trace.PostAttempted,true);assert.equal(posted.trace.Posted,true);
+    assert.equal(posted.trace.Detached,true);assert.equal(posted.trace.AttachedChecks,2);
+    assert.ok(posted.trace.Clients.includes(Number(posted.launcherPid)));
+    assert.equal(readJson(prepared.launchSpec+'.close-delivered.json').outcome,'delivered');
   }
   const ended=readJson(prepared.paths.launchDone);assert.equal(ended.reason,'owner_interrupt');assert.equal(ended.action,'terminate_J0');assert.equal(ended.empty,true);assert.ok(Date.parse(ended.at));
   const collected=collectFakeRun(prepared);
@@ -57,5 +62,10 @@ export async function runOperatorCase(name){
   assert.ok(existsSync(join(r.config.evidenceRoot,'global.lock')));
   const recovered=await invokeCli('recover',r,['--fixture-consent']);assert.equal(recovered.exit,0,recovered.stderr);
   const clean=realSweep({marker:prepared.marker,fixture,startedAt:prepared.startedAt},join(r.root,'verify'));assert.equal(clean.result,'PASS');assert.equal(clean.escapes.length,0);
+  if(name==='console_close'){
+    const completion={outcome:'handler_completed',reason:ended.reason,empty:ended.empty,sweep:ended.sweep,recovered:true,survivors:clean.survivors,at:new Date().toISOString()};
+    writeFileSync(prepared.launchSpec+'.close-completed.json',JSON.stringify(completion),{flag:'wx'});
+    console.log(JSON.stringify({case:name,delivery:readJson(prepared.launchSpec+'.close-delivered.json'),completion}));
+  }
   console.log(JSON.stringify({case:name,result:'PASS',root:r.root,controlled,actingLayer:ended}));
 }

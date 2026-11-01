@@ -136,14 +136,84 @@ namespace DyeJobs {
   [DllImport("kernel32.dll",SetLastError=true)] static extern bool GenerateConsoleCtrlEvent(uint kind,uint group);
   [DllImport("user32.dll",SetLastError=true)] static extern bool PostMessage(IntPtr window,uint message,IntPtr w,IntPtr l);
   [DllImport("user32.dll",SetLastError=true)] static extern uint GetWindowThreadProcessId(IntPtr window,out uint pid);
+  [DllImport("user32.dll")] static extern bool IsWindow(IntPtr window);
+  [DllImport("kernel32.dll",SetLastError=true)] static extern uint GetConsoleProcessList([Out] uint[] processes,uint count);
   public static long ConsoleWindow() {return GetConsoleWindow().ToInt64();}
-  public static void CloseOwnedClassicConsole(int hostPid,long hostCreated,int launcherPid,long launcherCreated,long window) {
-   var host=Inspect(hostPid);var launcher=Inspect(launcherPid);uint windowPid;
-   if(!host.Known || !host.Alive || host.Created!=hostCreated || !launcher.Known || !launcher.Alive || launcher.Created!=launcherCreated || window==0)
+  // The seam below is used only by deterministic tests of this test-signal helper.
+  // Operator requests cannot select an API: the public native entry point fixes it.
+  public abstract class OwnedConsoleApi {
+   public abstract Inspection Identity(int pid);
+   public abstract bool InJob(int pid,long job);
+   public abstract void Detach();
+   public abstract void Attach(int pid);
+   public abstract long Window();
+   public abstract int[] Clients();
+   public abstract bool WindowExists(long window);
+   public abstract uint WindowOwner(long window);
+   public abstract void PostClose(long window);
+  }
+  sealed class NativeOwnedConsoleApi : OwnedConsoleApi {
+   public override Inspection Identity(int pid) {return Inspect(pid);}
+   public override bool InJob(int pid,long job) {return Member(pid,job);}
+   public override void Detach() {
+    FreeConsole();
+    if(GetConsoleWindow()!=IntPtr.Zero)throw new InvalidOperationException("Signalling helper is still attached");
+   }
+   public override void Attach(int pid) {Require(AttachConsole((uint)pid),"Attach test-created console");}
+   public override long Window() {return ConsoleWindow();}
+   public override int[] Clients() {
+    uint[] values=new uint[16];uint count=GetConsoleProcessList(values,(uint)values.Length);
+    if(count==0)throw Error("Inspect test console clients");
+    if(count>values.Length) {
+     if(count>4096)throw new InvalidOperationException("Unexpected test console client count");
+     values=new uint[count];count=GetConsoleProcessList(values,(uint)values.Length);
+     if(count==0 || count>values.Length)throw new InvalidOperationException("Test console clients changed during inspection");
+    }
+    int[] result=new int[count];for(int i=0;i<count;i++)result[i]=checked((int)values[i]);return result;
+   }
+   public override bool WindowExists(long window) {return IsWindow(new IntPtr(window));}
+   public override uint WindowOwner(long window) {uint pid;GetWindowThreadProcessId(new IntPtr(window),out pid);return pid;}
+   public override void PostClose(long window) {Require(PostMessage(new IntPtr(window),0x10,IntPtr.Zero,IntPtr.Zero),"Close owned classic console");}
+  }
+  public class ConsoleCloseTrace {
+   public string Phase="not_attempted",ValidatedAtUtc,PostedAtUtc;
+   public bool Detached,PostAttempted,Posted;
+   public int AttachedChecks;
+   public uint ObservedWindowOwner;
+   public int[] Clients;
+  }
+  static void CheckCloseIdentity(OwnedConsoleApi api,int hostPid,long hostCreated,int launcherPid,long launcherCreated,long window,long job) {
+   var host=api.Identity(hostPid);var launcher=api.Identity(launcherPid);
+   if(hostPid<=0 || launcherPid<=0 || hostPid==launcherPid || job==0 || !host.Known || !host.Alive || host.Created!=hostCreated || !launcher.Known || !launcher.Alive || launcher.Created!=launcherCreated || window==0)
     throw new InvalidOperationException("Classic test console identity unverified");
-   Require(GetWindowThreadProcessId(new IntPtr(window),out windowPid)!=0,"Inspect test console window owner");
-   if(windowPid!=(uint)hostPid)throw new InvalidOperationException("Window is not owned by test-created conhost");
-   Require(PostMessage(new IntPtr(window),0x10,IntPtr.Zero,IntPtr.Zero),"Close owned classic console");
+   if(!api.InJob(launcherPid,job))throw new InvalidOperationException("Launcher is not in test-owned conhost job");
+   if(!api.WindowExists(window))throw new InvalidOperationException("Test console window is gone");
+  }
+  public static void CloseOwnedClassicConsole(int hostPid,long hostCreated,int launcherPid,long launcherCreated,long window,long job,ConsoleCloseTrace trace) {
+   CloseOwnedClassicConsole(hostPid,hostCreated,launcherPid,launcherCreated,window,job,trace,new NativeOwnedConsoleApi());
+  }
+  public static void CloseOwnedClassicConsole(int hostPid,long hostCreated,int launcherPid,long launcherCreated,long window,long job,ConsoleCloseTrace trace,OwnedConsoleApi api) {
+   trace.Phase="validating";
+   CheckCloseIdentity(api,hostPid,hostCreated,launcherPid,launcherCreated,window,job);
+   // This dedicated helper detaches itself, never the operator's console process.
+   api.Detach();trace.Detached=true;
+   try {
+    api.Attach(launcherPid);trace.Detached=false;
+    // Repeat all attached identity checks immediately before detaching to signal.
+    for(int pass=0;pass<2;pass++) {
+     CheckCloseIdentity(api,hostPid,hostCreated,launcherPid,launcherCreated,window,job);
+     if(api.Window()!=window)throw new InvalidOperationException("Attached console window changed");
+     var clients=api.Clients();bool found=false;foreach(int pid in clients)if(pid==launcherPid)found=true;
+     if(!found)throw new InvalidOperationException("Launcher is not a client of attached console");
+     trace.Clients=clients;trace.AttachedChecks++;trace.ObservedWindowOwner=api.WindowOwner(window);
+    }
+   } finally {api.Detach();trace.Detached=true;}
+   // Attached-window/client checks must precede FreeConsole; process/job/window
+   // identities are checked again after it, immediately before the only PostMessage.
+   CheckCloseIdentity(api,hostPid,hostCreated,launcherPid,launcherCreated,window,job);
+   trace.ValidatedAtUtc=DateTime.UtcNow.ToString("o");trace.Phase="validated_detached";
+   trace.PostAttempted=true;api.PostClose(window);trace.Posted=true;
+   trace.PostedAtUtc=DateTime.UtcNow.ToString("o");trace.Phase="posted";
   }
   public static void SignalOwnedConsole(int pid,long created,long window,bool close) {
    var info=Inspect(pid);if(!info.Known || !info.Alive || info.Created!=created || window==0)throw new InvalidOperationException("Test console identity unverified");

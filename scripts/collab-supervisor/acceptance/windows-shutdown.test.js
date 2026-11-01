@@ -38,6 +38,70 @@ const cases = ['step_timeout', 'hard_kill_node', 'hard_kill_launcher', 'hard_kil
   'hard_kill_node_and_launcher', 'detached_grandchild', 'wrapper_parent_death_only', 'launcher_j0_only',
   'launcher_total_deadline', 'wrapper_step_deadline_only', 'child_cannot_inherit_job_handles', 'refused_breakaway', 'agent_membership_both_jobs'];
 
+test('windows.console_close.identity_checks_refuse_without_posting', { skip:process.platform !== 'win32', timeout:60000 }, () => {
+  const scratch=mkdtempSync(join(tmpdir(),'dye-console-identity-'));
+  const script=join(scratch,'identity-tests.ps1');
+  // Compile the actual library and a deterministic API double together. The double
+  // never calls Win32: no real console, process, window or signal is touched here.
+  writeFileSync(script,`$ErrorActionPreference='Stop'
+$library=Get-Content -LiteralPath '${join(root,'lib','windows-job.ps1')}' -Raw
+$definition=[regex]::Match($library,"(?s)Add-Type -TypeDefinition @'\\r?\\n(.*?)\\r?\\n'@").Groups[1].Value
+if(-not $definition){throw 'Missing library definition'}
+$double=@'
+namespace DyeConsoleTest {
+ public class Api : DyeJobs.Process.OwnedConsoleApi {
+  public string Scenario;
+  public bool Attached;
+  public int Posts,LauncherReads,WindowChecks;
+  public Api(string scenario) {Scenario=scenario;}
+  public override DyeJobs.Inspection Identity(int pid) {
+   if(pid==20)LauncherReads++;
+   long created=pid==10?1000:2000;
+   if(Scenario=="creation_mismatch" && pid==10)created++;
+   if(Scenario=="reused_launcher_before_post" && pid==20 && LauncherReads>=4)created++;
+   return new DyeJobs.Inspection {Known=true,Alive=!(Scenario=="launcher_gone" && pid==20),Created=created};
+  }
+  public override bool InJob(int pid,long job) {return Scenario!="wrong_job" && pid==20 && job==42;}
+  public override void Detach() {Attached=false;}
+  public override void Attach(int pid) {Attached=true;}
+  public override long Window() {return Scenario=="wrong_window"?999:101;}
+  public override int[] Clients() {return Scenario=="unrelated_console"?new int[]{30}:new int[]{20,30};}
+  public override bool WindowExists(long window) {WindowChecks++;return Scenario!="window_gone" && !(Scenario=="window_gone_before_post" && WindowChecks>=4);}
+  public override uint WindowOwner(long window) {return Scenario=="owner_observation_unknown"?0u:20u;}
+  public override void PostClose(long window) {if(Attached)throw new System.Exception("Helper must detach before PostMessage");Posts++;}
+ }
+}
+'@
+Add-Type -TypeDefinition ($definition+[Environment]::NewLine+$double)
+$rows=@()
+foreach($name in @('wrong_window','creation_mismatch','reused_launcher_before_post','unrelated_console','launcher_gone','wrong_job','window_gone','window_gone_before_post','client_owner_observation','owner_observation_unknown')){
+  $api=New-Object DyeConsoleTest.Api($name)
+  $trace=New-Object DyeJobs.Process+ConsoleCloseTrace
+  $reason=$null
+  try{[DyeJobs.Process]::CloseOwnedClassicConsole(10,1000,20,2000,101,42,$trace,$api)}catch{$reason=$_.Exception.GetBaseException().Message}
+  $rows+=@{scenario=$name;posts=$api.Posts;attached=$api.Attached;reason=$reason;trace=$trace;launcherReads=$api.LauncherReads;windowChecks=$api.WindowChecks}
+}
+$rows | ConvertTo-Json -Depth 8
+`);
+  const rows=JSON.parse(execFileSync(powershell,['-NoProfile','-ExecutionPolicy','Bypass','-File',script],{encoding:'utf8',windowsHide:true,timeout:55000}));
+  assert.equal(rows.length,10);
+  for(const row of rows){
+    const positive=['client_owner_observation','owner_observation_unknown'].includes(row.scenario);
+    assert.equal(row.posts,positive?1:0,row.scenario);
+    assert.equal(row.trace.PostAttempted,positive,row.scenario);
+    assert.equal(row.trace.Posted,positive,row.scenario);
+    assert.equal(row.attached,false,row.scenario);
+    if(positive){
+      assert.equal(row.reason,null);assert.equal(row.trace.AttachedChecks,2);
+      assert.equal(row.trace.Detached,true);assert.equal(row.launcherReads,4);
+    }else assert.ok(row.reason,row.scenario);
+  }
+  assert.equal(rows.find(row=>row.scenario==='client_owner_observation').trace.ObservedWindowOwner,20);
+  assert.equal(rows.find(row=>row.scenario==='owner_observation_unknown').trace.ObservedWindowOwner,0);
+  writeFileSync(join(scratch,'identity-results.json'),JSON.stringify(rows,null,2),{flag:'wx'});
+  console.log(JSON.stringify({case:'console_identity',scratch,result:'PASS',rows}));
+});
+
 for (const scenario of cases) test(`windows.shutdown.${scenario}`, { skip: process.platform !== 'win32' ? 'NOT_RUN: Windows-only fake process test' : false }, async t => {
   const scratch = mkdtempSync(join(tmpdir(), 'dye-shutdown-fake-')); const marker = randomUUID();
   const paths = Object.fromEntries(['launcherSpec', 'driver', 'worker', 'grandchild', 'wrapperSpec', 'launcherReady', 'launcherDone', 'wrapperReady', 'wrapperDone', 'driverReady', 'workerReady', 'grandchildReady', 'wrapperPid', 'grandchildPid', 'handles', 'wrapperError'].map(name => [name, join(scratch, name + '.json')]));

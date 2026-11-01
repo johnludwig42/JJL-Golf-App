@@ -146,13 +146,16 @@ operator runs them outside the agent environment and the logs are reviewed.
 
 For console close only, the test explicitly starts a classic `conhost.exe` rather
 than relying on the default terminal host. Before closing its window, it verifies
-the conhost PID/creation time, launcher PID/creation time, launcher membership in
-the test-owned job, and that the window belongs to that exact conhost PID. It
+the conhost and launcher PID/creation time, launcher membership in the test-owned
+job, and the attached console's client list and recorded window handle. The helper
+detaches before posting the close and rechecks process, job and window identity.
+The reported window-owner PID is logged as an observation, not used as a gate. It
 requires launcher exit within eight seconds. The close/logoff/shutdown handler
 exclusively creates `<launchSpec>.console-event.json` with event kind and UTC
 timestamp on entry; a missing record is reported as `close not delivered`.
 Ctrl+C and WMI retain their previously tested paths. This description is not an
-operator acceptance result; actual console delivery remains for John's rerun.
+operator acceptance result; D8 delivery and completion passed John's Stage 0 r2 run
+and Claude's independent evidence review on 2026-11-01.
 
 The owner runs this from their own terminal after approval; Codex does not run it:
 
@@ -250,7 +253,7 @@ row stays UNVERIFIED, including rows whose fake subtests pass.
 
 | Register | Phase A evidence / remaining gate |
 | --- | --- |
-| G1 | A5 fake trees; partial until every required manual case passes; sweep sees only `node.exe` with run marker and fixture on its command line; real CLI B8 UNVERIFIED |
+| G1 | A5 fake trees PASS, including D8 console-close delivery and handler completion (John's Stage 0 r2 operator run, reviewed by Claude, 2026-11-01). Identity uses attached console clients/window plus rechecked process/job identities; window-owner PID is observational. Sweep sees only `node.exe` with run marker and fixture on its command line; real CLI B8 UNVERIFIED |
 | G2 | Sweep covers only `node.exe` with run marker and fixture on its command line; other escaped executables/shells not identified; elevated/broker descendants B1 UNVERIFIED |
 | G3–G8 | Write/read/network/tool/MCP/Claude confinement B2–B6 UNVERIFIED |
 | G9 | A3 dispatch/argv refusal tests; fake-only |

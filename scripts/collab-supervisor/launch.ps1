@@ -1,9 +1,18 @@
-param([Parameter(Mandatory=$true)][string]$SpecPath, [switch]$TestHarness)
+param([Parameter(Mandatory=$true)][string]$SpecPath, [switch]$TestHarness, [string]$ProbeMode='', [string]$ManifestHash='')
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'lib\windows-job.ps1')
 . (Join-Path $PSScriptRoot 'lib\broker.ps1')
 . (Join-Path $PSScriptRoot 'lib\sweep.ps1')
-$spec = Read-FakeSpec $SpecPath -TestHarness:$TestHarness
+$probeRoot=$null
+if($ProbeMode){
+    . (Join-Path $PSScriptRoot 'lib\probe-transport.ps1')
+    if(-not $TestHarness){throw 'Test harness required'}
+    $probeRoot=Get-DyeProbeRoot $SpecPath $ProbeMode $ManifestHash
+    $spec=Convert-DyeProbeRoot $probeRoot $SpecPath $ManifestHash
+}else{
+    if($ManifestHash){throw 'Unexpected manifest hash'}
+    $spec = Read-FakeSpec $SpecPath -TestHarness:$TestHarness
+}
 $child = $null
 $steps=@{}; $single=$false
 try {
@@ -17,7 +26,8 @@ try {
         if ($spec.brokerSpec -and -not $single -and (Test-Path -LiteralPath $spec.brokerSpec)) { $steps[$spec.brokerSpec]=Start-DyeStep $spec.brokerSpec $spec $child; $single=$true }
         if ($spec.stepsDir) {
             foreach ($request in @(Get-ChildItem -LiteralPath $spec.stepsDir -Filter '*.request.json' -File)) {
-                if (-not $steps.ContainsKey($request.FullName)) { $steps[$request.FullName]=Start-DyeStep $request.FullName $spec $child }
+                if($null -ne $probeRoot -and -not (Test-Path -LiteralPath ($request.FullName+'.published'))){continue}
+                if (-not $steps.ContainsKey($request.FullName)) { $steps[$request.FullName]=Start-DyeStep $request.FullName $spec $child $probeRoot $SpecPath $ManifestHash }
             }
         }
         foreach ($entry in $steps.Values) { if(-not $entry.recorded){Update-DyeStep $entry $child} }

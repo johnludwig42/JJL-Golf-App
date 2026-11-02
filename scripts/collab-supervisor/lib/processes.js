@@ -14,10 +14,21 @@ export function processProbe(request, directory) {
   try {
     const text = execFileSync(ps, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', fileURLToPath(probe), '-Request', path], { windowsHide: true, encoding: 'utf8', timeout: 10000, maxBuffer: 4 * 1024 * 1024 });
     return JSON.parse(text.replace(/^\uFEFF/, ''));
-  } catch (error) { throw fault('LOCK_INSPECTION_FAILED', `Process probe unavailable (${error.code || error.status})`); }
+  } catch (error) { throw fault('LOCK_INSPECTION_FAILED', `Process probe unavailable (${error.code || error.status}; ${error.syscall || 'decode'}; ${error.path || ps})`); }
 }
 export function inspector(directory) {
   return pid => processProbe({ action: 'inspect', pids: [pid] }, directory).processes[0];
+}
+export function ancestry(pid,directory) {
+  // Synthetic consent checks only caller and immediate parent, not an owner identity.
+  const result=processProbe({action:'ancestry',pid,limit:2},directory);
+  if(result.result!=='PASS' || result.limit!==2 || !Array.isArray(result.processes) || !result.processes.length || result.processes[0].pid!==pid)throw fault('LOCK_INSPECTION_FAILED','Unknown ancestry');
+  const seen=new Set();
+  for(const row of result.processes){
+    if(!Number.isInteger(row.pid)||row.pid<=0||seen.has(row.pid)||!Number.isInteger(row.parentPid)||row.parentPid<0||typeof row.name!=='string'||!row.name||!(/^[1-9][0-9]{0,18}$/).test(row.createdAt))throw fault('LOCK_INSPECTION_FAILED','Malformed ancestry');
+    seen.add(row.pid);
+  }
+  return result.processes;
 }
 // Enumeration and termination are deliberately separated: no marker match alone
 // authorizes a kill. The second inspection must match the captured creation time.

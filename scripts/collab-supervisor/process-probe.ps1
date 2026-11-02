@@ -4,6 +4,20 @@ $ErrorActionPreference = 'Stop'
 $requestData = Get-Content -LiteralPath $Request -Raw | ConvertFrom-Json
 $result = $null
 switch ($requestData.action) {
+    'ancestry' {
+        Import-Module (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\Modules\CimCmdlets\CimCmdlets.psd1') -ErrorAction Stop
+        $rows=@();$current=[int]$requestData.pid;$seen=@{}
+        $limit=[int]$requestData.limit;if($limit -lt 1 -or $limit -gt 32){throw 'Invalid ancestry depth'}
+        while($current -gt 0 -and $rows.Count -lt $limit){
+            if($seen.ContainsKey($current)){throw 'Ancestry cycle'};$seen[$current]=$true
+            # Explicit projection: never retrieve CommandLine for ancestry.
+            $row=Get-CimInstance -Query "SELECT Name,ProcessId,ParentProcessId,CreationDate FROM Win32_Process WHERE ProcessId=$current" -OperationTimeoutSec 3 -ErrorAction Stop
+            if(-not $row){throw 'Ancestry unavailable'}
+            $rows+=@{name=[string]$row.Name;pid=[int]$row.ProcessId;parentPid=[int]$row.ParentProcessId;createdAt=([DateTime]$row.CreationDate).ToUniversalTime().ToFileTimeUtc().ToString()}
+            $current=[int]$row.ParentProcessId
+        }
+        $result=@{result='PASS';complete=($current -eq 0);processes=$rows;limit=$limit}
+    }
     'operatorGate' {
         . (Join-Path $PSScriptRoot 'lib\operator-gate.ps1')
         try{Assert-DyeOperator;$result=@{allowed=$true}}

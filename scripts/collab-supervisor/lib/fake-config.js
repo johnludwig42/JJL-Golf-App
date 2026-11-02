@@ -41,7 +41,7 @@ export function loadFakeConfig(path) {
   tempPath(path); regular(path);
   const input = readJson(path);
   if (input.mode !== 'fake' || input.kind !== 'fake' || input.testHarness !== true) throw fault('NOT_APPROVED', 'Only fake test harness mode is implemented');
-  const allowed = ['mode','kind','testHarness','repository','evidenceRoot','packageFile','packageId','token','gitExecutable','fixtureHash','scenarios','totalMs','stepMs','authExpectation','authFixture','requiredChecks'];
+  const allowed = ['mode','kind','testHarness','repository','evidenceRoot','packageFile','packageId','token','gitExecutable','fixtureHash','scenarios','totalMs','stepMs','authExpectation','authFixture','requiredChecks','probes'];
   if (Object.keys(input).some(key => !allowed.includes(key))) throw fault('NOT_APPROVED', 'Unknown configuration field');
   if (!/^WP-FAKE-[A-Z0-9-]+$/.test(input.packageId) || !/^[a-f0-9-]{36}$/.test(input.token)) throw fault('NOT_APPROVED', 'Synthetic package and token required');
   const osTemp = realpathSync(tmpdir());
@@ -66,5 +66,9 @@ export function loadFakeConfig(path) {
   const scenarios = ['implemented','ready','findings','needs_owner','blocked','dispute','garbage','usage','hang','crash-once'];
   for (const role of ['implement','review']) if (!Array.isArray(config.scenarios?.[role]) || !config.scenarios[role].length || config.scenarios[role].some(value=>!scenarios.includes(value))) throw fault('NOT_APPROVED', 'Finite fake scenarios required');
   if (!Array.isArray(config.requiredChecks) || config.requiredChecks.some(name=>!['validate','release:sanity','diff-check'].includes(name))) throw fault('NOT_APPROVED');
+  if (input.probes !== undefined && (!input.probes || Object.keys(input.probes).sort().join(',') !== 'cap,ids' ||
+      !Array.isArray(input.probes.ids) || !input.probes.ids.length || input.probes.ids.length > 3 ||
+      new Set(input.probes.ids).size !== input.probes.ids.length || input.probes.ids.some(id => !['version','auth','refusal'].includes(id)) ||
+      !Number.isInteger(input.probes.cap) || input.probes.cap < input.probes.ids.length || input.probes.cap > 20)) throw fault('NOT_APPROVED','Closed synthetic probe configuration required');
   return config;
 }

@@ -36,7 +36,7 @@ export function realEligibility({ phase, approval, platform, bundle, versions } 
   return true;
 }
 export function refuseReal() { throw fault('NOT_PLATFORM_ACCEPTED', 'Phase A has no real-agent execution adapter, including version/auth probes'); }
-const SAFE_SCENARIOS = new Set(['implemented', 'ready', 'findings', 'needs_owner', 'blocked', 'dispute', 'garbage', 'usage', 'hang']);
+const SAFE_SCENARIOS = new Set(['implemented', 'ready', 'findings', 'needs_owner', 'blocked', 'dispute', 'garbage', 'usage', 'hang', 'probe-version', 'probe-auth', 'probe-refusal']);
 export function launchSpec(kind, config, scenario) {
   if (kind !== 'fake-agent') throw fault('NOT_APPROVED', `Dispatch refused: ${kind}`);
   if (!SAFE_SCENARIOS.has(scenario)) throw fault('AGENT_ERROR', 'Unknown fixture scenario');

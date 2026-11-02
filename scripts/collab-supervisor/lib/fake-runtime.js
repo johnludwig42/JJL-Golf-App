@@ -19,7 +19,7 @@ import { parseAgentOutput } from './agents.js';
 import { report } from './report.js';
 import { replaceCheckpoint } from './replace.js';
 
-function atomic(path, value) {
+export function atomic(path, value) {
   const temporary=path+'.'+randomUUID()+'.tmp'; mkdirSync(dirname(path),{recursive:true});
   const fd=openSync(temporary,'wx');try{writeFileSync(fd,JSON.stringify(value));fsyncSync(fd);}finally{closeSync(fd);}replaceCheckpoint(temporary,path);
 }
@@ -93,14 +93,17 @@ export async function fakeCommand(command, configPath, options={}) {
   atomic(launchSpec,{kind:'fake',executable:process.execPath,fixture:coordinator,fixtureHash:hash(readFileSync(coordinator)),args:[coordinator,transportFile,'--dye-run-marker='+marker],cwd:paths.run,
     stdout:join(paths.run,`${launchId}.coordinator.stdout`),stderr:join(paths.run,`${launchId}.coordinator.stderr`),ready:paths.launchReady,done:paths.launchDone,
     stepsDir:join(paths.run,'spool'),totalMs:resumed?Math.max(1,resumed.budget.originalDeadlineUtc-Date.now()):config.totalMs,graceMs:1000,marker,agentFixture:config.fixture,startedAt,ownerStop:paths.ownerStop});
+  const probeLaunch = options.prepareProbe ? options.prepareProbe(transport,readJson(launchSpec),transportFile) : null;
   if(options.prepareOnly===true)return{config,paths,launchSpec,launchId,marker,startedAt};
   const env={...childEnvironment(process.env,config.osTemp,marker,[dirname(process.execPath),dirname(config.gitExecutable)]),DYE_SUPERVISOR_TEST:'1',PATHEXT:'.EXE;.COM'};
-  const child=spawn(psRuntime(),['-NoProfile','-ExecutionPolicy','Bypass','-File',join(toolRoot,'launch.ps1'),'-SpecPath',launchSpec,'-TestHarness'],{cwd:paths.run,env,windowsHide:true,stdio:['ignore','pipe','pipe']});
+  probeLaunch?.beforeLaunch(); // Recheck approval-bound runtime hashes immediately before use.
+  const child=spawn(psRuntime(),['-NoProfile','-ExecutionPolicy','Bypass','-File',join(toolRoot,'launch.ps1'),'-SpecPath',probeLaunch?.path || launchSpec,'-TestHarness',...(probeLaunch?['-ProbeMode','fake','-ManifestHash',probeLaunch.hash]:[])],{cwd:paths.run,env,windowsHide:true,stdio:['ignore','pipe','pipe']});
   let errors='';child.stderr.on('data',data=>{errors+=data;});
   const ownerStop=()=>{if(!existsSync(paths.ownerStop))writeFileSync(paths.ownerStop,'owner interrupt',{flag:'wx'});};
   process.on('SIGINT',ownerStop);process.on('SIGTERM',ownerStop);
   try{await new Promise((done,reject)=>{child.on('error',reject);child.on('close',done);});}
   finally{process.off('SIGINT',ownerStop);process.off('SIGTERM',ownerStop);}
+  if(options.collectProbe) return options.collectProbe({config,paths,launchId,marker,startedAt},errors);
   return collectFakeRun({config,paths,launchId,marker,startedAt,resumed:!!resumed},errors);
 }
 export function collectFakeRun({config,paths,launchId,marker,startedAt},errors=''){

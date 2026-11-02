@@ -16,7 +16,8 @@ README describes the current implementation, not permission to operate it.
 
 - `supervisor.js`: fake-only `approve`, `run`, `resume`, `recover`, `status`.
   Requires `DYE_SUPERVISOR_TEST=1`, fake kind/mode, TestHarness, pinned fixture
-  bytes and a matching disposable repository marker. `platform-probes` refuses.
+  bytes and a matching disposable repository marker. Live `platform-probes` refuses;
+  Stage 1a adds only the separate synthetic route described below.
 - `lib/fake-config.js`, `fake-runtime.js`, `coordinator.js`: composition root,
   actual disposable worktrees/checks, step broker, locks, sweep and crash recovery.
 - `lib/state.js`: coordinator, maximum two correction rounds;
@@ -40,7 +41,7 @@ README describes the current implementation, not permission to operate it.
   both the run marker and the fake fixture path. It does not identify arbitrary
   real-agent executables or shells.
 - `acceptance/`: CLI integration, Windows shutdown and operator-only tests;
-  the Phase B gate still refuses.
+  the real Phase B gate still refuses.
 
 No new dependency or package script is needed. The regular test suite includes
 `tests/collab-supervisor.test.js`; manual shutdown tests stay outside `npm test`.
@@ -155,7 +156,10 @@ exclusively creates `<launchSpec>.console-event.json` with event kind and UTC
 timestamp on entry; a missing record is reported as `close not delivered`.
 Ctrl+C and WMI retain their previously tested paths. This description is not an
 operator acceptance result; D8 delivery and completion passed John's Stage 0 r2 run
-and Claude's independent evidence review on 2026-11-01.
+and Claude's independent evidence review on 2026-11-01, on Stage 0 commit `5c4e092`.
+That is historical evidence; Stage 1a changes the launch/broker/wrapper bytes, so
+the final Stage 1a operator rerun remains NOT_RUN until John runs the reviewed
+`stage1a-operator-r1.mjs` and Claude reviews its records.
 
 The owner runs this from their own terminal after approval; Codex does not run it:
 
@@ -253,7 +257,7 @@ row stays UNVERIFIED, including rows whose fake subtests pass.
 
 | Register | Phase A evidence / remaining gate |
 | --- | --- |
-| G1 | A5 fake trees PASS, including D8 console-close delivery and handler completion (John's Stage 0 r2 operator run, reviewed by Claude, 2026-11-01). Identity uses attached console clients/window plus rechecked process/job identities; window-owner PID is observational. Sweep sees only `node.exe` with run marker and fixture on its command line; real CLI B8 UNVERIFIED |
+| G1 | Historical D8 PASS on Stage 0 `5c4e092` (John's run, Claude-reviewed, 2026-11-01). Stage 1a final-byte operator rerun NOT_RUN. Identity uses attached console clients/window plus rechecked process/job identities; window-owner PID is observational. Sweep sees only `node.exe` with run marker and fixture on its command line; real CLI B8 UNVERIFIED |
 | G2 | Sweep covers only `node.exe` with run marker and fixture on its command line; other escaped executables/shells not identified; elevated/broker descendants B1 UNVERIFIED |
 | G3–G8 | Write/read/network/tool/MCP/Claude confinement B2–B6 UNVERIFIED |
 | G9 | A3 dispatch/argv refusal tests; fake-only |
@@ -300,3 +304,118 @@ Open Phase B design items (not implemented or verified here):
 
 Do not create `_supervisor`, install sentinels, change ACLs, call real CLIs or
 start a pilot using this Phase A package.
+
+## Stage 1a — synthetic probe tooling only
+
+The owner-approved Q4 amendment permits multiple links only for the fixed system
+PowerShell runtime role. Correction-round implementation is pending independent
+review and final-byte operator acceptance. No setup or real-agent stage is enabled.
+
+This adds no installed-tool resolver or live backend. `platform-probes live`,
+ordinary real `run`/`resume`, and a forged all-PASS platform record still refuse
+before executable lookup or launch. `realEligibility` remains an unwired legacy
+predicate, not dispatch authority. A later reviewed code change is required for
+live probes. No model invocation, external request, setup action, account or
+permission change, sentinel, profile read, or `_supervisor` installation occurs.
+Real B0–B8 results remain UNVERIFIED; fake success cannot satisfy them.
+
+Probe fixtures also require a single-link Git executable. When the PATH `cmd/git.exe`
+has multiple links, the shared fixture factory may use the already installed
+`bin/git.exe` only if it has one link and identical SHA-256 bytes. It never copies
+a runtime, changes links, adopts a different version or changes legacy Phase A
+selection. If no such prerequisite exists, it refuses instead of relaxing Git.
+
+The fixed synthetic registry contains version, subscription-status and refusal
+fixtures on pinned Node plus `fake-agent.js`. From a marked disposable Temp
+repository configuration, add `probes: { ids: ["version", "auth", "refusal"],
+cap: 3 }`. This is test configuration, not owner or model-use approval. The
+existing Temp/no-remote/fixture-hash checks still apply. Commands are:
+
+```text
+node scripts/collab-supervisor/supervisor.js platform-probes fake prepare --spec <absolute-test-config>
+node scripts/collab-supervisor/supervisor.js platform-probes fake approve --spec <absolute-test-config> --fixture-consent
+node scripts/collab-supervisor/supervisor.js platform-probes fake run --spec <absolute-test-config>
+node scripts/collab-supervisor/supervisor.js platform-probes fake status --spec <absolute-test-config>
+```
+
+These require `DYE_SUPERVISOR_TEST=1`. Approval is explicitly synthetic, bound to
+package/base/bundle/config/registry/probe IDs/cap; it does not authenticate John.
+Node, PowerShell and Git hashes are retained in that approval and checked again
+on run, rather than re-adopting changed binaries. Sealed manifests bind the runtime
+paths/hashes for independent wrapper checks. No installed agent is inventoried.
+These are approval-bound runtime change-detection hashes, not independently
+reviewed installed-version pins; that review remains a Stage 2 gate.
+Ancestry metadata is limited to the caller and immediate parent, with no command
+line retrieval. Unknown identity refuses. It is a heuristic, not a complete
+ancestry or owner-identity proof. The old approval service is reused.
+
+Node and Windows PowerShell 5.1 independently validate identical canonical input
+bytes: a flat sorted unique-key object, printable ASCII strings and bounded
+integers, strict UTF-8 without BOM and exactly one LF. Duplicate/case-variant keys,
+lenient JSON forms and ambiguous/linked paths refuse. Upper-case typed path
+tuples are comparison values; fixed Node fixture execution keeps a lower-case
+`.js` extension. Hash equality alone is not parser-equivalence proof.
+
+The exception is compiled solely for `powershell_executable` at the exact raw path
+built from process SystemRoot and `System32\WindowsPowerShell\v1.0\powershell.exe`.
+Aliases, wrong case, separator variants and other roles cannot select it. Generic
+path validators, Node/Git, fixtures and control/data files still reject multiple
+links. All existing regular-file/component/reparse checks remain. The role's hash
+is checked against the synthetic approval before launch, including every wrapper.
+No ACL reads or changes are added. Node refuses an expected PowerShell path under
+Temp, the user profile, repository or evidence root before prepare or hashing.
+PowerShell independently compares the SystemRoot-built system directory with the
+OS `[Environment]::SystemDirectory` and refuses a mismatch. This checks the running
+launcher's environment and guards its subsequent wrapper launches. Node starts
+the initial launcher using its location checks and approval-bound hash; the
+PowerShell OS comparison runs only after that process has started. Same-user
+environment integrity remains a P2 trust assumption. A1 adds defence in depth;
+Node's location checks do not establish the initial launcher's OS identity.
+
+Trusted launcher/wrapper parameters select sealed mode and supply its expected
+manifest hash/consumption reference. Legacy JSON fields cannot select that mode.
+The launcher is the broker process. It exclusively flushes consumption before
+starting a wrapper; the wrapper rechecks the request, current lock, actual parent
+PID/FILETIME (older than itself), and exclusively flushes a separate start receipt
+before creating a child. Probe children use manifest-sealed environment fields,
+never legacy `step.env`. No arbitrary argv or executable can enter this route.
+The launcher skips requests until an exclusive publication marker follows the
+completed, flushed wire write; it cannot parse a partially written request. This
+marker is a visibility barrier, not an authentication or isolation guarantee.
+
+Attempt intent is exclusively written and fsynced before each fake dispatch under
+the existing run lock. No success-based accounting, reset or refunded slot exists.
+The original deadline is fixed and all synthetic steps are capped at two minutes.
+The proposed future model budgets are not active permissions. Probe runs have no
+automatic resume: a crash retains consumed IDs, evidence and lock for the existing
+interactive recovery flow. An exclusive run reservation prevents reusing the same
+approval after recovery or completion; a new test requires fresh evidence and
+synthetic consent, preserving the old attempt/deadline history.
+Final lock release requires launcher exit, empty jobs and its successful sweep.
+The sealed coordinator does not spawn an additional sweep inspector. Raw fixture
+output is synthetic test data; only validated redacted auth projections enter the
+results/index. This is not proof of real CLI privacy or isolation.
+
+`acceptance/platform-setup.ps1 -Action Plan` emits proposed paths/capture/restore
+steps as data. Apply is unimplemented and refuses. No permission-changing backend
+exists to enable by flag. Future setup requires reviewed Stage 1b code and John's
+exact action approval. No command in this section applies setup.
+
+| Stage 1a protection | Behavioral verification; result/log in round handoff |
+| --- | --- |
+| Live gate / forged acceptance | `probe.live_gate`, existing supervisor gate, synthetic CLI refusal |
+| Canonical grammar and paths in both languages | `probe.strict_tokens`, `probe.paths`, `probe.cross_language` |
+| Exclusive wire/receipt, replay and concurrent consumers | `probe.exclusive_wire`, `probe.concurrent_receipts`, `probe.broker_wrapper` |
+| Real parent, consumed request and lock binding | `probe.broker_wrapper`; successful CLI captures both job memberships |
+| Fixed attempts/deadline, disk failure, redaction | `probe.reservation`, `probe.auth` |
+| Legacy fields cannot activate probes | `probe.legacy_entry` |
+| Setup refusal | `probe.setup` |
+| Final launch-byte operator proof | NOT_RUN by Codex; John runs the reviewed runner |
+| B0–B8 real platform protections, B8 real tools | UNVERIFIED; no live backend in this stage |
+
+Required verification includes `tests/collab-platform-probes.test.js`, the existing
+supervisor and CLI suites, `acceptance/platform-probes.test.js`, non-operator A5,
+the final owner-run operator cases, full tests, lint, validation, release sanity
+and full before/after fingerprints. Retain failures; do not hide ref changes or
+repeat a gate until a failure disappears. Stage 1a neither starts nor authorizes
+the attended pilot.

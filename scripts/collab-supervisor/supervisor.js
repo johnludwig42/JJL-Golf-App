@@ -4,9 +4,14 @@ import { refuseReal } from './lib/policy.js';
 import { report } from './lib/report.js';
 import { fakeCommand } from './lib/fake-runtime.js';
 import { EXIT } from './lib/state.js';
+import { platformCommand } from './lib/platform-probes.js';
 
 export function main(args) {
   const [command, path] = args;
+  if (command === 'platform-probes') {
+    if (args[1] !== 'fake') refuseReal();
+    return platformCommand(args.slice(1));
+  }
   if (command === 'status' && path && path!=='--spec') {
     return report(JSON.parse(readFileSync(path, 'utf8')), { reconstructed: true });
   }

@@ -1,7 +1,14 @@
-param([Parameter(Mandatory=$true)][string]$SpecPath, [switch]$TestHarness)
+param([Parameter(Mandatory=$true)][string]$SpecPath, [switch]$TestHarness, [string]$ProbeMode='', [string]$ManifestPath='', [string]$ManifestHash='', [string]$ConsumptionPath='')
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'lib\windows-job.ps1')
-$spec = Read-FakeSpec $SpecPath -TestHarness:$TestHarness
+if($ProbeMode){
+    . (Join-Path $PSScriptRoot 'lib\probe-transport.ps1')
+    if($ProbeMode -cne 'fake' -or -not $TestHarness){throw 'Synthetic probe wrapper gate'}
+    $spec=Confirm-DyeProbeStart $SpecPath $ManifestPath $ManifestHash $ConsumptionPath
+}else{
+    if($ManifestPath -or $ManifestHash -or $ConsumptionPath){throw 'Unexpected probe parameters'}
+    $spec = Read-FakeSpec $SpecPath -TestHarness:$TestHarness
+}
 $child = $null
 try {
     $deadline = [DateTime]::UtcNow.AddMilliseconds([double]$spec.stepMs)

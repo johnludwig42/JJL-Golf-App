@@ -8,6 +8,9 @@ if(destination && ['implemented','dispute'].includes(scenario)){mkdirSync(dirnam
 if(release){const hold=setInterval(()=>{if(existsSync(release) && scenario!=='hang')clearInterval(hold);},10);}
 const finding = { id: 'R1', severity: 'medium', file: 'docs/example.md', line: 1, scenario: 'Synthetic review correction', criterion: 'C1' };
 const results = {
+  'probe-version': { schema:1, version:'fixture-v1', mode:'fake' },
+  'probe-auth': { schema:1, source:'fixture-subscription', mode:'subscription', authenticated:true, exit:0, timeout:false },
+  'probe-refusal': { schema:1, result:'REFUSED', synthetic:true },
   implemented: { status: 'implemented', summary: 'Synthetic implementation', criteria: [{ id: 'C1', result: 'PASS' }], disputes: [] },
   ready: { verdict: 'ready', findings: [] },
   findings: { verdict: 'findings', findings: [finding] },

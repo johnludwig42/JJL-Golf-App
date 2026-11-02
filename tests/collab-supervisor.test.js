@@ -85,9 +85,10 @@ test('policy.argv_refusals/npm_refused and phaseA.no_real_cli_dispatch', () => {
   for (const args of [['run'], ['approve'], ['resume'], ['recover'], ['run', '--disable-launcher'], ['platform-probes']]) assert.throws(() => main(args), { code: 'NOT_PLATFORM_ACCEPTED' });
   assert.throws(refuseReal, { code: 'NOT_PLATFORM_ACCEPTED' });
 });
-test('phaseA.forged_platform_record_still_refused; eligibility checks record, bundle, versions and all rows', () => {
+test('phaseA.forged_platform_record_still_refused; legacy eligibility is an unwired predicate only', () => {
   const record = { phase: 'C', approval: { phase: 'C', bundle: 'bundle' }, bundle: 'bundle', versions: ['v'], platform: { bundle: 'bundle', versions: ['v'], reviewed: true, required: [{ result: 'PASS' }] } };
   assert.equal(realEligibility(record), true); assert.throws(refuseReal, { code: 'NOT_PLATFORM_ACCEPTED' });
+  for(const command of ['run','resume','platform-probes']) assert.throws(()=>main([command,JSON.stringify(record)]),{code:'NOT_PLATFORM_ACCEPTED'});
   assert.throws(() => realEligibility({ ...record, platform: { ...record.platform, required: [{ result: 'NOT_RUN' }] } }), { code: 'NOT_PLATFORM_ACCEPTED' });
   assert.throws(() => realEligibility({ ...record, approval: null }), { code: 'NOT_APPROVED' });
 });

@@ -1,17 +1,27 @@
 # The launcher starts these native siblings of Node. They never inherit the
 # coordinator's libuv job. Both siblings are assigned to J0 before resuming.
-function Start-DyeStep([string]$SpecPath,$RootSpec,$Coordinator) {
-    $step = Read-FakeSpec $SpecPath -TestHarness
+function Start-DyeStep([string]$SpecPath,$RootSpec,$Coordinator,$ProbeRoot=$null,[string]$ManifestPath='',[string]$ManifestHash='') {
+    $probeArgs=@()
+    if($null -ne $ProbeRoot){
+        $sealed=New-DyeProbeConsumption $SpecPath $ProbeRoot $ManifestHash $Coordinator
+        $step=$sealed.step
+        $probeArgs=@('-ProbeMode','fake','-ManifestPath',$ManifestPath,'-ManifestHash',$ManifestHash,'-ConsumptionPath',$sealed.consume)
+    }else{$step = Read-FakeSpec $SpecPath -TestHarness}
     if ([int]$step.parentPid -ne $Coordinator.Pid -or [string]$step.parentCreated -ne $Coordinator.Created.ToString()) { throw 'Step parent identity mismatch' }
     $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $wrapper = Join-Path $PSScriptRoot '..\run-step.ps1'
     $old=@{}
     try {
-        if($step.env){foreach($entry in $step.env.PSObject.Properties){
+        if($null -ne $ProbeRoot){Set-DyeProbeEnvironment $ProbeRoot}
+        elseif($step.env){foreach($entry in $step.env.PSObject.Properties){
             if($entry.Name -notmatch '^(SystemRoot|PATH|GIT_DIR|GIT_WORK_TREE|GIT_CONFIG_NOSYSTEM|GIT_CONFIG_GLOBAL|GIT_ATTR_NOSYSTEM|GIT_TERMINAL_PROMPT|GIT_CONFIG_COUNT|GIT_CONFIG_(KEY|VALUE)_\d+)$'){throw 'Unapproved child environment key'}
             $old[$entry.Name]=[Environment]::GetEnvironmentVariable($entry.Name);[Environment]::SetEnvironmentVariable($entry.Name,[string]$entry.Value)
         }}
-        $owner = New-Object DyeJobs.Process($psExe,[string[]]@('-NoProfile','-ExecutionPolicy','Bypass','-File',$wrapper,'-SpecPath',$SpecPath,'-TestHarness'),$RootSpec.cwd,($SpecPath+'.wrapper.stdout'),($SpecPath+'.wrapper.stderr'),$false,$Coordinator.Job.ToInt64())
+        if($null -ne $ProbeRoot){
+            $psExe=Get-DyeSystemPowerShellPath
+            if($psExe.ToUpperInvariant() -cne $ProbeRoot['powershell_executable'] -or (Get-DyeProbeHash $psExe) -cne $ProbeRoot['powershell_hash']){throw 'System PowerShell changed before wrapper launch'}
+        }
+        $owner = New-Object DyeJobs.Process($psExe,[string[]](@('-NoProfile','-ExecutionPolicy','Bypass','-File',$wrapper,'-SpecPath',$SpecPath,'-TestHarness')+$probeArgs),$RootSpec.cwd,($SpecPath+'.wrapper.stdout'),($SpecPath+'.wrapper.stderr'),$false,$Coordinator.Job.ToInt64())
     } finally {foreach($key in $old.Keys){[Environment]::SetEnvironmentVariable($key,$old[$key])}}
     if ($step.wrapperPid) { [IO.File]::WriteAllText([string]$step.wrapperPid,$owner.Pid.ToString()) }
     return @{owner=$owner;step=$step;path=$SpecPath;released=$false;recorded=$false}

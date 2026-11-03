@@ -66,11 +66,104 @@ test('probe.auth: validate source before redacting, no raw privacy fields surviv
   assert.deepEqual(syntheticAuth(valid),{schema:1,mode:'synthetic-subscription',exit:0});
   for(const delta of [{source:'api-key'},{source:'unknown'},{mode:'console'},{authenticated:false},{exit:1},{timeout:true},{email:'do-not-retain@example.invalid'},{token:'do-not-retain'}])assert.throws(()=>syntheticAuth({...valid,...delta}),{code:'AUTH_OR_USAGE'});
 });
-test('probe.setup: plan is data, apply refuses and does not create setup paths',{skip:process.platform!=='win32'},()=>{
+test('probe.setup: unapproved entry invocation refuses before setup paths',{skip:process.platform!=='win32'},()=>{
   const script=resolve('scripts/collab-supervisor/acceptance/platform-setup.ps1');
-  const plan=JSON.parse(execFileSync(psRuntime(),['-NoProfile','-ExecutionPolicy','Bypass','-File',script,'-Action','Plan'],{encoding:'utf8',windowsHide:true}));
-  assert.equal(plan.applied,false);assert.equal(plan.realResults,'UNVERIFIED');
-  assert.throws(()=>execFileSync(psRuntime(),['-NoProfile','-ExecutionPolicy','Bypass','-File',script,'-Action','Apply'],{windowsHide:true,stdio:'pipe'}));
+  const root=temp();
+  for(const action of ['Plan','Apply','Verify','Restore']){
+    assert.throws(()=>execFileSync(psRuntime(),['-NoProfile','-ExecutionPolicy','Bypass','-File',script,'-Action',action],{cwd:root,windowsHide:true,stdio:'pipe',env:{...process.env,USERPROFILE:root,TEMP:root,TMP:root}}),error=>{
+      assert.match(String(error.stderr),/NOT_APPROVED: captured entry bytes/);return true;
+    });
+    assert.equal(existsSync(join(root,'_supervisor')),false);
+    assert.equal(existsSync(join(root,'wp-auto-02-sentinel.txt')),false);
+  }
+});
+test('probe.setup_bundle: changed entry/library refuse before native loading from another cwd',{skip:process.platform!=='win32'},()=>{
+  const root=temp(),entry=resolve('scripts/collab-supervisor/acceptance/platform-setup.ps1');
+  const run=parameters=>{
+    const driver=join(root,randomUUID()+'.ps1');
+    writeFileSync(driver,`$ErrorActionPreference='Stop'\n$b=[IO.File]::ReadAllBytes(${psQuote(entry)})\n& ([ScriptBlock]::Create([Text.UTF8Encoding]::new($false,$true).GetString($b))) -SourcePath ${psQuote(entry)} ${parameters}\n`);
+    return ()=>execFileSync(psRuntime(),['-NoProfile','-ExecutionPolicy','Bypass','-File',driver],{cwd:root,windowsHide:true,stdio:'pipe',env:{...process.env,USERPROFILE:root,TEMP:root,TMP:root}});
+  };
+  assert.throws(run(`-EntryHash '${'0'.repeat(64)}' -BundleHash '${'0'.repeat(64)}'`),e=>{assert.match(String(e.stderr),/SOURCE: changed entry bytes/);return true;});
+  assert.throws(run(`-EntryHash '${hash(readFileSync(entry)).toLowerCase()}'`),e=>{assert.match(String(e.stderr),/reviewed setup bundle required for every action/);return true;});
+  assert.throws(run(`-EntryHash '${hash(readFileSync(entry)).toLowerCase()}' -BundleHash '${'0'.repeat(64)}'`),e=>{assert.match(String(e.stderr),/NOT_APPROVED: changed setup dependency/);return true;});
+  for(const name of ['_supervisor','wp-auto-02-sentinel.txt','.env.wp-auto-sentinel'])assert.equal(existsSync(join(root,name)),false);
+});
+test('probe.setup_recovery: pure journal classification and runtime guards never invoke native access',{skip:process.platform!=='win32'},()=>{
+  const root=temp(),driver=join(root,'pure.ps1'),library=resolve('scripts/collab-supervisor/lib/setup-acl.ps1');
+  writeFileSync(driver,`$ErrorActionPreference='Stop'
+. ${psQuote(library)}
+function Initialize-B0Native {throw 'FORBIDDEN_NATIVE'}
+function Assert-B0Path {throw 'FORBIDDEN_FILESYSTEM'}
+$d=[ordered]@{Kind='file';Id='one';Owner='owner';Sddl='acl';Hash='hash';Size=52}
+$o=[ordered]@{Kind='file';Id='one';Owner='owner';Sddl='acl';Hash='hash';Size=52}
+$rows=@((Get-B0Classification $null $null),(Get-B0Classification $null $o),(Get-B0Classification $d $o))
+foreach($key in @('Kind','Id','Owner','Sddl','Hash','Size')){$copy=@{};foreach($k in $o.Keys){$copy[$k]=$o[$k]};$copy[$key]='different';$rows+=Get-B0Classification $d $copy}
+$rows+=Get-B0Classification $d $null
+$directory=[ordered]@{Kind='directory';Id='one';Owner='owner';Sddl='acl'}
+$changedDirectory=[ordered]@{Kind='directory';Id='one';Owner='owner';Sddl='changed'}
+if((Get-B0Classification $directory $changedDirectory) -ne 'UNCERTAIN'){throw 'protected directory descriptor must remain identity'}
+$bundle=Get-B0BundleDigest ('a'*64) ('b'*64)
+$m=[ordered]@{schema=1;sentinelBytes=52;paths=@('placeholder')}
+$digest=Get-B0ManifestDigest $m;$roundtrip=ConvertFrom-Json (ConvertTo-B0Json $m)
+if($digest -cne (Get-B0ManifestDigest $roundtrip)){throw 'manifest bytes not stable'}
+if((Get-B0TextBytes ('WP-AUTO-02-SENTINEL-'+('f'*32))).Length -ne 52){throw 'sentinel length'}
+$blocked=$false;try{Assert-B0Token 'deny' @('owner','deny')}catch{$blocked=$true};if(!$blocked){throw 'token refusal'}
+@{rows=$rows;bundle=$bundle}|ConvertTo-Json -Compress
+`);
+  const result=JSON.parse(execFileSync(psRuntime(),['-NoProfile','-ExecutionPolicy','Bypass','-File',driver],{encoding:'utf8',windowsHide:true}));
+  assert.deepEqual(result.rows,['ABSENT','UNCERTAIN','CERTAIN','UNCERTAIN','UNCERTAIN','UNCERTAIN','CERTAIN','UNCERTAIN','UNCERTAIN','ABSENT']);
+  assert.equal(result.bundle,hash(`platform-setup.ps1 ${'a'.repeat(64)}\nlib/setup-acl.ps1 ${'b'.repeat(64)}\n`).toLowerCase());
+});
+test('probe.setup_preloaded: native type refuses before library or setup-path inspection',{skip:process.platform!=='win32'},()=>{
+  const root=temp(),entry=resolve('scripts/collab-supervisor/acceptance/platform-setup.ps1');
+  const library=resolve('scripts/collab-supervisor/lib/setup-acl.ps1');
+  const entryHash=hash(readFileSync(entry)).toLowerCase(),libraryHash=hash(readFileSync(library)).toLowerCase();
+  const bundle=hash(`platform-setup.ps1 ${entryHash}\nlib/setup-acl.ps1 ${libraryHash}\n`).toLowerCase();
+  const driver=join(root,'preloaded.ps1');
+  writeFileSync(driver,`$ErrorActionPreference='Stop'
+Add-Type -TypeDefinition 'namespace DyeB0 { public static class Native { public static int OlderVersion() { return 1; } } }'
+$bytes=[IO.File]::ReadAllBytes(${psQuote(entry)})
+& ([ScriptBlock]::Create([Text.UTF8Encoding]::new($false,$true).GetString($bytes))) -Action Plan -SourcePath ${psQuote(entry)} -EntryHash '${entryHash}' -BundleHash '${bundle}' -EvidenceRoot ${psQuote(root)}
+`);
+  assert.throws(()=>execFileSync(psRuntime(),['-NoProfile','-ExecutionPolicy','Bypass','-File',driver],{cwd:root,windowsHide:true,stdio:'pipe',env:{...process.env,USERPROFILE:root,TEMP:root,TMP:root}}),error=>{assert.match(String(error.stderr),/NATIVE_PRELOADED/);return true;});
+  for(const name of ['_supervisor','wp-auto-02-sentinel.txt','.env.wp-auto-sentinel'])assert.equal(existsSync(join(root,name)),false);
+});
+test('probe.setup_journal: torn tails and damaged middle chains preserve earlier evidence',{skip:process.platform!=='win32'},()=>{
+  const root=temp(),driver=join(root,'journal.ps1'),library=resolve('scripts/collab-supervisor/lib/setup-acl.ps1');
+  writeFileSync(driver,`$ErrorActionPreference='Stop'
+. ${psQuote(library)}
+function Initialize-B0Native {throw 'FORBIDDEN_NATIVE'}
+function Get-B0Snapshot {return @{Kind='file'}}
+function Assert-B0Path {param($Path,[switch]$MissingLeaf) if(!$Path.StartsWith(${psQuote(root)})){throw 'OUTSIDE_TEST'}}
+$p=${psQuote(join(root,'journal.jsonl'))}
+Write-B0Exclusive $p @()
+Add-B0Journal $p @{event='start'}
+Add-B0Journal $p @{event='intent';path='synthetic';step='one'}
+$original=[IO.File]::ReadAllBytes($p)
+[IO.File]::AppendAllText($p,'{')
+$j=Read-B0Journal $p;if(!$j.torn -or $j.rows.Count -ne 2){throw 'torn tail'}
+$refused=$false;try{Add-B0Journal $p @{event='done'}}catch{$refused=$true};if(!$refused){throw 'append to torn journal'}
+$broken=[Text.UTF8Encoding]::new($false,$true).GetString($original).Replace('"prev":""','"prev":"bad"')
+[IO.File]::WriteAllText($p,$broken,[Text.UTF8Encoding]::new($false))
+$refused=$false;try{Read-B0Journal $p}catch{$refused=$_.ToString() -match 'JOURNAL_DAMAGED'};if(!$refused){throw 'damaged middle chain'}
+'PASS'
+`);
+  assert.match(execFileSync(psRuntime(),['-NoProfile','-ExecutionPolicy','Bypass','-File',driver],{encoding:'utf8',windowsHide:true}),/PASS/);
+});
+test('probe.setup_source_boundary: library loading defines functions only',{skip:process.platform!=='win32'},()=>{
+  const root=temp(),driver=join(root,'ast.ps1'),library=resolve('scripts/collab-supervisor/lib/setup-acl.ps1');
+  writeFileSync(driver,`$ErrorActionPreference='Stop'
+$tokens=$null;$errors=$null
+$ast=[Management.Automation.Language.Parser]::ParseFile(${psQuote(library)},[ref]$tokens,[ref]$errors)
+if($errors.Count){throw 'library parse failed'}
+foreach($statement in $ast.EndBlock.Statements){if($statement -isnot [Management.Automation.Language.FunctionDefinitionAst]){throw 'top-level library execution'}}
+'PASS'
+`);
+  assert.match(execFileSync(psRuntime(),['-NoProfile','-ExecutionPolicy','Bypass','-File',driver],{encoding:'utf8',windowsHide:true}),/PASS/);
+  const entry=readFileSync(resolve('scripts/collab-supervisor/acceptance/platform-setup.ps1'),'utf8');
+  assert.doesNotMatch(entry,/\bSet-Acl\b|\.SetAccessControl\(/);
+  // This scan supplements the actual refusal and pure-function runtime guards.
 });
 test('probe.cross_language: identical adversarial bytes and typed tuples in Windows PowerShell 5.1',{skip:process.platform!=='win32'},()=>{
   const root=temp(),valid=join(root,'regular.json');writeFileSync(valid,'own test data');

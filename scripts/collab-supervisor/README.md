@@ -281,8 +281,142 @@ implementation verdict. The handoff records any unmet or partially tested item.
 
 ## Phase B setup — NOT APPLIED
 
-This section grants no permission and contains no runnable setup command.
-The following require a separately approved work package and reviewed plan:
+Stage 1b adds setup tooling, not an installed environment. Nothing here grants
+permission to apply it. The owner runs Plan only after independent build review;
+Apply needs a separate approval naming the exact reviewed hashes. Real agents,
+the trusted runtime bundle and live probes remain disabled. G3, G4 and G15 remain
+UNVERIFIED until the real B2/B3 checks; B0 is not an effective-access proof.
+
+The setup changes no existing permissions. Its eventual Apply creates a protected
+`<EvidenceRoot>\_supervisor` with John, SYSTEM and Administrators granted Full
+Control, and the resolved local CodexSandboxUsers group denied Full Control. It
+creates six synthetic sentinels (five if `.supabase` is absent), each **52 ASCII
+bytes**, inheriting its parent's existing permissions. It never reads auth files.
+Profile folders are not enumerated. Only the package's journal names and the newly
+created control tree are enumerated, for recovery and exact-child checks.
+
+Before creation, it refuses an elevated operator, a missing deny group, deny-group
+membership in the operator's enabled/deny-only/restricted token, or an in-memory
+access check denying the operator Full Control. Local nested group enumeration
+also refuses John, SYSTEM or Administrators as members; unknown external group
+expansion refuses instead of contacting a domain. After creation it verifies a
+real create/read/write/delete probe in the new control area.
+
+### Reviewed operator procedure (not yet applied)
+
+1. Claude reviews the build and its complete fingerprint. John has authorized a
+   later Plan, but no real-path setup run by Codex. Keep Claude Code and Codex
+   idle, and use a non-elevated account after that review.
+2. Start **every action in its own fresh Windows PowerShell 5.1 process**, with
+   no profile and only the OS Windows PowerShell module directory in that child's
+   module path. Do not reuse a previous setup process: the entry refuses a
+   preloaded native type before it loads the library or examines setup targets.
+   The parent waits while the child owns interactive input. This changes no user
+   or machine settings. The placeholders make this command refuse unchanged:
+
+```powershell
+$bootstrap = @'
+$ErrorActionPreference = 'Stop'
+# Windows PowerShell may add machine module directories during startup. Reset
+# again inside the child, before resolving any setup cmdlet or loading its code.
+$env:PSModulePath = [IO.Path]::Combine([Environment]::SystemDirectory, 'WindowsPowerShell\v1.0\Modules')
+$entry = 'C:\Projects\JJL-Golf-App\scripts\collab-supervisor\acceptance\platform-setup.ps1'
+$reviewedEntry = '<Claude-reviewed lowercase SHA256>'
+$reviewedBundle = '<Claude-reviewed lowercase bundle SHA256>'
+$bytes = [IO.File]::ReadAllBytes($entry)
+$sha = [Security.Cryptography.SHA256]::Create()
+try { $entryHash = ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','').ToLowerInvariant() }
+finally { $sha.Dispose() }
+if ($entryHash -cne $reviewedEntry) { throw 'Entry differs from reviewed bytes. Stop.' }
+$captured = [ScriptBlock]::Create([Text.UTF8Encoding]::new($false,$true).GetString($bytes))
+& $captured -Action Plan -SourcePath $entry -EntryHash $entryHash -BundleHash $reviewedBundle -EvidenceRoot 'C:\Projects\dye-ledger-evidence'
+'@
+$runtime = [IO.Path]::Combine([Environment]::SystemDirectory, 'WindowsPowerShell\v1.0\powershell.exe')
+$start = [Diagnostics.ProcessStartInfo]::new()
+$start.FileName = $runtime
+$start.UseShellExecute = $false
+$start.CreateNoWindow = $false
+$start.EnvironmentVariables['PSModulePath'] = [IO.Path]::Combine([Environment]::SystemDirectory, 'WindowsPowerShell\v1.0\Modules')
+$start.Arguments = '-NoProfile -EncodedCommand ' + [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($bootstrap))
+$child = [Diagnostics.Process]::Start($start)
+$child.WaitForExit()
+if ($child.ExitCode -ne 0) { throw 'Setup action failed. Retain its output and evidence.' }
+$child.Dispose()
+```
+
+3. Plan writes one exclusive `WP-AUTO-02/stage1b-plan-<id>.json`. Claude reviews
+   paths, parent identities/SDDL, group membership and dependencies. The setup
+   bundle hash binds the entry plus library; the entry captures the library once,
+   checks its hash before execution and executes those captured bytes. The bundle
+   digest hashes this UTF-8 text (lowercase hashes, LF after each line):
+   `platform-setup.ps1 <hash>\nlib/setup-acl.ps1 <hash>\n`.
+   PowerShell and Git paths/hashes are also bound. System PowerShell uses the OS
+   system directory. Git must be single-link; only the existing byte-identical
+   `bin/git.exe` may replace a multiply linked PATH `cmd/git.exe`. This pin covers
+   the loader, not its executable closure (Stage 1a O4 remains).
+4. **Do not Apply until John separately approves the permission action.** After
+   that approval, use the same fresh-process bootstrap above, changing its
+   captured invocation to
+   `-Action Apply`, `-SourcePath`, `-EntryHash`, `-EvidenceRoot`, `-PlanFile`,
+   `-BundleHash`, `-ManifestHash`, `-PowerShellHash` and `-GitHash`, using exactly
+   the reviewed values. Type `APPLY B0 <first eight manifest-hash characters>`.
+   This confirmation is a heuristic, not proof of operator identity (O2).
+5. Verify runs automatically. Claude reviews the new result and redacted journal.
+   To repeat Verify, start a new process with the same bound arguments and
+   `-Action Verify -ApplyId <recorded id>`. Approval alone is not acceptance.
+6. An immediate failed Apply/Verify may be restored only under the exact owner's
+   rollback approval. Use a new process with the same bound arguments, `-Action Restore -ApplyId
+   <id>` and type `RESTORE B0 <first eight id characters>`. Any later removal
+   needs a new owner decision. A changed dependency refuses even recovery: stop
+   for a reviewed recovery decision; do not edit evidence or bypass hash checks.
+
+Every mutation has flushed intent/completion records. An object lacking a matching
+completion identity is UNCERTAIN and is retained, even when its name/content looks
+right. Partial/torn journals are retained; damaged middle chains refuse. A hash
+chain detects accidents, not hostile same-user changes. Restore checks identities
+and content through the deletion handle, preserves evidence copies (excluding
+sentinel values), and resumes completed deletions. A file is certain only when
+its volume/file ID, owner, size and full hash match; file permission changes are
+reported separately. Our protected folders also require their exact descriptor.
+Parent permission drift is reported, never repaired, and does not prevent Restore;
+changed parent identity/owner or unreadable metadata still refuses. Verify remains
+strict and fails on permission drift. Folder-metadata handles share read/write/
+delete so they do not briefly obstruct other applications; content hashes block
+writers and final deletion handles stay exclusive.
+
+Restore is deliberately all-or-nothing at preflight: any UNCERTAIN object or extra
+control content prevents **all** cleanup, not just control-folder removal. It never
+automatically removes other certain objects while that ambiguity exists.
+No recursive delete, permission widening or automatic rollback is used.
+
+After a trusted journal exists, failed actions write an exclusive
+`stage1b-<action>-<applyId>-failed-<guid>.json`. It inventories all fixed journal
+targets as CERTAIN, UNCERTAIN or ABSENT, their observable identity/owner/size/
+timestamps, hashes only for files of at most 52 bytes, and all parent drift. No
+values or raw file contents are recorded. Damaged journals cannot confer certainty
+or authorize inspecting injected paths. If evidence cannot be written, the console
+shows that failure as well as the original action failure; keep the journals.
+Untrusted source/hash/preloaded-type refusals happen before setup-target discovery
+and do not read an existing journal to manufacture a failure report.
+
+The sentinels' random values stay only in their files and the protected values
+record. Review evidence contains hashes/identities, never values. Temp test fixtures
+are retained. Ordinary `npm test` exercises non-mutating refusals and pure recovery
+classification; it never runs real Plan or the ACL acceptance suite. The latter is
+outside `tests/`, requires explicit approval plus `DYE_SETUP_TEST=1`, and calls the
+library only with newly created Temp paths and Anonymous as the deny SID. Its
+current-user deny descriptor is checked in memory only, never applied. Source
+checks cannot establish safety alone; behavioral refusal tests are also required.
+
+Owner decisions remain separated: U1 evidence-root hardening is deferred to real
+B2/D7; U2 profile sentinels require Apply approval; U3 the trusted bundle is Stage
+2; U4 later sentinel removal requires approval. H1 parent rename/delete exposure
+is a hypothesis for B2, not a demonstrated vulnerability. Identity/DACL/file-ID
+verification detects replacement; it does not prevent rename or lost availability.
+Same-user control and OS trust limits (P2) remain. No installed Claude/Codex lookup,
+version/auth call, model request, account, firewall or configuration change occurs.
+
+The following later steps require separate approvals and reviewed plans:
 
 1. Decide the still-open owner decisions, including exact runtime versions,
    authentication outputs, budgets and extra-usage confirmation.

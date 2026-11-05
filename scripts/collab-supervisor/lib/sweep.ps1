@@ -30,3 +30,18 @@ function Invoke-DyeSweep([string]$Marker,[string]$Fixture,[double]$StartedAt,[lo
     }
     return @{result=$(if($survivors.Count -eq 0){'PASS'}else{'FAIL'});escapes=@($escapes);survivors=@($survivors)}
 }
+
+# Stage 2 observations never reuse the Phase A marker/name-based termination
+# path above. The caller has already validated its S2-C/S2-F controls; this
+# helper reports identities only and cannot terminate an escaped process.
+function Get-DyeProbeProcessObservation {
+    param([string]$Mode,[string]$RunClass,[string[]]$OwnerSids,
+          [int[]]$Pids,[string[]]$Created)
+    if($Mode -cne 'live-nonmodel'){throw 'PROBE_OBSERVATION_MODE'}
+    if($RunClass -ceq 'live-test'){
+        if($OwnerSids -or !$Pids -or !$Created -or $Pids.Count -ne $Created.Count){throw 'PROBE_OBSERVATION_FIXTURE'}
+        return [DyeStage2.Identity]::Observe($Pids,$Created)
+    }
+    if($RunClass -cne 'live-real' -or !$OwnerSids -or $Pids -or $Created){throw 'PROBE_OBSERVATION_APPROVAL'}
+    return [DyeStage2.Identity]::ObserveOwners($OwnerSids)
+}

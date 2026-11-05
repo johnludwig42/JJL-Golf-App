@@ -1,7 +1,172 @@
 import test from 'node:test';
+import { bindInventoryApproval, INVENTORY_TEMPLATES, inventoryRegistryHash } from '../scripts/collab-supervisor/lib/probe-contract.js';
 import assert from 'node:assert/strict';
+import { liveProbeCommand, compareInventoryObservations, buildStage2Result, scanInventoryOutput, inventoryPublication, publishInventoryArtifacts, recordStage2Failure, appendStage2Journal } from '../scripts/collab-supervisor/lib/live-probes.js';
+import { validateAuthProjection, applyAuthSchema } from '../scripts/collab-supervisor/lib/auth.js';
+import { networkTarget, payloadTargets, runNetworkProbe } from '../scripts/collab-supervisor/acceptance/stage2-probe-payload.mjs';
+
+test('stage2 payload target policy is closed and network checks are data-only', () => {
+  assert.deepEqual(networkTarget('dns','github.com'),{kind:'dns',target:'github.com'});
+  assert.deepEqual(networkTarget('https-head','https://github.com/'),{kind:'https-head',target:'https://github.com/'});
+  assert.deepEqual(networkTarget('tcp','127.0.0.1:5087'),{kind:'tcp',host:'127.0.0.1',port:5087});
+  for (const [kind,target] of [['dns','example.com'],['dns','github.com.'],['https-head','http://github.com/'],
+    ['https-head','https://github.com/private'],['https-head','https://user@github.com/'],['tcp','localhost:80'],
+    ['tcp','127.0.0.1:0'],['tcp','127.0.0.1:65536'],['tcp','127.0.0.1:080'],['get','https://github.com/']])
+    assert.throws(()=>networkTarget(kind,target),{code:'PAYLOAD_REFUSED'});
+  const nonce='a'.repeat(32),id='dye-live-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+  const root='C:\\Projects\\dye-ledger-stage2-wt-'+id;
+  const policy=payloadTargets(root,nonce,false,id);
+  assert.equal(policy.reads.length,6);assert.equal(policy.creates.length,12);assert.equal(policy.renames.length,3);
+  assert.ok(policy.reads.every(path=>path.endsWith('sentinel.txt')||path.endsWith('.env.wp-auto-sentinel')));
+  assert.ok(policy.creates.every(path=>path.endsWith('.canary')&&!path.endsWith('pre-commit')));
+  assert.ok(policy.renames.every(path=>path.includes(id)));
+  assert.throws(()=>payloadTargets(root,'b'.repeat(32),false,id),{code:'PAYLOAD_REFUSED'});
+  assert.throws(()=>payloadTargets('C:\\Projects\\JJL-Golf-App',nonce,false,id),{code:'PAYLOAD_REFUSED'});
+});
+
+test('stage2 auth evidence accepts only vocabulary and redacted classes, and never infers an auth mode', () => {
+  const projection = { authMode: 'UNVERIFIED (bootstrap)', loggedIn: 'UNVERIFIED (bootstrap)', schema: null,
+    shape: {fields:[['email','<redacted:len=23,class=email-like>'],['mode','subscription']]} };
+  assert.match(validateAuthProjection(projection).projectionHash,/^[A-F0-9]{64}$/);
+  for(const change of [
+    {...projection, authMode:'subscription'}, {...projection, schema:{accepted:true}},
+    {...projection, shape:{fields:[['email','private@example.invalid']]}},
+    {...projection, shape:{fields:[['private@example.invalid','subscription']]}},
+    {stop:'TOKEN_LIKE',shape:projection.shape}, {stop:'UNKNOWN'}
+  ]) assert.throws(()=>validateAuthProjection(change),{code:'AUTH_OR_USAGE'});
+  assert.match(validateAuthProjection({stop:'TOKEN_LIKE'}).projectionHash,/^[A-F0-9]{64}$/);
+  assert.match(validateAuthProjection({stop:'TOKEN_LIKE',hitClass:'SECRET_PREFIX',jsonPathOrLineNo:2}).projectionHash,/^[A-F0-9]{64}$/);
+  for (const details of [
+    {hitClass:'raw-secret-value',jsonPathOrLineNo:1},
+    {hitClass:'SECRET_PREFIX',jsonPathOrLineNo:'private-key-path'},
+    {hitClass:'SECRET_PREFIX',jsonPathOrLineNo:0}
+  ]) assert.throws(()=>validateAuthProjection({stop:'TOKEN_LIKE',...details}),{code:'AUTH_OR_USAGE'});
+  assert.throws(()=>applyAuthSchema(projection),/separate review/);
+  assert.throws(()=>applyAuthSchema(projection,{rules:[{mode:'subscription'}]}),/not accepted/);
+});
+
+test('stage2 result projection refuses fixture evidence and never promotes bootstrap auth to platform acceptance', () => {
+  const input = {mode:'live-nonmodel',run_class:'live-real',operation:'l-a',inventoryRegistryHash,
+    shape:{mode:'live-nonmodel',run_class:'live-real',exitCode:0,stdoutTotal:18,stderrTotal:0,durationMs:10,projection:{authMode:'UNVERIFIED (bootstrap)',
+      loggedIn:'UNVERIFIED (bootstrap)',schema:null,shape:{fields:[['loggedIn',true]]}}}};
+  const result = buildStage2Result(input);
+  assert.equal(result.status,'OBSERVED (shape only)');
+  assert.equal(result.platformAcceptance,'UNVERIFIED');
+  assert.equal(result.authMode,'UNVERIFIED (bootstrap)');
+  const {shapeHash,...safeRecord}=result;
+  assert.equal(shapeHash,hash(JSON.stringify(safeRecord)));
+  assert.notEqual(buildStage2Result({...input,shape:{...input.shape,durationMs:11}}).shapeHash,shapeHash);
+  input.shape.projection.shape.fields[0][1]=false;
+  assert.equal(result.projection.shape.fields[0][1],true);
+  for (const change of [{run_class:'live-test'},{mode:'fake'},{operation:'payload-identity'},{inventoryRegistryHash:'0'.repeat(64)}])
+    assert.throws(()=>buildStage2Result({...input,...change}),{code:'NOT_APPROVED'});
+  assert.throws(()=>buildStage2Result({...input,shape:{...input.shape,run_class:'live-test'}}),{code:'NOT_APPROVED'});
+  const stopped=buildStage2Result({...input,shape:{...input.shape,projection:{stop:'TOKEN_LIKE',hitClass:'BEARER',jsonPathOrLineNo:1}}});
+  assert.equal(stopped.status,'STOPPED');
+  assert.equal(stopped.projection.shape,undefined);
+  const version=buildStage2Result({...input,operation:'c-v',done:{exit:1},raw:'must not be projected'});
+  assert.equal(version.raw,undefined);
+  assert.equal(version.exitCode,1);
+  assert.equal(version.status,'NOT_RUN');
+});
+
+test('stage2 inventory comparison refuses missing observations and reports drift or unowned survivors without killing', () => {
+  const snapshot = { status: 'OK', files: { image: { sha256: 'A'.repeat(64) }, install: [], profiles: [] },
+    resolution: { path: 'C:\\fixture\\cli.exe' }, paths: [],
+    system: { users: [], groups: [], sandboxMembers: [], firewall: [] }, processes: { Status: 'OK', Processes: [] } };
+  const scope = { startedFiletime: '100', endedFiletime: '200', sandboxSids: ['S-1-5-21-1003'], installFolder: 'C:\\fixture' };
+  assert.equal(compareInventoryObservations(snapshot, structuredClone(snapshot), scope).result, 'PASS');
+  for (const field of ['files', 'resolution', 'paths', 'system', 'processes']) {
+    const missing = structuredClone(snapshot); delete missing[field];
+    assert.equal(compareInventoryObservations(snapshot, missing, scope).result, 'NOT_RUN');
+  }
+  const drift = structuredClone(snapshot); drift.paths.push({ sddl: 'changed' });
+  assert.equal(compareInventoryObservations(snapshot, drift, scope).result, 'FAIL');
+  const survivor = structuredClone(snapshot);
+  survivor.processes.Processes.push({ Pid: 123, ParentPid:122, CreatedFiletime: '150', ParentCreatedFiletime:'140',
+    OwnerSid: 'S-1-5-21-1003', Image: 'C:\\elsewhere\\child.exe', ImageSha256:'B'.repeat(64), Error: null });
+  assert.equal(compareInventoryObservations(snapshot, survivor, scope).result, 'FAIL');
+  assert.equal(compareInventoryObservations(survivor, snapshot, scope).reason, 'sandbox users busy');
+  const ownerSurvivor=structuredClone(survivor);
+  Object.assign(ownerSurvivor.processes.Processes[0],{OwnerSid:'S-1-5-21-2000',Image:'C:\\fixture\\private-process.exe'});
+  const ownerResult=compareInventoryObservations(snapshot,ownerSurvivor,scope);
+  assert.equal(ownerResult.result,'FAIL');
+  assert.equal(ownerResult.survivors[0].image,undefined);
+  assert.equal(ownerResult.survivors[0].imageSha256,'B'.repeat(64));
+  for(const field of ['ParentPid','ParentCreatedFiletime','ImageSha256','OwnerSid']){
+    const invalid=structuredClone(survivor);invalid.processes.Processes[0][field]=null;
+    assert.equal(compareInventoryObservations(snapshot,invalid,scope).result,'NOT_RUN',field);
+  }
+  survivor.processes.Processes[0].Error = 'ACCESS_DENIED';
+  assert.equal(compareInventoryObservations(snapshot, survivor, scope).result, 'NOT_RUN');
+});
+
+test('stage2 protected inventory entry refuses disposable controls before reading approval or resolving a tool', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'dye-inventory-entry-'));
+  const path = join(directory, 'approval.json');
+  writeFileSync(path, 'not-json: must never be read');
+  await assert.rejects(Promise.resolve().then(() => liveProbeCommand(['inventory', '--spec', path])),
+    /Protected inventory control path required|Live mode rejects test flags/);
+  assert.equal(readFileSync(path, 'utf8'), 'not-json: must never be read');
+  assert.throws(() => liveProbeCommand(['run', '--spec', path]), /requires later approval/);
+});
+
+test('stage2 inventory approval binds all nine reviewed commands and refuses probe authority', () => {
+  for (const [id, template] of Object.entries(INVENTORY_TEMPLATES)) {
+    const binding = { templateId: id, runId: 'dye-live-11111111-1111-1111-1111-111111111111',
+      runClass: 'live-real', bundleHash: 'A'.repeat(64), providerContactAllowed: false,
+      tools: { [template.role]: { path: 'C:\\fixture\\tool.exe', sha256: 'B'.repeat(64) } } };
+    const approval = { kind: 'S2-C', mode: 'live-nonmodel', runClass: binding.runClass,
+      bundleHash: binding.bundleHash, inventoryRegistryHash, runId: binding.runId,
+      templateIds: [id], providerContactAllowed: false, tools: structuredClone(binding.tools),
+      environments: { [template.role]: template.env } };
+    const bound = bindInventoryApproval(approval, binding);
+    assert.deepEqual(bound.argv, template.argv);
+    assert.deepEqual(bound.environment, template.env);
+    assert.equal(bound.timeoutMs, 60000);
+    assert.equal(bound.outputRoute, id.endsWith('-a') ? 'memory-shape' : 'file');
+    for (const mutation of [
+      { kind: 'S2-F' }, { runClass: 'live-test' }, { bundleHash: 'C'.repeat(64) },
+      { inventoryRegistryHash: 'C'.repeat(64) }, { runId: 'different' },
+      { templateIds: ['B1'] }, { templateIds: [id, id] }, { providerContactAllowed: true },
+      { environments: {} }, { tools: {} }
+    ]) assert.throws(() => bindInventoryApproval({ ...approval, ...mutation }, binding), { code: 'NOT_APPROVED' });
+    assert.throws(() => bindInventoryApproval(approval, { ...binding, templateId: 'B1' }), { code: 'NOT_APPROVED' });
+  }
+});
+test('stage2 live dispatch never calls fake handlers or spawnAllowed (module spies)', {skip:process.platform!=='win32'}, () => {
+  const root=mkdtempSync(join(tmpdir(),'dye-dispatch-spies-'));
+  const script=join(root,'spies.mjs');
+  const url=path=>pathToFileURL(resolve('scripts/collab-supervisor',path)).href;
+  writeFileSync(script,`
+import assert from 'node:assert/strict';
+import {mock} from 'node:test';
+const policy=await import(${JSON.stringify(url('lib/policy.js'))});
+const fake=await import(${JSON.stringify(url('lib/fake-runtime.js'))});
+const calls={fakeCommand:0,executeFakeSession:0,spawnAllowed:0};
+const stop=name=>()=>{calls[name]++;throw new Error('Unexpected fake route: '+name);};
+mock.module(${JSON.stringify(url('lib/policy.js'))},{namedExports:{...policy,spawnAllowed:stop('spawnAllowed')}});
+mock.module(${JSON.stringify(url('lib/fake-runtime.js'))},{namedExports:{...fake,fakeCommand:stop('fakeCommand'),executeFakeSession:stop('executeFakeSession')}});
+const {main}=await import(${JSON.stringify(url('supervisor.js'))});
+process.env.DYE_SUPERVISOR_TEST='1';
+assert.throws(()=>main(['platform-probes','live','inventory','--spec',${JSON.stringify(join(root,'absent.json'))}]),{code:'NOT_PLATFORM_ACCEPTED'});
+const prior=process.argv;
+process.argv=[process.execPath,${JSON.stringify(resolve('scripts/collab-supervisor/coordinator.js'))},'--sealed-live-probe',${JSON.stringify(join(root,'absent.json'))},'A'.repeat(64)];
+await import(${JSON.stringify(url('coordinator.js'))}+'?dispatch-live');
+assert.equal(process.exitCode,99);process.exitCode=0;
+delete process.env.DYE_SUPERVISOR_TEST;
+process.argv[2]='--sealed-probe';
+await import(${JSON.stringify(url('coordinator.js'))}+'?dispatch-synthetic');
+assert.equal(process.exitCode,99);process.exitCode=0;process.argv=prior;
+assert.deepEqual(calls,{fakeCommand:0,executeFakeSession:0,spawnAllowed:0});
+mock.restoreAll();process.stdout.write('PASS dispatch spies');
+`);
+  const result=execFileSync(process.execPath,['--experimental-test-module-mocks',script],
+    {encoding:'utf8',windowsHide:true,timeout:10000,stdio:['ignore','pipe','pipe']});
+  assert.match(result,/PASS dispatch spies/);
+});
 import { Buffer } from 'node:buffer';
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, mkdirSync, linkSync, symlinkSync, copyFileSync, lstatSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, mkdirSync, linkSync, symlinkSync, copyFileSync, lstatSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync,spawn } from 'node:child_process';
@@ -15,6 +180,48 @@ import { pathToFileURL } from 'node:url';
 import { main } from '../scripts/collab-supervisor/supervisor.js';
 import { psRuntime } from '../scripts/collab-supervisor/lib/fake-config.js';
 import { randomUUID } from 'node:crypto';
+
+test('stage2 source boundaries preserve frozen file drain and keep capture and redaction path-free', () => {
+  const path = 'scripts/collab-supervisor/lib/windows-job.ps1';
+  const current = readFileSync(path, 'utf8').replaceAll('\r\n', '\n');
+  const frozen = execFileSync('git', ['--no-optional-locks', 'cat-file', 'blob', '7f8c4b9:' + path], {encoding:'utf8'});
+  const drain = text => text.match(/  static Task Drain\(IntPtr h,string file\) \{\n[^\n]+\n  \}/)?.[0];
+  assert.ok(drain(frozen), 'Frozen file-route drain must be identifiable');
+  assert.equal(drain(current), drain(frozen), 'File-route drain remains byte-identical in Git representation');
+  const capture = current.slice(current.indexOf(' public sealed class Capture {'), current.indexOf(' public class Inspection'));
+  assert.ok(capture.includes('public void Drain(Stream stream)'));
+  assert.doesNotMatch(capture, /FileStream|\bFile\.|StreamWriter|ReadAllText|GetString/);
+  const auth = readFileSync('scripts/collab-supervisor/lib/auth-shape.ps1','utf8');
+  assert.doesNotMatch(auth, /FileStream|\bFile\.|StreamWriter|ReadAllText/);
+  const wrapper = readFileSync('scripts/collab-supervisor/run-step.ps1','utf8');
+  assert.doesNotMatch(wrapper, /ReadToEnd|ReadAllText|\.Consume\(/);
+  assert.match(wrapper, /\[DyeStage2\.AuthShape\]::Project/);
+  const broker=readFileSync('scripts/collab-supervisor/lib/broker.ps1','utf8');
+  const probeBranch=broker.slice(broker.indexOf('if($null -ne $ProbeRoot){'),broker.indexOf('}else{$step = Read-FakeSpec'));
+  assert.ok(probeBranch.length>0);
+  assert.doesNotMatch(probeBranch, /'fake'/);
+  assert.ok(probeBranch.includes("'-ProbeMode',$ProbeRoot['mode']"));
+  assert.ok(probeBranch.includes("if($ProbeRoot['mode'] -ceq 'live-nonmodel'){$harness=@()}"));
+  // John's A12 exception permits the API only in the disposable test helper.
+  // Scan every production file; acceptance/ contains the generated helper text.
+  const production=resolve('scripts/collab-supervisor');
+  function scan(directory) {
+    for(const entry of readdirSync(directory,{withFileTypes:true})) {
+      if(entry.name==='acceptance')continue;
+      const path=join(directory,entry.name);
+      if(entry.isDirectory())scan(path);
+      else if(/\.(?:js|mjs|ps1)$/.test(entry.name))assert.doesNotMatch(readFileSync(path,'utf8'),/DuplicateHandle/,path);
+    }
+  }
+  scan(production);
+  for(const path of ['scripts/collab-supervisor/lib/setup-acl.ps1',
+    'scripts/collab-supervisor/acceptance/platform-setup.ps1',
+    'scripts/collab-supervisor/acceptance/platform-setup.test.js']) {
+    // Compare actual checkout bytes, including this repository's CRLF filter.
+    const accepted=execFileSync('git',['cat-file','--filters','7f8c4b9:'+path]);
+    assert.deepEqual(readFileSync(path),accepted,'Frozen Stage 1b checkout bytes: '+path);
+  }
+});
 const temp=()=>mkdtempSync(join(tmpdir(),'dye-probe-contract-'));
 const psQuote=value=>"'"+value.replaceAll("'","''")+"'";
 const wire={mode:'fake',schema:1,type:'vector'};
@@ -22,16 +229,27 @@ const wire={mode:'fake',schema:1,type:'vector'};
 test('probe.live_gate: forged all-PASS eligibility cannot dispatch run, resume or probes',async()=>{
   const forged={phase:'B',bundle:'forged',versions:{v:'1'},approval:{phase:'B',bundle:'forged'},platform:{bundle:'forged',versions:{v:'1'},reviewed:true,required:[{result:'PASS'}]}};
   assert.equal(realEligibility(forged),true); // Legacy pure predicate only; no execution authority.
-  for(const command of ['run','resume'])assert.throws(()=>main([command,JSON.stringify(forged)]),{code:'NOT_PLATFORM_ACCEPTED'});
+  for(const command of ['approve','run','resume','recover'])assert.throws(()=>main([command,JSON.stringify(forged)]),{code:'NOT_PLATFORM_ACCEPTED'});
   for(const mode of ['live','real','B',undefined])await assert.rejects(async()=>main(['platform-probes',mode,'run','--spec','C:\\DO-NOT-READ']),{code:'NOT_PLATFORM_ACCEPTED'});
   assert.throws(()=>probeMode('live'),{code:'NOT_PLATFORM_ACCEPTED'});
 });
 test('probe.strict_tokens: duplicates, ambiguous names, malformed types and framing refuse',()=>{
-  for(const text of ['{"mode":"fake","mode":"fake"}\n','{"Argv":"x"}\n','{"\\u006dode":"fake"}\n','{"unknown":"x"}\n','{"schema":true}\n','{"schema":null}\n','{"schema":[]}\n','{"schema":{}}\n','{"schema":1.0}\n','{"schema":1e0}\n','{"schema":01}\n','{"schema":-0}\n','{"schema":9007199254740992}\n','{"type":"vector","mode":"fake"}\n','{"mode":"Fake"}\n','{"type":"VECTOR"}\n','{"argv_count":1}\n','{"argv_0001":"x","argv_count":1}\n','{"mode":"fa\\nke"}\n','{"mode":"faké"}\n','{"schema":1,}\n','{"schema":1}\n\n','\uFEFF{"schema":1}\n','{"schema":1}\r\n']){
+  for(const text of ['{"mode":"fake","mode":"fake"}\n','{"Argv":"x"}\n','{"\\u006dode":"fake"}\n','{"unknown":"x"}\n','{"schema":true}\n','{"schema":null}\n','{"schema":[]}\n','{"schema":{}}\n','{"schema":1.0}\n','{"schema":1e0}\n','{"schema":01}\n','{"schema":-0}\n','{"schema":9007199254740992}\n','{"type":"vector","mode":"fake"}\n','{"mode":"Fake"}\n','{"type":"VECTOR"}\n','{"argv_count":1}\n','{"argv_0001":"x","argv_count":1}\n','{"mode":"fa\\nke"}\n','{"mode":"fak\u00e9"}\n','{"schema":1,}\n','{"schema":1}\n\n','\uFEFF{"schema":1}\n','{"schema":1}\r\n']){
     assert.throws(()=>parseWire(Buffer.from(text),{paths:false}),undefined,text);
   }
   assert.throws(()=>parseWire(Buffer.from([0xff,0x0a])));
   assert.deepEqual({...parseWire(canonicalWire(wire),{paths:false})},wire);
+});
+
+test('stage2 cross-mode wire records cannot be reused as manifests requests consumption or starts', () => {
+  for (const type of ['manifest','request','consumption','started']) {
+    const fake = canonicalWire({schema:1,type,mode:'fake'},'fake');
+    const live = canonicalWire({schema:1,type,mode:'live-nonmodel'},'live-nonmodel');
+    assert.equal(parseWire(fake,{paths:false,mode:'fake'}).mode,'fake');
+    assert.equal(parseWire(live,{paths:false,mode:'live-nonmodel'}).mode,'live-nonmodel');
+    assert.throws(()=>parseWire(fake,{paths:false,mode:'live-nonmodel'}));
+    assert.throws(()=>parseWire(live,{paths:false,mode:'fake'}));
+  }
 });
 test('probe.paths: ambiguous, linked, short and missing paths are refused before contents',()=>{
   const root=temp(),file=join(root,'input.json');writeFileSync(file,'synthetic');
@@ -168,7 +386,7 @@ foreach($statement in $ast.EndBlock.Statements){if($statement -isnot [Management
 test('probe.cross_language: identical adversarial bytes and typed tuples in Windows PowerShell 5.1',{skip:process.platform!=='win32'},()=>{
   const root=temp(),valid=join(root,'regular.json');writeFileSync(valid,'own test data');
   const corpus=[canonicalWire(wire),canonicalWire({...wire,cwd:root,fixture:valid,parent_created:'134000000000000000',...indexed('argv',['x','\\"'])}),
-    ...['{"schema":1,"schema":2}\n','{"schema":true}\n','{"schema":9007199254740992}\n','{"schema":-0}\n','{"schema":1e1}\n','{"mode":"Fake"}\n','{"Argv":"x"}\n','{"\\u006dode":"fake"}\n','{"env_count":1}\n','{"schema":1,}\n','\uFEFF{"schema":1}\n','{"schema":1}\r\n','{"unknown":"x"}\n','{"mode":[]}\n','{"mode":null}\n','{"mode":{}}\n','{"mode":"faké"}\n','{"type":"vector","schema":1}\n','{"schema":1}\nextra'].map(s=>Buffer.from(s)),
+    ...['{"schema":1,"schema":2}\n','{"schema":true}\n','{"schema":9007199254740992}\n','{"schema":-0}\n','{"schema":1e1}\n','{"mode":"Fake"}\n','{"Argv":"x"}\n','{"\\u006dode":"fake"}\n','{"env_count":1}\n','{"schema":1,}\n','\uFEFF{"schema":1}\n','{"schema":1}\r\n','{"unknown":"x"}\n','{"mode":[]}\n','{"mode":null}\n','{"mode":{}}\n','{"mode":"fak\u00e9"}\n','{"type":"vector","schema":1}\n','{"schema":1}\nextra'].map(s=>Buffer.from(s)),
     ...['C:relative','C:\\a\\..\\b','C:\\FOO~1\\x','C:\\a.\\x','C:\\a \\x','C:\\a:b','\\\\server\\share','\\\\?\\C:\\x',join(root,'missing','x')].map(cwd=>canonicalWire({...wire,cwd}))];
   const hard=join(root,'hard.json');linkSync(valid,hard);corpus.push(canonicalWire({...wire,fixture:hard}));
   const junction=join(root,'junction');symlinkSync(root,junction,'junction');corpus.push(canonicalWire({...wire,cwd:junction}));
@@ -248,6 +466,11 @@ $second=Request '00000000-0000-4000-8000-000000000003'
 $request=Read-DyeProbeWire $second
 $consumption=@{schema=1;type='consumption';mode='fake';run_id=$root['run_id'];request_id=$request['request_id'];probe_id='version';manifest_hash='${manifestHash}';request_hash=(Get-DyeProbeHash $second);registry_hash=$root['registry_hash'];launcher_pid=$parent;launcher_created=$parentCreated;coordinator_pid=$parent;coordinator_created=$parentCreated;deadline_utc=$request['deadline_utc']}
 Write-DyeProbeWire ($second+'.consumed.json') $consumption
+$consumedBytes=[IO.File]::ReadAllBytes($second+'.consumed.json')
+$foreignMode=[Text.Encoding]::UTF8.GetString($consumedBytes).Replace('"mode":"fake"','"mode":"live-nonmodel"')
+[IO.File]::WriteAllText($second+'.consumed.json',$foreignMode,[Text.UTF8Encoding]::new($false))
+Expect-Refusal 'foreign_consumption_mode' {Confirm-DyeProbeStart $second ${psQuote(manifest)} '${manifestHash}' ($second+'.consumed.json')} 'mode|contract'
+[IO.File]::WriteAllBytes($second+'.consumed.json',$consumedBytes)
 $validated=Confirm-DyeProbeStart $second ${psQuote(manifest)} '${manifestHash}' ($second+'.consumed.json')
 if($validated.args[1] -cne 'probe-version' -or -not (Test-Path -LiteralPath ($second+'.started.json'))){throw 'Wrapper receipt missing'}
 $results+=@{name='valid_wrapper_receipt_without_child';result='PASS'}
@@ -267,7 +490,7 @@ Expect-Refusal 'swapped_after_consumption' {Confirm-DyeProbeStart $second ${psQu
 ConvertTo-Json -InputObject $results -Compress
 `);
   const rows=JSON.parse(execFileSync(psRuntime(),['-NoProfile','-ExecutionPolicy','Bypass','-File',driver],{encoding:'utf8',windowsHide:true,timeout:30000,env:{...process.env,DYE_SUPERVISOR_TEST:'1'}}));
-  assert.equal(rows.length,13);assert.ok(rows.every(row=>row.result==='PASS'));
+  assert.equal(rows.length,14);assert.ok(rows.every(row=>row.result==='PASS'));
   assert.equal(existsSync(join(root,'stdout')),false); // Validation never reached any child creation.
 });
 
@@ -387,3 +610,170 @@ function spawnSyncResult(executable,args,env){
   try{return {exit:0,stdout:execFileSync(executable,args,{env,windowsHide:true,encoding:'utf8',stdio:'pipe'}),stderr:''};}
   catch(error){return {exit:error.status,stdout:String(error.stdout),stderr:String(error.stderr)};}
 }
+import { assessProbeAttribution, probeJobMembership } from '../scripts/collab-supervisor/lib/processes.js';
+
+test('stage2 membership requires matching creation time, complete bounded samples and final emptiness', () => {
+  const process = { pid: 23, createdAt: '116444736010000000', observedAliveAt: '1970-01-01T00:00:03.000Z' };
+  const sample = { startUtc: '1970-01-01T00:00:02.000Z', endUtc: '1970-01-01T00:00:02.010Z',
+    activeProcesses: 1, members: [{ pid: process.pid, createdFiletime: process.createdAt }] };
+  const initial = { job: 'J0', seq: 0, phase: 'initial', status: 'OK', sample };
+  const final = { job: 'J0', seq: 1, phase: 'final', status: 'OK',
+    sample: { ...sample, activeProcesses: 0, members: [] } };
+  assert.deepEqual(probeJobMembership(process, [initial, final]), { membership: 'J0', job: 'J0', seq: 0 });
+  assert.deepEqual(probeJobMembership(process, [final]), { membership: 'neither', job: 'J0', seq: 1 });
+  assert.equal(probeJobMembership(process, [initial]), null);
+  for (const mutation of [
+    { status: 'INCOMPLETE' }, { sample: { ...sample, activeProcesses: 2 } },
+    { sample: { ...sample, endUtc: '1970-01-01T00:00:02.200Z' } },
+    { sample: { ...sample, members: [{ pid: 23, createdFiletime: '116444736020000000' }] } }
+  ]) {
+    assert.equal(probeJobMembership({ ...process, observedAliveAt: undefined }, [{ ...initial, ...mutation }, final]), null);
+  }
+});
+
+test('stage2 attribution refuses incomplete observations and reports survivors without terminating them', () => {
+  const sample = { pid: 10, parentPid: 9, createdAt: '200', parentCreatedAt: '100',
+    image: 'C:\\fixture\\node.exe', imageSha256: 'A'.repeat(64), ownerSid: 'S-1-5-21-1003',
+    membership: 'J1', alive: false };
+  const assess = processes => assessProbeAttribution({ baseline: [], enumerationComplete: true, processes });
+  assert.equal(assess([sample]).result, 'PASS');
+  for (const key of Object.keys(sample)) {
+    assert.equal(assess([{ ...sample, [key]: null }]).result, 'NOT_RUN', key);
+  }
+  assert.equal(assess([{ ...sample, alive: true }]).result, 'FAIL');
+  assert.equal(assess([{ ...sample, alive: true, membership: 'neither' }]).reason, 'UNATTRIBUTED');
+  assert.equal(assess([{ ...sample, parentCreatedAt: '201' }]).result, 'NOT_RUN');
+  assert.equal(assess([{ ...sample, error: 'PID_RACE' }]).result, 'NOT_RUN');
+  assert.equal(assess([{ ...sample, nonceVerified:true }]).result,'NOT_RUN');
+  const nonce='a'.repeat(32);
+  const bound={...sample,membership:'neither',nonce,nonceVerified:true,chainVerified:true,alive:true};
+  const boundAssessment=row=>assessProbeAttribution({baseline:[],enumerationComplete:true,processes:[row],expectedNonce:nonce});
+  assert.equal(boundAssessment(bound).reason,'surviving process');
+  assert.equal(boundAssessment({...bound,nonce:'b'.repeat(32),alive:false}).result,'NOT_RUN');
+  assert.equal(boundAssessment({...bound,chainVerified:false}).reason,'UNATTRIBUTED');
+
+  assert.equal(assessProbeAttribution({ baseline: [sample], enumerationComplete: true, processes: [] }).reason, 'sandbox users busy');
+  assert.equal(assessProbeAttribution({ baseline: [], enumerationComplete: false, processes: [] }).result, 'NOT_RUN');
+});
+
+// Synthetic records exercise publication policy only; they are not observations
+// from installed tools and cannot satisfy a platform acceptance gate.
+test('stage2 inventory quarantine rejects either stream before preparing ordinary artifacts', () => {
+  const record={mode:'live-nonmodel',run_class:'live-real',operation:'c-h1',inventoryRegistryHash,done:{exit:0}};
+  const safe=Buffer.from('Usage: codex --help\n');
+  const secrets=['WP-AUTO-02-SENTINEL-'+ 'a'.repeat(32),'eyJabcdefghijk.','sk-secret',
+    'Bearer secret','-----BEGIN PRIVATE KEY-----','a'.repeat(32)];
+  for(const secret of secrets)for(const stream of ['stdout','stderr']) {
+    const bytes=Buffer.from(secret);
+    const publication=inventoryPublication(record,{stdout:safe,stderr:Buffer.alloc(0),[stream]:bytes});
+    assert.equal(publication.status,'QUARANTINED');assert.equal(publication.artifacts,undefined);
+    assert.ok(!JSON.stringify(publication).includes(secret));
+    assert.ok(!JSON.stringify(publication).includes(hash(bytes)));
+  }
+  assert.deepEqual(scanInventoryOutput(Buffer.from([0xff])),{status:'QUARANTINED',reason:'NON_UTF8'});
+  const approved=inventoryPublication(record,{stdout:safe,stderr:Buffer.alloc(0)});
+  assert.equal(approved.status,'READY');assert.equal(approved.artifacts.length,2);
+  assert.equal(approved.artifacts[1].value.toString(),safe.toString());
+  assert.equal(approved.artifacts[0].value.platformAcceptance,'UNVERIFIED');
+  const version=inventoryPublication({...record,operation:'c-v'},{stdout:safe,stderr:Buffer.alloc(0)});
+  assert.equal(version.artifacts.length,1);
+  for(const failed of [
+    inventoryPublication({...record,done:{exit:2}},{stdout:safe,stderr:Buffer.alloc(0)}),
+    inventoryPublication(record,{stdout:safe,stderr:Buffer.from('error: unknown command')})
+  ]) {
+    assert.equal(failed.artifacts.length,1);
+    assert.equal(failed.artifacts[0].value.status,'NOT_RUN');
+  }
+  assert.throws(()=>inventoryPublication({...record,run_class:'live-test'},{stdout:safe,stderr:safe}));
+});
+
+test('stage2 ordinary publication writes scanned evidence exclusively and quarantines without touching the destination', () => {
+  const root=temp(),ordinary=join(root,'ordinary'),id='dye-live-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+  const record={mode:'live-nonmodel',run_class:'live-real',operation:'l-h1',inventoryRegistryHash,done:{exit:0}};
+  const secret='WP-AUTO-02-SENTINEL-'+ 'a'.repeat(32);
+  const blocked=publishInventoryArtifacts(record,{stdout:Buffer.from(secret),stderr:Buffer.alloc(0)},ordinary,id);
+  assert.equal(blocked.status,'QUARANTINED');assert.equal(existsSync(ordinary),false);
+  assert.throws(()=>publishInventoryArtifacts({...record,run_class:'live-test'},undefined,ordinary,id));
+  assert.equal(existsSync(ordinary),false);
+  const streams={stdout:Buffer.from('Usage: claude --help\n'),stderr:Buffer.alloc(0)};
+  const result=publishInventoryArtifacts(record,streams,ordinary,id);
+  assert.equal(result.status,'PUBLISHED');
+  assert.equal(readFileSync(join(ordinary,'stage2-'+id+'-help-l-h1.txt'),'utf8'),streams.stdout.toString());
+  const evidence=new Evidence(ordinary);assert.deepEqual(evidence.verify(),[]);
+  assert.equal(evidence.entries().length,2);
+  for(const row of evidence.entries()) {
+    const bytes=readFileSync(evidence.path(row.artifact));
+    assert.ok(!bytes.includes(Buffer.from(secret)));
+    assert.ok(!bytes.includes(Buffer.from(hash(Buffer.from(secret)))));
+  }
+  assert.throws(()=>publishInventoryArtifacts(record,streams,ordinary,id),{code:'EVIDENCE_WRITE'});
+  assert.deepEqual(evidence.verify(),[]);
+});
+
+test('stage2 network operation uses closed targets and does not follow redirects or read bodies (synthetic modules)', async () => {
+  let calls=0,destroyed=0;
+  const load=async name=>{
+    calls++;
+    if(name==='node:dns/promises')return {Resolver:class {resolve4(name){assert.equal(name,'github.com');return Promise.resolve(['synthetic']);}cancel(){}}};
+    if(name==='node:net')return {createConnection(options){
+      assert.deepEqual(options,{host:'127.0.0.1',port:5087});
+      const socket={once(event,callback){if(event==='connect')Promise.resolve().then(callback);return socket;},destroy(){destroyed++;}};
+      return socket;
+    }};
+    if(name==='node:https')return {request(url,options,callback){
+      assert.equal(url,'https://github.com/');assert.deepEqual(options,{method:'HEAD'});
+      return {once(){},end(){callback({statusCode:200,destroy(){destroyed++;}});},destroy(){destroyed++;}};
+    }};
+    throw new Error('Unexpected module');
+  };
+  for(const [kind,target] of [['dns','github.com'],['tcp','127.0.0.1:5087'],['https-head','https://github.com/']]){
+    const result=await runNetworkProbe(kind,target,load);assert.equal(result.ok,true);assert.ok(result.elapsed>=0);
+  }
+  assert.equal(calls,3);assert.equal(destroyed,2);
+  await assert.rejects(()=>runNetworkProbe('dns','example.com',load),{code:'PAYLOAD_REFUSED'});
+  assert.equal(calls,3);
+  let requests=0;
+  const redirect=await runNetworkProbe('https-head','https://github.com/',async()=>({request(url,options,callback){
+    requests++;return {once(){},end(){callback({statusCode:302,destroy(){}});},destroy(){}};
+  }}));
+  assert.equal(redirect.ok,false);assert.equal(redirect.error,'REDIRECT_REFUSED');assert.equal(requests,1);
+  const denied=await runNetworkProbe('dns','github.com',async()=>({Resolver:class {
+    resolve4(){return Promise.reject(Object.assign(new Error('private transport detail'),{code:'ENOTFOUND'}));}cancel(){}
+  }}));
+  assert.equal(denied.error,'ENOTFOUND');assert.ok(!JSON.stringify(denied).includes('private'));
+});
+
+test('stage2 failure evidence preserves uncertain objects and excludes raw error details', () => {
+  const root=temp(),run=join(root,'run'),ordinary=join(root,'ordinary');
+  const evidence=new Evidence(run);
+  evidence.write('manifest.json',{fixture:true});
+  const context={run,ordinaryRoot:ordinary,runId:'dye-live-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',operation:'c-a',executionClass:'live-test'};
+  const secret='private@example.invalid';
+  const record=recordStage2Failure(context,new Error('AREA_PERMISSIONS '+secret));
+  assert.equal(record.status,'NOT_RUN');assert.equal(record.reason,'AREA_PERMISSIONS');
+  assert.equal(record.objects.find(row=>row.name==='manifest.json').state,'UNCERTAIN');
+  assert.equal(record.objects.find(row=>row.name==='raw/c-a.out').state,'ABSENT');
+  assert.equal(record.preserved,true);assert.equal(existsSync(ordinary),false);
+  assert.ok(!JSON.stringify(record).includes(secret));
+  assert.ok(existsSync(join(run,'manifest.json')));assert.deepEqual(evidence.verify(),[]);
+  evidence.write('launch-ready.json',{fixture:true});
+  const later=recordStage2Failure(context,new Error('unrecognized '+secret));
+  assert.equal(later.status,'INVALID');assert.equal(later.reason,'RUN_FAILED');
+  for(const row of evidence.entries())assert.ok(!readFileSync(evidence.path(row.artifact),'utf8').includes(secret));
+  assert.throws(()=>recordStage2Failure({...context,runId:'../../escape'},new Error(secret)),{code:'EVIDENCE_WRITE'});
+});
+
+test('stage2 journal retains linked transitions and refuses torn evidence without repair', () => {
+  const root=temp(),evidence=new Evidence(root);
+  const context={runId:'dye-live-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',operation:'c-a',executionClass:'live-test'};
+  const first=appendStage2Journal(evidence,context,'reserved');
+  const next=appendStage2Journal(evidence,context,'launch-intent');
+  assert.equal(first.seq,0);assert.equal(next.seq,1);assert.equal(next.previous,hash(JSON.stringify(first)));
+  appendStage2Journal(evidence,context,'failed');assert.deepEqual(evidence.verify(),[]);
+  const path=join(root,'journal.jsonl'),before=readFileSync(path);
+  assert.throws(()=>appendStage2Journal(evidence,{...context,operation:'c-v'},'complete'),{code:'INTEGRITY'});
+  assert.deepEqual(readFileSync(path),before);
+  const torn=Buffer.concat([before,Buffer.from('{')]);writeFileSync(path,torn);
+  assert.throws(()=>appendStage2Journal(evidence,context,'complete'),{code:'INTEGRITY'});
+  assert.deepEqual(readFileSync(path),torn);
+});

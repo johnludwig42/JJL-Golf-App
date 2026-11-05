@@ -10,3 +10,5 @@ Read in this order:
 
 Invariants live in [CLAUDE.md](CLAUDE.md#non-negotiable-invariants).
 Approvals live in [workflow §16](docs/03_CODEX_WORKFLOW.md#16-actions-requiring-product-owner-approval).
+
+For every autonomous Goal, follow [bounded execution controls](docs/03_CODEX_WORKFLOW.md#bounded-goal-execution).

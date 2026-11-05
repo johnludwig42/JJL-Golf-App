@@ -53,3 +53,68 @@ export function realSweep(config, directory) {
     inspect: inspector(directory), terminate: row => processProbe({ action: 'terminate', pid: row.pid, createdAt: row.createdAt }, directory).terminated === true });
 }
 export function readJson(path) { return JSON.parse(readFileSync(path, 'utf8').replace(/^\uFEFF/, '')); }
+
+export function probeJobMembership(process, records) {
+  if (!process || !Number.isInteger(process.pid) || !/^[1-9][0-9]{0,18}$/.test(process.createdAt ?? '') ||
+      !Array.isArray(records)) return null;
+  const valid = row => {
+    const sample = row?.sample;
+    if (row?.status !== 'OK' || !sample || !Array.isArray(sample.members) ||
+        sample.members.length !== sample.activeProcesses || sample.members.length > 256) return false;
+    const start = Date.parse(sample.startUtc), end = Date.parse(sample.endUtc);
+    return Number.isFinite(start) && Number.isFinite(end) && end >= start && end - start <= 100 &&
+      new Set(sample.members.map(member => member.pid)).size === sample.members.length &&
+      sample.members.every(member => Number.isInteger(member.pid) && member.pid > 0 &&
+        /^[1-9][0-9]{0,18}$/.test(member.createdFiletime ?? ''));
+  };
+  const outer = records.filter(row => row.job === 'J0');
+  const final = outer.at(-1);
+  if (!valid(final) || final.phase !== 'final' || final.sample.activeProcesses !== 0) return null;
+  for (const job of ['J1', 'J0']) {
+    const member = records.find(row => row.job === job && valid(row) &&
+      row.sample.members.some(item => item.pid === process.pid && item.createdFiletime === process.createdAt));
+    if (member) return { membership: job, job, seq: member.seq };
+  }
+  const createdMs = Number(BigInt(process.createdAt) / 10000n - 11644473600000n);
+  const observed = Date.parse(process.observedAliveAt);
+  if (!Number.isFinite(observed)) return null;
+  const excluded = outer.find(row => valid(row) && Date.parse(row.sample.startUtc) > createdMs &&
+    Date.parse(row.sample.endUtc) < observed && !row.sample.members.some(item => item.pid === process.pid));
+  return excluded ? { membership: 'neither', job: 'J0', seq: excluded.seq } : null;
+}
+
+// Observations classify a run; this function never terminates a process.
+export function assessProbeAttribution({ baseline, enumerationComplete, processes, expectedNonce }) {
+  if (!Array.isArray(baseline) || !enumerationComplete || !Array.isArray(processes)) {
+    return { result: 'NOT_RUN', reason: 'attribution incomplete' };
+  }
+  if (baseline.length) return { result: 'NOT_RUN', reason: 'sandbox users busy' };
+  const incomplete = [];
+  const survivors = [];
+  const unattributed = [];
+  for (const row of processes) {
+    const nonceBound = Object.hasOwn(row, 'nonce') || row.nonceVerified === true;
+    const nonceComplete = !nonceBound || (row.nonceVerified === true &&
+      /^[a-f0-9]{32}$/.test(expectedNonce ?? '') && row.nonce === expectedNonce);
+    const complete = nonceComplete && Number.isInteger(row.pid) && row.pid > 0 &&
+      Number.isInteger(row.parentPid) && row.parentPid > 0 &&
+      /^[1-9][0-9]{0,18}$/.test(row.createdAt ?? '') &&
+      /^[1-9][0-9]{0,18}$/.test(row.parentCreatedAt ?? '') &&
+      BigInt(row.parentCreatedAt) <= BigInt(row.createdAt) &&
+      typeof row.image === 'string' && row.image.length > 0 &&
+      /^[A-Fa-f0-9]{64}$/.test(row.imageSha256 ?? '') &&
+      /^S-1-[0-9-]+$/.test(row.ownerSid ?? '') &&
+      ['J0', 'J1', 'neither'].includes(row.membership) && typeof row.alive === 'boolean' && !row.error;
+    if (!complete) incomplete.push(row);
+    const attributed = complete && (row.membership !== 'neither' ||
+      (row.nonceVerified === true && row.chainVerified === true &&
+       nonceBound && nonceComplete));
+    if (row.alive === true && attributed) survivors.push(row);
+    if (row.alive === true && complete && !attributed) unattributed.push(row);
+  }
+  if (survivors.length || unattributed.length || incomplete.some(row => row.alive === true)) {
+    return { result: 'FAIL', reason: unattributed.length ? 'UNATTRIBUTED' : 'surviving process', survivors, unattributed, incomplete };
+  }
+  if (incomplete.length) return { result: 'NOT_RUN', reason: 'attribution incomplete', incomplete };
+  return { result: 'PASS', survivors, unattributed, incomplete };
+}

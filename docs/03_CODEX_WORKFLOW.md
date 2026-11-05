@@ -518,6 +518,43 @@ If no issues remain, provide:
 Do not commit.
 ```
 
+## Bounded Goal Execution
+
+- Start only an approved work package. Record its measurable segment objective,
+  permitted files, exclusions, tests, retry allowance and checkpoint authority.
+  A continuing Goal does not authorize the next segment or work package.
+- Target 25 minutes per segment. Check elapsed time before starting each command;
+  allow time for its expected duration and safe shutdown. Report progress near
+  20 minutes. At 30 minutes, initiate no new command. Report any live command that
+  cannot safely be stopped, retain its handle and evidence, and do not restart it.
+- Use relevant targeted tests first. Broader tests require a named milestone and
+  allowance in the package. Permit one corrective retry per failure, supported
+  by a diagnosed cause or a changed input. Preserve every failed run; never retry
+  repeatedly to obtain a green result. Escalate a second failure of that case.
+- Report actual credit consumption only when supplied by the application. Tokens
+  and elapsed time are separate measurements, never credits or dollars. When an
+  actual credit budget is available and approved, warn at 75% and stop initiating
+  work at 90%. Otherwise report credit consumption as unavailable. Never invent
+  an enforced monetary or time cap.
+- Stop dependent work for an approval blocker, unexpected complexity, exhausted
+  retry allowance, scope expansion or budget boundary. Explain evidence, impact
+  and the smallest next decision before expanding scope. Complete independent
+  work only within the same approved segment and remaining allowance.
+- Track each acceptance criterion as complete, failed, blocked or outstanding,
+  with its evidence. A stale tracker is not an acceptance verdict.
+- End with files changed, exact test results, unresolved gaps, elapsed time and
+  available usage counters, Git status, checkpoint recommendation and next
+  proposed segment. Stop until the next segment is authorized.
+- A package may explicitly pre-authorize local commits at named verified
+  milestones: exact file scope, passing relevant checks, reviewed fingerprint,
+  accurate message and preserved failure evidence. Without that authorization,
+  recommend a commit and wait. WIP commits must be labelled WIP. Pushes, PRs and
+  merges remain separate actions under §16; no automatic history rewriting.
+
+These are procedural controls. Goal persistence does not itself enforce scope,
+wall-clock deadlines or monetary limits. Any technical enforcement must be
+verified separately; these instructions do not authorize building it.
+
 ## Closing Standard
 
 Every Codex session should leave The Dye Ledger safer, clearer, and easier to continue.

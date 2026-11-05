@@ -8,6 +8,52 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Microsoft.Win32.SafeHandles;
 namespace DyeJobs {
+ public sealed class Capture {
+  public const int Capacity=65536;
+  readonly byte[] buffer=new byte[Capacity];
+  readonly object gate=new object();
+  int length;
+  public long Total { get; private set; }
+  public bool Complete { get; private set; }
+  public bool Overflow { get; private set; }
+  public bool Faulted { get; private set; }
+  public bool Abandoned { get; private set; }
+  void Clear() { Array.Clear(buffer,0,length); length=0; }
+  internal void Append(byte[] chunk,int count) {
+   lock(gate) {
+    Total+=count;
+    if(Abandoned || Overflow || Faulted) return;
+    if(count>Capacity-length) { Overflow=true; Clear(); return; }
+    Buffer.BlockCopy(chunk,0,buffer,length,count);
+    length+=count;
+   }
+  }
+  internal void Finish() { lock(gate) { Complete=true; } }
+  internal void Fail() { lock(gate) { Faulted=true; Clear(); } }
+  public void Abandon() { lock(gate) { Abandoned=true; Clear(); } }
+  // Native-object seam for deterministic tests. Wire requests cannot supply a
+  // Stream; production passes only its owned anonymous-pipe read stream.
+  public void Drain(Stream stream) {
+   var chunk=new byte[4096];
+   try {
+    if(stream==null) throw new ArgumentNullException("stream");
+    int count;
+    while((count=stream.Read(chunk,0,chunk.Length))!=0) {
+     Append(chunk,count);
+     Array.Clear(chunk,0,count);
+    }
+    Finish();
+   } catch { Fail(); }
+   finally { Array.Clear(chunk,0,chunk.Length); }
+  }
+  public string Consume(Func<byte[],int,string> extract) {
+   lock(gate) {
+    if(!Complete || Overflow || Faulted || Abandoned) throw new InvalidOperationException("CAPTURE_UNAVAILABLE");
+    try { return extract(buffer,length); }
+    finally { Abandoned=true; Clear(); }
+   }
+  }
+ }
  public class Inspection { public bool Known,Alive; public long Created; public int Error; }
  [StructLayout(LayoutKind.Sequential)] public struct IO_COUNTERS { public ulong a,b,c,d,e,f; }
  [StructLayout(LayoutKind.Sequential)] public struct BASIC { public long a,b; public uint flags; public UIntPtr min,max; public uint active; public UIntPtr affinity; public uint priority, scheduling; }
@@ -42,6 +88,7 @@ namespace DyeJobs {
   public IntPtr Job { get; private set; }
   public PI Child;
   Task reader1,reader2;
+  readonly Capture capture1,capture2;
   static Exception Error(string step) { return new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(),step); }
   static void Require(bool ok,string step) { if(!ok) throw Error(step); }
   public static string Quote(string value) {
@@ -53,10 +100,27 @@ namespace DyeJobs {
   static Task Drain(IntPtr h,string file) {
    return Task.Run(()=> { using(var stream=new FileStream(new SafeFileHandle(h,true),FileAccess.Read)) using(var output=new FileStream(file,FileMode.CreateNew,FileAccess.Write,FileShare.Read)) { stream.CopyTo(output); output.Flush(true); } });
   }
+  static Task DrainToMemory(IntPtr h,Capture capture) {
+   return Task.Run(()=> {
+    try {
+     using(var stream=new FileStream(new SafeFileHandle(h,true),FileAccess.Read)) {
+      capture.Drain(stream);
+     }
+    } catch { capture.Fail(); }
+   });
+  }
   public Process(string executable,string[] args,string cwd,string stdout,string stderr) : this(executable,args,cwd,stdout,stderr,false) {}
   public Process(string executable,string[] args,string cwd,string stdout,string stderr,bool testBreakaway) : this(executable,args,cwd,stdout,stderr,testBreakaway,0) {}
   public Process(string executable,string[] args,string cwd,string stdout,string stderr,bool testBreakaway,long outerJob) : this(executable,args,cwd,stdout,stderr,testBreakaway,outerJob,false) {}
-  public Process(string executable,string[] args,string cwd,string stdout,string stderr,bool testBreakaway,long outerJob,bool testConsole) {
+  public Process(string executable,string[] args,string cwd,string stdout,string stderr,bool testBreakaway,long outerJob,bool testConsole) : this(executable,args,cwd,stdout,stderr,testBreakaway,outerJob,testConsole,null,null) {}
+  public Process(string executable,string[] args,string cwd,Capture stdout,Capture stderr) : this(executable,args,cwd,null,null,false,0,false,RequireCapture(stdout),RequireCapture(stderr)) {}
+  static Capture RequireCapture(Capture capture) {
+   if(capture==null) throw new ArgumentNullException("capture");
+   return capture;
+  }
+  Process(string executable,string[] args,string cwd,string stdout,string stderr,bool testBreakaway,long outerJob,bool testConsole,Capture stdoutCapture,Capture stderrCapture) {
+   if(stdoutCapture!=null && Object.ReferenceEquals(stdoutCapture,stderrCapture)) throw new ArgumentException("CAPTURE_ALIAS");
+   capture1=stdoutCapture; capture2=stderrCapture;
    Job=CreateJobObject(IntPtr.Zero,null); if(Job==IntPtr.Zero) throw Error("CreateJobObject");
    IntPtr read1=IntPtr.Zero,write1=IntPtr.Zero,read2=IntPtr.Zero,write2=IntPtr.Zero,list=IntPtr.Zero,handles=IntPtr.Zero;
    bool started=false;
@@ -77,7 +141,8 @@ namespace DyeJobs {
     Require(CreateProcessW(executable,cmd,IntPtr.Zero,IntPtr.Zero,true,0x80000|0x4|(testConsole ? 0x10u : 0x8000000u)|(testBreakaway ? 0x1000000u : 0u),IntPtr.Zero,cwd,ref si,out Child),"Create suspended child"); started=true;
     if(outerJob!=0) Require(AssignProcessToJobObject(new IntPtr(outerJob),Child.process),"Assign outer job before resume");
     Require(AssignProcessToJobObject(Job,Child.process),"Assign child before resume");
-    reader1=Drain(read1,stdout); read1=IntPtr.Zero; reader2=Drain(read2,stderr); read2=IntPtr.Zero;
+    reader1=capture1==null ? Drain(read1,stdout) : DrainToMemory(read1,capture1); read1=IntPtr.Zero;
+    reader2=capture2==null ? Drain(read2,stderr) : DrainToMemory(read2,capture2); read2=IntPtr.Zero;
     if(ResumeThread(Child.thread)==0xffffffff) throw Error("ResumeThread");
    } catch { if(started) TerminateProcess(Child.process,98); Kill(); Dispose(); throw; }
    finally {
@@ -254,11 +319,16 @@ namespace DyeJobs {
    try { Require(QueryInformationJobObject(Job,1,data,48,IntPtr.Zero),"Query job accounting"); return Marshal.ReadInt32(data,40)==0; }
    finally { Marshal.FreeHGlobal(data); }
   }
+  public bool WaitCaptures(int ms) {
+   if(capture1==null || ms<0 || ms>1000) throw new ArgumentException("INVALID_CAPTURE_WAIT");
+   return Task.WaitAll(new[]{reader1,reader2},ms);
+  }
   public void Dispose() {
    if(Job!=IntPtr.Zero) { CloseHandle(Job); Job=IntPtr.Zero; }
    if(Child.thread!=IntPtr.Zero) { CloseHandle(Child.thread); Child.thread=IntPtr.Zero; }
    if(Child.process!=IntPtr.Zero) { CloseHandle(Child.process); Child.process=IntPtr.Zero; }
-   try { if(reader1!=null) reader1.Wait(2000); if(reader2!=null) reader2.Wait(2000); } catch { }
+   if(capture1!=null) { capture1.Abandon(); capture2.Abandon(); }
+   else { try { if(reader1!=null) reader1.Wait(2000); if(reader2!=null) reader2.Wait(2000); } catch { } }
   }
  }
 }

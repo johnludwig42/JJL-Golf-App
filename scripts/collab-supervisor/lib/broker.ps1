@@ -2,10 +2,12 @@
 # coordinator's libuv job. Both siblings are assigned to J0 before resuming.
 function Start-DyeStep([string]$SpecPath,$RootSpec,$Coordinator,$ProbeRoot=$null,[string]$ManifestPath='',[string]$ManifestHash='') {
     $probeArgs=@()
+    $harness=@('-TestHarness')
     if($null -ne $ProbeRoot){
         $sealed=New-DyeProbeConsumption $SpecPath $ProbeRoot $ManifestHash $Coordinator
         $step=$sealed.step
-        $probeArgs=@('-ProbeMode','fake','-ManifestPath',$ManifestPath,'-ManifestHash',$ManifestHash,'-ConsumptionPath',$sealed.consume)
+        $probeArgs=@('-ProbeMode',$ProbeRoot['mode'],'-ManifestPath',$ManifestPath,'-ManifestHash',$ManifestHash,'-ConsumptionPath',$sealed.consume)
+        if($ProbeRoot['mode'] -ceq 'live-nonmodel'){$harness=@()}
     }else{$step = Read-FakeSpec $SpecPath -TestHarness}
     if ([int]$step.parentPid -ne $Coordinator.Pid -or [string]$step.parentCreated -ne $Coordinator.Created.ToString()) { throw 'Step parent identity mismatch' }
     $psExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
@@ -21,7 +23,7 @@ function Start-DyeStep([string]$SpecPath,$RootSpec,$Coordinator,$ProbeRoot=$null
             $psExe=Get-DyeSystemPowerShellPath
             if($psExe.ToUpperInvariant() -cne $ProbeRoot['powershell_executable'] -or (Get-DyeProbeHash $psExe) -cne $ProbeRoot['powershell_hash']){throw 'System PowerShell changed before wrapper launch'}
         }
-        $owner = New-Object DyeJobs.Process($psExe,[string[]](@('-NoProfile','-ExecutionPolicy','Bypass','-File',$wrapper,'-SpecPath',$SpecPath,'-TestHarness')+$probeArgs),$RootSpec.cwd,($SpecPath+'.wrapper.stdout'),($SpecPath+'.wrapper.stderr'),$false,$Coordinator.Job.ToInt64())
+        $owner = New-Object DyeJobs.Process($psExe,[string[]](@('-NoProfile','-ExecutionPolicy','Bypass','-File',$wrapper,'-SpecPath',$SpecPath)+$harness+$probeArgs),$RootSpec.cwd,($SpecPath+'.wrapper.stdout'),($SpecPath+'.wrapper.stderr'),$false,$Coordinator.Job.ToInt64())
     } finally {foreach($key in $old.Keys){[Environment]::SetEnvironmentVariable($key,$old[$key])}}
     if ($step.wrapperPid) { [IO.File]::WriteAllText([string]$step.wrapperPid,$owner.Pid.ToString()) }
     return @{owner=$owner;step=$step;path=$SpecPath;released=$false;recorded=$false}

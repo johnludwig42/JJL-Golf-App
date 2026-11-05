@@ -5,10 +5,12 @@ import { report } from './lib/report.js';
 import { fakeCommand } from './lib/fake-runtime.js';
 import { EXIT } from './lib/state.js';
 import { platformCommand } from './lib/platform-probes.js';
+import { liveProbeCommand } from './lib/live-probes.js';
 
 export function main(args) {
   const [command, path] = args;
   if (command === 'platform-probes') {
+    if (args[1] === 'live') return liveProbeCommand(args.slice(2));
     if (args[1] !== 'fake') refuseReal();
     return platformCommand(args.slice(1));
   }

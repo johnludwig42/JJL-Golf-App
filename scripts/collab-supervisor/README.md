@@ -1,11 +1,12 @@
-# Collaboration supervisor — Phase A
+# Collaboration supervisor â€” Phase A
 
-This is the fake-only implementation for WP-AUTO-01. It does **not** start an
-overnight session. No real agent adapter, installed CLI discovery, auth probe,
-real approval, deployment or scheduler is enabled. The complete CLI works only
-with marked disposable repositories and evidence below OS Temp; it rejects the
-project checkout, everything under `C:\Projects` and any repository with a remote.
-Changing a flag or supplying a platform record cannot enable real execution.
+The WP-AUTO-01 supervisor remains fake-only. It does **not** start an overnight
+session. Its work-package commands require marked disposable repositories and
+evidence below OS Temp; they reject the project checkout, everything under
+`C:\Projects` and any repository with a remote. WP-AUTO-02 Stage 2a adds a separate
+non-model inventory transport whose real-class execution requires the protected
+area and separately bound approval. Only its fake fixture route has been exercised.
+No real agent adapter, model work, deployment or scheduler is enabled.
 John must separately approve Phase B and Phase C, with a new plan review and
 reviewed implementation before real agents can run.
 
@@ -16,8 +17,8 @@ README describes the current implementation, not permission to operate it.
 
 - `supervisor.js`: fake-only `approve`, `run`, `resume`, `recover`, `status`.
   Requires `DYE_SUPERVISOR_TEST=1`, fake kind/mode, TestHarness, pinned fixture
-  bytes and a matching disposable repository marker. Live `platform-probes` refuses;
-  Stage 1a adds only the separate synthetic route described below.
+  bytes and a matching disposable repository marker. Stage 1a's synthetic probes
+  and Stage 2a's approval-gated non-model inventory are separate dispatch routes.
 - `lib/fake-config.js`, `fake-runtime.js`, `coordinator.js`: composition root,
   actual disposable worktrees/checks, step broker, locks, sweep and crash recovery.
 - `lib/state.js`: coordinator, maximum two correction rounds;
@@ -47,6 +48,61 @@ No new dependency or package script is needed. The regular test suite includes
 `tests/collab-supervisor.test.js`; manual shutdown tests stay outside `npm test`.
 
 ## Offline verification
+
+The Stage 2a coexistence fixture uses a protected `_stage2` sibling of its
+disposable Stage 1b `_supervisor` tree. It exercises the launcher, broker and
+wrapper with the hash-pinned fake CLI. The wrapper captures auth output in
+memory and writes only the redacted shape. The test checks both job evidence
+chains and verifies that Stage 1b Restore preserves the sibling evidence.
+
+```powershell
+$env:DYE_SETUP_TEST = '1'
+node --test scripts/collab-supervisor/acceptance/stage2-area.test.js
+Remove-Item Env:DYE_SETUP_TEST
+```
+
+This fixture creates protected directories and changes permissions only in a
+new OS Temp tree with fixture SID `S-1-5-7`. The result class is `live-test`
+and its real results remain `UNVERIFIED`.
+
+Stage 2a is build-and-fixture verification, not permission to run installed tools.
+The protected inventory entry requires separately bound S2-C approval and the
+exact protected area. Probe execution and model work still refuse. A fixture
+record cannot be used by the real inventory result projector; bootstrap auth
+remains `UNVERIFIED (bootstrap)` even when the shape contains `loggedIn: true`.
+
+The area verifier requires the successful provisioning receipt as well as the
+bound `area.json`, native file identities, permissions and Stage 1b snapshot.
+An interrupted provisioning attempt retains its objects and failure journal; a
+readable but unfinished area record is insufficient. The fixture-only fault
+switch is rejected without both `-Fixture` and `DYE_SETUP_TEST=1`.
+
+Auth capture retains at most 65,536 bytes per pipe and drains/discards overflow.
+Credential-like output stops without a shape or raw digest. Retained hit details
+are fixed categories and line numbers only. Native-stream and extraction seams
+allow deterministic failures in tests; no request field can select them. The
+legacy file-output drain remains unchanged. Shutdown operator cases remain
+John's responsibility after review of the final code and runner.
+
+The held-pipe test generates a fixed, hash-pinned helper only in its disposable
+fixture. Under John's A12 exception, that helper duplicates only its stdout pipe
+into the identity-checked test driver. It never duplicates a job handle. The
+production sources contain no handle-duplication call. This tests the bounded
+`CAPTURE_INCOMPLETE` outcome; it does not authorize a real helper or agent run.
+
+File-routed inventory output stays in the protected run's `raw` directory.
+Ordinary help/result publication scans both streams first; a sentinel/token
+pattern or invalid UTF-8 quarantines the case without publishing its projection.
+Auth never enters that file scanner. Its only publication is the validated
+bootstrap shape or fixed stop record. Missing commands are NOT_RUN and do not
+trigger a substitute command. Ordinary artifacts are exclusive writes.
+
+The Stage 2 process-observation helper is separate from the Phase A marker sweep:
+it reports identities and per-field errors and never terminates a process. The
+collector's token fields are observations, not proof of confinement. Fixture
+checks query only their own child PIDs. Real owner discovery remains gated by
+separate inventory/probe approval. Payload tree descendants remain alive until
+the test-owned job terminates them; fixture network operations always refuse.
 
 From the project checkout:
 
@@ -134,7 +190,7 @@ check execution is pinned by the baseline closure comparison. The wrapper check
 does not authenticate a same-user writer or bind a spool request to the launch
 spec. Such a request still runs inside J0; same-user forgery is not prevented.
 
-### Operator-only cases — implemented, not run by Codex
+### Operator-only cases â€” implemented, not run by Codex
 
 WMI escape, Ctrl+C and console-close have executable test bodies. They are skipped
 by default; both the Node entry and PowerShell action helper require operator
@@ -174,8 +230,8 @@ only marked disposable data; no real CLI, user console or credential is a target
 
 ## State, budget and evidence
 
-The fake coordinator follows PRECHECK → PREPARE_WORKTREE → IMPLEMENT → CAPTURE →
-CHECK → REVIEW, then READY or at most two CORRECT/review rounds. Missing mandatory
+The fake coordinator follows PRECHECK â†’ PREPARE_WORKTREE â†’ IMPLEMENT â†’ CAPTURE â†’
+CHECK â†’ REVIEW, then READY or at most two CORRECT/review rounds. Missing mandatory
 criteria, failed/NOT_RUN checks or unresolved findings prevent READY. Agent output
 cannot authorize a command. Defined stops and refusals have distinct library exit
 codes, also returned by the CLI.
@@ -192,7 +248,7 @@ or correction steps require an owner choice. Sleep/hibernate is unverified.
 
 One lock belongs to the configured evidence root. A flushed complete temporary
 file is atomically linked into place, then that call's transient name is removed.
-Per package §9, a lock is held only when both PID and creation time match a live
+Per package Â§9, a lock is held only when both PID and creation time match a live
 owner. A reused PID means the recorded owner is dead; its current occupant is
 never terminated by recovery. Both owners must be dead for LOCK_STALE. Creation
 times are compared as exact canonical decimal FILETIME strings, never rounded
@@ -259,7 +315,7 @@ row stays UNVERIFIED, including rows whose fake subtests pass.
 | --- | --- |
 | G1 | Historical D8 PASS on Stage 0 `5c4e092` (John's run, Claude-reviewed, 2026-11-01). Stage 1a final-byte operator rerun NOT_RUN. Identity uses attached console clients/window plus rechecked process/job identities; window-owner PID is observational. Sweep sees only `node.exe` with run marker and fixture on its command line; real CLI B8 UNVERIFIED |
 | G2 | Sweep covers only `node.exe` with run marker and fixture on its command line; other escaped executables/shells not identified; elevated/broker descendants B1 UNVERIFIED |
-| G3–G8 | Write/read/network/tool/MCP/Claude confinement B2–B6 UNVERIFIED |
+| G3â€“G8 | Write/read/network/tool/MCP/Claude confinement B2â€“B6 UNVERIFIED |
 | G9 | A3 dispatch/argv refusal tests; fake-only |
 | G10 | A3 closure drift and actual fixed fake-check executor |
 | G11 | A2 real disposable Git pointer/ref/fsmonitor and link tests |
@@ -275,11 +331,11 @@ row stays UNVERIFIED, including rows whose fake subtests pass.
 | G20 | Sleep/hibernate UNVERIFIED; unattended operation blocked |
 | G21 | A13 real dispatch refused even with forged platform record |
 
-Criteria 1–3, 5–12 map to A1–A4/A6–A13; criterion 4 is manual A5.
+Criteria 1â€“3, 5â€“12 map to A1â€“A4/A6â€“A13; criterion 4 is manual A5.
 Criterion 13 is Phase B, 14 is Phase C, and 15 requires Claude's independent
 implementation verdict. The handoff records any unmet or partially tested item.
 
-## Phase B setup — NOT APPLIED
+## Phase B setup â€” NOT APPLIED
 
 Stage 1b adds setup tooling, not an installed environment. Nothing here grants
 permission to apply it. The owner runs Plan only after independent build review;
@@ -424,7 +480,7 @@ The following later steps require separate approvals and reviewed plans:
    locations and permission policy; review every concrete permission change.
 3. Implement and verify real runtime adapters and platform probes. Do not turn
    the Phase A refusal into a configuration bypass.
-4. Run B1–B8 and review all required rows for the exact bundle/versions. B9 is a
+4. Run B1â€“B8 and review all required rows for the exact bundle/versions. B9 is a
    separately reviewed optional check sandbox. Failed/NOT_RUN gates block Phase C.
 5. Obtain separate Phase C approval for the bounded attended pilot. READY never
    authorizes commit, push, merge, deployment, database changes or spending.
@@ -439,7 +495,7 @@ Open Phase B design items (not implemented or verified here):
 Do not create `_supervisor`, install sentinels, change ACLs, call real CLIs or
 start a pilot using this Phase A package.
 
-## Stage 1a — synthetic probe tooling only
+## Stage 1a â€” synthetic probe tooling only
 
 The owner-approved Q4 amendment permits multiple links only for the fixed system
 PowerShell runtime role. Correction-round implementation is pending independent
@@ -451,7 +507,7 @@ before executable lookup or launch. `realEligibility` remains an unwired legacy
 predicate, not dispatch authority. A later reviewed code change is required for
 live probes. No model invocation, external request, setup action, account or
 permission change, sentinel, profile read, or `_supervisor` installation occurs.
-Real B0–B8 results remain UNVERIFIED; fake success cannot satisfy them.
+Real B0â€“B8 results remain UNVERIFIED; fake success cannot satisfy them.
 
 Probe fixtures also require a single-link Git executable. When the PATH `cmd/git.exe`
 has multiple links, the shared fixture factory may use the already installed
@@ -545,7 +601,7 @@ exact action approval. No command in this section applies setup.
 | Legacy fields cannot activate probes | `probe.legacy_entry` |
 | Setup refusal | `probe.setup` |
 | Final launch-byte operator proof | NOT_RUN by Codex; John runs the reviewed runner |
-| B0–B8 real platform protections, B8 real tools | UNVERIFIED; no live backend in this stage |
+| B0â€“B8 real platform protections, B8 real tools | UNVERIFIED; no live backend in this stage |
 
 Required verification includes `tests/collab-platform-probes.test.js`, the existing
 supervisor and CLI suites, `acceptance/platform-probes.test.js`, non-operator A5,

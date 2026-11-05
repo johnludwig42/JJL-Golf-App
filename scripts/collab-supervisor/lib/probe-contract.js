@@ -1,4 +1,4 @@
-// Stage 1a: synthetic contracts only. There is deliberately no live resolver.
+// Sealed fake contracts and separately approved non-model inventory templates.
 import { readFileSync, lstatSync, realpathSync, existsSync, openSync, writeFileSync, fsyncSync, closeSync } from 'node:fs';
 import { win32 } from 'node:path';
 import { TextDecoder } from 'node:util';
@@ -6,6 +6,7 @@ import { Buffer } from 'node:buffer';
 import { tmpdir, homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { fault, hash } from './policy.js';
+import { AUTH_KEYS, AUTH_WORDS } from './auth.js';
 import { remaining } from './budget.js';
 
 export const PROBE_REGISTRY = Object.freeze({
@@ -13,7 +14,7 @@ export const PROBE_REGISTRY = Object.freeze({
   auth: Object.freeze({ scenario: 'probe-auth', stage: 'synthetic', realResult: 'UNVERIFIED' }),
   refusal: Object.freeze({ scenario: 'probe-refusal', stage: 'synthetic', realResult: 'UNVERIFIED' })
 });
-// Descriptions only: no executable template, resolver or live adapter exists.
+// Platform probes remain descriptions/refusals; inventory authority cannot run them.
 export const REAL_PROBE_REQUIREMENTS = Object.freeze(Object.fromEntries([
   ['B0','Reviewed setup and original-ACL capture','1b'],
   ['B1','Real descendant containment and escape sweep','2'],
@@ -31,6 +32,56 @@ const integers = new Set('schema total_ms grace_ms started_at parent_pid launche
 const pathKeys = new Set('config_path transport_path executable fixture cwd stdout stderr ready done steps_dir owner_stop agent_fixture lock_path consume_path receipt_path manifest_path release'.split(' '));
 const shaKeys = new Set('manifest_hash request_hash registry_hash config_hash transport_hash executable_hash fixture_hash approval_hash'.split(' '));
 const enums = { mode: ['fake'], type: ['manifest', 'request', 'consumption', 'started', 'vector'] };
+const stage2Fields = new Set('run_class output_route template_hash shape area_path area_record_hash area_volume area_file_id run_dir_file_id approval_file_id approval_path auth_shape_hash attest_hash identity_hash payload_hash payload_path payload_id worktree target_executable target_hash inventory_registry_hash inventory_bundle_hash'.split(' '));
+export const INVENTORY_TEMPLATES = Object.freeze(Object.fromEntries([
+  ['c-v','codex',['--version']],
+  ['c-h1','codex',['--help']],
+  ['c-h2','codex',['sandbox','--help']],
+  ['c-h3','codex',['exec','--help']],
+  ['c-a','codex',['login','status']],
+  ['l-v','claude',['--version']],
+  ['l-h1','claude',['--help']],
+  ['l-h2','claude',['auth','--help']],
+  ['l-a','claude',['auth','status','--json']]
+].map(([id, role, argv]) => [id, Object.freeze({
+  role, argv: Object.freeze(argv), timeoutMs: 60000,
+  route: id.endsWith('-a') ? 'memory-shape' : 'file',
+  format: id === 'c-a' ? 'text' : 'json',
+  env: Object.freeze(role === 'claude' ? { DISABLE_AUTOUPDATER: '1', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' } : {})
+})])));
+export const inventoryRegistryHash = hash(JSON.stringify({ templates: INVENTORY_TEMPLATES, keys: AUTH_KEYS, words: AUTH_WORDS }));
+// This validates already observed bindings. It performs no lookup or execution.
+export function bindInventoryApproval(approval, binding) {
+  const template = INVENTORY_TEMPLATES[binding?.templateId];
+  const refuse = message => { throw fault('NOT_APPROVED', message); };
+  if (!template || !approval || approval.kind !== 'S2-C' || approval.mode !== 'live-nonmodel' ||
+      !['live-test', 'live-real'].includes(binding.runClass) || approval.runClass !== binding.runClass ||
+      approval.inventoryRegistryHash !== inventoryRegistryHash || approval.bundleHash !== binding.bundleHash ||
+      !/^[A-F0-9]{64}$/.test(binding.bundleHash ?? '') || approval.runId !== binding.runId ||
+      !/^dye-live-[a-f0-9-]{36}$/.test(binding.runId ?? '')) refuse('Inventory approval binding mismatch');
+  if (!Array.isArray(approval.templateIds) || approval.templateIds.length === 0 ||
+      new Set(approval.templateIds).size !== approval.templateIds.length ||
+      approval.templateIds.some(id => !Object.hasOwn(INVENTORY_TEMPLATES, id)) ||
+      !approval.templateIds.includes(binding.templateId)) refuse('Inventory template not approved');
+  if (typeof approval.providerContactAllowed !== 'boolean' ||
+      approval.providerContactAllowed !== binding.providerContactAllowed) refuse('Provider contact decision missing or changed');
+  const pin = approval.tools?.[template.role];
+  const observed = binding.tools?.[template.role];
+  if (!pin || !observed || !/^[A-Za-z]:\\[^\r\n]+$/.test(pin.path ?? '') ||
+      !/^[A-F0-9]{64}$/.test(pin.sha256 ?? '') || pin.path !== observed.path ||
+      pin.sha256 !== observed.sha256) refuse('Inventory executable pin mismatch');
+  const environment = approval.environments?.[template.role];
+  if (!environment || typeof environment !== 'object' || Array.isArray(environment) ||
+      Object.keys(environment).length !== Object.keys(template.env).length ||
+      Object.entries(template.env).some(([key, value]) => environment[key] !== value)) {
+    refuse('Inventory environment mismatch');
+  }
+  return Object.freeze({ templateId: binding.templateId, executable: pin.path, executableHash: pin.sha256,
+    argv: template.argv, environment: template.env, timeoutMs: template.timeoutMs,
+    outputRoute: template.route, registryHash: inventoryRegistryHash });
+}
+for(const key of ['shape','area_path','approval_path','payload_path','worktree','target_executable']) pathKeys.add(key);
+for(const key of ['template_hash','area_record_hash','auth_shape_hash','attest_hash','identity_hash','payload_hash','target_hash','inventory_registry_hash','inventory_bundle_hash']) shaKeys.add(key);
 const requireThat = (ok, message) => { if (!ok) throw fault('INTEGRITY', message); };
 keys.add('repository'); pathKeys.add('repository');
 for(const key of ['powershell_executable','git_executable']){keys.add(key);pathKeys.add(key);}
@@ -86,13 +137,14 @@ function powerShellTuple(value) {
   return expected.toUpperCase();
 }
 
-export function canonicalWire(row) {
+export function canonicalWire(row, mode = 'fake') {
   const sorted = Object.fromEntries(Object.keys(row).sort().map(key => [key, row[key]]));
   const bytes = Buffer.from(JSON.stringify(sorted) + '\n');
-  parseWire(bytes, { paths: false });
+  parseWire(bytes, { paths: false, mode });
   return bytes;
 }
-export function parseWire(bytes, { paths = true } = {}) {
+export function parseWire(bytes, { paths = true, mode = 'fake' } = {}) {
+  requireThat(mode === 'fake' || mode === 'live-nonmodel', 'Unknown wire mode');
   // Validate tokens before interpreting JSON: duplicate/case-folded keys never disappear.
   const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
   requireThat(text.length <= 65536 && text.endsWith('\n') && !text.includes('\r'), 'Wire framing');
@@ -104,7 +156,7 @@ export function parseWire(bytes, { paths = true } = {}) {
     field.lastIndex = position; const match = field.exec(text);
     requireThat(match && match.index === position, 'Noncanonical token');
     const [, key, token] = match;
-    requireThat(key > previous && (keys.has(key) || /^(argv_[0-9]{4}|env_[0-9]{4}_(name|value))$/.test(key)), 'Unknown, duplicate or unsorted field');
+    requireThat(key > previous && (keys.has(key) || (mode === 'live-nonmodel' && stage2Fields.has(key)) || /^(argv_[0-9]{4}|env_[0-9]{4}_(name|value))$/.test(key)), 'Unknown, duplicate or unsorted field');
     previous = key; position = field.lastIndex;
     const value = JSON.parse(token);
     const numeric = integers.has(key);
@@ -115,14 +167,15 @@ export function parseWire(bytes, { paths = true } = {}) {
     if (key === 'grace_ms') requireThat(value <= 2000, 'Grace limit');
     if (shaKeys.has(key)) requireThat(/^[A-F0-9]{64}$/.test(value), 'Hash spelling');
     if (key.endsWith('_created')) requireThat(/^[1-9][0-9]{0,18}$/.test(value) && BigInt(value) <= 9223372036854775807n, 'FILETIME spelling');
-    if (enums[key]) requireThat(enums[key].includes(value), 'Unknown enum');
-    if (key === 'probe_id') requireThat(Object.hasOwn(PROBE_REGISTRY, value), 'Unknown probe');
+    if (key === 'mode') requireThat(value === mode, 'Wire mode mismatch');
+    else if (enums[key]) requireThat(enums[key].includes(value), 'Unknown enum');
+    if (key === 'probe_id') requireThat(mode === 'fake' ? Object.hasOwn(PROBE_REGISTRY, value) : /^[a-z][a-z0-9-]{0,31}$/.test(value), 'Unknown probe');
     row[key] = paths && key==='powershell_executable' ? powerShellTuple(value) : paths && pathKeys.has(key) ? pathTuple(value, { output: !['powershell_executable','git_executable','repository', 'config_path', 'transport_path', 'executable', 'fixture', 'cwd', 'steps_dir', 'agent_fixture', 'manifest_path'].includes(key) }) : value;
     if (text[position] === ',') { position++; requireThat(text[position] !== '}', 'Trailing comma'); }
     else break;
   }
   requireThat(text.slice(position) === '}\n', 'Trailing data');
-  requireThat(row.schema === 1 && row.mode === 'fake' && enums.type.includes(row.type), 'Required wire header');
+  requireThat(row.schema === 1 && row.mode === mode && enums.type.includes(row.type), 'Required wire header');
   if(paths && Object.hasOwn(row,'powershell_executable'))requireThat(hash(readFileSync(systemPowerShellPath()))===row.powershell_hash,'System PowerShell hash mismatch');
   for (const prefix of ['argv', 'env']) {
     const count = row[prefix + '_count'] ?? 0;
@@ -141,14 +194,14 @@ export function readWire(path, expectedHash, options) {
   requireThat(!expectedHash || hash(bytes) === expectedHash, 'Wire hash mismatch');
   return parseWire(bytes, options);
 }
-export function writeWire(path, row) {
+export function writeWire(path, row, mode = 'fake') {
   pathTuple(path, { output: true });
-  const bytes = canonicalWire(row), fd = openSync(path, 'wx');
+  const bytes = canonicalWire(row, mode), fd = openSync(path, 'wx');
   try { writeFileSync(fd, bytes); fsyncSync(fd); } finally { closeSync(fd); }
   return hash(bytes);
 }
-export function publishProbeRequest(path, row) {
-  const sealed = writeWire(path, row);
+export function publishProbeRequest(path, row, mode = 'fake') {
+  const sealed = writeWire(path, row, mode);
   // Directory enumeration may see the request while its bytes are being written.
   // An empty exclusive completion marker is published only after fsync+close.
   // It is a visibility barrier, not authentication; the sealed hashes bind data.

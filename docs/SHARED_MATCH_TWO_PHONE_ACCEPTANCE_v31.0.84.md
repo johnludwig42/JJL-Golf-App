@@ -1,6 +1,9 @@
 # v31.0.84 — physical two-phone acceptance
 
-Status: NOT_RUN. Requires a separately approved, phone-accessible staging website
+Status: PASS (owner-attested), accepted by John on November 7, 2026. See the
+[acceptance audit and accepted limitations](audits/v31.0.84-physical-two-phone-acceptance.md).
+
+For future runs, use a separately approved, phone-accessible staging website
 using staging project darbakmabpbkikisadop. Do not use production for this test.
 Both phones must show v31.0.84. Use clearly named synthetic golfers/rounds.
 

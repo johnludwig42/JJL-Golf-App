@@ -1,5 +1,24 @@
 # The Dye Ledger — PROJECT_CONTEXT.md
 
+November 7, 2026: WP-SM-01 physical two-phone acceptance of v31.0.84 is
+PASS (owner-attested), accepted by John with documented limitations. Round
+DYE-276167 used iPhone 15 Pro Max / iPhone 15 Pro, iOS 26.6.2, Safari tabs.
+Owner confirmed offline pending persistence, assigned-device/host takeover
+reconciliation, 18-hole zero-pending Confirmed parity and matching totals, remote
+exit, Ledger settlement and freeze persistence. Screenshots establish early-round
+parity/assignments only; final outcomes are owner-attested. Home Screen mode and
+AI-service success remain NOT_RUN; AI failed and facts-only fallback succeeded.
+Netlify staging stays up under approved HX-2. Badge overlap of non-required Share
+Code and script-check timing inside the stated round window were accepted.
+The separate offline page-caching concern and AI failure cause remain open.
+This supersedes the historical physical-phone NOT_RUN below for this scope, not
+the broader staging/server matrix. See docs/audits/v31.0.84-physical-two-phone-acceptance.md.
+Reviewed staging-host tooling adds -Netlify with -BuildOnly to
+scripts/start-staging-preview.ps1, producing an isolated, staging-only upload
+folder with the STAGING manifest label, noindex/robots protections and SHA-256
+file list; tests/shared-match-netlify-build.test.js covers build safeguards.
+No app runtime, release identity or SQL change.
+
 October 30 v31.0.84 Assigned Device Reconciliation implements the approved client
 fix for both canonical ownership and explicit host-authority gates. Pending cells,
 paired writes, newer local intent, unreadable queue protection and frozen records

@@ -35,6 +35,14 @@ function fixture(t, projectRef = stage) {
     mkdirSync(dirname(join(root, path)), { recursive: true });
     cpSync(join(repo, path), join(root, path));
   }
+  // Match the staging builder's five known current-release icons even before
+  // the release commit. Keep these extra copies untracked in the fixture too.
+  for (const name of ['app-icon-192', 'app-icon-512', 'apple-touch-icon', 'favicon-32', 'favicon-16']) {
+    const asset = `branding/${name}-v${version}.png`;
+    if (paths.includes(asset)) continue;
+    mkdirSync(dirname(join(root, asset)), { recursive: true });
+    cpSync(join(repo, asset), join(root, asset));
+  }
   writeFileSync(join(root, 'supabase-config.js'), `window.__DYE_SUPABASE_CONFIG__ = {url: 'https://${production}.supabase.co', anonKey: '${productionKey}'};`);
   mkdirSync(join(root, settingsDir), { recursive: true });
   writeFileSync(join(root, settingsDir, 'preview-settings.json'), JSON.stringify({

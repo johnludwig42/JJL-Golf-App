@@ -268,7 +268,7 @@ test('service worker updates are waiting-worker driven and never force a mid-rou
   assert.doesNotMatch(worker.match(/self\.addEventListener\('install'[\s\S]*?\n\}\);/)?.[0] || '', /skipWaiting/);
   assert.match(worker, /message[\s\S]*SKIP_WAITING[\s\S]*skipWaiting/);
   assert.match(worker, /request\.mode === 'navigate'[\s\S]*networkFirstNavigation\(event\.request\)/);
-  assert.match(worker, /caches\.match\('\.\/index\.html'\)/);
+  assert.match(worker, /caches\.match\(APP_SHELL_URL\)/);
   assert.match(app, /function triggerAppUpdate\(\)\s*\{\s*refreshPwaNow\(\{ force: false \}\);/);
   assert.doesNotMatch(app, /Refresh Now Anyway/);
 });

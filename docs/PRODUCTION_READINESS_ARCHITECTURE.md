@@ -118,7 +118,7 @@ The v30.3.70 worker precaches a versioned shell but does not call `skipWaiting()
 
 The page blocks ordinary refresh while setup, scoring, unsaved score inputs, blocking dialogs, imports, or other unsafe workflows are active. The update banner remains available and changes to “Refresh When Safe”; it does not expose a routine force-through path. Cache reset remains an explicit confirmed support operation.
 
-Navigation requests are network-first with cached `index.html`/root fallback. Static same-origin assets are cache-first and successful fetches are added to the current cache. Activation removes only older Dye Ledger caches and then claims clients.
+Main-app navigation is network-first with cached `index.html`/root fallback; Ledger navigation uses its own precached shell offline and never replaces the app shell, while other navigations retain browser-default handling. Static same-origin assets are cache-first and successful fetches are added to the current cache. Activation removes only older Dye Ledger caches and then claims clients.
 
 ## Failure communication and diagnostics
 

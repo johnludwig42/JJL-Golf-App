@@ -1,35 +1,39 @@
 const BUILD_INFO = {
-  version: 'v31.0.84',
-  versionNumber: '31.0.84',
-  cacheName: 'the-dye-ledger-v31.0.84',
-  buildDate: '2026-10-30T10:30:00.000Z'
+  version: 'v31.0.85',
+  versionNumber: '31.0.85',
+  cacheName: 'the-dye-ledger-v31.0.85',
+  buildDate: '2026-11-08T15:10:54.917Z'
 };
 const CACHE_NAME = BUILD_INFO.cacheName;
+const SCOPE_URL = new URL('./', self.location.href);
+const APP_SHELL_URL = new URL('./index.html', SCOPE_URL).href;
+const APP_ROOT_URL = SCOPE_URL.href;
+const LEDGER_SHELL_URL = new URL('./ledger-report/shell.html', SCOPE_URL).href;
 const ASSETS = [
   './',
   './index.html',
-  './app-components.css?v=31.0.84',
-  './app-print.css?v=31.0.84',
-  './app-presentation.js?v=31.0.84',
-  './style.css?v=31.0.84&rev=202610301030',
-  './preserved-score-review.js?v=31.0.84',
-  './app.js?v=31.0.84&rev=202610301030',
-  './identity-security.js?v=31.0.84&rev=202610301030',
-  './supabase-config.js?v=31.0.84&rev=202610301030',
-  './manifest.json?v=31.0.84&rev=202610301030',
-  './branding/apple-touch-icon-v31.0.84.png',
-  './branding/favicon-32-v31.0.84.png',
-  './branding/favicon-16-v31.0.84.png',
-  './branding/app-icon-192-v31.0.84.png',
-  './branding/app-icon-512-v31.0.84.png',
+  './app-components.css?v=31.0.85',
+  './app-print.css?v=31.0.85',
+  './app-presentation.js?v=31.0.85',
+  './style.css?v=31.0.85&rev=202611081510',
+  './preserved-score-review.js?v=31.0.85',
+  './app.js?v=31.0.85&rev=202611081510',
+  './identity-security.js?v=31.0.85&rev=202611081510',
+  './supabase-config.js?v=31.0.85&rev=202611081510',
+  './manifest.json?v=31.0.85&rev=202611081510',
+  './branding/apple-touch-icon-v31.0.85.png',
+  './branding/favicon-32-v31.0.85.png',
+  './branding/favicon-16-v31.0.85.png',
+  './branding/app-icon-192-v31.0.85.png',
+  './branding/app-icon-512-v31.0.85.png',
   './ledger-report/shell.html',
-  './ledger-report/bootstrap.js?v=31.0.84',
-  './ledger-report/pack.js?v=31.0.84',
-  './ledger-report/engines.js?v=31.0.84',
-  './ledger-report/stroke-play.js?v=31.0.84',
-  './ledger-report/logic.js?v=31.0.84',
-  './ledger-report/report.js?v=31.0.84',
-  './ledger-report/flamtana-evidence.js?v=31.0.84',
+  './ledger-report/bootstrap.js?v=31.0.85',
+  './ledger-report/pack.js?v=31.0.85',
+  './ledger-report/engines.js?v=31.0.85',
+  './ledger-report/stroke-play.js?v=31.0.85',
+  './ledger-report/logic.js?v=31.0.85',
+  './ledger-report/report.js?v=31.0.85',
+  './ledger-report/flamtana-evidence.js?v=31.0.85',
   './ledger-report/fonts/archivo-latin-500-normal.woff2',
   './ledger-report/fonts/archivo-latin-600-normal.woff2',
   './ledger-report/fonts/archivo-latin-700-normal.woff2',
@@ -41,12 +45,12 @@ const ASSETS = [
   './ledger-report/fonts/ibm-plex-mono-latin-600-normal.woff2',
   './players.svg',
   './courses.svg',
-  './setup.svg?v=31.0.84',
-  './scoring.svg?v=31.0.84',
-  './leaderboard.svg?v=31.0.84',
-  './settings.svg?v=31.0.84',
-  './library.svg?v=31.0.84',
-  './insights.svg?v=31.0.84'
+  './setup.svg?v=31.0.85',
+  './scoring.svg?v=31.0.85',
+  './leaderboard.svg?v=31.0.85',
+  './settings.svg?v=31.0.85',
+  './library.svg?v=31.0.85',
+  './insights.svg?v=31.0.85'
 ];
 
 self.addEventListener('install', event => {
@@ -68,18 +72,31 @@ self.addEventListener('message', event => {
   }
 });
 
+function classifyNavigation(requestUrl) {
+  const url = new URL(requestUrl);
+  if (url.origin !== self.location.origin || !url.pathname.startsWith(SCOPE_URL.pathname)) return 'other';
+  const relativePath = url.pathname.slice(SCOPE_URL.pathname.length);
+  if (relativePath === '' || relativePath === 'index.html') return 'app';
+  if (relativePath === 'ledger-report/shell.html') return 'ledger';
+  return 'other';
+}
+
 async function networkFirstNavigation(request) {
+  const navigation = classifyNavigation(request.url);
   try {
     const response = await fetch(request);
-    if (response && response.ok) {
+    if (navigation === 'app' && response && response.ok) {
       try {
         const cache = await caches.open(CACHE_NAME);
-        await cache.put('./index.html', response.clone());
+        await cache.put(APP_SHELL_URL, response.clone());
       } catch {}
     }
     return response;
   } catch {
-    return (await caches.match('./index.html')) || caches.match('./');
+    if (navigation === 'ledger') {
+      return (await caches.match(LEDGER_SHELL_URL)) || Response.error();
+    }
+    return (await caches.match(APP_SHELL_URL)) || (await caches.match(APP_ROOT_URL)) || Response.error();
   }
 }
 
@@ -99,6 +116,7 @@ async function cacheFirstStatic(request) {
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   if (event.request.mode === 'navigate') {
+    if (classifyNavigation(event.request.url) === 'other') return;
     event.respondWith(networkFirstNavigation(event.request));
     return;
   }

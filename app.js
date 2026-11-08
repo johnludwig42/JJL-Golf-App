@@ -19,11 +19,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.84',
-  versionNumber: '31.0.84',
-  cacheName: 'the-dye-ledger-v31.0.84',
-  buildDate: '2026-10-30T10:30:00.000Z',
-  buildLabel: 'Assigned Device Reconciliation'
+  version: 'v31.0.85',
+  versionNumber: '31.0.85',
+  cacheName: 'the-dye-ledger-v31.0.85',
+  buildDate: '2026-11-08T15:10:54.917Z',
+  buildLabel: 'Offline Page Caching'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;

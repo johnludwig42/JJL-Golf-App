@@ -3,10 +3,10 @@
    or derived from it. Stroke allocation comes from the app's engine, keyed by
    basis; the report never re-derives handicapping.
    ========================================================================== */
-import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getWinningMarginPerspective } from './logic.js?v=31.0.85';
+import { composeCompetitionLabel, describeFinalCarry, describeMarginTurningPoint, getWinningMarginPerspective } from './logic.js?v=31.0.86';
 
-import './stroke-play.js?v=31.0.85';
-import { compactFlamtanaEvidence, formatFlamtanaMatchedSteps } from './flamtana-evidence.js?v=31.0.85';
+import './stroke-play.js?v=31.0.86';
+import { compactFlamtanaEvidence, formatFlamtanaMatchedSteps } from './flamtana-evidence.js?v=31.0.86';
 const {buildStrokePlaySummary,roundEntryColors,strokePlayChart,strokePlayStrip,strokePlayCallout,handicapTable,toPar}=globalThis.DYE_LEDGER_STROKE_REPORT;
 
 const packPages = globalThis.packPages;
@@ -1528,9 +1528,159 @@ function report(pages,overflows){
   console.log(`LAYOUT: ${pages.length} pages, ${P.length} players, ${ROUND.games.length} games, ${NH} holes`);
 }
 
+// Printing and saving never mutate ROUND or its accepted snapshot. Prepare the
+// file before a tap: print/share must retain the browser's user activation.
+let printReady=false, exportFile=null, exportState="pending";
+let printAttempt=null, nextPrintAttempt=0, statusKind="";
+const PRINT_FALLBACK="If the print options didn't open, printing may not be available here. You can save a report file instead. Your report and round are unchanged.";
+function setPrintStatus(text,kind=""){
+  statusKind=kind;
+  const node=document.getElementById("printStatus");
+  if(node) node.textContent=text;
+}
+function standaloneReport(){
+  return navigator.standalone===true || window.matchMedia?.("(display-mode: standalone)").matches===true;
+}
+function showPrintFallback(){
+  if(printAttempt){ clearTimeout(printAttempt.timer); printAttempt=null; }
+  const button=document.getElementById("saveReportFileBtn");
+  if(button){ button.hidden=false; button.focus(); }
+  const preparation=exportState==="pending" ? " Preparing the report file…"
+    : exportState==="failed" ? " The report file isn't available. Your report is still here." : "";
+  setPrintStatus(PRINT_FALLBACK+preparation,"fallback");
+}
+function requestPrint(){
+  if(!printReady){ setPrintStatus("Preparing the report — tap Print / Save PDF again in a moment.","print-preparing"); return; }
+  if(printAttempt) return;
+  const attempt={id:++nextPrintAttempt,sawBefore:false,timer:null};
+  printAttempt=attempt;
+  setPrintStatus("Opening print options…","printing");
+  try{ window.print(); }catch(_error){ showPrintFallback(); return; }
+  // Events can fire synchronously inside print(), including afterprint. Do not
+  // resurrect a finished attempt or schedule its stale fallback afterwards.
+  if(printAttempt===attempt && !attempt.sawBefore){
+    attempt.timer=setTimeout(()=>{ if(printAttempt===attempt) showPrintFallback(); },1500);
+  }
+}
+window.addEventListener("beforeprint",()=>{
+  if(printAttempt){ printAttempt.sawBefore=true; clearTimeout(printAttempt.timer); }
+  printAttempt=null; // A missing afterprint must never lock out the next tap.
+  setPrintStatus("");
+});
+window.addEventListener("afterprint",()=>{
+  if(printAttempt) clearTimeout(printAttempt.timer);
+  printAttempt=null;
+  setPrintStatus("");
+});
+
+function reportFileName(){
+  const name=String(ROUND.meta.roundName||ROUND.meta.name||ROUND.meta.course||"Round")
+    .normalize("NFKC").replace(/[^a-zA-Z0-9_-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,70)||"Round";
+  const date=/^\d{4}-\d{2}-\d{2}$/.test(String(ROUND.meta.date)) ? ROUND.meta.date : "undated";
+  return `Dye-Ledger-${name}-${date}.html`;
+}
+function inlineFontBytes(buffer){
+  const bytes=new Uint8Array(buffer);let binary="";
+  for(let start=0;start<bytes.length;start+=8192) binary+=String.fromCharCode(...bytes.subarray(start,start+8192));
+  return "data:font/woff2;base64,"+btoa(binary);
+}
+async function buildReportFile(){
+  try{
+    let styles=[...document.querySelectorAll("style")].map(node=>node.textContent).join("\n");
+    const faces=[...styles.matchAll(/@font-face\s*\{[^}]*\}/g)];
+    const embedded=await Promise.all(faces.map(async([face])=>{
+      const source=/url\(['"]?([^)'"\s]+)['"]?\)/.exec(face);
+      if(!source) return "";
+      const url=new URL(source[1],location.href);
+      const fontRoot=new URL("./fonts/",location.href);
+      if(url.origin!==location.origin || !url.href.startsWith(fontRoot.href)
+        || !url.pathname.endsWith(".woff2") || url.search || url.hash) throw Error("Non-local report font");
+      try{
+        const response=await fetch(url.href,{credentials:"omit",redirect:"error",signal:AbortSignal.timeout(5000)});
+        if(!response.ok) return "";
+        return face.replace(source[0],`url('${inlineFontBytes(await response.arrayBuffer())}')`);
+      }catch(_error){ return ""; } // A readable system-font copy is preferable to an external dependency.
+    }));
+    faces.forEach(([face],i)=>{ styles=styles.replace(face,embedded[i]); });
+    // Rebuild a passive document from visible pages, never from the app payload.
+    const output=document.implementation.createHTMLDocument("Ledger Entry Report");
+    output.documentElement.lang="en";
+    output.title=`Dye Ledger — ${ROUND.meta.course||"Round"} — ${ROUND.meta.date||""}`;
+    const charset=output.createElement("meta");charset.setAttribute("charset","utf-8");output.head.prepend(charset);
+    const policy=output.createElement("meta");policy.httpEquiv="Content-Security-Policy";
+    policy.content="default-src 'none'; style-src 'unsafe-inline'; font-src data:; img-src data:";
+    output.head.appendChild(policy);
+    const viewport=output.createElement("meta");viewport.name="viewport";viewport.content="width=device-width, initial-scale=1";output.head.appendChild(viewport);
+    const style=output.createElement("style");style.textContent=styles;output.head.appendChild(style);
+    // Preserve the iOS page geometry already used for the displayed report.
+    if(document.documentElement.classList.contains("ios-print-surface")) output.documentElement.classList.add("ios-print-surface");
+    const doc=output.createElement("div");doc.id="doc";output.body.appendChild(doc);
+    for(const page of document.querySelectorAll("#doc .page")){
+      const copy=page.cloneNode(true);
+      copy.querySelectorAll("script,noscript,iframe,object,embed,form,button,input,select,textarea,dialog,.report-nav,#probe,.page-overflow-diagnostic,[hidden]").forEach(node=>node.remove());
+      for(const node of [copy,...copy.querySelectorAll("*")]){
+        if(node.style?.display==="none"){ node.remove(); continue; }
+        for(const attr of [...node.attributes]){
+          const name=attr.name.toLowerCase();
+          if(name.startsWith("on") || ["contenteditable","draggable","tabindex"].includes(name)
+            || (name.startsWith("data-") && !styles.includes(name))) node.removeAttribute(attr.name);
+        }
+        if(node.matches("a[href]") && !node.getAttribute("href").startsWith("#")) node.replaceWith(output.createTextNode(node.textContent));
+      }
+      doc.appendChild(copy);
+    }
+    if(!doc.querySelector(".page")) throw Error("No report pages");
+    // Inspect resource-bearing attributes and CSS, including SVG and responsive
+    // images. No exported page may depend on a server or execute a URL.
+    for(const node of output.querySelectorAll("*")) for(const attr of node.attributes){
+      if(["src","href","xlink:href","poster","background","srcset"].includes(attr.name.toLowerCase())
+        && !/^(?:data:|#)/i.test(attr.value)) throw Error("Non-embedded resource");
+      if(/javascript\s*:/i.test(attr.value)) throw Error("Active URL");
+    }
+    for(const match of (styles+"\n"+[...doc.querySelectorAll("[style]")].map(n=>n.getAttribute("style")).join("\n")).matchAll(/url\(\s*['"]?([^)'"\s]+)['"]?\s*\)/gi)){
+      if(!/^(?:data:|#)/i.test(match[1])) throw Error("Non-embedded CSS resource");
+    }
+    if(/@import\b/i.test(styles)) throw Error("External stylesheet");
+    const html="<!doctype html>\n"+output.documentElement.outerHTML;
+    const file=new File([html],reportFileName(),{type:"text/html"});
+    if(file.size>2*1024*1024) throw Error("Report file exceeds 2 MiB");
+    exportFile=file;exportState="ready";
+    const saveButton=document.getElementById("saveReportFileBtn");
+    saveButton?.setAttribute("data-ready","true");
+    saveButton?.setAttribute("data-font-fallback",String(embedded.some(face=>!face)));
+    if(statusKind==="file-preparing" || statusKind==="fallback") setPrintStatus(PRINT_FALLBACK+" Report file ready — tap Save report file.","fallback");
+  }catch(_error){
+    exportState="failed";
+    if(statusKind==="fallback" || statusKind==="file-preparing") setPrintStatus(PRINT_FALLBACK+" The report file isn't available. Your report is still here.","fallback");
+  }
+}
+function saveReportFile(){
+  if(exportState!=="ready"){
+    setPrintStatus(exportState==="failed" ? "The report file isn't available. Your report is still here." : "Preparing the report file — tap again in a moment.","file-preparing");return;
+  }
+  try{
+    if(navigator.canShare?.({files:[exportFile]})){
+      navigator.share({files:[exportFile],title:"Dye Ledger report"}).catch(error=>{
+        if(error.name!=="AbortError") setPrintStatus("The share sheet didn't open. Try again, or use Print from Safari.","share-error");
+      });
+    }else{
+      const downloadUrl=URL.createObjectURL(exportFile);
+      const link=document.createElement("a");link.hidden=true;link.download=exportFile.name;link.href=downloadUrl;
+      document.body.appendChild(link);link.click();link.remove();
+      // Let the browser consume the download before revocation. Each tap gets a
+      // fresh URL, including after a back-forward-cache restore; no prepared URL
+      // is kept or revoked by pagehide. Closing the document also releases it.
+      setTimeout(()=>URL.revokeObjectURL(downloadUrl),60000);
+    }
+  }catch(_error){ setPrintStatus("The share sheet didn't open. Try again, or use Print from Safari.","share-error"); }
+}
+
 function layoutThenPrint(){
   layout();
-  if(globalThis.__DYE_LEDGER_AUTO_PRINT__ && !globalThis.__DYE_LEDGER_PRINT_STARTED__){
+  printReady=true;
+  if(statusKind==="print-preparing") setPrintStatus("Ready — tap Print / Save PDF.","ready");
+  void buildReportFile();
+  if(!standaloneReport() && globalThis.__DYE_LEDGER_AUTO_PRINT__ && !globalThis.__DYE_LEDGER_PRINT_STARTED__){
     globalThis.__DYE_LEDGER_PRINT_STARTED__=true;
     setTimeout(()=>{ try{ window.print(); }catch(e){} },260);
   }
@@ -1564,6 +1714,7 @@ function returnToOriginatingMatch(){
 function acceptLedgerEntry(){
   const button=document.getElementById("acceptLedgerEntryBtn");
   const status=document.getElementById("returnToMatchStatus");
+  if(ROUND?.meta?.acceptanceStatus==="accepted") return;
   if(ROUND?.meta?.storyApprovalRequired){
     if(status){ status.hidden=false; status.textContent="Review and save the Story of the Round before accepting this Ledger Entry."; }
     return;
@@ -1593,7 +1744,7 @@ function acceptLedgerEntry(){
   }
   ROUND.meta.acceptanceStatus="accepted";
   ROUND.meta.acceptedAt=acceptedAt;
-  if(button){ button.disabled=true; button.textContent="Accepted"; }
+  setAcceptanceLabel("✓ Accepted");
   const reviseButton=document.getElementById("reviseLedgerEntryBtn");
   if(reviseButton) reviseButton.hidden=false;
   if(status){ status.hidden=false; status.textContent="Accepted and frozen with this completed round."; }
@@ -1619,26 +1770,36 @@ function reviseLedgerEntry(){
   if(status){ status.hidden=false; status.textContent="Unlocked. Return to the match and generate a revised Ledger Entry."; }
   const acceptButton=document.getElementById("acceptLedgerEntryBtn");
   const reviseButton=document.getElementById("reviseLedgerEntryBtn");
-  if(acceptButton){ acceptButton.disabled=true; acceptButton.textContent="Unlocked"; }
+  setAcceptanceLabel("Unlocked");
   if(reviseButton) reviseButton.hidden=true;
 }
 document.getElementById("returnToMatchBtn")?.addEventListener("click",returnToOriginatingMatch);
 document.getElementById("acceptLedgerEntryBtn")?.addEventListener("click",acceptLedgerEntry);
 document.getElementById("reviseLedgerEntryBtn")?.addEventListener("click",reviseLedgerEntry);
-document.getElementById("printLedgerEntryBtn")?.addEventListener("click",()=>{ try{ window.print(); }catch(e){} });
+document.getElementById("printLedgerEntryBtn")?.addEventListener("click",requestPrint);
+document.getElementById("saveReportFileBtn")?.addEventListener("click",saveReportFile);
+function setAcceptanceLabel(text){
+  const button=document.getElementById("acceptLedgerEntryBtn");
+  if(button) button.hidden=true;
+  const label=document.getElementById("ledgerAcceptanceStatus");
+  if(label){ label.textContent=text; label.hidden=false; }
+}
+const desktopPrintTip=document.getElementById("desktopPrintTip");
+if(desktopPrintTip) desktopPrintTip.hidden=/iPad|iPhone|iPod/i.test(navigator.userAgent)
+  || (navigator.platform==="MacIntel" && Number(navigator.maxTouchPoints||0)>1);
 if(ROUND?.meta?.acceptanceStatus==="accepted"){
   const button=document.getElementById("acceptLedgerEntryBtn");
-  if(button){ button.disabled=true; button.textContent="Accepted"; }
+  setAcceptanceLabel("✓ Accepted");
   const reviseButton=document.getElementById("reviseLedgerEntryBtn");
   if(reviseButton) reviseButton.hidden=false;
 }else if(ROUND?.meta?.storyApprovalRequired){
   const button=document.getElementById("acceptLedgerEntryBtn");
-  if(button){ button.disabled=true; button.textContent="Save Story to finalize"; }
+  setAcceptanceLabel("Save Story to finalize");
   const status=document.getElementById("returnToMatchStatus");
   if(status){ status.hidden=false; status.textContent="Preview uses a verified facts-only Story. Review and save the Story of the Round to finalize."; }
 }else if(ROUND?.meta?.status!=="final"){
   const button=document.getElementById("acceptLedgerEntryBtn");
-  if(button){ button.disabled=true; button.textContent="Complete round to accept"; }
+  setAcceptanceLabel("Complete round to accept");
 }
 if(document.fonts&&document.fonts.ready) document.fonts.ready.then(()=>setTimeout(layoutThenPrint,40));
 else window.addEventListener("load",()=>setTimeout(layoutThenPrint,40));

@@ -1,5 +1,24 @@
 # The Dye Ledger — PROJECT_CONTEXT.md
 
+November 8, 2026: WP-PRINT-01 v31.0.86, Report Print Fallback, adds trusted-tap
+Print feedback and a passive HTML report-file fallback. Home Screen auto-print
+is suppressed; accepted-report and unlock safeguards remain intact. A missing
+afterprint no longer locks the next Print tap. Report fonts are bounded to the
+local fonts folder; the export has its own strict security policy and uses fresh
+download URLs. No scoring, settlement, historical record or storage-schema change.
+Group 1 passed 16 print tests, 19 corrected legacy checks and 194 targeted
+regressions (overlapping coverage), including a real Chrome download after actual
+back-forward restoration. S3 passed 210/210; full suite 1,749/1,749 with no skips;
+lint 0 errors/88 warnings; layout 7/7; release sanity 8 PASS/1 dirty-tree WARN;
+simulation 77/77 exact, 57 warnings/1 pre-existing suspicious outcome; simulation
+tests 4/4; stress 50/50, policy 1. Gates ran once without retries. All 19 generated
+report artifacts were retained and restored to exact pre-gate bytes; no reports/
+changes remain. Census retains only previously reviewed D1-A/D2 behavior; no new
+persistence exception is accepted. Physical iPhone acceptance is NOT_RUN; Safari
+results pending; D9 undecided. HTML export is not PDF, and no iPhone print-resolution
+claim is made. Worker behavior is unchanged apart from release identity.
+See BUILD_NOTES_v31.0.86.md for final validation evidence and limitations.
+
 November 8, 2026: WP-OFFLINE-01 v31.0.85, Offline Page Caching, separates app
 and Ledger offline navigation while other pages retain honest browser failures.
 Browser AC6 for a–d and f is accepted under John’s D1-A blank-draft exception

@@ -151,7 +151,16 @@ test('dedicated Ledger Entry adapter maps existing authoritative facts without c
   assert.match(renderer, new RegExp(`logic\\.js\\?v=${currentVersionBareRegexEscaped}`));
   assert.match(renderer, /ROUND\.meta\.recap/);
   assert.match(renderer, /ROUND\.meta\.story \|\| ROUND\.meta\.recap/);
-  assert.doesNotMatch(renderer, /localStorage|supabase|fetch\(/);
+  assert.doesNotMatch(renderer, /localStorage|supabase/);
+  assert.doesNotMatch(renderer, /XMLHttpRequest|WebSocket|EventSource|sendBeacon|\bimport\(/);
+  assert.equal((renderer.match(/\bfetch\(/g)||[]).length,1);
+  const exportBuilder=renderer.slice(renderer.indexOf('async function buildReportFile('),renderer.indexOf('function saveReportFile('));
+  assert.match(exportBuilder,/fetch\(url\.href/);
+  assert.match(exportBuilder,/url\.origin!==location\.origin/);
+  assert.match(exportBuilder,/new URL\("\.\/fonts\/",location\.href\)/);
+  assert.match(exportBuilder,/url\.href\.startsWith\(fontRoot\.href\)/);
+  assert.match(exportBuilder,/credentials:"omit",redirect:"error"/);
+  assert.equal(shell.match(/<meta http-equiv="Content-Security-Policy" content="([^"]*)"/)[1],"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'");
   assert.match(renderer, /data-ledger-stat-group/);
   assert.match(renderer, /Birdie\+ \/ GIR/);
   assert.match(renderer, /p\.tee/);

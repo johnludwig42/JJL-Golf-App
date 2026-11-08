@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Ledger Entry — Chatham Hills, August 9, 2026</title>
 <style>
 @font-face{font-family:'Archivo';font-style:normal;font-weight:500;src:url('./fonts/archivo-latin-500-normal.woff2') format('woff2')}
@@ -26,7 +26,10 @@ body{background:#2E322C;font-family:var(--body);color:var(--ink);font-size:9pt;l
 .report-nav button{appearance:none;border:1px solid rgba(255,255,255,.34);border-radius:999px;
   background:var(--paper);color:var(--ink);padding:10px 14px;min-height:44px;font:600 1rem var(--body);cursor:pointer}
 .report-nav button:focus-visible{outline:3px solid #E5C567;outline-offset:2px}
-.report-nav button[disabled]{opacity:.72;cursor:default}
+.report-nav .report-primary{background:#E5C567;border-color:#E5C567;color:var(--ink)}
+.report-nav .report-secondary{background:transparent;color:var(--paper)}
+.report-nav-badge{padding:10px 14px;font:600 1rem var(--body)}
+.report-nav [hidden]{display:none!important}
 .report-nav-status{flex:1 0 100%;font:400 7.5pt var(--body);color:rgba(255,255,255,.78)}
 @media(max-width:700px){.report-nav button{flex:1 1 calc(50% - 4px);min-width:0}.report-nav-status{line-height:1.4}}
 .report-missing{width:8.5in;min-height:11in;margin:22px auto;padding:1in;background:var(--paper)}
@@ -243,14 +246,17 @@ td.l:has(.nm){white-space:normal;overflow:visible;overflow-wrap:anywhere}
 <nav class="report-nav" aria-label="Ledger Entry actions">
   <button id="returnToMatchBtn" type="button">‹ Return to Match</button>
   <button id="acceptLedgerEntryBtn" type="button">Accept &amp; Finalize</button>
-  <button id="reviseLedgerEntryBtn" type="button" hidden>Unlock &amp; Regenerate</button>
-  <button id="printLedgerEntryBtn" type="button">Print / Save PDF</button>
-  <span class="report-nav-status"><strong>Before printing:</strong> if your desktop print dialog offers Headers and footers, turn them off under More settings. On iPhone and iPad, AirPrint does not provide that browser setting. The Ledger footer remains on every report page.</span>
+  <span id="ledgerAcceptanceStatus" class="report-nav-badge" hidden></span>
+  <button id="reviseLedgerEntryBtn" type="button" class="report-secondary" hidden>Unlock &amp; Regenerate</button>
+  <button id="printLedgerEntryBtn" type="button" class="report-primary">Print / Save PDF</button>
+  <button id="saveReportFileBtn" type="button" hidden>Save report file</button>
+  <span id="printStatus" class="report-nav-status" role="status" aria-live="polite"></span>
+  <span id="desktopPrintTip" class="report-nav-status"><strong>Before printing:</strong> if your desktop print dialog offers Headers and footers, turn them off under More settings. The Ledger footer remains on every report page.</span>
   <span id="returnToMatchStatus" class="report-nav-status" hidden>Close this tab to return to the match.</span>
 </nav>
 <div id="probe"></div>
 <div id="doc"></div>
-<script src="./bootstrap.js?v=31.0.85"></script>
-<script type="module" src="./pack.js?v=31.0.85"></script>
-<script type="module" src="./engines.js?v=31.0.85"></script>
-<script type="module" src="./report.js?v=31.0.85"></script>
+<script src="./bootstrap.js?v=31.0.86"></script>
+<script type="module" src="./pack.js?v=31.0.86"></script>
+<script type="module" src="./engines.js?v=31.0.86"></script>
+<script type="module" src="./report.js?v=31.0.86"></script>

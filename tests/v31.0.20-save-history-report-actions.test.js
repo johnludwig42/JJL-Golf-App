@@ -40,6 +40,11 @@ test('Ledger actions match scorecard-sized controls and printing guidance is pla
   assert.match(shell, /min-height:44px/);
   assert.match(shell, /font:600 1rem var\(--body\)/);
   assert.match(shell, /desktop print dialog offers Headers and footers/);
-  assert.match(shell, /iPhone and iPad, AirPrint does not provide that browser setting/);
+  const tip=shell.match(/<span id="desktopPrintTip"[^>]*>([\s\S]*?)<\/span>/)[1];
+  assert.match(tip, /desktop print dialog offers Headers and footers/);
+  assert.doesNotMatch(tip, /iPhone|iPad|AirPrint/);
+  const renderer=readFileSync(new URL('../ledger-report/report.js',import.meta.url),'utf8');
+  assert.match(renderer,/desktopPrintTip\.hidden=\/iPad\|iPhone\|iPod\/i\.test\(navigator\.userAgent\)/);
+  assert.match(renderer,/navigator\.platform==="MacIntel" && Number\(navigator\.maxTouchPoints\|\|0\)>1/);
   assert.match(shell, /@media\(max-width:700px\)[^{]*\{\.report-nav button\{flex:1 1 calc\(50% - 4px\)/);
 });

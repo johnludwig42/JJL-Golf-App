@@ -37,18 +37,25 @@ test('real report acceptance enables completed records and blocks provisional re
       const page=await browser.newPage();
       await page.evaluateOnNewDocument(model=>sessionStorage.setItem('status-review',JSON.stringify({createdAt:new Date().toISOString(),report:model})),report);
       await page.goto(`http://127.0.0.1:${server.address().port}/ledger-report/shell.html?reportKey=status-review`,{waitUntil:'networkidle0'});
-      const button=await page.$eval('#acceptLedgerEntryBtn',node=>({disabled:node.disabled,text:node.textContent}));
-      assert.equal(button.disabled,!complete);
+      const button=await page.$eval('#acceptLedgerEntryBtn',node=>({hidden:node.hidden}));
+      assert.equal(button.hidden,!complete);
+      assert.equal(await page.$$eval('.report-nav :disabled',nodes=>nodes.length),0);
       if(complete){
         await page.click('#acceptLedgerEntryBtn');
-        assert.equal(await page.$eval('#acceptLedgerEntryBtn',node=>node.textContent),'Accepted');
+        assert.equal(await page.$eval('#acceptLedgerEntryBtn',node=>node.hidden),true);
+        assert.equal(await page.$eval('#ledgerAcceptanceStatus',node=>node.textContent),'✓ Accepted');
         const accepted=await page.evaluate(()=>JSON.parse(localStorage.getItem('dye-ledger:pending-ledger-entry-acceptance')));
         assert.equal(accepted.report.meta.status,'final');
         assert.equal(accepted.report.meta.story,'Reviewed test Story');
         assert.equal(JSON.stringify(accepted.report.payments),JSON.stringify(report.payments));
         assert.equal(JSON.stringify(accepted.report.meta.flamtanaEvidence),JSON.stringify(report.meta.flamtanaEvidence));
+        const acceptedBytes=await page.evaluate(()=>localStorage.getItem('dye-ledger:pending-ledger-entry-acceptance'));
+        await page.$eval('#acceptLedgerEntryBtn',node=>node.click());
+        assert.equal(await page.evaluate(()=>localStorage.getItem('dye-ledger:pending-ledger-entry-acceptance')),acceptedBytes);
       }else{
-        assert.equal(button.text,'Complete round to accept');
+        assert.equal(await page.$eval('#ledgerAcceptanceStatus',node=>({text:node.textContent,hidden:node.hidden})).then(n=>!n.hidden&&n.text),'Complete round to accept');
+        await page.$eval('#acceptLedgerEntryBtn',node=>node.click());
+        assert.equal(await page.$eval('#returnToMatchStatus',node=>node.textContent),'Complete the round before accepting this Ledger Entry.');
         assert.equal(await page.evaluate(()=>localStorage.getItem('dye-ledger:pending-ledger-entry-acceptance')),null);
       }
       await page.close();

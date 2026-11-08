@@ -1,5 +1,29 @@
 # The Dye Ledger — PROJECT_CONTEXT.md
 
+November 8, 2026: WP-OFFLINE-01 v31.0.85, Offline Page Caching, separates app
+and Ledger offline navigation while other pages retain honest browser failures.
+Browser AC6 for a–d and f is accepted under John’s D1-A blank-draft exception
+(six generated fields only). Upgrade AC6 is accepted under D2 Option A for the
+reviewed synthetic no-games match only: the ordinary pre-update save changed
+auto to stroke_net with unchanged resolved competition; settlement impact is
+not established, and no coded exception was added. The old cache was contaminated
+by observer/Ledger navigation and healed online before activation. The app’s own
+update path removed the old cache, then offline app and Ledger reopening passed.
+
+S6: full suite 1,733/1,733, lint 0 errors/88 warnings, validate PASS, layout 7/7,
+release sanity 8 PASS/1 dirty-tree WARN/0 FAIL, simulation 77/77 exact with
+64 warnings and 1 pre-existing suspicious outcome, simulation tests 4/4, stress
+50/50, whitespace PASS. The initial S4 174/177 fixture failure is retained; S4b
+passed 4/4 and 177/177 after copying untracked current icons without staging them.
+Under Option R, all 19 gate-generated artifacts were restored to their exact
+pre-gate bytes; before/after evidence is retained. Physical iPhone acceptance
+is NOT_RUN. See BUILD_NOTES_v31.0.85.md for the precise scope and limitations.
+
+Backlog: meaningful setup-draft overwrite remains UNVERIFIED; render-time
+featuredCompetition normalization and misleading update messages were observed
+existing behavior, with broader effects unverified; a possible second update
+prompt is UNVERIFIED. None was fixed as part of this package.
+
 November 7, 2026: WP-SM-01 physical two-phone acceptance of v31.0.84 is
 PASS (owner-attested), accepted by John with documented limitations. Round
 DYE-276167 used iPhone 15 Pro Max / iPhone 15 Pro, iOS 26.6.2, Safari tabs.

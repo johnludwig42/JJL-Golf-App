@@ -19,11 +19,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.86',
-  versionNumber: '31.0.86',
-  cacheName: 'the-dye-ledger-v31.0.86',
-  buildDate: '2026-11-08T19:53:02.069Z',
-  buildLabel: 'Report Print Fallback'
+  version: 'v31.0.87',
+  versionNumber: '31.0.87',
+  cacheName: 'the-dye-ledger-v31.0.87',
+  buildDate: '2026-11-09T11:28:55.359Z',
+  buildLabel: 'Storage Notice Clarity'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;
@@ -1772,12 +1772,63 @@ function preservedReviewButton(match) {
   const count=getSharedScoresPreservedForHostReview(match).length;
   return count || match.sharedScoreResolution ? '<button type="button" class="secondary" data-preserved-review="'+escapeHtml(String(match.id))+'">'+(count?'Scores awaiting review ('+count+')':'Score review history')+'</button>':'';
 }
+function describeStoragePressure(pressure, unmatchedReviewCount = 0) {
+  if (!pressure.warning) return { hidden: true, heading: '', sections: [] };
+
+  const sizeHeading = 'Saved data on this device is large';
+  const deliveryHeading = 'Local score delivery and review data is large';
+  const heading = pressure.totalWarning && pressure.deliveryWarning
+    ? 'Device storage is large'
+    : pressure.totalWarning ? sizeHeading : deliveryHeading;
+  const sections = [];
+  const kib = bytes => Math.ceil(bytes / 1024);
+  if (pressure.totalWarning) {
+    const backup = pressure.backupBytes
+      ? `Recovery backup: about ${kib(pressure.backupBytes)} KiB.`
+      : 'No recovery backup is currently stored.';
+    sections.push({ id: 'size', text: `About ${kib(pressure.totalBytes)} KiB stored. Main app data: about ${kib(pressure.mainBytes)} KiB. ${backup} Other local data: about ${kib(pressure.otherBytes)} KiB. These are size estimates, not remaining device space.` });
+  }
+  if (pressure.deliveryWarning) {
+    sections.push({ id: 'delivery', text: `About ${kib(pressure.deliveryBytes)} KiB of local score delivery and review data (estimated).` });
+  }
+  if (pressure.pending) {
+    sections.push({ id: 'pending', text: `${pressure.pending} score ${pressure.pending === 1 ? 'change is' : 'changes are'} saved on this device and waiting to send.` });
+  }
+  if (pressure.review) {
+    sections.push({ id: 'review', text: `${pressure.review} preserved ${pressure.review === 1 ? 'score is' : 'scores are'} awaiting host review.` });
+  }
+  if (unmatchedReviewCount) {
+    sections.push({ id: 'unmatched', text: `${unmatchedReviewCount} ${unmatchedReviewCount === 1 ? 'preserved score has' : 'preserved scores have'} no matching round in this device's round list. ${unmatchedReviewCount === 1 ? 'It remains' : 'They remain'} stored on this device.` });
+  }
+  sections.push({ id: 'preservation', text: "This notice doesn't remove anything." });
+  return { hidden: false, heading, sections };
+}
+
 function renderPreservedScorePressure() {
   const notice=document.getElementById('preservedScorePressure');if(!notice || !window.DyeLedgerPreservedReview)return;
   try{
-    const pressure=window.DyeLedgerPreservedReview.pressure(localStorage,readSharedScoreOutbox());notice.hidden=!pressure.warning;notice.classList.toggle('setup-warning',pressure.warning);
-    const matches=state.matches.filter(match=>getSharedScoresPreservedForHostReview(match).length);
-    notice.innerHTML=pressure.warning?'<strong>Saved score storage is growing</strong><p>'+pressure.pending+' pending writes; '+pressure.review+' scores awaiting review. Delivery/review: about '+Math.ceil(pressure.deliveryBytes/1024)+' KiB. Total localStorage including backups: about '+Math.ceil(pressure.totalBytes/1024)+' KiB (UTF-16 estimate, not quota headroom). Saving remains available; no records are discarded.</p>'+matches.map(preservedReviewButton).join('')+'<button type="button" class="secondary" data-pressure-rounds>Review saved rounds</button>'+(matches.length?'':'<p>Reconnect and retry delivery when convenient. Existing audit history stays separate.</p>'):'';
+    const outbox = readSharedScoreOutbox();
+    const pressure = window.DyeLedgerPreservedReview.pressure(localStorage, outbox, {
+      mainKey: STORAGE_KEY,
+      backupKey: STATE_BACKUP_STORAGE_KEY,
+    });
+    notice.hidden = !pressure.warning;
+    notice.classList.toggle('setup-warning', pressure.warning);
+    if (!pressure.warning) {
+      notice.innerHTML = '';
+      return;
+    }
+
+    const matchId = match => String(match.sharedMatchId || match.id || '');
+    const localIds = new Set(state.matches.map(matchId));
+    const reviewRows = outbox.preservedForHostReview || [];
+    const reviewIds = new Set(reviewRows.map(row => String(row?.matchId)));
+    const unmatchedCount = reviewRows.filter(row => !localIds.has(String(row?.matchId))).length;
+    const matches = state.matches.filter(match => reviewIds.has(matchId(match)));
+    const description = describeStoragePressure(pressure, unmatchedCount);
+    notice.innerHTML = `<strong>${escapeHtml(description.heading)}</strong>`
+      + description.sections.map(section => `<p>${escapeHtml(section.text)}</p>`).join('')
+      + matches.map(preservedReviewButton).join('');
   }catch{notice.hidden=false;notice.classList.add('setup-warning');notice.textContent='Storage usage could not be measured. Saving remains available; use Support diagnostics if a save fails.';}
 }
 function formatPreservedScoreValue(entry,stats=false) {
@@ -25353,7 +25404,6 @@ function installHandlers() {
   window.addEventListener('focus',scheduleDeferredEditingRender);
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')resetInterruptedEditingGesture();});
   document.addEventListener('click',event=>{
-    if(event.target.closest?.('[data-pressure-rounds]')){activateTab('courses');openExperienceDestination('courses','rounds');return;}
     const review=event.target.closest?.('[data-preserved-review]');
     if(review){void openPreservedScoreReview(review.dataset.preservedReview);return;}
     const resolve=event.target.closest?.('[data-resolve-preserved]');
@@ -28558,6 +28608,7 @@ function installDyeLedgerLiveEngineAdapter() {
     verifyPreservedPublishedParity,
     getPreservedReviewRecord,
     isResolvedPreservedKey,
+    describeStoragePressure,
     renderPreservedScorePressure,
     queueSharedScoreOperation,
     acknowledgeSharedScoreOperations,

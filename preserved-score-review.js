@@ -56,11 +56,30 @@
     }
     return {usage:async()=>{const rows=await transaction('readonly',store=>store.getAll());return {receipts:rows.length,bytes:canonical(rows).length*2};},put:receipt=>transaction('readwrite',store=>store.put(receipt)),list:matchId=>transaction('readonly',store=>store.index('matchId').getAll(String(matchId)))};
   }
-  function pressure(storage,outbox,{deliveryBytes=256*1024,totalBytes=2*1024*1024}={}){
-    let total=0;
-    for(let i=0;i<storage.length;i++){const key=storage.key(i);total+=(String(key).length+String(storage.getItem(key) || '').length)*2;}
-    const bytes=canonical(outbox).length*2;
-    return {pending:outbox.operations?.length || 0,review:outbox.preservedForHostReview?.length || 0,deliveryBytes:bytes,totalBytes:total,warning:bytes>=deliveryBytes || total>=totalBytes};
+  function pressure(storage,outbox,{deliveryBytes=256*1024,totalBytes=2*1024*1024,mainKey=null,backupKey=null}={}){
+    let total = 0, mainBytes = 0, backupBytes = 0;
+    for (let i = 0; i < storage.length; i++) {
+      const key = storage.key(i);
+      const bytes = (String(key).length + String(storage.getItem(key) || '').length) * 2;
+      total += bytes;
+      if (key === mainKey) mainBytes = bytes;
+      else if (key === backupKey) backupBytes = bytes;
+    }
+    const bytes = canonical(outbox).length * 2;
+    const totalWarning = total >= totalBytes;
+    const deliveryWarning = bytes >= deliveryBytes;
+    return {
+      pending: outbox.operations?.length || 0,
+      review: outbox.preservedForHostReview?.length || 0,
+      deliveryBytes: bytes,
+      totalBytes: total,
+      mainBytes,
+      backupBytes,
+      otherBytes: total - mainBytes - backupBytes,
+      totalWarning,
+      deliveryWarning,
+      warning: deliveryWarning || totalWarning,
+    };
   }
   // Audit is written before the caller may remove payloads. IDs and fingerprints
   // make cleanup recoverable without discarding a changed/replaced operation.

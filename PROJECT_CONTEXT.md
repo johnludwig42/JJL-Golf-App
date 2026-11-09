@@ -1,5 +1,12 @@
 # The Dye Ledger — PROJECT_CONTEXT.md
 
+November 9, 2026: WP-STORE-01 v31.0.87, Storage Notice Clarity, separates
+device storage estimates from score delivery and host review. The notice reports
+main app data, backup and other local data, and removes its saved-rounds shortcut.
+Thresholds, recovery, scoring, settlement and stored data behavior are unchanged.
+I1 passed 34 targeted tests. Chromium measured one fewer read per refresh path
+with identical write counts and keys. See BUILD_NOTES_v31.0.87.md.
+
 November 8, 2026: WP-PRINT-01 v31.0.86, Report Print Fallback, adds trusted-tap
 Print feedback and a passive HTML report-file fallback. Home Screen auto-print
 is suppressed; accepted-report and unlock safeguards remain intact. A missing

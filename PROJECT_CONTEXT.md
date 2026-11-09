@@ -14,9 +14,19 @@ simulation 77/77 exact, 57 warnings/1 pre-existing suspicious outcome; simulatio
 tests 4/4; stress 50/50, policy 1. Gates ran once without retries. All 19 generated
 report artifacts were retained and restored to exact pre-gate bytes; no reports/
 changes remain. Census retains only previously reviewed D1-A/D2 behavior; no new
-persistence exception is accepted. Physical iPhone acceptance is NOT_RUN; Safari
-results pending; D9 undecided. HTML export is not PDF, and no iPhone print-resolution
-claim is made. Worker behavior is unchanged apart from release identity.
+persistence exception is accepted. HTML export is not PDF. Worker behavior is
+unchanged apart from release identity.
+Owner-attested iPhone results (iPhone 15 Pro Max, iOS 26.6.2, staging, synthetic
+rounds; no artifacts retained): Home Screen direct Print opened native printing
+only after a tap, produced a readable PDF that a recipient confirmed, and worked
+again after reopening the accepted Ledger. Safari direct printing FAILED and is
+not fixed; Safari's HTML fallback opened readably and printed to a readable PDF
+with matching scores and settlement. Return preserved scores, settlement and Story
+in both modes. Home Screen HTML fallback NOT_RUN; objective MET via Home Screen
+direct printing; D9 not triggered; the reporter's Safari response is pending.
+John accepted these limitations and authorized the merge. Independently verified:
+staging served the reviewed build; PR #198 merged as abcb5a5 (tree equal to the
+reviewed 5d11dbb) and GitHub Pages run 42525483809 succeeded.
 See BUILD_NOTES_v31.0.86.md for final validation evidence and limitations.
 
 November 8, 2026: WP-OFFLINE-01 v31.0.85, Offline Page Caching, separates app

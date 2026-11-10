@@ -129,11 +129,13 @@ do not conceal them by restricting the status or untracked list to approved file
 1. **Implementation — Codex:** supply the fingerprint, the summary required by
    [workflow §14](03_CODEX_WORKFLOW.md#14-required-implementation-summary-format),
    real check results/logs, before/after check status and each acceptance criterion
-   marked met, unmet or NOT_RUN.
+   marked met, unmet or NOT_RUN. Include the
+   [deviations section](#7-plan-deviations-and-owner-decisions) before the
+   verification results, even when there are none.
 2. **Independent review — Claude:** recompute and match the fingerprint first;
-   stop on mismatch. Number findings `R1`, `R2`, etc. Each gives severity, file:line,
-   a failure scenario and the acceptance criterion it breaks. List out-of-scope
-   observations separately without fixing them.
+   stop on mismatch. Review the deviations section next. Number findings `R1`, `R2`,
+   etc. Each gives severity, file:line, a failure scenario and the acceptance
+   criterion it breaks. List out-of-scope observations separately without fixing them.
 3. **Correction — Codex:** fix the listed findings or dispute them with evidence.
    Provide a new fingerprint and a finding-to-change table. Do not expand scope.
 4. **Re-review — Claude:** inspect the changes since the previous fingerprint,
@@ -183,3 +185,99 @@ commit, push, merge, deployment, database or spending authority and does not
 change [workflow §16](03_CODEX_WORKFLOW.md#16-actions-requiring-product-owner-approval).
 Do not bypass a failed isolation/evidence gate or reset a stale lock/budget to
 continue. Preserve partial evidence and report the stopped state.
+
+## 7. Plan deviations and owner decisions
+
+### 7.1 What counts as a deviation
+
+List every item below, even if it looks harmless:
+
+- Touching a file outside the plan's file scope, or one the plan says is never touched.
+- Changing a design the plan specifies, such as startup order, write order, key
+  names, formats or states.
+- Changing, merging, splitting or dropping a planned test file or acceptance check.
+- Weakening, narrowing or reinterpreting an acceptance criterion, or proving it a
+  different way.
+- Changing behaviour the plan says must stay the same.
+- Changing an existing test, timeout, fixture or harness behaviour that other
+  tests rely on.
+- Going beyond the approved segment, or doing work planned for a later segment.
+- Relying on an owner permission given outside the plan.
+
+### 7.2 Rules
+
+- Every implementation and correction handoff includes the section in §7.3, placed
+  before the verification results. If there are no deviations, it says exactly:
+  `None. Implementation matches the approved plan.`
+- A deviation marked `OWNER DECISION REQUIRED` blocks a **Ready for owner
+  decision** verdict until John decides. The rest of the review may continue.
+- A deviation marked `Pre-approved` cites an entry in the package decision log
+  (§7.4). A mention in the handoff alone is not enough.
+- An unlisted deviation that Claude finds is a required correction, even when the
+  change itself is acceptable.
+- A plan that proves infeasible is a deviation too. Say so in **Why**, so Claude
+  can correct the plan.
+
+### 7.3 Handoff template
+
+````markdown
+## Deviations from the approved plan
+
+**Plan:** <plan file and SHA-256> · **Approval:** <decision-log entry, e.g. DL-03>
+
+| ID | Plan reference | Plan said | Implemented instead | Category |
+|---|---|---|---|---|
+| DV-1 | §x.y / AC-xx | <quote or close paraphrase> | <what was done> | design · scope · test · criterion · behaviour · process |
+
+### DV-1: <short title>
+
+- **Why:** <the constraint or defect that forced it; say whether the plan was infeasible>
+- **Who is affected:** <all users (G0) · recovery profiles only · tests only · none at runtime>
+- **Risk to protected data:** <round history, outbox, holds, auth, or "none", with the reason>
+- **Files:** <paths and line ranges>
+- **Evidence it is safe:** <named tests or logs, or NOT_RUN>
+- **Alternatives considered:** <the plan's approach and why it was rejected; any others>
+- **Reversible:** <yes, how / no, why>
+- **Authority:** <one of:>
+  - `Pre-approved: <decision-log entry>`
+  - `OWNER DECISION REQUIRED: <the exact question, with options>`
+  - `Within plan latitude: <the plan clause that allows it>`
+- **Status:** open · approved · rejected · reverted
+
+### Summary
+
+- **Deviations:** <n> · **Pre-approved:** <n> · **Awaiting owner decision:** <n>
+- **Owner decisions needed:**
+  1. <DV-n: question>
+````
+
+### 7.4 Decision log
+
+Each package keeps one `decision-log.md` in its evidence root. It is an append-only
+file. Only John's decisions go in it: plan approvals, segment approvals, deviation
+rulings, accepted residual risk, and permissions given outside the plan. Either
+agent may append an entry at John's request, quoting his words. Agents never record
+their own decisions there.
+
+Never edit or delete an entry. To change a decision, add a new entry that
+supersedes it. Record the log's SHA-256 in each round's handoff, so reviewers can
+confirm that earlier entries are unchanged.
+
+````markdown
+# Decision log: <package ID>
+
+Append-only. Never edit or delete an entry; supersede it with a new one.
+
+## DL-<nn>: <short title>
+
+- **Date (UTC):** <YYYY-MM-DD HH:MM>
+- **Decided by:** John
+- **Type:** plan approval · segment approval · deviation ruling · scope change · permission · residual risk · other
+- **Applies to:** <plan section, segment, DV-n, finding Rn or ODn>
+- **Question:** <what was asked, with the options offered>
+- **Decision:** <approved · rejected · approved with conditions · deferred>
+- **John's words:** "<verbatim quote>"
+- **Conditions or limits:** <scope, expiry, evidence still required, or "none">
+- **Supersedes:** <DL-nn or "none">
+- **Recorded by:** <Codex · Claude> on <date>, from <message or session reference>
+````

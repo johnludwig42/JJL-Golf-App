@@ -1238,12 +1238,57 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <template id="appStartupScripts">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" data-cloud-sdk></script>
   <script src="supabase-config.js?v=31.0.87&amp;rev=202611091128"></script>
   <script src="identity-security.js?v=31.0.87&amp;rev=202611091128"></script>
   <script src="ledger-report/stroke-play.js?v=31.0.87"></script>
   <script src="app-presentation.js?v=31.0.87"></script>
   <script src="preserved-score-review.js?v=31.0.87"></script>
   <script src="app.js?v=31.0.87&amp;rev=202611091128"></script>
+  </template>
+  <script>
+    (() => {
+      const scripts = document.getElementById('appStartupScripts');
+      const keys = ['dye-ledger-recovery-verification', 'the-dye-ledger-v20:recovered-score-hold:v1', 'the-dye-ledger-v20:recovered-startup-hold:v1'];
+      const block = () => {
+        const notice = document.createElement('p');
+        notice.setAttribute('role', 'alert');
+        notice.textContent = 'Restore incomplete or unreadable. Open the recovery page.';
+        document.body.replaceChildren(notice);
+      };
+      const hasRecovery = () => {
+        for (const key of keys) {
+          try { if (localStorage.getItem(key) !== null) return true; }
+          catch { /* Ordinary app startup handles unavailable storage. */ }
+        }
+        return false;
+      };
+      if (!hasRecovery()) {
+          // Load the same classic scripts in order. A failed CDN load still allows local use.
+          const load = async () => {
+            for (const source of scripts.content.querySelectorAll('script[src]')) {
+              if (hasRecovery()) return block();
+              await new Promise(resolve => {
+                const script = document.createElement('script');
+                script.src = source.getAttribute('src');
+                script.onload = resolve;
+                script.onerror = () => {
+                  if (!source.hasAttribute('data-cloud-sdk')) console.warn('Could not load app script:', script.src);
+                  resolve();
+                };
+                document.head.append(script);
+              });
+            }
+          };
+          void load();
+          return;
+      }
+      const guard = document.createElement('script');
+      guard.src = 'recovery-guard.js';
+      guard.addEventListener('error', block, { once: true });
+      document.head.append(guard);
+    })();
+  </script>
 </body>
 </html>

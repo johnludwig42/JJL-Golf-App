@@ -8,6 +8,91 @@ const FINISH_RECOVERY_STORAGE_KEY = `${STORAGE_KEY}:finish-recovery`;
 const SETUP_DRAFT_STORAGE_KEY = `${STORAGE_KEY}:setup-draft`;
 const SHARED_SCORE_OUTBOX_STORAGE_KEY = `${STORAGE_KEY}:shared-score-outbox:v1`;
 const SHARED_SCORE_OUTBOX_SCHEMA_VERSION = 1;
+const RECOVERY_GUARD_KEYS = [
+  'dye-ledger-recovery-verification',
+  `${STORAGE_KEY}:recovered-score-hold:v1`,
+  `${STORAGE_KEY}:recovered-startup-hold:v1`,
+];
+const recoveryStartupGuard = window.__DYE_RECOVERY_GUARD__;
+const recoveryHeldMatchIds = new Set(recoveryStartupGuard?.heldMatchIds || []);
+let recoveryTabStale = false;
+
+function stopStaleRecoveryTab() {
+  if (recoveryTabStale) return;
+  recoveryTabStale = true;
+  const clients = new Set([window.__DYE_SUPABASE_CLIENT__, supabaseClient, sharedSessionReadyClient]);
+  window.__DYE_SUPABASE_CLIENT__ = undefined;
+  supabaseClient = null;
+  sharedSessionReadyClient = null;
+  sharedSessionReadyUntil = 0;
+  sharedAuthSubscription?.unsubscribe?.();
+  sharedAuthSubscription = null;
+  window.DyeLedgerIdentitySecurity?.disposeAccountSecurity?.();
+  for (const client of clients) {
+    try {
+      client?.realtime?.disconnect?.();
+      Promise.resolve(client?.auth?.stopAutoRefresh?.()).catch(console.warn);
+    } catch (error) { console.warn('Could not disconnect the stale recovery tab.', error); }
+  }
+  const message = document.createElement('p');
+  message.setAttribute('role', 'alert');
+  message.textContent = 'Recovery started in this browser profile. Reload.';
+  document.body.replaceChildren(message);
+}
+
+function canPersistRecoveryProfile(storage = localStorage) {
+  if (DYE_LEDGER_ADAPTER_MODE || (storage !== localStorage && storage !== window.sessionStorage)) return true;
+  if (!recoveryTabStale) {
+    try {
+      if (RECOVERY_GUARD_KEYS.some(key => localStorage.getItem(key) !== (recoveryStartupGuard?.raw?.[key] ?? null))) {
+        stopStaleRecoveryTab();
+      }
+    } catch {
+      return !recoveryStartupGuard;
+    }
+  }
+  return !recoveryTabStale;
+}
+
+function recoveryCloudOff() {
+  return recoveryStartupGuard?.cloudOff === true || !canPersistRecoveryProfile();
+}
+
+// SDK session persistence uses the same browser keys and a tab-local fallback
+// when storage is unavailable. A late SDK response cannot write after recovery.
+const recoveryAuthMemory = new Map();
+const recoveryAuthStorage = {
+  getItem(key) {
+    if (!canPersistRecoveryProfile()) return null;
+    try { return localStorage.getItem(key) ?? recoveryAuthMemory.get(key) ?? null; }
+    catch { return recoveryAuthMemory.get(key) ?? null; }
+  },
+  setItem(key, value) {
+    if (!canPersistRecoveryProfile()) return;
+    try { localStorage.setItem(key, value); recoveryAuthMemory.delete(key); }
+    catch { recoveryAuthMemory.set(key, value); }
+  },
+  removeItem(key) {
+    if (!canPersistRecoveryProfile()) return;
+    recoveryAuthMemory.delete(key);
+    try { localStorage.removeItem(key); } catch {}
+  },
+};
+
+function recoveryGuardedFetch(...args) {
+  if (recoveryCloudOff()) return Promise.reject(new Error('Cloud features are off in this profile.'));
+  return window.fetch(...args);
+}
+
+function isRecoveryHeldMatch(match) {
+  return [match?.id, match?.sharedMatchId, match?.sharedMatchRef].some(id => recoveryHeldMatchIds.has(String(id || '')));
+}
+
+function getRecoveryHeldScoreCount(match) {
+  const ids = [match.id, match.sharedMatchId, match.sharedMatchRef];
+  return new Set((recoveryStartupGuard?.heldScores || [])
+    .filter(row => ids.includes(row.matchId)).map(row => row.operationId)).size;
+}
 const STORAGE_FAILURE_MESSAGE = 'We couldn\'t save this change locally. Your current screen is still open—please keep the app open and try again.';
 const localPersistenceDiagnostics = {
   storageAvailable: true,
@@ -182,6 +267,7 @@ function normalizePlayerPreferences(raw) {
 }
 
 function savePlayerPreferences(preferences, storage = localStorage) {
+  if (!canPersistRecoveryProfile(storage)) return false;
   const normalized = normalizePlayerPreferences(preferences);
   try {
     storage.setItem(PLAYER_PREFERENCES_STORAGE_KEY, JSON.stringify(normalized));
@@ -299,6 +385,7 @@ function readRecentAppErrors() {
 }
 
 function writeRecentAppErrors(errors) {
+  if (!canPersistRecoveryProfile()) return;
   try {
     const bounded = Array.isArray(errors) ? errors.slice(0, APP_ERROR_LIMIT) : [];
     localStorage.setItem(APP_ERROR_STORAGE_KEY, JSON.stringify(bounded));
@@ -589,6 +676,7 @@ const GAME_LABELS = Object.fromEntries(GAME_LIBRARY.map(g => [g.key, g.label]));
 const CLOUD_MATCH_CACHE_PREFIX = 'the-dye-ledger-cloud-match:';
 const SUPABASE_CONFIG = window.__DYE_SUPABASE_CONFIG__ || {};
 let supabaseClient = null;
+let sharedAuthSubscription = null;
 let supabaseInitPromise = null;
 
 const sharedMatchSyncTimers = new Map();
@@ -695,6 +783,7 @@ function getSharedDeviceId() {
   let id = '';
   try { id = localStorage.getItem(SHARED_DEVICE_ID_KEY) || ''; } catch {}
   if (!id) {
+    if (recoveryStartupGuard?.state === 'G1' || !canPersistRecoveryProfile()) return '';
     id = `device-${uid()}`;
     try { localStorage.setItem(SHARED_DEVICE_ID_KEY, id); } catch {}
   }
@@ -704,6 +793,7 @@ function getStoredSharedDeviceName() {
   try { return String(localStorage.getItem(SHARED_DEVICE_NAME_KEY) || '').trim(); } catch { return ''; }
 }
 function setStoredSharedDeviceName(name = '') {
+  if (!canPersistRecoveryProfile()) return '';
   const normalized = String(name || '').trim().slice(0, 40);
   if (!normalized) return '';
   try { localStorage.setItem(SHARED_DEVICE_NAME_KEY, normalized); } catch {}
@@ -881,6 +971,7 @@ function getStoredSharedParticipantId(match = null) {
   try { return String(localStorage.getItem(getSharedParticipantStorageKey(match)) || '').trim(); } catch { return ''; }
 }
 function setStoredSharedParticipantId(match = null, participantId = '') {
+  if (recoveryStartupGuard?.state === 'G1' || !canPersistRecoveryProfile()) return '';
   const id = String(participantId || '').trim();
   if (!id) return '';
   try { localStorage.setItem(getSharedParticipantStorageKey(match), id); } catch {}
@@ -1124,6 +1215,7 @@ function getSharedDeviceLabelPayload(match = null) {
 }
 
 async function upsertSharedMembershipForCurrentDevice(match, { role = null } = {}) {
+  if (isRecoveryHeldMatch(match)) return false;
   if (!match || match.storageMode !== 'shared' || !match.sharedMatchId || !hasSupabaseConfig()) return false;
   const client = await ensureSharedSessionReady();
   if (!client) return false;
@@ -1146,6 +1238,7 @@ async function upsertSharedMembershipForCurrentDevice(match, { role = null } = {
   return true;
 }
 async function publishCurrentSharedDeviceToCloudMetadata(match) {
+  if (isRecoveryHeldMatch(match)) return false;
   if (!match || match.storageMode !== 'shared' || !match.sharedMatchId || !hasSupabaseConfig()) return false;
   const client = await ensureSupabaseClient();
   if (!client) return false;
@@ -1531,6 +1624,7 @@ function noteSharedDeliveryFailure(match,error,{storage=localStorage}={}) {
   error.sharedDeliveryDeferred=true;return error;
 }
 function canAttemptSharedDelivery(match,{storage=localStorage,now=Date.now()}={}) {
+  if (isRecoveryHeldMatch(match) || recoveryCloudOff()) return false;
   const retry=getSharedDeliveryRetry(match,storage);
   const assignments=stableJson(match.sharedPlayerAssignmentState || match.sharedPlayerAssignments || {});
   const due=Date.parse(retry.nextRetryAt);
@@ -1589,6 +1683,7 @@ async function resumeSharedForeground() {
   try{return await task;}finally{sharedForegroundInflight=null;}
 }
 function sharedSessionChanged(event,session) {
+  if (recoveryCloudOff()) return;
   sharedSessionReadyUntil=0;
   const fingerprint=session?String(session.user?.id || '')+':'+String(session.expires_at || '')+':'+String(session.user?.last_sign_in_at || ''):'';
   const previous=sharedCredentialFingerprint;sharedCredentialFingerprint=fingerprint;
@@ -1691,6 +1786,7 @@ function isResolvedPreservedKey(match,key) {
   return !!cached?.auditVerified && !!record && cached?.text===window.DyeLedgerPreservedReview.canonical(record) && (match.sharedScoreResolution?.keys || []).includes(key);
 }
 async function recoverPreservedScoreResolutions(match,{storage=localStorage,audit=getPreservedReviewStore(),save=()=>savePreservedReviewReference(match),checkpoint=async()=>{}}={}) {
+  if (isRecoveryHeldMatch(match) || !canPersistRecoveryProfile(storage)) return { cleared: 0, receipts: [] };
   const api=window.DyeLedgerPreservedReview,record=getPreservedReviewRecord(match),recordText=api.canonical(record),baseHash=record?await api.hash(record):null;
   const receipts=(await audit.list(reviewMatchKey(match))).sort((a,b)=>a.decidedAt.localeCompare(b.decidedAt)||a.id.localeCompare(b.id));let cleared=0;
   for(const receipt of receipts){
@@ -1714,7 +1810,7 @@ async function recoverPreservedScoreResolutions(match,{storage=localStorage,audi
     if(!writeSharedScoreOutbox(outbox,storage).ok)throw new Error('Could not clear the resolved delivery copies. The audit is saved; reopen review to finish cleanup.');
     cleared+=before-outbox.preservedForHostReview.length;
     await checkpoint('after-cleanup');
-    if(receipt.phase!=='complete')await audit.put({...receipt,phase:'complete'});
+    if(receipt.phase!=='complete' && canPersistRecoveryProfile(storage))await audit.put({...receipt,phase:'complete'});
   }
   if(record)resolvedReviewRecordCache.set(reviewMatchKey(match),{text:api.canonical(record),hash:baseHash,auditVerified:receipts.some(receipt=>receipt.id===match.sharedScoreResolution?.receiptId && (!receipt.baseHash || receipt.baseHash===baseHash))});
   if(match.sharedScoreResolution && !getSharedScoresPreservedForHostReview(match,storage).length){
@@ -1725,6 +1821,7 @@ async function recoverPreservedScoreResolutions(match,{storage=localStorage,audi
   return {cleared,receipts};
 }
 async function resolvePreservedScoreGroups(match,groupIds,{decision,reason,choices={},actor,expectedIds=null,storage=localStorage,audit=getPreservedReviewStore(),save=()=>savePreservedReviewReference(match),checkpoint=async()=>{}}={}) {
+  if (isRecoveryHeldMatch(match) || !canPersistRecoveryProfile(storage)) throw new Error('Restored scores are held on this device.');
   const key=reviewMatchKey(match);
   if(preservedReviewInflight.has(key))throw new Error('A review decision is already saving.');
   const task=(async()=>{
@@ -1735,6 +1832,7 @@ async function resolvePreservedScoreGroups(match,groupIds,{decision,reason,choic
     if(expectedIds && selected.some(group=>JSON.stringify(group.operations.map(op=>op.operationId).sort())!==JSON.stringify((expectedIds[group.id] || []).slice().sort())))throw new Error('New evidence arrived. Review the selection again.');
     const receipt=await window.DyeLedgerPreservedReview.prepare({matchId:key,selected,decision,reason,choices,record:getPreservedReviewRecord(match),statsEnabled:!!match.statTrackingEnabled,sourceLabels:Object.fromEntries((match.sharedDevices || []).map(device=>[device.id,device.deviceName || device.name || device.id])),
       actor:actor || {deviceId:getSharedDeviceId(),participantId:getCurrentSharedParticipantId(match),hostDevice:isCurrentDeviceMatchHost(match),authority:'device-local review; physical reviewer not authenticated'}});
+    if (!canPersistRecoveryProfile(storage)) throw new Error('Recovery profile changed.');
     await audit.put(receipt);
     await checkpoint('after-receipt');
     await recoverPreservedScoreResolutions(match,{storage,audit,save,checkpoint});
@@ -3869,7 +3967,7 @@ function closeIosInstallInstructions({ remember = true } = {}) {
   dialog.classList.add('hidden');
   dialog.setAttribute('aria-hidden', 'true');
   if (remember) {
-    try { localStorage.setItem(IOS_INSTALL_DISMISSAL_KEY, String(Date.now())); } catch {}
+    try { if (canPersistRecoveryProfile()) localStorage.setItem(IOS_INSTALL_DISMISSAL_KEY, String(Date.now())); } catch {}
   }
   updateInstallControl();
   document.getElementById('installBtn')?.focus({ preventScroll: true });
@@ -4124,6 +4222,7 @@ function getCurrentWeatherPosition() {
 }
 
 async function fetchOpenMeteoCurrentWeather(latitude, longitude) {
+  if (recoveryCloudOff()) throw new Error('Cloud features are off in this profile.');
   const params = new URLSearchParams({
     latitude: String(latitude),
     longitude: String(longitude),
@@ -4169,6 +4268,7 @@ function getWeatherFailureStatus(error) {
 }
 
 async function captureWeatherForMatch(matchId) {
+  if (recoveryCloudOff()) return false;
   const match = getMatch(matchId);
   if (!match) return false;
   if (match.captureWeatherContext === false) {
@@ -4538,7 +4638,7 @@ function loadStateFromStorage(storage = localStorage) {
     const recovery = reconcileInterruptedFinishState(loaded, markerResult.value);
     loaded = recovery.state;
     localPersistenceDiagnostics.recoveryStatus = recovery.status;
-    try { storage.removeItem(FINISH_RECOVERY_STORAGE_KEY); } catch {}
+    try { if (canPersistRecoveryProfile(storage)) storage.removeItem(FINISH_RECOVERY_STORAGE_KEY); } catch {}
   } else {
     localPersistenceDiagnostics.recoveryStatus = 'none';
   }
@@ -4565,6 +4665,7 @@ function persistStateSnapshot(snapshot, storage = localStorage, options = {}) {
     return { ok: false, savedAt, error, errorMessage: getStorageErrorMessage(error), stage: 'serialize' };
   }
   let backupPruned = false;
+  if (!canPersistRecoveryProfile(storage)) return { ok: false, errorMessage: 'Recovery profile changed.' };
   try {
     storage.setItem(STORAGE_KEY, payload);
   } catch (error) {
@@ -4578,6 +4679,7 @@ function persistStateSnapshot(snapshot, storage = localStorage, options = {}) {
       return { ok: false, savedAt, error, errorMessage: getStorageErrorMessage(error), stage: 'primary-write' };
     }
     try {
+      if (!canPersistRecoveryProfile(storage)) return { ok: false, errorMessage: 'Recovery profile changed.' };
       storage.removeItem(STATE_BACKUP_STORAGE_KEY);
       backupPruned = true;
       storage.setItem(STORAGE_KEY, payload);
@@ -4594,12 +4696,14 @@ function persistStateSnapshot(snapshot, storage = localStorage, options = {}) {
   }
   let backupError = null;
   if (options.writeBackup !== false && !backupPruned) {
+    if (!canPersistRecoveryProfile(storage)) return { ok: false, errorMessage: 'Recovery profile changed.' };
     try { storage.setItem(STATE_BACKUP_STORAGE_KEY, payload); } catch (error) { backupError = getStorageErrorMessage(error); }
   }
   return { ok: true, savedAt, backupError, backupPruned };
 }
 
 function writeJsonStorageRecord(storage, key, value) {
+  if (!canPersistRecoveryProfile(storage)) return { ok: false, error: new Error('Recovery profile changed.') };
   try {
     storage.setItem(key, JSON.stringify(value));
     return { ok: true };
@@ -4670,6 +4774,7 @@ function saveSetupDraft(draft, storage = localStorage) {
 }
 
 function clearSetupDraft(storage = localStorage) {
+  if (!canPersistRecoveryProfile(storage)) return false;
   try { storage.removeItem(SETUP_DRAFT_STORAGE_KEY); return true; } catch { return false; }
 }
 
@@ -4683,9 +4788,11 @@ function notifyLocalSaveFailure() {
 }
 
 function loadState() {
+  if (!canPersistRecoveryProfile()) return getEmptyPersistentState();
   return loadStateFromStorage(localStorage);
 }
 function persist({ skipRender = false, reclaimCloudCaches = false } = {}) {
+  if (!canPersistRecoveryProfile()) return false;
   const result = reclaimCloudCaches ? persistSharedJoinSnapshot(state, localStorage) : persistStateSnapshot(state, localStorage);
   if (!result.ok) {
     localPersistenceDiagnostics.storageAvailable = false;
@@ -4730,12 +4837,13 @@ function buildEmptyStats(count = 18) {
 }
 
 function persistFinishedStateSnapshot(snapshot, marker, storage = localStorage) {
+  if (!canPersistRecoveryProfile(storage)) return { ok: false, errorMessage: 'Recovery profile changed.' };
   let markerWrite = writeJsonStorageRecord(storage, FINISH_RECOVERY_STORAGE_KEY, marker);
   if (!markerWrite.ok && markerWrite.error?.name === 'QuotaExceededError') {
     // The active round remains in the primary record. Removing its redundant
     // backup creates room for the tiny interruption marker without sacrificing
     // the authoritative recovery copy.
-    try { storage.removeItem(STATE_BACKUP_STORAGE_KEY); } catch {}
+    try { if (canPersistRecoveryProfile(storage)) storage.removeItem(STATE_BACKUP_STORAGE_KEY); } catch {}
     markerWrite = writeJsonStorageRecord(storage, FINISH_RECOVERY_STORAGE_KEY, marker);
   }
   if (!markerWrite.ok) return { ...markerWrite, stage: 'finish-marker-write' };
@@ -4745,7 +4853,7 @@ function persistFinishedStateSnapshot(snapshot, marker, storage = localStorage) 
     // The marker is useful only while there is room for it. The primary setItem
     // is itself atomic, so retrying without the marker either saves the complete
     // round or leaves the prior active round untouched.
-    try { storage.removeItem(FINISH_RECOVERY_STORAGE_KEY); } catch {}
+    try { if (canPersistRecoveryProfile(storage)) storage.removeItem(FINISH_RECOVERY_STORAGE_KEY); } catch {}
     completedWrite = persistStateSnapshot(snapshot, storage, { writeBackup: false });
     return { ...completedWrite, finishMarkerPruned: true };
   }
@@ -8474,6 +8582,7 @@ function acceptLedgerEntrySnapshotEnvelope(envelope, { persistNow = true } = {})
   return { accepted: true, snapshot: clonePlain(snapshot) };
 }
 function consumePendingLedgerEntryAcceptance(storage = localStorage) {
+  if (!canPersistRecoveryProfile(storage)) return;
   let envelope = null;
   try { envelope = JSON.parse(storage.getItem(LEDGER_ENTRY_ACCEPTANCE_STORAGE_KEY) || 'null'); } catch  {}
   if (!envelope) return { accepted: false, reason: 'none' };
@@ -8498,6 +8607,7 @@ function unlockAcceptedLedgerEntry(roundId, { persistNow = true } = {}) {
   return { unlocked: true };
 }
 function consumePendingLedgerEntryRevision(storage = localStorage) {
+  if (!canPersistRecoveryProfile(storage)) return;
   let request = null;
   try { request = JSON.parse(storage.getItem(LEDGER_ENTRY_REVISION_STORAGE_KEY) || 'null'); } catch  {}
   if (!request) return { unlocked: false, reason: 'none' };
@@ -8616,7 +8726,7 @@ function addVerifiedGreeniesToLedgerStory(match, metrics, recapText) {
 async function prepareLedgerEntryStory(match, metrics) {
   if (isTeamScoredRound(match) && !getFlamtanaConfig(match)) return buildDeterministicLedgerEntryStory(match, metrics, 'team-scored-round');
   const offline = navigator.onLine === false;
-  const configured = Boolean(getRoundRecapUrl());
+  const configured = !recoveryCloudOff() && Boolean(getRoundRecapUrl());
   if (offline || !configured) {
     return buildDeterministicLedgerEntryStory(match, metrics, getLedgerEntryStoryFallbackReason(null, { offline, configured }));
   }
@@ -9415,6 +9525,10 @@ function buildRoundRecapPayload(match, metrics) {
 }
 async function runRoundRecapGeneration(match, { automatic = false, silent = false } = {}) {
   const notify = (message, duration) => { if (!silent) toast(message, duration); };
+  if (recoveryCloudOff()) {
+    notify('Cloud features are off in this profile.');
+    return { ok: false, skipped: true, reason: 'recovery-cloud-off' };
+  }
   const url = getRoundRecapUrl();
   const metrics = computeMatchMetrics(match);
   if (!metrics) {
@@ -9444,6 +9558,7 @@ async function runRoundRecapGeneration(match, { automatic = false, silent = fals
   renderRoundMemoriesPanel(match);
   renderRoundRecapControlPanel(match);
   const requestRecap = async (repair = null) => {
+    if (recoveryCloudOff()) throw new Error('Cloud features are off in this profile.');
     const controller = getFlamtanaConfig(match) ? new window.AbortController() : null;
     const timeoutId = controller ? window.setTimeout(() => controller.abort(), 45000) : null;
     try {
@@ -11005,6 +11120,7 @@ function shouldUseSameTabLedgerReport() {
 }
 function storeLedgerReportTransfer(reportModel, { autoPrint = true } = {}) {
   const transferKey = `dye-ledger-report-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  if (!canPersistRecoveryProfile(sessionStorage)) throw new Error('Recovery profile changed.');
   sessionStorage.setItem(transferKey, JSON.stringify({
     report: reportModel,
     autoPrint: !!autoPrint,
@@ -14608,6 +14724,7 @@ function scheduleTeamPayoutSplitPaneSync() {
 }
 
 function hasSupabaseConfig() {
+  if (recoveryCloudOff()) return false;
   return !!(SUPABASE_CONFIG?.url && SUPABASE_CONFIG?.anonKey && window.supabase?.createClient);
 }
 async function ensureSupabaseClient(options = {}) {
@@ -14629,11 +14746,12 @@ async function ensureSupabaseClient(options = {}) {
   if (!supabaseInitPromise) {
     supabaseInitPromise = (async () => {
       const client = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey, {
-        auth: { storageKey: window.DyeLedgerIdentitySecurity?.ACCOUNT_AUTH_STORAGE_KEY || 'dye-ledger-account-auth-v1', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+        auth: { storageKey: window.DyeLedgerIdentitySecurity?.ACCOUNT_AUTH_STORAGE_KEY || 'dye-ledger-account-auth-v1', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: recoveryAuthStorage },
+        global: { fetch: recoveryGuardedFetch },
       });
       supabaseClient = client;
       window.__DYE_SUPABASE_CLIENT__ = client;
-      client.auth.onAuthStateChange?.(sharedSessionChanged);
+      sharedAuthSubscription = client.auth.onAuthStateChange?.(sharedSessionChanged)?.data?.subscription || null;
       return client;
     })().catch(err => {
       supabaseInitPromise = null;
@@ -15501,6 +15619,7 @@ function rememberSharedMatchId(matchId) {
   state.sharedMatchIds = [...new Set([...(state.sharedMatchIds || []), matchId])];
 }
 function cacheCloudMatchBundle(matchId, bundle, storage = localStorage) {
+  if (!canPersistRecoveryProfile(storage)) return false;
   if (!matchId || !bundle) return false;
   // A redundant cloud recovery copy must not turn a successful read into a
   // download failure. The authoritative local save is checked separately.
@@ -15518,7 +15637,7 @@ function persistSharedJoinSnapshot(snapshot, storage = localStorage) {
       const key = storage.key(i);
       if (key?.startsWith(CLOUD_MATCH_CACHE_PREFIX)) keys.push(key);
     }
-    for (const key of keys) storage.removeItem(key);
+    for (const key of keys) if (canPersistRecoveryProfile(storage)) storage.removeItem(key);
   } catch { return result; }
   result = persistStateSnapshot(snapshot, storage);
   return result;
@@ -16104,6 +16223,7 @@ function recordSharedScoreTransport(match,kind,reason='') {
   if(previous?.kind!==kind)recordSharedSyncDiagnostic(match,kind==='direct'?'SHARED_TRANSPORT_DOWNGRADED':'SHARED_TRANSPORT_RPC',{code:reason || 'RPC_AVAILABLE'});
 }
 async function submitPendingSharedScoreOperations(client, match, scoreEntries = [], { storage = localStorage, batchLimit = SHARED_SCORE_RPC_BATCH_LIMIT } = {}) {
+  if (isRecoveryHeldMatch(match)) return { submitted: 0, acknowledged: 0, acknowledgedIds: [], held: true };
   return runSharedDelivery(match,async()=>{
     if(match.remoteCompletionPending || getSharedScoresPreservedForHostReview(match,storage).length)return preserveClosedSharedScoreOperations(match,storage);
     if(!getSharedScoreOutboxOperations(match,storage).length)return {submitted:0,acknowledged:0,acknowledgedIds:[],fallback:false};
@@ -16189,6 +16309,7 @@ function isPermanentSharedScoreDeliveryError() {
 }
 async function drainPendingSharedScoreOperationsForMatch(matchOrId, { storage = localStorage } = {}) {
   let match = getCanonicalSharedMatch(matchOrId);
+  if (isRecoveryHeldMatch(match)) return { ok: true, skipped: true, held: true };
   if (!match || match.storageMode !== 'shared' || !match.sharedMatchId) return { ok: true, skipped: true, pending: 0 };
   const pendingBefore = getSharedScoreOutboxOperations(match, storage).length;
   if(!canAttemptSharedDelivery(match,{storage}))return {ok:false,skipped:true,pending:pendingBefore,backoff:true};
@@ -16260,6 +16381,7 @@ async function drainPendingSharedScoreOutboxes({ matches = state.matches, storag
   }
 }
 async function uploadSharedMatch(match) {
+  if (isRecoveryHeldMatch(match)) return { held: true };
   if(!canAttemptSharedDelivery(match))throw Object.assign(new Error('Scores remain queued until the next retry.'),{code:'SHARED_BACKOFF'});
   await ensureSharedSessionReady();
   if (match.remoteCompletionPending || getSharedScoresPreservedForHostReview(match).length) return preserveClosedSharedScoreOperations(match);
@@ -16438,6 +16560,7 @@ async function fetchSharedMatchBundleWithRetry(matchId, { attempts = 3, delayMs 
 async function authorizeSharedMatchJoin(matchId) {
   const canonical = normalizeJoinMatchCode(matchId);
   if (!canonical) throw new Error('Enter a valid Shared Match code.');
+  if (isRecoveryHeldMatch({ sharedMatchId: canonical })) throw new Error('Restored scores are held on this device.');
   const client = await ensureSupabaseClient();
   if (!client) throw new Error('Shared Match service is unavailable.');
   const { data, error } = await client.rpc('join_shared_match', {
@@ -17018,6 +17141,7 @@ function isValidSharedAssignmentParticipantId(match, participantId) {
   return getSharedAssignmentParticipants(match).some(participant => String(participant.participantId) === id);
 }
 async function publishSharedPlayerAssignments(match) {
+  if (isRecoveryHeldMatch(match)) return false;
   if (!match || match.storageMode !== 'shared' || !match.sharedMatchId || !hasSupabaseConfig()) return false;
   if (!isCurrentDeviceMatchHost(match)) return false;
   const client = await ensureSupabaseClient();
@@ -17141,6 +17265,7 @@ async function refreshActiveSharedParticipants({ silent = true } = {}) {
 }
 async function heartbeatActiveSharedParticipant({ silent = true } = {}) {
   const match = getActiveMatch();
+  if (isRecoveryHeldMatch(match)) return false;
   if (!match || match.storageMode !== 'shared' || match.status === 'complete' || document.visibilityState === 'hidden' || navigator.onLine===false) return false;
   if (sharedPresenceHeartbeatInflight) return sharedPresenceHeartbeatInflight;
   sharedPresenceHeartbeatInflight = (async () => {
@@ -17243,7 +17368,7 @@ async function registerSharedJoinDevice(match, {
   merge = mergeCloudSharedMetadata,
   isHost = isCurrentDeviceMatchHost,
 } = {}) {
-  if (!match || match.storageMode !== 'shared') return { registered: false, published: false };
+  if (!match || match.storageMode !== 'shared' || isRecoveryHeldMatch(match)) return { registered: false, published: false };
   ensureSharedParticipantRegistered(match, isHost(match) ? 'Host Device' : getPreferredSharedDeviceName('Joined Device'));
   // authorizeSharedMatchJoin() already created the authenticated membership
   // through the security-definer join boundary. Re-inserting it directly from
@@ -17287,7 +17412,7 @@ function classifySharedJoinFailure(error, { phase = 'download', authorized = fal
   }
   const friendly = new Error(message, { cause: error });
   friendly.code = code; friendly.sharedJoinPhase = phase; friendly.sharedJoinTable = table; friendly.sharedJoinKind = kind; friendly.sharedJoinAuthorized = authorized;
-  try { localStorage.setItem(STORAGE_KEY + ':shared-join-diagnostic', JSON.stringify({ occurredAt: new Date().toISOString(), phase, table, kind, code, authorized })); } catch {}
+  try { if (canPersistRecoveryProfile()) localStorage.setItem(STORAGE_KEY + ':shared-join-diagnostic', JSON.stringify({ occurredAt: new Date().toISOString(), phase, table, kind, code, authorized })); } catch {}
   return friendly;
 }
 function getLastSharedJoinDiagnostic() {
@@ -17303,7 +17428,7 @@ async function fetchSharedJoinBundle(matchId, { requireRegistration = false, aut
   }
   try {
     const bundle = await fetchBundle(cloudId);
-    try { localStorage.removeItem(STORAGE_KEY + ':shared-join-diagnostic'); } catch {}
+    try { if (canPersistRecoveryProfile()) localStorage.removeItem(STORAGE_KEY + ':shared-join-diagnostic'); } catch {}
     return { cloudId, bundle, fromCache: false };
   } catch (error) {
     const bundle = readCached(cloudId);
@@ -17312,6 +17437,7 @@ async function fetchSharedJoinBundle(matchId, { requireRegistration = false, aut
   }
 }
 async function loadSharedMatchFromCloud(matchId, { activate = true, silent = false, requireRegistration = false } = {}) {
+  if (isRecoveryHeldMatch({ sharedMatchId: matchId })) throw new Error('Restored scores are held on this device.');
   const { bundle, fromCache } = await fetchSharedJoinBundle(matchId, { requireRegistration });
   const hydrated = hydrateMatchFromCloudBundle(bundle);
   if (hydrated.storageMode === 'shared') {
@@ -17341,6 +17467,7 @@ function clearScheduledSharedMatchSync(matchId) {
 }
 async function flushSharedMatchSync(matchId, { silent = true } = {}) {
   if (!matchId) return;
+  if (isRecoveryHeldMatch({ id: matchId })) return null;
   if(document.visibilityState==='hidden' || navigator.onLine===false)return null;
   let match = getCanonicalSharedMatch(matchId);
   if (!match || match.storageMode !== 'shared' || !hasSupabaseConfig()) return null;
@@ -17478,6 +17605,7 @@ function scheduleSharedMatchSync(matchOrId, { immediate = false, silent = true }
   const matchId = typeof matchOrId === 'string' ? matchOrId : (matchOrId?.id || null);
   if (!matchId) return;
   const match = typeof matchOrId === 'string' ? getMatch(matchId) : matchOrId;
+  if (isRecoveryHeldMatch(match)) return;
   if (!match || match.storageMode !== 'shared' || !hasSupabaseConfig()) return;
   if(!canAttemptSharedDelivery(match) || document.visibilityState==='hidden' || navigator.onLine===false) {
     match.cloudSyncState='pending-sync';persist({skipRender:true});return;
@@ -17846,6 +17974,7 @@ function getScorecardImportSaveGuard(data = {}) {
   return { warnings, requiresConfirmation: warnings.length > 0 };
 }
 async function requestAiScorecardExtraction(filesOrFile) {
+  if (recoveryCloudOff()) throw new Error('Cloud features are off in this profile.');
   const endpoint = getScorecardImportEndpoint();
   if (!endpoint) throw new Error('AI scorecard import is not configured.');
   const files = Array.isArray(filesOrFile) ? filesOrFile.filter(Boolean) : [filesOrFile].filter(Boolean);
@@ -18451,6 +18580,7 @@ function mergeRoundMemories(match, incoming = [], { source = 'shared' } = {}) {
 }
 
 async function publishSharedMemories(match) {
+  if (isRecoveryHeldMatch(match)) return false;
   if (!match || match.storageMode !== 'shared' || !match.sharedMatchId || !hasSupabaseConfig()) return false;
   const client = await ensureSupabaseClient();
   if (!client) return false;
@@ -18996,6 +19126,7 @@ function renderMatches() {
     const timing = getRoundElapsedTimeState(match, metrics);
     const storage = match.storageMode === 'shared' ? 'Shared' : 'Local';
     const cloudMeta = match.storageMode === 'shared' ? `${storage} · ${match.cloudSyncState || 'local-cache'}${match.sharedMatchRef ? ` · ID ${match.sharedMatchRef}` : ''}` : storage;
+    const heldCount = isRecoveryHeldMatch(match) ? getRecoveryHeldScoreCount(match) : null;
     const playerNames = (match.players || []).map(row => getPlayer(row.playerId)?.name || row.name).filter(Boolean);
     const hasGames = Array.isArray(match.selectedGames) && match.selectedGames.length > 0;
     const resultLabel = hasGames
@@ -19016,6 +19147,7 @@ function renderMatches() {
               <span><b>Progress</b>${metrics ? `${metrics.completed}/${getPlayableHoleCount(match, metrics.tee)} holes` : 'Unavailable'}</span>
               <span><b>Players</b>${escapeHtml(playerNames.join(', ') || `${(match.players || []).length} saved`)}</span>
               <span><b>Storage</b>${escapeHtml(cloudMeta)}</span>
+              ${heldCount === null ? '' : `<span>Restored: ${heldCount} ${heldCount === 1 ? 'score' : 'scores'} held, not sent</span>`}
               ${timing.available ? `<span><b>Time</b>${escapeHtml(match.status === 'complete' ? formatRoundDuration(timing.elapsedMs) : `${formatRoundDuration(timing.elapsedMs)} elapsed`)}</span>` : ''}
             </div>
           </div>
@@ -20010,7 +20142,7 @@ function completeActiveRound() {
     localPersistenceDiagnostics.lastSuccessfulLocalSave = completedWrite.savedAt;
     localPersistenceDiagnostics.lastFailureMessage = '';
     localPersistenceDiagnostics.lastBackupWarning = completedWrite.backupError || '';
-    try { localStorage.removeItem(FINISH_RECOVERY_STORAGE_KEY); } catch {}
+    try { if (canPersistRecoveryProfile()) localStorage.removeItem(FINISH_RECOVERY_STORAGE_KEY); } catch {}
     finishConfirmArmed = false;
     newMatchPromptFinishArmed = false;
     if (candidate.storageMode === 'shared') scheduleSharedMatchSync(candidate, { immediate: true, silent: true });
@@ -23312,6 +23444,7 @@ function renderSetupGroupRulesPreview() {
 }
 
 function writeMatchTemplates(templates) {
+  if (!canPersistRecoveryProfile()) return false;
   try {
     const cleaned = Array.isArray(templates) ? templates.slice(0, 50) : [];
     localStorage.setItem(MATCH_TEMPLATES_STORAGE_KEY, JSON.stringify(cleaned));
@@ -27808,7 +27941,7 @@ function consumeAppUpdateConfirmation() {
   if (!pending) return;
   if (pending === APP_VERSION_NUMBER) {
     pwaUpdateStatusMessage = `Updated successfully to ${APP_VERSION}.`;
-    try { sessionStorage.removeItem(APP_UPDATE_CONFIRMATION_KEY); } catch {}
+    try { if (canPersistRecoveryProfile(sessionStorage)) sessionStorage.removeItem(APP_UPDATE_CONFIRMATION_KEY); } catch {}
     setTimeout(() => toast(`Updated successfully to ${APP_VERSION}.`), 250);
   }
 }
@@ -28063,7 +28196,7 @@ async function refreshPwaNow(options = {}) {
     if (registration?.waiting) {
       const targetVersion = getServiceWorkerVersion(registration.waiting) || APP_VERSION_NUMBER;
       pwaUpdateStatusMessage = `Installing v${targetVersion}…`;
-      try { sessionStorage.setItem(APP_UPDATE_CONFIRMATION_KEY, targetVersion); } catch {}
+      try { if (canPersistRecoveryProfile(sessionStorage)) sessionStorage.setItem(APP_UPDATE_CONFIRMATION_KEY, targetVersion); } catch {}
       renderBuildInfoUi();
       registration.waiting.postMessage({ type: 'SKIP_WAITING' });
       setTimeout(() => reloadOnceSafely({ force: forceUnsafeAppReload }), 1200);
@@ -28075,7 +28208,7 @@ async function refreshPwaNow(options = {}) {
       if (waitingWorker) {
         const targetVersion = getServiceWorkerVersion(waitingWorker) || APP_VERSION_NUMBER;
         pwaUpdateStatusMessage = `Installing v${targetVersion}…`;
-        try { sessionStorage.setItem(APP_UPDATE_CONFIRMATION_KEY, targetVersion); } catch {}
+        try { if (canPersistRecoveryProfile(sessionStorage)) sessionStorage.setItem(APP_UPDATE_CONFIRMATION_KEY, targetVersion); } catch {}
         renderBuildInfoUi();
         waitingWorker.postMessage({ type: 'SKIP_WAITING' });
         setTimeout(() => reloadOnceSafely({ force: forceUnsafeAppReload }), 1200);
@@ -28095,6 +28228,7 @@ async function refreshPwaNow(options = {}) {
 }
 
 async function resetDyeLedgerAppCache() {
+  if (!canPersistRecoveryProfile()) return;
   const ok = window.confirm('Reset downloaded app files and reload?\n\nThis may help if the app is stuck on an old version. Saved matches, local courses, players, and scores will remain on this device.');
   if (!ok) return;
   userRequestedAppReload = true;
@@ -28104,10 +28238,12 @@ async function resetDyeLedgerAppCache() {
   try {
     if ('caches' in window) {
       const keys = await caches.keys();
+      if (!canPersistRecoveryProfile()) return;
       await Promise.all(keys.filter(key => key.includes('the-dye-ledger')).map(key => caches.delete(key)));
     }
     if ('serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations();
+      if (!canPersistRecoveryProfile()) return;
       await Promise.all(registrations.filter(reg => reg.scope && reg.scope.startsWith(window.location.origin)).map(reg => reg.unregister()));
     }
   } catch (err) {
@@ -28171,8 +28307,9 @@ async function forceDyeLedgerUpdateCheck() {
 window.forceDyeLedgerUpdateCheck = forceDyeLedgerUpdateCheck;
 
 function registerServiceWorker() {
+  if (recoveryCloudOff()) return;
   if (!('serviceWorker' in navigator) || !isServiceWorkerContextSupported()) return;
-  window.addEventListener('load', async () => {
+  const register = async () => {
     try {
       const registration = await navigator.serviceWorker.register(`./service-worker.js?v=${BUILD_INFO.versionNumber}`, { scope: './' });
       hookServiceWorkerRegistration(registration);
@@ -28190,7 +28327,9 @@ function registerServiceWorker() {
       console.warn('[BuildInfo] Service worker registration/update check failed:', error);
       // Keep the app fully usable if service worker registration fails.
     }
-  });
+  };
+  if (document.readyState === 'complete') void register();
+  else window.addEventListener('load', register);
 }
 
 function installDyeLedgerLiveEngineAdapter() {
@@ -28719,7 +28858,10 @@ function installAppChromeHeightSync() {
   }
 }
 
-if (!DYE_LEDGER_ADAPTER_MODE) {
+if (!DYE_LEDGER_ADAPTER_MODE && canPersistRecoveryProfile()) {
+  window.addEventListener('storage', event => {
+    if (event.key === null || RECOVERY_GUARD_KEYS.includes(event.key)) canPersistRecoveryProfile();
+  });
   installViewportStabilityGuards();
   installAppChromeHeightSync();
   installTableScrollKeyboardSupport();
@@ -28737,7 +28879,7 @@ if (!DYE_LEDGER_ADAPTER_MODE) {
   updateVersionUi();
   renderAppReleaseNotes();
   renderAll();
-  window.DyeLedgerIdentitySecurity?.mountAccountSecurity?.();
+  window.DyeLedgerIdentitySecurity?.mountAccountSecurity?.({ storage: recoveryAuthStorage, fetch: recoveryGuardedFetch });
   if (hasSupabaseConfig()) {
     window.setTimeout(() => refreshCourseLibraryFromCloud({ silent: true, force: true }), 250);
   }

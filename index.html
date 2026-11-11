@@ -977,11 +977,15 @@
         <h2>Data tools</h2>
         <div class="actions wrap">
           <button id="exportBtn" type="button">Export JSON</button>
+          <button id="saveRecoveryFileBtn" type="button">Save recovery file</button>
+          <button id="showRecoveryIsolationCodeBtn" type="button">Show isolation code</button>
           <label class="button-link file-label">
             Import JSON
             <input id="importFile" type="file" accept="application/json" />
           </label>
         </div>
+        <p class="tiny">Save a recovery copy for restoring your rounds in a separate browser profile. Open it on the recovery page.</p>
+        <p id="recoveryToolsStatus" class="tiny" role="status"></p>
       </div>
 
       <div class="card tight-card" data-experience-section="shared">

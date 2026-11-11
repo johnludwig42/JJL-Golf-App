@@ -22837,7 +22837,9 @@ function captureCurrentSetupDraft() {
 }
 
 let setupDraftSaveTimer = null;
+let setupDraftAutosaveSuppressed = false;
 function scheduleSetupDraftSave() {
+  if (setupDraftAutosaveSuppressed) return;
   if (editingMatchId || setupWorkflowMode !== 'create') return;
   if (setupDraftSaveTimer) window.clearTimeout(setupDraftSaveTimer);
   setupDraftSaveTimer = window.setTimeout(() => {
@@ -25099,6 +25101,7 @@ function openExperienceDestination(tabId, destination, { scroll = true } = {}) {
   const copy = EXPERIENCE_DESTINATIONS[tabId]?.[destination];
   if (!container || !copy) return false;
   container.dataset.activeDestination = destination;
+  if (tabId === 'settings' && destination === 'utilities') ensureRecoveryFileModule();
   const header = container.querySelector('[data-experience-destination-header]');
   header?.classList.remove('hidden');
   const title = header?.querySelector('[data-experience-destination-title]');
@@ -25464,6 +25467,206 @@ function exportJson() {
   const a = document.createElement('a');
   a.href = url; a.download = `the-dye-ledger-${todayIso()}.json`; a.click();
   URL.revokeObjectURL(url);
+}
+
+let recoverySaveInProgress = false;
+
+function recoveryToolsMessage(message) {
+  const status = document.getElementById('recoveryToolsStatus');
+  if (status) status.textContent = message;
+}
+
+function recoveryToolsGate() {
+  if (DYE_LEDGER_ADAPTER_MODE || window.__DYE_RECOVERY_GUARD__ !== undefined) {
+    throw new Error('Recovery tools are available only in an ordinary app profile.');
+  }
+  if (!canPersistRecoveryProfile()) throw new Error('This tab is out of date. Reload before using recovery tools.');
+}
+
+function ensureRecoveryFileModule() {
+  const button = document.getElementById('saveRecoveryFileBtn');
+  if (!button || button.dataset.recoveryFileState) return;
+  try {
+    recoveryToolsGate();
+  } catch {
+    button.dataset.recoveryFileState = 'blocked';
+    return;
+  }
+  button.dataset.recoveryFileState = 'loading';
+  const script = document.createElement('script');
+  script.src = new URL(`recovery-file.js?v=${encodeURIComponent(APP_VERSION_NUMBER)}`, document.baseURI).href;
+  script.onload = () => {
+    const api = window.DyeLedgerRecoveryFile;
+    button.dataset.recoveryFileState = ['buildRecoveryFile', 'serialize', 'sha256Hex', 'canonical']
+      .every(method => typeof api?.[method] === 'function') ? 'ready' : 'unavailable';
+  };
+  script.onerror = () => { button.dataset.recoveryFileState = 'unavailable'; };
+  document.head.append(script);
+}
+
+function showRecoveryIsolationCode() {
+  const key = 'dye-ledger-recovery-isolation-canary';
+  const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+  try {
+    recoveryToolsGate();
+    const existing = localStorage.getItem(key);
+    const code = uuid.test(existing) ? existing : window.crypto.randomUUID();
+    if (code !== existing) localStorage.setItem(key, code);
+    recoveryToolsMessage(`Isolation code ${code}.`);
+  } catch (error) {
+    recoveryToolsMessage(`Could not show the isolation code. ${error.message || 'Please try again.'}`);
+  }
+}
+
+function captureRecoverySources() {
+  const keys = [
+    STORAGE_KEY, SHARED_SCORE_OUTBOX_STORAGE_KEY, FINISH_RECOVERY_STORAGE_KEY,
+    SETUP_DRAFT_STORAGE_KEY, COURSE_PUBLISH_RECOVERY_STORAGE_KEY,
+    LEDGER_ENTRY_ACCEPTANCE_STORAGE_KEY, LEDGER_ENTRY_REVISION_STORAGE_KEY,
+    MATCH_TEMPLATES_STORAGE_KEY, PLAYER_PREFERENCES_STORAGE_KEY, SHARED_DEVICE_ID_KEY,
+    ...RECOVERY_GUARD_KEYS,
+  ];
+  const values = Object.fromEntries(keys.map(key => [key, localStorage.getItem(key)]));
+  const stateText = JSON.stringify(state);
+  return { values, stateText, fingerprint: JSON.stringify([values, stateText]) };
+}
+
+async function readRecoveryReviewReceipts() {
+  const name = 'the-dye-ledger-score-review-v1';
+  try {
+    const storage = window.indexedDB;
+    if (!storage) throw new Error('IndexedDB unavailable');
+    if (typeof storage.databases === 'function' && !(await storage.databases()).some(db => db.name === name)) return [];
+    return await new Promise((resolve, reject) => {
+      const request = storage.open(name);
+      let abortedCreation = false;
+      let blocked = false;
+      request.onupgradeneeded = () => {
+        abortedCreation = true;
+        request.transaction.abort();
+      };
+      request.onerror = () => {
+        if (abortedCreation && request.error?.name === 'AbortError') resolve([]);
+        else reject(request.error);
+      };
+      request.onblocked = () => {
+        blocked = true;
+        reject(new Error('Receipt database is blocked'));
+      };
+      request.onsuccess = () => {
+        const db = request.result;
+        if (blocked) {
+          db.close();
+          return;
+        }
+        try {
+          const transaction = db.transaction('receipts', 'readonly');
+          const read = transaction.objectStore('receipts').getAll();
+          transaction.onabort = () => {
+            db.close();
+            reject(transaction.error);
+          };
+          transaction.oncomplete = () => {
+            db.close();
+            const rows = read.result;
+            const ids = rows.map(row => row?.id);
+            if (ids.some(id => typeof id !== 'string' || !id.trim()) || new Set(ids).size !== ids.length) {
+              reject(new Error('Invalid receipt identifiers'));
+            } else {
+              resolve(rows);
+            }
+          };
+        } catch (error) {
+          db.close();
+          reject(error);
+        }
+      };
+    });
+  } catch {
+    throw new Error('Could not read saved review receipts. No recovery file was created.');
+  }
+}
+
+function parseRecoveryExportOutbox(raw) {
+  if (raw === null) return { schemaVersion: SHARED_SCORE_OUTBOX_SCHEMA_VERSION, operations: [], preservedForHostReview: [] };
+  try {
+    const outbox = JSON.parse(raw);
+    if (outbox?.schemaVersion !== SHARED_SCORE_OUTBOX_SCHEMA_VERSION || !Array.isArray(outbox.operations)
+      || (Object.hasOwn(outbox, 'preservedForHostReview') && !Array.isArray(outbox.preservedForHostReview))) {
+      throw new Error('Invalid score delivery queue');
+    }
+    return { ...outbox, preservedForHostReview: outbox.preservedForHostReview ?? [] };
+  } catch {
+    throw new Error('Could not read saved score delivery data. No recovery file was created.');
+  }
+}
+
+async function saveRecoveryFile() {
+  if (recoverySaveInProgress) {
+    recoveryToolsMessage('A recovery file is already being prepared.');
+    return;
+  }
+  recoverySaveInProgress = true;
+  try {
+    recoveryToolsGate();
+    const moduleState = document.getElementById('saveRecoveryFileBtn')?.dataset.recoveryFileState;
+    if (moduleState === 'loading') throw new Error('Recovery tools are still loading. Try again in a moment.');
+    const api = window.DyeLedgerRecoveryFile;
+    if (moduleState !== 'ready' || !api || !window.crypto?.subtle || typeof window.crypto.randomUUID !== 'function' || !Object.hasOwn) {
+      throw new Error("Recovery file isn't available here. Reload the app while online, then try again.");
+    }
+    const checkReady = () => {
+      recoveryToolsGate();
+      if (preservedReviewInflight.size) throw new Error('Wait for the score review to finish, then try again.');
+    };
+    checkReady();
+    const { values, stateText, fingerprint } = captureRecoverySources();
+    const assertUnchanged = () => {
+      checkReady();
+      if (captureRecoverySources().fingerprint !== fingerprint) throw new Error('Your data changed while saving. Try again.');
+    };
+    const outbox = parseRecoveryExportOutbox(values[SHARED_SCORE_OUTBOX_STORAGE_KEY]);
+    const reviewReceipts = await readRecoveryReviewReceipts();
+    assertUnchanged();
+    const createdAt = new Date().toISOString();
+    const fileId = window.crypto.randomUUID();
+    const recovery = await api.buildRecoveryFile({
+      state: JSON.parse(stateText),
+      outbox,
+      reviewReceipts,
+      finishRecovery: values[FINISH_RECOVERY_STORAGE_KEY],
+      setupDraft: values[SETUP_DRAFT_STORAGE_KEY],
+      coursePublishRecovery: values[COURSE_PUBLISH_RECOVERY_STORAGE_KEY],
+      pendingLedger: {
+        acceptance: values[LEDGER_ENTRY_ACCEPTANCE_STORAGE_KEY],
+        revision: values[LEDGER_ENTRY_REVISION_STORAGE_KEY],
+      },
+      templates: values[MATCH_TEMPLATES_STORAGE_KEY],
+      preferences: values[PLAYER_PREFERENCES_STORAGE_KEY],
+      deviceIdentity: { deviceId: values[SHARED_DEVICE_ID_KEY] },
+    }, { appVersion: APP_VERSION, createdAt, sourceOrigin: window.location.origin, fileId });
+    const text = api.serialize(recovery);
+    const fileHash = await api.sha256Hex(text);
+    const finalReceipts = await readRecoveryReviewReceipts();
+    if (api.canonical(finalReceipts) !== api.canonical(reviewReceipts)) {
+      throw new Error('Your review receipts changed while saving. Try again.');
+    }
+    assertUnchanged();
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `the-dye-ledger-recovery-${createdAt.slice(0, 10)}.json`;
+    try {
+      link.click();
+    } finally {
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
+    recoveryToolsMessage(`Recovery file prepared. File ID ${fileId}. SHA-256 ${fileHash}.`);
+  } catch (error) {
+    recoveryToolsMessage(`Could not prepare the recovery file. ${error.message || 'Please try again.'}`);
+  } finally {
+    recoverySaveInProgress = false;
+  }
 }
 
 function findStatPuttsInput(playerId) {
@@ -27541,6 +27744,8 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   });
 
   document.getElementById('exportBtn').addEventListener('click', exportJson);
+  document.getElementById('saveRecoveryFileBtn')?.addEventListener('click', saveRecoveryFile);
+  document.getElementById('showRecoveryIsolationCodeBtn')?.addEventListener('click', showRecoveryIsolationCode);
   document.getElementById('playerPreferencesForm')?.addEventListener('change', event => {
     const input = event.target.closest('[name]');
     if (!input || !PLAYER_PREFERENCE_PATHS.has(input.name)) return;
@@ -28875,6 +29080,9 @@ if (!DYE_LEDGER_ADAPTER_MODE && canPersistRecoveryProfile()) {
   const recoveredSetupDraft = startupActiveMatch ? null : loadSetupDraft();
   if (startupActiveMatch) currentHole = Math.max(1, Math.min(getRequestedHoleCount(startupActiveMatch), Number(startupActiveMatch.currentHole) || completedHoles(startupActiveMatch) || 1));
   setupWorkflowMode = startupActiveMatch || recoveredSetupDraft ? 'create' : 'landing';
+  // Rendering the setup hub can schedule a draft save before any user edit.
+  setupDraftAutosaveSuppressed = recoveryStartupGuard?.state === 'G1';
+  if (setupDraftAutosaveSuppressed) queueMicrotask(() => { setupDraftAutosaveSuppressed = false; });
   loadMatchEditor(null, recoveredSetupDraft || undefined);
   updateVersionUi();
   renderAppReleaseNotes();

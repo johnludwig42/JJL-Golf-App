@@ -1,5 +1,10 @@
 # The Dye Ledger — PROJECT_CONTEXT.md
 
+November 14, 2026: WP-LIB-01 v31.0.88, Round Recovery, adds verified recovery
+file export, isolated restore, and read-only viewing of accepted Ledgers.
+The staging builder includes the recovery page. Physical iPhone acceptance
+and final release verification are pending. See BUILD_NOTES_v31.0.88.md.
+
 November 9, 2026: WP-STORE-01 v31.0.87, Storage Notice Clarity, separates
 device storage estimates from score delivery and host review. The notice reports
 main app data, backup and other local data, and removes its saved-rounds shortcut.

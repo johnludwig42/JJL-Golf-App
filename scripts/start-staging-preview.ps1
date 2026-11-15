@@ -28,7 +28,7 @@ New-Item -ItemType Directory -Force -Path $previewOutput | Out-Null
 $previewTrackedFiles = & git -C $previewRoot ls-files
 if ($LASTEXITCODE -ne 0) { throw 'Could not inventory tracked application assets.' }
 $previewFiles = @($previewTrackedFiles | Where-Object {
-    ($_ -match '^[^/]+\.(js|css|svg)$') -or ($_ -in @('index.html','manifest.json')) -or
+    ($_ -match '^[^/]+\.(js|css|svg)$') -or ($_ -in @('index.html','manifest.json','recovery.html')) -or
     ($_ -match '^ledger-report/[^.].*\.(html|js|css|woff2|svg|png)$') -or
     ($_ -match $previewBrandingPattern)
 })

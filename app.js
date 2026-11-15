@@ -283,7 +283,7 @@ function getPlayerPreferences(storage = localStorage) {
     const raw = storage.getItem(PLAYER_PREFERENCES_STORAGE_KEY);
     if (raw == null) {
       const defaults = getDefaultPlayerPreferences();
-      savePlayerPreferences(defaults, storage);
+      if (recoveryStartupGuard?.state !== 'G1') savePlayerPreferences(defaults, storage);
       return defaults;
     }
     return normalizePlayerPreferences(JSON.parse(raw));
@@ -10177,6 +10177,181 @@ function buildClassicOnlyExportBody(match, metrics) {
     </section>${buildExportMatchNetScorecards(match, metrics)}`;
 }
 
+function runUnifiedExportControls(win, doc, view) {
+  const AUTO_PRINT_DELAY = 260;
+  const PRINT_PAGE_HEIGHT_MM = view === 'ledger' ? 279.4 : 215.9;
+  const PRINT_PAGE_MARGIN_MM = 8;
+  const SECTION_GAP_PX = 10;
+  function mmToPx(mm) {
+    const probe = doc.createElement('div');
+    probe.style.position = 'absolute';
+    probe.style.visibility = 'hidden';
+    probe.style.height = mm + 'mm';
+    probe.style.pointerEvents = 'none';
+    doc.body.appendChild(probe);
+    const px = probe.getBoundingClientRect().height || (mm * 96 / 25.4);
+    probe.remove();
+    return px;
+  }
+  function getPrintablePageHeightPx() {
+    return Math.max(480, mmToPx(PRINT_PAGE_HEIGHT_MM - (PRINT_PAGE_MARGIN_MM * 2)));
+  }
+  function decoratePrintPages() {
+    doc.querySelectorAll('.export-section').forEach(function (section) {
+      if (section.querySelector(':scope > .print-page-content')) return;
+      const wrapper = doc.createElement('div');
+      wrapper.className = 'print-page-content';
+      while (section.firstChild) wrapper.appendChild(section.firstChild);
+      section.appendChild(wrapper);
+    });
+  }
+  function fitStage(stage) {
+    if (!stage) return;
+    const box = stage.querySelector('.fit-box');
+    if (!box) return;
+    stage.style.removeProperty('height');
+    stage.style.removeProperty('--fit-scale');
+    box.style.removeProperty('transform');
+    box.style.removeProperty('width');
+    const fitMode = stage.getAttribute('data-fit') || 'width';
+    const minScale = Math.max(0.4, Math.min(Number(stage.getAttribute('data-fit-min') || 0.6), 1));
+    const width = Math.max(box.scrollWidth || 0, box.offsetWidth || 0, box.getBoundingClientRect().width || 0);
+    const height = Math.max(box.scrollHeight || 0, box.offsetHeight || 0, box.getBoundingClientRect().height || 0);
+    const availableWidth = Math.max(560, stage.clientWidth || doc.documentElement.clientWidth || win.innerWidth || 980);
+    const availableHeight = Math.max(380, win.innerHeight || 720);
+    let scale = 1;
+    if (width > 0) scale = Math.min(scale, availableWidth / width);
+    if (fitMode === 'width-height' && height > 0) scale = Math.min(scale, (availableHeight - 150) / height);
+    scale = Math.max(minScale, Math.min(scale, 1));
+    stage.style.setProperty('--fit-scale', String(scale));
+    if (height > 0) stage.style.height = Math.ceil(height * scale) + 8 + 'px';
+  }
+  function fitAllStages() {
+    doc.querySelectorAll('.fit-stage').forEach(fitStage);
+  }
+  function layoutPrintPages() {
+    const printableHeight = getPrintablePageHeightPx();
+    const header = doc.querySelector('.export-header');
+    const headerHeight = header ? Math.ceil(header.getBoundingClientRect().height) + SECTION_GAP_PX : 0;
+    doc.querySelectorAll('.export-section').forEach(function (section, index) {
+      const content = section.querySelector(':scope > .print-page-content');
+      if (!content) return;
+      section.style.removeProperty('height');
+      section.style.removeProperty('--page-scale');
+      content.style.removeProperty('transform');
+      content.style.removeProperty('width');
+      const sectionChrome = section.offsetHeight - content.offsetHeight;
+      const naturalHeight = Math.max(content.scrollHeight || 0, content.offsetHeight || 0, content.getBoundingClientRect().height || 0);
+      const availableHeight = Math.max(280, printableHeight - sectionChrome - (index === 0 ? headerHeight : 0));
+      const scale = naturalHeight > printableHeight ? Math.max(0.78, Math.min(1, availableHeight / naturalHeight)) : 1;
+      section.style.setProperty('--page-scale', String(scale));
+      section.style.height = Math.ceil((naturalHeight * scale) + sectionChrome) + 'px';
+    });
+  }
+  function paginateWholeSections() {
+    const printableHeight = getPrintablePageHeightPx();
+    const header = doc.querySelector('.export-header');
+    let used = header ? Math.ceil(header.getBoundingClientRect().height) + SECTION_GAP_PX : 0;
+    doc.querySelectorAll('.ledger-entry-page-start, .export-section').forEach(function (section) {
+      if (section.classList.contains('ledger-entry-page-start')) {
+        used = 0;
+        return;
+      }
+      section.classList.remove('export-auto-page-before');
+      const forced = section.classList.contains('export-force-page-before')
+        || section.classList.contains('export-section-classic-summary')
+        || section.classList.contains('export-section-round-recap')
+        || section.classList.contains('export-section-ssp-audit')
+        || section.classList.contains('report-layer--ledger');
+      if (forced) used = 0;
+      const height = Math.ceil(section.getBoundingClientRect().height || section.offsetHeight || 0) + SECTION_GAP_PX;
+      if (!forced && height <= printableHeight && used > 0 && used + height > printableHeight) {
+        section.classList.add('export-auto-page-before');
+        used = 0;
+      }
+      used = height > printableHeight ? 0 : used + height;
+    });
+  }
+  function reserveFirstPageForRecap() {
+    const recap = doc.querySelector('.export-section-round-recap');
+    const games = doc.querySelector('.export-section-games-summary-after-recap');
+    if (!recap || !games) return;
+    games.classList.remove('export-force-page-before');
+    const printableHeight = getPrintablePageHeightPx();
+    const header = doc.querySelector('.export-header');
+    const headerHeight = header ? Math.ceil(header.getBoundingClientRect().height) : 0;
+    const recapHeight = Math.ceil(recap.getBoundingClientRect().height || recap.offsetHeight || 0);
+    const gamesHeight = Math.ceil(games.getBoundingClientRect().height || games.offsetHeight || 0);
+    const buffer = SECTION_GAP_PX * 3;
+    if (headerHeight + recapHeight + gamesHeight + buffer > printableHeight) {
+      games.classList.add('export-force-page-before');
+    }
+  }
+  function runAfterLayout(fn) {
+    win.requestAnimationFrame(function () {
+      win.requestAnimationFrame(function () {
+        win.setTimeout(fn, 120);
+      });
+    });
+  }
+  function prepareExportLayout() {
+    decoratePrintPages();
+    fitAllStages();
+    layoutPrintPages();
+    reserveFirstPageForRecap();
+    paginateWholeSections();
+  }
+  function startPrint() {
+    prepareExportLayout();
+    runAfterLayout(function () {
+      prepareExportLayout();
+      win.setTimeout(function () {
+        try { win.print(); } catch (e) {}
+      }, AUTO_PRINT_DELAY);
+    });
+  }
+  function showReturnFallback(message) {
+    const el = doc.getElementById('returnStatus');
+    if (!el) return;
+    el.hidden = false;
+    if (message) el.textContent = message;
+  }
+  function returnToApp() {
+    let closed = false;
+    try {
+      win.close();
+      closed = win.closed;
+    } catch (e) {}
+    win.setTimeout(function () {
+      if (win.closed || closed) return;
+      try {
+        if (win.opener && typeof win.opener.focus === 'function') win.opener.focus();
+      } catch (e) {}
+      try {
+        if (win.history.length > 1) {
+          win.history.back();
+          return;
+        }
+      } catch (e) {}
+      showReturnFallback('You can close this tab to return to the app.');
+    }, 120);
+  }
+  win.addEventListener('resize', prepareExportLayout);
+  win.addEventListener('beforeprint', prepareExportLayout);
+  doc.getElementById('manualPrintBtn')?.addEventListener('click', function () {
+    prepareExportLayout();
+    win.setTimeout(function () {
+      try { win.print(); } catch (e) {}
+    }, 60);
+  });
+  doc.getElementById('returnToAppBtn')?.addEventListener('click', returnToApp);
+  if (doc.readyState === 'complete') {
+    startPrint();
+  } else {
+    win.addEventListener('load', startPrint, { once: true });
+  }
+}
+
 function buildUnifiedExportDocument(match, metrics, printView = 'ledger') {
   // `summary` remains an internal compatibility route for historical records and
   // regression fixtures. It is intentionally absent from the user-facing picker.
@@ -10932,182 +11107,7 @@ function buildUnifiedExportDocument(match, metrics, printView = 'ledger') {
     </div>
     ${bodyHtml}
   </div>
-  <script>
-    (function () {
-      const AUTO_PRINT_DELAY = 260;
-      const PRINT_PAGE_HEIGHT_MM = ${requestedView === 'ledger' ? '279.4' : '215.9'};
-      const PRINT_PAGE_MARGIN_MM = 8;
-      const SECTION_GAP_PX = 10;
-      function mmToPx(mm) {
-        const probe = document.createElement('div');
-        probe.style.position = 'absolute';
-        probe.style.visibility = 'hidden';
-        probe.style.height = mm + 'mm';
-        probe.style.pointerEvents = 'none';
-        document.body.appendChild(probe);
-        const px = probe.getBoundingClientRect().height || (mm * 96 / 25.4);
-        probe.remove();
-        return px;
-      }
-      function getPrintablePageHeightPx() {
-        return Math.max(480, mmToPx(PRINT_PAGE_HEIGHT_MM - (PRINT_PAGE_MARGIN_MM * 2)));
-      }
-      function decoratePrintPages() {
-        document.querySelectorAll('.export-section').forEach(function (section) {
-          if (section.querySelector(':scope > .print-page-content')) return;
-          const wrapper = document.createElement('div');
-          wrapper.className = 'print-page-content';
-          while (section.firstChild) wrapper.appendChild(section.firstChild);
-          section.appendChild(wrapper);
-        });
-      }
-      function fitStage(stage) {
-        if (!stage) return;
-        const box = stage.querySelector('.fit-box');
-        if (!box) return;
-        stage.style.removeProperty('height');
-        stage.style.removeProperty('--fit-scale');
-        box.style.removeProperty('transform');
-        box.style.removeProperty('width');
-        const fitMode = stage.getAttribute('data-fit') || 'width';
-        const minScale = Math.max(0.4, Math.min(Number(stage.getAttribute('data-fit-min') || 0.6), 1));
-        const width = Math.max(box.scrollWidth || 0, box.offsetWidth || 0, box.getBoundingClientRect().width || 0);
-        const height = Math.max(box.scrollHeight || 0, box.offsetHeight || 0, box.getBoundingClientRect().height || 0);
-        const availableWidth = Math.max(560, stage.clientWidth || document.documentElement.clientWidth || window.innerWidth || 980);
-        const availableHeight = Math.max(380, window.innerHeight || 720);
-        let scale = 1;
-        if (width > 0) scale = Math.min(scale, availableWidth / width);
-        if (fitMode === 'width-height' && height > 0) scale = Math.min(scale, (availableHeight - 150) / height);
-        scale = Math.max(minScale, Math.min(scale, 1));
-        stage.style.setProperty('--fit-scale', String(scale));
-        if (height > 0) stage.style.height = Math.ceil(height * scale) + 8 + 'px';
-      }
-      function fitAllStages() {
-        document.querySelectorAll('.fit-stage').forEach(fitStage);
-      }
-      function layoutPrintPages() {
-        const printableHeight = getPrintablePageHeightPx();
-        const header = document.querySelector('.export-header');
-        const headerHeight = header ? Math.ceil(header.getBoundingClientRect().height) + SECTION_GAP_PX : 0;
-        document.querySelectorAll('.export-section').forEach(function (section, index) {
-          const content = section.querySelector(':scope > .print-page-content');
-          if (!content) return;
-          section.style.removeProperty('height');
-          section.style.removeProperty('--page-scale');
-          content.style.removeProperty('transform');
-          content.style.removeProperty('width');
-          const sectionChrome = section.offsetHeight - content.offsetHeight;
-          const naturalHeight = Math.max(content.scrollHeight || 0, content.offsetHeight || 0, content.getBoundingClientRect().height || 0);
-          const availableHeight = Math.max(280, printableHeight - sectionChrome - (index === 0 ? headerHeight : 0));
-          const scale = naturalHeight > printableHeight ? Math.max(0.78, Math.min(1, availableHeight / naturalHeight)) : 1;
-          section.style.setProperty('--page-scale', String(scale));
-          section.style.height = Math.ceil((naturalHeight * scale) + sectionChrome) + 'px';
-        });
-      }
-      function paginateWholeSections() {
-        const printableHeight = getPrintablePageHeightPx();
-        const header = document.querySelector('.export-header');
-        let used = header ? Math.ceil(header.getBoundingClientRect().height) + SECTION_GAP_PX : 0;
-        document.querySelectorAll('.ledger-entry-page-start, .export-section').forEach(function (section) {
-          if (section.classList.contains('ledger-entry-page-start')) {
-            used = 0;
-            return;
-          }
-          section.classList.remove('export-auto-page-before');
-          const forced = section.classList.contains('export-force-page-before')
-            || section.classList.contains('export-section-classic-summary')
-            || section.classList.contains('export-section-round-recap')
-            || section.classList.contains('export-section-ssp-audit')
-            || section.classList.contains('report-layer--ledger');
-          if (forced) used = 0;
-          const height = Math.ceil(section.getBoundingClientRect().height || section.offsetHeight || 0) + SECTION_GAP_PX;
-          if (!forced && height <= printableHeight && used > 0 && used + height > printableHeight) {
-            section.classList.add('export-auto-page-before');
-            used = 0;
-          }
-          used = height > printableHeight ? 0 : used + height;
-        });
-      }
-      function reserveFirstPageForRecap() {
-        const recap = document.querySelector('.export-section-round-recap');
-        const games = document.querySelector('.export-section-games-summary-after-recap');
-        if (!recap || !games) return;
-        games.classList.remove('export-force-page-before');
-        const printableHeight = getPrintablePageHeightPx();
-        const header = document.querySelector('.export-header');
-        const headerHeight = header ? Math.ceil(header.getBoundingClientRect().height) : 0;
-        const recapHeight = Math.ceil(recap.getBoundingClientRect().height || recap.offsetHeight || 0);
-        const gamesHeight = Math.ceil(games.getBoundingClientRect().height || games.offsetHeight || 0);
-        const buffer = SECTION_GAP_PX * 3;
-        if (headerHeight + recapHeight + gamesHeight + buffer > printableHeight) {
-          games.classList.add('export-force-page-before');
-        }
-      }
-      function runAfterLayout(fn) {
-        requestAnimationFrame(function () {
-          requestAnimationFrame(function () {
-            setTimeout(fn, 120);
-          });
-        });
-      }
-      function prepareExportLayout() {
-        decoratePrintPages();
-        fitAllStages();
-        layoutPrintPages();
-        reserveFirstPageForRecap();
-        paginateWholeSections();
-      }
-      function startPrint() {
-        prepareExportLayout();
-        runAfterLayout(function () {
-          prepareExportLayout();
-          setTimeout(function () {
-            try { window.print(); } catch (e) {}
-          }, AUTO_PRINT_DELAY);
-        });
-      }
-      function showReturnFallback(message) {
-        const el = document.getElementById('returnStatus');
-        if (!el) return;
-        el.hidden = false;
-        if (message) el.textContent = message;
-      }
-      function returnToApp() {
-        let closed = false;
-        try {
-          window.close();
-          closed = window.closed;
-        } catch (e) {}
-        setTimeout(function () {
-          if (window.closed || closed) return;
-          try {
-            if (window.opener && typeof window.opener.focus === 'function') window.opener.focus();
-          } catch (e) {}
-          try {
-            if (window.history.length > 1) {
-              window.history.back();
-              return;
-            }
-          } catch (e) {}
-          showReturnFallback('You can close this tab to return to the app.');
-        }, 120);
-      }
-      window.addEventListener('resize', prepareExportLayout);
-      window.addEventListener('beforeprint', prepareExportLayout);
-      document.getElementById('manualPrintBtn')?.addEventListener('click', function () {
-        prepareExportLayout();
-        setTimeout(function () {
-          try { window.print(); } catch (e) {}
-        }, 60);
-      });
-      document.getElementById('returnToAppBtn')?.addEventListener('click', returnToApp);
-      if (document.readyState === 'complete') {
-        startPrint();
-      } else {
-        window.addEventListener('load', startPrint, { once: true });
-      }
-    })();
-  <\/script>
+  ${recoveryStartupGuard?.cloudOff === true ? '' : `<script>(${runUnifiedExportControls.toString()})(window, document, ${JSON.stringify(requestedView)});<\/script>`}
 </body>
 </html>`;
 }
@@ -11221,6 +11221,9 @@ async function openUnifiedExport(match, printView = 'ledger') {
   exportWindow.document.open();
   exportWindow.document.write(exportHtml);
   exportWindow.document.close();
+  if (recoveryStartupGuard?.cloudOff === true) {
+    runUnifiedExportControls(exportWindow, exportWindow.document, printView);
+  }
   try { exportWindow.focus(); } catch  {}
 }
 globalThis.__DYE_LEDGER_ACCEPT_REPORT__ = envelope => acceptLedgerEntrySnapshotEnvelope(envelope, { persistNow: true });

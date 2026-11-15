@@ -31,6 +31,7 @@ const browserGlobals = {
   setInterval: "readonly",
   clearInterval: "readonly",
   requestAnimationFrame: "readonly",
+  queueMicrotask: "readonly",
   cancelAnimationFrame: "readonly",
   crypto: "readonly",
   indexedDB: "readonly",

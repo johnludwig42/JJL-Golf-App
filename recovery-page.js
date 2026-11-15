@@ -3,6 +3,7 @@
   const api = window.DyeLedgerRecoveryFile;
   const byId = id => document.getElementById(id);
   const markerKey = api.restoreKeys.marker;
+  const viewerPrefix = 'dye-ledger-report-recovery-';
   const canaryKey = 'dye-ledger-recovery-isolation-canary';
   const receiptDatabase = 'the-dye-ledger-score-review-v1';
   const canaryPattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
@@ -25,17 +26,116 @@
 
   function markerNotice() {
     const raw = localStorage.getItem(markerKey);
+    byId('recoveryViewer').hidden = true;
     if (raw === null) return false;
     let marker;
     try { marker = JSON.parse(raw); } catch {}
     closePicker();
     byId('checkIsolation').disabled = true;
     byId('canaryProof').hidden = true;
-    announce(api.validateMarker(marker) && marker.phase === 'restored-verified'
+    const verified = api.validateMarker(marker) && marker.phase === 'restored-verified';
+    byId('recoveryViewer').hidden = !verified;
+    const remaining = verified ? marker.results.leftInFile?.length : 0;
+    announce(verified
       ? 'Verified recovery: ' + marker.results.rounds + ' rounds, ' + marker.results.receipts
         + ' review receipts. Backup: ' + marker.results.backup + '.'
+        + (remaining ? ' ' + remaining + ' rounds remain in the recovery file.' : '')
       : 'Restore incomplete. This profile cannot be reused. Start again in a new disposable profile.');
     return true;
+  }
+
+  function viewerOnline() {
+    if (navigator.onLine === false) {
+      throw new Error('Reconnect to open the Ledger viewer. Its pages are not stored offline in this profile.');
+    }
+  }
+
+  function verifiedViewerMarker(raw) {
+    try {
+      const marker = JSON.parse(raw);
+      return api.validateMarker(marker) && marker.phase === 'restored-verified' ? marker : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function openLedger(raw, marker, roundId, report) {
+    viewerOnline();
+    if (localStorage.getItem(markerKey) !== raw) throw new Error('The recovery profile has changed. Reopen the viewer.');
+    const key = viewerPrefix + crypto.randomUUID();
+    const shell = new URL('ledger-report/shell.html', location.href);
+    shell.searchParams.set('reportKey', key);
+    try {
+      sessionStorage.setItem(key, JSON.stringify({
+        report, autoPrint: false, viewOnly: true, source: 'recovery-file', fileId: marker.fileId,
+        roundId, returnUrl: new URL('recovery.html', location.href).href, createdAt: new Date().toISOString(),
+      }));
+    } catch {
+      throw new Error('Could not open the Ledger. Nothing was changed.');
+    }
+    location.assign(shell.href);
+  }
+
+  async function viewSelectedFile(input) {
+    const list = byId('recoveryViewerRounds');
+    list.replaceChildren();
+    const file = input.files?.[0];
+    if (!file) return;
+    viewerOnline();
+    const raw = localStorage.getItem(markerKey);
+    const marker = verifiedViewerMarker(raw);
+    const wrongFile = () => new Error('This is not the recovery file restored into this profile.');
+    if (!marker || file.size > 16 * 1024 * 1024) throw wrongFile();
+    let text;
+    try {
+      text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await file.arrayBuffer());
+    } catch {
+      throw wrongFile();
+    }
+    const parsed = api.parseRecoveryFile(text);
+    if (!parsed.ok || parsed.file.meta.fileId !== marker.fileId
+      || await api.sha256Hex(text) !== marker.fileSha256
+      || !(await api.verifyRecoveryFile(parsed.file)).ok) throw wrongFile();
+    if (input.files?.[0] !== file || !input.isConnected) return;
+    viewerOnline();
+    if (localStorage.getItem(markerKey) !== raw) throw wrongFile();
+    const leftInFile = new Set(marker.results.leftInFile || []);
+    for (const match of parsed.file.payload.state.matches) {
+      const row = document.createElement('li');
+      row.textContent = [
+        match.name || match.id, match.date, match.status, match.courseSnapshot?.name || match.courseId,
+        match.teeSnapshot?.teeName || match.teeId, 'Hash OK',
+        leftInFile.has(match.id) ? 'In the recovery file only' : 'Restored',
+      ].filter(Boolean).join(' · ');
+      const report = api.acceptedLedgerReport(match);
+      if (report) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = 'View Ledger (read-only)';
+        button.addEventListener('click', () => void handle(() => openLedger(raw, marker, match.id, report)));
+        row.append(' · Shown as accepted · ', button);
+      } else {
+        row.append(match.ledgerEntrySnapshot ? ' · Accepted Ledger unavailable in this file'
+          : leftInFile.has(match.id) ? ' · No accepted Ledger in this file. This round stays in the recovery file.'
+            : ' · No accepted Ledger in this file.');
+      }
+      list.append(row);
+    }
+    announce('Recovery file verified for read-only viewing.');
+  }
+
+  function showViewerPicker() {
+    viewerOnline();
+    if (!verifiedViewerMarker(localStorage.getItem(markerKey))) return;
+    const label = document.createElement('label');
+    label.textContent = 'Choose the recovery file used for this restore ';
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.addEventListener('change', () => void handle(() => viewSelectedFile(input)));
+    label.append(input);
+    byId('recoveryViewerRounds').replaceChildren();
+    byId('recoveryViewerPicker').replaceChildren(label);
   }
 
   async function databaseEmpty() {
@@ -230,6 +330,16 @@
   byId('checkIsolation').addEventListener('click', () => void handle(checkIsolation));
   byId('confirmIsolation').addEventListener('click', () => void handle(confirmIsolation));
   byId('restoreRecovery').addEventListener('click', () => void handle(restore));
+  byId('viewRecoveryRounds').addEventListener('click', () => void handle(showViewerPicker));
+  function clearViewerTransfers() {
+    try {
+      for (let index = sessionStorage.length - 1; index >= 0; index--) {
+        const key = sessionStorage.key(index);
+        if (key?.startsWith(viewerPrefix)) sessionStorage.removeItem(key);
+      }
+    } catch {}
+  }
+  window.addEventListener('pageshow', clearViewerTransfers);
   window.addEventListener('online', () => {
     closePicker();
     byId('canaryProof').hidden = true;

@@ -170,6 +170,29 @@
   const nullableText = value => value === null || typeof value === 'string';
   const signature = record => sha256Hex(canonical(record));
 
+  function acceptedLedgerReport(match) {
+    const snapshot = match?.ledgerEntrySnapshot;
+    if (snapshot?.status !== 'accepted' || !snapshot.acceptedAt || !snapshot.report) return null;
+    const report = JSON.parse(JSON.stringify(snapshot.report));
+    const reportRoundId = String(report?.meta?.roundId || snapshot.roundId || '');
+    if (!reportRoundId || (match.id && reportRoundId !== String(match.id))) return null;
+    const story = String(report?.meta?.story || snapshot.story || '').trim();
+    if (!story || report.meta?.status !== 'final') return null;
+    report.meta.story = story;
+    report.meta.acceptanceStatus = 'accepted';
+    report.meta.acceptedAt = snapshot.acceptedAt;
+    return report;
+  }
+
+  function restorePriority(state) {
+    return state.matches.filter(match => match.id !== state.activeMatchId).map(match => ({
+      id: match.id,
+      group: match.status !== 'complete' ? 0 : acceptedLedgerReport(match) ? 2 : 1,
+      date: String(match.completedAt || match.date || ''),
+    })).sort((a, b) => a.group - b.group || b.date.localeCompare(a.date) || a.id.localeCompare(b.id))
+      .map(round => round.id);
+  }
+
   async function validateHoldRecord(record, kind) {
     if (!isRecord(record) || record.schemaVersion !== schemaVersion || !isNonemptyText(record.fileId)
       || !isHash(record.recordSha256)) return false;
@@ -204,7 +227,10 @@
       && isNonemptyText(marker.completedAt) && isRecord(marker.results)
       && Number.isSafeInteger(marker.results.rounds) && marker.results.rounds >= 0
       && Number.isSafeInteger(marker.results.receipts) && marker.results.receipts >= 0
-      && ['verified', 'quota-unavailable'].includes(marker.results.backup));
+      && ['verified', 'quota-unavailable'].includes(marker.results.backup)
+      && (!Object.hasOwn(marker.results, 'leftInFile') || (Array.isArray(marker.results.leftInFile)
+        && marker.results.leftInFile.length > 0 && marker.results.leftInFile.every(isNonemptyText)
+        && new Set(marker.results.leftInFile).size === marker.results.leftInFile.length)));
   }
 
   async function planRestore(text, { profileNonce, restoredAt } = {}) {
@@ -294,7 +320,13 @@
       }
 
       step = 'S1';
-      const markerText = JSON.stringify(marker);
+      // Reserve the serialized result space before attempting a quota-limited state write.
+      const completionSpace = JSON.stringify({
+        completedAt: marker.startedAt,
+        results: { rounds: rounds.length, receipts: receipts.length, backup: 'quota-unavailable',
+          leftInFile: rounds.map(round => round.roundId) },
+      }).length + 32;
+      const markerText = JSON.stringify({ ...marker, reserve: ' '.repeat(completionSpace) });
       write(restoreKeys.marker, markerText);
       if (stopped()) return refuse('interrupted');
       step = 'S2';
@@ -322,30 +354,64 @@
       }
       if (stopped()) return refuse('interrupted');
       step = 'S6';
-      write(restoreKeys.state, values[restoreKeys.state]);
+      const originalState = JSON.parse(values[restoreKeys.state]);
+      let stateText = values[restoreKeys.state];
+      try { write(restoreKeys.state, stateText); }
+      catch (error) {
+        if (error?.name !== 'QuotaExceededError' || storage.getItem(restoreKeys.state) !== null) throw error;
+        const priority = restorePriority(originalState);
+        let stored = null;
+        let low = 0;
+        let high = priority.length - 1;
+        while (low <= high) {
+          const count = Math.floor((low + high) / 2);
+          const ids = new Set(priority.slice(0, count));
+          const candidate = JSON.stringify({
+            ...originalState,
+            matches: originalState.matches.filter(match => match.id === originalState.activeMatchId || ids.has(match.id)),
+          });
+          try {
+            write(restoreKeys.state, candidate, stored);
+            stored = candidate;
+            low = count + 1;
+          } catch (failure) {
+            if (failure?.name !== 'QuotaExceededError' || storage.getItem(restoreKeys.state) !== stored) throw failure;
+            high = count - 1;
+          }
+        }
+        if (stored === null) throw error;
+        stateText = stored;
+      }
       const state = JSON.parse(storage.getItem(restoreKeys.state));
-      for (const [index, round] of rounds.entries()) {
-        const match = state.matches[index];
+      const roundById = new Map(rounds.map(round => [round.roundId, round]));
+      const restoredIds = new Set(state.matches.map(match => match.id));
+      const leftInFile = rounds.filter(round => !restoredIds.has(round.roundId)).map(round => round.roundId);
+      for (const match of state.matches) {
+        const round = roundById.get(match.id);
         const fields = Object.hasOwn(scoreHold.queueRecovery, match.id) ? scoreHold.queueRecovery[match.id] : {};
-        if (match.id !== round.roundId || await signature({ ...match, ...fields }) !== round.canonicalSha256) {
+        if (!round || await signature({ ...match, ...fields }) !== round.canonicalSha256) {
           return refuse('round-readback-mismatch');
         }
       }
       if (stopped()) return refuse('interrupted');
       step = 'S7';
       let backup = 'verified';
-      try { write(restoreKeys.backup, values[restoreKeys.backup]); }
+      try { write(restoreKeys.backup, stateText); }
       catch (error) {
         if (error?.name !== 'QuotaExceededError' || storage.getItem(restoreKeys.backup) !== null) throw error;
         backup = 'quota-unavailable';
       }
       if (stopped()) return refuse('interrupted');
       step = 'S8';
-      if (Object.entries(values).some(([key, value]) => key === restoreKeys.backup && backup === 'quota-unavailable'
+      const restoredValues = { ...values, [restoreKeys.state]: stateText, [restoreKeys.backup]: stateText };
+      const stateHash = leftInFile.length ? await sha256Hex(stateText) : marker.expected[restoreKeys.state];
+      if (Object.entries(restoredValues).some(([key, value]) => key === restoreKeys.backup && backup === 'quota-unavailable'
         ? storage.getItem(key) !== null : storage.getItem(key) !== value)) return refuse('restore-readback-mismatch');
       const completed = {
         ...marker, phase: 'restored-verified', completedAt: now(),
-        results: { rounds: rounds.length, receipts: receipts.length, backup },
+        expected: { ...marker.expected, [restoreKeys.state]: stateHash, [restoreKeys.backup]: stateHash },
+        results: { rounds: state.matches.length, receipts: receipts.length, backup,
+          ...(leftInFile.length ? { leftInFile } : {}) },
       };
       if (!validateMarker(completed)) return refuse('invalid-completion-marker');
       write(restoreKeys.marker, JSON.stringify(completed), markerText);
@@ -357,6 +423,6 @@
 
   return {
     canonical, sha256Hex, buildRecoveryFile, serialize, parseRecoveryFile, verifyRecoveryFile,
-    restoreKeys, planRestore, executeRestorePlan, validateHoldRecord, validateMarker,
+    restoreKeys, planRestore, executeRestorePlan, validateHoldRecord, validateMarker, restorePriority, acceptedLedgerReport,
   };
 });

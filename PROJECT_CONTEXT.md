@@ -1,9 +1,16 @@
 # The Dye Ledger — PROJECT_CONTEXT.md
 
-November 14, 2026: WP-LIB-01 v31.0.88, Round Recovery, adds verified recovery
+November 15, 2026: WP-LIB-01 v31.0.88, Round Recovery, adds verified recovery
 file export, isolated restore, and read-only viewing of accepted Ledgers.
-The staging builder includes the recovery page. Physical iPhone acceptance
-and final release verification are pending. See BUILD_NOTES_v31.0.88.md.
+The staging builder includes the recovery page. The full suite passed
+1,837/1,837 with no skips; layout is NOT_RUN. Staging served the reviewed build.
+On an iPhone 15 Pro Max (iOS 26.6.2, staging, synthetic rounds), John reported
+passing offline save, Private-tab restore and read-only viewing; screenshots
+corroborate part of this. Interrupted restore was not reproducible by hand and
+rests on Chromium evidence. C-1 is observation only. Both narrow AC6
+dispositions, the unestablished settlement impact, and the open AC-R8 and F-6
+observations carry forward. Merge and production verification are pending.
+See BUILD_NOTES_v31.0.88.md.
 
 November 9, 2026: WP-STORE-01 v31.0.87, Storage Notice Clarity, separates
 device storage estimates from score delivery and host review. The notice reports

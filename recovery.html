@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>The Dye Ledger Recovery</title>
+</head>
+<body>
+  <main>
+    <h1>Verify a recovery file</h1>
+    <p>Use an empty, separate browser profile. Open this page, then disconnect from the network before choosing a file.</p>
+    <p id="recoveryStatus" role="status" aria-live="polite"></p>
+    <button type="button" id="checkIsolation">Check isolation</button>
+    <section id="canaryProof" hidden>
+      <h2>Confirm the profiles are separate</h2>
+      <p>Recovery profile code: <output id="recoveryCanary"></output></p>
+      <p><label><input type="checkbox" id="canaryAbsent"> I confirmed this code is absent from the original profile.</label></p>
+      <p><label>Code from the original profile <input id="originalCanary" type="text" autocomplete="off"></label></p>
+      <button type="button" id="confirmIsolation">Confirm isolation</button>
+    </section>
+    <div id="recoveryPicker"></div>
+    <section id="recoveryDetails" hidden aria-label="Verified recovery file">
+      <h2>Recovery file contents</h2>
+      <p id="recoverySummary"></p>
+      <ul id="recoverySections"></ul>
+      <ul id="recoveryRounds"></ul>
+      <button type="button" id="restoreRecovery" disabled>Recover into empty profile</button>
+    </section>
+    <section id="recoveryViewer" hidden aria-label="Recovery file viewer">
+      <button type="button" id="viewRecoveryRounds">View rounds from the recovery file</button>
+      <div id="recoveryViewerPicker"></div>
+      <ul id="recoveryViewerRounds"></ul>
+    </section>
+  </main>
+  <script src="recovery-file.js"></script>
+  <script src="recovery-page.js"></script>
+</body>
+</html>

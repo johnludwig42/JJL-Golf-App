@@ -13,6 +13,7 @@
   const transferKey = query.get('reportKey');
   const retainedVersion = query.get('v');
   const consumedMarkerKey = 'dye-ledger-report:last-consumed';
+  const recoveryView = transferKey?.startsWith('dye-ledger-report-recovery-') || query.get('view') === 'recovery';
   let transfer = null;
   if (transferKey) {
     try {
@@ -25,6 +26,45 @@
     } catch (_error) {
       transfer = null;
     }
+  }
+  if (recoveryView || transfer?.viewOnly === true) {
+    if (transferKey) {
+      try { sessionStorage.removeItem(transferKey); } catch (_error) {}
+    }
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.search = '';
+    if (retainedVersion) cleanUrl.searchParams.set('v', retainedVersion);
+    cleanUrl.searchParams.set('view', 'recovery');
+    window.history.replaceState(null, '', cleanUrl);
+    window.opener = null;
+    Object.defineProperties(globalThis, {
+      __DYE_LEDGER_VIEW_ONLY__: { value: true },
+      __DYE_LEDGER_QUEUE_ACCEPTANCE__: { value: () => false },
+      __DYE_LEDGER_QUEUE_REVISION__: { value: () => false },
+    });
+    globalThis.__DYE_LEDGER_ROUND__ = transfer?.report || null;
+    globalThis.__DYE_LEDGER_AUTO_PRINT__ = false;
+    globalThis.__DYE_LEDGER_RETURN_URL__ = new URL('../recovery.html', window.location.href).href;
+    globalThis.__DYE_LEDGER_REPORT_TRANSFER_KEY__ = '';
+    globalThis.__DYE_LEDGER_REPORT_MISSING__ = !transfer?.report;
+    window.addEventListener('DOMContentLoaded', () => {
+      for (const id of ['acceptLedgerEntryBtn', 'reviseLedgerEntryBtn']) {
+        const button = document.getElementById(id);
+        if (button) button.hidden = true;
+      }
+      const status = document.getElementById('ledgerAcceptanceStatus');
+      if (status) {
+        status.hidden = false;
+        status.textContent = 'View only · from recovery file';
+      }
+      const returnButton = document.getElementById('returnToMatchBtn');
+      if (returnButton) returnButton.textContent = '‹ Return to recovery';
+      if (!transfer?.report) {
+        const doc = document.getElementById('doc');
+        if (doc) doc.innerHTML = '<main class="report-missing"><h1>Report data is no longer available</h1><p>Return to recovery and choose the recovery file again.</p></main>';
+      }
+    });
+    return;
   }
   if (transfer) {
     try { sessionStorage.setItem(consumedMarkerKey, String(Date.now())); } catch (_error) {}

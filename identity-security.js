@@ -226,14 +226,25 @@
     };
   }
 
-  function mountAccountSecurity() {
+  let accountSecurityCleanup = null;
+
+  function disposeAccountSecurity() {
+    const dispose = accountSecurityCleanup;
+    accountSecurityCleanup = null;
+    dispose?.();
+  }
+
+  function mountAccountSecurity({ storage, fetch } = {}) {
     const root = document.getElementById('accountSecurityPanel');
     if (!root || root.dataset.accountSecurityMounted === 'true') return;
     root.dataset.accountSecurityMounted = 'true';
     const config = global.__DYE_SUPABASE_CONFIG__ || {};
     const gate = getAccountAuthGate(config);
     const client = gate.enabled && config.url && config.anonKey && global.supabase?.createClient
-      ? (global.__DYE_SUPABASE_CLIENT__ || (global.__DYE_SUPABASE_CLIENT__ = global.supabase.createClient(config.url, config.anonKey, { auth: { storageKey: ACCOUNT_AUTH_STORAGE_KEY, persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }, global: { headers: { 'X-Client-Info': 'the-dye-ledger-account-v30.3.95' } } })))
+      ? (global.__DYE_SUPABASE_CLIENT__ || (global.__DYE_SUPABASE_CLIENT__ = global.supabase.createClient(config.url, config.anonKey, {
+        auth: { storageKey: ACCOUNT_AUTH_STORAGE_KEY, persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, ...(storage ? { storage } : {}) },
+        global: { headers: { 'X-Client-Info': 'the-dye-ledger-account-v30.3.95' }, ...(fetch ? { fetch } : {}) },
+      })))
       : null;
     const controller = createAuthController({ client });
     const profileController = createIdentityProfileController({ client });
@@ -241,6 +252,8 @@
     let profileAccountId = '';
     let profileRequest = 0;
     let resendTimer = null;
+    let disposed = false;
+    let authSubscription = null;
     let renderedAccountView = '';
     const loadProfile = async user => {
       const accountId = String(user?.id || '');
@@ -299,22 +312,35 @@
     };
     const escapeText = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
     controller.subscribe(state => {
+      if (disposed) return;
       if (!state.session?.user) { profileAccountId = ''; profileRequest += 1; state = { ...state, profile: null, profileLoading: false, profileError: '' }; }
       render(state);
       if (state.session?.user) void loadProfile(state.session.user);
     });
+    const online = () => feedback('Connection restored. You can sign in.');
+    const offline = () => feedback('Offline. Local scoring remains available.');
+    accountSecurityCleanup = () => {
+      disposed = true;
+      profileRequest += 1;
+      clearTimeout(resendTimer);
+      authSubscription?.unsubscribe?.();
+      global.removeEventListener('online', online);
+      global.removeEventListener('offline', offline);
+    };
     if (client) {
-      client.auth.onAuthStateChange((_event, nextSession) => controller.handleAuthSession(nextSession));
+      authSubscription = client.auth.onAuthStateChange((_event, nextSession) => {
+        if (!disposed) controller.handleAuthSession(nextSession);
+      })?.data?.subscription;
       controller.restore();
     }
-    global.addEventListener('online', () => feedback('Connection restored. You can sign in.'));
-    global.addEventListener('offline', () => feedback('Offline. Local scoring remains available.'));
+    global.addEventListener('online', online);
+    global.addEventListener('offline', offline);
   }
 
   global.DyeLedgerIdentitySecurity = Object.freeze({
     DOMAIN_SCHEMA_VERSION, ACCOUNT_AUTH_STORAGE_KEY, getProjectRef, getAccountAuthGate, isDurableAccountSession,
     createGolferIdentity, addGolferToLibrary, createRoundAccess,
     createRoundParticipation, createScoringAssignment, createRoundRecordVersion,
-    createAmendment, createAuthController, createIdentityProfileController, mountAccountSecurity,
+    createAmendment, createAuthController, createIdentityProfileController, mountAccountSecurity, disposeAccountSecurity,
   });
 })(typeof window === 'undefined' ? globalThis : window);

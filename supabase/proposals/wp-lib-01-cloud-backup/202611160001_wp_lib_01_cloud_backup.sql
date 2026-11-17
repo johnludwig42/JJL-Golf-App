@@ -122,11 +122,24 @@ begin
     raise exception 'BACKUP_HASH_MISMATCH' using errcode = '22023';
   end if;
 
-  -- The unique owner/round key arbitrates concurrent first uploads. The
-  -- winning insert and version insert commit together. A losing insert
-  -- then reads the winning version in a separate statement. That re-read
-  -- relies on READ COMMITTED (the PostgREST default) and this function being
-  -- VOLATILE (the default), so the separate SELECT takes a fresh snapshot.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('wp_lib_01_round_backups:' || owner_id::text, 0)
+  );
+
+  if not exists (
+       select 1 from public.round_backups as existing_backup
+       where existing_backup.owner_account_id = owner_id
+         and existing_backup.local_round_id = backup_round.local_round_id
+     )
+     and (select pg_catalog.count(*) from public.round_backups as owned_backup
+          where owned_backup.owner_account_id = owner_id) >= 100 then
+    raise exception 'BACKUP_LIMIT_REACHED' using errcode = '54000';
+  end if;
+
+  -- The per-owner advisory lock serializes one owner's calls, making the cap
+  -- exact under concurrency. The unique owner/round key still guarantees one
+  -- backup per round. READ COMMITTED (the PostgREST default) and this function
+  -- being VOLATILE (the default) give each separate statement a fresh snapshot.
   insert into public.round_backups as backup (owner_account_id, local_round_id)
     values (owner_id, backup_round.local_round_id)
     on conflict on constraint round_backups_owner_local_key do nothing

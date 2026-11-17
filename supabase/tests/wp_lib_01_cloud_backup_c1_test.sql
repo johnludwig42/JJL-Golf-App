@@ -1,7 +1,7 @@
 -- C1 contract for an approved staging database with pgTAP available.
 -- All claims and data are synthetic; ROLLBACK removes the fixture.
 begin;
-select plan(40);
+select plan(44);
 
 select set_config('request.jwt.claims', '{"sub":"11111111-1111-4111-8111-111111111111","is_anonymous":false}', true);
 set local role authenticated;
@@ -162,6 +162,50 @@ select is((
   select count(*) from public.round_backup_versions v join public.round_backups b using (cloud_round_id)
   where b.local_round_id = 'wp-lib-c1-fixture'
 ), 1::bigint, 'changed-round refusal leaves the existing version alone');
+
+do $$
+declare
+  backup_count bigint;
+  cap_local_round_id text;
+  cap_round_canonical text;
+begin
+  select count(*) into backup_count from public.round_backups;
+  while backup_count < 100 loop
+    cap_local_round_id := 'wp-lib-c1-cap-' || (backup_count + 1)::text;
+    cap_round_canonical := '{"id":"' || cap_local_round_id || '"}';
+    perform public.backup_round(
+      cap_local_round_id,
+      cap_round_canonical,
+      '[]',
+      encode(sha256(convert_to(cap_round_canonical, 'UTF8')), 'hex'),
+      encode(sha256(convert_to('[]', 'UTF8')), 'hex'),
+      '31.0.88'
+    );
+    backup_count := backup_count + 1;
+  end loop;
+end;
+$$;
+
+select is((select count(*) from public.round_backups),
+  100::bigint, 'owner reaches the 100-backup cap');
+select throws_ok($sql$select * from public.backup_round(
+  'wp-lib-c1-cap-overflow', '{"id":"wp-lib-c1-cap-overflow"}', '[]',
+  encode(sha256(convert_to('{"id":"wp-lib-c1-cap-overflow"}', 'UTF8')), 'hex'),
+  encode(sha256(convert_to('[]', 'UTF8')), 'hex'), '31.0.88'
+)$sql$,
+  '54000', 'BACKUP_LIMIT_REACHED', 'a new round is rejected at the 100-backup cap');
+select ok((
+  select not created from public.backup_round(
+    'wp-lib-c1-fixture', '{"id":"wp-lib-c1-fixture","status":"complete","storageMode":"local"}',
+    '[{"id":"player-1","index":12,"name":"Synthetic Golfer"}]',
+    encode(sha256(convert_to('{"id":"wp-lib-c1-fixture","status":"complete","storageMode":"local"}', 'UTF8')), 'hex'),
+    encode(sha256(convert_to('[{"id":"player-1","index":12,"name":"Synthetic Golfer"}]', 'UTF8')), 'hex'),
+    '31.0.88'
+  )
+), 'same-round retry still succeeds at the 100-backup cap');
+select is((select count(*) from public.round_backups),
+  100::bigint, 'same-round retry leaves the owner at exactly 100 backups');
+
 select throws_ok(
   $$insert into public.round_backups (owner_account_id, local_round_id)
     values ('11111111-1111-4111-8111-111111111112', 'wp-lib-c1-forged')$$,

@@ -1,5 +1,13 @@
 # The Dye Ledger — PROJECT_CONTEXT.md
 
+November 17, 2026: The WP-AUTO-01/02 collaboration supervisor, fake-only and
+never used with real agents, is retired. Its 49 files under
+scripts/collab-supervisor, tests/collab-* and tests/fixtures/collab-supervisor
+are removed from main and preserved at tag archive/wp-auto-02-main; the Stage
+2a work is at archive/wp-auto-02-stage2a. The _supervisor folder created by
+Stage 1b is left in place, and any restore runs from the archive tag. No app
+behavior changes.
+
 November 17, 2026: O-G1 v31.0.89, Recovery Script Versions, versions both
 recovery page scripts with the release, reducing the chance that an older
 cached script runs beside a newer page without ruling it out. Validation now

@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
+import { currentVersionBare } from './support/release-identity.js';
 
 const script = 'scripts/start-staging-preview.ps1';
 const settingsDir = 'tmp/report-qa/shared-staging';
@@ -73,10 +74,10 @@ for (const netlify of [false, true]) {
     if (netlify) assert.match(page, /<meta name="robots" content="noindex">/);
 
     const assets = [...page.matchAll(/<script src="([^"]+)"><\/script>/g)].map(match => match[1]);
-    assert.deepEqual(assets, ['recovery-file.js', 'recovery-page.js']);
+    assert.deepEqual(assets, [`recovery-file.js?v=${currentVersionBare}`, `recovery-page.js?v=${currentVersionBare}`]);
     const paths = filesUnder(output).sort();
     for (const path of [...assets, 'ledger-report/shell.html', 'ledger-report/bootstrap.js']) {
-      assert.ok(paths.includes(path), path);
+      assert.ok(paths.includes(path.split('?')[0]), path);
     }
     const records = paths.map(path => {
       const bytes = readFileSync(join(output, path));

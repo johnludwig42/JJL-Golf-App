@@ -1,5 +1,14 @@
 # The Dye Ledger — PROJECT_CONTEXT.md
 
+November 17, 2026: O-G1 v31.0.89, Recovery Script Versions, versions both
+recovery page scripts with the release, reducing the chance that an older
+cached script runs beside a newer page without ruling it out. Validation now
+requires both versioned sources; the staging test derives the version from
+package.json. Data, storage, scoring, settlement, restore and precache behavior
+are unchanged. The full suite passed 1,837/1,837 with no skips under a network
+guard; lint, simulation comparison, release sanity and all seven layout checks
+passed. Merge and device acceptance are pending. See BUILD_NOTES_v31.0.89.md.
+
 November 15, 2026: WP-LIB-01 v31.0.88, Round Recovery, adds verified recovery
 file export, isolated restore, and read-only viewing of accepted Ledgers.
 The staging builder includes the recovery page. The full suite passed

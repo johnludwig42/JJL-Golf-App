@@ -104,11 +104,11 @@ const localPersistenceDiagnostics = {
   lastBackupWarning: '',
 };
 const BUILD_INFO = {
-  version: 'v31.0.88',
-  versionNumber: '31.0.88',
-  cacheName: 'the-dye-ledger-v31.0.88',
-  buildDate: '2026-11-15T03:04:37.710Z',
-  buildLabel: 'Round Recovery'
+  version: 'v31.0.89',
+  versionNumber: '31.0.89',
+  cacheName: 'the-dye-ledger-v31.0.89',
+  buildDate: '2026-11-17T00:24:40.405Z',
+  buildLabel: 'Recovery Script Versions'
 };
 const APP_VERSION = BUILD_INFO.version;
 const BUILD_TIMESTAMP = BUILD_INFO.buildDate;

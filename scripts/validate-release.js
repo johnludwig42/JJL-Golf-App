@@ -26,12 +26,14 @@ requireCondition(manifest.version === displayVersion || manifest.version === ver
 const app = read('app.js');
 const worker = read('service-worker.js');
 const html = read('index.html');
+const recoveryHtml = read('recovery.html');
 requireCondition(app.includes(`versionNumber: '${version}'`), 'app.js runtime version is inconsistent');
 requireCondition(app.includes(`cacheName: 'the-dye-ledger-${displayVersion}'`), 'app.js cache version is inconsistent');
 requireCondition(worker.includes(`versionNumber: '${version}'`), 'service-worker.js version is inconsistent');
 requireCondition(worker.includes(`cacheName: 'the-dye-ledger-${displayVersion}'`), 'service-worker cache version is inconsistent');
 requireCondition(html.includes(`app.js?v=${version}&amp;rev=`), 'index.html app asset query is stale');
 requireCondition(html.includes(`style.css?v=${version}&amp;rev=`), 'index.html style asset query is stale');
+requireCondition(recoveryHtml.includes(`recovery-file.js?v=${version}`) && recoveryHtml.includes(`recovery-page.js?v=${version}`), 'recovery.html asset query is stale');
 
 const versionedAssets = ['manifest.json', 'style.css', 'supabase-config.js', 'identity-security.js', 'app.js'];
 const assetRevisions = versionedAssets.map(asset => {

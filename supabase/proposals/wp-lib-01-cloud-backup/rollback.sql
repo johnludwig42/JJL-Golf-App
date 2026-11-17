@@ -1,6 +1,6 @@
 -- Separate approval required. Pause pilot writes before running.
 -- Any retained pilot rows require separately approved admin cleanup.
--- Retained rows are protected by the immutability triggers, so a separately approved admin cleanup must disable those triggers inside its own transaction before deleting rows.
+-- Use admin-delete-owner-backups.sql for per-owner deletion; a full pilot cleanup must likewise disable the immutability triggers inside its own transaction.
 begin;
 
 lock table public.round_backups, public.round_backup_versions in access exclusive mode;

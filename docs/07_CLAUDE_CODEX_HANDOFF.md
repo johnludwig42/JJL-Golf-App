@@ -168,11 +168,11 @@ erase the finding. Only John can accept the remaining risk; record it as
 
 ## 6. Supervised runs
 
-[Collaboration supervisor](../scripts/collab-supervisor/README.md) contains the
-WP-AUTO-01 Phase A fake-only implementation and verification procedure. This does
-not enable overnight work. Operational commands work only with hash-pinned fake
-fixtures and marked disposable OS Temp repositories/evidence. All real agent,
-version and auth calls remain disabled pending separate Phase B and Phase C approval.
+The WP-AUTO-01/02 collaboration supervisor, a fake-only implementation that never
+ran real agents, was retired on November 17, 2026. Its code, tests and fixtures are
+preserved at the annotated tag `archive/wp-auto-02-main`, and the Stage 2a work at
+`archive/wp-auto-02-stage2a`; check out a tag to inspect or restore them. Claude and
+Codex now work through attended `codex exec` sessions under a work-package approval.
 
 Use the explicit absolute evidence folder named in the work package. Retain each
 round's diff, manifest, untracked-file copies, checks, before/after status and

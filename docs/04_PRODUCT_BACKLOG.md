@@ -296,6 +296,16 @@ FUTURE:
 - Event ownership.
 - Apple Watch companion app exploration.
 - Voice entry exploration.
+
+### Round Library and Cloud Backup follow-ups
+
+- **Manual cloud backup.** Add a Library action to back up an eligible completed round. Keep the device copy. Show “Backed up” only after cloud read-back matches the source hash. Prove second-device restore and duplicate-safe retries before production rollout.
+- **Opt-in automatic cloud backup.** After manual backup and restore are proven, define and approve which events trigger backup, when retries occur, and what status the user sees. Require explicit opt-in. Reaching 15 rounds alone does not trigger upload. Prove repeat backups and safe retries across timeouts and offline reconnects.
+- **Retention and offload.** Verify that saving rounds 15 and 16 displaces nothing. Treat removal of a device copy as a separate future decision. Require a hash-verified cloud copy, a qualifying recovery file, and a successful physical-iPhone restore of a round absent from the device before enabling offload.
+- **Scope boundary.** Keep local recovery-file export and Shared Match synchronization separate from Library cloud backup. Define Shared Match eligibility and participant access before backing up shared rounds.
+- **Per-account backup cap.** During the pilot, limit each account to 100 cloud-backed-up rounds. Refuse a new round beyond the cap with a clear message, and keep accepting retries of rounds already backed up. Revisit the limit before wider release.
+- **Account deletion and backup retention.** During the pilot, keep backups immutable and remove them only on request through a reviewed admin procedure. Before wider release, decide the long-term policy: delete backups automatically with the account, or let the user delete them.
+
 # Future SSP polish
 
 - SSP Momentum Chart using cumulative final SSP point margin shipped in v30.3.57.

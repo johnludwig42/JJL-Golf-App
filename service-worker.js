@@ -16,6 +16,7 @@ const ASSETS = [
   './app-print.css?v=31.0.89',
   './app-presentation.js?v=31.0.89',
   './recovery-file.js?v=31.0.89',
+  './cloud-backup.js?v=31.0.89',
   './style.css?v=31.0.89&rev=202611170024',
   './preserved-score-review.js?v=31.0.89',
   './app.js?v=31.0.89&rev=202611170024',

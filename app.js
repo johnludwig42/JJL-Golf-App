@@ -19112,18 +19112,21 @@ function compareRoundLibraryNewestFirst(a, b) {
 }
 
 function renderMatches() {
+  const cloudBackupOn = isCloudBackupConfigured();
+  const cloudToolbar = cloudBackupOn ? '<div class="actions wrap compact-actions" data-cloud-backup-toolbar><button class="secondary" data-cloud-restore-open>Restore from cloud</button></div><div id="cloudRestorePanel" class="list top-gap" hidden></div>' : '';
   const el = document.getElementById('matchesList');
   if (!el) return;
   if (!state.matches.length) {
-    el.innerHTML = '<div class="library-empty-state"><strong>No saved rounds</strong><span>Rounds appear here after you create one from Match Setup.</span></div>';
+    el.innerHTML = cloudToolbar + '<div class="library-empty-state"><strong>No saved rounds</strong><span>Rounds appear here after you create one from Match Setup.</span></div>';
+    if (cloudBackupOn) renderCloudRestorePanel();
     return;
   }
   const sorted = state.matches.slice().sort(compareRoundLibraryNewestFirst);
   const inProgress = sorted.filter(m => m.status !== 'complete');
   const completed = sorted.filter(m => m.status === 'complete');
   const renderRow = match => {
-    const course = getCourse(match.courseId);
-    const tee = getTee(match.courseId, match.teeId);
+    const course = getCourse(match.courseId) || getMatchCourse(match);
+    const tee = getTee(match.courseId, match.teeId) || getMatchTee(match, match.teeId);
     const metrics = computeMatchMetrics(match);
     const status = match.status === 'complete' ? 'Complete' : (state.activeMatchId === match.id ? 'Active' : 'Paused');
     const timing = getRoundElapsedTimeState(match, metrics);
@@ -19136,6 +19139,8 @@ function renderMatches() {
       ? buildRoundRecordResultLine(getEffectiveRoundRecord(match, metrics))
       : (match.status === 'complete' ? 'Round complete · No games selected' : 'No games selected');
     const canReopen = !getSharedScoresPreservedForHostReview(match).length && !match.sharedScoreResolution && match.status === 'complete' && (match.storageMode !== 'shared' || isCurrentDeviceMatchHost(match));
+    const cloudStatus = cloudBackupOn && match.status === 'complete' && match.storageMode === 'local' ? `<span data-cloud-backup-status="${escapeHtml(match.id)}"><b>Cloud</b><span data-cloud-backup-label>Checking…</span></span>` : '';
+    const cloudButton = cloudBackupOn && match.status === 'complete' && match.storageMode === 'local' ? `<button class="secondary" data-cloud-backup="${escapeHtml(match.id)}">Back up</button>` : '';
     const continueLabel = state.activeMatchId === match.id ? 'Continue Loaded Round' : (match.storageMode === 'shared' ? 'Continue / Refresh' : 'Continue');
     return `
       <div class="item compact-item library-item-card round-library-card" data-round-status="${match.status === 'complete' ? 'complete' : 'unfinished'}">
@@ -19150,6 +19155,7 @@ function renderMatches() {
               <span><b>Progress</b>${metrics ? `${metrics.completed}/${getPlayableHoleCount(match, metrics.tee)} holes` : 'Unavailable'}</span>
               <span><b>Players</b>${escapeHtml(playerNames.join(', ') || `${(match.players || []).length} saved`)}</span>
               <span><b>Storage</b>${escapeHtml(cloudMeta)}</span>
+              ${cloudStatus}
               ${heldCount === null ? '' : `<span>Restored: ${heldCount} ${heldCount === 1 ? 'score' : 'scores'} held, not sent</span>`}
               ${timing.available ? `<span><b>Time</b>${escapeHtml(match.status === 'complete' ? formatRoundDuration(timing.elapsedMs) : `${formatRoundDuration(timing.elapsedMs)} elapsed`)}</span>` : ''}
             </div>
@@ -19160,6 +19166,7 @@ function renderMatches() {
               : `<button data-load-match="${match.id}">${continueLabel}</button>`}
             ${preservedReviewButton(match)}
             <button class="secondary" data-share-match="${match.id}">Scorecard PDF</button>
+            ${cloudButton}
             ${match.storageMode === 'shared' ? `<button class="secondary" data-refresh-shared-match="${match.sharedMatchId || match.id}">Cloud Refresh</button>` : ''}
             <button class="secondary danger-lite" data-delete-match="${match.id}">Delete</button>
           </div>
@@ -19169,7 +19176,11 @@ function renderMatches() {
   const sections = [];
   sections.push(`<h4 class="library-section-heading">Continue Playing</h4>${inProgress.length ? inProgress.map(renderRow).join('') : '<div class="library-empty-state compact"><strong>No unfinished rounds</strong><span>Your next active round will appear here.</span></div>'}`);
   sections.push(`<h4 class="library-section-heading top-gap">Completed Rounds</h4>${completed.length ? completed.map(renderRow).join('') : '<div class="library-empty-state compact"><strong>No completed rounds</strong><span>Finished rounds will remain available here.</span></div>'}`);
-  el.innerHTML = sections.join('');
+  el.innerHTML = cloudToolbar + sections.join('');
+  if (cloudBackupOn) {
+    renderCloudRestorePanel();
+    void refreshCloudBackupStatuses();
+  }
 }
 
 
@@ -25507,6 +25518,316 @@ function ensureRecoveryFileModule() {
   document.head.append(script);
 }
 
+function isCloudBackupConfigured() {
+  if (DYE_LEDGER_ADAPTER_MODE) return false;
+  try {
+    return SUPABASE_CONFIG?.cloudBackup?.enabled === true
+      && SUPABASE_CONFIG?.accountAuth?.environment === 'staging'
+      && String(SUPABASE_CONFIG?.accountAuth?.expectedProjectRef).toLowerCase() === 'darbakmabpbkikisadop'
+      && new URL(SUPABASE_CONFIG?.url).hostname === 'darbakmabpbkikisadop.supabase.co';
+  } catch {
+    return false;
+  }
+}
+
+let cloudBackupModulesPromise = null;
+function loadCloudBackupModules() {
+  if (!isCloudBackupConfigured()) return Promise.reject(new Error('Cloud backup is not configured.'));
+  if (cloudBackupModulesPromise) return cloudBackupModulesPromise;
+  const load = file => new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = new URL(`${file}?v=${encodeURIComponent(APP_VERSION_NUMBER)}`, document.baseURI).href;
+    script.onload = resolve;
+    script.onerror = () => reject(new Error(`Could not load ${file}.`));
+    document.head.append(script);
+  });
+  cloudBackupModulesPromise = (async () => {
+    if (!window.DyeLedgerRecoveryFile) await load('recovery-file.js');
+    await load('cloud-backup.js');
+    const cloud = window.DyeLedgerCloudBackup;
+    const recoveryFile = window.DyeLedgerRecoveryFile;
+    if (typeof cloud?.backupRound !== 'function' || cloud.isFeatureEnabled(SUPABASE_CONFIG) !== true) {
+      throw new Error('Cloud backup module is unavailable.');
+    }
+    return { cloud, recoveryFile };
+  })().catch(error => {
+    cloudBackupModulesPromise = null;
+    throw error;
+  });
+  return cloudBackupModulesPromise;
+}
+
+const cloudBackupUi = {
+  inProgress: new Set(),
+  lastFailure: new Map(),
+  restore: { open: false, busy: false, rows: null, message: '' },
+};
+
+async function getCloudBackupSession({ verify = false } = {}) {
+  let client = null;
+  let user = null;
+  try {
+    client = await ensureSupabaseClient({ anonymousAuth: false });
+    if (!client) return { client: null, user: null };
+    const value = verify
+      ? (await client.auth.getUser()).data?.user
+      : (await client.auth.getSession()).data?.session?.user;
+    if (value) user = {
+      id: String(value.id),
+      is_anonymous: value.is_anonymous === false ? false : true,
+    };
+  } catch {
+    user = null;
+  }
+  return { client, user };
+}
+
+function readPendingLedgerRoundIds() {
+  const ids = new Set();
+  for (const key of [LEDGER_ENTRY_ACCEPTANCE_STORAGE_KEY, LEDGER_ENTRY_REVISION_STORAGE_KEY]) {
+    try {
+      const envelope = JSON.parse(localStorage.getItem(key));
+      for (const value of [
+        envelope?.roundId,
+        envelope?.report?.meta?.roundId,
+        envelope?.request?.roundId,
+      ]) {
+        if (String(value || '')) ids.add(String(value));
+      }
+    } catch {
+    }
+  }
+  return [...ids];
+}
+
+async function buildCloudBackupContext(user) {
+  const receipts = await readRecoveryReviewReceipts();
+  return {
+    state,
+    user,
+    recoveryGuardActive: window.__DYE_RECOVERY_GUARD__ !== undefined || !canPersistRecoveryProfile(),
+    outbox: readSharedScoreOutbox(localStorage),
+    reviewReceiptRoundIds: receipts.map(row => String(row?.matchId || '')).filter(Boolean),
+    pendingLedgerRoundIds: readPendingLedgerRoundIds(),
+  };
+}
+
+async function refreshCloudBackupStatuses() {
+  if (!isCloudBackupConfigured()) return;
+  const elements = document.querySelectorAll('#matchesList [data-cloud-backup-status]');
+  let modules;
+  try {
+    modules = await loadCloudBackupModules();
+  } catch {
+    elements.forEach(el => {
+      const label = el.querySelector('[data-cloud-backup-label]');
+      if (label) label.textContent = 'Cloud backup unavailable';
+    });
+    return;
+  }
+  const { cloud, recoveryFile } = modules;
+  const { user } = await getCloudBackupSession();
+  for (const el of elements) {
+    const roundId = el.dataset.cloudBackupStatus;
+    const label = el.querySelector('[data-cloud-backup-label]');
+    const button = document.querySelector(`[data-cloud-backup="${CSS.escape(roundId)}"]`);
+    if (button) button.disabled = cloudBackupUi.inProgress.has(roundId);
+    if (!label) continue;
+    if (!user || user.is_anonymous) {
+      label.textContent = 'Sign in to use cloud backup';
+      el.dataset.state = 'signed-out';
+      continue;
+    }
+    try {
+      const match = getMatch(roundId);
+      const currentRoundSha256 = await recoveryFile.sha256Hex(recoveryFile.canonical(match));
+      const indexResult = cloud.readIndex(localStorage, user.id);
+      const status = cloud.computeStatus({
+        indexResult,
+        entry: indexResult.entries[roundId],
+        currentRoundSha256,
+        inProgress: cloudBackupUi.inProgress.has(roundId),
+        lastFailure: cloudBackupUi.lastFailure.get(roundId),
+      });
+      label.textContent = status.label;
+      el.dataset.state = status.status;
+    } catch {
+      label.textContent = 'Unknown, check cloud';
+    }
+  }
+}
+
+async function runCloudBackup(roundId) {
+  if (cloudBackupUi.inProgress.has(roundId)) return;
+  cloudBackupUi.inProgress.add(roundId);
+  cloudBackupUi.lastFailure.delete(roundId);
+  await refreshCloudBackupStatuses();
+  try {
+    const { cloud, recoveryFile } = await loadCloudBackupModules();
+    const { client, user } = await getCloudBackupSession({ verify: true });
+    const match = getMatch(roundId);
+    let ctx;
+    try {
+      ctx = await buildCloudBackupContext(user);
+    } catch {
+      cloudBackupUi.lastFailure.set(roundId, 'PENDING_SYNC');
+      toast('Could not read saved review receipts. Nothing was uploaded.', 6000);
+      return;
+    }
+    const result = await cloud.backupRound({
+      match,
+      ctx,
+      client,
+      storage: localStorage,
+      appVersion: APP_VERSION_NUMBER,
+      recoveryFile,
+      getCurrentMatch: () => getMatch(roundId),
+      now: () => new Date().toISOString(),
+    });
+    if (result.ok) {
+      toast(result.indexWritten
+        ? 'Backed up and verified.'
+        : 'Backed up and verified. This device could not record it; status will show Unknown.', 4000);
+    } else {
+      cloudBackupUi.lastFailure.set(roundId, result.code);
+      toast(result.message, 6000);
+    }
+  } catch (error) {
+    cloudBackupUi.lastFailure.set(roundId, 'NETWORK_ERROR');
+    toast(error?.message || 'Network problem. Check the connection and tap Back up again.', 6000);
+  } finally {
+    cloudBackupUi.inProgress.delete(roundId);
+    await refreshCloudBackupStatuses();
+  }
+}
+
+function renderCloudRestorePanel() {
+  const panel = document.getElementById('cloudRestorePanel');
+  if (!panel) return;
+  panel.hidden = !cloudBackupUi.restore.open;
+  if (cloudBackupUi.restore.busy) {
+    panel.innerHTML = '<div class="tiny">Checking cloud backups…</div>';
+  } else if (cloudBackupUi.restore.message) {
+    panel.innerHTML = `<div class="tiny">${escapeHtml(cloudBackupUi.restore.message)}</div>`;
+  } else if (Array.isArray(cloudBackupUi.restore.rows)) {
+    panel.innerHTML = cloudBackupUi.restore.rows.length
+      ? cloudBackupUi.restore.rows.map(row => {
+        const date = new Date(row.createdAt);
+        const createdAt = Number.isFinite(date.getTime()) ? date.toLocaleString() : row.createdAt;
+        if (row.label) {
+          const name = row.label.name || 'Round';
+          const details = [row.label.courseName, row.label.teeName, row.label.date].filter(Boolean).join(' · ');
+          return `<div class="item compact-item"><div class="item-title">${escapeHtml(name)}</div>${details ? `<div class="muted">${escapeHtml(details)}</div>` : ''}<div class="tiny">Backed up ${escapeHtml(createdAt)}</div><button class="secondary" data-cloud-restore="${escapeHtml(row.cloudRoundId)}" data-local-round-id="${escapeHtml(row.localRoundId)}">Restore</button></div>`;
+        }
+        return `<div class="item compact-item"><div class="muted">Backed up ${escapeHtml(createdAt)}</div><div class="tiny">Round ${escapeHtml(row.localRoundId)}</div><button class="secondary" data-cloud-restore="${escapeHtml(row.cloudRoundId)}" data-local-round-id="${escapeHtml(row.localRoundId)}">Restore</button></div>`;
+      }).join('')
+      : '<div class="library-empty-state compact"><strong>No cloud rounds to restore</strong><span>Every backed-up round is already on this device.</span></div>';
+  } else {
+    panel.innerHTML = '';
+  }
+}
+
+async function openCloudRestorePanel() {
+  Object.assign(cloudBackupUi.restore, { open: true, busy: true, message: '', rows: null });
+  renderCloudRestorePanel();
+  try {
+    const { cloud } = await loadCloudBackupModules();
+    const { client, user } = await getCloudBackupSession({ verify: true });
+    if (!user || user.is_anonymous) {
+      cloudBackupUi.restore.message = cloud.errorMessage('SIGN_IN_REQUIRED');
+    } else {
+      const result = await cloud.listCloudRounds({ client });
+      if (!result.ok) cloudBackupUi.restore.message = result.message;
+      else {
+        const rows = result.rounds.filter(row => !getMatch(row.localRoundId));
+        if (rows.length) {
+          try {
+            const described = await cloud.describeCloudRounds({
+              client,
+              cloudRoundIds: rows.map(row => row.cloudRoundId),
+            });
+            if (described.ok) {
+              const labels = new Map(described.rounds.map(label => [label.cloudRoundId, label]));
+              rows.forEach(row => { row.label = labels.get(row.cloudRoundId); });
+            }
+          } catch {
+          }
+        }
+        cloudBackupUi.restore.rows = rows;
+      }
+    }
+  } catch {
+    cloudBackupUi.restore.message = 'Cloud backups could not be checked.';
+  } finally {
+    cloudBackupUi.restore.busy = false;
+    renderCloudRestorePanel();
+  }
+}
+
+async function runCloudRestore(cloudRoundId, localRoundId) {
+  if (cloudBackupUi.restore.busy) return;
+  cloudBackupUi.restore.busy = true;
+  renderCloudRestorePanel();
+  try {
+    const { cloud, recoveryFile } = await loadCloudBackupModules();
+    const { client, user } = await getCloudBackupSession({ verify: true });
+    if (!user || user.is_anonymous) {
+      toast(cloud.errorMessage('SIGN_IN_REQUIRED'), 6000);
+      return;
+    }
+    const ctx = {
+      state,
+      user,
+      recoveryGuardActive: window.__DYE_RECOVERY_GUARD__ !== undefined || !canPersistRecoveryProfile(),
+    };
+    const planned = await cloud.planRestore({
+      cloudRoundId, localRoundId, ctx, client, storage: localStorage, recoveryFile,
+    });
+    if (!planned.ok) {
+      toast(planned.message, 6000);
+      return;
+    }
+    const before = JSON.parse(JSON.stringify(state));
+    const result = await cloud.executeRestore({
+      plan: planned.plan,
+      state: before,
+      commit: next => ({ ok: persistStateSnapshot(next, localStorage).ok }),
+      readBack: () => loadStateFromStorage(localStorage),
+      storage: localStorage,
+      ownerId: user.id,
+      recoveryFile,
+      now: () => new Date().toISOString(),
+    });
+    if (!result.ok) {
+      toast(result.message, 6000);
+      return;
+    }
+    const restoredState = loadStateFromStorage(localStorage);
+    Object.keys(state).forEach(key => { delete state[key]; });
+    Object.assign(state, restoredState);
+    toast('Round restored and verified. Reloading…', 4000);
+    setTimeout(() => window.location.reload(), 1200);
+  } catch {
+    toast('The round could not be restored. Nothing was changed.', 6000);
+  } finally {
+    cloudBackupUi.restore.busy = false;
+    renderCloudRestorePanel();
+  }
+}
+
+function bindCloudBackupLibraryEvents() {
+  if (!isCloudBackupConfigured()) return;
+  document.getElementById('matchesList')?.addEventListener('click', e => {
+    const target = e.target.closest('[data-cloud-backup],[data-cloud-restore-open],[data-cloud-restore]');
+    if (!target) return;
+    if (target.dataset.cloudBackup) void runCloudBackup(target.dataset.cloudBackup);
+    else if (target.hasAttribute('data-cloud-restore-open')) void openCloudRestorePanel();
+    else if (target.dataset.cloudRestore) {
+      void runCloudRestore(target.dataset.cloudRestore, target.dataset.localRoundId);
+    }
+  });
+}
+
 function showRecoveryIsolationCode() {
   const key = 'dye-ledger-recovery-isolation-canary';
   const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
@@ -27488,6 +27809,7 @@ document.getElementById('leaderboard').addEventListener('change', e => {
   }
   window.dyeLedgerSaveCurrentHole = saveCurrentHole;
 
+  bindCloudBackupLibraryEvents();
   document.getElementById('matchesList').addEventListener('click', e => {
     const loadId = e.target.dataset.loadMatch;
     const viewId = e.target.dataset.viewMatch;
